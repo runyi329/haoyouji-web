@@ -1,13 +1,12 @@
-/**
- * 石油详情页（WTI 西德克萨斯轻质原油 / Brent 布伦特原油）
- * 与 DXYDetailPage 风格完全一致：
- *   - 深绿渐变头部（石油主题色）+ 左右分栏信息卡片 + AI 三段式分析
- *   - Tab1: 数据分析（涨跌统计 + 连涨连跌 + 频率分布 + 品种对比说明）
- *   - Tab2: 日线历史（两位年份、固定宽度、每页100条）
- * 路由：/oil-detail?type=WTI 或 /oil-detail?type=BRENT
+/*
+ * 石油详情页（WTI + Brent 并列显示）
+ * - 顶部头部：WTI 和 Brent 实时行情并列对比
+ * - 数据分析 Tab：涨跌统计并列对比
+ * - 日线历史 Tab：保留 WTI/Brent 切换按钮
+ * 路由：/oil-detail
  */
 import { useState, useMemo } from "react";
-import { useLocation, useSearch } from "wouter";
+import { useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import {
@@ -21,7 +20,6 @@ const GREEN_A = "#388E3C";
 const MUTED = "#888";
 const BG = "#f5f5f5";
 
-// WTI 深绿色主题 / Brent 深蓝绿主题
 const THEME = {
   WTI: {
     gradient: "linear-gradient(160deg, #1B5E20 0%, #2E7D32 50%, #1A4A1E 100%)",
@@ -29,10 +27,11 @@ const THEME = {
     accentLight: "#A5D6A7",
     name: "WTI 西德克萨斯轻质原油",
     shortName: "WTI",
-    exchange: "NYMEX（纽约商品交易所）",
+    exchange: "NYMEX",
     unit: "美元/桶",
     icon: "🛢",
     decimals: 2,
+    headerColor: "rgba(76,175,80,0.25)",
   },
   BRENT: {
     gradient: "linear-gradient(160deg, #004D40 0%, #00695C 50%, #003330 100%)",
@@ -40,18 +39,15 @@ const THEME = {
     accentLight: "#80CBC4",
     name: "Brent 布伦特原油",
     shortName: "Brent",
-    exchange: "ICE（洲际交易所）",
+    exchange: "ICE",
     unit: "美元/桶",
     icon: "⛽",
     decimals: 2,
+    headerColor: "rgba(38,166,154,0.25)",
   },
 };
 
 const PAGE_SIZE = 100;
-const TABS = [
-  { key: "analysis", label: "数据分析" },
-  { key: "data",     label: "日线历史" },
-];
 
 // ── 工具函数 ──────────────────────────────────────────────────────────────────
 function formatPrice(val: number | null | undefined, decimals = 2): string {
@@ -101,13 +97,14 @@ function calcStreakFromItems(data: { changePct: number | null }[]): {
 
 // ── 连涨连跌统计面板 ──────────────────────────────────────────────────────────
 function StreakStatsPanel({ allData }: { allData: { date: string; changePct: number | null }[] }) {
-  const [streakTab, setStreakTab] = useState<30 | 60 | 90 | 180 | "all">(60);
-  const allSorted = allData;
+  const [streakTab, setStreakTab] = useState<30 | 60 | 90 | 180 | "all">("all");
+
+  const allSorted = useMemo(() => [...allData].sort((a, b) => a.date.localeCompare(b.date)), [allData]);
   const recentData30  = useMemo(() => calcStreakFromItems(allSorted.slice(-30)),  [allSorted]);
   const recentData60  = useMemo(() => calcStreakFromItems(allSorted.slice(-60)),  [allSorted]);
   const recentData90  = useMemo(() => calcStreakFromItems(allSorted.slice(-90)),  [allSorted]);
   const recentData180 = useMemo(() => calcStreakFromItems(allSorted.slice(-180)), [allSorted]);
-  const allStreakData  = useMemo(() => calcStreakFromItems(allSorted),             [allSorted]);
+  const allStreakData  = useMemo(() => calcStreakFromItems(allSorted),            [allSorted]);
 
   const curData = streakTab === "all" ? allStreakData
     : streakTab === 30  ? recentData30
@@ -183,7 +180,7 @@ function StreakStatsPanel({ allData }: { allData: { date: string; changePct: num
 }
 
 // ── 涨跌幅频率分布图 ──────────────────────────────────────────────────────────
-function ChangePctDistChart({ allData }: { allData: { date: string; changePct: number | null }[] }) {
+function ChangePctDistChart({ allData, label }: { allData: { date: string; changePct: number | null }[]; label: string }) {
   const distData = useMemo(() => {
     const bucketMap: Record<number, number> = {};
     for (const item of allData) {
@@ -199,30 +196,24 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
     const maxB = Math.max(0, ...keys);
     const result = [];
     for (let b = minB; b <= maxB; b++) {
-      const cnt = bucketMap[b] || 0;
-      const label = b === 0 ? "0%" : b > 0 ? `+${b}%` : `${b}%`;
-      result.push({ bucket: b, label, count: cnt, isUp: b >= 0 });
+      result.push({ label: `${b >= 0 ? "+" : ""}${b}%`, count: bucketMap[b] || 0, isUp: b >= 0 });
     }
     return result;
   }, [allData]);
 
-  const totalDays = allData.filter(d => d.changePct != null).length;
-  const upDays    = allData.filter(d => d.changePct != null && d.changePct > 0).length;
-  const downDays  = allData.filter(d => d.changePct != null && d.changePct < 0).length;
+  const upDays   = allData.filter(d => (d.changePct ?? 0) > 0).length;
+  const downDays = allData.filter(d => (d.changePct ?? 0) < 0).length;
 
   return (
-    <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-        <div>
-          <span className="text-sm font-semibold text-gray-700">涨跌幅频率分布</span>
-          <span className="text-xs text-gray-400 ml-2">每1%一个区间 · 共{totalDays}天</span>
-        </div>
-        <div className="flex gap-3 text-xs">
-          <span style={{ color: RED }}>↑{upDays}天</span>
-          <span style={{ color: GREEN_A }}>↓{downDays}天</span>
+    <div style={{ background: "#fff", borderTop: `8px solid ${BG}` }}>
+      <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+        <span className="text-xs font-semibold" style={{ color: MUTED }}>{label} 涨跌幅频率分布</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs" style={{ color: RED }}>↑{upDays}天</span>
+          <span className="text-xs" style={{ color: GREEN_A }}>↓{downDays}天</span>
         </div>
       </div>
-      <div style={{ height: 180, padding: "8px 4px 4px" }}>
+      <div style={{ height: 160, padding: "8px 4px 4px" }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={distData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
@@ -242,66 +233,145 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
   );
 }
 
-// ── 主页面组件 ────────────────────────────────────────────────────────────────
-export default function OilDetailPage() {
-  const [, setLocation] = useLocation();
-  const search = useSearch();
-  const params = new URLSearchParams(search);
-  const oilType = (params.get("type") || "WTI").toUpperCase() as "WTI" | "BRENT";
-  const theme = THEME[oilType] || THEME.WTI;
-  const SYMBOL = oilType; // 数据库中的 symbol
-
-  const [activeTab, setActiveTab] = useState("analysis");
-  const [page, setPage] = useState(1);
-  const [aiExpanded, setAiExpanded] = useState(false);
-
-  // ── 数据查询 ────────────────────────────────────────────────────────────────
-  const { data: metaData, isLoading: metaLoading } = trpc.cryptoData.getMeta.useQuery({ symbol: SYMBOL });
-  const { data: statsData, isLoading: statsLoading } = trpc.cryptoData.getStats.useQuery({ symbol: SYMBOL });
-  const { data: klinesData, isLoading: klinesLoading, isFetching } = trpc.cryptoData.getKlines.useQuery(
-    { symbol: SYMBOL, page, pageSize: PAGE_SIZE },
-    { keepPreviousData: true } as any
-  );
-  const { data: allChangePcts, isLoading: changePctsLoading } = trpc.cryptoData.getAllChangePcts.useQuery(
-    { symbol: SYMBOL }
-  );
-
+// ── 单品种行情卡片（用于头部并列） ────────────────────────────────────────────
+function OilQuoteCard({
+  symbol, theme, klinesData, klinesLoading, statsData, statsLoading, metaData, metaLoading
+}: {
+  symbol: "WTI" | "BRENT";
+  theme: typeof THEME.WTI;
+  klinesData: any;
+  klinesLoading: boolean;
+  statsData: any;
+  statsLoading: boolean;
+  metaData: any;
+  metaLoading: boolean;
+}) {
   const latestClose     = klinesData?.rows?.[0]?.close ?? null;
   const latestChangePct = klinesData?.rows?.[0]?.changePct ?? null;
   const total           = metaData?.total ?? 0;
   const oldestDate      = metaData?.oldestDate ?? "";
   const latestDate      = metaData?.latestDate ?? "";
 
+  return (
+    <div style={{
+      borderRadius: 10,
+      padding: "8px 10px",
+      background: theme.headerColor,
+      border: "1px solid rgba(255,255,255,0.2)",
+      flex: 1,
+    }}>
+      {/* 品种标题 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 6 }}>
+        <span style={{ fontSize: 14 }}>{theme.icon}</span>
+        <span style={{ fontSize: 12, fontWeight: 800, color: "#fff" }}>{theme.shortName}</span>
+        <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{theme.exchange}</span>
+      </div>
+
+      {/* 最新收盘价 */}
+      <div style={{ marginBottom: 4 }}>
+        {klinesLoading
+          ? <div style={{ width: 70, height: 18, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
+          : <span style={{ fontSize: 18, fontWeight: 900, color: "#fff", letterSpacing: -0.5 }}>
+              ${formatPrice(latestClose, theme.decimals)}
+            </span>
+        }
+      </div>
+
+      {/* 涨跌幅 */}
+      <div style={{ marginBottom: 6 }}>
+        {klinesLoading
+          ? <div style={{ width: 48, height: 13, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
+          : <span style={{ fontSize: 13, fontWeight: 700, color: (latestChangePct ?? 0) >= 0 ? "#FF8A80" : "#69F0AE" }}>
+              {formatPct(latestChangePct)}
+            </span>
+        }
+      </div>
+
+      {/* 小字统计 */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        {[
+          ["涨跌天数", statsLoading ? null : (statsData ? `↑${statsData.upDays} / ↓${statsData.downDays}` : "—")],
+          ["涨跌比",   statsLoading ? null : (statsData ? `${statsData.upPct}% / ${statsData.downPct}%` : "—")],
+          ["数据条数", metaLoading  ? null : `${total.toLocaleString()}条`],
+          ["起始日期", metaLoading  ? null : oldestDate],
+        ].map(([label, val], i) => (
+          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 16 }}>
+            <span style={{ fontSize: 9, color: "rgba(255,255,255,0.5)" }}>{label}</span>
+            {val == null
+              ? <div style={{ width: 44, height: 9, borderRadius: 3, background: "rgba(255,255,255,0.15)" }} />
+              : <span style={{ fontSize: 10, fontWeight: 600, color: "#fff" }}>{val}</span>
+            }
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── 主页面组件 ────────────────────────────────────────────────────────────────
+export default function OilDetailPage() {
+  const [, setLocation] = useLocation();
+
+  const [activeTab, setActiveTab] = useState("analysis");
+  const [historyType, setHistoryType] = useState<"WTI" | "BRENT">("WTI");
+  const [page, setPage] = useState(1);
+  const [aiExpanded, setAiExpanded] = useState(false);
+
+  // ── WTI 数据查询 ────────────────────────────────────────────────────────────
+  const { data: wtiMeta,    isLoading: wtiMetaLoading }    = trpc.cryptoData.getMeta.useQuery({ symbol: "WTI" });
+  const { data: wtiStats,   isLoading: wtiStatsLoading }   = trpc.cryptoData.getStats.useQuery({ symbol: "WTI" });
+  const { data: wtiKlines,  isLoading: wtiKlinesLoading }  = trpc.cryptoData.getKlines.useQuery(
+    { symbol: "WTI", page: 1, pageSize: 1 }, {}
+  );
+  const { data: wtiAllPcts, isLoading: wtiPctsLoading }    = trpc.cryptoData.getAllChangePcts.useQuery({ symbol: "WTI" });
+
+  // ── Brent 数据查询 ──────────────────────────────────────────────────────────
+  const { data: brentMeta,    isLoading: brentMetaLoading }    = trpc.cryptoData.getMeta.useQuery({ symbol: "BRENT" });
+  const { data: brentStats,   isLoading: brentStatsLoading }   = trpc.cryptoData.getStats.useQuery({ symbol: "BRENT" });
+  const { data: brentKlines,  isLoading: brentKlinesLoading }  = trpc.cryptoData.getKlines.useQuery(
+    { symbol: "BRENT", page: 1, pageSize: 1 }, {}
+  );
+  const { data: brentAllPcts, isLoading: brentPctsLoading }    = trpc.cryptoData.getAllChangePcts.useQuery({ symbol: "BRENT" });
+
+  // ── 日线历史（切换品种） ────────────────────────────────────────────────────
+  const { data: historyKlines, isLoading: historyLoading, isFetching } = trpc.cryptoData.getKlines.useQuery(
+    { symbol: historyType, page, pageSize: PAGE_SIZE },
+    { keepPreviousData: true } as any
+  );
+  const historyMeta = historyType === "WTI" ? wtiMeta : brentMeta;
+  const historyRows  = historyKlines?.rows ?? [];
+  const historyTotal = historyKlines?.total ?? 0;
+  const historyPages = Math.ceil(historyTotal / PAGE_SIZE);
+  const historyTheme = THEME[historyType];
+
+  // ── AI 分析（WTI） ──────────────────────────────────────────────────────────
+  const wtiLatestClose     = wtiKlines?.rows?.[0]?.close ?? null;
+  const wtiLatestChangePct = wtiKlines?.rows?.[0]?.changePct ?? null;
   const { data: aiData, isLoading: aiLoading } = trpc.cryptoData.getAIAnalysis.useQuery(
     {
-      symbol: SYMBOL,
-      stockName: theme.name,
-      latestClose:     latestClose     ?? undefined,
-      latestChangePct: latestChangePct ?? undefined,
-      total,
-      oldestDate,
-      latestDate,
+      symbol: "WTI",
+      stockName: "原油市场（WTI & Brent）",
+      latestClose:     wtiLatestClose     ?? undefined,
+      latestChangePct: wtiLatestChangePct ?? undefined,
+      total:           wtiMeta?.total ?? 0,
+      oldestDate:      wtiMeta?.oldestDate ?? "",
+      latestDate:      wtiMeta?.latestDate ?? "",
     },
     {
-      enabled: !metaLoading && !klinesLoading,
+      enabled: !wtiMetaLoading && !wtiKlinesLoading,
       staleTime: 10 * 60 * 1000,
     }
   );
 
-  // ── 派生数据 ────────────────────────────────────────────────────────────────
-  const rows       = klinesData?.rows ?? [];
-  const totalRows  = klinesData?.total ?? 0;
-  const totalPages = Math.ceil(totalRows / PAGE_SIZE);
-  const stats      = statsData;
-  const analysisLoading = statsLoading || changePctsLoading;
+  // 渐变背景（两种颜色融合）
+  const headerBg = "linear-gradient(160deg, #1B5E20 0%, #1A4A3A 50%, #003330 100%)";
 
-  // ── 渲染 ────────────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#EEF2F8" }}>
 
-      {/* ── 深绿渐变头部 ── */}
+      {/* ── 头部 ── */}
       <div style={{
-        background: theme.gradient,
+        background: headerBg,
         padding: "10px 14px 12px",
         flexShrink: 0,
         position: "sticky",
@@ -318,113 +388,45 @@ export default function OilDetailPage() {
             <ChevronLeft style={{ width: 16, height: 16, color: "#fff" }} />
           </button>
 
-          {/* 石油图标 */}
-          <div style={{
-            width: 30, height: 30, borderRadius: "50%",
-            background: "rgba(255,255,255,0.25)",
-            border: "1.5px solid rgba(255,255,255,0.5)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, fontSize: 16,
-          }}>{theme.icon}</div>
-
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontWeight: 800, fontSize: 15, color: "#fff", margin: 0, lineHeight: 1.2 }}>
-              {theme.name}
+              🛢 原油行情
             </p>
             <p style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.3 }}>
-              {theme.exchange} · {theme.unit}
+              WTI（NYMEX）& Brent（ICE）· 美元/桶
             </p>
           </div>
 
-          {/* WTI / Brent 切换 */}
-          <div style={{ display: "flex", borderRadius: 20, overflow: "hidden", border: "1px solid rgba(255,255,255,0.4)", flexShrink: 0 }}>
-            {(["WTI", "BRENT"] as const).map(t => (
-              <button
-                key={t}
-                onClick={() => setLocation(`/oil-detail?type=${t}`)}
-                style={{
-                  padding: "4px 10px",
-                  fontSize: 11,
-                  fontWeight: oilType === t ? 700 : 400,
-                  background: oilType === t ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.15)",
-                  color: oilType === t ? (t === "WTI" ? "#1B5E20" : "#004D40") : "#fff",
-                  border: "none",
-                  cursor: "pointer",
-                  letterSpacing: 0.3,
-                }}
-              >
-                {t === "BRENT" ? "Brent" : "WTI"}
-              </button>
-            ))}
-          </div>
+          <button
+            onClick={() => window.location.reload()}
+            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer", flexShrink: 0 }}
+          >
+            更新
+          </button>
         </div>
 
-        {/* 第二行：左右分栏信息卡片 */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-          {/* 左列：静态基本信息 */}
-          <div style={{ borderRadius: 10, padding: "8px 10px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)" }}>
-            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 5, textTransform: "uppercase" }}>基本信息</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {[
-                ["数据条数", metaLoading ? null : `${total.toLocaleString()}条`],
-                ["起始日期", metaLoading ? null : oldestDate],
-                ["最新日期", metaLoading ? null : latestDate],
-                ["计价单位", theme.unit],
-              ].map(([label, val], i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
-                  <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{label}</span>
-                  {val == null
-                    ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-                    : <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{val}</span>
-                  }
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* 右列：动态行情 */}
-          <div style={{ borderRadius: 10, padding: "8px 10px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)" }}>
-            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 5, textTransform: "uppercase" }}>最新行情</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
-                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>最新收盘</span>
-                {klinesLoading
-                  ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-                  : <span style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>${formatPrice(latestClose, theme.decimals)}</span>
-                }
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
-                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>当日涨跌</span>
-                {klinesLoading
-                  ? <div style={{ width: 40, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-                  : <span style={{ fontSize: 12, fontWeight: 700, color: (latestChangePct ?? 0) >= 0 ? "#FF8A80" : "#69F0AE" }}>
-                      {formatPct(latestChangePct)}
-                    </span>
-                }
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
-                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>涨跌天数</span>
-                {statsLoading
-                  ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-                  : <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
-                      {stats
-                        ? <span><span style={{ color: "#FF8A80" }}>↑{stats.upDays}</span><span style={{ color: "rgba(255,255,255,0.4)", margin: "0 2px" }}>/</span><span style={{ color: "#69F0AE" }}>↓{stats.downDays}</span></span>
-                        : "—"
-                      }
-                    </span>
-                }
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
-                <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>涨跌比</span>
-                {statsLoading
-                  ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-                  : <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
-                      {stats ? `${stats.upPct}% / ${stats.downPct}%` : "—"}
-                    </span>
-                }
-              </div>
-            </div>
-          </div>
+        {/* 第二行：WTI + Brent 并列行情卡片 */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+          <OilQuoteCard
+            symbol="WTI"
+            theme={THEME.WTI}
+            klinesData={wtiKlines}
+            klinesLoading={wtiKlinesLoading}
+            statsData={wtiStats}
+            statsLoading={wtiStatsLoading}
+            metaData={wtiMeta}
+            metaLoading={wtiMetaLoading}
+          />
+          <OilQuoteCard
+            symbol="BRENT"
+            theme={THEME.BRENT}
+            klinesData={brentKlines}
+            klinesLoading={brentKlinesLoading}
+            statsData={brentStats}
+            statsLoading={brentStatsLoading}
+            metaData={brentMeta}
+            metaLoading={brentMetaLoading}
+          />
         </div>
 
         {/* 第三行：AI 三段式分析（可折叠） */}
@@ -441,7 +443,7 @@ export default function OilDetailPage() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: 0.3 }}>
-                ✨ AI × {theme.shortName}
+                ✨ AI × 原油市场分析
               </span>
               {aiLoading && <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)" }}>分析中...</span>}
             </div>
@@ -478,7 +480,10 @@ export default function OilDetailPage() {
 
       {/* ── Tab 切换 ── */}
       <div style={{ background: "#fff", borderBottom: "1px solid #D8E0EC", display: "flex", flexShrink: 0 }}>
-        {TABS.map(t => (
+        {[
+          { key: "analysis", label: "数据分析" },
+          { key: "data",     label: `日线历史${(wtiMeta?.total ?? 0) > 0 ? `（WTI ${wtiMeta!.total}条）` : ""}` },
+        ].map(t => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
@@ -490,9 +495,7 @@ export default function OilDetailPage() {
               cursor: "pointer", transition: "color 0.2s",
             }}
           >
-            {t.key === "data"
-              ? `日线历史${total > 0 ? `（${total}条）` : ""}`
-              : t.label}
+            {t.label}
           </button>
         ))}
       </div>
@@ -500,208 +503,313 @@ export default function OilDetailPage() {
       {/* ── 数据分析 Tab ── */}
       {activeTab === "analysis" && (
         <div className="flex-1 overflow-auto pb-6">
-          {analysisLoading ? (
-            <div className="flex items-center justify-center py-20 text-gray-400 text-sm">计算中...</div>
-          ) : !stats ? (
-            <div className="flex items-center justify-center py-20 text-gray-400 text-sm">暂无数据</div>
-          ) : (
-            <div className="pt-3 space-y-0">
+          <div className="pt-3 space-y-0">
 
-              {/* 涨跌天数概览 */}
-              <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <span className="text-sm font-semibold text-gray-700">涨跌天数统计</span>
-                  <span className="text-xs text-gray-400 ml-2">共 {stats.total} 天</span>
-                </div>
-                <div className="grid grid-cols-3 divide-x divide-gray-100">
-                  <div className="flex flex-col items-center py-4">
-                    <span className="text-2xl font-bold text-red-500">{stats.upDays}</span>
-                    <span className="text-xs text-gray-400 mt-1">上涨天数</span>
-                    <span className="text-xs text-red-400 font-medium mt-0.5">{stats.upPct}%</span>
-                  </div>
-                  <div className="flex flex-col items-center py-4">
-                    <span className="text-2xl font-bold text-green-600">{stats.downDays}</span>
-                    <span className="text-xs text-gray-400 mt-1">下跌天数</span>
-                    <span className="text-xs text-green-500 font-medium mt-0.5">{stats.downPct}%</span>
-                  </div>
-                  <div className="flex flex-col items-center py-4">
-                    <span className="text-2xl font-bold text-gray-400">{stats.flatDays}</span>
-                    <span className="text-xs text-gray-400 mt-1">平盘天数</span>
-                    <span className="text-xs text-gray-400 font-medium mt-0.5">
-                      {stats.total > 0 ? (stats.flatDays / stats.total * 100).toFixed(2) : 0}%
-                    </span>
-                  </div>
-                </div>
-                <div className="mx-4 mb-3 h-2 rounded-full overflow-hidden flex">
-                  <div className="bg-red-400" style={{ width: `${stats.upPct}%` }} />
-                  <div className="bg-gray-200" style={{ width: `${(stats.flatDays / stats.total * 100).toFixed(2)}%` }} />
-                  <div className="bg-green-500 flex-1" />
-                </div>
+            {/* WTI vs Brent 涨跌天数并列对比 */}
+            <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <span className="text-sm font-semibold text-gray-700">涨跌天数对比</span>
               </div>
-
-              {/* 最长连涨/连跌 */}
-              <div className="grid grid-cols-2 gap-3 mx-3 mb-3">
-                <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex flex-col items-center">
-                  <span className="text-xs text-gray-400 mb-1">最长连涨</span>
-                  <span className="text-3xl font-bold text-red-500">{stats.maxConsecUp}</span>
-                  <span className="text-xs text-gray-400 mt-1">天</span>
-                </div>
-                <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex flex-col items-center">
-                  <span className="text-xs text-gray-400 mb-1">最长连跌</span>
-                  <span className="text-3xl font-bold text-green-600">{stats.maxConsecDown}</span>
-                  <span className="text-xs text-gray-400 mt-1">天</span>
-                </div>
-              </div>
-
-              {/* 连涨/连跌统计 */}
-              {allChangePcts && allChangePcts.length > 0 && (
-                <div className="bg-white border border-gray-200 mx-3 rounded-xl overflow-hidden mb-3">
-                  <StreakStatsPanel allData={allChangePcts} />
-                </div>
-              )}
-
-              {/* 涨跌幅频率分布图 */}
-              {allChangePcts && allChangePcts.length > 0 && (
-                <ChangePctDistChart allData={allChangePcts} />
-              )}
-
-              {/* WTI vs Brent 对比说明 */}
-              <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <span className="text-sm font-semibold text-gray-700">WTI vs Brent 对比</span>
-                </div>
-                <div className="px-4 py-3 space-y-2">
-                  {[
-                    { item: "产地", wti: "美国德克萨斯州", brent: "北海（英国/挪威）" },
-                    { item: "交易所", wti: "NYMEX（纽约）", brent: "ICE（伦敦）" },
-                    { item: "交割地", wti: "俄克拉荷马州库欣", brent: "北海海上交割" },
-                    { item: "硫含量", wti: "极低（甜质）", brent: "低（甜质）" },
-                    { item: "价差", wti: "通常低于Brent", brent: "通常高于WTI" },
-                    { item: "影响范围", wti: "美洲市场基准", brent: "全球市场基准" },
-                  ].map((row, i) => (
-                    <div key={i} className="grid grid-cols-3 gap-2 py-1 border-b border-gray-50 last:border-0">
-                      <span className="text-xs text-gray-400">{row.item}</span>
-                      <span className={`text-xs font-medium ${oilType === "WTI" ? "text-green-700 font-bold" : "text-gray-600"}`}>{row.wti}</span>
-                      <span className={`text-xs font-medium ${oilType === "BRENT" ? "text-teal-700 font-bold" : "text-gray-600"}`}>{row.brent}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="px-4 pb-3 text-xs text-gray-400">当前查看：<span className="font-semibold" style={{ color: oilType === "WTI" ? "#2E7D32" : "#00695C" }}>{theme.shortName}</span>（高亮列）</div>
-              </div>
-
-              {/* 与主要资产相关性 */}
-              <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <span className="text-sm font-semibold text-gray-700">与主要资产相关性</span>
-                </div>
-                <div className="px-4 py-3 space-y-2">
-                  {[
-                    { asset: "美元指数 DXY",  corr: "-0.55", desc: "中负相关：原油以美元计价", color: "#1565C0" },
-                    { asset: "黄金 XAU/USD",  corr: "+0.42", desc: "弱正相关：同为大宗商品", color: "#F57F17" },
-                    { asset: "美股 S&P500",   corr: "+0.38", desc: "弱正相关：经济景气度", color: "#D32F2F" },
-                    { asset: "人民币 CNY",    corr: "+0.35", desc: "弱正相关：能源进口影响", color: "#E65100" },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center justify-between py-1 border-b border-gray-50 last:border-0">
-                      <div>
-                        <span className="text-xs font-semibold text-gray-700">{item.asset}</span>
-                        <span className="text-xs text-gray-400 ml-2">{item.desc}</span>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0 }}>
+                {/* WTI */}
+                <div style={{ borderRight: "1px solid #F3F4F6", padding: "8px 0" }}>
+                  <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#2E7D32", marginBottom: 4 }}>🛢 WTI</div>
+                  {wtiStatsLoading ? (
+                    <div className="flex items-center justify-center py-4 text-gray-300 text-xs">加载中...</div>
+                  ) : wtiStats ? (
+                    <>
+                      <div className="grid grid-cols-3 divide-x divide-gray-100">
+                        <div className="flex flex-col items-center py-2">
+                          <span className="text-xl font-bold text-red-500">{wtiStats.upDays}</span>
+                          <span className="text-xs text-gray-400">上涨</span>
+                          <span className="text-xs text-red-400">{wtiStats.upPct}%</span>
+                        </div>
+                        <div className="flex flex-col items-center py-2">
+                          <span className="text-xl font-bold text-green-600">{wtiStats.downDays}</span>
+                          <span className="text-xs text-gray-400">下跌</span>
+                          <span className="text-xs text-green-500">{wtiStats.downPct}%</span>
+                        </div>
+                        <div className="flex flex-col items-center py-2">
+                          <span className="text-xl font-bold text-gray-400">{wtiStats.flatDays}</span>
+                          <span className="text-xs text-gray-400">平盘</span>
+                          <span className="text-xs text-gray-400">{wtiStats.total > 0 ? (wtiStats.flatDays / wtiStats.total * 100).toFixed(1) : 0}%</span>
+                        </div>
                       </div>
-                      <span className="text-xs font-bold" style={{ color: item.color }}>{item.corr}</span>
-                    </div>
-                  ))}
+                      <div className="mx-3 mt-1 mb-2 h-1.5 rounded-full overflow-hidden flex">
+                        <div className="bg-red-400" style={{ width: `${wtiStats.upPct}%` }} />
+                        <div className="bg-gray-200" style={{ width: `${(wtiStats.flatDays / wtiStats.total * 100).toFixed(1)}%` }} />
+                        <div className="bg-green-500 flex-1" />
+                      </div>
+                      <div className="text-center text-xs text-gray-400 pb-1">共 {wtiStats.total} 天</div>
+                    </>
+                  ) : <div className="text-center text-xs text-gray-300 py-4">暂无数据</div>}
                 </div>
-                <div className="px-4 pb-3 text-xs text-gray-400">注：相关系数为历史统计参考，实际相关性随市场环境变化</div>
+                {/* Brent */}
+                <div style={{ padding: "8px 0" }}>
+                  <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#00695C", marginBottom: 4 }}>⛽ Brent</div>
+                  {brentStatsLoading ? (
+                    <div className="flex items-center justify-center py-4 text-gray-300 text-xs">加载中...</div>
+                  ) : brentStats ? (
+                    <>
+                      <div className="grid grid-cols-3 divide-x divide-gray-100">
+                        <div className="flex flex-col items-center py-2">
+                          <span className="text-xl font-bold text-red-500">{brentStats.upDays}</span>
+                          <span className="text-xs text-gray-400">上涨</span>
+                          <span className="text-xs text-red-400">{brentStats.upPct}%</span>
+                        </div>
+                        <div className="flex flex-col items-center py-2">
+                          <span className="text-xl font-bold text-green-600">{brentStats.downDays}</span>
+                          <span className="text-xs text-gray-400">下跌</span>
+                          <span className="text-xs text-green-500">{brentStats.downPct}%</span>
+                        </div>
+                        <div className="flex flex-col items-center py-2">
+                          <span className="text-xl font-bold text-gray-400">{brentStats.flatDays}</span>
+                          <span className="text-xs text-gray-400">平盘</span>
+                          <span className="text-xs text-gray-400">{brentStats.total > 0 ? (brentStats.flatDays / brentStats.total * 100).toFixed(1) : 0}%</span>
+                        </div>
+                      </div>
+                      <div className="mx-3 mt-1 mb-2 h-1.5 rounded-full overflow-hidden flex">
+                        <div className="bg-red-400" style={{ width: `${brentStats.upPct}%` }} />
+                        <div className="bg-gray-200" style={{ width: `${(brentStats.flatDays / brentStats.total * 100).toFixed(1)}%` }} />
+                        <div className="bg-green-500 flex-1" />
+                      </div>
+                      <div className="text-center text-xs text-gray-400 pb-1">共 {brentStats.total} 天</div>
+                    </>
+                  ) : <div className="text-center text-xs text-gray-300 py-4">暂无数据</div>}
+                </div>
               </div>
-
             </div>
-          )}
+
+            {/* 最长连涨/连跌 并列 */}
+            <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <span className="text-sm font-semibold text-gray-700">最长连涨 / 连跌</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0 }}>
+                {/* WTI */}
+                <div style={{ borderRight: "1px solid #F3F4F6", padding: "8px 0" }}>
+                  <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#2E7D32", marginBottom: 4 }}>🛢 WTI</div>
+                  <div className="grid grid-cols-2 divide-x divide-gray-100">
+                    <div className="flex flex-col items-center py-2">
+                      <span className="text-2xl font-bold text-red-500">{wtiStats?.maxConsecUp ?? "—"}</span>
+                      <span className="text-xs text-gray-400 mt-0.5">连涨天</span>
+                    </div>
+                    <div className="flex flex-col items-center py-2">
+                      <span className="text-2xl font-bold text-green-600">{wtiStats?.maxConsecDown ?? "—"}</span>
+                      <span className="text-xs text-gray-400 mt-0.5">连跌天</span>
+                    </div>
+                  </div>
+                </div>
+                {/* Brent */}
+                <div style={{ padding: "8px 0" }}>
+                  <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#00695C", marginBottom: 4 }}>⛽ Brent</div>
+                  <div className="grid grid-cols-2 divide-x divide-gray-100">
+                    <div className="flex flex-col items-center py-2">
+                      <span className="text-2xl font-bold text-red-500">{brentStats?.maxConsecUp ?? "—"}</span>
+                      <span className="text-xs text-gray-400 mt-0.5">连涨天</span>
+                    </div>
+                    <div className="flex flex-col items-center py-2">
+                      <span className="text-2xl font-bold text-green-600">{brentStats?.maxConsecDown ?? "—"}</span>
+                      <span className="text-xs text-gray-400 mt-0.5">连跌天</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 连涨/连跌统计（WTI，全历史） */}
+            {wtiAllPcts && wtiAllPcts.length > 0 && (
+              <div className="bg-white border border-gray-200 mx-3 rounded-xl overflow-hidden mb-3">
+                <div className="px-4 py-2 border-b border-gray-100">
+                  <span className="text-xs font-semibold text-gray-500">🛢 WTI 连涨/连跌统计</span>
+                </div>
+                <StreakStatsPanel allData={wtiAllPcts} />
+              </div>
+            )}
+
+            {/* 涨跌幅频率分布（WTI） */}
+            {wtiAllPcts && wtiAllPcts.length > 0 && (
+              <div className="bg-white border border-gray-200 mx-3 rounded-xl overflow-hidden mb-3">
+                <ChangePctDistChart allData={wtiAllPcts} label="🛢 WTI" />
+              </div>
+            )}
+
+            {/* 涨跌幅频率分布（Brent） */}
+            {brentAllPcts && brentAllPcts.length > 0 && (
+              <div className="bg-white border border-gray-200 mx-3 rounded-xl overflow-hidden mb-3">
+                <ChangePctDistChart allData={brentAllPcts} label="⛽ Brent" />
+              </div>
+            )}
+
+            {/* WTI vs Brent 品种对比说明 */}
+            <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <span className="text-sm font-semibold text-gray-700">WTI vs Brent 品种对比</span>
+              </div>
+              <div className="px-4 py-3 space-y-2">
+                <div className="grid grid-cols-3 gap-2 pb-1 border-b border-gray-100">
+                  <span className="text-xs text-gray-400 font-medium">项目</span>
+                  <span className="text-xs font-bold text-green-700 text-center">🛢 WTI</span>
+                  <span className="text-xs font-bold text-teal-700 text-center">⛽ Brent</span>
+                </div>
+                {[
+                  { item: "产地",     wti: "美国德克萨斯",   brent: "北海（英/挪）" },
+                  { item: "交易所",   wti: "NYMEX（纽约）",  brent: "ICE（伦敦）" },
+                  { item: "交割地",   wti: "库欣（陆上）",   brent: "北海（海上）" },
+                  { item: "硫含量",   wti: "极低（甜质）",   brent: "低（甜质）" },
+                  { item: "价差",     wti: "通常低于Brent",  brent: "通常高于WTI" },
+                  { item: "影响范围", wti: "美洲市场基准",   brent: "全球市场基准" },
+                ].map((row, i) => (
+                  <div key={i} className="grid grid-cols-3 gap-2 py-1 border-b border-gray-50 last:border-0">
+                    <span className="text-xs text-gray-400">{row.item}</span>
+                    <span className="text-xs font-medium text-gray-600 text-center">{row.wti}</span>
+                    <span className="text-xs font-medium text-gray-600 text-center">{row.brent}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 与主要资产相关性 */}
+            <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <span className="text-sm font-semibold text-gray-700">与主要资产相关性</span>
+              </div>
+              <div className="px-4 py-3 space-y-2">
+                {[
+                  { asset: "美元指数 DXY",  corr: "-0.55", desc: "中负相关：原油以美元计价", color: "#1565C0" },
+                  { asset: "黄金 XAU/USD",  corr: "+0.42", desc: "弱正相关：同为大宗商品",  color: "#F57F17" },
+                  { asset: "美股 S&P500",   corr: "+0.38", desc: "弱正相关：经济景气度",    color: "#D32F2F" },
+                  { asset: "人民币 CNY",    corr: "+0.35", desc: "弱正相关：能源进口影响",  color: "#E65100" },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center justify-between py-1 border-b border-gray-50 last:border-0">
+                    <div>
+                      <span className="text-xs font-semibold text-gray-700">{item.asset}</span>
+                      <span className="text-xs text-gray-400 ml-2">{item.desc}</span>
+                    </div>
+                    <span className="text-xs font-bold" style={{ color: item.color }}>{item.corr}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="px-4 pb-3 text-xs text-gray-400">注：相关系数为历史统计参考，实际相关性随市场环境变化</div>
+            </div>
+
+          </div>
         </div>
       )}
 
       {/* ── 日线历史 Tab ── */}
       {activeTab === "data" && (
-        <div className="flex-1 overflow-auto">
-          {klinesLoading ? (
-            <div className="flex items-center justify-center py-20 text-gray-400 text-sm">加载中...</div>
-          ) : rows.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-sm gap-2">
-              <span>暂无数据</span>
+        <>
+          {/* 品种切换 */}
+          <div style={{ background: "#fff", borderBottom: "1px solid #E5E7EB", display: "flex", alignItems: "center", padding: "8px 14px", gap: 8, flexShrink: 0 }}>
+            <span style={{ fontSize: 11, color: "#9CA3AF", marginRight: 4 }}>品种：</span>
+            {(["WTI", "BRENT"] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => { setHistoryType(t); setPage(1); }}
+                style={{
+                  padding: "4px 14px",
+                  fontSize: 12,
+                  fontWeight: historyType === t ? 700 : 400,
+                  background: historyType === t ? (t === "WTI" ? "#2E7D32" : "#00695C") : "#F3F4F6",
+                  color: historyType === t ? "#fff" : "#6B7280",
+                  border: "none",
+                  borderRadius: 20,
+                  cursor: "pointer",
+                }}
+              >
+                {t === "BRENT" ? "⛽ Brent" : "🛢 WTI"}
+              </button>
+            ))}
+            <span style={{ fontSize: 10, color: "#9CA3AF", marginLeft: "auto" }}>
+              {historyMeta?.total ? `共 ${historyMeta.total} 条` : ""}
+            </span>
+          </div>
+
+          <div className="flex-1 overflow-auto">
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-20 text-gray-400 text-sm">加载中...</div>
+            ) : historyRows.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-sm gap-2">
+                <span>暂无数据</span>
+              </div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+                <colgroup>
+                  <col style={{ width: "15%" }} />
+                  <col style={{ width: "14.2%" }} />
+                  <col style={{ width: "14.2%" }} />
+                  <col style={{ width: "14.2%" }} />
+                  <col style={{ width: "14.2%" }} />
+                  <col style={{ width: "14.2%" }} />
+                  <col style={{ width: "14%" }} />
+                </colgroup>
+                <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+                  <tr style={{ background: "#F3F4F6" }}>
+                    {["日期","开盘","收盘","最高","最低","涨跌%","振幅%"].map(h => (
+                      <th key={h} style={{ border: "1px solid #D1D5DB", padding: "6px 2px", textAlign: "center", color: "#6B7280", fontWeight: 500, fontSize: 11 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyRows.map((row, idx) => {
+                    const up    = row.changePct != null && row.changePct > 0;
+                    const down  = row.changePct != null && row.changePct < 0;
+                    const color = up ? "#EF4444" : down ? "#16A34A" : "#9CA3AF";
+                    const rowBg = idx % 2 === 0 ? "#fff" : "#F9FAFB";
+                    const shortDate = (() => {
+                      const d = row.date || "";
+                      const parts = d.replace(/-/g, "/").split("/");
+                      if (parts.length === 3) {
+                        const yy = parts[0].length === 4 ? parts[0].slice(-2) : parts[0];
+                        return `${yy}/${parts[1]}/${parts[2]}`;
+                      }
+                      return d;
+                    })();
+                    return (
+                      <tr key={row.date} style={{ background: rowBg }}>
+                        <td style={{ border: "1px solid #E5E7EB", padding: "4px 0", textAlign: "center", color: "#6B7280", fontFamily: "monospace", fontSize: 10, whiteSpace: "nowrap", overflow: "hidden" }}>{shortDate}</td>
+                        <td style={{ border: "1px solid #E5E7EB", padding: "4px 0", textAlign: "center", color: "#374151", fontFamily: "monospace", fontSize: 10 }}>{formatPrice(row.open, historyTheme.decimals)}</td>
+                        <td style={{ border: "1px solid #E5E7EB", padding: "4px 0", textAlign: "center", color, fontFamily: "monospace", fontSize: 10, fontWeight: 600 }}>{formatPrice(row.close, historyTheme.decimals)}</td>
+                        <td style={{ border: "1px solid #E5E7EB", padding: "4px 0", textAlign: "center", color: "#4B5563", fontFamily: "monospace", fontSize: 10 }}>{formatPrice(row.high, historyTheme.decimals)}</td>
+                        <td style={{ border: "1px solid #E5E7EB", padding: "4px 0", textAlign: "center", color: "#4B5563", fontFamily: "monospace", fontSize: 10 }}>{formatPrice(row.low, historyTheme.decimals)}</td>
+                        <td style={{ border: "1px solid #E5E7EB", padding: "4px 0", textAlign: "center", color, fontFamily: "monospace", fontSize: 10 }}>{formatPct(row.changePct)}</td>
+                        <td style={{ border: "1px solid #E5E7EB", padding: "4px 0", textAlign: "center", color: "#6B7280", fontFamily: "monospace", fontSize: 10 }}>
+                          {row.amplitudePct != null ? row.amplitudePct.toFixed(2) + "%" : "-"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* 分页 */}
+          {historyPages > 1 && (
+            <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-between">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1 || isFetching}
+                className="px-4 py-1.5 text-sm rounded border border-gray-200 text-gray-600 disabled:opacity-40"
+              >
+                上一页
+              </button>
+              <span className="text-xs text-gray-400">
+                第 {page} / {historyPages} 页 · 共 {historyTotal} 条
+              </span>
+              <button
+                onClick={() => setPage(p => Math.min(historyPages, p + 1))}
+                disabled={page >= historyPages || isFetching}
+                className="px-4 py-1.5 text-sm rounded border border-gray-200 text-gray-600 disabled:opacity-40"
+              >
+                下一页
+              </button>
             </div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-              <colgroup>
-                <col style={{ width: "15%" }} />
-                <col style={{ width: "14.2%" }} />
-                <col style={{ width: "14.2%" }} />
-                <col style={{ width: "14.2%" }} />
-                <col style={{ width: "14.2%" }} />
-                <col style={{ width: "14.2%" }} />
-                <col style={{ width: "14%" }} />
-              </colgroup>
-              <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
-                <tr style={{ background: "#F3F4F6" }}>
-                  {["日期","开盘","收盘","最高","最低","涨跌%","振幅%"].map(h => (
-                    <th key={h} style={{ border: "1px solid #D1D5DB", padding: "6px 2px", textAlign: "center", color: "#6B7280", fontWeight: 500, fontSize: 11 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row, idx) => {
-                  const up    = row.changePct != null && row.changePct > 0;
-                  const down  = row.changePct != null && row.changePct < 0;
-                  const color = up ? "#EF4444" : down ? "#16A34A" : "#9CA3AF";
-                  const rowBg = idx % 2 === 0 ? "#fff" : "#F9FAFB";
-                  const shortDate = (() => {
-                    const d = row.date || "";
-                    const parts = d.replace(/-/g, "/").split("/");
-                    if (parts.length === 3) {
-                      const yy = parts[0].length === 4 ? parts[0].slice(-2) : parts[0];
-                      return `${yy}/${parts[1]}/${parts[2]}`;
-                    }
-                    return d;
-                  })();
-                  return (
-                    <tr key={row.date} style={{ background: rowBg }}>
-                      <td style={{ border: "1px solid #E5E7EB", padding: "4px 0", textAlign: "center", color: "#6B7280", fontFamily: "monospace", fontSize: 10, whiteSpace: "nowrap", overflow: "hidden" }}>{shortDate}</td>
-                      <td style={{ border: "1px solid #E5E7EB", padding: "4px 0", textAlign: "center", color: "#374151", fontFamily: "monospace", fontSize: 10 }}>{formatPrice(row.open, theme.decimals)}</td>
-                      <td style={{ border: "1px solid #E5E7EB", padding: "4px 0", textAlign: "center", color, fontFamily: "monospace", fontSize: 10, fontWeight: 600 }}>{formatPrice(row.close, theme.decimals)}</td>
-                      <td style={{ border: "1px solid #E5E7EB", padding: "4px 0", textAlign: "center", color: "#4B5563", fontFamily: "monospace", fontSize: 10 }}>{formatPrice(row.high, theme.decimals)}</td>
-                      <td style={{ border: "1px solid #E5E7EB", padding: "4px 0", textAlign: "center", color: "#4B5563", fontFamily: "monospace", fontSize: 10 }}>{formatPrice(row.low, theme.decimals)}</td>
-                      <td style={{ border: "1px solid #E5E7EB", padding: "4px 0", textAlign: "center", color, fontFamily: "monospace", fontSize: 10 }}>{formatPct(row.changePct)}</td>
-                      <td style={{ border: "1px solid #E5E7EB", padding: "4px 0", textAlign: "center", color: "#6B7280", fontFamily: "monospace", fontSize: 10 }}>
-                        {row.amplitudePct != null ? row.amplitudePct.toFixed(2) + "%" : "-"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
           )}
-        </div>
+        </>
       )}
 
-      {/* ── 分页（仅日线历史 Tab） ── */}
-      {activeTab === "data" && totalPages > 1 && (
-        <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-between">
-          <button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page <= 1 || isFetching}
-            className="px-4 py-1.5 text-sm rounded border border-gray-200 text-gray-600 disabled:opacity-40"
-          >
-            上一页
-          </button>
-          <span className="text-xs text-gray-400">
-            第 {page} / {totalPages} 页 · 共 {totalRows} 条
-          </span>
-          <button
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={page >= totalPages || isFetching}
-            className="px-4 py-1.5 text-sm rounded border border-gray-200 text-gray-600 disabled:opacity-40"
-          >
-            下一页
-          </button>
-        </div>
-      )}
     </div>
   );
 }
