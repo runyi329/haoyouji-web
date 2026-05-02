@@ -759,3 +759,48 @@ export async function syncStocksFromTushare(): Promise<{ added: number; dates: s
 
   return { added: totalAdded, dates: processedDates };
 }
+
+// ─── 批量获取多个标的最新日线价格（用于美股/数字币首页展示）─────────────────────
+export async function getLatestStockPrices(symbols: string[]): Promise<Record<string, {
+  symbol: string;
+  date: string;
+  close: number;
+  open: number;
+  high: number;
+  low: number;
+  changePct: number | null;
+}>> {
+  const conn = await getDbConnection();
+  if (!conn || symbols.length === 0) return {};
+  try {
+    const placeholders = symbols.map(() => '?').join(',');
+    const [rows] = await (conn as any).execute(
+      `SELECT k.symbol, DATE_FORMAT(k.date, '%Y-%m-%d') as date,
+              k.open, k.high, k.low, k.close, k.change_pct as changePct
+       FROM crypto_klines k
+       INNER JOIN (
+         SELECT symbol, MAX(date) as max_date
+         FROM crypto_klines
+         WHERE symbol IN (${placeholders}) AND date >= '2000-01-01'
+         GROUP BY symbol
+       ) latest ON k.symbol = latest.symbol AND k.date = latest.max_date
+       WHERE k.symbol IN (${placeholders})`,
+      [...symbols, ...symbols]
+    );
+    const result: Record<string, any> = {};
+    for (const r of rows as any[]) {
+      result[r.symbol] = {
+        symbol: r.symbol,
+        date: r.date,
+        close: parseFloat(r.close),
+        open: parseFloat(r.open),
+        high: parseFloat(r.high),
+        low: parseFloat(r.low),
+        changePct: r.changePct !== null ? parseFloat(r.changePct) : null,
+      };
+    }
+    return result;
+  } catch (e) {
+    return {};
+  }
+}
