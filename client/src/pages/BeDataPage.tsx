@@ -184,70 +184,7 @@ function StreakStatsPanel({ allData }: { allData: { date: string; changePct: num
         </div>
       )}
 
-      {/* 连涨连跌赔率表 */}
-      {maxStreak > 0 && (() => {
-        const totalDays = allSorted.length;
-        const COL = '60px 1fr 1fr 1fr 1fr 1fr';
-        const hStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: COL, gap: 0, background: '#fafafa', borderTop: '1px solid #e5e7eb', borderBottom: '1px solid #e5e7eb', padding: '3px 0' };
-        const rStyle = (i: number): React.CSSProperties => ({ display: 'grid', gridTemplateColumns: COL, gap: 0, borderBottom: '1px solid #f0f0f0', padding: '2px 0', alignItems: 'center', background: i % 2 === 0 ? '#fff' : '#fafafa' });
-        const Header = () => (
-          <div style={hStyle}>
-            <span style={{ fontSize: 9, textAlign: 'center', color: '#9ca3af', fontWeight: 600 }}>天数</span>
-            <span style={{ fontSize: 9, textAlign: 'center', color: '#9ca3af', fontWeight: 600 }}>概率</span>
-            {['10%优', '15%优', '20%优', '25%优'].map(t => (
-              <span key={t} style={{ fontSize: 9, textAlign: 'center', color: '#b45309', fontWeight: 600 }}>{t}</span>
-            ))}
-          </div>
-        );
-        const makeRows = (streakMap: Record<number, number>, maxN: number, keyPrefix: string) => {
-          // 计算总段数（所有连涨/连跌段的总次数，即 ≥1天 的总次数）
-          const totalSegments = Object.values(streakMap).reduce((s, v) => s + v, 0);
-          return Array.from({ length: maxN }, (_, i) => i + 1).map(n => {
-            const cnt = streakMap[n] ?? 0;
-            // 条件概率：恰好连涨/连跌N天的次数 ÷ 总段数
-            const prob = totalSegments > 0 ? cnt / totalSegments : 0;
-            const fairOdds = prob > 0 ? 1 / prob : 0;
-            if (cnt === 0) return (
-              <div key={`${keyPrefix}-${n}`} style={rStyle(n)}>
-                <span style={{ fontSize: 9, textAlign: 'center', color: '#888', fontFamily: 'monospace' }}>{n}天</span>
-                <span style={{ fontSize: 9, textAlign: 'center', color: '#ccc', fontFamily: 'monospace' }}>-</span>
-                {[0.10, 0.15, 0.20, 0.25].map(edge => (
-                  <span key={edge} style={{ fontSize: 9, textAlign: 'center', color: '#ccc', fontFamily: 'monospace' }}>-</span>
-                ))}
-              </div>
-            );
-            return (
-              <div key={`${keyPrefix}-${n}`} style={rStyle(n)}>
-                <span style={{ fontSize: 9, textAlign: 'center', color: '#888', fontFamily: 'monospace' }}>{n}天</span>
-                <span style={{ fontSize: 9, textAlign: 'center', color: '#6b7280', fontFamily: 'monospace' }}>{(prob * 100).toFixed(2)}%</span>
-                {[0.10, 0.15, 0.20, 0.25].map(edge => (
-                  <span key={edge} style={{ fontSize: 9, textAlign: 'center', color: '#92400e', fontFamily: 'monospace', fontWeight: 600 }}>
-                    {(fairOdds * (1 - edge)).toFixed(2)}
-                  </span>
-                ))}
-              </div>
-            );
-          });
-        };
-        return (
-          <div className="px-4 pb-3">
-            <div style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', margin: '4px 0 4px 0' }}>赔率参考表
-              <span style={{ fontSize: 9, fontWeight: 400, color: '#9ca3af', marginLeft: 6 }}>含本金 · 概率基于当前时间段统计</span>
-            </div>
-            <div style={{ fontSize: 9, color: RED, fontWeight: 600, margin: '4px 0 2px 0' }}>↑ 连涨赔率</div>
-            <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
-              <Header />
-              {makeRows(upStreakMap, maxUpStreak, 'up')}
-            </div>
-            <div style={{ fontSize: 9, color: GREEN_A, fontWeight: 600, margin: '8px 0 2px 0' }}>↓ 连跌赔率</div>
-            <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
-              <Header />
-              {makeRows(downStreakMap, maxDownStreak, 'down')}
-            </div>
-            <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 6 }}>注：赔率含本金。条件概率 = 该连涨/连跌N天出现次数 ÷ 所有连涨/连跌段总次数，各天数概率之和 = 100%。</div>
-          </div>
-        );
-      })()}
+
     </div>
   );
 }
@@ -394,8 +331,8 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
         })}
       </div>
 
-      {/* 赔率表 */}
-      <div className="border-t border-gray-100 px-4 pt-2 pb-3">
+      {/* 赔率表 已删除 */}
+      {false && <div className="border-t border-gray-100 px-4 pt-2 pb-3">
         <div className="text-xs font-semibold text-gray-500 mb-1">赔率参考表
           <span className="text-xs font-normal text-gray-400 ml-2">含本金 · 绝对概率 · 庄家优势百分比越高赔率越低</span>
         </div>
@@ -544,12 +481,10 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
           );
         })()}
         <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 6 }}>注：赔率含本金。绝对概率：各区间天数 ÷ 总天数，所有涨跌区间概率之和 = 100%。</div>
-      </div>
+      </div>}
 
       {/* ── 时间切片对比表 ── */}
       <SliceCompareTable allData={allData} />
-      {/* ── 4档竞猜分界点热力图 ── */}
-      <FourTierTable allData={allData} />
     </div>
   );
 }
@@ -766,8 +701,9 @@ function SliceCompareTable({ allData }: { allData: { date: string; changePct: nu
   );
 }
 
-// 4档竞猜分界点热力图：行=4档（大涨/小涨/小跌/大跌），列=18个时间切片
-function FourTierTable({ allData }: { allData: { date: string; changePct: number | null }[] }) {
+// FourTierTable 已删除
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _FourTierTable_REMOVED({ allData }: { allData: { date: string; changePct: number | null }[] }) {
   const HOUSE_EDGE = 0.25;
 
   // 时间切片：近1~12月 + 近1~5年 + 全量（与 SliceCompareTable 完全一致）
