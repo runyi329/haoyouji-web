@@ -337,23 +337,18 @@ function OilQuoteCard({
         </div>
       </div>
 
-      {/* 最新收盘价 */}
-      <div style={{ marginBottom: 4 }}>
+       {/* 最新收盘价 + 涨跌幅（同一行） */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 6 }}>
         {klinesLoading
           ? <div style={{ width: 70, height: 18, borderRadius: 4, background: skeletonBg }} />
-          : <span style={{ fontSize: 18, fontWeight: 900, color: textMain, letterSpacing: -0.5 }}>
-              ${formatPrice(latestClose, theme.decimals)}
-            </span>
-        }
-      </div>
-
-      {/* 涨跌幅 */}
-      <div style={{ marginBottom: 6 }}>
-        {klinesLoading
-          ? <div style={{ width: 48, height: 13, borderRadius: 4, background: skeletonBg }} />
-          : <span style={{ fontSize: 13, fontWeight: 700, color: (latestChangePct ?? 0) >= 0 ? upColor : downColor }}>
-              {formatPct(latestChangePct)}
-            </span>
+          : <>
+              <span style={{ fontSize: 18, fontWeight: 900, color: textMain, letterSpacing: -0.5 }}>
+                ${formatPrice(latestClose, theme.decimals)}
+              </span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: (latestChangePct ?? 0) >= 0 ? upColor : downColor }}>
+                {formatPct(latestChangePct)}
+              </span>
+            </>
         }
       </div>
 
@@ -363,7 +358,7 @@ function OilQuoteCard({
           ["涨跌天数", statsLoading ? null : (statsData ? `↑${statsData.upDays} / ↓${statsData.downDays}` : "—")],
           ["涨跌比",   statsLoading ? null : (statsData ? `${statsData.upPct}% / ${statsData.downPct}%` : "—")],
           ["数据条数", metaLoading  ? null : `${total.toLocaleString()}条`],
-          ["起始日期", metaLoading  ? null : oldestDate],
+          ["起始日期", metaLoading  ? null : (oldestDate ? oldestDate.replace(/-/g, "/") : "")],
         ].map(([label, val], i) => (
           <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 16 }}>
             <span style={{ fontSize: 9, color: textSub }}>{label}</span>
@@ -844,7 +839,12 @@ export default function OilDetailPage() {
                     const rowBg = idx % 2 === 0 ? "#fff" : "#F9FAFB";
                     const shortDate = (() => {
                       const d = row.date || "";
-                      return d.replace(/-/g, "/");
+                      const parts = d.replace(/-/g, "/").split("/");
+                      if (parts.length === 3) {
+                        const yy = parts[0].length === 4 ? parts[0].slice(-2) : parts[0];
+                        return `${yy}/${parts[1]}/${parts[2]}`;
+                      }
+                      return d;
                     })();
                     return (
                       <tr key={row.date} style={{ background: rowBg }}>
