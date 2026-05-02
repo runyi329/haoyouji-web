@@ -565,6 +565,66 @@ async function startServer() {
     console.log('[竞猜结算] 已注册，每天北京时间 00:01 精确触发一次');
     // ──────────────────────────────────────────────────────
 
+    // ─── 数字币（BTC/ETH）：每日 UTC 00:10 自动拉取最新日线数据 ─────────────────
+    const CRYPTO_SYMBOLS = ['BTCUSDT', 'ETHUSDT'];
+
+    const scheduleCryptoSync = () => {
+      const now = new Date();
+      const { syncLatestFromBinance } = require('../db-crypto');
+
+      // 每天 UTC 00:10 触发（Binance 日线 UTC 00:00 收盘）
+      const target = new Date(Date.UTC(
+        now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+        0, 10, 0, 0
+      ));
+      if (target.getTime() <= now.getTime()) target.setUTCDate(target.getUTCDate() + 1);
+      const ms = target.getTime() - now.getTime();
+      const nextStr = target.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+      console.log(`[数字币同步] 下次触发时间: ${nextStr}`);
+
+      setTimeout(async () => {
+        try {
+          for (const sym of CRYPTO_SYMBOLS) {
+            try {
+              const r = await syncLatestFromBinance(sym);
+              console.log(`[数字币同步] ${sym} 新增 ${r.added} 条，最新日期 ${r.latestDate}`);
+            } catch (e: any) {
+              console.error(`[数字币同步] ${sym} 拉取失败:`, e.message);
+            }
+          }
+        } finally {
+          scheduleCryptoSync();
+        }
+      }, ms);
+    };
+    scheduleCryptoSync();
+    console.log('[数字币同步] 已注册，每天 UTC 00:10 自动拉取 BTC/ETH 日线数据');
+
+    // 启动时立即补齐所有缺失数据（数字币 + 美股）
+    setTimeout(async () => {
+      const { syncLatestFromBinance, syncStockFromYahoo } = require('../db-crypto');
+      console.log('[启动补齐] 开始补齐所有标的缺失数据...');
+      for (const sym of CRYPTO_SYMBOLS) {
+        try {
+          const r = await syncLatestFromBinance(sym);
+          console.log(`[启动补齐] ${sym} 新增 ${r.added} 条，最新日期 ${r.latestDate}`);
+        } catch (e: any) {
+          console.error(`[启动补齐] ${sym} 失败:`, e.message);
+        }
+      }
+      const US_STOCKS_BOOT = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META'];
+      for (const sym of US_STOCKS_BOOT) {
+        try {
+          const r = await syncStockFromYahoo(sym);
+          console.log(`[启动补齐] ${sym} 新增 ${r.added} 条，最新日期 ${r.latestDate}`);
+        } catch (e: any) {
+          console.error(`[启动补齐] ${sym} 失败:`, e.message);
+        }
+      }
+      console.log('[启动补齐] 全部完成');
+    }, 5000); // 服务器启动5秒后执行，避免启动期间资源竞争
+    // ──────────────────────────────────────────────────────
+
     // ─── 美股七姐妹：每日数据拉取 + 结算定时任务 ─────────────────────────────────
     // 夏令时（3月第2周日~11月第1周日）：美股收盘 BJT 04:00，任务触发 BJT 04:05
     // 冬令时（其余时间）：美股收盘 BJT 05:00，任务触发 BJT 05:05
