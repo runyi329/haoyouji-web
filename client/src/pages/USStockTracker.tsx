@@ -120,6 +120,22 @@ export default function USStockTracker() {
           </div>
         )}
 
+        {/* 美股日线数据快捷入口 */}
+        <div
+          className="mx-4 mt-4 rounded-2xl p-4 flex items-center gap-3 cursor-pointer active:opacity-80"
+          style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1.5px solid ${BORDER}` }}
+          onClick={() => setLocation('/ledger/52/be-data?filter=stocks')}
+        >
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${BLUE}15` }}>
+            <span style={{ fontSize: 22 }}>📊</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold" style={{ color: TEXT }}>美股日线数据</div>
+            <div className="text-xs mt-0.5" style={{ color: MUTED }}>AAPL / MSFT / GOOGL / AMZN / NVDA / TSLA / META</div>
+          </div>
+          <div style={{ color: BLUE, fontSize: 18 }}>›</div>
+        </div>
+
         {/* 总览卡片 */}
         {dataReady && (
           <div className="mx-4 mt-4 rounded-2xl p-4" style={{ background: CARD, boxShadow: CARD_SHADOW }}>

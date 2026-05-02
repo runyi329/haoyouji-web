@@ -9,17 +9,18 @@ import {
 } from "recharts";
 
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK";
-const SYMBOLS = [
-  { key: "BTCUSDT", label: "比特币 BTC", shortLabel: "BTC",  icon: `${CDN}/btc_732a725a.png` },
-  { key: "ETHUSDT", label: "以太坊 ETH", shortLabel: "ETH",  icon: `${CDN}/eth_6ebbf353.png` },
-  { key: "AAPL",   label: "苹果 AAPL",   shortLabel: "AAPL", icon: `${CDN}/aapl_3d0ebe4b.png` },
-  { key: "MSFT",   label: "微软 MSFT",   shortLabel: "MSFT", icon: `${CDN}/msft_6f03ba12.png` },
-  { key: "GOOGL",  label: "谷歌 GOOGL",  shortLabel: "GOOGL",icon: `${CDN}/googl_f5e51fc9.png` },
-  { key: "AMZN",   label: "亚马逊 AMZN",  shortLabel: "AMZN", icon: `${CDN}/amzn_62fb91c5.png` },
-  { key: "NVDA",   label: "英伟达 NVDA",  shortLabel: "NVDA", icon: `${CDN}/nvda_027844b0.png` },
-  { key: "TSLA",   label: "特斯拉 TSLA",  shortLabel: "TSLA", icon: `${CDN}/tsla_ce7ce165.png` },
-  { key: "META",   label: "Meta META",   shortLabel: "META", icon: `${CDN}/meta_c6a365b1.png` },
+const ALL_SYMBOLS = [
+  { key: "BTCUSDT", label: "比特币 BTC", shortLabel: "BTC",  icon: `${CDN}/btc_732a725a.png`, type: "crypto" },
+  { key: "ETHUSDT", label: "以太坊 ETH", shortLabel: "ETH",  icon: `${CDN}/eth_6ebbf353.png`, type: "crypto" },
+  { key: "AAPL",   label: "苹果 AAPL",   shortLabel: "AAPL", icon: `${CDN}/aapl_3d0ebe4b.png`, type: "stock" },
+  { key: "MSFT",   label: "微软 MSFT",   shortLabel: "MSFT", icon: `${CDN}/msft_6f03ba12.png`, type: "stock" },
+  { key: "GOOGL",  label: "谷歌 GOOGL",  shortLabel: "GOOGL",icon: `${CDN}/googl_f5e51fc9.png`, type: "stock" },
+  { key: "AMZN",   label: "亚马逊 AMZN",  shortLabel: "AMZN", icon: `${CDN}/amzn_62fb91c5.png`, type: "stock" },
+  { key: "NVDA",   label: "英伟达 NVDA",  shortLabel: "NVDA", icon: `${CDN}/nvda_027844b0.png`, type: "stock" },
+  { key: "TSLA",   label: "特斯拉 TSLA",  shortLabel: "TSLA", icon: `${CDN}/tsla_ce7ce165.png`, type: "stock" },
+  { key: "META",   label: "Meta META",   shortLabel: "META", icon: `${CDN}/meta_c6a365b1.png`, type: "stock" },
 ];
+const SYMBOLS = ALL_SYMBOLS; // 兼容旧引用
 
 const PAGE_SIZE = 60;
 const TABS = [
@@ -1188,10 +1189,20 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
 
 export default function BeDataPage() {
   const params = useParams();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 52;
 
-  const [activeSymbol, setActiveSymbol] = useState(SYMBOLS[0].key);
+  // 解析 URL filter 参数：crypto=数字币模式, stocks=美股模式, 默认=全部
+  const urlFilter = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('filter');
+  const filteredSymbols = urlFilter === 'crypto'
+    ? ALL_SYMBOLS.filter(s => s.type === 'crypto')
+    : urlFilter === 'stocks'
+    ? ALL_SYMBOLS.filter(s => s.type === 'stock')
+    : ALL_SYMBOLS;
+  const pageTitle = urlFilter === 'crypto' ? '数字币日线数据' : urlFilter === 'stocks' ? '美股日线数据' : 'BE数据';
+  const backPath = urlFilter === 'crypto' ? '/' : urlFilter === 'stocks' ? '/us-stock-tracker' : `/ledger/${ledgerId}/settings`;
+
+  const [activeSymbol, setActiveSymbol] = useState(filteredSymbols[0]?.key ?? ALL_SYMBOLS[0].key);
   const [activeTab, setActiveTab] = useState("data");
   const [page, setPage] = useState(1);
 
@@ -1256,12 +1267,12 @@ export default function BeDataPage() {
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="flex items-center h-12 px-3">
           <button
-            onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+            onClick={() => setLocation(backPath)}
             className="flex items-center text-gray-600 mr-2"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <span className="font-semibold text-gray-800 text-base flex-1">BE数据</span>
+          <span className="font-semibold text-gray-800 text-base flex-1">{pageTitle}</span>
           <button
             onClick={() => window.location.reload()}
             className="text-xs font-medium text-white bg-[#D32F2F] rounded-full px-3 py-1 active:opacity-70"
@@ -1272,7 +1283,7 @@ export default function BeDataPage() {
 
         {/* 币种 Tab - 横向滚动，只显示Logo图标 */}
         <div className="flex overflow-x-auto border-b border-gray-200 scrollbar-hide px-2 gap-1 py-1.5" style={{ WebkitOverflowScrolling: 'touch' }}>
-          {SYMBOLS.map((s) => (
+          {filteredSymbols.map((s) => (
             <button
               key={s.key}
               onClick={() => handleSymbolChange(s.key)}
