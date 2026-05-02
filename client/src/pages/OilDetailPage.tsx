@@ -364,7 +364,7 @@ function OilQuoteCard({
             <span style={{ fontSize: 9, color: textSub }}>{label}</span>
             {val == null
               ? <div style={{ width: 44, height: 9, borderRadius: 3, background: skeletonBg }} />
-              : <span style={{ fontSize: 10, fontWeight: 600, color: textMain }}>{val}</span>
+              : <span style={{ fontSize: 10, fontWeight: 600, color: textMain, textAlign: "right" }}>{val}</span>
             }
           </div>
         ))}
