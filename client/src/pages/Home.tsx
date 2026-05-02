@@ -880,7 +880,7 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
     { key: 'dxy',  label: '美元指数 DXY',  data: dollarIndex, unit: '',    decimals: 3,
       iconType: 'svg' as const, IconComp: DxyIcon, link: '/dxy' },
     { key: 'cnh',  label: 'USD/CNH',       data: usdCnh,     unit: '',      decimals: 4,
-      iconType: 'svg' as const, IconComp: CnhIcon },
+      iconType: 'svg' as const, IconComp: CnhIcon, link: '/cny-detail' },
     { key: 'btc',  label: 'BTC/USDT',      data: btcPrice,   unit: '',
       decimals: (btcPrice?.success && (btcPrice.price ?? 0) >= 100000) ? 0 : 1,
       iconType: 'svg' as const, IconComp: BtcIcon, link: '/ledger/52/be-data?filter=crypto' },
