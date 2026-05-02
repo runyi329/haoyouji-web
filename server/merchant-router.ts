@@ -1810,10 +1810,12 @@ export const merchantRouter = router({
           stock: merchantProducts.stock,
           extendedFields: merchantProducts.extendedFields,
           categoryName: merchantProductCategories.name,
-          ownerShopName: merchants.shopName,          badgeEnabled: merchantProducts.badgeEnabled,
+          ownerShopName: merchants.shopName,
+          badgeEnabled: merchantProducts.badgeEnabled,
           badgeLeftText: merchantProducts.badgeLeftText,
           badgeText: merchantProducts.badgeText,
-          // 分类信息   .from(merchantProducts)
+        })
+        .from(merchantProducts)
         .leftJoin(merchantProductCategories, eq(merchantProducts.categoryId, merchantProductCategories.id))
         .leftJoin(merchants, eq(merchantProducts.ownerMerchantId, merchants.id))
         .where(and(...conditions))
@@ -1823,18 +1825,4 @@ export const merchantRouter = router({
       return rows;
     }),
 
-  // 上传商品图片到 COS（管理员专用）
-  uploadProductImage: protectedProcedure
-    .input(z.object({
-      imageData: z.string(), // base64 字符串或 data URL
-      folder: z.string().default('merchant-products'),
-    }))
-    .mutation(async ({ ctx, input }) => {
-      const userRole = (ctx.user as any).role;
-      if (userRole !== 'super_admin' && userRole !== 'admin') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限上传商品图片' });
-      }
-      const url = await (uploadImageToCOS as any)(input.imageData, input.folder);
-      return { url };
-    }),
 });
