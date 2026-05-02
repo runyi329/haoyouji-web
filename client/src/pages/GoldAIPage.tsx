@@ -306,7 +306,9 @@ export default function GoldAIPage() {
               {/* 左：伦敦金 XAU/USD + 人民币折算价 */}
               <div className="pr-4" style={{ borderRight: `1px solid ${BORDER}` }}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold" style={{ color: MUTED }}>伦敦金</span>
+                  <span className="text-xs font-semibold" style={{ color: MUTED }}>
+                    伦敦金 <span style={{ color: BORDER, fontWeight: 400 }}>/</span> 纽约金
+                  </span>
                   <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "#FFF0F0", color: RED, fontSize: 10 }}>XAU/USD</span>
                 </div>
                 <div className="text-xl font-bold" style={{ color: TEXT }}>
