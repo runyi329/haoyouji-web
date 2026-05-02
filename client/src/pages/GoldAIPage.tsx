@@ -74,8 +74,8 @@ export default function GoldAIPage() {
   // 综合行情数据
   const { data: goldData, isLoading: goldLoading, refetch: refetchGold } =
     trpc.stock.getGoldComprehensive.useQuery(undefined, {
-      refetchInterval: 60_000,
-      staleTime: 30_000,
+      refetchInterval: 3_000,   // 每3秒实时刷新，与首页行情保持一致
+      staleTime: 1_000,
     });
 
   // K线数据
