@@ -1274,29 +1274,33 @@ export default function BeDataPage() {
             </button>
           </div>
 
-          {/* 第二行：左右分栏信息卡片 */}
-          {!isLoading && total > 0 && (
+          {/* 第二行：左右分栏信息卡片（始终占位，加载中显示骨架） */}
+          {(() => {
+            const cardLoading = isLoading || !metaData;
+            const skeletonStyle: React.CSSProperties = { height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)", marginBottom: 4 };
+            return (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
               {/* 左列：静态信息 */}
               <div style={{ borderRadius: 10, padding: "8px 10px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)" }}>
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 5, textTransform: "uppercase" }}>基本信息</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>数据条数</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{total.toLocaleString()}条</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>起始日期</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{oldestDate}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>最新日期</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{latestDate}</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>交易所</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#E3F2FD" }}>NASDAQ</span>
-                  </div>
+                  {['数据条数', '起始日期', '最新日期', '交易所'].map((label, i) => {
+                    const vals = [
+                      cardLoading ? null : `${total.toLocaleString()}条`,
+                      cardLoading ? null : oldestDate,
+                      cardLoading ? null : latestDate,
+                      'NASDAQ',
+                    ];
+                    return (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                        <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{label}</span>
+                        {vals[i] == null
+                          ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
+                          : <span style={{ fontSize: i === 3 ? 11 : 11, fontWeight: 700, color: i === 3 ? "#E3F2FD" : "#fff" }}>{vals[i]}</span>
+                        }
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1304,40 +1308,52 @@ export default function BeDataPage() {
               <div style={{ borderRadius: 10, padding: "8px 10px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)" }}>
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 5, textTransform: "uppercase" }}>实时行情</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  {/* 最新收盘 */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
                     <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>最新收盘</span>
-                    <span style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>
-                      {latestClose != null ? formatPrice(latestClose) : "—"}
-                    </span>
+                    {isLoading
+                      ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
+                      : <span style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>{latestClose != null ? formatPrice(latestClose) : "—"}</span>
+                    }
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  {/* 当日涨跌 */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
                     <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>当日涨跌</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: (latestChangePct ?? 0) >= 0 ? "#FF8A80" : "#69F0AE" }}>
-                      {latestChangePct != null ? ((latestChangePct >= 0 ? "+" : "") + latestChangePct.toFixed(2) + "%") : "—"}
-                    </span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>涨跌天数</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
-                      {stats ? (
-                        <span>
-                          <span style={{ color: "#FF8A80" }}>↑{stats.upDays}</span>
-                          <span style={{ color: "rgba(255,255,255,0.4)", margin: "0 2px" }}>/</span>
-                          <span style={{ color: "#69F0AE" }}>↓{stats.downDays}</span>
+                    {isLoading
+                      ? <div style={{ width: 40, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
+                      : <span style={{ fontSize: 12, fontWeight: 700, color: (latestChangePct ?? 0) >= 0 ? "#FF8A80" : "#69F0AE" }}>
+                          {latestChangePct != null ? ((latestChangePct >= 0 ? "+" : "") + latestChangePct.toFixed(2) + "%") : "—"}
                         </span>
-                      ) : "—"}
-                    </span>
+                    }
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  {/* 涨跌天数 */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>涨跌天数</span>
+                    {statsLoading
+                      ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
+                      : <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
+                          {stats
+                            ? <span><span style={{ color: "#FF8A80" }}>↑{stats.upDays}</span><span style={{ color: "rgba(255,255,255,0.4)", margin: "0 2px" }}>/</span><span style={{ color: "#69F0AE" }}>↓{stats.downDays}</span></span>
+                            : "—"
+                          }
+                        </span>
+                    }
+                  </div>
+                  {/* 涨跌比 */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
                     <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>涨跌比</span>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
-                      {stats ? `${stats.upPct}% / ${stats.downPct}%` : "—"}
-                    </span>
+                    {statsLoading
+                      ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
+                      : <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
+                          {stats ? `${stats.upPct}% / ${stats.downPct}%` : "—"}
+                        </span>
+                    }
                   </div>
                 </div>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* 第三行： AI × 股票名 三段式分析 */}
           <div
