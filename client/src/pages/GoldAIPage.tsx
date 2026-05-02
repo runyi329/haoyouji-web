@@ -295,67 +295,62 @@ export default function GoldAIPage() {
         </button>
       </div>
 
-      {/* ── 三品种行情卡片 ── */}
+      {/* ── 三品种行情卡片（并列展示）── */}
       <div className="mx-0 mt-0" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
         {goldLoading && !goldData ? (
           <div className="text-center py-6" style={{ color: MUTED }}>行情加载中...</div>
         ) : (
           <div className="px-4 pt-4 pb-4">
-            {/* 伦敦金 / 纽约金 主价格 */}
-            <div className="mb-3">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold" style={{ color: MUTED }}>伦敦金 / 纽约金</span>
-                <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "#FFF0F0", color: RED, fontWeight: 600 }}>XAU/USD</span>
-              </div>
-              <div className="flex items-baseline gap-3">
-                <span className="text-3xl font-bold" style={{ color: TEXT }}>
+            {/* 三品种并列：XAU/USD | 人民币换算价 | AU9999上海金 */}
+            <div className="grid grid-cols-3 gap-0" style={{ borderBottom: `1px solid ${BORDER}`, paddingBottom: 12, marginBottom: 12 }}>
+              {/* 伦敦金 XAU/USD */}
+              <div className="pr-3" style={{ borderRight: `1px solid ${BORDER}` }}>
+                <div className="text-xs mb-1" style={{ color: MUTED }}>伦敦金</div>
+                <div className="text-sm font-bold" style={{ color: TEXT }}>
                   {xau?.price ? xau.price.toFixed(2) : "--"}
-                </span>
-                <span className="text-sm" style={{ color: MUTED }}>美元/盎司</span>
+                </div>
+                <div className="text-xs" style={{ color: MUTED }}>美元/盎司</div>
                 {xau && xau.price > 0 && (
-                  <span className="text-base font-bold" style={{ color: pctColor(xau.changePercent) }}>
+                  <div className="text-xs font-semibold mt-0.5" style={{ color: pctColor(xau.changePercent) }}>
                     {pctSign(xau.changePercent)}{xau.changePercent.toFixed(2)}%
-                  </span>
+                  </div>
                 )}
               </div>
-              {xau && xau.price > 0 && (
-                <div className="flex gap-4 mt-1 text-xs" style={{ color: MUTED }}>
-                  <span>开 {xau.open.toFixed(2)}</span>
-                  <span style={{ color: RED }}>高 {xau.high.toFixed(2)}</span>
-                  <span style={{ color: GREEN_A }}>低 {xau.low.toFixed(2)}</span>
-                  <span>昨收 {xau.prevClose.toFixed(2)}</span>
-                </div>
-              )}
-            </div>
-
-            {/* 分隔线 */}
-            <div style={{ height: 1, background: BORDER, margin: "0 0 12px 0" }} />
-
-            {/* 人民币换算价 + 上海金参考价 */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl p-3" style={{ background: "#FFF8F2", border: `1px solid ${BORDER}` }}>
-                <div className="text-xs mb-1" style={{ color: MUTED }}>人民币换算价</div>
-                <div className="text-lg font-bold" style={{ color: TEXT }}>
+              {/* 人民币换算价 */}
+              <div className="px-3" style={{ borderRight: `1px solid ${BORDER}` }}>
+                <div className="text-xs mb-1" style={{ color: MUTED }}>人民币价</div>
+                <div className="text-sm font-bold" style={{ color: TEXT }}>
                   {cny?.price ? cny.price.toFixed(2) : "--"}
                 </div>
                 <div className="text-xs" style={{ color: MUTED }}>元/克</div>
                 {cny && cny.price > 0 && (
-                  <div className="text-xs mt-0.5 font-semibold" style={{ color: pctColor(cny.changePercent) }}>
+                  <div className="text-xs font-semibold mt-0.5" style={{ color: pctColor(cny.changePercent) }}>
                     {pctSign(cny.changePercent)}{cny.changePercent.toFixed(2)}%
                   </div>
                 )}
               </div>
-              <div className="rounded-xl p-3" style={{ background: "#FFF8F2", border: `1px solid ${BORDER}` }}>
-                <div className="text-xs mb-1" style={{ color: MUTED }}>上海金（参考）</div>
-                <div className="text-lg font-bold" style={{ color: TEXT }}>
+              {/* AU9999 上海金参考价 */}
+              <div className="pl-3">
+                <div className="text-xs mb-1" style={{ color: MUTED }}>上海金</div>
+                <div className="text-sm font-bold" style={{ color: TEXT }}>
                   {cny?.price ? cny.price.toFixed(2) : "--"}
                 </div>
-                <div className="text-xs" style={{ color: MUTED }}>元/克 · AU9999</div>
+                <div className="text-xs" style={{ color: MUTED }}>元/克 AU9999</div>
                 <div className="text-xs mt-0.5" style={{ color: MUTED }}>
-                  汇率 {usdCny.toFixed(4)}
+                  ≈汇率 {usdCny.toFixed(2)}
                 </div>
               </div>
             </div>
+
+            {/* XAU/USD 详细行情（高低开收） */}
+            {xau && xau.price > 0 && (
+              <div className="flex gap-4 text-xs" style={{ color: MUTED }}>
+                <span>开 <span style={{ color: TEXT, fontWeight: 600 }}>{xau.open.toFixed(2)}</span></span>
+                <span>高 <span style={{ color: RED, fontWeight: 600 }}>{xau.high.toFixed(2)}</span></span>
+                <span>低 <span style={{ color: GREEN_A, fontWeight: 600 }}>{xau.low.toFixed(2)}</span></span>
+                <span>昨收 <span style={{ color: TEXT, fontWeight: 600 }}>{xau.prevClose.toFixed(2)}</span></span>
+              </div>
+            )}
           </div>
         )}
       </div>
