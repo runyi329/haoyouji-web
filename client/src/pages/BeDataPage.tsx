@@ -1338,7 +1338,7 @@ export default function BeDataPage() {
 
       {/* 功能 Tab */}
       <div className="bg-white border-b border-gray-200 flex">
-        {TABS.map((t) => (
+        {TABS.filter((t) => !(urlFilter === 'stocks' && t.key === 'predict')).map((t) => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
