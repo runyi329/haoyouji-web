@@ -1193,7 +1193,9 @@ export default function BeDataPage() {
   const ledgerId = params?.id ? parseInt(params.id) : 52;
 
   // 解析 URL filter 参数：crypto=数字币模式, stocks=美股模式, 默认=全部
-  const urlFilter = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('filter');
+  const urlParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const urlFilter = urlParams.get('filter');
+  const urlSymbol = urlParams.get('symbol'); // 美股模式下直接指定的股票（如 AAPL.US）
   const filteredSymbols = urlFilter === 'crypto'
     ? ALL_SYMBOLS.filter(s => s.type === 'crypto')
     : urlFilter === 'stocks'
@@ -1201,8 +1203,15 @@ export default function BeDataPage() {
     : ALL_SYMBOLS;
   const pageTitle = urlFilter === 'crypto' ? '数字币日线数据' : urlFilter === 'stocks' ? '美股日线数据' : 'BE数据';
   const backPath = urlFilter === 'crypto' ? '/' : urlFilter === 'stocks' ? '/us-stock-tracker' : `/ledger/${ledgerId}/settings`;
+  // 美股模式下隐藏股票切换 tab
+  const hideSymbolTabs = urlFilter === 'stocks';
 
-  const [activeSymbol, setActiveSymbol] = useState(filteredSymbols[0]?.key ?? ALL_SYMBOLS[0].key);
+  // 美股模式下，优先用 URL 中的 symbol 参数确定初始股票
+  const initialSymbol = urlFilter === 'stocks' && urlSymbol
+    ? (ALL_SYMBOLS.find(s => s.symbol === urlSymbol || s.key === urlSymbol || s.key === urlSymbol.replace('.US', ''))?.key ?? filteredSymbols[0]?.key ?? ALL_SYMBOLS[0].key)
+    : (filteredSymbols[0]?.key ?? ALL_SYMBOLS[0].key);
+
+  const [activeSymbol, setActiveSymbol] = useState(initialSymbol);
   const [activeTab, setActiveTab] = useState("data");
   const [page, setPage] = useState(1);
 
@@ -1281,8 +1290,8 @@ export default function BeDataPage() {
           </button>
         </div>
 
-        {/* 币种 Tab - 横向滚动，只显示Logo图标 */}
-        <div className="flex overflow-x-auto border-b border-gray-200 scrollbar-hide px-2 gap-1 py-1.5" style={{ WebkitOverflowScrolling: 'touch' }}>
+        {/* 币种 Tab - 横向滚动，只显示Logo图标（美股模式下隐藏） */}
+        {!hideSymbolTabs && <div className="flex overflow-x-auto border-b border-gray-200 scrollbar-hide px-2 gap-1 py-1.5" style={{ WebkitOverflowScrolling: 'touch' }}>
           {filteredSymbols.map((s) => (
             <button
               key={s.key}
@@ -1304,7 +1313,7 @@ export default function BeDataPage() {
               }`}>{s.shortLabel}</span>
             </button>
           ))}
-        </div>
+        </div>}
       </div>
 
       {/* 统计栏 */}
