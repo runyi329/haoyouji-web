@@ -20210,6 +20210,24 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       const prevClose = price > 0 ? price - change : 0;
       return { price, prevClose, change, changePercent, success: price > 0 };
     }),
+    /** 以太坊实时行情（从 price-scanner 内存缓存读取，遵循 crypto-price-unified 规范） */
+    getEthPrice: publicProcedure.query(async () => {
+      const { getLatestPrice, getLatestChangePercent } = await import('./price-scanner');
+      const price = getLatestPrice('ETH') ?? 0;
+      const changePercent = getLatestChangePercent('ETH') ?? 0;
+      const change = price > 0 ? price * changePercent / 100 : 0;
+      const prevClose = price > 0 ? price - change : 0;
+      return { price, prevClose, change, changePercent, success: price > 0 };
+    }),
+    /** 索拉纳实时行情（从 price-scanner 内存缓存读取，遵循 crypto-price-unified 规范） */
+    getSolPrice: publicProcedure.query(async () => {
+      const { getLatestPrice, getLatestChangePercent } = await import('./price-scanner');
+      const price = getLatestPrice('SOL') ?? 0;
+      const changePercent = getLatestChangePercent('SOL') ?? 0;
+      const change = price > 0 ? price * changePercent / 100 : 0;
+      const prevClose = price > 0 ? price - change : 0;
+      return { price, prevClose, change, changePercent, success: price > 0 };
+    }),
     // ========== 港股全生命周期相关接口 ==========
     /** 港股全生命周期趋势折线图（hk_trend_cache）*/
     hkTrendData: publicProcedure
