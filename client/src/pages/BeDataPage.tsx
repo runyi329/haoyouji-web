@@ -23,7 +23,7 @@ const ALL_SYMBOLS = [
 ];
 const SYMBOLS = ALL_SYMBOLS; // 兼容旧引用
 
-const PAGE_SIZE = 20; // 每页显示20条，手机一屏内展示完整
+const PAGE_SIZE = 100; // 每页显示100条
 const TABS = [
   { key: "analysis", label: "数据分析" },
   { key: "data", label: "日线数据" },
@@ -1404,13 +1404,13 @@ export default function BeDataPage() {
                   })();
                   return (
                     <tr key={row.date} style={{ background: rowBg }}>
-                      <td style={{ border: '1px solid #E5E7EB', padding: '5px 2px', textAlign: 'center', color: '#6B7280', fontFamily: 'monospace', fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden' }}>{shortDate}</td>
-                      <td style={{ border: '1px solid #E5E7EB', padding: '5px 2px', textAlign: 'right', color: '#374151', fontFamily: 'monospace', fontSize: 10, paddingRight: 4 }}>{formatPrice(row.open)}</td>
-                      <td style={{ border: '1px solid #E5E7EB', padding: '5px 2px', textAlign: 'right', color, fontFamily: 'monospace', fontSize: 10, fontWeight: 600, paddingRight: 4 }}>{formatPrice(row.close)}</td>
-                      <td style={{ border: '1px solid #E5E7EB', padding: '5px 2px', textAlign: 'right', color: '#4B5563', fontFamily: 'monospace', fontSize: 10, paddingRight: 4 }}>{formatPrice(row.high)}</td>
-                      <td style={{ border: '1px solid #E5E7EB', padding: '5px 2px', textAlign: 'right', color: '#4B5563', fontFamily: 'monospace', fontSize: 10, paddingRight: 4 }}>{formatPrice(row.low)}</td>
-                      <td style={{ border: '1px solid #E5E7EB', padding: '5px 2px', textAlign: 'right', color, fontFamily: 'monospace', fontSize: 10, paddingRight: 4 }}>{formatPct(row.changePct)}</td>
-                      <td style={{ border: '1px solid #E5E7EB', padding: '5px 2px', textAlign: 'right', color: '#6B7280', fontFamily: 'monospace', fontSize: 10, paddingRight: 4 }}>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#6B7280', fontFamily: 'monospace', fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden' }}>{shortDate}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#374151', fontFamily: 'monospace', fontSize: 10 }}>{formatPrice(row.open)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color, fontFamily: 'monospace', fontSize: 10, fontWeight: 600 }}>{formatPrice(row.close)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#4B5563', fontFamily: 'monospace', fontSize: 10 }}>{formatPrice(row.high)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#4B5563', fontFamily: 'monospace', fontSize: 10 }}>{formatPrice(row.low)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color, fontFamily: 'monospace', fontSize: 10 }}>{formatPct(row.changePct)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#6B7280', fontFamily: 'monospace', fontSize: 10 }}>
                         {row.amplitudePct != null ? row.amplitudePct.toFixed(2) + '%' : '-'}
                       </td>
                     </tr>
