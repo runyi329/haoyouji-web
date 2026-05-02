@@ -22,14 +22,15 @@ const GREEN = "#00B050";
 const CARD_SHADOW = "0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06)";
 
 // ─── 七巨头配置 ────────────────────────────────────────────
+const COS = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets";
 const MEGA_SEVEN = [
-  { symbol: "AAPL.US",  name: "苹果",   code: "AAPL",  emoji: "🍎" },
-  { symbol: "MSFT.US",  name: "微软",   code: "MSFT",  emoji: "🪟" },
-  { symbol: "NVDA.US",  name: "英伟达", code: "NVDA",  emoji: "🎮" },
-  { symbol: "GOOGL.US", name: "谷歌",   code: "GOOGL", emoji: "🔍" },
-  { symbol: "AMZN.US",  name: "亚马逊", code: "AMZN",  emoji: "📦" },
-  { symbol: "META.US",  name: "Meta",   code: "META",  emoji: "👓" },
-  { symbol: "TSLA.US",  name: "特斯拉", code: "TSLA",  emoji: "⚡" },
+  { symbol: "AAPL.US",  name: "Apple",     code: "AAPL",  logo: `${COS}/logo_apple_3d_t_16b8b55f.png` },
+  { symbol: "MSFT.US",  name: "Microsoft", code: "MSFT",  logo: `${COS}/logo_microsoft_3d_t_4719f9c5.png` },
+  { symbol: "NVDA.US",  name: "NVIDIA",    code: "NVDA",  logo: `${COS}/logo_nvidia_3d_t_d451eb3d.png` },
+  { symbol: "GOOGL.US", name: "Alphabet",  code: "GOOGL", logo: `${COS}/logo_google_3d_t_cd971ae7.png` },
+  { symbol: "AMZN.US",  name: "Amazon",    code: "AMZN",  logo: `${COS}/logo_amazon_3d_t_0c61d380.png` },
+  { symbol: "META.US",  name: "Meta",      code: "META",  logo: `${COS}/logo_meta_3d_t_5b7237ab.png` },
+  { symbol: "TSLA.US",  name: "Tesla",     code: "TSLA",  logo: `${COS}/logo_tesla_3d_t_0d585ca4.png` },
 ];
 
 function Skeleton({ w = "full", h = 4 }: { w?: string; h?: number }) {
@@ -45,44 +46,68 @@ function PriceCard({
   stock,
   priceData,
   onClick,
+  index,
+  total,
 }: {
   stock: typeof MEGA_SEVEN[0];
   priceData?: { close: number; changePct: number | null; date: string };
   onClick: () => void;
+  index: number;
+  total: number;
 }) {
   const isUp = (priceData?.changePct ?? 0) >= 0;
-  const color = isUp ? RED : GREEN;
+  const changeColor = isUp ? RED : GREEN;
+  const changeBg = isUp ? "rgba(211,47,47,0.08)" : "rgba(0,176,80,0.08)";
   const sign = isUp ? "+" : "";
 
   return (
     <div
-      className="rounded-2xl p-3 cursor-pointer active:opacity-80 flex flex-col gap-1"
+      className="flex items-center cursor-pointer active:opacity-80"
       style={{
-        background: CARD,
-        boxShadow: CARD_SHADOW,
-        border: `1.5px solid ${BORDER}`,
+        padding: "10px 4px",
+        borderBottom: index < total - 1 ? `1px solid ${BORDER}` : "none",
       }}
       onClick={onClick}
     >
-      {/* 公司标识行 */}
-      <div className="flex items-center gap-1.5">
-        <span style={{ fontSize: 16 }}>{stock.emoji}</span>
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-bold truncate" style={{ color: TEXT }}>{stock.name}</div>
-          <div className="text-xs" style={{ color: MUTED, fontSize: 10 }}>{stock.code}</div>
-        </div>
+      {/* 立体 Logo */}
+      <div className="flex-shrink-0 flex items-center justify-center" style={{ width: 44, height: 44 }}>
+        <img
+          src={stock.logo}
+          alt={stock.name}
+          style={{ width: 38, height: 38, objectFit: "contain", filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.15))" }}
+        />
       </div>
 
-      {/* 价格 */}
-      <div className="mt-0.5">
+      {/* 公司名 + 代码 */}
+      <div className="flex flex-col ml-3" style={{ flex: 1, minWidth: 0 }}>
+        <span className="font-semibold truncate" style={{ color: TEXT, fontSize: 14, lineHeight: 1.3 }}>{stock.name}</span>
+        <span style={{ color: MUTED, fontSize: 11, lineHeight: 1.3 }}>{stock.code}</span>
+        {priceData && (
+          <span style={{ color: MUTED, fontSize: 9, lineHeight: 1.5 }}>{priceData.date}</span>
+        )}
+      </div>
+
+      {/* 价格 + 涨跌幅 */}
+      <div className="flex flex-col items-end ml-2 flex-shrink-0">
         {priceData ? (
           <>
-            <div className="text-base font-bold leading-tight" style={{ color: TEXT }}>
+            <span className="font-bold" style={{ color: TEXT, fontSize: 16, lineHeight: 1.3 }}>
               ${priceData.close.toFixed(2)}
-            </div>
-            <div className="text-xs font-medium mt-0.5" style={{ color }}>
+            </span>
+            <span
+              style={{
+                color: changeColor,
+                fontSize: 12,
+                fontWeight: 600,
+                lineHeight: 1.3,
+                background: changeBg,
+                borderRadius: 5,
+                padding: "1px 6px",
+                marginTop: 2,
+              }}
+            >
               {sign}{priceData.changePct?.toFixed(2) ?? "—"}%
-            </div>
+            </span>
           </>
         ) : (
           <>
@@ -92,12 +117,8 @@ function PriceCard({
         )}
       </div>
 
-      {/* 日期 */}
-      {priceData && (
-        <div className="text-xs" style={{ color: MUTED, fontSize: 9 }}>
-          {priceData.date}
-        </div>
-      )}
+      {/* 右箭头 */}
+      <span style={{ color: MUTED, fontSize: 14, marginLeft: 8, opacity: 0.5 }}>›</span>
     </div>
   );
 }
@@ -181,14 +202,17 @@ export default function USStockTracker() {
       {/* ── 主内容区 ── */}
       <div className="flex-1 overflow-y-auto pb-8">
 
-        {/* 七巨头行情网格 */}
+        {/* 七巨头行情列表 */}
         <div className="px-4 mt-4">
           <div className="flex items-center justify-between mb-2">
             <div className="text-sm font-bold" style={{ color: TEXT }}>七巨头最新收盘价</div>
             <div className="text-xs" style={{ color: MUTED }}>点击查看日线数据</div>
           </div>
-          <div className="grid grid-cols-3 gap-2.5">
-            {MEGA_SEVEN.map((stock) => {
+          <div
+            className="rounded-2xl overflow-hidden"
+            style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1.5px solid ${BORDER}`, padding: "0 12px" }}
+          >
+            {MEGA_SEVEN.map((stock, idx) => {
               const pd = latestPrices?.[stock.symbol];
               return (
                 <PriceCard
@@ -196,6 +220,8 @@ export default function USStockTracker() {
                   stock={stock}
                   priceData={pd}
                   onClick={() => setLocation(`/ledger/52/be-data?filter=stocks&symbol=${stock.symbol}`)}
+                  index={idx}
+                  total={MEGA_SEVEN.length}
                 />
               );
             })}
