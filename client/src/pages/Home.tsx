@@ -1020,13 +1020,13 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
 
 // ─── 七巨头行情横向滑动条 ────────────────────────────────────────────────────
 const MEGA_SEVEN_HOME = [
-  { symbol: "AAPL.US", name: "苹果",   code: "AAPL",  emoji: "🍎" },
-  { symbol: "MSFT.US", name: "微软",   code: "MSFT",  emoji: "🪟" },
-  { symbol: "NVDA.US", name: "英伟达", code: "NVDA",  emoji: "🎮" },
-  { symbol: "GOOGL.US",name: "谷歌",  code: "GOOGL", emoji: "🔍" },
-  { symbol: "AMZN.US", name: "亚马逊", code: "AMZN", emoji: "📦" },
-  { symbol: "META.US", name: "Meta",  code: "META",  emoji: "👓" },
-  { symbol: "TSLA.US", name: "特斯拉", code: "TSLA", emoji: "⚡" },
+  { symbol: "AAPL.US",  name: "Apple",   code: "AAPL",  logo: "/logo_apple_3d_t.png" },
+  { symbol: "MSFT.US",  name: "Microsoft", code: "MSFT", logo: "/logo_microsoft_3d_t.png" },
+  { symbol: "NVDA.US",  name: "NVIDIA",  code: "NVDA",  logo: "/logo_nvidia_3d_t.png" },
+  { symbol: "GOOGL.US", name: "Alphabet", code: "GOOGL", logo: "/logo_google_3d_t.png" },
+  { symbol: "AMZN.US",  name: "Amazon",  code: "AMZN",  logo: "/logo_amazon_3d_t.png" },
+  { symbol: "META.US",  name: "Meta",    code: "META",  logo: "/logo_meta_3d_t.png" },
+  { symbol: "TSLA.US",  name: "Tesla",   code: "TSLA",  logo: "/logo_tesla_3d_t.png" },
 ];
 
 const MegaSevenStrip = React.memo(function MegaSevenStrip() {
@@ -1037,53 +1037,77 @@ const MegaSevenStrip = React.memo(function MegaSevenStrip() {
   );
 
   return (
-    <div className="px-3 py-1.5" style={{ background: 'transparent' }}>
+    <div className="px-3 pt-2 pb-1" style={{ background: 'transparent' }}>
       {/* 标题行 */}
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-xs font-semibold" style={{ color: 'rgba(201,168,76,0.9)', letterSpacing: '0.05em' }}>美股七巨头</span>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold tracking-wider" style={{ color: 'rgba(201,168,76,0.9)' }}>美股七巨头</span>
         <button
           onClick={() => setLocation('/us-stock-tracker')}
           className="text-xs"
           style={{ color: 'rgba(201,168,76,0.7)' }}
         >查看全部 ›</button>
       </div>
-      {/* 横向滑动卡片 */}
-      <div
-        className="flex gap-2 overflow-x-auto"
-        style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', paddingBottom: '2px' }}
-      >
-        {MEGA_SEVEN_HOME.map((stock) => {
+      {/* 竖向列表：每只股票一行 */}
+      <div className="flex flex-col" style={{ gap: '1px' }}>
+        {MEGA_SEVEN_HOME.map((stock, idx) => {
           const pd = latestPrices?.[stock.symbol];
           const isUp = (pd?.changePct ?? 0) >= 0;
-          const color = isUp ? '#A80000' : '#16a34a';
+          const changeColor = isUp ? '#ef4444' : '#22c55e';
+          const changeBg   = isUp ? 'rgba(239,68,68,0.12)' : 'rgba(34,197,94,0.12)';
           return (
             <div
               key={stock.symbol}
-              className="flex-shrink-0 rounded-xl cursor-pointer active:opacity-80"
+              className="flex items-center cursor-pointer active:opacity-75"
               style={{
-                background: 'rgba(255,255,255,0.07)',
-                border: '1px solid rgba(201,168,76,0.2)',
-                padding: '6px 10px',
-                minWidth: '80px',
+                padding: '7px 4px',
+                borderBottom: idx < MEGA_SEVEN_HOME.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
               }}
               onClick={() => setLocation(`/ledger/52/be-data?filter=stocks&symbol=${stock.symbol}`)}
             >
-              <div className="flex items-center gap-1 mb-0.5">
-                <span style={{ fontSize: 12 }}>{stock.emoji}</span>
-                <span className="text-xs font-semibold" style={{ color: '#F5D78E', fontSize: 11 }}>{stock.code}</span>
+              {/* Logo */}
+              <div
+                className="flex-shrink-0 flex items-center justify-center"
+                style={{ width: 36, height: 36 }}
+              >
+                <img
+                  src={stock.logo}
+                  alt={stock.name}
+                  style={{ width: 32, height: 32, objectFit: 'contain', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.5))' }}
+                />
               </div>
-              {pd ? (
-                <>
-                  <div className="text-xs font-bold" style={{ color: '#FFFFFF', fontSize: 12 }}>
-                    ${pd.close.toFixed(2)}
-                  </div>
-                  <div className="text-xs font-medium" style={{ color, fontSize: 10 }}>
-                    {isUp ? '+' : ''}{(pd.changePct ?? 0).toFixed(2)}%
-                  </div>
-                </>
-              ) : (
-                <div className="text-xs" style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>--</div>
-              )}
+              {/* 公司名 + 代码 */}
+              <div className="flex flex-col ml-2" style={{ minWidth: 0, flex: 1 }}>
+                <span className="font-semibold truncate" style={{ color: '#FFFFFF', fontSize: 13, lineHeight: 1.3 }}>{stock.name}</span>
+                <span style={{ color: 'rgba(245,215,142,0.7)', fontSize: 10, lineHeight: 1.3 }}>{stock.code}</span>
+              </div>
+              {/* 价格 + 涨跌幅 */}
+              <div className="flex flex-col items-end ml-2 flex-shrink-0">
+                {pd ? (
+                  <>
+                    <span className="font-bold" style={{ color: '#FFFFFF', fontSize: 14, lineHeight: 1.3 }}>
+                      ${pd.close.toFixed(2)}
+                    </span>
+                    <span
+                      className="font-medium"
+                      style={{
+                        color: changeColor,
+                        fontSize: 11,
+                        lineHeight: 1.3,
+                        background: changeBg,
+                        borderRadius: 4,
+                        padding: '0 4px',
+                        marginTop: 1,
+                      }}
+                    >
+                      {isUp ? '+' : ''}{(pd.changePct ?? 0).toFixed(2)}%
+                    </span>
+                  </>
+                ) : (
+                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>--</span>
+                )}
+              </div>
+              {/* 右箭头 */}
+              <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 12, marginLeft: 6 }}>›</span>
             </div>
           );
         })}
