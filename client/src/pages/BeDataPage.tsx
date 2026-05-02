@@ -1255,14 +1255,7 @@ export default function BeDataPage() {
                 <div style={{ fontSize: 10, fontWeight: 700, color: "#fff", lineHeight: 1.4, marginTop: 1 }}>{oldestDate}</div>
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,0.6)", lineHeight: 1.3 }}>~ {latestDate}</div>
               </div>
-              <div style={{ flex: 1, borderRadius: 10, padding: "7px 10px", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.15)" }}>
-                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.65)", lineHeight: 1.3 }}>历史数据</div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 3, marginTop: 1 }}>
-                  <span style={{ fontSize: 17, fontWeight: 800, color: "#fff", lineHeight: 1.2 }}>{total}</span>
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.7)" }}>天</span>
-                </div>
-                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.6)", lineHeight: 1.3 }}>{total} 条日线</div>
-              </div>
+
               <div style={{ flex: 1, borderRadius: 10, padding: "7px 10px", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.15)" }}>
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,0.65)", lineHeight: 1.3 }}>最新收盘</div>
                 {latestClose != null ? (
@@ -1312,13 +1305,7 @@ export default function BeDataPage() {
                   <span className="text-xs text-gray-400 shrink-0">数据范围</span>
                   <span className="text-xs font-medium text-gray-700 font-mono ml-2">{oldestDate} ~ {latestDate}</span>
                 </div>
-                <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 flex items-center justify-between">
-                  <span className="text-xs text-gray-400 shrink-0">历史数据</span>
-                  <span className="text-xs font-medium text-gray-700 ml-2">
-                    <span className="text-[#D32F2F] font-bold">{total}</span> 天 &nbsp;
-                    <span className="text-[#D32F2F] font-bold">{total}</span> 条日线
-                  </span>
-                </div>
+
                 <div className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100 flex items-center justify-between">
                   <span className="text-xs text-gray-400 shrink-0">最新收盘</span>
                   <span className="text-xs text-gray-400 font-mono ml-2 mr-auto pl-1.5">{latestDate}</span>
@@ -1340,15 +1327,16 @@ export default function BeDataPage() {
             key={t.key}
             onClick={() => setActiveTab(t.key)}
             style={{
-              flex: 1, padding: "10px 0", fontSize: 14, fontWeight: 500,
+              flex: 1, padding: "10px 0", fontSize: 13, fontWeight: 500,
               color: activeTab === t.key ? (hideSymbolTabs ? "#1565C0" : "#D32F2F") : "#9CA3AF",
               borderBottom: activeTab === t.key ? `2px solid ${hideSymbolTabs ? "#1565C0" : "#D32F2F"}` : "2px solid transparent",
               background: "none", border: "none",
-              borderBottom: activeTab === t.key ? `2px solid ${hideSymbolTabs ? "#1565C0" : "#D32F2F"}` : "2px solid transparent",
               cursor: "pointer", transition: "color 0.2s",
             }}
           >
-            {t.label}
+            {t.key === 'data'
+              ? `日线历史${total > 0 ? `（${total}条）` : ''}`
+              : t.label}
           </button>
         ))}
       </div>
