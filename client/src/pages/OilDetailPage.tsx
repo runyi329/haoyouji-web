@@ -240,7 +240,7 @@ function StreakStatsPanel({ allData }: { allData: { date: string; changePct: num
 }
 
 // ── 涨跌幅频率分布图 ──────────────────────────────────────────────────────────
-function ChangePctDistChart({ allData, label }: { allData: { date: string; changePct: number | null }[]; label: string }) {
+function ChangePctDistChart({ allData, label, labelIcon }: { allData: { date: string; changePct: number | null }[]; label: string; labelIcon?: React.ReactNode }) {
   const distData = useMemo(() => {
     const bucketMap: Record<number, number> = {};
     for (const item of allData) {
@@ -267,7 +267,7 @@ function ChangePctDistChart({ allData, label }: { allData: { date: string; chang
   return (
     <div style={{ background: "#fff", borderTop: `8px solid ${BG}` }}>
       <div className="px-4 pt-3 pb-1 flex items-center justify-between">
-        <span className="text-xs font-semibold" style={{ color: MUTED }}>{label} 涨跌幅频率分布</span>
+        <span className="text-xs font-semibold" style={{ color: MUTED, display: "flex", alignItems: "center", gap: 4 }}>{labelIcon}{label} 涨跌幅频率分布</span>
         <div className="flex items-center gap-2">
           <span className="text-xs" style={{ color: RED }}>↑{upDays}天</span>
           <span className="text-xs" style={{ color: GREEN_A }}>↓{downDays}天</span>
@@ -583,7 +583,10 @@ export default function OilDetailPage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0 }}>
                 {/* WTI */}
                 <div style={{ borderRight: "1px solid #F3F4F6", padding: "8px 0" }}>
-                  <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#2E7D32", marginBottom: 4 }}>🛢 WTI</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 4 }}>
+                    <WtiIcon size={16} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#1a1a1a" }}>WTI</span>
+                  </div>
                   {wtiStatsLoading ? (
                     <div className="flex items-center justify-center py-4 text-gray-300 text-xs">加载中...</div>
                   ) : wtiStats ? (
@@ -616,7 +619,10 @@ export default function OilDetailPage() {
                 </div>
                 {/* Brent */}
                 <div style={{ padding: "8px 0" }}>
-                  <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#00695C", marginBottom: 4 }}>⛽ Brent</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 4 }}>
+                    <BrentIcon size={16} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#1a1a1a" }}>Brent</span>
+                  </div>
                   {brentStatsLoading ? (
                     <div className="flex items-center justify-center py-4 text-gray-300 text-xs">加载中...</div>
                   ) : brentStats ? (
@@ -658,7 +664,10 @@ export default function OilDetailPage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0 }}>
                 {/* WTI */}
                 <div style={{ borderRight: "1px solid #F3F4F6", padding: "8px 0" }}>
-                  <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#2E7D32", marginBottom: 4 }}>🛢 WTI</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 4 }}>
+                    <WtiIcon size={16} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#1a1a1a" }}>WTI</span>
+                  </div>
                   <div className="grid grid-cols-2 divide-x divide-gray-100">
                     <div className="flex flex-col items-center py-2">
                       <span className="text-2xl font-bold text-red-500">{wtiStats?.maxConsecUp ?? "—"}</span>
@@ -672,7 +681,10 @@ export default function OilDetailPage() {
                 </div>
                 {/* Brent */}
                 <div style={{ padding: "8px 0" }}>
-                  <div style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: "#00695C", marginBottom: 4 }}>⛽ Brent</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, marginBottom: 4 }}>
+                    <BrentIcon size={16} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#1a1a1a" }}>Brent</span>
+                  </div>
                   <div className="grid grid-cols-2 divide-x divide-gray-100">
                     <div className="flex flex-col items-center py-2">
                       <span className="text-2xl font-bold text-red-500">{brentStats?.maxConsecUp ?? "—"}</span>
@@ -691,7 +703,7 @@ export default function OilDetailPage() {
             {wtiAllPcts && wtiAllPcts.length > 0 && (
               <div className="bg-white border border-gray-200 mx-3 rounded-xl overflow-hidden mb-3">
                 <div className="px-4 py-2 border-b border-gray-100">
-                  <span className="text-xs font-semibold text-gray-500">🛢 WTI 连涨/连跌统计</span>
+                  <span className="text-xs font-semibold text-gray-500" style={{ display: "flex", alignItems: "center", gap: 4 }}><WtiIcon size={14} /> WTI 连涨/连跌统计</span>
                 </div>
                 <StreakStatsPanel allData={wtiAllPcts} />
               </div>
@@ -700,14 +712,14 @@ export default function OilDetailPage() {
             {/* 涨跌幅频率分布（WTI） */}
             {wtiAllPcts && wtiAllPcts.length > 0 && (
               <div className="bg-white border border-gray-200 mx-3 rounded-xl overflow-hidden mb-3">
-                <ChangePctDistChart allData={wtiAllPcts} label="🛢 WTI" />
+                <ChangePctDistChart allData={wtiAllPcts} label="WTI" labelIcon={<WtiIcon size={14} />} />
               </div>
             )}
 
             {/* 涨跌幅频率分布（Brent） */}
             {brentAllPcts && brentAllPcts.length > 0 && (
               <div className="bg-white border border-gray-200 mx-3 rounded-xl overflow-hidden mb-3">
-                <ChangePctDistChart allData={brentAllPcts} label="⛽ Brent" />
+                <ChangePctDistChart allData={brentAllPcts} label="Brent" labelIcon={<BrentIcon size={14} />} />
               </div>
             )}
 
@@ -719,8 +731,8 @@ export default function OilDetailPage() {
               <div className="px-4 py-3 space-y-2">
                 <div className="grid grid-cols-3 gap-2 pb-1 border-b border-gray-100">
                   <span className="text-xs text-gray-400 font-medium">项目</span>
-                  <span className="text-xs font-bold text-green-700 text-center">🛢 WTI</span>
-                  <span className="text-xs font-bold text-teal-700 text-center">⛽ Brent</span>
+                  <span className="text-xs font-bold text-gray-700 text-center" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}><WtiIcon size={14} /> WTI</span>
+                  <span className="text-xs font-bold text-gray-700 text-center" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}><BrentIcon size={14} /> Brent</span>
                 </div>
                 {[
                   { item: "产地",     wti: "美国德克萨斯",   brent: "北海（英/挪）" },
@@ -788,7 +800,10 @@ export default function OilDetailPage() {
                   cursor: "pointer",
                 }}
               >
-                {t === "BRENT" ? "⛽ Brent" : "🛢 WTI"}
+                <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  {t === "BRENT" ? <BrentIcon size={14} /> : <WtiIcon size={14} />}
+                  {t === "BRENT" ? "Brent" : "WTI"}
+                </span>
               </button>
             ))}
             <span style={{ fontSize: 10, color: "#9CA3AF", marginLeft: "auto" }}>
