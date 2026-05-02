@@ -202,8 +202,8 @@ export const appRouter = router({
         return { success: true, count };
       }),
 
-    // 查询K线数据（账本成员可访问）
-    getKlines: protectedProcedure
+    // 查询K线数据（公开访问，DXY/石油等公开页面使用）
+    getKlines: publicProcedure
       .input(z.object({
         symbol: z.string(),
         page: z.number().optional().default(1),
@@ -221,15 +221,15 @@ export const appRouter = router({
         return { date };
       }),
 
-    // 涨跌统计分析
-    getStats: protectedProcedure
+    // 涨跌统计分析（公开访问）
+    getStats: publicProcedure
       .input(z.object({ symbol: z.string() }))
       .query(async ({ input }) => {
         return await dbCrypto.getCryptoStats(input.symbol);
       }),
 
-    // 获取全量涨跌幅数组（用于前端分段计算连涨连跌统计）
-    getAllChangePcts: protectedProcedure
+    // 获取全量涨跌幅数组（公开访问，用于前端分段计算连涨连跌统计）
+    getAllChangePcts: publicProcedure
       .input(z.object({ symbol: z.string() }))
       .query(async ({ input }) => {
         return await dbCrypto.getAllChangePcts(input.symbol);
