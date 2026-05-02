@@ -23,7 +23,7 @@ const ALL_SYMBOLS = [
 ];
 const SYMBOLS = ALL_SYMBOLS; // 兼容旧引用
 
-const PAGE_SIZE = 60;
+const PAGE_SIZE = 20; // 每页显示20条，手机一屏内展示完整
 const TABS = [
   { key: "analysis", label: "数据分析" },
   { key: "data", label: "日线数据" },
@@ -1363,34 +1363,55 @@ export default function BeDataPage() {
               <span>暂无数据</span>
             </div>
           ) : (
-            <table className="w-full border-collapse text-xs">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-gray-100">
-                  <th className="border border-gray-300 px-1.5 py-2 text-center text-gray-500 font-medium w-[68px]">日期</th>
-                  <th className="border border-gray-300 px-1 py-2 text-center text-gray-500 font-medium">开盘</th>
-                  <th className="border border-gray-300 px-1 py-2 text-center text-gray-500 font-medium">收盘</th>
-                  <th className="border border-gray-300 px-1 py-2 text-center text-gray-500 font-medium">最高</th>
-                  <th className="border border-gray-300 px-1 py-2 text-center text-gray-500 font-medium">最低</th>
-                  <th className="border border-gray-300 px-1 py-2 text-center text-gray-500 font-medium w-[58px]">涨跌</th>
-                  <th className="border border-gray-300 px-1 py-2 text-center text-gray-500 font-medium w-[52px]">振幅</th>
+            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+              <colgroup>
+                {/* 日期列固定宽度，其他列平分剩余空间 */}
+                <col style={{ width: '15%' }} />
+                <col style={{ width: '14.2%' }} />
+                <col style={{ width: '14.2%' }} />
+                <col style={{ width: '14.2%' }} />
+                <col style={{ width: '14.2%' }} />
+                <col style={{ width: '14.2%' }} />
+                <col style={{ width: '14%' }} />
+              </colgroup>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                <tr style={{ background: '#F3F4F6' }}>
+                  <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>日期</th>
+                  <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>开盘</th>
+                  <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>收盘</th>
+                  <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>最高</th>
+                  <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>最低</th>
+                  <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>涨跌%</th>
+                  <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>振幅%</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row, idx) => {
                   const up = row.changePct != null && row.changePct > 0;
                   const down = row.changePct != null && row.changePct < 0;
-                  const color = up ? "text-red-500" : down ? "text-green-600" : "text-gray-400";
-                  const rowBg = idx % 2 === 0 ? "bg-white" : "bg-gray-50";
+                  const color = up ? '#EF4444' : down ? '#16A34A' : '#9CA3AF';
+                  const rowBg = idx % 2 === 0 ? '#fff' : '#F9FAFB';
+                  // 日期格式：将 2026/05/02 或 26/05/02 统一转为 26/05/02
+                  const shortDate = (() => {
+                    const d = row.date || '';
+                    // 支持 YYYY/MM/DD 和 YY/MM/DD 格式
+                    const parts = d.replace(/-/g, '/').split('/');
+                    if (parts.length === 3) {
+                      const yy = parts[0].length === 4 ? parts[0].slice(-2) : parts[0];
+                      return `${yy}/${parts[1]}/${parts[2]}`;
+                    }
+                    return d;
+                  })();
                   return (
-                    <tr key={row.date} className={rowBg}>
-                      <td className="border border-gray-200 px-1.5 py-2 text-gray-500 font-mono">{row.date}</td>
-                      <td className="border border-gray-200 px-1 py-2 text-right text-gray-700 font-mono">{formatPrice(row.open)}</td>
-                      <td className={`border border-gray-200 px-1 py-2 text-right font-mono font-medium ${color}`}>{formatPrice(row.close)}</td>
-                      <td className="border border-gray-200 px-1 py-2 text-right text-gray-600 font-mono">{formatPrice(row.high)}</td>
-                      <td className="border border-gray-200 px-1 py-2 text-right text-gray-600 font-mono">{formatPrice(row.low)}</td>
-                      <td className={`border border-gray-200 px-1 py-2 text-right font-mono ${color}`}>{formatPct(row.changePct)}</td>
-                      <td className="border border-gray-200 px-1 py-2 text-right text-gray-500 font-mono">
-                        {row.amplitudePct != null ? row.amplitudePct.toFixed(2) + "%" : "-"}
+                    <tr key={row.date} style={{ background: rowBg }}>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '5px 2px', textAlign: 'center', color: '#6B7280', fontFamily: 'monospace', fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden' }}>{shortDate}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '5px 2px', textAlign: 'right', color: '#374151', fontFamily: 'monospace', fontSize: 10, paddingRight: 4 }}>{formatPrice(row.open)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '5px 2px', textAlign: 'right', color, fontFamily: 'monospace', fontSize: 10, fontWeight: 600, paddingRight: 4 }}>{formatPrice(row.close)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '5px 2px', textAlign: 'right', color: '#4B5563', fontFamily: 'monospace', fontSize: 10, paddingRight: 4 }}>{formatPrice(row.high)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '5px 2px', textAlign: 'right', color: '#4B5563', fontFamily: 'monospace', fontSize: 10, paddingRight: 4 }}>{formatPrice(row.low)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '5px 2px', textAlign: 'right', color, fontFamily: 'monospace', fontSize: 10, paddingRight: 4 }}>{formatPct(row.changePct)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '5px 2px', textAlign: 'right', color: '#6B7280', fontFamily: 'monospace', fontSize: 10, paddingRight: 4 }}>
+                        {row.amplitudePct != null ? row.amplitudePct.toFixed(2) + '%' : '-'}
                       </td>
                     </tr>
                   );
