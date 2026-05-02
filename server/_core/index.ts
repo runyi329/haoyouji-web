@@ -625,72 +625,65 @@ async function startServer() {
     }, 5000); // 服务器启动5秒后执行，避免启动期间资源竞争
     // ──────────────────────────────────────────────────────
 
-    // ─── 美股七姐妹：每日数据拉取 + 结算定时任务 ─────────────────────────────────
-    // 夏令时（3月第2周日~11月第1周日）：美股收盘 BJT 04:00，任务触发 BJT 04:05
-    // 冬令时（其余时间）：美股收盘 BJT 05:00，任务触发 BJT 05:05
+    // ─── 美股七姐妹：每小时检查 + 每日数据拉取 + 结算定时任务 ────────────────────────
+    // 改为每小时检查一次（而非精确到某时刻的 setTimeout），确保服务器重启后最多1小时内补齐数据
+    // 美股收盘时间：夏令时 BJT 04:00，冬令时 BJT 05:00
     const US_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META'];
 
-    const scheduleUSStockSettle = () => {
-      const now = new Date();
+    const runUSStockSync = async () => {
       const { isUSDST, syncStockFromYahoo, isUSTradingDay } = require('../db-crypto');
-
-      // 判断当前是否夏令时，决定触发时间
-      const dst = isUSDST(now);
-      // 触发时间：BJT 04:05（夏令时）或 BJT 05:05（冬令时）
-      const triggerHourBJT = dst ? 4 : 5;
-      const triggerMinBJT = 5;
-
-      // 计算下次触发时间（UTC）
+      const now = new Date();
       const bjtNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-      const target = new Date(Date.UTC(
-        bjtNow.getUTCFullYear(), bjtNow.getUTCMonth(), bjtNow.getUTCDate(),
-        triggerHourBJT - 8, triggerMinBJT, 0, 0
-      ));
-      if (target.getTime() <= now.getTime()) target.setUTCDate(target.getUTCDate() + 1);
-      const ms = target.getTime() - now.getTime();
-      const nextStr = target.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
-      console.log(`[美股结算] 下次触发时间: ${nextStr} (BJT ${triggerHourBJT.toString().padStart(2,'0')}:${triggerMinBJT.toString().padStart(2,'0')}, ${dst ? '夏令时' : '冬令时'})`);
+      const bjtHour = bjtNow.getUTCHours();
+      const dst = isUSDST(now);
+      // 美股收盘后（夏令时 BJT 04:00+，冬令时 BJT 05:00+）才拉取
+      const closeHourBJT = dst ? 4 : 5;
+      if (bjtHour < closeHourBJT) {
+        console.log(`[美股同步] 当前 BJT ${bjtHour}:xx，美股尚未收盘（收盘时间 BJT ${closeHourBJT}:00），跳过`);
+        return;
+      }
 
-      setTimeout(async () => {
+      // 结算日期：BJT 今天的前一天（美东昨天）
+      const yesterday = new Date(bjtNow);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      const targetDate = yesterday.toISOString().slice(0, 10);
+
+      if (!isUSTradingDay(targetDate)) {
+        console.log(`[美股同步] ${targetDate} 为非交易日，跳过`);
+        return;
+      }
+
+      // 拉取七姐妹最新数据（syncStockFromYahoo 会自动从最新日期增量拉取）
+      let anyAdded = false;
+      for (const sym of US_STOCKS) {
         try {
-          // 结算日期：北京时间当天（美股开盘日，即昨天美东日期）
-          // 触发时是 BJT 04:05/05:05，此时美东还是前一天，所以结算"BJT昨天"
-          const bjtNowInner = new Date(Date.now() + 8 * 60 * 60 * 1000);
-          const yesterday = new Date(bjtNowInner);
-          yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-          const targetDate = yesterday.toISOString().slice(0, 10);
-
-          console.log(`[美股结算] 触发，结算日期: ${targetDate}`);
-
-          // 判断是否为交易日
-          if (!isUSTradingDay(targetDate)) {
-            console.log(`[美股结算] ${targetDate} 为非交易日，跳过`);
-            return;
+          const r = await syncStockFromYahoo(sym);
+          if (r.added > 0) {
+            console.log(`[美股同步] ${sym} 新增 ${r.added} 条，最新日期 ${r.latestDate}`);
+            anyAdded = true;
           }
+        } catch (e: any) {
+          console.error(`[美股同步] ${sym} 拉取失败:`, e.message);
+        }
+      }
 
-          // 1. 拉取七姐妹最新数据
-          for (const sym of US_STOCKS) {
-            try {
-              const r = await syncStockFromYahoo(sym);
-              console.log(`[美股数据] ${sym} 新增 ${r.added} 条，最新日期 ${r.latestDate}`);
-            } catch (e: any) {
-              console.error(`[美股数据] ${sym} 拉取失败:`, e.message);
-            }
-          }
-
-          // 2. 结算当天订单
+      // 有新数据时才触发结算
+      if (anyAdded) {
+        try {
           const { settleDailyBets } = await import('../prediction-router');
           const result = await settleDailyBets(targetDate);
           console.log(`[美股结算] ${targetDate} 完成: 结算${result.settled}单，中奖${result.won}单，派奖${result.totalPayout.toFixed(2)}U`);
         } catch (err) {
           console.error('[美股结算] 执行失败:', err);
-        } finally {
-          scheduleUSStockSettle();
         }
-      }, ms);
+      }
     };
-    scheduleUSStockSettle();
-    console.log('[美股结算] 已注册，每天美股收盘后自动拉取数据并结算');
+
+    // 每小时执行一次检查
+    setInterval(runUSStockSync, 60 * 60 * 1000);
+    // 启动时也立即执行一次（5秒后，避免与启动补齐冲突）
+    setTimeout(runUSStockSync, 8000);
+    console.log('[美股同步] 已注册，每小时检查一次，美股收盘后自动拉取数据并结算');
     // ──────────────────────────────────────────────────────
   });
 }
