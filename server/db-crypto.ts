@@ -96,14 +96,14 @@ export async function getCryptoKlines(
 
   const [rows] = await conn.execute(
     `SELECT symbol,
-            DATE_FORMAT(date, '%y/%m/%d') as date,
+            DATE_FORMAT(date, '%Y/%m/%d') as date,
             open, high, low, close,
             volume,
             quote_volume as quoteVolume,
             change_pct as changePct,
             amplitude_pct as amplitudePct
      FROM crypto_klines
-     WHERE symbol = ?
+     WHERE symbol = ? AND date >= '2000-01-01'
      ORDER BY date DESC
      LIMIT ${safePageSize} OFFSET ${safeOffset}`,
     [symbol]
@@ -336,8 +336,8 @@ export async function getAllChangePcts(symbol: string): Promise<{ date: string; 
   const conn = await getDbConnection();
   if (!conn) return [];
   const [rows] = await conn.execute(
-    `SELECT DATE_FORMAT(date, '%y/%m/%d') as date, change_pct as changePct
-     FROM crypto_klines WHERE symbol = ? ORDER BY date ASC`,
+    `SELECT DATE_FORMAT(date, '%Y/%m/%d') as date, change_pct as changePct
+     FROM crypto_klines WHERE symbol = ? AND date >= '2000-01-01' ORDER BY date ASC`,
     [symbol]
   ) as any[];
   return (rows as any[]).map((r: any) => ({

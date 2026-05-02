@@ -565,10 +565,10 @@ function SliceCompareTable({ allData }: { allData: { date: string; changePct: nu
   const periods = useMemo(() => {
     const now = new Date();
     const fmtDate = (d: Date) => {
-      const yy = String(d.getFullYear()).slice(-2).padStart(2, '0');
+      const yyyy = String(d.getFullYear()).padStart(4, '0');
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const dd = String(d.getDate()).padStart(2, '0');
-      return `${yy}/${mm}/${dd}`;
+      return `${yyyy}/${mm}/${dd}`;
     };
     const byMonth = Array.from({ length: 12 }, (_, i) => {
       const d = new Date(now);
@@ -580,7 +580,7 @@ function SliceCompareTable({ allData }: { allData: { date: string; changePct: nu
       d.setFullYear(d.getFullYear() - (i + 1));
       return { label: `近${i+1}年`, cutDate: fmtDate(d), group: 'year' };
     });
-    const all = { label: '全量', cutDate: '00/01/01', group: 'year' };
+    const all = { label: '全量', cutDate: '2000/01/01', group: 'year' };
     return [...byMonth, ...byYear, all];
   }, []);
 
@@ -773,10 +773,10 @@ function FourTierTable({ allData }: { allData: { date: string; changePct: number
   const periods = useMemo(() => {
     const now = new Date();
     const fmtDate = (d: Date) => {
-      const yy = String(d.getFullYear()).slice(-2).padStart(2, '0');
+      const yyyy = String(d.getFullYear()).padStart(4, '0');
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const dd = String(d.getDate()).padStart(2, '0');
-      return `${yy}/${mm}/${dd}`;
+      return `${yyyy}/${mm}/${dd}`;
     };
     const byMonth = Array.from({ length: 12 }, (_, i) => {
       const d = new Date(now);
@@ -788,7 +788,7 @@ function FourTierTable({ allData }: { allData: { date: string; changePct: number
       d.setFullYear(d.getFullYear() - (i + 1));
       return { label: `近${i+1}年`, cutDate: fmtDate(d), group: 'year' };
     });
-    const all = { label: '全量', cutDate: '00/01/01', group: 'year' };
+    const all = { label: '全量', cutDate: '2000/01/01', group: 'year' };
     return [...byMonth, ...byYear, all];
   }, []);
 
