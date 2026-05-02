@@ -1172,13 +1172,23 @@ export default function BeDataPage() {
     { enabled: activeTab === "analysis" || activeTab === "predict", staleTime: 5 * 60 * 1000 }
   );
 
+  // 从数据库读取元数据（起始日期、条数）
+  const metaSymbol = currentStockInfo?.symbol ?? activeSymbol; // 美股用 AAPL.US，数字币用 BTCUSDT
+  const metaSymbolKey = currentStockInfo?.type === 'stock'
+    ? (currentStockInfo.symbol.replace('.US', ''))  // AAPL.US -> AAPL
+    : activeSymbol;
+  const { data: metaData } = trpc.cryptoData.getMeta.useQuery(
+    { symbol: metaSymbolKey },
+    { staleTime: 30 * 60 * 1000 } // 30分钟缓存
+  );
+
   const rows = data?.rows ?? [];
-  const total = data?.total ?? 0;
+  const total = metaData?.total ?? data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const latestRow = page === 1 ? rows[0] : null;
-  const oldestDate = total > 0 ? "17/08/17" : "-";
-  const latestDate = latestRow ? latestRow.date : "-";
+  const oldestDate = metaData?.oldestDate ?? (total > 0 ? "-" : "-");
+  const latestDate = metaData?.latestDate ?? (latestRow ? latestRow.date : "-");
   const latestClose = latestRow ? latestRow.close : null;
   const latestChangePct = latestRow ? latestRow.changePct : null;
   const isUp = latestChangePct != null && latestChangePct > 0;
