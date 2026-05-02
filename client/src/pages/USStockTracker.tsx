@@ -118,19 +118,6 @@ export default function USStockTracker() {
     staleTime: 2000,
   });
 
-  // 全生命周期统计（总数）
-  const { data: totalCount } = trpc.usStockLifecycle.useQuery(
-    { page: 1, pageSize: 1, sortBy: "upRate", sortDir: "desc" },
-    { refetchOnWindowFocus: false }
-  );
-
-  // 涨幅率 Top5
-  const { data: topUpRate } = trpc.usStockLifecycle.useQuery(
-    { page: 1, pageSize: 5, sortBy: "upRate", sortDir: "desc", minTotalDays: 500 },
-    { refetchOnWindowFocus: false }
-  );
-
-  const total = totalCount?.total ?? 0;
   const sp500Up = (sp500?.changePercent ?? 0) >= 0;
 
   return (
@@ -219,86 +206,26 @@ export default function USStockTracker() {
         </div>
 
         {/* 功能入口区 */}
-        <div className="px-4 mt-4 grid grid-cols-2 gap-3">
-          {/* 日线数据分析 */}
+        <div className="px-4 mt-4">
+          {/* 日线数据分析 - 全宽横向卡片 */}
           <div
-            className="rounded-2xl p-4 cursor-pointer active:opacity-80 flex flex-col gap-2"
+            className="rounded-2xl p-4 cursor-pointer active:opacity-80 flex items-center gap-4"
             style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1.5px solid ${BORDER}` }}
             onClick={() => setLocation("/ledger/52/be-data?filter=stocks")}
           >
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${BLUE}15` }}>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${BLUE}15` }}>
               <BarChart2 className="w-5 h-5" style={{ color: BLUE }} />
             </div>
-            <div>
-              <div className="text-sm font-bold" style={{ color: TEXT }}>日线数据</div>
-              <div className="text-xs mt-0.5" style={{ color: MUTED }}>涨跌幅 · 振幅 · 连涨连跌</div>
+            <div className="flex-1">
+              <div className="text-sm font-bold" style={{ color: TEXT }}>七巨头日线数据分析</div>
+              <div className="text-xs mt-0.5" style={{ color: MUTED }}>涨跌幅 · 振幅 · 连涨连跌 · 历史K线</div>
             </div>
+            <div className="text-lg" style={{ color: BLUE }}>›</div>
           </div>
 
-          {/* 全市场排行 */}
-          <div
-            className="rounded-2xl p-4 cursor-pointer active:opacity-80 flex flex-col gap-2"
-            style={{ background: CARD, boxShadow: CARD_SHADOW, border: `1.5px solid ${BORDER}` }}
-            onClick={() => setLocation("/us-stock-tracker/stock-lifecycle")}
-          >
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${RED}15` }}>
-              <TrendingUp className="w-5 h-5" style={{ color: RED }} />
-            </div>
-            <div>
-              <div className="text-sm font-bold" style={{ color: TEXT }}>全市场排行</div>
-              <div className="text-xs mt-0.5" style={{ color: MUTED }}>
-                {total > 0 ? `${total.toLocaleString()}只股票` : "涨幅率 · 涨天数排行"}
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* 涨幅率 Top5 */}
-        {topUpRate && topUpRate.list.length > 0 && (
-          <div className="mx-4 mt-4 rounded-2xl p-4" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-sm font-bold" style={{ color: BLUE }}>
-                涨幅率 Top5
-              </div>
-              <div className="text-xs" style={{ color: MUTED }}>≥500交易日</div>
-            </div>
-            <div className="space-y-2.5">
-              {topUpRate.list.map((s, i) => (
-                <div
-                  key={s.tsCode}
-                  className="flex items-center gap-3 cursor-pointer"
-                  onClick={() => setLocation(`/us-stock/${encodeURIComponent(s.tsCode)}`)}
-                >
-                  <div
-                    className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                    style={{
-                      background: i === 0 ? "#FFD600" : i === 1 ? "#E0E0E0" : i === 2 ? "#FFAB40" : BG,
-                      color: i < 3 ? "#333" : MUTED,
-                    }}
-                  >
-                    {i + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate" style={{ color: TEXT }}>
-                      {s.name || s.enname || s.tsCode}
-                    </div>
-                    <div className="text-xs" style={{ color: MUTED }}>{s.tsCode}</div>
-                  </div>
-                  <div className="text-sm font-bold" style={{ color: s.upRate >= 50 ? RED : GREEN }}>
-                    {s.upRate.toFixed(1)}%
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => setLocation("/us-stock-tracker/stock-lifecycle")}
-              className="mt-3 w-full py-2 rounded-xl text-sm font-medium"
-              style={{ background: BG, color: BLUE }}
-            >
-              查看完整排行榜 →
-            </button>
-          </div>
-        )}
+
 
       </div>
     </div>

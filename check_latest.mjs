@@ -1,13 +1,11 @@
 import { createConnection } from 'mysql2/promise';
+import { config } from 'dotenv';
+config();
 
-const dbUrl = "mysql://root:Miao@20190603@124.223.54.69:3306/crm_db";
+const dbUrl = process.env.EXTERNAL_DATABASE_URL;
+if (!dbUrl) { console.error('找不到 EXTERNAL_DATABASE_URL'); process.exit(1); }
 
-const conn = await createConnection({
-  uri: dbUrl,
-  ssl: { rejectUnauthorized: false },
-  connectTimeout: 15000,
-});
-
+const conn = await createConnection(dbUrl);
 const [rows] = await conn.execute(
   `SELECT symbol, DATE_FORMAT(MAX(date), '%Y-%m-%d') as latest_date, COUNT(*) as total_rows
    FROM crypto_klines 
@@ -15,11 +13,9 @@ const [rows] = await conn.execute(
    GROUP BY symbol
    ORDER BY symbol`
 );
-
-console.log('\n标的\t\t最新日期\t总行数');
-console.log('─'.repeat(45));
+console.log('标的\t\t最新日期\t总行数');
+console.log('─'.repeat(50));
 for (const r of rows) {
-  const sym = r.symbol.padEnd(10);
-  console.log(`${sym}\t${r.latest_date}\t${r.total_rows}`);
+  console.log(`${r.symbol}\t\t${r.latest_date}\t${r.total_rows}`);
 }
 await conn.end();

@@ -1018,6 +1018,80 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
   );
 });
 
+// ─── 七巨头行情横向滑动条 ────────────────────────────────────────────────────
+const MEGA_SEVEN_HOME = [
+  { symbol: "AAPL.US", name: "苹果",   code: "AAPL",  emoji: "🍎" },
+  { symbol: "MSFT.US", name: "微软",   code: "MSFT",  emoji: "🪟" },
+  { symbol: "NVDA.US", name: "英伟达", code: "NVDA",  emoji: "🎮" },
+  { symbol: "GOOGL.US",name: "谷歌",  code: "GOOGL", emoji: "🔍" },
+  { symbol: "AMZN.US", name: "亚马逊", code: "AMZN", emoji: "📦" },
+  { symbol: "META.US", name: "Meta",  code: "META",  emoji: "👓" },
+  { symbol: "TSLA.US", name: "特斯拉", code: "TSLA", emoji: "⚡" },
+];
+
+const MegaSevenStrip = React.memo(function MegaSevenStrip() {
+  const [, setLocation] = useLocation();
+  const { data: latestPrices } = trpc.cryptoData.getLatestPrices.useQuery(
+    undefined,
+    { refetchInterval: 30000, staleTime: 15000 }
+  );
+
+  return (
+    <div className="px-3 py-1.5" style={{ background: 'transparent' }}>
+      {/* 标题行 */}
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-xs font-semibold" style={{ color: 'rgba(201,168,76,0.9)', letterSpacing: '0.05em' }}>美股七巨头</span>
+        <button
+          onClick={() => setLocation('/us-stock-tracker')}
+          className="text-xs"
+          style={{ color: 'rgba(201,168,76,0.7)' }}
+        >查看全部 ›</button>
+      </div>
+      {/* 横向滑动卡片 */}
+      <div
+        className="flex gap-2 overflow-x-auto"
+        style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', paddingBottom: '2px' }}
+      >
+        {MEGA_SEVEN_HOME.map((stock) => {
+          const pd = latestPrices?.[stock.symbol];
+          const isUp = (pd?.changePct ?? 0) >= 0;
+          const color = isUp ? '#A80000' : '#16a34a';
+          return (
+            <div
+              key={stock.symbol}
+              className="flex-shrink-0 rounded-xl cursor-pointer active:opacity-80"
+              style={{
+                background: 'rgba(255,255,255,0.07)',
+                border: '1px solid rgba(201,168,76,0.2)',
+                padding: '6px 10px',
+                minWidth: '80px',
+              }}
+              onClick={() => setLocation(`/ledger/52/be-data?filter=stocks&symbol=${stock.symbol}`)}
+            >
+              <div className="flex items-center gap-1 mb-0.5">
+                <span style={{ fontSize: 12 }}>{stock.emoji}</span>
+                <span className="text-xs font-semibold" style={{ color: '#F5D78E', fontSize: 11 }}>{stock.code}</span>
+              </div>
+              {pd ? (
+                <>
+                  <div className="text-xs font-bold" style={{ color: '#FFFFFF', fontSize: 12 }}>
+                    ${pd.close.toFixed(2)}
+                  </div>
+                  <div className="text-xs font-medium" style={{ color, fontSize: 10 }}>
+                    {isUp ? '+' : ''}{(pd.changePct ?? 0).toFixed(2)}%
+                  </div>
+                </>
+              ) : (
+                <div className="text-xs" style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10 }}>--</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
 export default function Home() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
@@ -2367,6 +2441,9 @@ export default function Home() {
 
           {/* 全球市场跑马灯卡片（独立组件，避免Home重渲染导致闪烁） */}
           <GlobalMarketStrip />
+
+          {/* 美股七巨头行情横向滑动条 */}
+          <MegaSevenStrip />
 
           {/* 三个功能入口 - flex-1撑满剩余空间 */}
           <div className="px-3 pt-1.5 pb-2 flex flex-col flex-1 min-h-0 gap-1.5">

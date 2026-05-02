@@ -1,12 +1,16 @@
 import { createConnection } from 'mysql2/promise';
 
-const dbUrl = "mysql://root:Miao@20190603@124.223.54.69:3306/crm_db";
-
 const conn = await createConnection({
-  uri: dbUrl,
-  ssl: { rejectUnauthorized: false },
+  host: '124.223.54.69',
+  port: 3306,
+  user: 'root',
+  password: 'Miao@20190603',
+  database: 'crm_db',
+  ssl: false,
   connectTimeout: 15000,
 });
+
+console.log('✅ 连接成功！\n');
 
 const [rows] = await conn.execute(
   `SELECT symbol, DATE_FORMAT(MAX(date), '%Y-%m-%d') as latest_date, COUNT(*) as total_rows
@@ -16,10 +20,11 @@ const [rows] = await conn.execute(
    ORDER BY symbol`
 );
 
-console.log('\n标的\t\t最新日期\t总行数');
-console.log('─'.repeat(45));
+console.log('标的\t\t\t最新日期\t总行数');
+console.log('─'.repeat(50));
 for (const r of rows) {
-  const sym = r.symbol.padEnd(10);
+  const sym = String(r.symbol).padEnd(12);
   console.log(`${sym}\t${r.latest_date}\t${r.total_rows}`);
 }
+
 await conn.end();
