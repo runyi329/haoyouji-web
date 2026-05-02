@@ -459,8 +459,8 @@ export default function OilDetailPage() {
           </button>
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontWeight: 800, fontSize: 15, color: "#fff", margin: 0, lineHeight: 1.2 }}>
-              🛢 原油行情
+            <p style={{ fontWeight: 800, fontSize: 15, color: "#fff", margin: 0, lineHeight: 1.2, display: "flex", alignItems: "center", gap: 6 }}>
+              <WtiIcon size={18} /> 原油行情
             </p>
             <p style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.3 }}>
               WTI（NYMEX）& Brent（ICE）· 美元/桶
