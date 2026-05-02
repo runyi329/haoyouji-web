@@ -346,6 +346,52 @@ export async function getAllChangePcts(symbol: string): Promise<{ date: string; 
   }));
 }
 
+
+/**
+ * 获取指定股票的元数据（从 crypto_klines_meta 表）
+ */
+export async function getKlinesMeta(symbol: string): Promise<{
+  symbol: string;
+  total: number;
+  oldestDate: string;
+  latestDate: string;
+} | null> {
+  const conn = await getDbConnection();
+  const [rows] = await conn.execute(
+    `SELECT symbol, total,
+       DATE_FORMAT(oldest_date, '%y/%m/%d') as oldestDate,
+       DATE_FORMAT(latest_date, '%y/%m/%d') as latestDate
+     FROM crypto_klines_meta WHERE symbol = ? LIMIT 1`,
+    [symbol]
+  ) as any[];
+  const row = (rows as any[])[0];
+  return {
+    symbol: row.symbol,
+    total: Number(row.total),
+    oldestDate: row.oldestDate,
+    latestDate: row.latestDate,
+  };
+}
+
+/**
+ * 刷新指定股票的元数据（同步最新日期和条数）
+ */
+export async function refreshKlinesMeta(symbol: string): Promise<void> {
+  const conn = await getDbConnection();
+  await conn.execute(
+    `INSERT INTO crypto_klines_meta (symbol, total, oldest_date, latest_date)
+     SELECT symbol, COUNT(*), MIN(date), MAX(date)
+     FROM crypto_klines WHERE symbol = ?
+     GROUP BY symbol
+     ON DUPLICATE KEY UPDATE
+       total = VALUES(total),
+       oldest_date = VALUES(oldest_date),
+       latest_date = VALUES(latest_date),
+       updated_at = CURRENT_TIMESTAMP`,
+    [symbol]
+  );
+}
+
 // ─── 美股相关工具函数 ────────────────────────────────────────────────────────────
 
 /**

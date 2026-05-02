@@ -291,6 +291,13 @@ export const appRouter = router({
         }
       }),
 
+    // 获取股票元数据（起始日期、最新日期、条数）
+    getMeta: publicProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        return await dbCrypto.getKlinesMeta(input.symbol);
+      }),
+
     // AI 分析该股票（调用 LLM 生成简要分析）
     getAIAnalysis: publicProcedure
       .input(z.object({
