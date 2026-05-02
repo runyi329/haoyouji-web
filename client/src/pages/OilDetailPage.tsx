@@ -844,12 +844,7 @@ export default function OilDetailPage() {
                     const rowBg = idx % 2 === 0 ? "#fff" : "#F9FAFB";
                     const shortDate = (() => {
                       const d = row.date || "";
-                      const parts = d.replace(/-/g, "/").split("/");
-                      if (parts.length === 3) {
-                        const yy = parts[0].length === 4 ? parts[0].slice(-2) : parts[0];
-                        return `${yy}/${parts[1]}/${parts[2]}`;
-                      }
-                      return d;
+                      return d.replace(/-/g, "/");
                     })();
                     return (
                       <tr key={row.date} style={{ background: rowBg }}>
