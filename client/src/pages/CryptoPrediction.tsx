@@ -292,8 +292,8 @@ const RANGE_LABELS = [
 // ─── 行情评估9个标的配置（与BE数据页面保持一致）─────────────────
 const CDN = 'https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/';
 const MARKET_SYMBOLS = [
-  { key: 'BTC',   label: 'BTC',   icon: CDN + 'btc_732a725a.png'   },
-  { key: 'ETH',   label: 'ETH',   icon: CDN + 'eth_6ebbf353.png'   },
+  { key: 'BTC',   label: 'BTC',   icon: '/btc-3d-icon.webp'   },
+  { key: 'ETH',   label: 'ETH',   icon: '/eth-3d-icon.webp'   },
   { key: 'AAPL',  label: 'AAPL',  icon: CDN + 'aapl_3d0ebe4b.png'  },
   { key: 'MSFT',  label: 'MSFT',  icon: CDN + 'msft_6f03ba12.png'  },
   { key: 'GOOGL', label: 'GOOGL', icon: CDN + 'googl_f5e51fc9.png' },
