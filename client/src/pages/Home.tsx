@@ -686,6 +686,7 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
   const [, setLocation] = useLocation();
   const { data: goldPrice } = trpc.stock.getGoldPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
   const { data: oilPrice } = trpc.stock.getOilPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
+  const { data: brentPrice } = trpc.stock.getBrentPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
   const { data: dollarIndex } = trpc.stock.getDollarIndex.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
   const { data: usdCnh } = trpc.stock.getUsdCnh.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
   const { data: btcPrice } = trpc.stock.getBtcPrice.useQuery(undefined, { refetchInterval: 5000, staleTime: 2000 });
@@ -877,6 +878,8 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
       iconType: 'svg' as const, IconComp: GoldIcon, link: '/gold-ai' },
     { key: 'oil',  label: '原油 WTI',      data: oilPrice,   unit: '/桶',   decimals: 2,
       iconType: 'svg' as const, IconComp: OilIcon, link: '/oil-detail?type=WTI' },
+    { key: 'brent', label: '布伦特 Brent',  data: brentPrice, unit: '/桶',   decimals: 2,
+      iconType: 'svg' as const, IconComp: OilIcon, link: '/oil-detail?type=BRENT' },
     { key: 'dxy',  label: '美元指数 DXY',  data: dollarIndex, unit: '',    decimals: 3,
       iconType: 'svg' as const, IconComp: DxyIcon, link: '/dxy' },
     { key: 'cnh',  label: 'USD/CNH',       data: usdCnh,     unit: '',      decimals: 4,
