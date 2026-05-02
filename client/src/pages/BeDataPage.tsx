@@ -1244,95 +1244,180 @@ export default function BeDataPage() {
 
       {/* 顶部导航 */}
       {hideSymbolTabs ? (
-        // 美股模式：对齐 USStockTracker 风格
-        <div style={{ background: "linear-gradient(135deg, #1565C0 0%, #0D47A1 100%)", padding: "10px 16px 12px", flexShrink: 0, position: "sticky", top: 0, zIndex: 10 }}>
-          {/* 第一行：返回 + 标题 + 更新按鈕 */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        // 美股模式：全新设计蓝色头部
+        <div style={{ background: "linear-gradient(160deg, #1565C0 0%, #0D47A1 60%, #0A3880 100%)", padding: "10px 14px 12px", flexShrink: 0, position: "sticky", top: 0, zIndex: 10 }}>
+
+          {/* 第一行：返回 + logo+名称 + 更新按鈕 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
             <button
               onClick={() => setLocation(backPath)}
-              style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.2)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+              style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.18)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
             >
               <ChevronLeft style={{ width: 16, height: 16, color: "#fff" }} />
             </button>
-            {currentStockInfo ? (
-              <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10 }}>
-                <img src={currentStockInfo.icon} alt={currentStockInfo.shortLabel} style={{ width: 32, height: 32, objectFit: "contain", filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.3))" }} />
-                <div>
-                  <p style={{ fontWeight: 700, fontSize: 16, color: "#fff", margin: 0, lineHeight: 1.2 }}>AI 数据追踪</p>
-                  <p style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", margin: 0, lineHeight: 1.3 }}>{currentStockInfo.label} · {currentStockInfo.shortLabel}</p>
-                </div>
-              </div>
-            ) : (
-              <div style={{ flex: 1 }}>
-                <p style={{ fontWeight: 700, fontSize: 16, color: "#fff", margin: 0 }}>AI 数据追踪</p>
-              </div>
+            {currentStockInfo && (
+              <img src={currentStockInfo.icon} alt={currentStockInfo.shortLabel} style={{ width: 30, height: 30, objectFit: "contain", filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.35))", flexShrink: 0 }} />
             )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontWeight: 800, fontSize: 15, color: "#fff", margin: 0, lineHeight: 1.2 }}>
+                {currentStockInfo?.label ?? "AI 数据追踪"}
+              </p>
+              <p style={{ fontSize: 10, color: "rgba(255,255,255,0.65)", margin: 0, lineHeight: 1.3 }}>
+                {currentStockInfo?.shortLabel ?? ""} &middot; AI 数据追踪
+              </p>
+            </div>
             <button
               onClick={() => window.location.reload()}
-              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer" }}
+              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer", flexShrink: 0 }}
             >
               更新
             </button>
           </div>
 
-          {/* 统计信息：两小卡片横排，嵌入蓝色导航栏 */}
+          {/* 第二行：左右分栏信息卡片 */}
           {!isLoading && total > 0 && (
-            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-              <div style={{ flex: 1, borderRadius: 10, padding: "7px 10px", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.15)" }}>
-                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.65)", lineHeight: 1.3 }}>数据范围</div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#fff", lineHeight: 1.4, marginTop: 1 }}>{oldestDate}</div>
-                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.6)", lineHeight: 1.3 }}>~ {latestDate}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+              {/* 左列：静态信息 */}
+              <div style={{ borderRadius: 10, padding: "8px 10px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)" }}>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 5, textTransform: "uppercase" }}>基本信息</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>数据条数</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{total.toLocaleString()}条</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>起始日期</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{oldestDate}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>最新日期</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{latestDate}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>交易所</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#E3F2FD" }}>NASDAQ</span>
+                  </div>
+                </div>
               </div>
 
-              <div style={{ flex: 1, borderRadius: 10, padding: "7px 10px", background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.15)" }}>
-                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.65)", lineHeight: 1.3 }}>最新收盘</div>
-                {latestClose != null ? (
-                  <>
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginTop: 1 }}>
-                      <span style={{ fontSize: 14, fontWeight: 800, color: "#fff", lineHeight: 1.2 }}>{formatPrice(latestClose)}</span>
-                    </div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: (latestChangePct ?? 0) >= 0 ? "#FF8A80" : "#69F0AE", lineHeight: 1.3 }}>
-                      {(latestChangePct ?? 0) >= 0 ? "+" : ""}{latestChangePct?.toFixed(2) ?? "—"}%
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ marginTop: 4, fontSize: 11, color: "rgba(255,255,255,0.5)" }}>—</div>
-                )}
+              {/* 右列：动态信息 */}
+              <div style={{ borderRadius: 10, padding: "8px 10px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)" }}>
+                <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 5, textTransform: "uppercase" }}>实时行情</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>最新收盘</span>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: "#fff" }}>
+                      {latestClose != null ? formatPrice(latestClose) : "—"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>当日涨跌</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: (latestChangePct ?? 0) >= 0 ? "#FF8A80" : "#69F0AE" }}>
+                      {latestChangePct != null ? ((latestChangePct >= 0 ? "+" : "") + latestChangePct.toFixed(2) + "%") : "—"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>涨跌天数</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
+                      {stats ? (
+                        <span>
+                          <span style={{ color: "#FF8A80" }}>↑{stats.upDays}</span>
+                          <span style={{ color: "rgba(255,255,255,0.4)", margin: "0 2px" }}>/</span>
+                          <span style={{ color: "#69F0AE" }}>↓{stats.downDays}</span>
+                        </span>
+                      ) : "—"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>涨跌比</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
+                      {stats ? `${stats.upPct}% / ${stats.downPct}%` : "—"}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* AI × 股票名 分析卡片 */}
+          {/* 第三行： AI × 股票名 三段式分析 */}
           <div
             onClick={() => setAiExpanded(v => !v)}
             style={{
               borderRadius: 12,
-              background: "rgba(255,255,255,0.1)",
-              border: "1px solid rgba(255,255,255,0.2)",
+              background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.18)",
               padding: "9px 12px",
               cursor: "pointer",
-              transition: "background 0.2s",
             }}
           >
             {/* 标题行 */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: 0.3 }}>
                   ✨ AI × {currentStockInfo?.shortLabel ?? activeSymbol}
                 </span>
                 {aiLoading && (
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.6)" }}>分析中...</span>
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)" }}>分析中...</span>
                 )}
               </div>
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.6)" }}>{aiExpanded ? '▲ 收起' : '▼ 展开'}</span>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>{aiExpanded ? '▲ 收起' : '▼ 展开'}</span>
             </div>
 
-            {/* 展开后显示 AI 分析内容 */}
+            {/* 展开后显示 AI 三段式分析 */}
             {aiExpanded && (
-              <div style={{ marginTop: 8, fontSize: 12, color: "rgba(255,255,255,0.9)", lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
-                {aiLoading
-                  ? '正在生成 AI 分析，请稍候...'
-                  : String(aiData?.analysis ?? '暂无分析结果')}
+              <div style={{ marginTop: 10 }}>
+                {aiLoading ? (
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", textAlign: "center", padding: "8px 0" }}>
+                    正在生成 AI 分析，请稍候...
+                  </div>
+                ) : (() => {
+                  // 解析三段内容
+                  const raw = String(aiData?.analysis ?? '');
+                  const trend = aiData?.trend ?? '';
+                  const keyLevel = aiData?.keyLevel ?? '';
+                  const tip = aiData?.tip ?? '';
+                  const hasSections = trend || keyLevel || tip;
+
+                  if (hasSections) {
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {/* 趋势判断 */}
+                        {trend && (
+                          <div style={{ borderRadius: 8, background: "rgba(255,255,255,0.08)", padding: "8px 10px" }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "#90CAF9", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                              <span>📈</span> 趋势判断
+                            </div>
+                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65 }}>{trend}</div>
+                          </div>
+                        )}
+                        {/* 关键位置 */}
+                        {keyLevel && (
+                          <div style={{ borderRadius: 8, background: "rgba(255,255,255,0.08)", padding: "8px 10px" }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "#FFE082", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                              <span>🎯</span> 关键位置
+                            </div>
+                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65 }}>{keyLevel}</div>
+                          </div>
+                        )}
+                        {/* 投资提示 */}
+                        {tip && (
+                          <div style={{ borderRadius: 8, background: "rgba(255,255,255,0.08)", padding: "8px 10px" }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "#A5D6A7", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                              <span>💡</span> 投资提示
+                            </div>
+                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65 }}>{tip}</div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  // 备用：直接显示原始文本
+                  return (
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+                      {raw || '暂无分析结果'}
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

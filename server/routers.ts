@@ -339,7 +339,7 @@ export const appRouter = router({
           ? recentKlines.map(r => `${r.date}: 开${r.open} 收${r.close} 高${r.high} 低${r.low} 涨跌${r.changePct != null ? r.changePct.toFixed(2) + '%' : '-'}`).join('\n')
           : '暂无日线数据';
 
-        const prompt = `你是一个专业的金融分析师。请对以下股票做简明分析（中文，200字以内）：
+        const prompt = `你是一个专业的金融分析师。请对以下股票做结构化分析，返回 JSON 格式：
 
 股票：${stockName}（${symbol}）
 最新收盘：${latestClose != null ? latestClose.toFixed(2) : '-'} 美元，当日涨跌：${latestChangePct != null ? (latestChangePct >= 0 ? '+' : '') + latestChangePct.toFixed(2) + '%' : '-'}
@@ -348,12 +348,13 @@ export const appRouter = router({
 最近 20 交易日日线：
 ${klinesSummary}
 
-请从以下三个角度简要分析：
-1. 趋势判断：近期价格走势和动能
-2. 关键位置：支撑位和压力位参考
-3. 投资提示：短期注意事项
-
-要求简洁、客观、专业。`;
+请返回以下 JSON 格式（每段 60-80 字，简洁专业）：
+{
+  "trend": "趋势判断：近期价格走势和动能分析",
+  "keyLevel": "关键位置：支撑位和压力位参考",
+  "tip": "投资提示：短期注意事项"
+}
+只返回 JSON，不要其他内容。`;
 
         try {
           const res = await invokeLLM({
@@ -362,8 +363,22 @@ ${klinesSummary}
               { role: 'user', content: prompt },
             ],
           });
-          const content = res?.choices?.[0]?.message?.content ?? '暂无分析结果';
-          return { analysis: content, symbol, stockName };
+          const raw = res?.choices?.[0]?.message?.content ?? '';
+          // 尝试解析结构化 JSON
+          let trend = '', keyLevel = '', tip = '', analysis = raw;
+          try {
+            const jsonMatch = raw.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              const parsed = JSON.parse(jsonMatch[0]);
+              trend = parsed.trend ?? '';
+              keyLevel = parsed.keyLevel ?? '';
+              tip = parsed.tip ?? '';
+              analysis = [trend, keyLevel, tip].filter(Boolean).join('\n\n');
+            }
+          } catch (_) {
+            // 解析失败则保留原始文本
+          }
+          return { analysis, trend, keyLevel, tip, symbol, stockName };
         } catch (e) {
           console.error('[getAIAnalysis] LLM error:', e);
           return { analysis: '分析服务暂时不可用，请稍后重试。', symbol, stockName };
