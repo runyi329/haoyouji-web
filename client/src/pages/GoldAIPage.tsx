@@ -131,7 +131,7 @@ export default function GoldAIPage() {
         usdCny: goldData.usdCny,
         recentTrend,
       });
-      setAiContent(result.content);
+      setAiContent(typeof result.content === 'string' ? result.content : String(result.content ?? ''));
       setAiGeneratedAt(result.generatedAt);
     } catch (e: any) {
       toast.error("AI分析失败：" + e.message);
