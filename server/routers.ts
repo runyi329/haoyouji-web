@@ -20109,6 +20109,37 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
       }
     }),
+    /** 人民币双价格：在岸CNY + 离岸CNH（新浪财经） */
+    getCnyDualPrice: publicProcedure.query(async () => {
+      const cacheKey = 'global_cny_dual';
+      const cached = getCache(cacheKey);
+      if (cached) return cached;
+      try {
+        const res = await fetch(
+          'https://hq.sinajs.cn/list=USDCNY,USDCNH',
+          { headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+        );
+        const buf = await res.arrayBuffer();
+        const text = new TextDecoder('gbk').decode(buf);
+        const parsePair = (raw: string) => {
+          const parts = raw.split(',');
+          const price = parseFloat(parts[1]) || 0;
+          const prev = parseFloat(parts[5]) || 0;
+          const change = price - prev;
+          const changePercent = prev > 0 ? (change / prev * 100) : 0;
+          return { price, prevClose: prev, change, changePercent };
+        };
+        const matchCNY = text.match(/hq_str_USDCNY="([^"]+)"/);
+        const matchCNH = text.match(/hq_str_USDCNH="([^"]+)"/);
+        const cny = matchCNY ? parsePair(matchCNY[1]) : { price: 0, prevClose: 0, change: 0, changePercent: 0 };
+        const cnh = matchCNH ? parsePair(matchCNH[1]) : { price: 0, prevClose: 0, change: 0, changePercent: 0 };
+        const result = { cny, cnh, success: true };
+        setCache(cacheKey, result);
+        return result;
+      } catch (e) {
+        return { cny: { price: 0, prevClose: 0, change: 0, changePercent: 0 }, cnh: { price: 0, prevClose: 0, change: 0, changePercent: 0 }, success: false };
+      }
+    }),
     /** 黄金综合行情（XAU/USD + USD/CNY换算 + 上海金参考价） */
     getGoldComprehensive: publicProcedure.query(async () => {
       const cacheKey = 'gold_comprehensive';
