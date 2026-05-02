@@ -248,6 +248,13 @@ export const appRouter = router({
         const result = await dbCrypto.syncLatestFromBinance(input.symbol);
         return result;
       }),
+
+    // 批量获取多个标的最新日线价格（用于美股/数字币首页展示）
+    getLatestPrices: publicProcedure
+      .input(z.object({ symbols: z.array(z.string()) }))
+      .query(async ({ input }) => {
+        return await dbCrypto.getLatestStockPrices(input.symbols);
+      }),
   }),
 
   // 支付账户管理
