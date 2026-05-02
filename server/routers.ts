@@ -19928,6 +19928,107 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         return { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
       }
     }),
+    /** 黄金综合行情（XAU/USD + USD/CNY换算 + 上海金参考价） */
+    getGoldComprehensive: publicProcedure.query(async () => {
+      const cacheKey = 'gold_comprehensive';
+      const cached = getCache(cacheKey);
+      if (cached) return cached;
+      try {
+        const [xauRes, cnyRes] = await Promise.all([
+          fetch('https://hq.sinajs.cn/list=hf_XAU', {
+            headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' },
+            signal: AbortSignal.timeout(8000)
+          }),
+          fetch('https://hq.sinajs.cn/list=fx_susdcny', {
+            headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' },
+            signal: AbortSignal.timeout(8000)
+          }),
+        ]);
+        const xauBuf = await xauRes.arrayBuffer();
+        const xauText = new TextDecoder('gbk').decode(xauBuf);
+        const cnyBuf = await cnyRes.arrayBuffer();
+        const cnyText = new TextDecoder('gbk').decode(cnyBuf);
+        const xauMatch = xauText.match(/"([^"]+)"/);
+        if (!xauMatch) throw new Error('XAU解析失败');
+        const xauParts = xauMatch[1].split(',');
+        const xauPrice = parseFloat(xauParts[0]) || 0;
+        const xauPrev = parseFloat(xauParts[7]) || 0;
+        const xauOpen = parseFloat(xauParts[8]) || 0;
+        const xauHigh = parseFloat(xauParts[4]) || 0;
+        const xauLow = parseFloat(xauParts[5]) || 0;
+        const xauChange = xauPrice - xauPrev;
+        const xauChangePct = xauPrev > 0 ? (xauChange / xauPrev * 100) : 0;
+        const cnyMatch = cnyText.match(/"([^"]+)"/);
+        let usdCny = 7.25;
+        if (cnyMatch) {
+          const cnyParts = cnyMatch[1].split(',');
+          usdCny = parseFloat(cnyParts[1]) || parseFloat(cnyParts[3]) || 7.25;
+        }
+        const TROY_OZ_TO_GRAM = 31.1035;
+        const cnyPerGram = xauPrice > 0 ? (xauPrice * usdCny / TROY_OZ_TO_GRAM) : 0;
+        const cnyPrevGram = xauPrev > 0 ? (xauPrev * usdCny / TROY_OZ_TO_GRAM) : 0;
+        const cnyChange = cnyPerGram - cnyPrevGram;
+        const cnyChangePct = cnyPrevGram > 0 ? (cnyChange / cnyPrevGram * 100) : 0;
+        const result = {
+          xau: { price: xauPrice, prevClose: xauPrev, open: xauOpen, high: xauHigh, low: xauLow, change: xauChange, changePercent: xauChangePct, unit: 'USD/oz' },
+          cny: { price: parseFloat(cnyPerGram.toFixed(2)), prevClose: parseFloat(cnyPrevGram.toFixed(2)), change: parseFloat(cnyChange.toFixed(2)), changePercent: cnyChangePct, unit: 'CNY/g', note: '参考价（XAU/USD×汇率÷31.1035）' },
+          usdCny,
+          success: true,
+        };
+        setCache(cacheKey, result);
+        return result;
+      } catch (e: any) {
+        return {
+          xau: { price: 0, prevClose: 0, open: 0, high: 0, low: 0, change: 0, changePercent: 0, unit: 'USD/oz' },
+          cny: { price: 0, prevClose: 0, change: 0, changePercent: 0, unit: 'CNY/g', note: '' },
+          usdCny: 7.25,
+          success: false,
+        };
+      }
+    }),
+    /** 黄金AI分析报告 */
+    getGoldAIAnalysis: publicProcedure
+      .input(z.object({
+        xauPrice: z.number(),
+        xauChangePct: z.number(),
+        xauHigh: z.number(),
+        xauLow: z.number(),
+        cnyPrice: z.number(),
+        usdCny: z.number(),
+        recentTrend: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        try {
+          const { invokeLLM } = await import('./_core/llm.js');
+          const prompt = `你是一位专业的黄金市场分析师，请根据以下实时数据生成一份简洁的黄金行情分析报告（面向中国大陆投资者）：
+
+当前数据：
+- 伦敦金（XAU/USD）：${input.xauPrice.toFixed(2)} 美元/盎司
+- 今日涨跌幅：${input.xauChangePct > 0 ? '+' : ''}${input.xauChangePct.toFixed(2)}%
+- 今日高点：${input.xauHigh.toFixed(2)}，今日低点：${input.xauLow.toFixed(2)}
+- 人民币参考价：${input.cnyPrice.toFixed(2)} 元/克
+- 美元/人民币汇率：${input.usdCny.toFixed(4)}
+${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
+
+请从以下几个维度进行分析（每个维度2-3句话，总字数控制在300字以内）：
+1. **当前趋势判断**：当前处于什么走势阶段
+2. **关键价位**：重要支撑位和压力位
+3. **影响因素**：当前影响金价的主要宏观因素
+4. **操作建议**：短线和中线的操作参考建议
+
+注意：分析要客观专业，不要做出绝对性预测，要提示投资风险。`;
+          const response = await invokeLLM({
+            messages: [
+              { role: 'system', content: '你是一位专业的黄金市场分析师，擅长技术分析和基本面分析，面向中国大陆投资者。' },
+              { role: 'user', content: prompt },
+            ],
+          });
+          const content = response?.choices?.[0]?.message?.content || '分析生成失败，请稍后重试。';
+          return { content, success: true, generatedAt: new Date().toISOString() };
+        } catch (e: any) {
+          return { content: '分析生成失败：' + (e as any).message, success: false, generatedAt: new Date().toISOString() };
+        }
+      }),
     /** 比特币实时行情（从 price-scanner 内存缓存读取，遵循 crypto-price-unified 规范） */
     getBtcPrice: publicProcedure.query(async () => {
       const { getLatestPrice, getLatestChangePercent } = await import('./price-scanner');
