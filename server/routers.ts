@@ -26,6 +26,7 @@ import * as dbPaymentAccounts from "./db-payment-accounts";
 import * as dbRecharge from "./db-recharge";
 import * as dbAIEmployee from "./db-ai-employee";
 import * as dbCrypto from "./db-crypto";
+import { callDataApi } from "./_core/dataApi";
 import { getDb, getDbConnection, getLedgerDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, ledgerMembers, agPromptImages, agSyncSources, agSyncLogs, ahCompanies, ahTaxAuthorizations, ahCompanyMembers } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
@@ -254,6 +255,72 @@ export const appRouter = router({
       .input(z.object({ symbols: z.array(z.string()) }))
       .query(async ({ input }) => {
         return await dbCrypto.getLatestStockPrices(input.symbols);
+      }),
+
+    // 获取单只美股基本面数据（Yahoo Finance：52周高低、分析师目标价、技术面趋势、支撑/阻力位）
+    getStockFundamentals: publicProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        try {
+          // 并行获取 chart（52周数据）和 insights（分析师/技术面）
+          const [chartRes, insightsRes] = await Promise.all([
+            callDataApi('YahooFinance/get_stock_chart', {
+              query: {
+                symbol: input.symbol,
+                region: 'US',
+                interval: '1d',
+                range: '5d',
+                includeAdjustedClose: false,
+              },
+            }),
+            callDataApi('YahooFinance/get_stock_insights', {
+              query: { symbol: input.symbol },
+            }),
+          ]);
+
+          // 提取 chart meta 数据
+          const meta = chartRes?.chart?.result?.[0]?.meta ?? {};
+          const week52High: number | null = meta.fiftyTwoWeekHigh ?? null;
+          const week52Low: number | null = meta.fiftyTwoWeekLow ?? null;
+          const currentPrice: number | null = meta.regularMarketPrice ?? null;
+          const dayHigh: number | null = meta.regularMarketDayHigh ?? null;
+          const dayLow: number | null = meta.regularMarketDayLow ?? null;
+          const volume: number | null = meta.regularMarketVolume ?? null;
+
+          // 提取 insights 数据
+          const finResult = insightsRes?.finance?.result ?? {};
+          const instrInfo = finResult.instrumentInfo ?? {};
+          const keyTech = instrInfo.keyTechnicals ?? {};
+          const valuation = instrInfo.valuation ?? {};
+          const recommendation = finResult.recommendation ?? {};
+          const techEvents = instrInfo.technicalEvents ?? {};
+
+          // 短期技术面方向
+          const shortTermDir: string | null = techEvents.shortTermOutlook?.direction ?? null;
+          const midTermDir: string | null = techEvents.intermediateTermOutlook?.direction ?? null;
+
+          return {
+            symbol: input.symbol,
+            week52High,
+            week52Low,
+            currentPrice,
+            dayHigh,
+            dayLow,
+            volume,
+            support: keyTech.support ?? null,
+            resistance: keyTech.resistance ?? null,
+            stopLoss: keyTech.stopLoss ?? null,
+            valuationDesc: valuation.description ?? null,  // 'Overvalued' | 'Undervalued' | 'Fairly Valued'
+            valuationDiscount: valuation.discount ?? null, // '-6%' | '+12%' 等
+            targetPrice: recommendation.targetPrice ?? null,
+            rating: recommendation.rating ?? null,          // 'BUY' | 'SELL' | 'HOLD'
+            shortTermDir,
+            midTermDir,
+          };
+        } catch (e) {
+          console.error(`[getStockFundamentals] ${input.symbol} error:`, e);
+          return null;
+        }
       }),
   }),
 
