@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 补齐美股和数字币数据
+      - name: 补齐美股数据（Tushare us_daily）和数字币数据（Binance）
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: 124.223.54.69
@@ -21,18 +21,20 @@ jobs:
           script: |
             set -e
             echo "=== 开始补齐美股和数字币日线数据 ==="
-
             pip3 install pymysql requests -q 2>/dev/null || true
 
             python3 << 'PYEOF'
 import pymysql, requests, time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 DB_CONFIG = {
     'host': '127.0.0.1', 'port': 3306,
     'user': 'root', 'password': 'Miao@20190603',
     'database': 'crm_db', 'charset': 'utf8mb4',
 }
+TUSHARE_TOKEN = '5762b219a162bab92c913a2281663934b2e20e5e02c07ce7e42dfd79'
+TUSHARE_URL = 'http://api.tushare.pro'
+US_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META']
 
 def get_conn():
     return pymysql.connect(**DB_CONFIG)
@@ -47,84 +49,100 @@ def get_latest_date(symbol):
     finally:
         conn.close()
 
-def upsert_kline(symbol, date_str, open_p, high_p, low_p, close_p, volume):
+def upsert_klines(rows):
+    if not rows: return 0
     conn = get_conn()
     try:
         with conn.cursor() as cur:
-            cur.execute("""
+            cur.executemany("""
                 INSERT INTO crypto_klines (symbol, date, open, high, low, close, volume)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                   open=VALUES(open), high=VALUES(high), low=VALUES(low),
                   close=VALUES(close), volume=VALUES(volume)
-            """, (symbol, date_str, open_p, high_p, low_p, close_p, volume))
+            """, rows)
         conn.commit()
+        return len(rows)
     finally:
         conn.close()
 
-# ── 美股七姐妹 ──────────────────────────────────────────────────────────────
-US_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META']
-
+# ── 美股：Tushare us_daily 按日期批量拉取 ──────────────────────────────────
+# 找出最早缺失日期
+earliest_start = None
 for sym in US_STOCKS:
     latest = get_latest_date(sym)
     if latest:
-        start_dt = datetime.strptime(latest, '%Y-%m-%d') + timedelta(days=1)
+        start = datetime.strptime(latest, '%Y-%m-%d') + timedelta(days=1)
     else:
-        start_dt = datetime(2010, 1, 1)
-    
-    now = datetime.utcnow()
-    if start_dt.date() > now.date():
-        print(f"[{sym}] 已是最新 ({latest})，跳过")
+        start = datetime(2010, 1, 1)
+    if earliest_start is None or start < earliest_start:
+        earliest_start = start
+
+now = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+print(f"美股补齐范围: {earliest_start.strftime('%Y-%m-%d')} ~ {now.strftime('%Y-%m-%d')}")
+
+total_us = 0
+cursor = earliest_start
+while cursor < now:
+    # 跳过周末
+    if cursor.weekday() >= 5:
+        cursor += timedelta(days=1)
         continue
     
-    period1 = int(start_dt.timestamp())
-    period2 = int(now.timestamp())
+    trade_date = cursor.strftime('%Y%m%d')
+    try:
+        resp = requests.post(TUSHARE_URL, json={
+            'api_name': 'us_daily',
+            'token': TUSHARE_TOKEN,
+            'params': {'trade_date': trade_date},
+            'fields': 'ts_code,trade_date,open,high,low,close,vol',
+        }, timeout=15)
+        d = resp.json()
+        
+        if d.get('code') != 0:
+            print(f"  [{trade_date}] 跳过: {d.get('msg','')}")
+            cursor += timedelta(days=1)
+            time.sleep(0.6)
+            continue
+        
+        items = d.get('data', {}).get('items', []) or []
+        fields = d.get('data', {}).get('fields', [])
+        
+        if not items:
+            # 假日无数据
+            cursor += timedelta(days=1)
+            time.sleep(0.3)
+            continue
+        
+        idx = {f: i for i, f in enumerate(fields)}
+        date_str = cursor.strftime('%Y-%m-%d')
+        rows = []
+        for item in items:
+            code = item[idx['ts_code']]
+            if code not in US_STOCKS:
+                continue
+            o = item[idx['open']]
+            h = item[idx['high']]
+            l = item[idx['low']]
+            c = item[idx['close']]
+            v = item[idx['vol']] or 0
+            if not o or not c:
+                continue
+            rows.append((code, date_str, round(float(o),4), round(float(h),4), round(float(l),4), round(float(c),4), round(float(v),4)))
+        
+        if rows:
+            n = upsert_klines(rows)
+            total_us += n
+            print(f"  [{date_str}] 写入 {n} 条: {[r[0] for r in rows]}")
+    except Exception as e:
+        print(f"  [{trade_date}] 请求失败: {e}")
     
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&period1={period1}&period2={period2}&events=history"
-    
-    added = 0
-    for attempt in range(3):
-        try:
-            resp = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
-            if resp.status_code != 200:
-                # 备用
-                url2 = url.replace('query1', 'query2')
-                resp = requests.get(url2, headers={'User-Agent': 'Mozilla/5.0'}, timeout=20)
-            data = resp.json()
-            result = data.get('chart', {}).get('result', [None])[0]
-            if not result:
-                print(f"[{sym}] Yahoo 返回空数据")
-                break
-            
-            timestamps = result.get('timestamp', [])
-            ohlcv = result.get('indicators', {}).get('quote', [{}])[0]
-            opens = ohlcv.get('open', [])
-            highs = ohlcv.get('high', [])
-            lows = ohlcv.get('low', [])
-            closes = ohlcv.get('close', [])
-            volumes = ohlcv.get('volume', [])
-            
-            for i, ts in enumerate(timestamps):
-                if ts is None: continue
-                dt = datetime.utcfromtimestamp(ts)
-                if dt.year < 2000: continue
-                date_str = dt.strftime('%Y-%m-%d')
-                o = opens[i] if i < len(opens) and opens[i] else None
-                h = highs[i] if i < len(highs) and highs[i] else None
-                l = lows[i] if i < len(lows) and lows[i] else None
-                c = closes[i] if i < len(closes) and closes[i] else None
-                v = volumes[i] if i < len(volumes) and volumes[i] else 0
-                if not all([o, h, l, c]): continue
-                upsert_kline(sym, date_str, round(o,4), round(h,4), round(l,4), round(c,4), int(v))
-                added += 1
-            
-            print(f"[{sym}] 新增/更新 {added} 条，最新日期: {date_str if timestamps else latest}")
-            break
-        except Exception as e:
-            print(f"[{sym}] 第{attempt+1}次失败: {e}")
-            time.sleep(3)
+    cursor += timedelta(days=1)
+    time.sleep(0.6)  # 限速 < 2次/分钟
 
-# ── 数字币 BTC/ETH ────────────────────────────────────────────────────────
+print(f"美股共补齐 {total_us} 条")
+
+# ── 数字币：Binance ────────────────────────────────────────────────────────
 CRYPTO_SYMBOLS = ['BTCUSDT', 'ETHUSDT']
 
 for sym in CRYPTO_SYMBOLS:
@@ -135,13 +153,11 @@ for sym in CRYPTO_SYMBOLS:
         start_dt = datetime(2017, 1, 1)
     
     now_utc = datetime.utcnow()
-    if start_dt.date() > now_utc.date():
+    if start_dt.date() >= now_utc.date():
         print(f"[{sym}] 已是最新 ({latest})，跳过")
         continue
     
-    ticker = sym.replace('USDT', '')
     start_ms = int(start_dt.timestamp() * 1000)
-    
     added = 0
     while True:
         url = f"https://api.binance.com/api/v3/klines?symbol={sym}&interval=1d&startTime={start_ms}&limit=1000"
@@ -150,14 +166,18 @@ for sym in CRYPTO_SYMBOLS:
             klines = resp.json()
             if not klines or not isinstance(klines, list): break
             
+            rows = []
             for k in klines:
                 ts = k[0]
                 dt = datetime.utcfromtimestamp(ts / 1000)
-                if dt.date() >= now_utc.date(): continue  # 跳过未收盘的当天
+                if dt.date() >= now_utc.date(): continue
                 date_str = dt.strftime('%Y-%m-%d')
                 o, h, l, c, v = float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])
-                upsert_kline(sym, date_str, round(o,4), round(h,4), round(l,4), round(c,4), round(v,4))
-                added += 1
+                rows.append((sym, date_str, round(o,4), round(h,4), round(l,4), round(c,4), round(v,4)))
+            
+            if rows:
+                n = upsert_klines(rows)
+                added += n
             
             if len(klines) < 1000: break
             start_ms = klines[-1][0] + 86400000
@@ -167,7 +187,7 @@ for sym in CRYPTO_SYMBOLS:
             break
     
     new_latest = get_latest_date(sym)
-    print(f"[{sym}] 新增/更新 {added} 条，最新日期: {new_latest}")
+    print(f"[{sym}] 新增 {added} 条，最新日期: {new_latest}")
 
 print("=== 全部补齐完成 ===")
 PYEOF
