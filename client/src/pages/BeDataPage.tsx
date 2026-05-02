@@ -11,8 +11,9 @@ import {
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK";
 const COS_BE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets";
 const ALL_SYMBOLS = [
-  { key: "BTCUSDT", label: "比特币 BTC", shortLabel: "BTC",  icon: `${CDN}/btc_732a725a.png`, type: "crypto", symbol: "BTCUSDT" },
-  { key: "ETHUSDT", label: "以太坊 ETH", shortLabel: "ETH",  icon: `${CDN}/eth_6ebbf353.png`, type: "crypto", symbol: "ETHUSDT" },
+  { key: "BTCUSDT", label: "比特币 Bitcoin", shortLabel: "BTC",  icon: "/btc-3d-icon.webp", type: "crypto", symbol: "BTCUSDT" },
+  { key: "ETHUSDT", label: "以太坊 Ethereum", shortLabel: "ETH",  icon: "/eth-3d-icon.webp", type: "crypto", symbol: "ETHUSDT" },
+  { key: "SOLUSDT", label: "索拉纳 Solana", shortLabel: "SOL",  icon: "/sol-3d-icon.webp", type: "crypto", symbol: "SOLUSDT" },
   { key: "AAPL",   label: "Apple",   shortLabel: "AAPL", icon: `${COS_BE}/logo_apple_3d_t_16b8b55f.png`, type: "stock", symbol: "AAPL.US" },
   { key: "MSFT",   label: "Microsoft",   shortLabel: "MSFT", icon: `${COS_BE}/logos/logo_microsoft_3d.png`, type: "stock", symbol: "MSFT.US" },
   { key: "GOOGL",  label: "Alphabet",  shortLabel: "GOOGL", icon: `${COS_BE}/logos/logo_google_3d.png`, type: "stock", symbol: "GOOGL.US" },
@@ -1140,8 +1141,8 @@ export default function BeDataPage() {
     : ALL_SYMBOLS;
   const pageTitle = urlFilter === 'crypto' ? '数字币日线数据' : urlFilter === 'stocks' ? '美股日线数据' : 'BE数据';
   const backPath = urlFilter === 'crypto' ? '/' : urlFilter === 'stocks' ? '/us-stock-tracker' : `/ledger/${ledgerId}/settings`;
-  // 美股模式下隐藏股票切换 tab
-  const hideSymbolTabs = urlFilter === 'stocks';
+  // 美股模式和数字币模式下都使用蓝色头部，隐藏股票切换 tab
+  const hideSymbolTabs = urlFilter === 'stocks' || urlFilter === 'crypto';
 
   // 美股模式下，优先用 URL 中的 symbol 参数确定初始股票
   const initialSymbol = urlFilter === 'stocks' && urlSymbol
@@ -1149,7 +1150,7 @@ export default function BeDataPage() {
     : (filteredSymbols[0]?.key ?? ALL_SYMBOLS[0].key);
 
   const [activeSymbol, setActiveSymbol] = useState(initialSymbol);
-  // 美股模式下默认显示数据分析，其他模式保持日线数据
+  // 美股模式和数字币模式下默认显示数据分析
   const [activeTab, setActiveTab] = useState(hideSymbolTabs ? "analysis" : "data");
   const [page, setPage] = useState(1);
 
@@ -1176,7 +1177,7 @@ export default function BeDataPage() {
   const metaSymbol = currentStockInfo?.symbol ?? activeSymbol; // 美股用 AAPL.US，数字币用 BTCUSDT
   const metaSymbolKey = currentStockInfo?.type === 'stock'
     ? (currentStockInfo.symbol.replace('.US', ''))  // AAPL.US -> AAPL
-    : activeSymbol;
+    : activeSymbol; // BTCUSDT / ETHUSDT / SOLUSDT
   const { data: metaData } = trpc.cryptoData.getMeta.useQuery(
     { symbol: metaSymbolKey },
     { staleTime: 30 * 60 * 1000 } // 30分钟缓存
@@ -1208,7 +1209,7 @@ export default function BeDataPage() {
       latestDate,
     },
     {
-      enabled: hideSymbolTabs && !isLoading && total > 0,
+      enabled: hideSymbolTabs && !isLoading,
       staleTime: 10 * 60 * 1000, // 10分钟内不重新请求
     }
   );
@@ -1248,7 +1249,7 @@ export default function BeDataPage() {
         <div style={{ background: "linear-gradient(160deg, #1565C0 0%, #0D47A1 60%, #0A3880 100%)", padding: "10px 14px 12px", flexShrink: 0, position: "sticky", top: 0, zIndex: 10 }}>
 
           {/* 第一行：返回 + logo+名称 + 更新按鈕 */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: urlFilter === 'crypto' ? 6 : 10 }}>
             <button
               onClick={() => setLocation(backPath)}
               style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.18)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
@@ -1273,6 +1274,27 @@ export default function BeDataPage() {
               更新
             </button>
           </div>
+
+          {/* 数字币模式：币种切换按鈕横排 */}
+          {urlFilter === 'crypto' && (
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+              {filteredSymbols.map(s => (
+                <button
+                  key={s.key}
+                  onClick={() => { handleSymbolChange(s.key); }}
+                  style={{
+                    flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                    padding: "5px 0", borderRadius: 10, cursor: "pointer", transition: "all 0.2s",
+                    background: activeSymbol === s.key ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)",
+                    border: activeSymbol === s.key ? "1.5px solid rgba(255,255,255,0.7)" : "1.5px solid rgba(255,255,255,0.15)",
+                  }}
+                >
+                  <img src={s.icon} alt={s.shortLabel} style={{ width: 22, height: 22, objectFit: "contain" }} />
+                  <span style={{ fontSize: 9, fontWeight: 700, color: activeSymbol === s.key ? "#fff" : "rgba(255,255,255,0.55)" }}>{s.shortLabel}</span>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* 第二行：左右分栏信息卡片（始终占位，加载中显示骨架） */}
           {(() => {
@@ -1486,7 +1508,7 @@ export default function BeDataPage() {
 
       {/* 功能 Tab */}
       <div style={{ background: "#fff", borderBottom: hideSymbolTabs ? "1px solid #D8E0EC" : "1px solid #E5E7EB", display: "flex", flexShrink: 0 }}>
-        {TABS.filter((t) => !(urlFilter === 'stocks' && t.key === 'predict')).map((t) => (
+        {TABS.filter((t) => !((urlFilter === 'stocks' || urlFilter === 'crypto') && t.key === 'predict')).map((t) => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
