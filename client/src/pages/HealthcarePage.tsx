@@ -5,7 +5,7 @@
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, X, Info, RefreshCw } from "lucide-react";
+import { ChevronLeft, X, Info } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -134,11 +134,10 @@ export default function HealthcarePage() {
         </div>
         <button
           onClick={() => window.location.reload()}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-full"
-          style={{ background: BG_SUBTLE }}
+          className="px-3 py-1 rounded-full text-xs font-medium"
+          style={{ background: BG_SUBTLE, color: TEXT_SUB }}
         >
-          <RefreshCw className="w-3.5 h-3.5" style={{ color: TEXT_SUB }} />
-          <span style={{ fontSize: 12, color: TEXT_SUB, fontWeight: 500 }}>刷新</span>
+          刷新
         </button>
       </div>
 

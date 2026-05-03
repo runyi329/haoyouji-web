@@ -5,7 +5,7 @@
  * 风格：浅色背景 + 渐变大卡片
  */
 import { useLocation } from "wouter";
-import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function SmartFinancePage() {
   const [, navigate] = useLocation();
@@ -133,11 +133,10 @@ export default function SmartFinancePage() {
         {/* 刷新按钮 */}
         <button
           onClick={handleRefresh}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-full"
-          style={{ background: '#f0f2f5' }}
+          className="px-3 py-1 rounded-full text-xs font-medium"
+          style={{ background: '#f0f2f5', color: '#6b7280' }}
         >
-          <RefreshCw className="w-3.5 h-3.5" style={{ color: '#6b7280' }} />
-          <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 500 }}>刷新</span>
+          刷新
         </button>
       </div>
 
