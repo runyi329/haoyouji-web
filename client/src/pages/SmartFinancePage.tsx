@@ -4,7 +4,7 @@
  * 包含：人口×AI、房产×AI 等宏观数据入口
  */
 import { useLocation } from "wouter";
-import { ChevronLeft, Users, Home, TrendingDown, BarChart2 } from "lucide-react";
+import { ChevronLeft, Users, Home, TrendingDown, BarChart2, Shield } from "lucide-react";
 
 const BG_PAGE   = "#f5f6f8";
 const BG_WHITE  = "#ffffff";
@@ -44,10 +44,25 @@ const MODULES = [
     accentColor: ACCENT2,
     stats: [
       { label: '2024年均价', value: '9,200元', color: ACCENT2 },
-      { label: '历史峰值', value: '10,139元', color: GOLD_LINE },
+      { label: '历史峰値', value: '10,139元', color: GOLD_LINE },
       { label: 'AI预测2034', value: '6,900元', color: AI_COLOR },
     ],
     tag: '房地产',
+  },
+  {
+    key: 'socialsecurity',
+    title: '社保',
+    subtitle: '×AI',
+    desc: '社保基金结余、收支趋势、参保人数及 AI 预测（2025-2034）',
+    path: '/social-security',
+    icon: Shield,
+    accentColor: '#16a34a',
+    stats: [
+      { label: '2024年结余', value: '10.98万亿', color: '#16a34a' },
+      { label: '2024年收入', value: '8.21万亿', color: ACCENT },
+      { label: 'AI预测2034', value: '12.65万亿', color: AI_COLOR },
+    ],
+    tag: '社会保障',
   },
 ];
 
