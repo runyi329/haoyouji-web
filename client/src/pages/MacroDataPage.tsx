@@ -129,10 +129,10 @@ export default function MacroDataPage() {
         </div>
         <button
           onClick={() => window.location.reload()}
-          className="flex items-center justify-center w-8 h-8 rounded-full"
-          style={{ background: BG_SUBTLE }}
+          className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-semibold"
+          style={{ background: BG_SUBTLE, color: TEXT_SUB }}
         >
-          <RefreshCw className="w-4 h-4" style={{ color: TEXT_SUB }} />
+          刷新
         </button>
       </div>
 
