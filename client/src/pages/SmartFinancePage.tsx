@@ -1,188 +1,245 @@
 /**
  * 智能财务 汇总入口页
  * 路由：/smart-finance
- * 包含：人口×AI、房产×AI 等宏观数据入口
+ * 4 个模块：人口×AI、房产×AI、社保×AI、医疗×AI
+ * 风格：渐变背景大卡片，视觉冲击力强
  */
 import { useLocation } from "wouter";
-import { ChevronLeft, Users, Home, TrendingDown, BarChart2, Shield, Stethoscope } from "lucide-react";
-
-const BG_PAGE   = "#f5f6f8";
-const BG_WHITE  = "#ffffff";
-const BORDER    = "#e4e7ed";
-const TEXT_MAIN = "#1a1a2e";
-const TEXT_SUB  = "#6b7280";
-const TEXT_MUTED = "#9ca3af";
-const ACCENT    = "#1a56db";
-const AI_COLOR  = "#7c3aed";
-const ACCENT2   = "#e53935";
-const GOLD_LINE = "#d97706";
-const BG_SUBTLE = "#f0f2f5";
-
-const MODULES = [
-  {
-    key: 'population',
-    title: '人口',
-    subtitle: '×AI',
-    desc: '出生人口趋势、分省数据、性别结构及 AI 预测（2026-2035）',
-    path: '/macro-data',
-    icon: Users,
-    accentColor: ACCENT,
-    stats: [
-      { label: '2024年出生', value: '954万', color: ACCENT2 },
-      { label: '历史峰值', value: '2953万', color: GOLD_LINE },
-      { label: 'AI预测2035', value: '520万', color: AI_COLOR },
-    ],
-    tag: '人口学',
-  },
-  {
-    key: 'realestate',
-    title: '房产',
-    subtitle: '×AI',
-    desc: '全国均价趋势、销售面积、城市分化及 AI 预测（2025-2034）',
-    path: '/real-estate',
-    icon: Home,
-    accentColor: ACCENT2,
-    stats: [
-      { label: '2024年均价', value: '9,200元', color: ACCENT2 },
-      { label: '历史峰値', value: '10,139元', color: GOLD_LINE },
-      { label: 'AI预测2034', value: '6,900元', color: AI_COLOR },
-    ],
-    tag: '房地产',
-  },
-  {
-    key: 'socialsecurity',
-    title: '社保',
-    subtitle: '×AI',
-    desc: '社保基金结余、收支趋势、参保人数及 AI 预测（2025-2034）',
-    path: '/social-security',
-    icon: Shield,
-    accentColor: '#16a34a',
-    stats: [
-      { label: '2024年结余', value: '10.98万亿', color: '#16a34a' },
-      { label: '2024年收入', value: '8.21万亿', color: ACCENT },
-      { label: 'AI预测2034', value: '12.65万亿', color: AI_COLOR },
-    ],
-    tag: '社会保障',
-  },
-  {
-    key: 'healthcare',
-    title: '医疗',
-    subtitle: '×AI',
-    desc: '医疗机构、床位、医护人员、主要疾病发病率及 AI 预测（2025-2034）',
-    path: '/healthcare',
-    icon: Stethoscope,
-    accentColor: '#0891b2',
-    stats: [
-      { label: '2024年医院数', value: '3.9万家', color: '#0891b2' },
-      { label: '2024年床位数', value: '1030万张', color: ACCENT },
-      { label: 'AI预测2034', value: '14.9万亿', color: AI_COLOR },
-    ],
-    tag: '医疗卫生',
-  },
-];
+import { ChevronLeft, ChevronRight, Landmark } from "lucide-react";
 
 export default function SmartFinancePage() {
   const [, navigate] = useLocation();
 
+  const MODULES = [
+    {
+      key: 'population',
+      title: '人口',
+      tag: '×AI',
+      sub: '出生人口 · 趋势预测 · 分省数据',
+      path: '/macro-data',
+      gradient: 'linear-gradient(135deg, #1a1a4e 0%, #0f3460 40%, #1a56db 100%)',
+      // 装饰圆圈颜色
+      circle1: 'rgba(26,86,219,0.35)',
+      circle2: 'rgba(255,255,255,0.06)',
+      stats: [
+        { label: '2024年出生', value: '954万人' },
+        { label: '历史峰值', value: '2953万人' },
+        { label: 'AI预测2035', value: '520万人' },
+      ],
+      badge: '人口学',
+      badgeBg: 'rgba(255,255,255,0.15)',
+      highlight: '#60a5fa',
+    },
+    {
+      key: 'realestate',
+      title: '房产',
+      tag: '×AI',
+      sub: '全国均价 · 销售面积 · 城市分化',
+      path: '/real-estate',
+      gradient: 'linear-gradient(135deg, #3b0a0a 0%, #7f1d1d 40%, #dc2626 100%)',
+      circle1: 'rgba(220,38,38,0.35)',
+      circle2: 'rgba(255,255,255,0.06)',
+      stats: [
+        { label: '2024年均价', value: '9,200元/㎡' },
+        { label: '历史峰值', value: '10,139元/㎡' },
+        { label: 'AI预测2034', value: '6,900元/㎡' },
+      ],
+      badge: '房地产',
+      badgeBg: 'rgba(255,255,255,0.15)',
+      highlight: '#fca5a5',
+    },
+    {
+      key: 'socialsecurity',
+      title: '社保',
+      tag: '×AI',
+      sub: '基金结余 · 收支趋势 · 参保人数',
+      path: '/social-security',
+      gradient: 'linear-gradient(135deg, #052e16 0%, #14532d 40%, #16a34a 100%)',
+      circle1: 'rgba(22,163,74,0.35)',
+      circle2: 'rgba(255,255,255,0.06)',
+      stats: [
+        { label: '2024年结余', value: '10.98万亿' },
+        { label: '2024年收入', value: '8.21万亿' },
+        { label: 'AI预测2034', value: '12.65万亿' },
+      ],
+      badge: '社会保障',
+      badgeBg: 'rgba(255,255,255,0.15)',
+      highlight: '#86efac',
+    },
+    {
+      key: 'healthcare',
+      title: '医疗',
+      tag: '×AI',
+      sub: '医疗机构 · 疾病统计 · 卫生费用',
+      path: '/healthcare',
+      gradient: 'linear-gradient(135deg, #0c1a2e 0%, #0e3a5c 40%, #0891b2 100%)',
+      circle1: 'rgba(8,145,178,0.35)',
+      circle2: 'rgba(255,255,255,0.06)',
+      stats: [
+        { label: '2024年医院', value: '3.9万家' },
+        { label: '2024年床位', value: '1030万张' },
+        { label: '卫生总费用', value: '9.6万亿' },
+      ],
+      badge: '医疗卫生',
+      badgeBg: 'rgba(255,255,255,0.15)',
+      highlight: '#67e8f9',
+    },
+    {
+      key: 'bankrate',
+      title: '存款',
+      tag: '×AI',
+      sub: '存款利率 · LPR贷款 · 存贷利差',
+      path: '/bank-rate',
+      gradient: 'linear-gradient(135deg, #1c1207 0%, #451a03 40%, #d97706 100%)',
+      circle1: 'rgba(217,119,6,0.35)',
+      circle2: 'rgba(255,255,255,0.06)',
+      stats: [
+        { label: '1年期存款', value: '1.10%' },
+        { label: '1年期LPR', value: '3.10%' },
+        { label: '存贷利差', value: '2.00%' },
+      ],
+      badge: '银行利率',
+      badgeBg: 'rgba(255,255,255,0.15)',
+      highlight: '#fcd34d',
+    },
+  ];
+
   return (
-    <div className="min-h-screen max-w-md mx-auto relative" style={{ background: BG_PAGE, color: TEXT_MAIN }}>
+    <div
+      className="min-h-screen max-w-md mx-auto relative"
+      style={{ background: '#0d0d1a', color: '#fff' }}
+    >
       {/* ── 顶部导航 ── */}
       <div
         className="sticky top-0 z-20 flex items-center px-4 py-3"
-        style={{ background: '#fff', borderBottom: `1px solid ${BORDER}` }}
+        style={{ background: 'rgba(13,13,26,0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
       >
         <button
           onClick={() => navigate("/")}
           className="flex items-center justify-center w-8 h-8 rounded-full mr-3"
-          style={{ background: BG_SUBTLE }}
+          style={{ background: 'rgba(255,255,255,0.1)' }}
         >
-          <ChevronLeft className="w-5 h-5" style={{ color: TEXT_MAIN }} />
+          <ChevronLeft className="w-5 h-5 text-white" />
         </button>
-        <div className="flex items-center gap-1.5 flex-1">
-          <BarChart2 className="w-4 h-4" style={{ color: GOLD_LINE }} />
-          <span className="text-base font-bold" style={{ color: TEXT_MAIN }}>智能财务</span>
-          <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: 'rgba(124,58,237,0.1)', color: AI_COLOR, fontWeight: 600 }}>AI</span>
+        <div className="flex items-center gap-2 flex-1">
+          <span className="text-base font-bold text-white">智能财务</span>
+          <span
+            className="text-xs px-2 py-0.5 rounded-full font-bold"
+            style={{ background: 'linear-gradient(90deg, #7c3aed, #1a56db)', color: '#fff' }}
+          >
+            AI
+          </span>
         </div>
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>宏观数据分析</span>
       </div>
 
       {/* ── 副标题 ── */}
-      <div className="px-4 pt-4 pb-2">
-        <p style={{ fontSize: 12, color: TEXT_MUTED }}>基于 AI 大模型的宏观经济数据分析与预测</p>
+      <div className="px-4 pt-5 pb-3">
+        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6 }}>
+          基于 AI 大模型的宏观经济数据分析与预测平台
+        </p>
       </div>
 
-      {/* ── 模块入口卡片 ── */}
-      <div className="px-4 space-y-3 pb-8">
-        {MODULES.map((mod) => {
-          const Icon = mod.icon;
-          return (
+      {/* ── 模块卡片列表 ── */}
+      <div className="px-4 space-y-4 pb-10">
+        {MODULES.map((mod) => (
+          <div
+            key={mod.key}
+            className="rounded-3xl overflow-hidden cursor-pointer relative"
+            style={{
+              background: mod.gradient,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
+              minHeight: 160,
+              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+            }}
+            onClick={() => navigate(mod.path)}
+          >
+            {/* 装饰圆圈 1 */}
             <div
-              key={mod.key}
-              className="rounded-2xl cursor-pointer active:scale-[0.99] overflow-hidden"
               style={{
-                background: BG_WHITE,
-                border: `1px solid ${BORDER}`,
-                boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
-                transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                position: 'absolute',
+                top: -40,
+                right: -40,
+                width: 160,
+                height: 160,
+                borderRadius: '50%',
+                background: mod.circle1,
+                pointerEvents: 'none',
               }}
-              onClick={() => navigate(mod.path)}
-            >
-              {/* 顶部色条 */}
-              <div style={{ height: 3, background: `linear-gradient(90deg, ${mod.accentColor}, ${AI_COLOR})` }} />
+            />
+            {/* 装饰圆圈 2 */}
+            <div
+              style={{
+                position: 'absolute',
+                bottom: -30,
+                left: -30,
+                width: 120,
+                height: 120,
+                borderRadius: '50%',
+                background: mod.circle2,
+                border: '1px solid rgba(255,255,255,0.08)',
+                pointerEvents: 'none',
+              }}
+            />
 
-              <div className="p-4">
-                {/* 标题行 */}
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center"
-                      style={{ background: `${mod.accentColor}15` }}
-                    >
-                      <Icon className="w-5 h-5" style={{ color: mod.accentColor }} />
-                    </div>
-                    <div>
-                      <div className="flex items-baseline gap-1">
-                        <span style={{ fontSize: 16, fontWeight: 700, color: TEXT_MAIN }}>{mod.title}</span>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: mod.accentColor }}>{mod.subtitle}</span>
-                      </div>
-                      <span style={{ fontSize: 10, color: TEXT_MUTED }}>{mod.tag}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1" style={{ color: TEXT_MUTED }}>
-                    <span style={{ fontSize: 11 }}>查看详情</span>
-                    <ChevronLeft className="w-3.5 h-3.5 rotate-180" />
-                  </div>
-                </div>
-
-                {/* 描述 */}
-                <p style={{ fontSize: 11, color: TEXT_SUB, lineHeight: 1.6, marginBottom: 12 }}>{mod.desc}</p>
-
-                {/* 关键数据 */}
-                <div className="grid grid-cols-3 gap-2">
-                  {mod.stats.map((stat, i) => (
-                    <div
-                      key={i}
-                      className="rounded-lg p-2 text-center"
-                      style={{ background: BG_PAGE }}
-                    >
-                      <div style={{ fontSize: 9, color: TEXT_MUTED, marginBottom: 2 }}>{stat.label}</div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: stat.color }}>{stat.value}</div>
-                    </div>
-                  ))}
+            <div className="relative p-5">
+              {/* 标签 + 箭头 */}
+              <div className="flex items-center justify-between mb-3">
+                <span
+                  className="text-xs px-2.5 py-1 rounded-full font-semibold"
+                  style={{ background: mod.badgeBg, color: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(4px)' }}
+                >
+                  {mod.badge}
+                </span>
+                <div
+                  className="flex items-center justify-center w-7 h-7 rounded-full"
+                  style={{ background: 'rgba(255,255,255,0.15)' }}
+                >
+                  <ChevronRight className="w-4 h-4 text-white" />
                 </div>
               </div>
+
+              {/* 大标题 */}
+              <div className="flex items-baseline gap-1 mb-1">
+                <span style={{ fontSize: 32, fontWeight: 900, color: '#fff', lineHeight: 1 }}>{mod.title}</span>
+                <span style={{ fontSize: 20, fontWeight: 900, color: mod.highlight, lineHeight: 1 }}>{mod.tag}</span>
+              </div>
+              <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginBottom: 16 }}>{mod.sub}</p>
+
+              {/* 关键数据 3 格 */}
+              <div
+                className="grid grid-cols-3 gap-2"
+                style={{
+                  background: 'rgba(0,0,0,0.25)',
+                  borderRadius: 14,
+                  padding: '10px 8px',
+                  backdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                {mod.stats.map((s, i) => (
+                  <div key={i} className="text-center">
+                    <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', marginBottom: 3 }}>{s.label}</div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: i === 2 ? mod.highlight : '#fff', lineHeight: 1.2 }}>
+                      {s.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-          );
-        })}
+          </div>
+        ))}
 
         {/* 更多模块占位 */}
         <div
-          className="rounded-2xl p-4 flex items-center justify-center"
-          style={{ background: BG_WHITE, border: `1px dashed ${BORDER}`, minHeight: 72 }}
+          className="rounded-3xl p-5 flex items-center justify-center"
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px dashed rgba(255,255,255,0.15)',
+            minHeight: 72,
+          }}
         >
-          <div className="text-center">
-            <TrendingDown className="w-5 h-5 mx-auto mb-1" style={{ color: TEXT_MUTED }} />
-            <p style={{ fontSize: 11, color: TEXT_MUTED }}>更多宏观数据模块即将上线</p>
-          </div>
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>更多宏观数据模块即将上线</p>
         </div>
       </div>
     </div>
