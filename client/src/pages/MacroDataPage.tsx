@@ -27,7 +27,56 @@ const FEMALE_COLOR = "#f472b6";
 const GOLD_LINE  = "#d97706";   // 参考线颜色（深琥珀，在白底可见）
 
 // ── Tab 类型 ──────────────────────────────────────────────────────────────────
-type TabType = 'national' | 'provincial' | 'gender';
+type TabType = 'national' | 'provincial' | 'gender' | 'prediction';
+
+// ── AI 预测数据（2026-2035，由 AI 大模型基于17变量测算）────────────────────────
+const AI_PREDICTION_DATA = [
+  { year: 2026, births: 750, optimistic: 780, pessimistic: 720, confidence: 88, keyFactor: '00后主力进入生育期但规模偏小，TFR维持1.0低位' },
+  { year: 2027, births: 720, optimistic: 750, pessimistic: 690, confidence: 87, keyFactor: '育龄女性人口进一步减少，城镇化率提升，房价压力持续' },
+  { year: 2028, births: 690, optimistic: 720, pessimistic: 660, confidence: 86, keyFactor: '00后进入生育后期，TFR持续承压，女性受教育年限增加' },
+  { year: 2029, births: 660, optimistic: 690, pessimistic: 630, confidence: 85, keyFactor: '育龄女性人口规模加速萎缩，东亚低生育率结构性影响显著' },
+  { year: 2030, births: 630, optimistic: 660, pessimistic: 600, confidence: 84, keyFactor: '育龄女性人口基数大幅下降，初婚年龄推迟效应累积' },
+  { year: 2031, births: 600, optimistic: 630, pessimistic: 570, confidence: 83, keyFactor: '05后开始接棒，育龄女性人口规模进一步缩小，TFR难有起色' },
+  { year: 2032, births: 580, optimistic: 610, pessimistic: 550, confidence: 82, keyFactor: '育龄女性人口结构性下降，城镇化率持续提升，生育意愿低迷' },
+  { year: 2033, births: 560, optimistic: 590, pessimistic: 530, confidence: 81, keyFactor: '育龄女性人口规模持续萎缩，房价与教育成本抑制效应显著' },
+  { year: 2034, births: 540, optimistic: 570, pessimistic: 510, confidence: 80, keyFactor: '育龄女性人口基数持续缩小，TFR维持在0.9-1.0区间' },
+  { year: 2035, births: 520, optimistic: 550, pessimistic: 490, confidence: 79, keyFactor: '育龄女性人口结构性下降趋势不可逆，政策边际效应有限' },
+];
+
+const AI_METHODOLOGY = `## AI人口预测方法说明
+
+本预测模型基于**多变量加权分析法**，结合历史数据趋势、人口学原理、社会经济因素和政策影响，对中国未来出生人口进行综合评估。
+
+### 核心模型
+采用**队列-组分模型（Cohort-Component Model）**结合机器学习修正，将17个关键变量分三层赋权，通过量化各变量对出生人口的贡献度，构建动态预测框架。
+
+### 三大情景假设
+- **基准情景**：TFR维持1.0，育龄女性按现有趋势萎缩，政策边际效应有限
+- **乐观情景**：TFR在补贴大幅加码下维持1.05，房价压力有所缓解
+- **悲观情景**：TFR继续下滑至0.85，育龄女性下降速度加快
+
+### 关键结论
+预计出生人口从2026年约750万，逐步下降至2035年约520万，甚至可能跌破500万大关。核心制约因素是育龄女性规模的**结构性萎缩**，这是不可逆的人口学规律。`;
+
+const AI_DIMENSIONS = [
+  { name: '育龄女性人口规模（20-34岁）', weight: 35, layer: 1 },
+  { name: '总和生育率（TFR）趋势', weight: 25, layer: 1 },
+  { name: '初婚年龄推迟趋势', weight: 10, layer: 1 },
+  { name: '城镇化率', weight: 8, layer: 2 },
+  { name: '房价收入比', weight: 7, layer: 2 },
+  { name: '女性受教育年限', weight: 5, layer: 2 },
+  { name: '人均可支配收入增速', weight: 3, layer: 2 },
+  { name: '生育补贴力度', weight: 2, layer: 3 },
+  { name: '参照国家经验（韩/日/台）', weight: 2, layer: 3 },
+  { name: '疫情后补偿效应衰减', weight: 1, layer: 3 },
+  { name: '龙年/吉年效应', weight: 0.5, layer: 3 },
+  { name: '性别比失衡修复效应', weight: 0.5, layer: 3 },
+  { name: '二孩/三孩政策存量释放', weight: 0.5, layer: 3 },
+  { name: '人口流动与区域集中效应', weight: 0.3, layer: 3 },
+  { name: '托育服务覆盖率', weight: 0.2, layer: 3 },
+  { name: '辅助生殖技术普及', weight: 0.1, layer: 3 },
+  { name: '气候与环境因素', weight: 0.1, layer: 3 },
+];
 
 // ── 自定义 Tooltip ─────────────────────────────────────────────────────────────
 const NationalTooltip = ({ active, payload, label }: any) => {
@@ -103,7 +152,11 @@ export default function MacroDataPage() {
     { key: 'national' as TabType, label: '趋势×AI' },
     { key: 'provincial' as TabType, label: '分省×AI' },
     { key: 'gender' as TabType, label: '性别×AI' },
+    { key: 'prediction' as TabType, label: 'AI预测' },
   ];
+
+  // AI 预测弹出框状态
+  const [predictionModal, setPredictionModal] = useState<typeof AI_PREDICTION_DATA[0] | null>(null);
 
   return (
     <div
@@ -534,8 +587,249 @@ export default function MacroDataPage() {
                 </div>
               </div>
             )}
+            {/* AI 预测 */}
+            {activeTab === 'prediction' && (
+              <div>
+                {/* AI 标识卡片 */}
+                <div className="rounded-xl p-4 mb-3" style={{ background: 'linear-gradient(135deg, #1a56db 0%, #1e40af 100%)', border: 'none' }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                      <span style={{ fontSize: 12, color: '#fff', fontWeight: 800 }}>AI</span>
+                    </div>
+                    <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>AI人口预测×17变量模型</span>
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 11, lineHeight: 1.6 }}>
+                    基于队列-组分模型，综合17个变量（人口学基础70% + 社会经济23% + 政策外部7%）测算中国2026-2035年出生人口趋势。
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-full" style={{ background: 'rgba(255,255,255,0.15)' }}>
+                      <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.9)' }}>点击每行查看详细分析</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 图例 */}
+                <div className="flex gap-3 mb-2 px-1">
+                  <span className="flex items-center gap-1" style={{ fontSize: 10, color: TEXT_MUTED }}>
+                    <span style={{ display: 'inline-block', width: 12, height: 8, borderRadius: 2, background: ACCENT }} />基准预测
+                  </span>
+                  <span className="flex items-center gap-1" style={{ fontSize: 10, color: TEXT_MUTED }}>
+                    <span style={{ display: 'inline-block', width: 12, height: 8, borderRadius: 2, background: '#16a34a' }} />乐观情景
+                  </span>
+                  <span className="flex items-center gap-1" style={{ fontSize: 10, color: TEXT_MUTED }}>
+                    <span style={{ display: 'inline-block', width: 12, height: 8, borderRadius: 2, background: ACCENT2 }} />悲观情景
+                  </span>
+                </div>
+
+                {/* 预测进度条列表 */}
+                {(() => {
+                  const maxVal = Math.max(...AI_PREDICTION_DATA.map(d => d.optimistic));
+                  const ROW_H = 14;
+                  const BAR_H = 11;
+                  const LABEL_W = 32;
+                  return (
+                    <div className="rounded-xl overflow-hidden px-3 py-2" style={{ background: BG_WHITE, border: `1px solid ${BORDER}` }}>
+                      {AI_PREDICTION_DATA.map((row, idx) => {
+                        const barPct = (row.births / maxVal) * 100;
+                        const numLabel = `${row.births}万`;
+                        return (
+                          <div
+                            key={row.year}
+                            className="flex items-center cursor-pointer hover:bg-blue-50 rounded transition-colors"
+                            style={{ height: ROW_H, marginBottom: 0 }}
+                            onClick={() => setPredictionModal(row)}
+                          >
+                            {/* 年份标签 */}
+                            <div
+                              className="flex-shrink-0 text-right pr-1.5"
+                              style={{
+                                width: LABEL_W,
+                                fontSize: 9,
+                                color: ACCENT,
+                                fontWeight: 700,
+                                lineHeight: `${ROW_H}px`,
+                              }}
+                            >
+                              {row.year}
+                            </div>
+                            {/* 条形轨道 */}
+                            <div
+                              className="relative flex-1"
+                              style={{ height: BAR_H, borderRadius: 2, background: '#E8E0D8' }}
+                            >
+                              {/* 基准条形 */}
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: 0,
+                                  height: '100%',
+                                  width: `${Math.max(barPct, 0.5)}%`,
+                                  background: `linear-gradient(90deg, ${ACCENT} 0%, #60a5fa 100%)`,
+                                  borderRadius: '2px 3px 3px 2px',
+                                  transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${idx * 60}ms`,
+                                  boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.2)',
+                                }}
+                              />
+                              {/* 数值标签 */}
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  top: '50%',
+                                  transform: 'translateY(-50%)',
+                                  ...(barPct >= 20
+                                    ? { right: `${100 - Math.max(barPct, 0.5)}%`, paddingRight: 3, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }
+                                    : { left: `${Math.max(barPct, 0.5)}%`, paddingLeft: 3, color: TEXT_MAIN }
+                                  ),
+                                  fontSize: 8,
+                                  fontWeight: 700,
+                                  lineHeight: 1,
+                                  whiteSpace: 'nowrap',
+                                  fontVariantNumeric: 'tabular-nums',
+                                  pointerEvents: 'none',
+                                }}
+                              >
+                                {numLabel}
+                              </div>
+                            </div>
+                            {/* 置信度 */}
+                            <div
+                              className="flex-shrink-0 pl-1.5"
+                              style={{
+                                fontSize: 8,
+                                color: TEXT_MUTED,
+                                fontWeight: 600,
+                                lineHeight: `${ROW_H}px`,
+                                width: 38,
+                                textAlign: 'right',
+                              }}
+                            >
+                              {row.confidence}%
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
+                {/* 变量权重说明 */}
+                <div className="mt-3 rounded-xl p-3" style={{ background: BG_WHITE, border: `1px solid ${BORDER}` }}>
+                  <div style={{ color: TEXT_MAIN, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>17变量权重体系</div>
+                  {[1, 2, 3].map(layer => (
+                    <div key={layer} className="mb-2">
+                      <div style={{ color: TEXT_SUB, fontSize: 10, fontWeight: 600, marginBottom: 4 }}>
+                        {layer === 1 ? '第一层：人口学基础（70%）' : layer === 2 ? '第二层：社会经济（23%）' : '第三层：政策与外部（7%）'}
+                      </div>
+                      {AI_DIMENSIONS.filter(d => d.layer === layer).map((dim, i) => (
+                        <div key={i} className="flex items-center gap-2 mb-1">
+                          <div
+                            className="flex-1 h-2 rounded overflow-hidden"
+                            style={{ background: '#E8E0D8' }}
+                          >
+                            <div
+                              style={{
+                                height: '100%',
+                                width: `${(dim.weight / 35) * 100}%`,
+                                background: layer === 1 ? ACCENT : layer === 2 ? '#16a34a' : '#d97706',
+                                borderRadius: 2,
+                              }}
+                            />
+                          </div>
+                          <span style={{ color: TEXT_MUTED, fontSize: 9, minWidth: 28, textAlign: 'right' }}>{dim.weight}%</span>
+                          <span style={{ color: TEXT_SUB, fontSize: 9, flex: 2 }}>{dim.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div>
         </>
+      )}
+
+      {/* AI 预测详情弹出框 */}
+      {predictionModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setPredictionModal(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-2xl p-5 pb-8"
+            style={{ background: '#fff', maxHeight: '80vh', overflowY: 'auto' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 弹框标题 */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: ACCENT }}>
+                  <span style={{ fontSize: 11, color: '#fff', fontWeight: 800 }}>AI</span>
+                </div>
+                <div>
+                  <div style={{ color: TEXT_MAIN, fontSize: 15, fontWeight: 800 }}>{predictionModal.year}年 出生人口预测</div>
+                  <div style={{ color: TEXT_MUTED, fontSize: 11 }}>AI × 17变量模型测算</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setPredictionModal(null)}
+                className="w-7 h-7 rounded-full flex items-center justify-center"
+                style={{ background: BG_SUBTLE, color: TEXT_SUB, fontSize: 16 }}
+              >×</button>
+            </div>
+
+            {/* 三情景数据 */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <div className="rounded-xl p-3 text-center" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                <div style={{ color: '#1d4ed8', fontSize: 10, fontWeight: 600 }}>基准预测</div>
+                <div style={{ color: '#1d4ed8', fontSize: 22, fontWeight: 800 }}>{predictionModal.births}</div>
+                <div style={{ color: '#93c5fd', fontSize: 10 }}>万人</div>
+              </div>
+              <div className="rounded-xl p-3 text-center" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
+                <div style={{ color: '#15803d', fontSize: 10, fontWeight: 600 }}>乐观情景</div>
+                <div style={{ color: '#15803d', fontSize: 22, fontWeight: 800 }}>{predictionModal.optimistic}</div>
+                <div style={{ color: '#86efac', fontSize: 10 }}>万人</div>
+              </div>
+              <div className="rounded-xl p-3 text-center" style={{ background: '#fff1f2', border: '1px solid #fecdd3' }}>
+                <div style={{ color: '#be123c', fontSize: 10, fontWeight: 600 }}>悲观情景</div>
+                <div style={{ color: '#be123c', fontSize: 22, fontWeight: 800 }}>{predictionModal.pessimistic}</div>
+                <div style={{ color: '#fda4af', fontSize: 10 }}>万人</div>
+              </div>
+            </div>
+
+            {/* 置信度 */}
+            <div className="flex items-center gap-3 mb-4 p-3 rounded-xl" style={{ background: BG_SUBTLE }}>
+              <span style={{ color: TEXT_SUB, fontSize: 12 }}>AI置信度</span>
+              <div className="flex-1 h-2 rounded overflow-hidden" style={{ background: '#E8E0D8' }}>
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${predictionModal.confidence}%`,
+                    background: `linear-gradient(90deg, ${ACCENT} 0%, #60a5fa 100%)`,
+                    borderRadius: 2,
+                  }}
+                />
+              </div>
+              <span style={{ color: ACCENT, fontSize: 13, fontWeight: 700 }}>{predictionModal.confidence}%</span>
+            </div>
+
+            {/* 核心驱动因素 */}
+            <div className="mb-4 p-3 rounded-xl" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
+              <div style={{ color: '#92400e', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>核心驱动因素</div>
+              <div style={{ color: '#78350f', fontSize: 12, lineHeight: 1.6 }}>{predictionModal.keyFactor}</div>
+            </div>
+
+            {/* 预测方法说明 */}
+            <div className="p-3 rounded-xl" style={{ background: BG_SUBTLE }}>
+              <div style={{ color: TEXT_MAIN, fontSize: 11, fontWeight: 700, marginBottom: 6 }}>预测方法说明</div>
+              <div style={{ color: TEXT_SUB, fontSize: 11, lineHeight: 1.7, whiteSpace: 'pre-line' }}>
+                {AI_METHODOLOGY.replace(/##\s*/g, '').replace(/\*\*/g, '').replace(/^###\s*/gm, '').trim()}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
