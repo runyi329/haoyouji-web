@@ -213,40 +213,61 @@ function ChangePctDistChart({ symbol, labelIcon, labelText, textColor, labelColo
 // ===== AI 分析组件 =====
 function AiAnalysis({ cnyPrice, cnhPrice }: { cnyPrice: number; cnhPrice: number }) {
   const [expanded, setExpanded] = useState(false);
-  const spread = cnhPrice > 0 && cnyPrice > 0 ? (cnhPrice - cnyPrice).toFixed(4) : "--";
-  const spreadNum = cnhPrice > 0 && cnyPrice > 0 ? cnhPrice - cnyPrice : 0;
-  const spreadDesc = spreadNum > 0 ? "离岸高于在岸（资金外流预期）" : spreadNum < 0 ? "在岸高于离岸（资金回流预期）" : "在岸离岸基本持平";
-
+  // AI 接口预留：将来接入真实 AI 分析
+  const aiData: { trend?: string; keyLevel?: string; tip?: string } | null = null;
+  const aiLoading = false;
   return (
-    <div className="mt-4 bg-white/10 rounded-xl p-3">
-      <button
-        className="flex items-center justify-between w-full"
-        onClick={() => setExpanded(e => !e)}
-      >
-        <div className="flex items-center gap-2">
-          <CnyIcon size={20} />
-          <span className="text-white text-sm font-medium">人民币汇率分析</span>
+    <div
+      onClick={() => setExpanded(v => !v)}
+      style={{
+        borderRadius: 12,
+        background: "rgba(255,255,255,0.08)",
+        border: "1px solid rgba(255,255,255,0.18)",
+        padding: "9px 12px",
+        cursor: "pointer",
+        marginTop: 12,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: 0.3 }}>
+            AI × 人民币汇率 CNY/CNH
+          </span>
+          {aiLoading && <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)" }}>分析中...</span>}
         </div>
-        <span className="text-white/60 text-xs">{expanded ? "收起" : "展开"}</span>
-      </button>
+        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>{expanded ? "▲ 收起" : "▼ 展开"}</span>
+      </div>
       {expanded && (
-        <div className="mt-3 space-y-2 text-xs text-white/80 leading-relaxed">
-          <div>
-            <span className="text-white font-medium">📊 在岸/离岸价差：</span>
-            {spread} ({spreadDesc})
-          </div>
-          <div>
-            <span className="text-white font-medium">🔍 在岸人民币（CNY）：</span>
-            由中国人民银行每日设定中间价，波动区间受管控，反映官方汇率政策。
-          </div>
-          <div>
-            <span className="text-white font-medium">🌏 离岸人民币（CNH）：</span>
-            在香港等离岸市场自由交易，更能反映市场对人民币的真实预期，波动幅度通常大于在岸。
-          </div>
-          <div>
-            <span className="text-white font-medium">💡 投资参考：</span>
-            CNH与CNY价差扩大时，通常预示资本流动压力。人民币汇率走势与美联储利率政策、中美贸易关系、国内经济数据密切相关。
-          </div>
+        <div style={{ marginTop: 10 }}>
+          {aiLoading ? (
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", textAlign: "center", padding: "8px 0" }}>AI 分析生成中...</div>
+          ) : aiData ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[
+                { label: "趋势判断", content: aiData.trend },
+                { label: "关键位置", content: aiData.keyLevel },
+                { label: "投资提示", content: aiData.tip },
+              ].filter(s => s.content).map((section, i) => (
+                <div key={i} style={{ background: "rgba(255,255,255,0.08)", borderRadius: 8, padding: "8px 10px" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>{section.label}</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.9)", lineHeight: 1.6 }}>{section.content}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[
+                { label: "趋势判断", content: "AI 分析接口待接入" },
+                { label: "关键位置", content: "AI 分析接口待接入" },
+                { label: "投资提示", content: "AI 分析接口待接入" },
+              ].map((section, i) => (
+                <div key={i} style={{ background: "rgba(255,255,255,0.08)", borderRadius: 8, padding: "8px 10px" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>{section.label}</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>{section.content}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -369,8 +390,9 @@ export default function CNYDetailPage() {
     <div className="min-h-screen pb-20 max-w-md mx-auto relative" style={{ background: "#0f1117" }}>
       {/* 渐变头部背景 */}
       <div
-        className="absolute top-0 left-0 right-0 h-72 rounded-b-3xl"
-        style={{ background: "linear-gradient(135deg, #7b0000 0%, #cc0000 50%, #1a0000 100%)" }}
+        className="absolute top-0 left-0 right-0 rounded-b-3xl"
+        style={{ background: "linear-gradient(135deg, #7b0000 0%, #cc0000 50%, #1a0000 100%)", height: 520 }}
+
       />
 
       {/* 内容区 */}
