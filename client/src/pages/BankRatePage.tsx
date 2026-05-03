@@ -5,7 +5,7 @@
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, X, Info } from "lucide-react";
+import { ChevronLeft, X, Info, RefreshCw } from "lucide-react";
 import {
   LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -132,7 +132,14 @@ export default function BankRatePage() {
           <span className="text-base font-bold" style={{ color: GOLD }}>×</span>
           <span className="text-base font-bold" style={{ color: AI_COLOR }}>AI</span>
         </div>
-        <span style={{ fontSize: 10, color: TEXT_MUTED }}>数据来源：中国人民银行</span>
+        <button
+          onClick={() => window.location.reload()}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-full"
+          style={{ background: BG_SUBTLE }}
+        >
+          <RefreshCw className="w-3.5 h-3.5" style={{ color: TEXT_MUTED }} />
+          <span style={{ fontSize: 12, color: TEXT_MUTED, fontWeight: 500 }}>刷新</span>
+        </button>
       </div>
 
       {/* ── 数据摘要卡片 ── */}
