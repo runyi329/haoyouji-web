@@ -317,21 +317,25 @@ export default function MacroDataPage() {
                     ))}
                   </div>
                 </div>
-                {/* 年度数据进度条列表（参照 TradingCostBar 格式） */}
+                {/* 年度数据进度条列表（参照 TradingCostBar 格式，含 AI 预测数据） */}
                 {(() => {
                   const maxBirths = Math.max(...chartData.map(d => d.births));
-                  const sortedDesc = [...chartData].reverse();
+                  // 合并历史数据 + AI 预测数据
+                  const historicalRows = [...chartData].reverse().map(d => ({ ...d, isPrediction: false }));
+                  const predictionRows = AI_PREDICTION_DATA.map(d => ({ year: d.year, births: d.births, isPrediction: true, confidence: d.confidence }));
+                  const allRows = [...predictionRows.slice().reverse(), ...historicalRows];
                   // 行高常量（与 TradingCostBar 一致）
                   const ROW_H = 14;
                   const BAR_H = 11;
                   const LABEL_W = 32;
+                  const AI_COLOR = '#7c3aed'; // 紫色代表 AI 预测
                   return (
                     <div className="mt-3 rounded-xl overflow-hidden px-3 py-2" style={{ background: BG_WHITE, border: `1px solid ${BORDER}` }}>
                       <p className="text-xs font-medium mb-2" style={{ color: TEXT_SUB }}>历年出生人口（万人）</p>
                       {/* 图例 */}
-                      <div className="flex gap-3 mb-2">
+                      <div className="flex flex-wrap gap-3 mb-2">
                         <span className="flex items-center gap-1" style={{ fontSize: 10, color: TEXT_MUTED }}>
-                          <span style={{ display: 'inline-block', width: 12, height: 8, borderRadius: 2, background: GOLD_LINE }} />历史峰値
+                          <span style={{ display: 'inline-block', width: 12, height: 8, borderRadius: 2, background: GOLD_LINE }} />历史峰值
                         </span>
                         <span className="flex items-center gap-1" style={{ fontSize: 10, color: TEXT_MUTED }}>
                           <span style={{ display: 'inline-block', width: 12, height: 8, borderRadius: 2, background: ACCENT2 }} />出生减少
@@ -339,31 +343,44 @@ export default function MacroDataPage() {
                         <span className="flex items-center gap-1" style={{ fontSize: 10, color: TEXT_MUTED }}>
                           <span style={{ display: 'inline-block', width: 12, height: 8, borderRadius: 2, background: ACCENT }} />出生增加
                         </span>
+                        <span className="flex items-center gap-1" style={{ fontSize: 10, color: TEXT_MUTED }}>
+                          <span style={{ display: 'inline-block', width: 12, height: 8, borderRadius: 2, background: AI_COLOR, opacity: 0.85 }} />AI预测
+                        </span>
                       </div>
-                      {/* 数据行 */}
-                      {sortedDesc.map((row, idx, arr) => {
+                      {/* 数据行（AI预测 + 历史数据） */}
+                      {allRows.map((row, idx, arr) => {
+                        const isPrediction = (row as any).isPrediction;
                         const prev = arr[idx + 1];
                         const pct  = prev ? ((row.births - prev.births) / prev.births * 100) : null;
                         const isDown = pct !== null && pct < 0;
-                        const isPeak = row.births === maxBirths;
+                        const isPeak = !isPrediction && row.births === maxBirths;
                         const barPct = (row.births / maxBirths) * 100;
-                        const barColor = isPeak
-                          ? `linear-gradient(90deg, ${GOLD_LINE} 0%, #f59e0b 100%)`
-                          : isDown
-                            ? `linear-gradient(90deg, ${ACCENT2} 0%, #f87171 100%)`
-                            : `linear-gradient(90deg, ${ACCENT} 0%, #60a5fa 100%)`;
+                        const barColor = isPrediction
+                          ? `linear-gradient(90deg, ${AI_COLOR} 0%, #a78bfa 100%)`
+                          : isPeak
+                            ? `linear-gradient(90deg, ${GOLD_LINE} 0%, #f59e0b 100%)`
+                            : isDown
+                              ? `linear-gradient(90deg, ${ACCENT2} 0%, #f87171 100%)`
+                              : `linear-gradient(90deg, ${ACCENT} 0%, #60a5fa 100%)`;
                         const numLabel = `${row.births.toLocaleString()}万`;
                         const pctLabel = pct !== null ? `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%` : '';
+                        const confidence = isPrediction ? (row as any).confidence : null;
+                        // AI预测行和历史数据之间的分隔线
+                        const isFirstHistorical = !isPrediction && (idx === 0 || (arr[idx - 1] as any).isPrediction);
                         return (
-                          <div key={row.year} className="flex items-center" style={{ height: ROW_H, marginBottom: 0 }}>
+                          <>
+                            {isFirstHistorical && (
+                              <div key={`sep-${row.year}`} style={{ height: 1, background: BORDER, margin: '4px 0', width: '100%' }} />
+                            )}
+                          <div key={row.year} className="flex items-center" style={{ height: ROW_H, marginBottom: 0, opacity: isPrediction ? 0.9 : 1 }}>
                             {/* 年份标签 */}
                             <div
                               className="flex-shrink-0 text-right pr-1.5"
                               style={{
                                 width: LABEL_W,
                                 fontSize: 9,
-                                color: isPeak ? GOLD_LINE : TEXT_MUTED,
-                                fontWeight: isPeak ? 700 : 400,
+                                color: isPrediction ? AI_COLOR : isPeak ? GOLD_LINE : TEXT_MUTED,
+                                fontWeight: isPrediction ? 600 : isPeak ? 700 : 400,
                                 lineHeight: `${ROW_H}px`,
                               }}
                             >
@@ -409,23 +426,22 @@ export default function MacroDataPage() {
                                 {numLabel}
                               </div>
                             </div>
-                            {/* 变化率：条形右侧外显示 */}
-                            {pctLabel && (
-                              <div
-                                className="flex-shrink-0 pl-1.5"
-                                style={{
-                                  fontSize: 8,
-                                  color: isDown ? ACCENT2 : (pct !== null && pct > 0) ? '#16a34a' : TEXT_MUTED,
-                                  fontWeight: 600,
-                                  lineHeight: `${ROW_H}px`,
-                                  width: 38,
-                                  textAlign: 'right',
-                                }}
-                              >
-                                {pctLabel}
-                              </div>
-                            )}
+                            {/* 右侧：变化率 或 AI置信度 */}
+                            <div
+                              className="flex-shrink-0 pl-1.5"
+                              style={{
+                                fontSize: 8,
+                                color: isPrediction ? AI_COLOR : isDown ? ACCENT2 : (pct !== null && pct > 0) ? '#16a34a' : TEXT_MUTED,
+                                fontWeight: 600,
+                                lineHeight: `${ROW_H}px`,
+                                width: 42,
+                                textAlign: 'right',
+                              }}
+                            >
+                              {isPrediction ? `${confidence}%` : pctLabel}
+                            </div>
                           </div>
+                          </>
                         );
                       })}
                     </div>
