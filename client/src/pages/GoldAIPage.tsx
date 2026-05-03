@@ -286,11 +286,9 @@ export default function GoldAIPage() {
           <p className="text-xs opacity-70">XAU/USD · AU9999 · 实时行情</p>
         </div>
         <button
-          onClick={() => { refetchGold(); fetchBars(); }}
-          disabled={goldLoading}
-          style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer", flexShrink: 0, opacity: goldLoading ? 0.6 : 1 }}
+          onClick={() => window.location.reload()}
+          style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer", flexShrink: 0 }}
         >
-          {goldLoading && <RefreshCw size={11} className="animate-spin" style={{ color: "#fff" }} />}
           更新
         </button>
       </div>
