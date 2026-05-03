@@ -410,7 +410,8 @@ export default function MacroDataPage() {
                                   boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.2)',
                                 }}
                               />
-                              {/* 数值标签：条形内显示（宽度足够）或条形外显示 */}
+                              {/* 数值标签：AI预测行始终显示在条形外面右侧；历史数据按宽度决定位置 */}
+                              {!isPrediction && (
                               <div
                                 style={{
                                   position: 'absolute',
@@ -428,9 +429,27 @@ export default function MacroDataPage() {
                                   pointerEvents: 'none',
                                 }}
                               >
-                              {numLabel}{isPrediction && <span style={{ marginLeft: 2, fontSize: 7, fontWeight: 700, color: barPct >= 20 ? 'rgba(255,255,255,0.9)' : AI_COLOR, background: barPct >= 20 ? 'rgba(255,255,255,0.2)' : 'rgba(124,58,237,0.1)', borderRadius: 2, padding: '0 2px', letterSpacing: 0.2 }}>AI</span>}
+                              {numLabel}
                             </div>
+                              )}
                             </div>
+                            {/* AI预测行：数值标签显示在条形外面右侧 */}
+                            {isPrediction && (
+                              <div
+                                style={{
+                                  flexShrink: 0,
+                                  paddingLeft: 4,
+                                  fontSize: 8,
+                                  fontWeight: 700,
+                                  color: AI_COLOR,
+                                  lineHeight: `${ROW_H}px`,
+                                  whiteSpace: 'nowrap',
+                                  fontVariantNumeric: 'tabular-nums',
+                                }}
+                              >
+                                {numLabel}<span style={{ marginLeft: 2, fontSize: 7, fontWeight: 700, color: AI_COLOR, background: 'rgba(124,58,237,0.1)', borderRadius: 2, padding: '0 2px', letterSpacing: 0.2 }}>AI</span>
+                              </div>
+                            )}
                             {/* 右侧：变化率 或 AI置信度 */}
                             <div
                               className="flex-shrink-0 pl-1.5"
