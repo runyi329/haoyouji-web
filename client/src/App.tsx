@@ -143,6 +143,8 @@ const DXYDetailPage = lazy(() => import("./pages/DXYDetailPage"));
 const OilDetailPage = lazy(() => import("./pages/OilDetailPage"));
 // 人民币汇率详情页（在岸CNY + 离岸CNH）
 const CNYDetailPage = lazy(() => import("./pages/CNYDetailPage"));
+// 宏观数据页面
+const MacroDataPage = lazy(() => import("./pages/MacroDataPage"));
 const GoldAIPage = lazy(() => import("./pages/GoldAIPage"));
 const FundingHistoryPage = lazy(() => import("./pages/FundingHistoryPage"));
 const CryptoFundingHistoryPage = lazy(() => import("./pages/CryptoFundingHistoryPage"));
@@ -604,6 +606,8 @@ function Router() {
         <Route path="/oil-detail" component={OilDetailPage} />
         {/* 人民币汇率详情页（在岸CNY + 离岸CNH） */}
         <Route path="/cny-detail" component={CNYDetailPage} />
+        {/* 宏观数据页面 */}
+        <Route path="/macro-data" component={MacroDataPage} />
         <Route path="/ledger/:id/oil/funding-history" component={FundingHistoryPage} />
         {/* 加密货币资金费率历史 */}
         <Route path="/ledger/:id/crypto/funding-history" component={CryptoFundingHistoryPage} />

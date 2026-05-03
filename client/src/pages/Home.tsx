@@ -2474,6 +2474,7 @@ export default function Home() {
               {/* 智能财务 - 黑白金立体风格 */}
               <div
                 className="flex flex-col rounded-xl cursor-pointer active:scale-[0.98] relative overflow-hidden"
+                onClick={() => navigate('/macro-data')}
                 style={{
                   background: 'linear-gradient(135deg, #111111 0%, #2a2a2a 45%, #1a1a1a 100%)',
                   boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',

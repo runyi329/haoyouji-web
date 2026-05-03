@@ -27,6 +27,7 @@ import * as dbRecharge from "./db-recharge";
 import * as dbAIEmployee from "./db-ai-employee";
 import * as dbCrypto from "./db-crypto";
 import { callDataApi } from "./_core/dataApi";
+import { macroRouter } from "./routers/macro-router";
 import { getDb, getDbConnection, getLedgerDb } from "./db";
 import { contacts, contactFieldCategories, contactFieldValues, contactTags, users, sharingNotifications, sharingAuthorizations, contactSharingConnections, scannerHeartbeat, walletAddresses, rechargeOrders, ledgers, ledgerRecords, ledgerCategories, ledgerMembers, agPromptImages, agSyncSources, agSyncLogs, ahCompanies, ahTaxAuthorizations, ahCompanyMembers } from "../drizzle/schema";
 import * as schema from "../drizzle/schema";
@@ -165,6 +166,9 @@ export const appRouter = router({
   lottery: lotteryRouter,
   prediction: predictionRouter,
   okxTrader: okxTraderRouter,
+
+  // 宏观数据（出生人口等）
+  macro: macroRouter,
 
   // BE数据：BTC/ETH历史K线
   cryptoData: router({
