@@ -153,6 +153,8 @@ const SmartFinancePage = lazy(() => import("./pages/SmartFinancePage"));
 const SocialSecurityPage = lazy(() => import("./pages/SocialSecurityPage"));
 // 医疗×AI 页面
 const HealthcarePage = lazy(() => import("./pages/HealthcarePage"));
+// 存款×AI 页面
+const BankRatePage = lazy(() => import("./pages/BankRatePage"));
 const GoldAIPage = lazy(() => import("./pages/GoldAIPage"));
 const FundingHistoryPage = lazy(() => import("./pages/FundingHistoryPage"));
 const CryptoFundingHistoryPage = lazy(() => import("./pages/CryptoFundingHistoryPage"));
@@ -624,6 +626,8 @@ function Router() {
         <Route path="/social-security" component={SocialSecurityPage} />
         {/* 医疗×AI 页面 */}
         <Route path="/healthcare" component={HealthcarePage} />
+        {/* 存款×AI 页面 */}
+        <Route path="/bank-rate" component={BankRatePage} />
         <Route path="/ledger/:id/oil/funding-history" component={FundingHistoryPage} />
         {/* 加密货币资金费率历史 */}
         <Route path="/ledger/:id/crypto/funding-history" component={CryptoFundingHistoryPage} />
