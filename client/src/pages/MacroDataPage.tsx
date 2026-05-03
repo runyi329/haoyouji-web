@@ -382,18 +382,14 @@ export default function MacroDataPage() {
                             <div
                               className="flex-shrink-0 text-right pr-1.5"
                               style={{
-                                width: LABEL_W + (isPrediction ? 10 : 0),
+                                width: LABEL_W,
                                 fontSize: 9,
                                 color: isPrediction ? AI_COLOR : isPeak ? GOLD_LINE : TEXT_MUTED,
-                                fontWeight: isPrediction ? 600 : isPeak ? 700 : 400,
+                                fontWeight: isPeak ? 700 : 400,
                                 lineHeight: `${ROW_H}px`,
                               }}
                             >
-                              {isPrediction ? (
-                                <div className="flex items-center justify-end" style={{ gap: 2 }}>
-                                  <span style={{ fontSize: 9, fontWeight: 700, color: AI_COLOR }}>{row.year}</span>
-                                </div>
-                              ) : row.year}
+                              {row.year}
                             </div>
                             {/* 条形轨道 */}
                             <div
