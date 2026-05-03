@@ -59,10 +59,10 @@ const BarTooltip = ({ active, payload, label }: any) => {
 
 // ── 关键事件标注 ───────────────────────────────────────────────────────────────
 const KEY_EVENTS = [
-  { year: 1963, label: '峰值' },
-  { year: 1980, label: '独生子女' },
-  { year: 2016, label: '全面二孩' },
-  { year: 2021, label: '三孩' },
+  { year: 1963, label: '峰值',    position: 'top' as const },
+  { year: 1980, label: '独生子女', position: 'top' as const },
+  { year: 2016, label: '全面二孩', position: 'insideBottomRight' as const },
+  { year: 2021, label: '三孩',    position: 'top' as const },
 ];
 
 export default function MacroDataPage() {
@@ -229,7 +229,7 @@ export default function MacroDataPage() {
                           stroke={GOLD_LINE}
                           strokeDasharray="4 3"
                           strokeWidth={1.5}
-                          label={{ value: ev.label, position: 'top', fill: GOLD_LINE, fontSize: 9, fontWeight: 600 }}
+                          label={{ value: ev.label, position: ev.position, fill: GOLD_LINE, fontSize: 9, fontWeight: 600 }}
                         />
                       ))}
                       <Area
