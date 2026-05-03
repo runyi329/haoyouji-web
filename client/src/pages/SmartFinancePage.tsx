@@ -5,7 +5,7 @@
  * 风格：浅色背景 + 渐变大卡片
  */
 import { useLocation } from "wouter";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 
 export default function SmartFinancePage() {
   const [, navigate] = useLocation();
@@ -180,29 +180,21 @@ export default function SmartFinancePage() {
             }} />
 
             <div className="relative p-5">
-              {/* 标签 + 箭头 + 图标 */}
-              <div className="flex items-center justify-between mb-3">
+              {/* 标签 + 图标 */}
+              <div className="flex items-center justify-between mb-2">
                 <span
                   className="text-xs px-2.5 py-1 rounded-full font-semibold"
                   style={{ background: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.9)' }}
                 >
                   {mod.badge}
                 </span>
-                <div className="flex items-center gap-2">
-                  {mod.icon && (
-                    <img
-                      src={mod.icon}
-                      alt={mod.title}
-                      style={{ width: 48, height: 48, objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.3))' }}
-                    />
-                  )}
-                  <div
-                    className="flex items-center justify-center w-7 h-7 rounded-full"
-                    style={{ background: 'rgba(255,255,255,0.18)' }}
-                  >
-                    <ChevronRight className="w-4 h-4 text-white" />
-                  </div>
-                </div>
+                {mod.icon && (
+                  <img
+                    src={mod.icon}
+                    alt={mod.title}
+                    style={{ width: 72, height: 72, objectFit: 'contain', filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.35))', marginTop: -8 }}
+                  />
+                )}
               </div>
 
               {/* 大标题 */}
