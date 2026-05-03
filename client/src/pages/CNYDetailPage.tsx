@@ -387,16 +387,9 @@ export default function CNYDetailPage() {
   const cnhChangePct = dualPrice?.cnh?.changePercent ?? 0;
 
   return (
-    <div className="min-h-screen pb-20 max-w-md mx-auto relative" style={{ background: "#0f1117" }}>
-      {/* 渐变头部背景 */}
-      <div
-        className="absolute top-0 left-0 right-0 rounded-b-3xl"
-        style={{ background: "linear-gradient(135deg, #7b0000 0%, #cc0000 50%, #1a0000 100%)", height: 520 }}
-
-      />
-
-      {/* 内容区 */}
-      <div className="relative z-10 px-4 pt-4">
+    <div className="min-h-screen pb-20 max-w-md mx-auto" style={{ background: "#0f1117" }}>
+      {/* 红色渐变头部区域（导航栏 + 双卡片 + AI分析）*/}
+      <div style={{ background: "linear-gradient(135deg, #7b0000 0%, #cc0000 50%, #1a0000 100%)", borderRadius: "0 0 24px 24px", padding: "16px 16px 20px" }}>
         {/* 顶部导航栏 */}
         <div className="flex items-center justify-between mb-4">
           <button
@@ -440,9 +433,12 @@ export default function CNYDetailPage() {
 
         {/* AI 分析 */}
         <AiAnalysis cnyPrice={cnyPrice} cnhPrice={cnhPrice} />
+      </div>
 
+      {/* 下方内容区（黑色背景，Tab 切换 + 数据分析 + 日线历史）*/}
+      <div className="px-4 pt-4">
         {/* Tab 切换 */}
-        <div className="flex gap-2 mt-5 mb-4">
+        <div className="flex gap-2 mb-4">
           {(["analysis", "history"] as const).map(tab => (
             <button
               key={tab}
@@ -450,8 +446,9 @@ export default function CNYDetailPage() {
               className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
                 activeTab === tab
                   ? "bg-red-600 text-white shadow-lg"
-                  : "bg-white/10 text-white/60 hover:bg-white/15"
+                  : "text-white/60 hover:text-white/80"
               }`}
+              style={activeTab !== tab ? { background: "rgba(255,255,255,0.08)" } : {}}
             >
               {tab === "analysis" ? "数据分析" : "日线历史"}
             </button>
