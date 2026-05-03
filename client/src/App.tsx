@@ -147,6 +147,8 @@ const CNYDetailPage = lazy(() => import("./pages/CNYDetailPage"));
 const MacroDataPage = lazy(() => import("./pages/MacroDataPage"));
 // 房产×AI 页面
 const RealEstatePage = lazy(() => import("./pages/RealEstatePage"));
+// 智能财务汇总入口页
+const SmartFinancePage = lazy(() => import("./pages/SmartFinancePage"));
 const GoldAIPage = lazy(() => import("./pages/GoldAIPage"));
 const FundingHistoryPage = lazy(() => import("./pages/FundingHistoryPage"));
 const CryptoFundingHistoryPage = lazy(() => import("./pages/CryptoFundingHistoryPage"));
@@ -612,6 +614,8 @@ function Router() {
         <Route path="/macro-data" component={MacroDataPage} />
         {/* 房产×AI 页面 */}
         <Route path="/real-estate" component={RealEstatePage} />
+        {/* 智能财务汇总入口 */}
+        <Route path="/smart-finance" component={SmartFinancePage} />
         <Route path="/ledger/:id/oil/funding-history" component={FundingHistoryPage} />
         {/* 加密货币资金费率历史 */}
         <Route path="/ledger/:id/crypto/funding-history" component={CryptoFundingHistoryPage} />
