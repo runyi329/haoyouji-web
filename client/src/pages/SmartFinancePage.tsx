@@ -4,7 +4,7 @@
  * 包含：人口×AI、房产×AI 等宏观数据入口
  */
 import { useLocation } from "wouter";
-import { ChevronLeft, Users, Home, TrendingDown, BarChart2, Shield } from "lucide-react";
+import { ChevronLeft, Users, Home, TrendingDown, BarChart2, Shield, Stethoscope } from "lucide-react";
 
 const BG_PAGE   = "#f5f6f8";
 const BG_WHITE  = "#ffffff";
@@ -63,6 +63,21 @@ const MODULES = [
       { label: 'AI预测2034', value: '12.65万亿', color: AI_COLOR },
     ],
     tag: '社会保障',
+  },
+  {
+    key: 'healthcare',
+    title: '医疗',
+    subtitle: '×AI',
+    desc: '医疗机构、床位、医护人员、主要疾病发病率及 AI 预测（2025-2034）',
+    path: '/healthcare',
+    icon: Stethoscope,
+    accentColor: '#0891b2',
+    stats: [
+      { label: '2024年医院数', value: '3.9万家', color: '#0891b2' },
+      { label: '2024年床位数', value: '1030万张', color: ACCENT },
+      { label: 'AI预测2034', value: '14.9万亿', color: AI_COLOR },
+    ],
+    tag: '医疗卫生',
   },
 ];
 
