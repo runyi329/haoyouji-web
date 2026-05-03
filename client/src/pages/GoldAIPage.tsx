@@ -288,10 +288,10 @@ export default function GoldAIPage() {
         <button
           onClick={() => { refetchGold(); fetchBars(); }}
           disabled={goldLoading}
-          className="w-7 h-7 flex items-center justify-center rounded-full"
-          style={{ background: "rgba(255,255,255,0.2)" }}
+          style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer", flexShrink: 0, opacity: goldLoading ? 0.6 : 1 }}
         >
-          <RefreshCw size={14} className={`text-white ${goldLoading ? "animate-spin" : ""}`} />
+          {goldLoading && <RefreshCw size={11} className="animate-spin" style={{ color: "#fff" }} />}
+          更新
         </button>
       </div>
 
