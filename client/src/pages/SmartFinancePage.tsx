@@ -22,7 +22,7 @@ export default function SmartFinancePage() {
       gradient: 'linear-gradient(135deg, #1a1a4e 0%, #0f3460 40%, #1a56db 100%)',
       circle1: 'rgba(26,86,219,0.35)',
       circle2: 'rgba(255,255,255,0.06)',
-      icon: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/WHSbVBhouTdCTfAf.png',
+      icon: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icon-population-v3_4a7c48eb.png',
       stats: [
         { label: '2024年出生', value: '954万人' },
         { label: '历史峰值', value: '2953万人' },
@@ -40,7 +40,7 @@ export default function SmartFinancePage() {
       gradient: 'linear-gradient(135deg, #3b0a0a 0%, #7f1d1d 40%, #dc2626 100%)',
       circle1: 'rgba(220,38,38,0.35)',
       circle2: 'rgba(255,255,255,0.06)',
-      icon: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/WkrgntffxllbBwER.png',
+      icon: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icon-realestate-v3_949ac414.png',
       stats: [
         { label: '2024年均价', value: '9,200元/㎡' },
         { label: '历史峰值', value: '10,139元/㎡' },
@@ -58,7 +58,7 @@ export default function SmartFinancePage() {
       gradient: 'linear-gradient(135deg, #052e16 0%, #14532d 40%, #16a34a 100%)',
       circle1: 'rgba(22,163,74,0.35)',
       circle2: 'rgba(255,255,255,0.06)',
-      icon: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/cuZbiXsJrEalXmnf.png',
+      icon: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icon-socialsecurity-v3_1bb0cc9a.png',
       stats: [
         { label: '2024年结余', value: '10.98万亿' },
         { label: '2024年收入', value: '8.21万亿' },
@@ -76,7 +76,7 @@ export default function SmartFinancePage() {
       gradient: 'linear-gradient(135deg, #0c1a2e 0%, #0e3a5c 40%, #0891b2 100%)',
       circle1: 'rgba(8,145,178,0.35)',
       circle2: 'rgba(255,255,255,0.06)',
-      icon: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/eAkPeGkRPBxgJvrV.png',
+      icon: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icon-healthcare-v3_b5eeed32.png',
       stats: [
         { label: '2024年医院', value: '3.9万家' },
         { label: '2024年床位', value: '1030万张' },
@@ -94,7 +94,7 @@ export default function SmartFinancePage() {
       gradient: 'linear-gradient(135deg, #1c1207 0%, #451a03 40%, #d97706 100%)',
       circle1: 'rgba(217,119,6,0.35)',
       circle2: 'rgba(255,255,255,0.06)',
-      icon: 'https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/uUOAMTxxSdnAIuJg.png',
+      icon: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icon-bank-v3_d2e6c9bc.png',
       stats: [
         { label: '1年期存款', value: '1.10%' },
         { label: '1年期LPR', value: '3.10%' },
