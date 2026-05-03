@@ -264,6 +264,83 @@ export default function MacroDataPage() {
                     ))}
                   </div>
                 </div>
+                {/* 年度数据列表 */}
+                <div className="mt-3 rounded-xl overflow-hidden" style={{ background: BG_WHITE, border: `1px solid ${BORDER}` }}>
+                  {/* 表头 */}
+                  <div
+                    className="flex items-center px-4 py-2"
+                    style={{ background: BG_SUBTLE, borderBottom: `1px solid ${BORDER}` }}
+                  >
+                    <span style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: 600, flex: '0 0 48px' }}>年份</span>
+                    <span style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: 600, flex: 1, textAlign: 'right' }}>出生人口（万人）</span>
+                    <span style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: 600, flex: '0 0 64px', textAlign: 'right' }}>较上年</span>
+                    <span style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: 600, flex: '0 0 52px', textAlign: 'right' }}>变化率</span>
+                  </div>
+                  {/* 数据行（倒序，最新在前）*/}
+                  <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                    {[...chartData].reverse().map((row, idx, arr) => {
+                      const prev = arr[idx + 1];
+                      const diff = prev ? row.births - prev.births : null;
+                      const pct  = prev ? ((row.births - prev.births) / prev.births * 100) : null;
+                      const isUp = diff !== null && diff > 0;
+                      const isDown = diff !== null && diff < 0;
+                      const isPeak = row.births === latestData?.peak.births;
+                      return (
+                        <div
+                          key={row.year}
+                          className="flex items-center px-4 py-2.5"
+                          style={{
+                            borderBottom: `1px solid ${BORDER}`,
+                            background: isPeak ? 'rgba(217,119,6,0.06)' : 'transparent',
+                          }}
+                        >
+                          <span
+                            style={{
+                              flex: '0 0 48px',
+                              fontSize: 13,
+                              fontWeight: isPeak ? 700 : 500,
+                              color: isPeak ? GOLD_LINE : TEXT_MAIN,
+                            }}
+                          >
+                            {row.year}{isPeak && <span style={{ fontSize: 9, marginLeft: 2, color: GOLD_LINE }}>峰</span>}
+                          </span>
+                          <span
+                            style={{
+                              flex: 1,
+                              fontSize: 14,
+                              fontWeight: 700,
+                              textAlign: 'right',
+                              color: TEXT_MAIN,
+                            }}
+                          >
+                            {row.births.toLocaleString()}
+                          </span>
+                          <span
+                            style={{
+                              flex: '0 0 64px',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              textAlign: 'right',
+                              color: isUp ? '#16a34a' : isDown ? ACCENT2 : TEXT_MUTED,
+                            }}
+                          >
+                            {diff !== null ? `${diff > 0 ? '+' : ''}${diff}` : '—'}
+                          </span>
+                          <span
+                            style={{
+                              flex: '0 0 52px',
+                              fontSize: 11,
+                              textAlign: 'right',
+                              color: isUp ? '#16a34a' : isDown ? ACCENT2 : TEXT_MUTED,
+                            }}
+                          >
+                            {pct !== null ? `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%` : '—'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
 
