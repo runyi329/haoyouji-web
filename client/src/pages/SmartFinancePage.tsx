@@ -103,6 +103,24 @@ export default function SmartFinancePage() {
       badge: '银行利率',
       highlight: '#fcd34d',
     },
+    {
+      key: 'commerce',
+      title: '商业',
+      tag: '×AI',
+      sub: '餐饮 · 零售 · 美容 · 酒店',
+      path: '/commerce',
+      gradient: 'linear-gradient(135deg, #0f2027 0%, #203a43 40%, #2c5364 100%)',
+      circle1: 'rgba(44,83,100,0.45)',
+      circle2: 'rgba(255,255,255,0.06)',
+      icon: '',
+      stats: [
+        { label: '餐饮连锁', value: '153万家' },
+        { label: '零售便利', value: '321万家' },
+        { label: 'AI预测2026', value: '170万家' },
+      ],
+      badge: '商业连锁',
+      highlight: '#38bdf8',
+    },
   ];
 
   return (
