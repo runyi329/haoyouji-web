@@ -5,7 +5,7 @@
  */
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, RefreshCw } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, Cell
@@ -191,10 +191,11 @@ export default function RealEstatePage() {
         </div>
         <button
           onClick={() => window.location.reload()}
-          className="text-xs px-2 py-1 rounded"
-          style={{ color: TEXT_SUB, background: BG_SUBTLE }}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-full"
+          style={{ background: BG_SUBTLE }}
         >
-          刷新
+          <RefreshCw className="w-3.5 h-3.5" style={{ color: TEXT_SUB }} />
+          <span style={{ fontSize: 12, color: TEXT_SUB, fontWeight: 500 }}>刷新</span>
         </button>
       </div>
 

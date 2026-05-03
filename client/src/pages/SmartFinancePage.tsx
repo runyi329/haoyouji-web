@@ -1,14 +1,16 @@
 /**
  * 智能财务 汇总入口页
  * 路由：/smart-finance
- * 4 个模块：人口×AI、房产×AI、社保×AI、医疗×AI
- * 风格：渐变背景大卡片，视觉冲击力强
+ * 5 个模块：人口×AI、房产×AI、社保×AI、医疗×AI、存款×AI
+ * 风格：浅色背景 + 渐变大卡片
  */
 import { useLocation } from "wouter";
-import { ChevronLeft, ChevronRight, Landmark } from "lucide-react";
+import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 
 export default function SmartFinancePage() {
   const [, navigate] = useLocation();
+
+  const handleRefresh = () => window.location.reload();
 
   const MODULES = [
     {
@@ -18,7 +20,6 @@ export default function SmartFinancePage() {
       sub: '出生人口 · 趋势预测 · 分省数据',
       path: '/macro-data',
       gradient: 'linear-gradient(135deg, #1a1a4e 0%, #0f3460 40%, #1a56db 100%)',
-      // 装饰圆圈颜色
       circle1: 'rgba(26,86,219,0.35)',
       circle2: 'rgba(255,255,255,0.06)',
       stats: [
@@ -27,7 +28,6 @@ export default function SmartFinancePage() {
         { label: 'AI预测2035', value: '520万人' },
       ],
       badge: '人口学',
-      badgeBg: 'rgba(255,255,255,0.15)',
       highlight: '#60a5fa',
     },
     {
@@ -45,7 +45,6 @@ export default function SmartFinancePage() {
         { label: 'AI预测2034', value: '6,900元/㎡' },
       ],
       badge: '房地产',
-      badgeBg: 'rgba(255,255,255,0.15)',
       highlight: '#fca5a5',
     },
     {
@@ -63,7 +62,6 @@ export default function SmartFinancePage() {
         { label: 'AI预测2034', value: '12.65万亿' },
       ],
       badge: '社会保障',
-      badgeBg: 'rgba(255,255,255,0.15)',
       highlight: '#86efac',
     },
     {
@@ -81,7 +79,6 @@ export default function SmartFinancePage() {
         { label: '卫生总费用', value: '9.6万亿' },
       ],
       badge: '医疗卫生',
-      badgeBg: 'rgba(255,255,255,0.15)',
       highlight: '#67e8f9',
     },
     {
@@ -99,7 +96,6 @@ export default function SmartFinancePage() {
         { label: '存贷利差', value: '2.00%' },
       ],
       badge: '银行利率',
-      badgeBg: 'rgba(255,255,255,0.15)',
       highlight: '#fcd34d',
     },
   ];
@@ -107,22 +103,26 @@ export default function SmartFinancePage() {
   return (
     <div
       className="min-h-screen max-w-md mx-auto relative"
-      style={{ background: '#0d0d1a', color: '#fff' }}
+      style={{ background: '#f5f6f8', color: '#1a1a2e' }}
     >
       {/* ── 顶部导航 ── */}
       <div
         className="sticky top-0 z-20 flex items-center px-4 py-3"
-        style={{ background: 'rgba(13,13,26,0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+        style={{
+          background: '#ffffff',
+          borderBottom: '1px solid #e4e7ed',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+        }}
       >
         <button
           onClick={() => navigate("/")}
           className="flex items-center justify-center w-8 h-8 rounded-full mr-3"
-          style={{ background: 'rgba(255,255,255,0.1)' }}
+          style={{ background: '#f0f2f5' }}
         >
-          <ChevronLeft className="w-5 h-5 text-white" />
+          <ChevronLeft className="w-5 h-5" style={{ color: '#1a1a2e' }} />
         </button>
         <div className="flex items-center gap-2 flex-1">
-          <span className="text-base font-bold text-white">智能财务</span>
+          <span className="text-base font-bold" style={{ color: '#1a1a2e' }}>智能财务</span>
           <span
             className="text-xs px-2 py-0.5 rounded-full font-bold"
             style={{ background: 'linear-gradient(90deg, #7c3aed, #1a56db)', color: '#fff' }}
@@ -130,12 +130,20 @@ export default function SmartFinancePage() {
             AI
           </span>
         </div>
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>宏观数据分析</span>
+        {/* 刷新按钮 */}
+        <button
+          onClick={handleRefresh}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-full"
+          style={{ background: '#f0f2f5' }}
+        >
+          <RefreshCw className="w-3.5 h-3.5" style={{ color: '#6b7280' }} />
+          <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 500 }}>刷新</span>
+        </button>
       </div>
 
       {/* ── 副标题 ── */}
-      <div className="px-4 pt-5 pb-3">
-        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', lineHeight: 1.6 }}>
+      <div className="px-4 pt-4 pb-2">
+        <p style={{ fontSize: 12, color: '#9ca3af', lineHeight: 1.6 }}>
           基于 AI 大模型的宏观经济数据分析与预测平台
         </p>
       </div>
@@ -148,52 +156,37 @@ export default function SmartFinancePage() {
             className="rounded-3xl overflow-hidden cursor-pointer relative"
             style={{
               background: mod.gradient,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.45)',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
               minHeight: 160,
-              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
             }}
             onClick={() => navigate(mod.path)}
           >
             {/* 装饰圆圈 1 */}
-            <div
-              style={{
-                position: 'absolute',
-                top: -40,
-                right: -40,
-                width: 160,
-                height: 160,
-                borderRadius: '50%',
-                background: mod.circle1,
-                pointerEvents: 'none',
-              }}
-            />
+            <div style={{
+              position: 'absolute', top: -40, right: -40,
+              width: 160, height: 160, borderRadius: '50%',
+              background: mod.circle1, pointerEvents: 'none',
+            }} />
             {/* 装饰圆圈 2 */}
-            <div
-              style={{
-                position: 'absolute',
-                bottom: -30,
-                left: -30,
-                width: 120,
-                height: 120,
-                borderRadius: '50%',
-                background: mod.circle2,
-                border: '1px solid rgba(255,255,255,0.08)',
-                pointerEvents: 'none',
-              }}
-            />
+            <div style={{
+              position: 'absolute', bottom: -30, left: -30,
+              width: 120, height: 120, borderRadius: '50%',
+              background: mod.circle2, border: '1px solid rgba(255,255,255,0.08)',
+              pointerEvents: 'none',
+            }} />
 
             <div className="relative p-5">
               {/* 标签 + 箭头 */}
               <div className="flex items-center justify-between mb-3">
                 <span
                   className="text-xs px-2.5 py-1 rounded-full font-semibold"
-                  style={{ background: mod.badgeBg, color: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(4px)' }}
+                  style={{ background: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.9)' }}
                 >
                   {mod.badge}
                 </span>
                 <div
                   className="flex items-center justify-center w-7 h-7 rounded-full"
-                  style={{ background: 'rgba(255,255,255,0.15)' }}
+                  style={{ background: 'rgba(255,255,255,0.18)' }}
                 >
                   <ChevronRight className="w-4 h-4 text-white" />
                 </div>
@@ -210,10 +203,9 @@ export default function SmartFinancePage() {
               <div
                 className="grid grid-cols-3 gap-2"
                 style={{
-                  background: 'rgba(0,0,0,0.25)',
+                  background: 'rgba(0,0,0,0.22)',
                   borderRadius: 14,
                   padding: '10px 8px',
-                  backdropFilter: 'blur(8px)',
                   border: '1px solid rgba(255,255,255,0.08)',
                 }}
               >
@@ -234,12 +226,12 @@ export default function SmartFinancePage() {
         <div
           className="rounded-3xl p-5 flex items-center justify-center"
           style={{
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px dashed rgba(255,255,255,0.15)',
-            minHeight: 72,
+            background: '#ffffff',
+            border: '1px dashed #d1d5db',
+            minHeight: 64,
           }}
         >
-          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>更多宏观数据模块即将上线</p>
+          <p style={{ fontSize: 12, color: '#9ca3af' }}>更多宏观数据模块即将上线</p>
         </div>
       </div>
     </div>
