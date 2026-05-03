@@ -26,7 +26,7 @@ export default function SmartFinancePage() {
       stats: [
         { label: '2024年出生', value: '954万人' },
         { label: '历史峰值', value: '2953万人' },
-        { label: 'AI预测2035', value: '520万人' },
+        { label: 'AI预测2026', value: '820万人' },
       ],
       badge: '人口学',
       highlight: '#60a5fa',
@@ -44,7 +44,7 @@ export default function SmartFinancePage() {
       stats: [
         { label: '2024年均价', value: '9,200元/㎡' },
         { label: '历史峰值', value: '10,139元/㎡' },
-        { label: 'AI预测2034', value: '6,900元/㎡' },
+        { label: 'AI预测2026', value: '8,600元/㎡' },
       ],
       badge: '房地产',
       highlight: '#fca5a5',
@@ -62,7 +62,7 @@ export default function SmartFinancePage() {
       stats: [
         { label: '2024年结余', value: '10.98万亿' },
         { label: '2024年收入', value: '8.21万亿' },
-        { label: 'AI预测2034', value: '12.65万亿' },
+        { label: 'AI预测2026', value: '11.42万亿' },
       ],
       badge: '社会保障',
       highlight: '#86efac',
@@ -80,7 +80,7 @@ export default function SmartFinancePage() {
       stats: [
         { label: '2024年医院', value: '3.9万家' },
         { label: '2024年床位', value: '1030万张' },
-        { label: '卫生总费用', value: '9.6万亿' },
+        { label: 'AI预测2026', value: '10.8万亿' },
       ],
       badge: '医疗卫生',
       highlight: '#67e8f9',
@@ -98,7 +98,7 @@ export default function SmartFinancePage() {
       stats: [
         { label: '1年期存款', value: '1.10%' },
         { label: '1年期LPR', value: '3.10%' },
-        { label: '存贷利差', value: '2.00%' },
+        { label: 'AI预测2026', value: '0.85%' },
       ],
       badge: '银行利率',
       highlight: '#fcd34d',
