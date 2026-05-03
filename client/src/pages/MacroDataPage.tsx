@@ -3,7 +3,7 @@
  * 路由：/macro-data
  * 风格：白色/浅灰官方风格
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -264,96 +264,114 @@ export default function MacroDataPage() {
                     ))}
                   </div>
                 </div>
-                {/* 年度数据进度条列表 */}
+                {/* 年度数据进度条列表（参照 TradingCostBar 格式） */}
                 {(() => {
                   const maxBirths = Math.max(...chartData.map(d => d.births));
                   const sortedDesc = [...chartData].reverse();
+                  // 行高常量（与 TradingCostBar 一致）
+                  const ROW_H = 14;
+                  const BAR_H = 11;
+                  const LABEL_W = 32;
                   return (
-                    <div className="mt-3 rounded-xl overflow-hidden" style={{ background: BG_WHITE, border: `1px solid ${BORDER}` }}>
-                      {/* 表头 */}
-                      <div
-                        className="flex items-center px-3 py-2"
-                        style={{ background: BG_SUBTLE, borderBottom: `1px solid ${BORDER}` }}
-                      >
-                        <span style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: 600, width: 40, flexShrink: 0 }}>年份</span>
-                        <span style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: 600, flex: 1 }}>出生人口（万人）</span>
-                        <span style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: 600, width: 52, flexShrink: 0, textAlign: 'right' }}>变化率</span>
+                    <div className="mt-3 rounded-xl overflow-hidden px-3 py-2" style={{ background: BG_WHITE, border: `1px solid ${BORDER}` }}>
+                      <p className="text-xs font-medium mb-2" style={{ color: TEXT_SUB }}>历年出生人口（万人）</p>
+                      {/* 图例 */}
+                      <div className="flex gap-3 mb-2">
+                        <span className="flex items-center gap-1" style={{ fontSize: 10, color: TEXT_MUTED }}>
+                          <span style={{ display: 'inline-block', width: 12, height: 8, borderRadius: 2, background: GOLD_LINE }} />历史峰値
+                        </span>
+                        <span className="flex items-center gap-1" style={{ fontSize: 10, color: TEXT_MUTED }}>
+                          <span style={{ display: 'inline-block', width: 12, height: 8, borderRadius: 2, background: ACCENT2 }} />出生减少
+                        </span>
+                        <span className="flex items-center gap-1" style={{ fontSize: 10, color: TEXT_MUTED }}>
+                          <span style={{ display: 'inline-block', width: 12, height: 8, borderRadius: 2, background: ACCENT }} />出生增加
+                        </span>
                       </div>
                       {/* 数据行 */}
                       {sortedDesc.map((row, idx, arr) => {
                         const prev = arr[idx + 1];
                         const pct  = prev ? ((row.births - prev.births) / prev.births * 100) : null;
-                        const isUp = pct !== null && pct > 0;
                         const isDown = pct !== null && pct < 0;
                         const isPeak = row.births === maxBirths;
                         const barPct = (row.births / maxBirths) * 100;
-                        // 进度条颜色：峰值金色，近年下降红色，历史上升蓝色
-                        const barColor = isPeak ? GOLD_LINE : isDown ? ACCENT2 : ACCENT;
+                        const barColor = isPeak
+                          ? `linear-gradient(90deg, ${GOLD_LINE} 0%, #f59e0b 100%)`
+                          : isDown
+                            ? `linear-gradient(90deg, ${ACCENT2} 0%, #f87171 100%)`
+                            : `linear-gradient(90deg, ${ACCENT} 0%, #60a5fa 100%)`;
+                        const numLabel = `${row.births.toLocaleString()}万`;
+                        const pctLabel = pct !== null ? `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%` : '';
                         return (
-                          <div
-                            key={row.year}
-                            className="px-3 py-2"
-                            style={{
-                              borderBottom: `1px solid ${BORDER}`,
-                              background: isPeak ? 'rgba(217,119,6,0.05)' : idx % 2 === 0 ? BG_WHITE : BG_SUBTLE,
-                            }}
-                          >
-                            {/* 第一行：年份 + 数值 + 变化率 */}
-                            <div className="flex items-center mb-1">
-                              <span
-                                style={{
-                                  width: 40,
-                                  flexShrink: 0,
-                                  fontSize: 12,
-                                  fontWeight: isPeak ? 700 : 500,
-                                  color: isPeak ? GOLD_LINE : TEXT_MAIN,
-                                }}
-                              >
-                                {row.year}
-                                {isPeak && <span style={{ fontSize: 8, marginLeft: 2, color: GOLD_LINE }}>峰</span>}
-                              </span>
-                              <span
-                                style={{
-                                  flex: 1,
-                                  fontSize: 13,
-                                  fontWeight: 700,
-                                  color: TEXT_MAIN,
-                                }}
-                              >
-                                {row.births.toLocaleString()}
-                              </span>
-                              <span
-                                style={{
-                                  width: 52,
-                                  flexShrink: 0,
-                                  fontSize: 11,
-                                  fontWeight: 600,
-                                  textAlign: 'right',
-                                  color: isUp ? '#16a34a' : isDown ? ACCENT2 : TEXT_MUTED,
-                                }}
-                              >
-                                {pct !== null ? `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%` : '—'}
-                              </span>
-                            </div>
-                            {/* 第二行：进度条 */}
+                          <div key={row.year} className="flex items-center" style={{ height: ROW_H, marginBottom: 0 }}>
+                            {/* 年份标签 */}
                             <div
+                              className="flex-shrink-0 text-right pr-1.5"
                               style={{
-                                height: 5,
-                                borderRadius: 3,
-                                background: '#e9ecef',
-                                overflow: 'hidden',
+                                width: LABEL_W,
+                                fontSize: 9,
+                                color: isPeak ? GOLD_LINE : TEXT_MUTED,
+                                fontWeight: isPeak ? 700 : 400,
+                                lineHeight: `${ROW_H}px`,
                               }}
                             >
+                              {row.year}
+                            </div>
+                            {/* 条形轨道 */}
+                            <div
+                              className="relative flex-1"
+                              style={{ height: BAR_H, borderRadius: 2, background: '#E8E0D8' }}
+                            >
+                              {/* 动效条形 */}
                               <div
                                 style={{
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: 0,
                                   height: '100%',
-                                  width: `${barPct}%`,
-                                  borderRadius: 3,
+                                  width: `${Math.max(barPct, 0.5)}%`,
                                   background: barColor,
-                                  transition: 'width 0.3s ease',
+                                  borderRadius: '2px 3px 3px 2px',
+                                  transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${idx * 12}ms`,
+                                  boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.2)',
                                 }}
                               />
+                              {/* 数值标签：条形内显示（宽度足够）或条形外显示 */}
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  top: '50%',
+                                  transform: 'translateY(-50%)',
+                                  ...(barPct >= 20
+                                    ? { right: `${100 - Math.max(barPct, 0.5)}%`, paddingRight: 3, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.4)' }
+                                    : { left: `${Math.max(barPct, 0.5)}%`, paddingLeft: 3, color: TEXT_MAIN }
+                                  ),
+                                  fontSize: 8,
+                                  fontWeight: barPct >= 20 ? 700 : 600,
+                                  lineHeight: 1,
+                                  whiteSpace: 'nowrap',
+                                  fontVariantNumeric: 'tabular-nums',
+                                  pointerEvents: 'none',
+                                }}
+                              >
+                                {numLabel}
+                              </div>
                             </div>
+                            {/* 变化率：条形右侧外显示 */}
+                            {pctLabel && (
+                              <div
+                                className="flex-shrink-0 pl-1.5"
+                                style={{
+                                  fontSize: 8,
+                                  color: isDown ? ACCENT2 : (pct !== null && pct > 0) ? '#16a34a' : TEXT_MUTED,
+                                  fontWeight: 600,
+                                  lineHeight: `${ROW_H}px`,
+                                  width: 38,
+                                  textAlign: 'right',
+                                }}
+                              >
+                                {pctLabel}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
