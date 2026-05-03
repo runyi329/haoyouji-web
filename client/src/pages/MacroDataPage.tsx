@@ -8,7 +8,7 @@
  */
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, Baby, Users, TrendingDown } from "lucide-react";
+import { ChevronLeft, Baby, Users, TrendingDown, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -128,11 +128,17 @@ export default function MacroDataPage() {
         </button>
         <div className="flex items-center space-x-2 flex-1">
           <Baby className="w-5 h-5" style={{ color: GOLD }} />
-          <span className="text-base font-bold" style={{ color: TEXT_PRIMARY }}>中国出生人口</span>
+          <span className="text-base font-bold" style={{ color: TEXT_PRIMARY }}>人口</span>
+          <span className="text-base font-bold" style={{ color: GOLD }}>×</span>
+          <span className="text-base font-bold" style={{ color: ACCENT_LIGHT }}>AI</span>
         </div>
-        <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'rgba(229,57,53,0.15)', color: ACCENT_LIGHT }}>
-          宏观数据
-        </span>
+        <button
+          onClick={() => window.location.reload()}
+          className="flex items-center justify-center w-8 h-8 rounded-full"
+          style={{ background: 'rgba(255,255,255,0.08)' }}
+        >
+          <RefreshCw className="w-4 h-4" style={{ color: TEXT_MUTED }} />
+        </button>
       </div>
 
       {isLoading ? (
@@ -171,9 +177,9 @@ export default function MacroDataPage() {
           <div className="px-4 mt-4">
             <div className="flex rounded-xl p-1" style={{ background: BG_CARD }}>
               {([
-                { key: 'national', label: '全国趋势', icon: TrendingDown },
-                { key: 'provincial', label: '分省排行', icon: Users },
-                { key: 'gender', label: '性别比例', icon: Baby },
+                { key: 'national', label: '趋势×AI', icon: TrendingDown },
+                { key: 'provincial', label: '分省×AI', icon: Users },
+                { key: 'gender', label: '性别×AI', icon: Baby },
               ] as const).map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
@@ -199,7 +205,7 @@ export default function MacroDataPage() {
               <div>
                 <div className="rounded-xl p-4" style={{ background: BG_CARD }}>
                   <div className="flex items-center justify-between mb-3">
-                    <span style={{ color: TEXT_PRIMARY, fontSize: 13, fontWeight: 700 }}>年度出生人口（万人）</span>
+                    <span style={{ color: TEXT_PRIMARY, fontSize: 13, fontWeight: 700 }}>出生人口×AI（万人）</span>
                     <span style={{ color: TEXT_MUTED, fontSize: 11 }}>1949—2025</span>
                   </div>
                   <ResponsiveContainer width="100%" height={200}>
@@ -294,7 +300,7 @@ export default function MacroDataPage() {
 
                 <div className="rounded-xl p-4" style={{ background: BG_CARD }}>
                   <div className="flex items-center justify-between mb-3">
-                    <span style={{ color: TEXT_PRIMARY, fontSize: 13, fontWeight: 700 }}>各省出生率（‰）</span>
+                    <span style={{ color: TEXT_PRIMARY, fontSize: 13, fontWeight: 700 }}>分省出生率×AI（‰）</span>
                     <span style={{ color: TEXT_MUTED, fontSize: 11 }}>{selectedYear}年</span>
                   </div>
                   <ResponsiveContainer width="100%" height={500}>
@@ -346,7 +352,7 @@ export default function MacroDataPage() {
               <div>
                 {/* 全国数据 */}
                 <div className="rounded-xl p-4 mb-3" style={{ background: BG_CARD, border: `1px solid rgba(245,215,142,0.2)` }}>
-                  <div style={{ color: GOLD, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>全国总体（七普 2020年）</div>
+                  <div style={{ color: GOLD, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>性别×AI 全国总体（七普 2020年）</div>
                   <div className="grid grid-cols-3 gap-3">
                     <div className="text-center">
                       <div style={{ color: MALE_COLOR, fontSize: 20, fontWeight: 800 }}>{genderData.national.malePct}%</div>
@@ -376,7 +382,7 @@ export default function MacroDataPage() {
                 {/* 分省性别比排行 */}
                 <div className="rounded-xl p-4" style={{ background: BG_CARD }}>
                   <div className="flex items-center justify-between mb-3">
-                    <span style={{ color: TEXT_PRIMARY, fontSize: 13, fontWeight: 700 }}>分省性别比排行</span>
+                    <span style={{ color: TEXT_PRIMARY, fontSize: 13, fontWeight: 700 }}>分省性别比×AI</span>
                     <span style={{ color: TEXT_MUTED, fontSize: 11 }}>七普 2020年</span>
                   </div>
                   <div className="space-y-2">
