@@ -390,9 +390,8 @@ export default function MacroDataPage() {
                               }}
                             >
                               {isPrediction ? (
-                                <div className="flex flex-col items-end" style={{ gap: 1 }}>
+                                <div className="flex items-center justify-end" style={{ gap: 2 }}>
                                   <span style={{ fontSize: 9, fontWeight: 700, color: AI_COLOR }}>{row.year}</span>
-                                  <span style={{ fontSize: 7, fontWeight: 600, color: '#fff', background: AI_COLOR, borderRadius: 2, padding: '0 3px', lineHeight: '10px', letterSpacing: 0.3 }}>AI预测</span>
                                 </div>
                               ) : row.year}
                             </div>
@@ -433,8 +432,8 @@ export default function MacroDataPage() {
                                   pointerEvents: 'none',
                                 }}
                               >
-                                {numLabel}
-                              </div>
+                              {numLabel}{isPrediction && <span style={{ marginLeft: 2, fontSize: 7, fontWeight: 700, color: barPct >= 20 ? 'rgba(255,255,255,0.9)' : AI_COLOR, background: barPct >= 20 ? 'rgba(255,255,255,0.2)' : 'rgba(124,58,237,0.1)', borderRadius: 2, padding: '0 2px', letterSpacing: 0.2 }}>AI</span>}
+                            </div>
                             </div>
                             {/* 右侧：变化率 或 AI置信度 */}
                             <div
@@ -780,126 +779,125 @@ export default function MacroDataPage() {
       {predictionModal && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center"
-          style={{ background: 'rgba(0,0,0,0.5)' }}
+          style={{ background: 'rgba(0,0,0,0.45)' }}
           onClick={() => setPredictionModal(null)}
         >
           <div
-            className="w-full max-w-md rounded-t-2xl p-5 pb-8"
-            style={{ background: '#fff', maxHeight: '80vh', overflowY: 'auto' }}
+            className="w-full max-w-md rounded-t-2xl pb-10"
+            style={{ background: '#fff', maxHeight: '88vh', overflowY: 'auto' }}
             onClick={e => e.stopPropagation()}
           >
-            {/* 弹框标题 */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: ACCENT }}>
-                  <span style={{ fontSize: 11, color: '#fff', fontWeight: 800 }}>AI</span>
-                </div>
+            {/* 拖条手柄 */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: '#d1d5db' }} />
+            </div>
+
+            {/* 报告头部 */}
+            <div className="px-5 pt-3 pb-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
+              <div className="flex items-start justify-between">
                 <div>
-                  <div style={{ color: TEXT_MAIN, fontSize: 15, fontWeight: 800 }}>{predictionModal.year}年 出生人口预测</div>
-                  <div style={{ color: TEXT_MUTED, fontSize: 11 }}>AI × 17变量模型测算</div>
+                  <div style={{ color: TEXT_MUTED, fontSize: 11, letterSpacing: 0.5, marginBottom: 2 }}>AI × 17变量队列-组分模型测算</div>
+                  <div style={{ color: TEXT_MAIN, fontSize: 20, fontWeight: 800, letterSpacing: -0.5 }}>
+                    {predictionModal.year}年出生人口预测
+                  </div>
+                </div>
+                <button
+                  onClick={() => setPredictionModal(null)}
+                  style={{ color: TEXT_MUTED, fontSize: 20, lineHeight: 1, padding: '2px 4px', marginTop: 2 }}
+                >×</button>
+              </div>
+
+              {/* 三情景数据——无容器横排 */}
+              <div className="flex items-end gap-4 mt-5">
+                <div>
+                  <div style={{ color: TEXT_MUTED, fontSize: 10, marginBottom: 2 }}>悲观情景</div>
+                  <div style={{ color: ACCENT2, fontSize: 22, fontWeight: 800, lineHeight: 1 }}>{predictionModal.pessimistic}<span style={{ fontSize: 11, fontWeight: 400, color: TEXT_MUTED, marginLeft: 2 }}>万</span></div>
+                </div>
+                <div style={{ flex: 1, textAlign: 'center' }}>
+                  <div style={{ color: TEXT_MUTED, fontSize: 10, marginBottom: 2 }}>基准预测</div>
+                  <div style={{ color: TEXT_MAIN, fontSize: 32, fontWeight: 900, lineHeight: 1 }}>{predictionModal.births}<span style={{ fontSize: 13, fontWeight: 400, color: TEXT_MUTED, marginLeft: 3 }}>万人</span></div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ color: TEXT_MUTED, fontSize: 10, marginBottom: 2 }}>乐观情景</div>
+                  <div style={{ color: '#16a34a', fontSize: 22, fontWeight: 800, lineHeight: 1 }}>{predictionModal.optimistic}<span style={{ fontSize: 11, fontWeight: 400, color: TEXT_MUTED, marginLeft: 2 }}>万</span></div>
                 </div>
               </div>
-              <button
-                onClick={() => setPredictionModal(null)}
-                className="w-7 h-7 rounded-full flex items-center justify-center"
-                style={{ background: BG_SUBTLE, color: TEXT_SUB, fontSize: 16 }}
-              >×</button>
-            </div>
 
-            {/* 三情景数据 */}
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <div className="rounded-xl p-3 text-center" style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
-                <div style={{ color: '#1d4ed8', fontSize: 10, fontWeight: 600 }}>基准预测</div>
-                <div style={{ color: '#1d4ed8', fontSize: 22, fontWeight: 800 }}>{predictionModal.births}</div>
-                <div style={{ color: '#93c5fd', fontSize: 10 }}>万人</div>
-              </div>
-              <div className="rounded-xl p-3 text-center" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                <div style={{ color: '#15803d', fontSize: 10, fontWeight: 600 }}>乐观情景</div>
-                <div style={{ color: '#15803d', fontSize: 22, fontWeight: 800 }}>{predictionModal.optimistic}</div>
-                <div style={{ color: '#86efac', fontSize: 10 }}>万人</div>
-              </div>
-              <div className="rounded-xl p-3 text-center" style={{ background: '#fff1f2', border: '1px solid #fecdd3' }}>
-                <div style={{ color: '#be123c', fontSize: 10, fontWeight: 600 }}>悲观情景</div>
-                <div style={{ color: '#be123c', fontSize: 22, fontWeight: 800 }}>{predictionModal.pessimistic}</div>
-                <div style={{ color: '#fda4af', fontSize: 10 }}>万人</div>
+              {/* AI置信度条 */}
+              <div className="flex items-center gap-3 mt-4">
+                <span style={{ color: TEXT_MUTED, fontSize: 10, whiteSpace: 'nowrap' }}>AI置信度</span>
+                <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: '#e5e7eb' }}>
+                  <div style={{ height: '100%', width: `${predictionModal.confidence}%`, background: `linear-gradient(90deg, ${ACCENT}, #60a5fa)`, borderRadius: 99 }} />
+                </div>
+                <span style={{ color: ACCENT, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{predictionModal.confidence}%</span>
               </div>
             </div>
 
-            {/* 置信度 */}
-            <div className="flex items-center gap-3 mb-4 p-3 rounded-xl" style={{ background: BG_SUBTLE }}>
-              <span style={{ color: TEXT_SUB, fontSize: 12 }}>AI置信度</span>
-              <div className="flex-1 h-2 rounded overflow-hidden" style={{ background: '#E8E0D8' }}>
-                <div
-                  style={{
-                    height: '100%',
-                    width: `${predictionModal.confidence}%`,
-                    background: `linear-gradient(90deg, ${ACCENT} 0%, #60a5fa 100%)`,
-                    borderRadius: 2,
-                  }}
-                />
+            {/* 报告正文 */}
+            <div className="px-5 pt-4">
+
+              {/* 一、核心驱动因素 */}
+              <div style={{ color: TEXT_MUTED, fontSize: 10, letterSpacing: 1, fontWeight: 600, marginBottom: 4 }}>一、核心驱动因素</div>
+              <div style={{ color: TEXT_MAIN, fontSize: 13, lineHeight: 1.8, marginBottom: 20 }}>{predictionModal.keyFactor}</div>
+
+              {/* 二、三情景比较图表 */}
+              <div style={{ color: TEXT_MUTED, fontSize: 10, letterSpacing: 1, fontWeight: 600, marginBottom: 10 }}>二、三情景对比</div>
+              <div style={{ height: 80, marginBottom: 20 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={[
+                      { name: '悲观', value: predictionModal.pessimistic, fill: ACCENT2 },
+                      { name: '基准', value: predictionModal.births, fill: ACCENT },
+                      { name: '乐观', value: predictionModal.optimistic, fill: '#16a34a' },
+                    ]}
+                    margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
+                    barCategoryGap="30%"
+                  >
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: TEXT_SUB }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 9, fill: TEXT_MUTED }} axisLine={false} tickLine={false} domain={[400, 'dataMax + 50']} />
+                    <Bar dataKey="value" radius={[3, 3, 0, 0]}>
+                      {[ACCENT2, ACCENT, '#16a34a'].map((color, i) => <Cell key={i} fill={color} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-              <span style={{ color: ACCENT, fontSize: 13, fontWeight: 700 }}>{predictionModal.confidence}%</span>
-            </div>
 
-            {/* 核心驱动因素 */}
-            <div className="mb-4 p-3 rounded-xl" style={{ background: '#fffbeb', border: '1px solid #fde68a' }}>
-              <div style={{ color: '#92400e', fontSize: 11, fontWeight: 700, marginBottom: 4 }}>核心驱动因素</div>
-              <div style={{ color: '#78350f', fontSize: 12, lineHeight: 1.6 }}>{predictionModal.keyFactor}</div>
-            </div>
-
-            {/* 17变量权重详情 */}
-            <div className="mb-4 p-3 rounded-xl" style={{ background: BG_SUBTLE }}>
-              <div style={{ color: TEXT_MAIN, fontSize: 11, fontWeight: 700, marginBottom: 8 }}>17变量权重体系</div>
+              {/* 三、预测参考变量（17个） */}
+              <div style={{ color: TEXT_MUTED, fontSize: 10, letterSpacing: 1, fontWeight: 600, marginBottom: 10 }}>三、预测参考变量（17个）</div>
               {[1, 2, 3].map(layer => (
-                <div key={layer} className="mb-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span
-                      style={{
-                        fontSize: 9, fontWeight: 700, color: '#fff',
-                        background: layer === 1 ? ACCENT : layer === 2 ? '#16a34a' : '#d97706',
-                        borderRadius: 3, padding: '1px 5px',
-                      }}
-                    >
-                      {layer === 1 ? '第一层' : layer === 2 ? '第二层' : '第三层'}
-                    </span>
-                    <span style={{ color: TEXT_SUB, fontSize: 10, fontWeight: 600 }}>
-                      {layer === 1 ? '人口学基础（70%）' : layer === 2 ? '社会经济（23%）' : '政策与外部（7%）'}
-                    </span>
+                <div key={layer} style={{ marginBottom: 14 }}>
+                  <div style={{ color: TEXT_SUB, fontSize: 11, fontWeight: 700, marginBottom: 6 }}>
+                    {layer === 1 ? '人口学基础变量（70%）' : layer === 2 ? '社会经济变量（23%）' : '政策与外部变量（7%）'}
                   </div>
                   {AI_DIMENSIONS.filter(d => d.layer === layer).map((dim, i) => (
-                    <div key={i} className="flex items-center gap-2 mb-1.5">
-                      <div className="flex-shrink-0" style={{ width: 60 }}>
-                        <div className="h-2 rounded overflow-hidden" style={{ background: '#E8E0D8' }}>
-                          <div
-                            style={{
-                              height: '100%',
-                              width: `${(dim.weight / 35) * 100}%`,
-                              background: layer === 1 ? ACCENT : layer === 2 ? '#16a34a' : '#d97706',
-                              borderRadius: 2,
-                            }}
-                          />
+                    <div key={i} className="flex items-center" style={{ marginBottom: 5 }}>
+                      <div style={{ width: 80, flexShrink: 0 }}>
+                        <div style={{ height: 6, borderRadius: 3, background: '#f3f4f6', overflow: 'hidden' }}>
+                          <div style={{
+                            height: '100%',
+                            width: `${Math.min((dim.weight / 35) * 100, 100)}%`,
+                            background: layer === 1 ? ACCENT : layer === 2 ? '#16a34a' : '#d97706',
+                            borderRadius: 3,
+                          }} />
                         </div>
                       </div>
-                      <span style={{ color: layer === 1 ? ACCENT : layer === 2 ? '#15803d' : '#d97706', fontSize: 9, fontWeight: 700, minWidth: 22, textAlign: 'right' }}>{dim.weight}%</span>
-                      <span style={{ color: TEXT_SUB, fontSize: 10, flex: 1, lineHeight: 1.3 }}>{dim.name}</span>
+                      <span style={{ color: layer === 1 ? ACCENT : layer === 2 ? '#15803d' : '#d97706', fontSize: 10, fontWeight: 700, width: 30, textAlign: 'right', flexShrink: 0 }}>{dim.weight}%</span>
+                      <span style={{ color: TEXT_SUB, fontSize: 11, marginLeft: 8, lineHeight: 1.3 }}>{dim.name}</span>
                     </div>
                   ))}
                 </div>
               ))}
-            </div>
 
-            {/* 计算方式说明 */}
-            <div className="p-3 rounded-xl" style={{ background: '#f0f4ff', border: '1px solid #c7d2fe' }}>
-              <div style={{ color: '#3730a3', fontSize: 11, fontWeight: 700, marginBottom: 6 }}>计算方式</div>
-              <div style={{ color: '#4338ca', fontSize: 11, lineHeight: 1.8 }}>
-                <div className="mb-2">📐 <strong>核心模型：队列-组分模型（Cohort-Component）</strong></div>
-                <div className="mb-1" style={{ color: '#4f46e5', fontSize: 10 }}>出生人口 = 育龄女性规模 × TFR修正系数 × 政策调节因子</div>
-                <div className="mb-2" style={{ color: '#6366f1', fontSize: 10, fontFamily: 'monospace', background: 'rgba(99,102,241,0.08)', borderRadius: 4, padding: '4px 8px' }}>
-                  B(t) = W(t) × TFR(t) × Σ[wᵢ × Xᵢ(t)]
-                </div>
-                <div style={{ color: '#4338ca', fontSize: 10, lineHeight: 1.7 }}>
-                  其中 W(t) 为育龄女性人口，TFR(t) 为总和生育率，Xᵢ(t) 为第 i 个社会经济变量，wᵢ 为对应权重。三情景通过调整 TFR 假设值（悲观0.85 / 基准1.0 / 乐观1.05）和政策调节因子生成。
-                </div>
+              {/* 四、模型公式 */}
+              <div style={{ color: TEXT_MUTED, fontSize: 10, letterSpacing: 1, fontWeight: 600, marginBottom: 8 }}>四、计算模型</div>
+              <div style={{ color: TEXT_SUB, fontSize: 12, lineHeight: 1.8, marginBottom: 6 }}>
+                核心采用队列-组分模型（Cohort-Component），公式如下：
+              </div>
+              <div style={{ fontFamily: 'monospace', fontSize: 12, color: ACCENT, background: '#f8faff', borderLeft: `3px solid ${ACCENT}`, padding: '8px 12px', marginBottom: 8, letterSpacing: 0.5 }}>
+                B(t) = W(t) × TFR(t) × Σ[ωᵢ × Xᵢ(t)]
+              </div>
+              <div style={{ color: TEXT_SUB, fontSize: 11, lineHeight: 1.8, marginBottom: 20 }}>
+                W(t)：育龄女性人口（主导因素，权重35%）。TFR(t)：总和生育率。Xᵢ(t)：社会经济变量。三情景通过调整TFR假设值（悲观0.85／基准1.0／乐观1.05）生成。
               </div>
             </div>
           </div>
