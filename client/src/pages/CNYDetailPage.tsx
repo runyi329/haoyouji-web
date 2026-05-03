@@ -392,10 +392,9 @@ export default function CNYDetailPage() {
           </div>
           <button
             onClick={handleRefresh}
-            className="flex items-center gap-1 text-white/70 hover:text-white text-xs px-2 py-1 rounded-lg bg-white/10"
+            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer", flexShrink: 0 }}
           >
-            <RefreshCw className="w-3 h-3" />
-            <span>更新</span>
+            更新
           </button>
         </div>
 
