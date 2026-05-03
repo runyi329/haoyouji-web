@@ -2469,18 +2469,18 @@ export default function Home() {
 
           {/* 三个功能入口 - flex-1撑满剩余空间 */}
           <div className="px-3 pt-1.5 pb-2 flex flex-col flex-1 min-h-0 gap-1.5">
-            {/* 第一行：智能财务 + 房产×AI + 智能会计 */}
-            <div className="grid grid-cols-3 gap-2 flex-1">
+            {/* 第一行：智能财务 + 智能会计 */}
+            <div className="grid grid-cols-2 gap-2 flex-1">
               {/* 智能财务 - 黑白金立体风格 */}
               <div
                 className="flex flex-col rounded-xl cursor-pointer active:scale-[0.98] relative overflow-hidden"
-                onClick={() => navigate('/macro-data')}
+                onClick={() => navigate('/smart-finance')}
                 style={{
                   background: 'linear-gradient(135deg, #111111 0%, #2a2a2a 45%, #1a1a1a 100%)',
                   boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
                   border: '1px solid rgba(201,168,76,0.6)',
                   transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                  padding: '6px 8px',
+                  padding: '6px 10px',
                 }}
               >
                 {/* 顶部金色高光线 */}
@@ -2488,30 +2488,8 @@ export default function Home() {
                 {/* 底部暗影线 */}
                 <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
                 <div className="flex items-center space-x-1 mb-1">
-                  <BarChart2 className="w-3 h-3" style={{ color: '#C9A84C', filter: 'drop-shadow(0 1px 2px rgba(201,168,76,0.5))' }} />
-                  <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.03em', fontSize: 10 }}>智能财务</span>
-                </div>
-                <div className="flex-1" />
-              </div>
-              {/* 房产×AI - 黑白金立体风格 */}
-              <div
-                className="flex flex-col rounded-xl cursor-pointer active:scale-[0.98] relative overflow-hidden"
-                onClick={() => navigate('/real-estate')}
-                style={{
-                  background: 'linear-gradient(135deg, #111111 0%, #2a2a2a 45%, #1a1a1a 100%)',
-                  boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
-                  border: '1px solid rgba(201,168,76,0.6)',
-                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                  padding: '6px 8px',
-                }}
-              >
-                {/* 顶部金色高光线 */}
-                <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
-                {/* 底部暗影线 */}
-                <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
-                <div className="flex items-center space-x-1 mb-1">
-                  <ShoppingBag className="w-3 h-3" style={{ color: '#C9A84C', filter: 'drop-shadow(0 1px 2px rgba(201,168,76,0.5))' }} />
-                  <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.03em', fontSize: 10 }}>房产×AI</span>
+                  <BarChart2 className="w-3.5 h-3.5" style={{ color: '#C9A84C', filter: 'drop-shadow(0 1px 2px rgba(201,168,76,0.5))' }} />
+                  <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.05em' }}>智能财务</span>
                 </div>
                 <div className="flex-1" />
               </div>
@@ -2523,7 +2501,7 @@ export default function Home() {
                   boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
                   border: '1px solid rgba(201,168,76,0.6)',
                   transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-                  padding: '6px 8px',
+                  padding: '6px 10px',
                 }}
               >
                 {/* 顶部金色高光线 */}
@@ -2531,8 +2509,8 @@ export default function Home() {
                 {/* 底部暗影线 */}
                 <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
                 <div className="flex items-center space-x-1 mb-1">
-                  <FileText className="w-3 h-3" style={{ color: '#C9A84C', filter: 'drop-shadow(0 1px 2px rgba(201,168,76,0.5))' }} />
-                  <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.03em', fontSize: 10 }}>智能会计</span>
+                  <FileText className="w-3.5 h-3.5" style={{ color: '#C9A84C', filter: 'drop-shadow(0 1px 2px rgba(201,168,76,0.5))' }} />
+                  <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.05em' }}>智能会计</span>
                 </div>
                 <div className="flex-1" />
               </div>
