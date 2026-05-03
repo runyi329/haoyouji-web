@@ -356,10 +356,8 @@ export default function CNYDetailPage() {
   // Meta 数据
   const { data: cnyMeta } = trpc.cryptoData.getMeta.useQuery({ symbol: "CNY" });
   const { data: cnhMeta } = trpc.cryptoData.getMeta.useQuery({ symbol: "CNH" });
-
   const handleRefresh = () => {
-    refetchPrice();
-    setRefreshKey(k => k + 1);
+    window.location.reload();
   };
 
   const cnyPrice = dualPrice?.cny?.price ?? 0;
