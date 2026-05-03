@@ -372,19 +372,29 @@ export default function MacroDataPage() {
                             {isFirstHistorical && (
                               <div key={`sep-${row.year}`} style={{ height: 1, background: BORDER, margin: '4px 0', width: '100%' }} />
                             )}
-                          <div key={row.year} className="flex items-center" style={{ height: ROW_H, marginBottom: 0, opacity: isPrediction ? 0.9 : 1 }}>
-                            {/* 年份标签 */}
+                          <div
+                            key={row.year}
+                            className="flex items-center"
+                            style={{ height: isPrediction ? ROW_H + 4 : ROW_H, marginBottom: isPrediction ? 2 : 0, opacity: isPrediction ? 0.95 : 1, cursor: isPrediction ? 'pointer' : 'default', borderRadius: isPrediction ? 3 : 0, padding: isPrediction ? '0 2px' : 0 }}
+                            onClick={() => isPrediction ? setPredictionModal(AI_PREDICTION_DATA.find(d => d.year === row.year) ?? null) : undefined}
+                          >
+                            {/* 年份标签 + AI预测小标签 */}
                             <div
                               className="flex-shrink-0 text-right pr-1.5"
                               style={{
-                                width: LABEL_W,
+                                width: LABEL_W + (isPrediction ? 10 : 0),
                                 fontSize: 9,
                                 color: isPrediction ? AI_COLOR : isPeak ? GOLD_LINE : TEXT_MUTED,
                                 fontWeight: isPrediction ? 600 : isPeak ? 700 : 400,
                                 lineHeight: `${ROW_H}px`,
                               }}
                             >
-                              {row.year}
+                              {isPrediction ? (
+                                <div className="flex flex-col items-end" style={{ gap: 1 }}>
+                                  <span style={{ fontSize: 9, fontWeight: 700, color: AI_COLOR }}>{row.year}</span>
+                                  <span style={{ fontSize: 7, fontWeight: 600, color: '#fff', background: AI_COLOR, borderRadius: 2, padding: '0 3px', lineHeight: '10px', letterSpacing: 0.3 }}>AI预测</span>
+                                </div>
+                              ) : row.year}
                             </div>
                             {/* 条形轨道 */}
                             <div
@@ -837,11 +847,59 @@ export default function MacroDataPage() {
               <div style={{ color: '#78350f', fontSize: 12, lineHeight: 1.6 }}>{predictionModal.keyFactor}</div>
             </div>
 
-            {/* 预测方法说明 */}
-            <div className="p-3 rounded-xl" style={{ background: BG_SUBTLE }}>
-              <div style={{ color: TEXT_MAIN, fontSize: 11, fontWeight: 700, marginBottom: 6 }}>预测方法说明</div>
-              <div style={{ color: TEXT_SUB, fontSize: 11, lineHeight: 1.7, whiteSpace: 'pre-line' }}>
-                {AI_METHODOLOGY.replace(/##\s*/g, '').replace(/\*\*/g, '').replace(/^###\s*/gm, '').trim()}
+            {/* 17变量权重详情 */}
+            <div className="mb-4 p-3 rounded-xl" style={{ background: BG_SUBTLE }}>
+              <div style={{ color: TEXT_MAIN, fontSize: 11, fontWeight: 700, marginBottom: 8 }}>17变量权重体系</div>
+              {[1, 2, 3].map(layer => (
+                <div key={layer} className="mb-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span
+                      style={{
+                        fontSize: 9, fontWeight: 700, color: '#fff',
+                        background: layer === 1 ? ACCENT : layer === 2 ? '#16a34a' : '#d97706',
+                        borderRadius: 3, padding: '1px 5px',
+                      }}
+                    >
+                      {layer === 1 ? '第一层' : layer === 2 ? '第二层' : '第三层'}
+                    </span>
+                    <span style={{ color: TEXT_SUB, fontSize: 10, fontWeight: 600 }}>
+                      {layer === 1 ? '人口学基础（70%）' : layer === 2 ? '社会经济（23%）' : '政策与外部（7%）'}
+                    </span>
+                  </div>
+                  {AI_DIMENSIONS.filter(d => d.layer === layer).map((dim, i) => (
+                    <div key={i} className="flex items-center gap-2 mb-1.5">
+                      <div className="flex-shrink-0" style={{ width: 60 }}>
+                        <div className="h-2 rounded overflow-hidden" style={{ background: '#E8E0D8' }}>
+                          <div
+                            style={{
+                              height: '100%',
+                              width: `${(dim.weight / 35) * 100}%`,
+                              background: layer === 1 ? ACCENT : layer === 2 ? '#16a34a' : '#d97706',
+                              borderRadius: 2,
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <span style={{ color: layer === 1 ? ACCENT : layer === 2 ? '#15803d' : '#d97706', fontSize: 9, fontWeight: 700, minWidth: 22, textAlign: 'right' }}>{dim.weight}%</span>
+                      <span style={{ color: TEXT_SUB, fontSize: 10, flex: 1, lineHeight: 1.3 }}>{dim.name}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            {/* 计算方式说明 */}
+            <div className="p-3 rounded-xl" style={{ background: '#f0f4ff', border: '1px solid #c7d2fe' }}>
+              <div style={{ color: '#3730a3', fontSize: 11, fontWeight: 700, marginBottom: 6 }}>计算方式</div>
+              <div style={{ color: '#4338ca', fontSize: 11, lineHeight: 1.8 }}>
+                <div className="mb-2">📐 <strong>核心模型：队列-组分模型（Cohort-Component）</strong></div>
+                <div className="mb-1" style={{ color: '#4f46e5', fontSize: 10 }}>出生人口 = 育龄女性规模 × TFR修正系数 × 政策调节因子</div>
+                <div className="mb-2" style={{ color: '#6366f1', fontSize: 10, fontFamily: 'monospace', background: 'rgba(99,102,241,0.08)', borderRadius: 4, padding: '4px 8px' }}>
+                  B(t) = W(t) × TFR(t) × Σ[wᵢ × Xᵢ(t)]
+                </div>
+                <div style={{ color: '#4338ca', fontSize: 10, lineHeight: 1.7 }}>
+                  其中 W(t) 为育龄女性人口，TFR(t) 为总和生育率，Xᵢ(t) 为第 i 个社会经济变量，wᵢ 为对应权重。三情景通过调整 TFR 假设值（悲观0.85 / 基准1.0 / 乐观1.05）和政策调节因子生成。
+                </div>
               </div>
             </div>
           </div>
