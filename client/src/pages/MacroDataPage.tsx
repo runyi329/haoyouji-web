@@ -5,7 +5,7 @@
  */
 import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, RefreshCw } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -182,7 +182,7 @@ export default function MacroDataPage() {
         </div>
         <button
           onClick={() => window.location.reload()}
-          className="flex items-center justify-center px-3 h-7 rounded-full text-xs font-semibold"
+          className="px-3 py-1 rounded-full text-xs font-medium"
           style={{ background: BG_SUBTLE, color: TEXT_SUB }}
         >
           刷新
