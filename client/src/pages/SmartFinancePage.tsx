@@ -22,6 +22,7 @@ export default function SmartFinancePage() {
       gradient: 'linear-gradient(135deg, #1a1a4e 0%, #0f3460 40%, #1a56db 100%)',
       circle1: 'rgba(26,86,219,0.35)',
       circle2: 'rgba(255,255,255,0.06)',
+      icon: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/icon-population-v3-PButjTR4RNtZwM8JLznu5b.png',
       stats: [
         { label: '2024年出生', value: '954万人' },
         { label: '历史峰值', value: '2953万人' },
@@ -39,6 +40,7 @@ export default function SmartFinancePage() {
       gradient: 'linear-gradient(135deg, #3b0a0a 0%, #7f1d1d 40%, #dc2626 100%)',
       circle1: 'rgba(220,38,38,0.35)',
       circle2: 'rgba(255,255,255,0.06)',
+      icon: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/icon-realestate-v3-eY2NtFyNvzu6npjgqsNVeb.png',
       stats: [
         { label: '2024年均价', value: '9,200元/㎡' },
         { label: '历史峰值', value: '10,139元/㎡' },
@@ -56,6 +58,7 @@ export default function SmartFinancePage() {
       gradient: 'linear-gradient(135deg, #052e16 0%, #14532d 40%, #16a34a 100%)',
       circle1: 'rgba(22,163,74,0.35)',
       circle2: 'rgba(255,255,255,0.06)',
+      icon: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/icon-socialsecurity-v3-LZtacL7yYXHi6Bvt2wSyrJ.png',
       stats: [
         { label: '2024年结余', value: '10.98万亿' },
         { label: '2024年收入', value: '8.21万亿' },
@@ -73,6 +76,7 @@ export default function SmartFinancePage() {
       gradient: 'linear-gradient(135deg, #0c1a2e 0%, #0e3a5c 40%, #0891b2 100%)',
       circle1: 'rgba(8,145,178,0.35)',
       circle2: 'rgba(255,255,255,0.06)',
+      icon: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/icon-healthcare-v3-Ydyee3bQcDPn4in2cALNXm.png',
       stats: [
         { label: '2024年医院', value: '3.9万家' },
         { label: '2024年床位', value: '1030万张' },
@@ -90,6 +94,7 @@ export default function SmartFinancePage() {
       gradient: 'linear-gradient(135deg, #1c1207 0%, #451a03 40%, #d97706 100%)',
       circle1: 'rgba(217,119,6,0.35)',
       circle2: 'rgba(255,255,255,0.06)',
+      icon: 'https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/icon-bank-v3-JP3xHzRibDiGoytPuXLsU5.png',
       stats: [
         { label: '1年期存款', value: '1.10%' },
         { label: '1年期LPR', value: '3.10%' },
@@ -175,7 +180,7 @@ export default function SmartFinancePage() {
             }} />
 
             <div className="relative p-5">
-              {/* 标签 + 箭头 */}
+              {/* 标签 + 箭头 + 图标 */}
               <div className="flex items-center justify-between mb-3">
                 <span
                   className="text-xs px-2.5 py-1 rounded-full font-semibold"
@@ -183,11 +188,20 @@ export default function SmartFinancePage() {
                 >
                   {mod.badge}
                 </span>
-                <div
-                  className="flex items-center justify-center w-7 h-7 rounded-full"
-                  style={{ background: 'rgba(255,255,255,0.18)' }}
-                >
-                  <ChevronRight className="w-4 h-4 text-white" />
+                <div className="flex items-center gap-2">
+                  {mod.icon && (
+                    <img
+                      src={mod.icon}
+                      alt={mod.title}
+                      style={{ width: 48, height: 48, objectFit: 'contain', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.3))' }}
+                    />
+                  )}
+                  <div
+                    className="flex items-center justify-center w-7 h-7 rounded-full"
+                    style={{ background: 'rgba(255,255,255,0.18)' }}
+                  >
+                    <ChevronRight className="w-4 h-4 text-white" />
+                  </div>
                 </div>
               </div>
 
