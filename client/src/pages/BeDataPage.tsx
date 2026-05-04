@@ -1186,19 +1186,91 @@ export default function BeDataPage() {
     { staleTime: 30 * 60 * 1000 } // 30分钟缓存
   );
 
-  // 从 Binance 拉取增量数据
-  const syncMutation = trpc.cryptoData.syncLatest.useMutation({
+  // 批量写入K线数据（前端直接从Gate.io拉取，绕过服务器网络限制）
+  const batchImportMutation = trpc.cryptoData.batchImport.useMutation({
     onSuccess: () => {
       setIsSyncing(false);
       window.location.reload();
     },
-    onError: () => setIsSyncing(false),
+    onError: (err) => {
+      setIsSyncing(false);
+      alert('同步失败: ' + err.message);
+    },
   });
-  const handleSync = useCallback(() => {
+
+  const { data: latestDateData } = trpc.cryptoData.getLatestDate.useQuery(
+    { symbol: activeSymbol },
+    { staleTime: 60 * 1000 }
+  );
+
+  const handleSync = useCallback(async () => {
     if (isSyncing) return;
     setIsSyncing(true);
-    syncMutation.mutate({ symbol: activeSymbol });
-  }, [isSyncing, activeSymbol, syncMutation]);
+    try {
+      // 计算起始时间：数据库最新日期的次日
+      const latestDate = latestDateData?.date;
+      let startTs: number;
+      if (latestDate) {
+        const d = new Date(latestDate + 'T00:00:00Z');
+        d.setUTCDate(d.getUTCDate() + 1);
+        startTs = d.getTime();
+      } else {
+        // 无数据时从2020年开始
+        startTs = new Date('2020-01-01T00:00:00Z').getTime();
+      }
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      if (startTs >= today.getTime()) {
+        setIsSyncing(false);
+        alert('数据已是最新，无需同步');
+        return;
+      }
+      // Gate.io 符号格式：BTCUSDT -> BTC_USDT
+      const gateSymbol = activeSymbol.replace('USDT', '_USDT');
+      const gateUrl = `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${gateSymbol}&interval=1d&from=${Math.floor(startTs / 1000)}&limit=1000`;
+      const resp = await fetch(gateUrl);
+      if (!resp.ok) throw new Error(`Gate.io API error: ${resp.status}`);
+      const gateData: any[] = await resp.json();
+      if (!gateData || gateData.length === 0) {
+        setIsSyncing(false);
+        alert('Gate.io 无新数据');
+        return;
+      }
+      // Gate.io 格式: [timestamp, volume, close, high, low, open, quote_volume]
+      const records = gateData
+        .filter((g: any) => {
+          const ts = parseInt(g[0]) * 1000;
+          return ts < today.getTime(); // 只写入已收盘的日期
+        })
+        .map((g: any) => {
+          const ts = parseInt(g[0]) * 1000;
+          const dateStr = new Date(ts).toISOString().slice(0, 10);
+          const open = parseFloat(g[5]);
+          const high = parseFloat(g[3]);
+          const low = parseFloat(g[4]);
+          const close = parseFloat(g[2]);
+          const volume = parseFloat(g[1]);
+          const quoteVolume = parseFloat(g[6] ?? g[1]);
+          const amplitudePct = open > 0 ? parseFloat(((high - low) / open * 100).toFixed(4)) : null;
+          return {
+            symbol: activeSymbol,
+            date: dateStr,
+            open, high, low, close, volume, quoteVolume,
+            changePct: null as number | null, // 服务端会重新计算
+            amplitudePct,
+          };
+        });
+      if (records.length === 0) {
+        setIsSyncing(false);
+        alert('数据已是最新，无需同步');
+        return;
+      }
+      batchImportMutation.mutate({ records });
+    } catch (e: any) {
+      setIsSyncing(false);
+      alert('同步失败: ' + e.message);
+    }
+  }, [isSyncing, activeSymbol, latestDateData, batchImportMutation]);
 
   const rows = data?.rows ?? [];
   const total = metaData?.total ?? data?.total ?? 0;
