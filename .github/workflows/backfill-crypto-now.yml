@@ -22,14 +22,123 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-      - name: 🔄 在服务器本机触发数据补全
+      - name: 🔄 在服务器上直接补全数字币数据
         run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
-            echo "=== 触发数字币数据补全 ==="
-            # 通过本机 curl 调用内部接口（服务运行在3000端口）
-            result=$(curl -s -X POST http://127.0.0.1:3000/api/internal/sync-crypto \
-              -H "Content-Type: application/json" \
-              --max-time 120)
-            echo "补全结果: $result"
-            echo "=== 完成 ==="
-          ENDSSH
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'bash -s' << 'ENDSSH'
+            set -e
+            echo "=== 开始补全 BTC/ETH/SOL 日线数据 ==="
+
+            # 读取.env获取数据库连接
+            ENV_FILE=""
+            if [ -f /root/haoyouji-web/.env ]; then
+              ENV_FILE="/root/haoyouji-web/.env"
+            elif [ -f /home/ubuntu/haoyouji-web/.env ]; then
+              ENV_FILE="/home/ubuntu/haoyouji-web/.env"
+            fi
+            echo "使用env文件: $ENV_FILE"
+
+            DATABASE_URL=$(grep "^DATABASE_URL=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"' || echo "")
+            if [ -z "$DATABASE_URL" ]; then
+              echo "❌ 未找到 DATABASE_URL"
+              exit 1
+            fi
+            echo "DATABASE_URL已获取: ${DATABASE_URL:0:40}..."
+
+            # 安装依赖
+            pip3 install pymysql requests -q 2>/dev/null || true
+
+            # 执行Python补全脚本
+            python3 - "$DATABASE_URL" << 'PYEOF'
+import sys, re, pymysql, requests
+from datetime import datetime, timezone, timedelta
+
+DATABASE_URL = sys.argv[1]
+
+def parse_url(url):
+    m = re.match(r'mysql://([^:]+):([^@]+)@([^:/]+):?([0-9]*)/([^?]+)', url)
+    if not m:
+        raise ValueError(f"无法解析 DATABASE_URL: {url[:40]}")
+    user, pwd, host, port, db = m.groups()
+    return host, int(port or 4000), user, pwd, db
+
+DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME = parse_url(DATABASE_URL)
+print(f"连接: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+
+SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT']
+
+conn = pymysql.connect(
+    host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASS,
+    database=DB_NAME, ssl={'ssl': True}, charset='utf8mb4', connect_timeout=30
+)
+print("数据库连接成功")
+
+def get_latest_date(symbol):
+    with conn.cursor() as cur:
+        cur.execute("SELECT MAX(date) FROM crypto_klines WHERE symbol=%s", (symbol,))
+        row = cur.fetchone()
+        return str(row[0]) if row and row[0] else None
+
+def fetch_binance(symbol, start_ms):
+    for base in ['https://api.binance.com', 'https://api1.binance.com']:
+        url = f"{base}/api/v3/klines?symbol={symbol}&interval=1d&startTime={start_ms}&limit=1000"
+        try:
+            r = requests.get(url, timeout=30)
+            if r.status_code == 200:
+                return r.json()
+        except Exception as e:
+            print(f"  {base} 失败: {e}")
+    return []
+
+def upsert_klines(symbol, klines):
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    records = []
+    for k in klines:
+        dt = datetime.fromtimestamp(int(k[0])/1000, tz=timezone.utc)
+        if dt >= today:
+            continue
+        date_str = dt.strftime('%Y-%m-%d')
+        o, h, l, c = float(k[1]), float(k[2]), float(k[3]), float(k[4])
+        vol, qvol = float(k[5]), float(k[7])
+        chg = round((c - o) / o * 100, 4) if o > 0 else None
+        amp = round((h - l) / o * 100, 4) if o > 0 else None
+        records.append((symbol, date_str, o, h, l, c, vol, qvol, chg, amp))
+    if not records:
+        return 0
+    sql = """INSERT INTO crypto_klines
+        (symbol, date, open, high, low, close, volume, quote_volume, change_pct, amplitude_pct)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ON DUPLICATE KEY UPDATE
+          open=VALUES(open), high=VALUES(high), low=VALUES(low), close=VALUES(close),
+          volume=VALUES(volume), quote_volume=VALUES(quote_volume),
+          change_pct=VALUES(change_pct), amplitude_pct=VALUES(amplitude_pct)"""
+    with conn.cursor() as cur:
+        cur.executemany(sql, records)
+    conn.commit()
+    return len(records)
+
+for symbol in SYMBOLS:
+    print(f"\n--- {symbol} ---")
+    latest = get_latest_date(symbol)
+    print(f"  当前最新日期: {latest}")
+    if latest:
+        start_dt = datetime.strptime(latest, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1)
+    else:
+        start_dt = datetime(2017, 8, 17, tzinfo=timezone.utc)
+    start_ms = int(start_dt.timestamp() * 1000)
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    if start_ms > now_ms:
+        print(f"  已是最新，跳过")
+        continue
+    print(f"  从 {start_dt.strftime('%Y-%m-%d')} 开始拉取...")
+    klines = fetch_binance(symbol, start_ms)
+    print(f"  Binance返回 {len(klines)} 条原始数据")
+    added = upsert_klines(symbol, klines)
+    new_latest = get_latest_date(symbol)
+    print(f"  写入 {added} 条，最新日期: {new_latest}")
+
+conn.close()
+print("\n=== 全部完成 ===")
+PYEOF
+
+            echo "=== 脚本执行完毕 ==="
+ENDSSH
