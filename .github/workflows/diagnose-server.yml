@@ -18,6 +18,79 @@ jobs:
         run: |
           ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no root@124.223.54.69 "echo 'SSH连接成功'" || echo "SSH连接失败"
 
+      - name: 补全 BTC/ETH/SOL 日线数据
+        run: |
+          ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no root@124.223.54.69 'bash -s' << 'ENDSSH'
+            echo "=== 开始补全 BTC/ETH/SOL 日线数据 ==="
+            DATABASE_URL=$(grep "^DATABASE_URL=" /root/haoyouji-web/.env 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"' || grep "^DATABASE_URL=" /home/ubuntu/haoyouji-web/.env 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"' || echo "")
+            if [ -z "$DATABASE_URL" ]; then echo "❌ 未找到 DATABASE_URL"; exit 1; fi
+            echo "DATABASE_URL已获取: ${DATABASE_URL:0:40}..."
+            pip3 install pymysql requests -q 2>/dev/null || true
+            python3 - "$DATABASE_URL" << 'PYEOF'
+import sys, re, pymysql, requests
+from datetime import datetime, timezone, timedelta
+DATABASE_URL = sys.argv[1]
+def parse_url(url):
+    m = re.match(r'mysql://([^:]+):([^@]+)@([^:/]+):?([0-9]*)/([^?]+)', url)
+    if not m: raise ValueError(f"无法解析: {url[:40]}")
+    user, pwd, host, port, db = m.groups()
+    return host, int(port or 4000), user, pwd, db
+DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME = parse_url(DATABASE_URL)
+print(f"连接: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT']
+conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASS, database=DB_NAME, ssl={'ssl': True}, charset='utf8mb4', connect_timeout=30)
+print("数据库连接成功")
+def get_latest(sym):
+    with conn.cursor() as cur:
+        cur.execute("SELECT MAX(date) FROM crypto_klines WHERE symbol=%s", (sym,))
+        row = cur.fetchone()
+        return str(row[0]) if row and row[0] else None
+def fetch(sym, start_ms):
+    for base in ['https://api.binance.com', 'https://api1.binance.com']:
+        try:
+            r = requests.get(f"{base}/api/v3/klines?symbol={sym}&interval=1d&startTime={start_ms}&limit=1000", timeout=30)
+            if r.status_code == 200: return r.json()
+        except: pass
+    return []
+def upsert(sym, klines):
+    today = datetime.now(timezone.utc).replace(hour=0,minute=0,second=0,microsecond=0)
+    recs = []
+    for k in klines:
+        dt = datetime.fromtimestamp(int(k[0])/1000, tz=timezone.utc)
+        if dt >= today: continue
+        ds = dt.strftime('%Y-%m-%d')
+        o,h,l,c = float(k[1]),float(k[2]),float(k[3]),float(k[4])
+        vol,qvol = float(k[5]),float(k[7])
+        chg = round((c-o)/o*100,4) if o>0 else None
+        amp = round((h-l)/o*100,4) if o>0 else None
+        recs.append((sym,ds,o,h,l,c,vol,qvol,chg,amp))
+    if not recs: return 0
+    sql = "INSERT INTO crypto_klines (symbol,date,open,high,low,close,volume,quote_volume,change_pct,amplitude_pct) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE open=VALUES(open),high=VALUES(high),low=VALUES(low),close=VALUES(close),volume=VALUES(volume),quote_volume=VALUES(quote_volume),change_pct=VALUES(change_pct),amplitude_pct=VALUES(amplitude_pct)"
+    with conn.cursor() as cur: cur.executemany(sql, recs)
+    conn.commit()
+    return len(recs)
+for sym in SYMBOLS:
+    print(f"\n--- {sym} ---")
+    latest = get_latest(sym)
+    print(f"  当前最新: {latest}")
+    if latest:
+        start_dt = datetime.strptime(latest, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1)
+    else:
+        start_dt = datetime(2017, 8, 17, tzinfo=timezone.utc)
+    start_ms = int(start_dt.timestamp()*1000)
+    if start_ms > int(datetime.now(timezone.utc).timestamp()*1000):
+        print(f"  已是最新")
+        continue
+    klines = fetch(sym, start_ms)
+    print(f"  Binance返回 {len(klines)} 条")
+    added = upsert(sym, klines)
+    print(f"  写入 {added} 条，最新: {get_latest(sym)}")
+conn.close()
+print("\n=== 全部完成 ===")
+PYEOF
+            echo "=== 脚本执行完毕 ==="
+ENDSSH
+
       - name: 查看服务器状态
         run: |
           ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=no root@124.223.54.69 << 'EOF'
