@@ -166,19 +166,46 @@ export async function syncLatestFromBinance(symbol: string): Promise<{ added: nu
   const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&startTime=${startTime}&limit=1000`;
   
   let klines: any[];
+  let fetchSuccess = false;
+  // 尝试 Binance 主域名
   try {
-    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!resp.ok) throw new Error(`Binance API error: ${resp.status}`);
     klines = await resp.json();
+    fetchSuccess = true;
   } catch (e: any) {
-    // 尝试备用域名
+    // 尝试 Binance 备用域名
     try {
       const url2 = `https://api1.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&startTime=${startTime}&limit=1000`;
-      const resp2 = await fetch(url2, { signal: AbortSignal.timeout(15000) });
+      const resp2 = await fetch(url2, { signal: AbortSignal.timeout(10000) });
       if (!resp2.ok) throw new Error(`Binance API error: ${resp2.status}`);
       klines = await resp2.json();
+      fetchSuccess = true;
     } catch (e2: any) {
-      throw new Error(`无法连接 Binance API: ${e2.message}`);
+      // Binance 不可用，切换到 Gate.io
+    }
+  }
+  if (!fetchSuccess) {
+    // Gate.io 备用：BTCUSDT -> BTC_USDT
+    const gateSymbol = symbol.replace('USDT', '_USDT');
+    const gateUrl = `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${gateSymbol}&interval=1d&from=${Math.floor(startTime / 1000)}&limit=1000`;
+    try {
+      const resp3 = await fetch(gateUrl, { signal: AbortSignal.timeout(15000) });
+      if (!resp3.ok) throw new Error(`Gate.io API error: ${resp3.status}`);
+      const gateData: any[] = await resp3.json();
+      // Gate.io 格式: [timestamp, volume, close, high, low, open, quote_volume]
+      klines = gateData.map((g: any) => [
+        parseInt(g[0]) * 1000, // open_time ms
+        g[5],  // open
+        g[3],  // high
+        g[4],  // low
+        g[2],  // close
+        g[1],  // volume
+        0, 0,  // placeholder
+        g[6] ?? g[1], // quote_volume
+      ]);
+    } catch (e3: any) {
+      throw new Error(`所有数据源均不可用: ${e3.message}`);
     }
   }
 
