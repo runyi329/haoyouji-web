@@ -1193,3 +1193,128 @@ export async function getCorrelationFromCache(
     updatedAt: first.updated_at ? new Date(first.updated_at).toLocaleDateString('zh-CN') : undefined,
   };
 }
+
+// ─────────────────────────────────────────────
+// 资金费率相关
+// ─────────────────────────────────────────────
+
+/**
+ * 确保 crypto_funding_rates 表存在
+ */
+export async function ensureFundingRatesTable(): Promise<void> {
+  const conn = await getDbConnection();
+  if (!conn) return;
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS \`crypto_funding_rates\` (
+      \`id\`           INT AUTO_INCREMENT PRIMARY KEY,
+      \`symbol\`       VARCHAR(20) NOT NULL COMMENT '交易对，如 BTCUSDT',
+      \`funding_time\` BIGINT NOT NULL COMMENT '结算时间戳（毫秒）',
+      \`funding_rate\` DECIMAL(16,8) NOT NULL COMMENT '资金费率',
+      \`mark_price\`   DECIMAL(20,4) COMMENT '标记价格',
+      \`created_at\`   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY \`uk_symbol_time\` (\`symbol\`, \`funding_time\`),
+      INDEX \`idx_symbol\` (\`symbol\`),
+      INDEX \`idx_funding_time\` (\`funding_time\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='加密货币历史资金费率'
+  `);
+}
+
+export interface FundingRate {
+  symbol: string;
+  fundingTime: number;
+  fundingRate: number;
+  markPrice: number | null;
+}
+
+/**
+ * 批量插入资金费率（upsert）
+ */
+export async function batchUpsertFundingRates(records: FundingRate[]): Promise<number> {
+  const conn = await getDbConnection();
+  if (!conn || records.length === 0) return 0;
+  const values = records.map(r => [r.symbol, r.fundingTime, r.fundingRate, r.markPrice ?? null]);
+  const placeholders = values.map(() => '(?,?,?,?)').join(',');
+  const flat = values.flat();
+  const [result] = await conn.execute(
+    `INSERT INTO crypto_funding_rates (symbol, funding_time, funding_rate, mark_price)
+     VALUES ${placeholders}
+     ON DUPLICATE KEY UPDATE
+       funding_rate = VALUES(funding_rate),
+       mark_price   = VALUES(mark_price)`,
+    flat
+  ) as any;
+  return result.affectedRows ?? 0;
+}
+
+/**
+ * 查询资金费率（分页，降序）
+ */
+export async function getFundingRates(
+  symbol: string,
+  page: number = 1,
+  pageSize: number = 100
+): Promise<{ total: number; rows: FundingRate[] }> {
+  const conn = await getDbConnection();
+  if (!conn) return { total: 0, rows: [] };
+  const offset = (page - 1) * pageSize;
+  const [[{ total }]] = await conn.execute(
+    'SELECT COUNT(*) as total FROM crypto_funding_rates WHERE symbol = ?',
+    [symbol]
+  ) as any;
+  const [rows] = await conn.execute(
+    `SELECT symbol, funding_time, funding_rate, mark_price
+     FROM crypto_funding_rates
+     WHERE symbol = ?
+     ORDER BY funding_time DESC
+     LIMIT ? OFFSET ?`,
+    [symbol, pageSize, offset]
+  ) as any;
+  return {
+    total: Number(total),
+    rows: rows.map((r: any) => ({
+      symbol: r.symbol,
+      fundingTime: Number(r.funding_time),
+      fundingRate: Number(r.funding_rate),
+      markPrice: r.mark_price != null ? Number(r.mark_price) : null,
+    })),
+  };
+}
+
+/**
+ * 获取某币种最新一条资金费率的时间戳（用于增量同步）
+ */
+export async function getLatestFundingTime(symbol: string): Promise<number> {
+  const conn = await getDbConnection();
+  if (!conn) return 0;
+  const [[row]] = await conn.execute(
+    'SELECT MAX(funding_time) as latest FROM crypto_funding_rates WHERE symbol = ?',
+    [symbol]
+  ) as any;
+  return row?.latest ? Number(row.latest) : 0;
+}
+
+/**
+ * 获取资金费率折线图数据（最近N条，升序）
+ */
+export async function getFundingRateChart(symbol: string, limit: number = 500): Promise<FundingRate[]> {
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  const [rows] = await conn.execute(
+    `SELECT symbol, funding_time, funding_rate, mark_price
+     FROM (
+       SELECT symbol, funding_time, funding_rate, mark_price
+       FROM crypto_funding_rates
+       WHERE symbol = ?
+       ORDER BY funding_time DESC
+       LIMIT ?
+     ) sub
+     ORDER BY funding_time ASC`,
+    [symbol, limit]
+  ) as any;
+  return rows.map((r: any) => ({
+    symbol: r.symbol,
+    fundingTime: Number(r.funding_time),
+    fundingRate: Number(r.funding_rate),
+    markPrice: r.mark_price != null ? Number(r.mark_price) : null,
+  }));
+}

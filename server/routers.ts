@@ -407,6 +407,27 @@ ${klinesSummary}
         }
         return await dbCrypto.computeAndSaveAllCorrelations();
       }),
+
+    // 资金费率分页查询
+    getFundingRates: publicProcedure
+      .input(z.object({
+        symbol: z.string(),
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(200).default(100),
+      }))
+      .query(async ({ input }) => {
+        return await dbCrypto.getFundingRates(input.symbol, input.page, input.pageSize);
+      }),
+
+    // 资金费率折线图数据（最近N条，升序）
+    getFundingRateChart: publicProcedure
+      .input(z.object({
+        symbol: z.string(),
+        limit: z.number().min(1).max(2000).default(500),
+      }))
+      .query(async ({ input }) => {
+        return await dbCrypto.getFundingRateChart(input.symbol, input.limit);
+      }),
   }),
 
   // 支付账户管理

@@ -29,6 +29,7 @@ const PAGE_SIZE = 100; // 每页显示100条
 const TABS = [
   { key: "analysis", label: "数据分析" },
   { key: "data", label: "日线数据" },
+  { key: "funding", label: "资金费率" },
   { key: "predict", label: "预测未来" },
 ];
 
@@ -1431,6 +1432,18 @@ export default function BeDataPage() {
     },
     { enabled: activeTab === 'analysis' && corrCompare.length > 0, staleTime: 10 * 60 * 1000 }
   );
+  // 资金费率分页查询
+  const [fundingPage, setFundingPage] = useState(1);
+  const { data: fundingData, isLoading: fundingLoading } = trpc.cryptoData.getFundingRates.useQuery(
+    { symbol: activeSymbol, page: fundingPage, pageSize: 100 },
+    { enabled: activeTab === 'funding' && isCryptoMode }
+  );
+  // 资金费率折线图数据（数据分析Tab使用）
+  const { data: fundingChartData } = trpc.cryptoData.getFundingRateChart.useQuery(
+    { symbol: activeSymbol, limit: 500 },
+    { enabled: activeTab === 'analysis' && isCryptoMode, staleTime: 5 * 60 * 1000 }
+  );
+
   const { data: aiData, isLoading: aiLoading } = trpc.cryptoData.getAIAnalysis.useQuery(
     {
       symbol: currentStockInfo?.symbol ?? activeSymbol,
@@ -1450,6 +1463,7 @@ export default function BeDataPage() {
   const handleSymbolChange = (sym: string) => {
     setActiveSymbol(sym);
     setPage(1);
+    setFundingPage(1);
   };
 
   // 构建连涨/连跌图表数据（最多显示到10天，用于柱状图）
@@ -1753,7 +1767,11 @@ export default function BeDataPage() {
 
       {/* 功能 Tab */}
       <div style={{ background: "#fff", borderBottom: hideSymbolTabs ? "1px solid #D8E0EC" : "1px solid #E5E7EB", display: "flex", flexShrink: 0 }}>
-        {TABS.filter((t) => !((urlFilter === 'stocks' || urlFilter === 'crypto') && t.key === 'predict')).map((t) => (
+        {TABS.filter((t) => {
+            if ((urlFilter === 'stocks' || urlFilter === 'crypto') && t.key === 'predict') return false;
+            if (t.key === 'funding' && urlFilter !== 'crypto') return false;
+            return true;
+          }).map((t) => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
@@ -1839,6 +1857,91 @@ export default function BeDataPage() {
                 })}
               </tbody>
             </table>
+          )}
+        </div>
+      )}
+
+      {/* ===== 资金费率 Tab ===== */}
+      {activeTab === "funding" && (
+        <div className="flex-1 overflow-auto">
+          {fundingLoading ? (
+            <div className="flex items-center justify-center py-20 text-gray-400 text-sm">加载中...</div>
+          ) : !fundingData || fundingData.rows.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-sm gap-2">
+              <span>暂无资金费率数据</span>
+              <span className="text-xs text-gray-300">数据每8小时同步一次</span>
+            </div>
+          ) : (
+            <>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '32%' }} />
+                  <col style={{ width: '28%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '20%' }} />
+                </colgroup>
+                <thead>
+                  <tr style={{ background: '#F9FAFB', position: 'sticky', top: 0, zIndex: 1 }}>
+                    <th style={{ border: '1px solid #E5E7EB', padding: '6px 4px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#374151' }}>结算时间</th>
+                    <th style={{ border: '1px solid #E5E7EB', padding: '6px 4px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#374151' }}>资金费率</th>
+                    <th style={{ border: '1px solid #E5E7EB', padding: '6px 4px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#374151' }}>周期</th>
+                    <th style={{ border: '1px solid #E5E7EB', padding: '6px 4px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#374151' }}>标记价</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fundingData.rows.map((row, idx) => {
+                    const rate = row.fundingRate;
+                    const isPositive = rate > 0;
+                    const isNegative = rate < 0;
+                    const rateColor = isPositive ? '#D32F2F' : isNegative ? '#388E3C' : '#6B7280';
+                    const rowBg = idx % 2 === 0 ? '#fff' : '#FAFAFA';
+                    // 时间格式化：UTC时间戳 -> 日期+时间
+                    const dt = new Date(row.fundingTime);
+                    const dateStr = `${dt.getUTCFullYear()}/${String(dt.getUTCMonth()+1).padStart(2,'0')}/${String(dt.getUTCDate()).padStart(2,'0')}`;
+                    const timeStr = `${String(dt.getUTCHours()).padStart(2,'0')}:00`;
+                    // 资金费率格式化：保畖4位小数百分比
+                    const rateStr = (rate * 100).toFixed(4) + '%';
+                    // 结算周期：每8小时一次
+                    const period = '8h';
+                    // 标记价格式化
+                    const markStr = row.markPrice != null ? (row.markPrice >= 1000 ? row.markPrice.toLocaleString('en-US', { maximumFractionDigits: 2 }) : row.markPrice.toFixed(4)) : '-';
+                    return (
+                      <tr key={row.fundingTime} style={{ background: rowBg }}>
+                        <td style={{ border: '1px solid #E5E7EB', padding: '4px 2px', textAlign: 'center', color: '#6B7280', fontFamily: 'monospace', fontSize: 9, whiteSpace: 'nowrap' }}>
+                          <div>{dateStr}</div>
+                          <div style={{ color: '#9CA3AF' }}>{timeStr} UTC</div>
+                        </td>
+                        <td style={{ border: '1px solid #E5E7EB', padding: '4px 2px', textAlign: 'center', color: rateColor, fontFamily: 'monospace', fontSize: 11, fontWeight: 600 }}>{rateStr}</td>
+                        <td style={{ border: '1px solid #E5E7EB', padding: '4px 2px', textAlign: 'center', color: '#6B7280', fontFamily: 'monospace', fontSize: 10 }}>{period}</td>
+                        <td style={{ border: '1px solid #E5E7EB', padding: '4px 2px', textAlign: 'center', color: '#374151', fontFamily: 'monospace', fontSize: 9 }}>{markStr}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {/* 分页 */}
+              {fundingData.total > 100 && (
+                <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-between">
+                  <button
+                    onClick={() => setFundingPage((p) => Math.max(1, p - 1))}
+                    disabled={fundingPage <= 1 || fundingLoading}
+                    className="px-4 py-1.5 text-sm rounded border border-gray-200 text-gray-600 disabled:opacity-40"
+                  >
+                    上一页
+                  </button>
+                  <span className="text-xs text-gray-400">
+                    第 {fundingPage} / {Math.ceil(fundingData.total / 100)} 页 · 共 {fundingData.total} 条
+                  </span>
+                  <button
+                    onClick={() => setFundingPage((p) => Math.min(Math.ceil(fundingData.total / 100), p + 1))}
+                    disabled={fundingPage >= Math.ceil(fundingData.total / 100) || fundingLoading}
+                    className="px-4 py-1.5 text-sm rounded border border-gray-200 text-gray-600 disabled:opacity-40"
+                  >
+                    下一页
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -2001,6 +2104,93 @@ export default function BeDataPage() {
               {allChangePcts && allChangePcts.length > 0 && (
                 <ChangePctDistChart allData={allChangePcts} latestDate={latestDate} coinIcon={currentStockInfo?.icon} />
               )}
+
+              {/* 资金费率历史走势图（仅数字币模式） */}
+              {isCryptoMode && fundingChartData && fundingChartData.length > 0 && (() => {
+                const chartData = fundingChartData.map(d => ({
+                  date: (() => {
+                    const dt = new Date(d.fundingTime);
+                    return `${dt.getUTCFullYear()}/${String(dt.getUTCMonth()+1).padStart(2,'0')}/${String(dt.getUTCDate()).padStart(2,'0')}`;
+                  })(),
+                  rate: parseFloat((d.fundingRate * 100).toFixed(4)),
+                }));
+                const minRate = Math.min(...chartData.map(d => d.rate));
+                const maxRate = Math.max(...chartData.map(d => d.rate));
+                const absMax = Math.max(Math.abs(minRate), Math.abs(maxRate));
+                const yDomain: [number, number] = [-absMax * 1.2, absMax * 1.2];
+                return (
+                  <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
+                    <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-700 flex items-center gap-1">
+                        {currentStockInfo?.icon && <img src={currentStockInfo.icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+                        资金费率走势
+                      </span>
+                      <span className="text-xs text-gray-400">{chartData[0]?.date} ~ {chartData[chartData.length - 1]?.date}</span>
+                    </div>
+                    <div className="px-2 py-3">
+                      <ResponsiveContainer width="100%" height={180}>
+                        <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: -10, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="fundingAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.3} />
+                              <stop offset="100%" stopColor="#3B82F6" stopOpacity={0.02} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                          <XAxis
+                            dataKey="date"
+                            tick={{ fontSize: 8, fill: '#bbb' }}
+                            tickFormatter={(v: string) => v.slice(0, 4)}
+                            interval={Math.floor(chartData.length / 5)}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <YAxis
+                            tick={{ fontSize: 8, fill: '#bbb' }}
+                            tickFormatter={(v: number) => v.toFixed(3) + '%'}
+                            domain={yDomain}
+                            axisLine={false}
+                            tickLine={false}
+                            width={52}
+                          />
+                          <Tooltip
+                            contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb', padding: '6px 10px' }}
+                            formatter={(value: number) => [value.toFixed(4) + '%', '资金费率']}
+                            labelFormatter={(label: string) => `时间: ${label}`}
+                          />
+                          <ReferenceLine y={0} stroke="#9CA3AF" strokeDasharray="3 3" />
+                          <Area
+                            type="monotone"
+                            dataKey="rate"
+                            stroke="#3B82F6"
+                            strokeWidth={1.5}
+                            fill="url(#fundingAreaGradient)"
+                            dot={false}
+                            activeDot={{ r: 3, fill: '#3B82F6' }}
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                    {/* 简要统计 */}
+                    <div className="px-4 pb-3 grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <div className="text-xs text-gray-400">平均费率</div>
+                        <div className="text-sm font-semibold" style={{ color: (chartData.reduce((s, d) => s + d.rate, 0) / chartData.length) >= 0 ? '#D32F2F' : '#388E3C' }}>
+                          {(chartData.reduce((s, d) => s + d.rate, 0) / chartData.length).toFixed(4)}%
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-400">最高费率</div>
+                        <div className="text-sm font-semibold text-red-500">{maxRate.toFixed(4)}%</div>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-400">最低费率</div>
+                        <div className="text-sm font-semibold text-green-600">{minRate.toFixed(4)}%</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* 相关性统计模块 */}
               {(() => {
