@@ -1838,6 +1838,30 @@ export default function BeDataPage() {
                 }));
                 const minPrice = Math.min(...priceData.map(d => d.close));
                 const maxPrice = Math.max(...priceData.map(d => d.close));
+                const maxIdx = priceData.findIndex(d => d.close === maxPrice);
+                const minIdx = priceData.findIndex(d => d.close === minPrice);
+                const lastIdx = priceData.length - 1;
+                // 格式化价格标签
+                const fmtPrice = (v: number) => v >= 1000 ? (v >= 1000000 ? (v/1000000).toFixed(2).concat('M') : (v/1000).toFixed(1).concat('k')) : v.toFixed(2);
+                // 自定义dot：仅在最高/最低/最新三个点渲染标注
+                const CustomDot = (props: any) => {
+                  const { cx, cy, index, value } = props;
+                  const isMax = index === maxIdx;
+                  const isMin = index === minIdx;
+                  const isLast = index === lastIdx;
+                  if (!isMax && !isMin && !isLast) return null;
+                  const color = isMax ? '#f59e0b' : isMin ? '#22c55e' : '#3b82f6';
+                  const label = isMax ? '最高 $'.concat(fmtPrice(value)) : isMin ? '最低 $'.concat(fmtPrice(value)) : '现价 $'.concat(fmtPrice(value));
+                  // 标签位置：最高点标签在上方，最低点在下方，最新价在右上
+                  const dy = isMin ? 14 : -10;
+                  const anchor = isLast ? 'end' : 'middle';
+                  return (
+                    <g key={'dot-'.concat(String(index))}>
+                      <circle cx={cx} cy={cy} r={4} fill={color} stroke="#fff" strokeWidth={1.5} />
+                      <text x={cx} y={cy + dy} textAnchor={anchor} fontSize={8} fill={color} fontWeight={600}>{label}</text>
+                    </g>
+                  );
+                };
                 return (
                   <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
                     <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
@@ -1848,8 +1872,8 @@ export default function BeDataPage() {
                       <span className="text-xs text-gray-400">{priceData[0]?.date} ~ {priceData[priceData.length - 1]?.date}</span>
                     </div>
                     <div className="px-2 py-3">
-                      <ResponsiveContainer width="100%" height={180}>
-                        <ComposedChart data={priceData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                      <ResponsiveContainer width="100%" height={200}>
+                        <ComposedChart data={priceData} margin={{ top: 20, right: 40, left: -10, bottom: 0 }}>
                           <defs>
                             <linearGradient id="priceAreaGradient" x1="0" y1="0" x2="0" y2="1">
                               <stop offset="0%" stopColor="#ef4444" stopOpacity={0.45} />
@@ -1871,7 +1895,7 @@ export default function BeDataPage() {
                           />
                           <YAxis
                             tick={{ fontSize: 8, fill: '#bbb' }}
-                            domain={[minPrice * 0.95, maxPrice * 1.05]}
+                            domain={[minPrice * 0.92, maxPrice * 1.08]}
                             tickFormatter={(v: number) => v >= 1000 ? (v/1000).toFixed(0).concat('k') : v.toFixed(0)}
                             width={40}
                             axisLine={false}
@@ -1888,7 +1912,8 @@ export default function BeDataPage() {
                             stroke="#ef4444"
                             strokeWidth={2}
                             fill="url(#priceAreaGradient)"
-                            dot={false}
+                            dot={<CustomDot />}
+                            activeDot={{ r: 4, fill: '#ef4444' }}
                             connectNulls
                             strokeLinecap="round"
                             strokeLinejoin="round"
