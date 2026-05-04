@@ -403,7 +403,7 @@ export default function Wallet() {
             background: "linear-gradient(135deg, rgba(201,168,76,0.08) 0%, rgba(201,168,76,0.04) 100%)",
             border: "1px solid rgba(201,168,76,0.25)",
           }}
-          onClick={() => setLocation("/payment-accounts")}
+          onClick={() => { sessionStorage.setItem("payment_accounts_back", "/wallet"); setLocation("/payment-accounts"); }}
         >
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
