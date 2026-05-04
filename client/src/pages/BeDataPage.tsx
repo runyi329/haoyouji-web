@@ -1189,11 +1189,8 @@ export default function BeDataPage() {
   // 从 Binance 拉取增量数据
   const syncMutation = trpc.cryptoData.syncLatest.useMutation({
     onSuccess: () => {
-      utils.cryptoData.getKlines.invalidate({ symbol: activeSymbol });
-      utils.cryptoData.getStats.invalidate({ symbol: activeSymbol });
-      utils.cryptoData.getAllChangePcts.invalidate({ symbol: activeSymbol });
-      utils.cryptoData.getMeta.invalidate({ symbol: metaSymbolKey });
       setIsSyncing(false);
+      window.location.reload();
     },
     onError: () => setIsSyncing(false),
   });
