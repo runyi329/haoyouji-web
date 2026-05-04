@@ -111,7 +111,7 @@ function StreakStatsPanel({ allData, latestDate, coinIcon }: { allData: { date: 
     <div style={{ background: CARD, borderTop: `8px solid ${BG}` }}>
       {/* 标题（最顶部） */}
       <div className="px-4 pt-3 pb-2">
-        <span className="text-xs font-semibold flex items-center gap-1" style={{ color: MUTED }}>
+        <span className="text-sm font-semibold text-gray-700 flex items-center gap-1">
           {coinIcon && <img src={coinIcon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
           连涨 / 连跌统计
         </span>
