@@ -869,8 +869,8 @@ function YearlyBreakdown({
                   ]}
                   labelFormatter={(label) => `${label}年`}
                 />
-                <Bar dataKey="upPct" name="upPct" fill="#ef4444" opacity={0.85} radius={[2,2,0,0]} />
-                <Bar dataKey="downPctNeg" name="downPctNeg" fill="#22c55e" opacity={0.85} radius={[2,2,0,0]} />
+                <Bar dataKey="upPct" name="upPct" fill="#ef4444" opacity={0.85} radius={[2,2,0,0]} stackId="a" />
+                <Bar dataKey="downPctNeg" name="downPctNeg" fill="#22c55e" opacity={0.85} radius={[0,0,2,2]} stackId="b" />
                 <Line type="monotone" dataKey="actualPct" name="actualPct" stroke="#3b82f6" strokeWidth={1.5} dot={{ r: 2, fill: '#3b82f6' }} connectNulls />
               </ComposedChart>
             </ResponsiveContainer>
