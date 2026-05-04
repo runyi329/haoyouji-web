@@ -2046,10 +2046,9 @@ export default function BeDataPage() {
                     )}
                     {corrData && corrData.pairs.length > 0 && (
                       <div className="px-4 pb-4 pt-2 space-y-5">
-                        <div className="text-xs text-gray-400 text-center">
-                          共同有数据日期：{corrData.dateRange.start} ~ {corrData.dateRange.end}（{corrData.dateRange.totalDays}天）
-                          {(corrData as any).updatedAt && <span className="ml-2">· 更新于 {(corrData as any).updatedAt}</span>}
-                        </div>
+                        {(corrData as any).updatedAt && (
+                          <div className="text-xs text-gray-400 text-center">· 更新于 {(corrData as any).updatedAt}</div>
+                        )}
                         {/* 数字统计表格：全部币对并排展示 */}
                         <div className="border border-gray-100 rounded-xl overflow-hidden mb-4">
                           {/* 表头 */}
@@ -2064,6 +2063,8 @@ export default function BeDataPage() {
                                     <span className="text-xs font-semibold text-gray-700">{compInfo?.shortLabel ?? pair.symbol}</span>
                                   </div>
                                   <div className="text-xs text-gray-400">{pair.validDays}天</div>
+                                  <div className="text-xs text-gray-300" style={{ fontSize: 9 }}>{(pair as any).dateStart?.slice(0,7)} ~</div>
+                                  <div className="text-xs text-gray-300" style={{ fontSize: 9 }}>{(pair as any).dateEnd?.slice(0,7)}</div>
                                 </div>
                               );
                             })}
