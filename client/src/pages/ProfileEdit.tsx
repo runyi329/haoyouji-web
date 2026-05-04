@@ -269,7 +269,7 @@ export default function ProfileEdit() {
       {/* 收款账户入口 */}
       <div className="bg-white mx-4 mt-3 rounded-2xl shadow-sm overflow-hidden">
         <button
-          onClick={() => navigate("/payment-accounts")}
+          onClick={() => { sessionStorage.setItem("payment_accounts_back", "/profile/edit"); navigate("/payment-accounts"); }}
           className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-gray-50 transition-colors"
         >
           <div className="w-9 h-9 rounded-xl bg-[#FFF3E0] flex items-center justify-center flex-shrink-0">

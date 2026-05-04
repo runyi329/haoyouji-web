@@ -162,7 +162,7 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
                 <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
                 <p className="text-sm text-red-300 mb-3">您尚未绑定收款地址</p>
                 <button
-                  onClick={() => setLocation('/profile/payment-accounts')}
+                  onClick={() => { sessionStorage.setItem('payment_accounts_back', '/withdraw'); setLocation('/payment-accounts'); }}
                   className="px-4 py-2 rounded-lg text-sm font-medium text-black"
                   style={{ background: 'linear-gradient(135deg,#CBA471,#e8c98a)' }}
                 >
@@ -196,7 +196,7 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
                   );
                 })}
                 <button
-                  onClick={() => setLocation('/profile/payment-accounts')}
+                  onClick={() => { sessionStorage.setItem('payment_accounts_back', '/withdraw'); setLocation('/payment-accounts'); }}
                   className="w-full flex items-center justify-center py-2 text-sm text-gray-500"
                 >
                   <span>管理收款地址</span>
