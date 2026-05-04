@@ -2002,15 +2002,12 @@ export default function BeDataPage() {
                 return (
                   <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
                     {/* 标题行 */}
-                    <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+                    <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-semibold text-gray-700 flex items-center gap-1">
                         {baseInfo?.icon && <img src={baseInfo.icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
                         相关性统计
                       </span>
-                      <span className="text-xs text-gray-400">以 {baseInfo?.shortLabel} 为基准</span>
-                    </div>
-                    {/* 对比币选择器 */}
-                    <div className="px-4 pt-3 pb-1 flex flex-wrap gap-2">
+                      <span className="text-xs text-gray-400 mr-1">对比：</span>
                       {otherCryptos.map(s => {
                         const checked = corrCompare.includes(s.key);
                         return (
@@ -2021,19 +2018,19 @@ export default function BeDataPage() {
                                 checked ? prev.filter(k => k !== s.key) : [...prev, s.key]
                               );
                             }}
-                            className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border transition-all ${
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border transition-all ${
                               checked
                                 ? 'bg-blue-50 border-blue-400 text-blue-700'
                                 : 'bg-gray-50 border-gray-200 text-gray-400'
                             }`}
                           >
-                            <img src={s.icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }} />
+                            <img src={s.icon} alt="" style={{ width: 12, height: 12, borderRadius: '50%', objectFit: 'cover' }} />
                             {s.shortLabel}
-                            {checked && <span className="text-blue-500">✓</span>}
                           </button>
                         );
                       })}
                     </div>
+
                     {/* 统计结果 */}
                     {corrCompare.length === 0 && (
                       <div className="px-4 py-6 text-center text-gray-400 text-xs">请选择至少一个对比币</div>
@@ -2046,14 +2043,14 @@ export default function BeDataPage() {
                     )}
                     {corrData && corrData.pairs.length > 0 && (
                       <div className="px-4 pb-4 pt-2 space-y-5">
-                        {(corrData as any).updatedAt && (
-                          <div className="text-xs text-gray-400 text-center">· 更新于 {(corrData as any).updatedAt}</div>
-                        )}
                         {/* 数字统计表格：全部币对并排展示 */}
                         <div className="border border-gray-100 rounded-xl overflow-hidden mb-4">
                           {/* 表头 */}
-                          <div className="grid bg-gray-50 border-b border-gray-100" style={{ gridTemplateColumns: `120px repeat(${corrData.pairs.length}, 1fr)` }}>
-                            <div className="px-2 py-2 text-xs text-gray-500 font-medium">场景</div>
+                          <div className="grid bg-gray-50 border-b border-gray-100" style={{ gridTemplateColumns: `80px repeat(${corrData.pairs.length}, 1fr)` }}>
+                            <div className="px-2 py-2 flex items-center justify-center gap-1">
+                              {baseInfo?.icon && <img src={baseInfo.icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }} />}
+                              <span className="text-xs text-gray-500 font-medium">vs</span>
+                            </div>
                             {corrData.pairs.map(pair => {
                               const compInfo = ALL_SYMBOLS.find(s => s.key === pair.symbol);
                               return (
@@ -2071,15 +2068,15 @@ export default function BeDataPage() {
                           </div>
                           {/* 六行数据 */}
                           {([
-                            { label: `${baseInfo?.shortLabel}涨→对比涨`, key: 'bothUp', bg: 'bg-red-50', color: 'text-red-600' },
-                            { label: `${baseInfo?.shortLabel}涨→对比跌`, key: 'baseUpCompDown', bg: 'bg-orange-50', color: 'text-orange-500' },
-                            { label: `${baseInfo?.shortLabel}跌→对比跌`, key: 'bothDown', bg: 'bg-green-50', color: 'text-green-600' },
-                            { label: `${baseInfo?.shortLabel}跌→对比涨`, key: 'baseDownCompUp', bg: 'bg-emerald-50', color: 'text-emerald-500' },
-                            { label: '同向天数', key: 'sameDirection', bg: 'bg-gray-50', color: 'text-gray-800' },
-                            { label: '反向天数', key: 'oppositeDirection', bg: 'bg-gray-50', color: 'text-gray-700' },
+                            { label: '↑↑', key: 'bothUp', bg: 'bg-red-50', color: 'text-red-600' },
+                            { label: '↑↓', key: 'baseUpCompDown', bg: 'bg-orange-50', color: 'text-orange-500' },
+                            { label: '↓↓', key: 'bothDown', bg: 'bg-green-50', color: 'text-green-600' },
+                            { label: '↓↑', key: 'baseDownCompUp', bg: 'bg-emerald-50', color: 'text-emerald-500' },
+                            { label: '同向', key: 'sameDirection', bg: 'bg-gray-50', color: 'text-gray-800' },
+                            { label: '反向', key: 'oppositeDirection', bg: 'bg-gray-50', color: 'text-gray-700' },
                           ] as { label: string; key: keyof typeof corrData.pairs[0]; bg: string; color: string }[]).map((row, ri) => (
-                            <div key={ri} className={`grid border-b border-gray-100 last:border-b-0 ${row.bg}`} style={{ gridTemplateColumns: `120px repeat(${corrData.pairs.length}, 1fr)` }}>
-                              <div className="px-2 py-2 text-xs text-gray-500 flex items-center">{row.label}</div>
+                            <div key={ri} className={`grid border-b border-gray-100 last:border-b-0 ${row.bg}`} style={{ gridTemplateColumns: `80px repeat(${corrData.pairs.length}, 1fr)` }}>
+                              <div className="px-2 py-2 text-xs text-gray-500 flex items-center font-bold">{row.label}</div>
                               {corrData.pairs.map(pair => {
                                 const val = Number(pair[row.key]);
                                 const pct = pair.validDays > 0 ? ((val / pair.validDays) * 100).toFixed(1) : '0.0';
@@ -2093,8 +2090,21 @@ export default function BeDataPage() {
                             </div>
                           ))}
                         </div>
+                        {/* 注解 */}
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 px-1 pb-1 -mt-3">
+                          {[
+                            { sym: '↑↑', label: `${baseInfo?.shortLabel}涨+对比涨`, color: 'text-red-500' },
+                            { sym: '↑↓', label: `${baseInfo?.shortLabel}涨+对比跌`, color: 'text-orange-500' },
+                            { sym: '↓↓', label: `${baseInfo?.shortLabel}跌+对比跌`, color: 'text-green-600' },
+                            { sym: '↓↑', label: `${baseInfo?.shortLabel}跌+对比涨`, color: 'text-emerald-500' },
+                          ].map(item => (
+                            <span key={item.sym} className="text-xs text-gray-400">
+                              <span className={`font-bold ${item.color}`}>{item.sym}</span> = {item.label}
+                            </span>
+                          ))}
+                        </div>
 
-                        {/* 饼图可视化：每个币对一个饼图，并排 */}
+                        {/* 饵图可视化：每个币对一个饵图，并排 */}
                         <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(corrData.pairs.length, 2)}, 1fr)` }}>
                           {corrData.pairs.map(pair => {
                             const compInfo = ALL_SYMBOLS.find(s => s.key === pair.symbol);
