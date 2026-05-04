@@ -708,32 +708,47 @@ function YearlyBreakdown({
   totalUpPct,
   totalDownPct,
 }: {
-  allChangePcts: { date: string; changePct: number | null }[];
+  allChangePcts: { date: string; changePct: number | null; close?: number | null }[];
   totalUpPct: number;
   totalDownPct: number;
 }) {
   const [expanded, setExpanded] = useState(false);
 
-  // 按年分组计算每年累计涨幅和跌幅
+  // 按年分组计算每年累计涨幅、跌幅、线性净值、实际涨幅
   const yearlyData = useMemo(() => {
-    const map: Record<string, { upPct: number; downPct: number }> = {};
+    const map: Record<string, { upPct: number; downPct: number; firstClose: number | null; lastClose: number | null }> = {};
     for (const item of allChangePcts) {
-      if (item.changePct == null) continue;
       const year = item.date.slice(0, 4);
-      if (!map[year]) map[year] = { upPct: 0, downPct: 0 };
-      if (item.changePct > 0) map[year].upPct += item.changePct;
-      else if (item.changePct < 0) map[year].downPct += Math.abs(item.changePct);
+      if (!map[year]) map[year] = { upPct: 0, downPct: 0, firstClose: null, lastClose: null };
+      if (item.changePct != null) {
+        if (item.changePct > 0) map[year].upPct += item.changePct;
+        else if (item.changePct < 0) map[year].downPct += Math.abs(item.changePct);
+      }
+      // 记录首末收盘价
+      if (item.close != null) {
+        if (map[year].firstClose === null) map[year].firstClose = item.close;
+        map[year].lastClose = item.close;
+      }
     }
     return Object.entries(map)
       .sort((a, b) => b[0].localeCompare(a[0])) // 降序（最新年在上）
-      .map(([year, v]) => ({
-        year,
-        upPct: parseFloat(v.upPct.toFixed(2)),
-        downPct: parseFloat(v.downPct.toFixed(2)),
-      }));
+      .map(([year, v]) => {
+        const linearNet = v.upPct - v.downPct;
+        const actualPct = (v.firstClose != null && v.lastClose != null && v.firstClose > 0)
+          ? ((v.lastClose - v.firstClose) / v.firstClose) * 100
+          : null;
+        return {
+          year,
+          upPct: parseFloat(v.upPct.toFixed(2)),
+          downPct: parseFloat(v.downPct.toFixed(2)),
+          linearNet: parseFloat(linearNet.toFixed(2)),
+          actualPct: actualPct != null ? parseFloat(actualPct.toFixed(2)) : null,
+        };
+      });
   }, [allChangePcts]);
 
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtSigned = (n: number) => (n >= 0 ? '+' : '') + fmt(n);
 
   return (
     <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
@@ -763,18 +778,31 @@ function YearlyBreakdown({
       {expanded && (
         <div className="border-t border-gray-100">
           {/* 表头 */}
-          <div className="grid grid-cols-3 px-4 py-2 bg-gray-50 border-b border-gray-100">
+          <div className="grid grid-cols-4 px-4 py-2 bg-gray-50 border-b border-gray-100">
             <span className="text-xs font-semibold text-gray-500">年份</span>
             <span className="text-xs font-semibold text-red-500 text-right">涨幅累加</span>
-            <span className="text-xs font-semibold text-green-600 text-right">跌幅累加</span>
+            <span className="text-xs font-semibold text-gray-500 text-right">线性净值</span>
+            <span className="text-xs font-semibold text-blue-600 text-right">实际涨幅</span>
           </div>
           {yearlyData.map(row => (
-            <div key={row.year} className="grid grid-cols-3 px-4 py-2.5 border-b border-gray-50 last:border-0">
-              <span className="text-xs font-medium text-gray-700">{row.year}年</span>
-              <span className="text-xs font-mono text-red-500 text-right">+{fmt(row.upPct)}%</span>
-              <span className="text-xs font-mono text-green-600 text-right">-{fmt(row.downPct)}%</span>
+            <div key={row.year} className="border-b border-gray-50 last:border-0">
+              {/* 主行：年份 + 涨幅累加 + 线性净值 + 实际涨幅 */}
+              <div className="grid grid-cols-4 px-4 py-2.5">
+                <span className="text-xs font-medium text-gray-700">{row.year}年</span>
+                <span className="text-xs font-mono text-red-500 text-right">+{fmt(row.upPct)}%</span>
+                <span className={`text-xs font-mono text-right ${row.linearNet >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                  {fmtSigned(row.linearNet)}%
+                </span>
+                <span className={`text-xs font-mono text-right ${row.actualPct == null ? 'text-gray-400' : row.actualPct >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+                  {row.actualPct != null ? fmtSigned(row.actualPct) + '%' : '-'}
+                </span>
+              </div>
             </div>
           ))}
+          {/* 说明 */}
+          <div className="px-4 py-2 bg-gray-50 border-t border-gray-100">
+            <p className="text-xs text-gray-400">线性净值=涨幅累加-跌幅累加；实际涨幅=年末/年初收盘价</p>
+          </div>
         </div>
       )}
     </div>
