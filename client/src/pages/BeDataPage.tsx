@@ -2040,9 +2040,9 @@ export default function BeDataPage() {
                           {/* 六行数据 */}
                           {([
                             { arrow: '↑↑', text: '同涨', key: 'bothUp', bg: 'bg-red-50', color: 'text-red-600' },
-                            { arrow: '↑↓', text: '基涨对跌', key: 'baseUpCompDown', bg: 'bg-orange-50', color: 'text-orange-500' },
+                            { arrow: '↑↓', text: '涨跌', key: 'baseUpCompDown', bg: 'bg-orange-50', color: 'text-orange-500' },
                             { arrow: '↓↓', text: '同跌', key: 'bothDown', bg: 'bg-green-50', color: 'text-green-600' },
-                            { arrow: '↓↑', text: '基跌对涨', key: 'baseDownCompUp', bg: 'bg-emerald-50', color: 'text-emerald-500' },
+                            { arrow: '↓↑', text: '跌涨', key: 'baseDownCompUp', bg: 'bg-emerald-50', color: 'text-emerald-500' },
                             { arrow: '', text: '同向天数', key: 'sameDirection', bg: 'bg-gray-50', color: 'text-gray-800' },
                             { arrow: '', text: '反向天数', key: 'oppositeDirection', bg: 'bg-gray-50', color: 'text-gray-700' },
                           ] as { arrow: string; text: string; key: keyof typeof corrData.pairs[0]; bg: string; color: string }[]).map((row, ri) => (
