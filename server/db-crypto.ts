@@ -256,6 +256,10 @@ export interface CryptoStats {
   flatDays: number;
   upPct: number;
   downPct: number;
+  // 累计涨幅：所有上涨日涨幅之和
+  totalUpPct: number;
+  // 累计跌幅：所有下跌日跌幅绝对値之和
+  totalDownPct: number;
   // 连涨分布：key=连涨天数, value=出现次数
   consecutiveUp: Record<number, number>;
   // 连跌分布：key=连跌天数, value=出现次数
@@ -273,6 +277,7 @@ export async function getCryptoStats(symbol: string): Promise<CryptoStats> {
   if (!conn) return {
     total: 0, upDays: 0, downDays: 0, flatDays: 0,
     upPct: 0, downPct: 0,
+    totalUpPct: 0, totalDownPct: 0,
     consecutiveUp: {}, consecutiveDown: {},
     maxConsecUp: 0, maxConsecDown: 0,
   };
@@ -289,6 +294,7 @@ export async function getCryptoStats(symbol: string): Promise<CryptoStats> {
 
   const total = changes.length;
   let upDays = 0, downDays = 0, flatDays = 0;
+  let totalUpPct = 0, totalDownPct = 0;
 
   // 连涨/连跌统计
   const consecutiveUp: Record<number, number> = {};
@@ -300,6 +306,7 @@ export async function getCryptoStats(symbol: string): Promise<CryptoStats> {
     if (pct == null) continue;
     if (pct > 0) {
       upDays++;
+      totalUpPct += pct;
       // 结束连跌序列
       if (curDown > 0) {
         consecutiveDown[curDown] = (consecutiveDown[curDown] ?? 0) + 1;
@@ -309,6 +316,7 @@ export async function getCryptoStats(symbol: string): Promise<CryptoStats> {
       curUp++;
     } else if (pct < 0) {
       downDays++;
+      totalDownPct += Math.abs(pct);
       // 结束连涨序列
       if (curUp > 0) {
         consecutiveUp[curUp] = (consecutiveUp[curUp] ?? 0) + 1;
@@ -349,6 +357,8 @@ export async function getCryptoStats(symbol: string): Promise<CryptoStats> {
     flatDays,
     upPct: validTotal > 0 ? parseFloat((upDays / validTotal * 100).toFixed(1)) : 0,
     downPct: validTotal > 0 ? parseFloat((downDays / validTotal * 100).toFixed(1)) : 0,
+    totalUpPct: parseFloat(totalUpPct.toFixed(2)),
+    totalDownPct: parseFloat(totalDownPct.toFixed(2)),
     consecutiveUp,
     consecutiveDown,
     maxConsecUp,
