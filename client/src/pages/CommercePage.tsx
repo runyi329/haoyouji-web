@@ -220,7 +220,7 @@ export default function CommercePage() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
+            className={`flex items-center justify-center px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
               activeTab === tab.id
                 ? "bg-violet-600 text-white shadow-sm"
                 : "bg-white text-gray-600 border border-gray-200"
