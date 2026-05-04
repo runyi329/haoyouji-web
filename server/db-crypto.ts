@@ -1004,3 +1004,192 @@ export async function getCryptoCorrelation(
     pairs,
   };
 }
+
+/**
+ * 确保 crypto_correlation_stats 表存在
+ */
+export async function ensureCorrelationTable(): Promise<void> {
+  const conn = await getDbConnection();
+  if (!conn) return;
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS crypto_correlation_stats (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      base_symbol VARCHAR(20) NOT NULL,
+      compare_symbol VARCHAR(20) NOT NULL,
+      date_start VARCHAR(20) NOT NULL,
+      date_end VARCHAR(20) NOT NULL,
+      total_days INT NOT NULL DEFAULT 0,
+      both_up INT NOT NULL DEFAULT 0,
+      base_up_comp_down INT NOT NULL DEFAULT 0,
+      both_down INT NOT NULL DEFAULT 0,
+      base_down_comp_up INT NOT NULL DEFAULT 0,
+      same_direction INT NOT NULL DEFAULT 0,
+      opposite_direction INT NOT NULL DEFAULT 0,
+      same_direction_pct DECIMAL(5,1) NOT NULL DEFAULT 0,
+      opposite_direction_pct DECIMAL(5,1) NOT NULL DEFAULT 0,
+      valid_days INT NOT NULL DEFAULT 0,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_pair (base_symbol, compare_symbol)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+}
+
+/**
+ * 预计算并写入所有币对的相关性统计（全量，覆盖写）
+ * 支持的币对：BTCUSDT/ETHUSDT/SOLUSDT 两两互为基准
+ */
+export async function computeAndSaveAllCorrelations(): Promise<{ pairs: number; message: string }> {
+  await ensureCorrelationTable();
+  const conn = await getDbConnection();
+  if (!conn) return { pairs: 0, message: 'no db connection' };
+
+  const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+  let savedPairs = 0;
+
+  for (const base of symbols) {
+    for (const comp of symbols) {
+      if (base === comp) continue;
+
+      // 取共同有数据的日期
+      const [dateRows] = await conn.execute(
+        `SELECT DATE_FORMAT(date, '%Y-%m-%d') as d
+         FROM crypto_klines WHERE symbol = ? AND change_pct IS NOT NULL
+         AND date IN (
+           SELECT date FROM crypto_klines WHERE symbol = ? AND change_pct IS NOT NULL
+         )
+         ORDER BY d ASC`,
+        [base, comp]
+      ) as any[];
+
+      const commonDates = (dateRows as any[]).map((r: any) => r.d as string);
+      if (commonDates.length === 0) continue;
+
+      const startDate = commonDates[0];
+      const endDate = commonDates[commonDates.length - 1];
+
+      // 取基准币涨跌
+      const [baseRows] = await conn.execute(
+        `SELECT DATE_FORMAT(date, '%Y-%m-%d') as d, change_pct
+         FROM crypto_klines WHERE symbol = ? AND date BETWEEN ? AND ? AND change_pct IS NOT NULL`,
+        [base, startDate, endDate]
+      ) as any[];
+
+      const baseMap = new Map<string, number>();
+      for (const r of baseRows as any[]) baseMap.set(r.d, parseFloat(r.change_pct));
+
+      // 取对比币涨跌
+      const [compRows] = await conn.execute(
+        `SELECT DATE_FORMAT(date, '%Y-%m-%d') as d, change_pct
+         FROM crypto_klines WHERE symbol = ? AND date BETWEEN ? AND ? AND change_pct IS NOT NULL`,
+        [comp, startDate, endDate]
+      ) as any[];
+
+      let bothUp = 0, baseUpCompDown = 0, bothDown = 0, baseDownCompUp = 0;
+      for (const r of compRows as any[]) {
+        const baseChg = baseMap.get(r.d);
+        if (baseChg == null) continue;
+        const compChg = parseFloat(r.change_pct);
+        if (baseChg > 0 && compChg > 0) bothUp++;
+        else if (baseChg > 0 && compChg <= 0) baseUpCompDown++;
+        else if (baseChg <= 0 && compChg <= 0) bothDown++;
+        else if (baseChg <= 0 && compChg > 0) baseDownCompUp++;
+      }
+
+      const validDays = bothUp + baseUpCompDown + bothDown + baseDownCompUp;
+      const sameDirection = bothUp + bothDown;
+      const oppositeDirection = baseUpCompDown + baseDownCompUp;
+      const samePct = validDays > 0 ? Math.round((sameDirection / validDays) * 1000) / 10 : 0;
+      const oppPct = validDays > 0 ? Math.round((oppositeDirection / validDays) * 1000) / 10 : 0;
+
+      // 覆盖写入
+      await conn.execute(
+        `INSERT INTO crypto_correlation_stats
+           (base_symbol, compare_symbol, date_start, date_end, total_days,
+            both_up, base_up_comp_down, both_down, base_down_comp_up,
+            same_direction, opposite_direction, same_direction_pct, opposite_direction_pct, valid_days)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           date_start=VALUES(date_start), date_end=VALUES(date_end), total_days=VALUES(total_days),
+           both_up=VALUES(both_up), base_up_comp_down=VALUES(base_up_comp_down),
+           both_down=VALUES(both_down), base_down_comp_up=VALUES(base_down_comp_up),
+           same_direction=VALUES(same_direction), opposite_direction=VALUES(opposite_direction),
+           same_direction_pct=VALUES(same_direction_pct), opposite_direction_pct=VALUES(opposite_direction_pct),
+           valid_days=VALUES(valid_days), updated_at=NOW()`,
+        [base, comp, startDate, endDate, commonDates.length,
+         bothUp, baseUpCompDown, bothDown, baseDownCompUp,
+         sameDirection, oppositeDirection, samePct, oppPct, validDays]
+      );
+      savedPairs++;
+    }
+  }
+
+  return { pairs: savedPairs, message: `已计算并保存 ${savedPairs} 个币对` };
+}
+
+/**
+ * 从预计算表读取相关性统计（直接读表，毫秒级）
+ */
+export async function getCorrelationFromCache(
+  baseSymbol: string,
+  compareSymbols: string[]
+): Promise<{
+  dateRange: { start: string; end: string; totalDays: number };
+  pairs: {
+    symbol: string;
+    bothUp: number;
+    baseUpCompDown: number;
+    bothDown: number;
+    baseDownCompUp: number;
+    sameDirection: number;
+    oppositeDirection: number;
+    sameDirectionPct: number;
+    oppositeDirectionPct: number;
+    validDays: number;
+  }[];
+  updatedAt?: string;
+}> {
+  await ensureCorrelationTable();
+  const conn = await getDbConnection();
+  if (!conn) return { dateRange: { start: '-', end: '-', totalDays: 0 }, pairs: [] };
+
+  if (compareSymbols.length === 0) return { dateRange: { start: '-', end: '-', totalDays: 0 }, pairs: [] };
+
+  const placeholders = compareSymbols.map(() => '?').join(', ');
+  const [rows] = await conn.execute(
+    `SELECT * FROM crypto_correlation_stats
+     WHERE base_symbol = ? AND compare_symbol IN (${placeholders})
+     ORDER BY FIELD(compare_symbol, ${placeholders})`,
+    [baseSymbol, ...compareSymbols, ...compareSymbols]
+  ) as any[];
+
+  const results = rows as any[];
+  if (results.length === 0) return { dateRange: { start: '-', end: '-', totalDays: 0 }, pairs: [] };
+
+  // 取第一行的日期范围（所有对比币共用同一基准，日期范围可能略有差异，取第一个）
+  const first = results[0];
+  const pairs = results.map((r: any) => ({
+    symbol: r.compare_symbol,
+    bothUp: Number(r.both_up),
+    baseUpCompDown: Number(r.base_up_comp_down),
+    bothDown: Number(r.both_down),
+    baseDownCompUp: Number(r.base_down_comp_up),
+    sameDirection: Number(r.same_direction),
+    oppositeDirection: Number(r.opposite_direction),
+    sameDirectionPct: Number(r.same_direction_pct),
+    oppositeDirectionPct: Number(r.opposite_direction_pct),
+    validDays: Number(r.valid_days),
+    dateStart: (r.date_start as string).replace(/-/g, '/'),
+    dateEnd: (r.date_end as string).replace(/-/g, '/'),
+    totalDays: Number(r.total_days),
+  }));
+
+  return {
+    dateRange: {
+      start: (first.date_start as string).replace(/-/g, '/'),
+      end: (first.date_end as string).replace(/-/g, '/'),
+      totalDays: Number(first.total_days),
+    },
+    pairs,
+    updatedAt: first.updated_at ? new Date(first.updated_at).toLocaleDateString('zh-CN') : undefined,
+  };
+}
