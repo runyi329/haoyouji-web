@@ -389,14 +389,23 @@ ${klinesSummary}
         }
       }),
 
-    // 多币相关性统计
+    // 多币相关性统计（直接读预计算缓存表，毫秒级）
     getCorrelation: publicProcedure
       .input(z.object({
         baseSymbol: z.string(),
         compareSymbols: z.array(z.string()).min(1),
       }))
       .query(async ({ input }) => {
-        return await dbCrypto.getCryptoCorrelation(input.baseSymbol, input.compareSymbols);
+        return await dbCrypto.getCorrelationFromCache(input.baseSymbol, input.compareSymbols);
+      }),
+
+    // 重算并写入所有币对相关性统计（管理员手动触发）
+    rebuildCorrelation: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        return await dbCrypto.computeAndSaveAllCorrelations();
       }),
   }),
 

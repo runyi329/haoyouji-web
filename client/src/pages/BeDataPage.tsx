@@ -2039,12 +2039,16 @@ export default function BeDataPage() {
                       <div className="px-4 py-6 text-center text-gray-400 text-xs">请选择至少一个对比币</div>
                     )}
                     {corrLoading && corrCompare.length > 0 && (
-                      <div className="px-4 py-6 text-center text-gray-400 text-xs">计算中...</div>
+                      <div className="px-4 py-6 text-center text-gray-400 text-xs">加载中...</div>
+                    )}
+                    {!corrLoading && corrCompare.length > 0 && corrData && corrData.pairs.length === 0 && (
+                      <div className="px-4 py-6 text-center text-gray-400 text-xs">数据未初始化，请联系管理员触发计算</div>
                     )}
                     {corrData && corrData.pairs.length > 0 && (
                       <div className="px-4 pb-4 pt-2 space-y-5">
                         <div className="text-xs text-gray-400 text-center">
                           共同有数据日期：{corrData.dateRange.start} ~ {corrData.dateRange.end}（{corrData.dateRange.totalDays}天）
+                          {(corrData as any).updatedAt && <span className="ml-2">· 更新于 {(corrData as any).updatedAt}</span>}
                         </div>
                         {corrData.pairs.map(pair => {
                           const compInfo = ALL_SYMBOLS.find(s => s.key === pair.symbol);
