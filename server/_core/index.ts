@@ -446,6 +446,32 @@ async function startServer() {
   const goldTrackerModule = await import('../gold-tracker-router.js');
   app.use(goldTrackerModule.default);
 
+  // 内部数字币数据补全接口（仅允许本机调用）
+  app.post('/api/internal/sync-crypto', async (req: any, res: any) => {
+    const ip = req.ip || req.socket?.remoteAddress || '';
+    if (!ip.includes('127.0.0.1') && !ip.includes('::1') && ip !== 'localhost') {
+      return res.status(403).json({ error: '仅允许本机调用' });
+    }
+    try {
+      const { syncLatestFromBinance } = await import('../db-crypto.js');
+      const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+      const results: any[] = [];
+      for (const sym of symbols) {
+        try {
+          const r = await syncLatestFromBinance(sym);
+          results.push({ symbol: sym, added: r.added, latestDate: r.latestDate });
+          console.log(`[内部补全] ${sym} 新增 ${r.added} 条，最新日期: ${r.latestDate}`);
+        } catch (e: any) {
+          results.push({ symbol: sym, error: e.message });
+          console.error(`[内部补全] ${sym} 失败:`, e.message);
+        }
+      }
+      return res.json({ success: true, results });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

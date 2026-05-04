@@ -22,34 +22,14 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-      - name: 🔄 在服务器上执行数据补全
+      - name: 🔄 在服务器本机触发数据补全
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
-            set -e
-            export PATH="/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
-
-            echo "=== 开始补全 BTC/ETH/SOL 日线数据 ==="
-
-            # 在 /home/ubuntu/haoyouji-web 目录下运行（实际服务目录）
-            cd /home/ubuntu/haoyouji-web
-
-            # 加载环境变量并执行补全
-            node --input-type=module << 'NODEOF'
-              import { config } from 'dotenv';
-              import { syncLatestFromBinance } from './dist/db-crypto.js';
-
-              config(); // 加载 .env
-
-              const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
-              for (const sym of symbols) {
-                try {
-                  console.log(`[补全] 开始处理 ${sym} ...`);
-                  const r = await syncLatestFromBinance(sym);
-                  console.log(`[补全] ${sym} 新增 ${r.added} 条，最新日期: ${r.latestDate}`);
-                } catch (e) {
-                  console.error(`[补全] ${sym} 失败:`, e.message);
-                }
-              }
-              console.log('=== 全部完成 ===');
-NODEOF
+            echo "=== 触发数字币数据补全 ==="
+            # 通过本机 curl 调用内部接口（服务运行在3000端口）
+            result=$(curl -s -X POST http://127.0.0.1:3000/api/internal/sync-crypto \
+              -H "Content-Type: application/json" \
+              --max-time 120)
+            echo "补全结果: $result"
+            echo "=== 完成 ==="
           ENDSSH
