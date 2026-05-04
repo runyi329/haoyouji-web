@@ -109,8 +109,15 @@ function StreakStatsPanel({ allData, latestDate, coinIcon }: { allData: { date: 
 
   return (
     <div style={{ background: CARD, borderTop: `8px solid ${BG}` }}>
-      {/* 最长连涨/连跌（全量）展示区，一行左右并排 */}
-      <div className="flex items-center justify-around px-4 py-2.5 border-b border-gray-100">
+      {/* 标题（最顶部） */}
+      <div className="px-4 pt-3 pb-2">
+        <span className="text-xs font-semibold flex items-center gap-1" style={{ color: MUTED }}>
+          {coinIcon && <img src={coinIcon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+          连涨 / 连跌统计
+        </span>
+      </div>
+      {/* 最长连涨/连跌（全量）展示区，标题下方 */}
+      <div className="flex items-center justify-around px-4 py-2.5 border-b border-gray-100 border-t border-gray-50">
         <div className="flex items-baseline gap-1.5">
           <span className="text-xs text-gray-400">最长连涨</span>
           <span className="text-2xl font-bold text-red-500">{globalMaxUp}</span>
@@ -122,13 +129,6 @@ function StreakStatsPanel({ allData, latestDate, coinIcon }: { allData: { date: 
           <span className="text-2xl font-bold text-green-600">{globalMaxDown}</span>
           <span className="text-xs text-gray-400">天</span>
         </div>
-      </div>
-      {/* 标题 */}
-      <div className="px-4 pt-3 pb-1">
-        <span className="text-xs font-semibold flex items-center gap-1" style={{ color: MUTED }}>
-          {coinIcon && <img src={coinIcon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
-          连涨 / 连跌统计
-        </span>
       </div>
       {/* 表头 */}
       <div className="px-4 pb-1" style={{ display: 'grid', gridTemplateColumns: '1fr 36px 1fr', gap: 0 }}>
