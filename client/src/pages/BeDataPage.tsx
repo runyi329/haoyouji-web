@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, LabelList, ReferenceLine,
-  ComposedChart, Line
+  ComposedChart, Line, Area
 } from "recharts";
 
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK";
@@ -1850,31 +1850,49 @@ export default function BeDataPage() {
                     <div className="px-2 py-3">
                       <ResponsiveContainer width="100%" height={180}>
                         <ComposedChart data={priceData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+                          <defs>
+                            <linearGradient id="priceAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#ef4444" stopOpacity={0.45} />
+                              <stop offset="60%" stopColor="#ef4444" stopOpacity={0.15} />
+                              <stop offset="100%" stopColor="#ef4444" stopOpacity={0.02} />
+                            </linearGradient>
+                            <filter id="priceLineShadow" x="-5%" y="-20%" width="110%" height="140%">
+                              <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#ef4444" floodOpacity="0.35" />
+                            </filter>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                           <XAxis
                             dataKey="date"
                             tick={{ fontSize: 8, fill: '#bbb' }}
                             tickFormatter={(v: string) => v.slice(0, 4)}
                             interval={Math.floor(priceData.length / 6)}
+                            axisLine={false}
+                            tickLine={false}
                           />
                           <YAxis
                             tick={{ fontSize: 8, fill: '#bbb' }}
                             domain={[minPrice * 0.95, maxPrice * 1.05]}
-                            tickFormatter={(v: number) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v.toFixed(0)}
+                            tickFormatter={(v: number) => v >= 1000 ? (v/1000).toFixed(0).concat('k') : v.toFixed(0)}
                             width={40}
+                            axisLine={false}
+                            tickLine={false}
                           />
                           <Tooltip
-                            contentStyle={{ fontSize: 10, padding: '3px 7px' }}
-                            formatter={(value: number) => [`$${value.toLocaleString()}`, '收盘价']}
+                            contentStyle={{ fontSize: 10, padding: '3px 7px', borderRadius: 6, border: '1px solid #fecaca', background: 'rgba(255,255,255,0.95)' }}
+                            formatter={(value: number) => ['$'.concat(value.toLocaleString()), '收盘价']}
                             labelFormatter={(label: string) => label}
                           />
-                          <Line
+                          <Area
                             type="monotone"
                             dataKey="close"
                             stroke="#ef4444"
-                            strokeWidth={1.5}
+                            strokeWidth={2}
+                            fill="url(#priceAreaGradient)"
                             dot={false}
                             connectNulls
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            style={{ filter: 'url(#priceLineShadow)' }}
                           />
                         </ComposedChart>
                       </ResponsiveContainer>
