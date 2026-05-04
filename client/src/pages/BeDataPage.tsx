@@ -2050,92 +2050,100 @@ export default function BeDataPage() {
                           共同有数据日期：{corrData.dateRange.start} ~ {corrData.dateRange.end}（{corrData.dateRange.totalDays}天）
                           {(corrData as any).updatedAt && <span className="ml-2">· 更新于 {(corrData as any).updatedAt}</span>}
                         </div>
-                        {corrData.pairs.map(pair => {
-                          const compInfo = ALL_SYMBOLS.find(s => s.key === pair.symbol);
-                          const pieData = [
-                            { name: `${baseInfo?.shortLabel}涨+${compInfo?.shortLabel}涨`, value: pair.bothUp, color: '#ef4444' },
-                            { name: `${baseInfo?.shortLabel}涨+${compInfo?.shortLabel}跌`, value: pair.baseUpCompDown, color: '#f97316' },
-                            { name: `${baseInfo?.shortLabel}跌+${compInfo?.shortLabel}跌`, value: pair.bothDown, color: '#22c55e' },
-                            { name: `${baseInfo?.shortLabel}跌+${compInfo?.shortLabel}涨`, value: pair.baseDownCompUp, color: '#86efac' },
-                          ];
-                          return (
-                            <div key={pair.symbol} className="border border-gray-100 rounded-xl p-3">
-                              {/* 对比币标题 */}
-                              <div className="flex items-center gap-2 mb-3">
-                                {compInfo?.icon && <img src={compInfo.icon} alt="" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover' }} />}
-                                <span className="text-sm font-semibold text-gray-700">{baseInfo?.shortLabel} vs {compInfo?.shortLabel ?? pair.symbol}</span>
-                                <span className="ml-auto text-xs text-gray-400">{pair.validDays}天有效数据</span>
-                              </div>
-                              {/* 四象限数字表格 */}
-                              <div className="grid grid-cols-2 gap-2 mb-3">
-                                <div className="bg-red-50 rounded-lg p-2 text-center">
-                                  <div className="text-xs text-gray-500 mb-1">{baseInfo?.shortLabel}涨 → {compInfo?.shortLabel}涨</div>
-                                  <div className="text-lg font-bold text-red-600">{pair.bothUp}</div>
-                                  <div className="text-xs text-red-400">{pair.validDays > 0 ? ((pair.bothUp / pair.validDays) * 100).toFixed(1) : 0}%</div>
+                        {/* 数字统计表格：全部币对并排展示 */}
+                        <div className="border border-gray-100 rounded-xl overflow-hidden mb-4">
+                          {/* 表头 */}
+                          <div className="grid bg-gray-50 border-b border-gray-100" style={{ gridTemplateColumns: `120px repeat(${corrData.pairs.length}, 1fr)` }}>
+                            <div className="px-2 py-2 text-xs text-gray-500 font-medium">场景</div>
+                            {corrData.pairs.map(pair => {
+                              const compInfo = ALL_SYMBOLS.find(s => s.key === pair.symbol);
+                              return (
+                                <div key={pair.symbol} className="px-1 py-2 text-center">
+                                  <div className="flex items-center justify-center gap-1">
+                                    {compInfo?.icon && <img src={compInfo.icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }} />}
+                                    <span className="text-xs font-semibold text-gray-700">{compInfo?.shortLabel ?? pair.symbol}</span>
+                                  </div>
+                                  <div className="text-xs text-gray-400">{pair.validDays}天</div>
                                 </div>
-                                <div className="bg-orange-50 rounded-lg p-2 text-center">
-                                  <div className="text-xs text-gray-500 mb-1">{baseInfo?.shortLabel}涨 → {compInfo?.shortLabel}跌</div>
-                                  <div className="text-lg font-bold text-orange-500">{pair.baseUpCompDown}</div>
-                                  <div className="text-xs text-orange-400">{pair.validDays > 0 ? ((pair.baseUpCompDown / pair.validDays) * 100).toFixed(1) : 0}%</div>
-                                </div>
-                                <div className="bg-green-50 rounded-lg p-2 text-center">
-                                  <div className="text-xs text-gray-500 mb-1">{baseInfo?.shortLabel}跌 → {compInfo?.shortLabel}跌</div>
-                                  <div className="text-lg font-bold text-green-600">{pair.bothDown}</div>
-                                  <div className="text-xs text-green-400">{pair.validDays > 0 ? ((pair.bothDown / pair.validDays) * 100).toFixed(1) : 0}%</div>
-                                </div>
-                                <div className="bg-emerald-50 rounded-lg p-2 text-center">
-                                  <div className="text-xs text-gray-500 mb-1">{baseInfo?.shortLabel}跌 → {compInfo?.shortLabel}涨</div>
-                                  <div className="text-lg font-bold text-emerald-500">{pair.baseDownCompUp}</div>
-                                  <div className="text-xs text-emerald-400">{pair.validDays > 0 ? ((pair.baseDownCompUp / pair.validDays) * 100).toFixed(1) : 0}%</div>
-                                </div>
-                              </div>
-                              {/* 同向/反向汇总 */}
-                              <div className="flex gap-2 mb-3">
-                                <div className="flex-1 bg-gray-50 rounded-lg p-2 text-center">
-                                  <div className="text-xs text-gray-500">同向天数</div>
-                                  <div className="text-base font-bold text-gray-800">{pair.sameDirection}</div>
-                                  <div className="text-xs text-gray-400">{pair.sameDirectionPct}%</div>
-                                </div>
-                                <div className="flex-1 bg-gray-50 rounded-lg p-2 text-center">
-                                  <div className="text-xs text-gray-500">反向天数</div>
-                                  <div className="text-base font-bold text-gray-800">{pair.oppositeDirection}</div>
-                                  <div className="text-xs text-gray-400">{pair.oppositeDirectionPct}%</div>
-                                </div>
-                              </div>
-                              {/* 饼图可视化 */}
-                              <ResponsiveContainer width="100%" height={160}>
-                                <PieChart>
-                                  <Pie
-                                    data={pieData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={38}
-                                    outerRadius={60}
-                                    paddingAngle={2}
-                                    dataKey="value"
-                                    label={({ name, percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''}
-                                    labelLine={false}
-                                    fontSize={9}
-                                  >
-                                    {pieData.map((entry, i) => (
-                                      <Cell key={i} fill={entry.color} />
-                                    ))}
-                                  </Pie>
-                                  <Legend
-                                    iconType="circle"
-                                    iconSize={8}
-                                    formatter={(value) => <span style={{ fontSize: 9, color: '#666' }}>{value}</span>}
-                                  />
-                                  <Tooltip
-                                    formatter={(value: number, name: string) => [`${value}天`, name]}
-                                    contentStyle={{ fontSize: 10, padding: '3px 7px', borderRadius: 6 }}
-                                  />
-                                </PieChart>
-                              </ResponsiveContainer>
+                              );
+                            })}
+                          </div>
+                          {/* 六行数据 */}
+                          {([
+                            { label: `${baseInfo?.shortLabel}涨→对比涨`, key: 'bothUp', bg: 'bg-red-50', color: 'text-red-600' },
+                            { label: `${baseInfo?.shortLabel}涨→对比跌`, key: 'baseUpCompDown', bg: 'bg-orange-50', color: 'text-orange-500' },
+                            { label: `${baseInfo?.shortLabel}跌→对比跌`, key: 'bothDown', bg: 'bg-green-50', color: 'text-green-600' },
+                            { label: `${baseInfo?.shortLabel}跌→对比涨`, key: 'baseDownCompUp', bg: 'bg-emerald-50', color: 'text-emerald-500' },
+                            { label: '同向天数', key: 'sameDirection', bg: 'bg-gray-50', color: 'text-gray-800' },
+                            { label: '反向天数', key: 'oppositeDirection', bg: 'bg-gray-50', color: 'text-gray-700' },
+                          ] as { label: string; key: keyof typeof corrData.pairs[0]; bg: string; color: string }[]).map((row, ri) => (
+                            <div key={ri} className={`grid border-b border-gray-100 last:border-b-0 ${row.bg}`} style={{ gridTemplateColumns: `120px repeat(${corrData.pairs.length}, 1fr)` }}>
+                              <div className="px-2 py-2 text-xs text-gray-500 flex items-center">{row.label}</div>
+                              {corrData.pairs.map(pair => {
+                                const val = Number(pair[row.key]);
+                                const pct = pair.validDays > 0 ? ((val / pair.validDays) * 100).toFixed(1) : '0.0';
+                                return (
+                                  <div key={pair.symbol} className="px-1 py-2 text-center">
+                                    <div className={`text-sm font-bold ${row.color}`}>{val}</div>
+                                    <div className="text-xs text-gray-400">{pct}%</div>
+                                  </div>
+                                );
+                              })}
                             </div>
-                          );
-                        })}
+                          ))}
+                        </div>
+
+                        {/* 饼图可视化：每个币对一个饼图，并排 */}
+                        <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(corrData.pairs.length, 2)}, 1fr)` }}>
+                          {corrData.pairs.map(pair => {
+                            const compInfo = ALL_SYMBOLS.find(s => s.key === pair.symbol);
+                            const pieData = [
+                              { name: `${baseInfo?.shortLabel}涨+${compInfo?.shortLabel}涨`, value: pair.bothUp, color: '#ef4444' },
+                              { name: `${baseInfo?.shortLabel}涨+${compInfo?.shortLabel}跌`, value: pair.baseUpCompDown, color: '#f97316' },
+                              { name: `${baseInfo?.shortLabel}跌+${compInfo?.shortLabel}跌`, value: pair.bothDown, color: '#22c55e' },
+                              { name: `${baseInfo?.shortLabel}跌+${compInfo?.shortLabel}涨`, value: pair.baseDownCompUp, color: '#86efac' },
+                            ];
+                            return (
+                              <div key={pair.symbol} className="border border-gray-100 rounded-xl pt-2 pb-1">
+                                <div className="text-xs text-center text-gray-500 font-medium mb-1">
+                                  {baseInfo?.shortLabel} vs {compInfo?.shortLabel ?? pair.symbol}
+                                </div>
+                                <ResponsiveContainer width="100%" height={190}>
+                                  <PieChart margin={{ top: 12, right: 5, bottom: 0, left: 5 }}>
+                                    <Pie
+                                      data={pieData}
+                                      cx="50%"
+                                      cy="42%"
+                                      innerRadius={28}
+                                      outerRadius={50}
+                                      paddingAngle={2}
+                                      dataKey="value"
+                                      label={({ percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''}
+                                      labelLine={false}
+                                      fontSize={9}
+                                    >
+                                      {pieData.map((entry, i) => (
+                                        <Cell key={i} fill={entry.color} />
+                                      ))}
+                                    </Pie>
+                                    <Legend
+                                      iconType="circle"
+                                      iconSize={7}
+                                      wrapperStyle={{ fontSize: 8, paddingTop: 4 }}
+                                      formatter={(value) => <span style={{ fontSize: 8, color: '#666' }}>{value}</span>}
+                                    />
+                                    <Tooltip
+                                      formatter={(value: number, name: string) => [`${value}天`, name]}
+                                      contentStyle={{ fontSize: 10, padding: '3px 7px', borderRadius: 6 }}
+                                    />
+                                  </PieChart>
+                                </ResponsiveContainer>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
+                    )}
                     )}
                   </div>
                 );
