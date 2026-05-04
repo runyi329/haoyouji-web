@@ -1832,7 +1832,7 @@ export default function BeDataPage() {
 
               {/* 历史价格折线图 */}
               {allChangePcts && allChangePcts.length > 0 && (() => {
-                const priceData = [...allChangePcts].reverse().filter(d => d.close != null).map(d => ({
+                const priceData = [...allChangePcts].filter(d => d.close != null).map(d => ({
                   date: d.date,
                   close: d.close as number,
                 }));
