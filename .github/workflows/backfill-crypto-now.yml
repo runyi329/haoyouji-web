@@ -1,0 +1,55 @@
+name: 手动补全数字币K线数据（BTC/ETH/SOL）
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: '触发原因'
+        required: false
+        default: '手动补全数字币历史数据'
+
+jobs:
+  backfill:
+    name: 补全 BTC/ETH/SOL 日线数据
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 检出代码
+        uses: actions/checkout@v4
+
+      - name: 🔑 配置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: 🔄 在服务器上执行数据补全
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            set -e
+            export PATH="/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
+            echo "=== 开始补全 BTC/ETH/SOL 日线数据 ==="
+
+            # 在 /home/ubuntu/haoyouji-web 目录下运行（实际服务目录）
+            cd /home/ubuntu/haoyouji-web
+
+            # 加载环境变量并执行补全
+            node --input-type=module << 'NODEOF'
+              import { config } from 'dotenv';
+              import { syncLatestFromBinance } from './dist/db-crypto.js';
+
+              config(); // 加载 .env
+
+              const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+              for (const sym of symbols) {
+                try {
+                  console.log(`[补全] 开始处理 ${sym} ...`);
+                  const r = await syncLatestFromBinance(sym);
+                  console.log(`[补全] ${sym} 新增 ${r.added} 条，最新日期: ${r.latestDate}`);
+                } catch (e) {
+                  console.error(`[补全] ${sym} 失败:`, e.message);
+                }
+              }
+              console.log('=== 全部完成 ===');
+NODEOF
+          ENDSSH
