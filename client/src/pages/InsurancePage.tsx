@@ -334,32 +334,141 @@ export default function InsurancePage() {
             </div>
 
             <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <div className="text-sm font-semibold text-gray-700 mb-3">香港热门险种占比</div>
-              {hkProductData.map(item => (
-                <ProgressBar
-                  key={item.name}
-                  label={item.name}
-                  value={item.value}
-                  max={50}
-                  unit="%"
-                  color={item.color}
-                />
-              ))}
+              <div className="text-sm font-semibold text-gray-700 mb-2">香港热门险种占比</div>
+              {(() => {
+                const ROW_H = 14;
+                const BAR_H = 10;
+                const LABEL_W = 52;
+                const maxVal = Math.max(...hkProductData.map(d => d.value));
+                return hkProductData.map((item, idx) => {
+                  const barPct = (item.value / maxVal) * 100;
+                  return (
+                    <div
+                      key={item.name}
+                      className="flex items-center"
+                      style={{ height: ROW_H, marginBottom: 1 }}
+                    >
+                      <div
+                        className="flex-shrink-0 text-right pr-1.5"
+                        style={{ width: LABEL_W, fontSize: 9, color: '#9ca3af', lineHeight: `${ROW_H}px` }}
+                      >
+                        {item.name}
+                      </div>
+                      <div
+                        className="relative flex-1"
+                        style={{ height: BAR_H, borderRadius: 2, background: '#f3e8ff' }}
+                      >
+                        <div
+                          style={{
+                            position: 'absolute', top: 0, left: 0, height: '100%',
+                            width: `${Math.max(barPct, 0.5)}%`,
+                            background: item.color,
+                            borderRadius: '2px 3px 3px 2px',
+                            transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${idx * 15}ms`,
+                            boxShadow: 'inset 0 -1px 3px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.2)',
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute', top: '50%', transform: 'translateY(-50%)',
+                            ...(barPct >= 25
+                              ? { right: `${100 - Math.max(barPct, 0.5)}%`, paddingRight: 3, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.35)' }
+                              : { left: `${Math.max(barPct, 0.5)}%`, paddingLeft: 3, color: '#374151' }
+                            ),
+                            fontSize: 8, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap',
+                            fontVariantNumeric: 'tabular-nums', pointerEvents: 'none',
+                          }}
+                        >
+                          {item.value}%
+                        </div>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
 
             <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <div className="text-sm font-semibold text-gray-700 mb-3">内地访客赴港投保趋势</div>
-              {hkPremiumData.slice().reverse().map(d => (
-                <ProgressBar
-                  key={d.year}
-                  label={`${d.year}年`}
-                  value={d.mainland}
-                  max={800}
-                  unit="亿港元"
-                  color="#a855f7"
-                  sub={`占总保费${((d.mainland / d.total) * 100).toFixed(1)}%`}
-                />
-              ))}
+              <div className="text-sm font-semibold text-gray-700 mb-2">内地访客赴港投保趋势</div>
+              {/* 图例 */}
+              <div className="flex flex-wrap gap-3 mb-2">
+                <span className="flex items-center gap-1" style={{ fontSize: 10, color: '#9ca3af' }}>
+                  <span style={{ display: 'inline-block', width: 12, height: 7, borderRadius: 2, background: 'linear-gradient(90deg,#a855f7,#c084fc)' }} />内地访客保费
+                </span>
+                <span className="flex items-center gap-1" style={{ fontSize: 10, color: '#9ca3af' }}>
+                  <span style={{ display: 'inline-block', width: 12, height: 7, borderRadius: 2, background: '#f59e0b' }} />占总保费比
+                </span>
+              </div>
+              {(() => {
+                const ROW_H = 14;
+                const BAR_H = 10;
+                const LABEL_W = 36;
+                const maxVal = Math.max(...hkPremiumData.map(d => d.mainland));
+                const rows = hkPremiumData.slice().reverse();
+                return rows.map((d, idx) => {
+                  const prev = rows[idx + 1];
+                  const pct = prev ? ((d.mainland - prev.mainland) / prev.mainland * 100) : null;
+                  const barPct = (d.mainland / maxVal) * 100;
+                  const ratioPct = (d.mainland / d.total) * 100;
+                  const ratioPctBar = Math.min(ratioPct / 20 * 100, 100); // 比例最大按20%归一
+                  const pctLabel = pct !== null ? `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%` : '';
+                  return (
+                    <div
+                      key={d.year}
+                      className="flex items-center"
+                      style={{ height: ROW_H, marginBottom: 1 }}
+                    >
+                      <div
+                        className="flex-shrink-0 text-right pr-1.5"
+                        style={{ width: LABEL_W, fontSize: 9, color: '#9ca3af', lineHeight: `${ROW_H}px` }}
+                      >
+                        {d.year}
+                      </div>
+                      <div
+                        className="relative flex-1"
+                        style={{ height: BAR_H, borderRadius: 2, background: '#f3e8ff' }}
+                      >
+                        {/* 内地访客保费主条 */}
+                        <div
+                          style={{
+                            position: 'absolute', top: 0, left: 0, height: '100%',
+                            width: `${Math.max(barPct, 0.5)}%`,
+                            background: 'linear-gradient(90deg,#a855f7 0%,#c084fc 100%)',
+                            borderRadius: '2px 3px 3px 2px',
+                            transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${idx * 15}ms`,
+                            boxShadow: 'inset 0 -1px 3px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.2)',
+                          }}
+                        />
+                        {/* 占总保费比例细条（下半半透明琥珀色） */}
+                        <div
+                          style={{
+                            position: 'absolute', bottom: 0, left: 0, height: '50%',
+                            width: `${Math.max(ratioPctBar, 0.5)}%`,
+                            background: 'rgba(245,158,11,0.55)',
+                            borderRadius: '0 0 0 2px',
+                            transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${idx * 15 + 100}ms`,
+                            pointerEvents: 'none',
+                          }}
+                        />
+                        {/* 数值标签 */}
+                        <div
+                          style={{
+                            position: 'absolute', top: '50%', transform: 'translateY(-50%)',
+                            ...(barPct >= 25
+                              ? { right: `${100 - Math.max(barPct, 0.5)}%`, paddingRight: 3, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.35)' }
+                              : { left: `${Math.max(barPct, 0.5)}%`, paddingLeft: 3, color: '#374151' }
+                            ),
+                            fontSize: 8, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap',
+                            fontVariantNumeric: 'tabular-nums', pointerEvents: 'none',
+                          }}
+                        >
+                          {d.mainland}亿{pctLabel ? ` ${pctLabel}` : ''} 占{ratioPct.toFixed(1)}%
+                        </div>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
 
             {/* 香港保险优势说明 */}
