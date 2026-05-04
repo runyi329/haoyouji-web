@@ -83,7 +83,7 @@ function calcStreakFromItems(data: { changePct: number | null }[]): {
 }
 
 // 连涨连跌统计组件（三列对称布局，参照 StockDetail）
-function StreakStatsPanel({ allData, latestDate }: { allData: { date: string; changePct: number | null }[]; latestDate?: string }) {
+function StreakStatsPanel({ allData, latestDate, coinIcon }: { allData: { date: string; changePct: number | null }[]; latestDate?: string; coinIcon?: string }) {
   const [streakTab, setStreakTab] = useState<30 | 60 | 90 | 180 | 'all'>(60);
 
   // 各时间段统计（前端计算）
@@ -125,7 +125,10 @@ function StreakStatsPanel({ allData, latestDate }: { allData: { date: string; ch
       </div>
       {/* 标题 + 时间段切换 */}
       <div className="px-4 pt-3 pb-1 flex items-center justify-between">
-        <span className="text-xs font-semibold" style={{ color: MUTED }}>连涨 / 连跌统计</span>
+        <span className="text-xs font-semibold flex items-center gap-1" style={{ color: MUTED }}>
+          {coinIcon && <img src={coinIcon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+          连涨 / 连跌统计
+        </span>
         <div className="flex items-center gap-1">
           {([30, 60, 90, 180, 'all'] as const).map(n => (
             <button
@@ -209,7 +212,7 @@ function StreakStatsPanel({ allData, latestDate }: { allData: { date: string; ch
 }
 
 // 涨跌幅频率分布图组件（正态分布直方图）
-function ChangePctDistChart({ allData, latestDate }: { allData: { date: string; changePct: number | null }[]; latestDate?: string }) {
+function ChangePctDistChart({ allData, latestDate, coinIcon }: { allData: { date: string; changePct: number | null }[]; latestDate?: string; coinIcon?: string }) {
   const distData = useMemo(() => {
     // 统计每1%区间的出现次数
     const bucketMap: Record<number, number> = {};
@@ -249,7 +252,10 @@ function ChangePctDistChart({ allData, latestDate }: { allData: { date: string; 
     <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <div>
-          <span className="text-sm font-semibold text-gray-700">涨跌幅频率分布</span>
+          <span className="text-sm font-semibold text-gray-700 flex items-center gap-1">
+            {coinIcon && <img src={coinIcon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+            涨跌幅频率分布
+          </span>
           <span className="text-xs text-gray-400 ml-2">每1%一个区间 · 共{totalDays}天</span>
         </div>
         <div className="flex items-center gap-2 text-xs">
@@ -725,10 +731,12 @@ function YearlyBreakdown({
   allChangePcts,
   totalUpPct,
   totalDownPct,
+  coinIcon,
 }: {
   allChangePcts: { date: string; changePct: number | null; close?: number | null }[];
   totalUpPct: number;
   totalDownPct: number;
+  coinIcon?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -776,7 +784,10 @@ function YearlyBreakdown({
         onClick={() => setExpanded(e => !e)}
       >
         <div>
-          <span className="text-sm font-semibold text-gray-700">累计涨跌幅</span>
+          <span className="text-sm font-semibold text-gray-700 flex items-center gap-1">
+            {coinIcon && <img src={coinIcon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+            累计涨跌幅
+          </span>
           <span className="text-xs text-gray-400 ml-2">所有上涨/下跌日涨跌幅累加</span>
         </div>
         <span className="text-xs text-gray-400">{expanded ? '▲ 收起' : '▼ 按年明细'}</span>
@@ -1788,9 +1799,12 @@ export default function BeDataPage() {
 
               {/* 涨跌天数概览 */}
               <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <span className="text-sm font-semibold text-gray-700">涨跌天数统计</span>
-                  <span className="text-xs text-gray-400 ml-2">共 {stats.total} 天</span>
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+                  <span className="text-sm font-semibold text-gray-700 flex items-center gap-1">
+                    {currentStockInfo?.icon && <img src={currentStockInfo.icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+                    涨跌天数统计
+                  </span>
+                  <span className="text-xs text-gray-400">共 {stats.total} 天</span>
                 </div>
                 <div className="grid grid-cols-3 divide-x divide-gray-100">
                   <div className="flex flex-col items-center py-4">
@@ -1820,18 +1834,18 @@ export default function BeDataPage() {
               </div>
 
               {/* 累计涨跌幅 */}
-              <YearlyBreakdown allChangePcts={allChangePcts ?? []} totalUpPct={stats.totalUpPct} totalDownPct={stats.totalDownPct} />
+              <YearlyBreakdown allChangePcts={allChangePcts ?? []} totalUpPct={stats.totalUpPct} totalDownPct={stats.totalDownPct} coinIcon={currentStockInfo?.icon} />
 
               {/* 连涨/连跌统计（已内嵌最长连涨/连跌） */}
               {allChangePcts && allChangePcts.length > 0 && (
                 <div className="bg-white border border-gray-200 mx-3 rounded-xl overflow-hidden mb-3">
-                  <StreakStatsPanel allData={allChangePcts} latestDate={latestDate} />
+                  <StreakStatsPanel allData={allChangePcts} latestDate={latestDate} coinIcon={currentStockInfo?.icon} />
                 </div>
               )}
 
               {/* 涨跌幅频率分布图（正态分布直方图） */}
               {allChangePcts && allChangePcts.length > 0 && (
-                <ChangePctDistChart allData={allChangePcts} latestDate={latestDate} />
+                <ChangePctDistChart allData={allChangePcts} latestDate={latestDate} coinIcon={currentStockInfo?.icon} />
               )}
 
             </div>
