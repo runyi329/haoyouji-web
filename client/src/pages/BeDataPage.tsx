@@ -1844,11 +1844,12 @@ export default function BeDataPage() {
                 // 格式化价格标签（强制转Number防止toFixed报错）
                 const fmtPrice = (v: number | string) => { const n = Number(v); if (isNaN(n)) return String(v); return n >= 1000000 ? (n/1000000).toFixed(2).concat('M') : n >= 1000 ? (n/1000).toFixed(1).concat('k') : n.toFixed(2); };
                 // 自定义dot：仅在最高价点渲染标注（带白底标签，不混淆坐标轴）
-                const CustomDot = (props: any) => {
-                  const { cx, cy, index, value } = props;
+                const renderDot = (props: any) => {
+                  const { cx, cy, index, payload } = props;
                   const isMax = index === maxIdx;
                   if (!isMax) return null;
-                  const n = Number(value);
+                  const n = Number(payload?.close ?? payload?.value);
+                  if (isNaN(n) || !cx || !cy) return null;
                   const labelText = '↑ 最高 $'.concat(fmtPrice(n));
                   const labelW = labelText.length * 5.5 + 8;
                   const labelH = 14;
@@ -1912,7 +1913,7 @@ export default function BeDataPage() {
                             stroke="#ef4444"
                             strokeWidth={2}
                             fill="url(#priceAreaGradient)"
-                            dot={<CustomDot />}
+                            dot={renderDot}
                             activeDot={{ r: 4, fill: '#ef4444' }}
                             connectNulls
                             strokeLinecap="round"
