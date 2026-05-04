@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { MarketBetPanelWithTabs } from "./CryptoPrediction";
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft } from "lucide-react";
@@ -1153,6 +1153,9 @@ export default function BeDataPage() {
   // 美股模式和数字币模式下默认显示数据分析
   const [activeTab, setActiveTab] = useState(hideSymbolTabs ? "analysis" : "data");
   const [page, setPage] = useState(1);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const utils = trpc.useUtils();
 
   // 当前股票信息（用于美股模式下显示 logo 和名称）
   const currentStockInfo = ALL_SYMBOLS.find(s => s.key === activeSymbol);
@@ -1182,6 +1185,23 @@ export default function BeDataPage() {
     { symbol: metaSymbolKey },
     { staleTime: 30 * 60 * 1000 } // 30分钟缓存
   );
+
+  // 从 Binance 拉取增量数据
+  const syncMutation = trpc.cryptoData.syncLatest.useMutation({
+    onSuccess: () => {
+      utils.cryptoData.getKlines.invalidate({ symbol: activeSymbol });
+      utils.cryptoData.getStats.invalidate({ symbol: activeSymbol });
+      utils.cryptoData.getAllChangePcts.invalidate({ symbol: activeSymbol });
+      utils.cryptoData.getMeta.invalidate({ symbol: metaSymbolKey });
+      setIsSyncing(false);
+    },
+    onError: () => setIsSyncing(false),
+  });
+  const handleSync = useCallback(() => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    syncMutation.mutate({ symbol: activeSymbol });
+  }, [isSyncing, activeSymbol, syncMutation]);
 
   const rows = data?.rows ?? [];
   const total = metaData?.total ?? data?.total ?? 0;
@@ -1292,10 +1312,11 @@ export default function BeDataPage() {
               </p>
             </div>
             <button
-              onClick={() => window.location.reload()}
-              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer", flexShrink: 0 }}
+              onClick={handleSync}
+              disabled={isSyncing}
+              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: isSyncing ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: isSyncing ? "not-allowed" : "pointer", flexShrink: 0, opacity: isSyncing ? 0.7 : 1 }}
             >
-              更新
+              {isSyncing ? "同步中..." : "更新"}
             </button>
           </div>
 
@@ -1492,7 +1513,7 @@ export default function BeDataPage() {
               <ChevronLeft className="w-5 h-5" />
             </button>
             <span className="font-semibold text-gray-800 text-base flex-1">{pageTitle}</span>
-            <button onClick={() => window.location.reload()} className="text-xs font-medium text-white bg-[#D32F2F] rounded-full px-3 py-1 active:opacity-70">更新</button>
+            <button onClick={handleSync} disabled={isSyncing} className="text-xs font-medium text-white bg-[#D32F2F] rounded-full px-3 py-1 active:opacity-70" style={{ opacity: isSyncing ? 0.7 : 1 }}>{isSyncing ? "同步中..." : "更新"}</button>
           </div>
           {/* 币种 Tab */}
           <div className="flex overflow-x-auto border-b border-gray-200 scrollbar-hide px-2 gap-1 py-1.5" style={{ WebkitOverflowScrolling: 'touch' }}>

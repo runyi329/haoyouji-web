@@ -566,7 +566,7 @@ async function startServer() {
     // ──────────────────────────────────────────────────────
 
     // ─── 数字币（BTC/ETH）：每日 UTC 00:10 自动拉取最新日线数据 ─────────────────
-    const CRYPTO_SYMBOLS = ['BTCUSDT', 'ETHUSDT'];
+    const CRYPTO_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
 
     const scheduleCryptoSync = () => {
       const now = new Date();
