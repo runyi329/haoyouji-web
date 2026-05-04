@@ -289,6 +289,12 @@ export default function USStockTracker() {
             <Search style={{ width: 11, height: 11 }} />
             全市场
           </button>
+          <button
+            onClick={() => window.location.reload()}
+            style={{ padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer" }}
+          >
+            刷新
+          </button>
         </div>
 
         {/* 标普500 指数条 */}

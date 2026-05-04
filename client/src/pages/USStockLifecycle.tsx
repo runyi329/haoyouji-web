@@ -186,6 +186,13 @@ export default function USStockLifecycle() {
             <p className="text-xs opacity-80">共 {total.toLocaleString()} 只</p>
           )}
         </div>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-xs font-medium px-2.5 py-1 rounded-full"
+          style={{ background: "rgba(255,255,255,0.2)", color: "#fff" }}
+        >
+          刷新
+        </button>
       </div>
 
       {/* 搜索框 */}

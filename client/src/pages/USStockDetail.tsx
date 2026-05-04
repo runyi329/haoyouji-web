@@ -159,6 +159,13 @@ export default function USStockDetail() {
             已退市
           </span>
         )}
+        <button
+          onClick={() => window.location.reload()}
+          className="text-xs font-medium px-2.5 py-1 rounded-full"
+          style={{ background: "rgba(255,255,255,0.2)", color: "#fff" }}
+        >
+          刷新
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto pb-8">
