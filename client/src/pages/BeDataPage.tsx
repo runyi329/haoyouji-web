@@ -1841,8 +1841,8 @@ export default function BeDataPage() {
                 const maxIdx = priceData.findIndex(d => d.close === maxPrice);
                 const minIdx = priceData.findIndex(d => d.close === minPrice);
                 const lastIdx = priceData.length - 1;
-                // 格式化价格标签
-                const fmtPrice = (v: number) => v >= 1000 ? (v >= 1000000 ? (v/1000000).toFixed(2).concat('M') : (v/1000).toFixed(1).concat('k')) : v.toFixed(2);
+                // 格式化价格标签（强制转Number防止toFixed报错）
+                const fmtPrice = (v: number | string) => { const n = Number(v); if (isNaN(n)) return String(v); return n >= 1000000 ? (n/1000000).toFixed(2).concat('M') : n >= 1000 ? (n/1000).toFixed(1).concat('k') : n.toFixed(2); };
                 // 自定义dot：仅在最高/最低/最新三个点渲染标注
                 const CustomDot = (props: any) => {
                   const { cx, cy, index, value } = props;
