@@ -112,7 +112,7 @@ export default function SmartFinancePage() {
       gradient: 'linear-gradient(135deg, #0f2027 0%, #203a43 40%, #2c5364 100%)',
       circle1: 'rgba(44,83,100,0.45)',
       circle2: 'rgba(255,255,255,0.06)',
-      icon: '',
+      icon: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icon-commerce-final3_9bc112d3.png',
       stats: [
         { label: '餐饮连锁', value: '153万家' },
         { label: '零售便利', value: '321万家' },
@@ -120,6 +120,24 @@ export default function SmartFinancePage() {
       ],
       badge: '商业连锁',
       highlight: '#38bdf8',
+    },
+    {
+      key: 'insurance',
+      title: '保险',
+      tag: '×AI',
+      sub: '大陆保险 · 香港保险',
+      path: '/insurance',
+      gradient: 'linear-gradient(135deg, #4a0080 0%, #7b2ff7 50%, #a855f7 100%)',
+      circle1: 'rgba(168,85,247,0.35)',
+      circle2: 'rgba(255,255,255,0.06)',
+      icon: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icon-insurance-v2_6979e0e6.png',
+      stats: [
+        { label: '保费规模', value: '5.1万亿' },
+        { label: '港险保费', value: '619亿港元' },
+        { label: 'AI预测2026', value: '5.8万亿' },
+      ],
+      badge: '保险数据',
+      highlight: '#e879f9',
     },
   ];
 
