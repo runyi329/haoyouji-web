@@ -395,19 +395,21 @@ export async function getKlinesMeta(symbol: string): Promise<{
   latestDate: string;
 } | null> {
   const conn = await getDbConnection();
+  // 直接从日线表实时查询，不依赖汇总表，确保最新日期随数据库更新实时同步
   const [rows] = await conn.execute(
-    `SELECT symbol, total,
-       DATE_FORMAT(oldest_date, '%Y/%m/%d') as oldestDate,
-       DATE_FORMAT(latest_date, '%Y/%m/%d') as latestDate
-     FROM crypto_klines_meta WHERE symbol = ? LIMIT 1`,
+    `SELECT
+       COUNT(*) as total,
+       DATE_FORMAT(MIN(date), '%Y/%m/%d') as oldestDate,
+       DATE_FORMAT(MAX(date), '%Y/%m/%d') as latestDate
+     FROM crypto_klines WHERE symbol = ?`,
     [symbol]
   ) as any[];
   const row = (rows as any[])[0];
   return {
-    symbol: row.symbol,
-    total: Number(row.total),
-    oldestDate: row.oldestDate,
-    latestDate: row.latestDate,
+    symbol,
+    total: Number(row.total ?? 0),
+    oldestDate: row.oldestDate ?? '-',
+    latestDate: row.latestDate ?? '-',
   };
 }
 

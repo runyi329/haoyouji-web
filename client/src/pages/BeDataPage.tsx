@@ -1483,11 +1483,12 @@ export default function BeDataPage() {
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 5, textTransform: "uppercase" }}>基本信息</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {['数据条数', '起始日期', '最新日期', '交易所'].map((label, i) => {
+                    const exchangeLabel = isCryptoMode ? '欧易 / 币安' : 'NASDAQ';
                     const vals = [
                       cardLoading ? null : `${total.toLocaleString()}条`,
                       cardLoading ? null : oldestDate,
                       cardLoading ? null : latestDate,
-                      'NASDAQ',
+                      exchangeLabel,
                     ];
                     return (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
