@@ -1556,7 +1556,7 @@ export default function BeDataPage() {
             {t.key === 'data'
               ? `日线历史${total > 0 ? `（${total}条）` : ''}`
               : t.key === 'analysis' && latestDate && latestDate !== '-'
-                ? `数据分析（${latestDate.replace(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/, '$1年$2月$3日')}）`
+                ? `数据分析（${latestDate.replace(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/, (_, y, m, d) => `${y}年${m}月${d}日`)}）`
                 : t.label}
           </button>
         ))}
@@ -1704,7 +1704,6 @@ export default function BeDataPage() {
                   <span className="text-3xl font-bold text-green-600">{stats.maxConsecDown}</span>
                   <span className="text-xs text-gray-400 mt-1">天</span>
                 </div>
-              </div>
               </div>
 
               {/* 连涨/连跌统计（三列对称布局，参照 StockDetail） */}
