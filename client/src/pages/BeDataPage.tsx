@@ -1576,8 +1576,8 @@ export default function BeDataPage() {
                     <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>交易所</span>
                     {isCryptoMode ? (
                       <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                        <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/okx-icon-GgvZvKhWK9hF2eZJ6X3pvw.png" alt="OKX" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
-                        <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/binance-icon-5jgGcENM9rhUCb2uBuUPiD.png" alt="Binance" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
+                        <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logos/okx-circle-icon.png" alt="OKX" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
+                        <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logos/binance-circle-icon.png" alt="Binance" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
                       </div>
                     ) : (
                       <span style={{ fontSize: 11, fontWeight: 700, color: "#E3F2FD" }}>NASDAQ</span>
