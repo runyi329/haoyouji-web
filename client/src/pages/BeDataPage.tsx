@@ -861,22 +861,26 @@ function YearlyBreakdown({
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="year" tick={{ fontSize: 9, fill: '#999' }} angle={-45} textAnchor="end" interval={0} />
                 <YAxis tick={{ fontSize: 9, fill: '#999' }} />
+                <ReferenceLine y={0} stroke="#ccc" strokeWidth={1} />
                 <Tooltip
                   contentStyle={{ fontSize: 11, padding: '4px 8px' }}
                   formatter={(value: number, name: string) => [
                     `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`,
-                    name === 'upPct' ? '涨幅累加' : name === 'downPctNeg' ? '跌幅累加' : name === 'actualPct' ? '实际涨幅' : name
+                    name === 'linearNet' ? '线性净值' : name === 'actualPct' ? '实际涨幅' : name
                   ]}
                   labelFormatter={(label) => `${label}年`}
                 />
-                <Bar dataKey="upPct" name="upPct" fill="#ef4444" opacity={0.85} radius={[2,2,0,0]} stackId="a" />
-                <Bar dataKey="downPctNeg" name="downPctNeg" fill="#22c55e" opacity={0.85} radius={[0,0,2,2]} stackId="b" />
+                <Bar dataKey="linearNet" name="linearNet" radius={[2,2,2,2]} opacity={0.85}>
+                  {([...yearlyData].reverse()).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.linearNet >= 0 ? '#ef4444' : '#22c55e'} />
+                  ))}
+                </Bar>
                 <Line type="monotone" dataKey="actualPct" name="actualPct" stroke="#3b82f6" strokeWidth={1.5} dot={{ r: 2, fill: '#3b82f6' }} connectNulls />
               </ComposedChart>
             </ResponsiveContainer>
             <div className="flex items-center gap-3 px-2 mt-1">
-              <span className="flex items-center gap-1 text-xs text-gray-400"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-400"></span>涨幅累加</span>
-              <span className="flex items-center gap-1 text-xs text-gray-400"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500"></span>跌幅累加</span>
+              <span className="flex items-center gap-1 text-xs text-gray-400"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-400"></span>线性净值（正）</span>
+              <span className="flex items-center gap-1 text-xs text-gray-400"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500"></span>线性净值（负）</span>
               <span className="flex items-center gap-1 text-xs text-gray-400"><span className="inline-block w-5 h-0.5 bg-blue-500"></span>实际涨幅</span>
             </div>
           </div>
