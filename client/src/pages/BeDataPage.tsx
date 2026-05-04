@@ -702,6 +702,85 @@ function SliceCompareTable({ allData }: { allData: { date: string; changePct: nu
   );
 }
 
+// ===== 按年涨跌幅明细组件（可折叠） =====
+function YearlyBreakdown({
+  allChangePcts,
+  totalUpPct,
+  totalDownPct,
+}: {
+  allChangePcts: { date: string; changePct: number | null }[];
+  totalUpPct: number;
+  totalDownPct: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  // 按年分组计算每年累计涨幅和跌幅
+  const yearlyData = useMemo(() => {
+    const map: Record<string, { upPct: number; downPct: number }> = {};
+    for (const item of allChangePcts) {
+      if (item.changePct == null) continue;
+      const year = item.date.slice(0, 4);
+      if (!map[year]) map[year] = { upPct: 0, downPct: 0 };
+      if (item.changePct > 0) map[year].upPct += item.changePct;
+      else if (item.changePct < 0) map[year].downPct += Math.abs(item.changePct);
+    }
+    return Object.entries(map)
+      .sort((a, b) => b[0].localeCompare(a[0])) // 降序（最新年在上）
+      .map(([year, v]) => ({
+        year,
+        upPct: parseFloat(v.upPct.toFixed(2)),
+        downPct: parseFloat(v.downPct.toFixed(2)),
+      }));
+  }, [allChangePcts]);
+
+  const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  return (
+    <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
+      {/* 标题行：总计 + 展开按钮 */}
+      <div
+        className="px-4 py-3 flex items-center justify-between cursor-pointer select-none"
+        onClick={() => setExpanded(e => !e)}
+      >
+        <div>
+          <span className="text-sm font-semibold text-gray-700">累计涨跌幅</span>
+          <span className="text-xs text-gray-400 ml-2">所有上涨/下跌日涨跌幅累加</span>
+        </div>
+        <span className="text-xs text-gray-400">{expanded ? '▲ 收起' : '▼ 按年明细'}</span>
+      </div>
+      {/* 总计数据 */}
+      <div className="grid grid-cols-2 divide-x divide-gray-100 border-t border-gray-100">
+        <div className="flex flex-col items-center py-4">
+          <span className="text-xl font-bold text-red-500">+{fmt(totalUpPct)}%</span>
+          <span className="text-xs text-gray-400 mt-1">累计涨幅</span>
+        </div>
+        <div className="flex flex-col items-center py-4">
+          <span className="text-xl font-bold text-green-600">-{fmt(totalDownPct)}%</span>
+          <span className="text-xs text-gray-400 mt-1">累计跌幅</span>
+        </div>
+      </div>
+      {/* 按年明细（可折叠） */}
+      {expanded && (
+        <div className="border-t border-gray-100">
+          {/* 表头 */}
+          <div className="grid grid-cols-3 px-4 py-2 bg-gray-50 border-b border-gray-100">
+            <span className="text-xs font-semibold text-gray-500">年份</span>
+            <span className="text-xs font-semibold text-red-500 text-right">涨幅累加</span>
+            <span className="text-xs font-semibold text-green-600 text-right">跌幅累加</span>
+          </div>
+          {yearlyData.map(row => (
+            <div key={row.year} className="grid grid-cols-3 px-4 py-2.5 border-b border-gray-50 last:border-0">
+              <span className="text-xs font-medium text-gray-700">{row.year}年</span>
+              <span className="text-xs font-mono text-red-500 text-right">+{fmt(row.upPct)}%</span>
+              <span className="text-xs font-mono text-green-600 text-right">-{fmt(row.downPct)}%</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // FourTierTable 已删除
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function _FourTierTable_REMOVED({ allData }: { allData: { date: string; changePct: number | null }[] }) {
@@ -1675,22 +1754,7 @@ export default function BeDataPage() {
               </div>
 
               {/* 累计涨跌幅 */}
-              <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <span className="text-sm font-semibold text-gray-700">累计涨跌幅</span>
-                  <span className="text-xs text-gray-400 ml-2">所有上涨/下跌日涨跌幅累加</span>
-                </div>
-                <div className="grid grid-cols-2 divide-x divide-gray-100">
-                  <div className="flex flex-col items-center py-4">
-                    <span className="text-xl font-bold text-red-500">+{stats.totalUpPct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
-                    <span className="text-xs text-gray-400 mt-1">累计涨幅</span>
-                  </div>
-                  <div className="flex flex-col items-center py-4">
-                    <span className="text-xl font-bold text-green-600">-{stats.totalDownPct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
-                    <span className="text-xs text-gray-400 mt-1">累计跌幅</span>
-                  </div>
-                </div>
-              </div>
+              <YearlyBreakdown allChangePcts={allChangePcts ?? []} totalUpPct={stats.totalUpPct} totalDownPct={stats.totalDownPct} />
 
               {/* 最长连涨/连跌 */}
               <div className="grid grid-cols-2 gap-3 mx-3 mb-3">
