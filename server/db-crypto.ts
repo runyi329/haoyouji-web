@@ -369,17 +369,18 @@ export async function getCryptoStats(symbol: string): Promise<CryptoStats> {
 /**
  * 获取某交易对全量涨跌幅数组（按日期升序），用于前端分段计算连涨连跌统计
  */
-export async function getAllChangePcts(symbol: string): Promise<{ date: string; changePct: number | null }[]> {
+export async function getAllChangePcts(symbol: string): Promise<{ date: string; changePct: number | null; close: number | null }[]> {
   const conn = await getDbConnection();
   if (!conn) return [];
   const [rows] = await conn.execute(
-    `SELECT DATE_FORMAT(date, '%Y/%m/%d') as date, change_pct as changePct
+    `SELECT DATE_FORMAT(date, '%Y/%m/%d') as date, change_pct as changePct, close
      FROM crypto_klines WHERE symbol = ? AND date >= '2000-01-01' ORDER BY date ASC`,
     [symbol]
   ) as any[];
   return (rows as any[]).map((r: any) => ({
     date: r.date,
     changePct: r.changePct != null ? parseFloat(r.changePct) : null,
+    close: r.close != null ? parseFloat(r.close) : null,
   }));
 }
 
