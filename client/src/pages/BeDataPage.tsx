@@ -1712,7 +1712,7 @@ export default function BeDataPage() {
             {t.key === 'data'
               ? `日线历史${total > 0 ? `（${total}条）` : ''}`
               : t.key === 'analysis' && latestDate && latestDate !== '-'
-                ? `数据分析（${latestDate.replace(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/, (_, y, m, d) => `${+m}/${+d}`)}）`
+                ? (() => { const parts = latestDate.split('/'); return `数据分析（${parts[1] ? (+parts[1]) + '/' + (+parts[2]) : latestDate}）`; })()
                 : t.label}
           </button>
         ))}
