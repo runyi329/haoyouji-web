@@ -1491,15 +1491,16 @@ export default function BeDataPage() {
                 key={s.key}
                 onClick={() => handleSymbolChange(s.key)}
                 style={{
-                  width: 44, height: 44, borderRadius: '50%', padding: 0,
-                  border: isActive ? '2.5px solid #D32F2F' : '2px solid rgba(0,0,0,0.10)',
-                  background: isActive ? '#fff' : 'rgba(255,255,255,0.85)',
-                  boxShadow: isActive ? '0 4px 16px rgba(211,47,47,0.28)' : '0 2px 8px rgba(0,0,0,0.13)',
-                  cursor: 'pointer', transition: 'all 0.18s',
+                  width: isActive ? 50 : 42, height: isActive ? 50 : 42, borderRadius: '50%', padding: 0,
+                  border: 'none',
+                  background: 'rgba(255,255,255,0.92)',
+                  boxShadow: isActive ? '0 6px 20px rgba(0,0,0,0.22)' : '0 2px 8px rgba(0,0,0,0.12)',
+                  cursor: 'pointer', transition: 'all 0.2s',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   backdropFilter: 'blur(8px)',
                   WebkitBackdropFilter: 'blur(8px)',
                   pointerEvents: 'auto',
+                  opacity: isActive ? 1 : 0.6,
                 }}
               >
                 <img src={s.icon} alt={s.shortLabel} style={{ width: 26, height: 26, objectFit: 'contain', borderRadius: '50%' }} />
