@@ -130,7 +130,7 @@ export default function SmartFinancePage() {
       gradient: 'linear-gradient(135deg, #4a0080 0%, #7b2ff7 50%, #a855f7 100%)',
       circle1: 'rgba(168,85,247,0.35)',
       circle2: 'rgba(255,255,255,0.06)',
-      icon: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icon-insurance-umbrella1_adac12d9.png',
+      icon: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icon-insurance-transparent_a5e7fd61.png',
       stats: [
         { label: '保费规模', value: '5.1万亿' },
         { label: '港险保费', value: '619亿港元' },
