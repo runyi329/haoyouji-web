@@ -1850,7 +1850,8 @@ export default function BeDataPage() {
                   if (!isMax) return null;
                   const n = Number(payload?.close ?? payload?.value);
                   if (isNaN(n) || !cx || !cy) return null;
-                  const labelText = '↑ 最高 $'.concat(fmtPrice(n));
+                  const fullPrice = n >= 1 ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : n.toFixed(4);
+                  const labelText = '\u2191 \u6700\u9ad8 $'.concat(fullPrice);
                   const labelW = labelText.length * 5.5 + 8;
                   const labelH = 14;
                   const lx = cx - labelW / 2;
