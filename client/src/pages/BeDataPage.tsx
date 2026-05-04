@@ -1404,6 +1404,26 @@ export default function BeDataPage() {
                         </span>
                     }
                   </div>
+                  {/* 累计涨幅 */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>累计涨幅</span>
+                    {statsLoading
+                      ? <div style={{ width: 60, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
+                      : <span style={{ fontSize: 11, fontWeight: 700, color: "#FF8A80" }}>
+                          {stats ? `+${stats.totalUpPct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "—"}
+                        </span>
+                    }
+                  </div>
+                  {/* 累计跌幅 */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>累计跌幅</span>
+                    {statsLoading
+                      ? <div style={{ width: 60, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
+                      : <span style={{ fontSize: 11, fontWeight: 700, color: "#69F0AE" }}>
+                          {stats ? `-${stats.totalDownPct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "—"}
+                        </span>
+                    }
+                  </div>
                 </div>
               </div>
             </div>
