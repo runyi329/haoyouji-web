@@ -181,12 +181,6 @@ export default function SmartFinancePage() {
         </button>
       </div>
 
-      {/* ── 副标题 ── */}
-      <div className="px-4 pt-4 pb-2">
-        <p style={{ fontSize: 12, color: '#9ca3af', lineHeight: 1.6 }}>
-          基于 AI 大模型的宏观经济数据分析与预测平台
-        </p>
-      </div>
 
       {/* ── 模块卡片列表 ── */}
       <div className="px-4 space-y-4 pb-10">
