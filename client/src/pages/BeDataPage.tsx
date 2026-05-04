@@ -5,7 +5,8 @@ import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Cell, LabelList, ReferenceLine
+  ResponsiveContainer, Cell, LabelList, ReferenceLine,
+  ComposedChart, Line
 } from "recharts";
 
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK";
@@ -764,6 +765,7 @@ function YearlyBreakdown({
           year,
           upPct: parseFloat(v.upPct.toFixed(2)),
           downPct: parseFloat(v.downPct.toFixed(2)),
+          downPctNeg: -parseFloat(v.downPct.toFixed(2)),
           linearNet: parseFloat(linearNet.toFixed(2)),
           actualPct: actualPct != null ? parseFloat(actualPct.toFixed(2)) : null,
         };
@@ -823,21 +825,21 @@ function YearlyBreakdown({
           </div>
           {yearlyData.map((row, idx) => (
             <div key={row.year} className={`grid grid-cols-5 border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-              <div className="px-2 py-2 border-r border-gray-100">
+              <div className="px-2 py-0.5 border-r border-gray-100">
                 <span className="text-xs font-medium text-gray-700">{row.year}年</span>
               </div>
-              <div className="px-2 py-2 border-r border-gray-100 text-right">
+              <div className="px-2 py-0.5 border-r border-gray-100 text-right">
                 <span className="text-xs font-mono text-red-500">+{fmt(row.upPct)}%</span>
               </div>
-              <div className="px-2 py-2 border-r border-gray-100 text-right">
+              <div className="px-2 py-0.5 border-r border-gray-100 text-right">
                 <span className="text-xs font-mono text-green-600">-{fmt(row.downPct)}%</span>
               </div>
-              <div className="px-2 py-2 border-r border-gray-100 text-right">
+              <div className="px-2 py-0.5 border-r border-gray-100 text-right">
                 <span className={`text-xs font-mono ${row.linearNet >= 0 ? 'text-red-500' : 'text-green-600'}`}>
                   {fmtSigned(row.linearNet)}%
                 </span>
               </div>
-              <div className="px-2 py-2 text-right">
+              <div className="px-2 py-0.5 text-right">
                 <span className={`text-xs font-mono ${row.actualPct == null ? 'text-gray-400' : row.actualPct >= 0 ? 'text-red-500' : 'text-green-600'}`}>
                   {row.actualPct != null ? fmtSigned(row.actualPct) + '%' : '-'}
                 </span>
@@ -845,8 +847,38 @@ function YearlyBreakdown({
             </div>
           ))}
           {/* 说明 */}
-          <div className="px-4 py-2 bg-gray-50 border-t border-gray-200">
+          <div className="px-4 py-1.5 bg-gray-50 border-t border-gray-200">
             <p className="text-xs text-gray-400">线性净值=涨幅累加-跌幅累加；实际涨幅=年末/年初收盘价</p>
+          </div>
+          {/* 图表：分组柱状图（涨幅累加/跌幅累加）+ 实际涨幅折线 */}
+          <div className="px-2 pt-3 pb-3 border-t border-gray-100">
+            <div className="text-xs text-gray-400 px-2 mb-1">按年可视化</div>
+            <ResponsiveContainer width="100%" height={200}>
+              <ComposedChart
+                data={[...yearlyData].reverse()}
+                margin={{ top: 8, right: 8, left: -20, bottom: 20 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="year" tick={{ fontSize: 9, fill: '#999' }} angle={-45} textAnchor="end" interval={0} />
+                <YAxis tick={{ fontSize: 9, fill: '#999' }} />
+                <Tooltip
+                  contentStyle={{ fontSize: 11, padding: '4px 8px' }}
+                  formatter={(value: number, name: string) => [
+                    `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`,
+                    name === 'upPct' ? '涨幅累加' : name === 'downPctNeg' ? '跌幅累加' : name === 'actualPct' ? '实际涨幅' : name
+                  ]}
+                  labelFormatter={(label) => `${label}年`}
+                />
+                <Bar dataKey="upPct" name="upPct" fill="#ef4444" opacity={0.85} radius={[2,2,0,0]} />
+                <Bar dataKey="downPctNeg" name="downPctNeg" fill="#22c55e" opacity={0.85} radius={[2,2,0,0]} />
+                <Line type="monotone" dataKey="actualPct" name="actualPct" stroke="#3b82f6" strokeWidth={1.5} dot={{ r: 2, fill: '#3b82f6' }} connectNulls />
+              </ComposedChart>
+            </ResponsiveContainer>
+            <div className="flex items-center gap-3 px-2 mt-1">
+              <span className="flex items-center gap-1 text-xs text-gray-400"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-400"></span>涨幅累加</span>
+              <span className="flex items-center gap-1 text-xs text-gray-400"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-green-500"></span>跌幅累加</span>
+              <span className="flex items-center gap-1 text-xs text-gray-400"><span className="inline-block w-5 h-0.5 bg-blue-500"></span>实际涨幅</span>
+            </div>
           </div>
         </div>
       )}
