@@ -1556,7 +1556,7 @@ export default function BeDataPage() {
             {t.key === 'data'
               ? `日线历史${total > 0 ? `（${total}条）` : ''}`
               : t.key === 'analysis' && latestDate && latestDate !== '-'
-                ? `数据分析（${latestDate.replace(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/, (_, y, m, d) => `${y}年${m}月${d}日`)}）`
+                ? `数据分析（${latestDate.replace(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/, (_, y, m, d) => `${+m}/${+d}`)}）`
                 : t.label}
           </button>
         ))}
