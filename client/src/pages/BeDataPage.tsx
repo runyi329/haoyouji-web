@@ -1421,12 +1421,9 @@ export default function BeDataPage() {
 
   // 相关性统计：选择对比币
   const CRYPTO_SYMBOLS = ALL_SYMBOLS.filter(s => s.type === 'crypto');
-  const [corrCompare, setCorrCompare] = useState<string[]>(() => {
-    // 默认选中除当前币之外的第一个
-    const others = CRYPTO_SYMBOLS.filter(s => s.key !== activeSymbol);
-    return others.length > 0 ? [others[0].key] : [];
-  });
   const corrBaseSymbol = activeSymbol; // 当前币为基准
+  // 默认对比所有其他币种，固定不变
+  const corrCompare = CRYPTO_SYMBOLS.filter(s => s.key !== corrBaseSymbol).map(s => s.key);
   const { data: corrData, isLoading: corrLoading } = trpc.cryptoData.getCorrelation.useQuery(
     {
       baseSymbol: corrBaseSymbol,
@@ -1998,37 +1995,14 @@ export default function BeDataPage() {
               {/* 相关性统计模块 */}
               {(() => {
                 const baseInfo = ALL_SYMBOLS.find(s => s.key === corrBaseSymbol);
-                const otherCryptos = CRYPTO_SYMBOLS.filter(s => s.key !== corrBaseSymbol);
                 return (
                   <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
                     {/* 标题行 */}
-                    <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2 flex-wrap">
+                    <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
                       <span className="text-sm font-semibold text-gray-700 flex items-center gap-1">
                         {baseInfo?.icon && <img src={baseInfo.icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
                         相关性统计
                       </span>
-                      <span className="text-xs text-gray-400 mr-1">对比：</span>
-                      {otherCryptos.map(s => {
-                        const checked = corrCompare.includes(s.key);
-                        return (
-                          <button
-                            key={s.key}
-                            onClick={() => {
-                              setCorrCompare(prev =>
-                                checked ? prev.filter(k => k !== s.key) : [...prev, s.key]
-                              );
-                            }}
-                            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border transition-all ${
-                              checked
-                                ? 'bg-blue-50 border-blue-400 text-blue-700'
-                                : 'bg-gray-50 border-gray-200 text-gray-400'
-                            }`}
-                          >
-                            <img src={s.icon} alt="" style={{ width: 12, height: 12, borderRadius: '50%', objectFit: 'cover' }} />
-                            {s.shortLabel}
-                          </button>
-                        );
-                      })}
                     </div>
 
                     {/* 统计结果 */}
