@@ -2061,19 +2061,7 @@ export default function BeDataPage() {
                             </div>
                           ))}
                         </div>
-                        {/* 注解 */}
-                        <div className="flex flex-wrap gap-x-3 gap-y-1 px-1 pb-1 -mt-3">
-                          {[
-                            { sym: '↑↑', label: `${baseInfo?.shortLabel}涨+对比涨`, color: 'text-red-500' },
-                            { sym: '↑↓', label: `${baseInfo?.shortLabel}涨+对比跌`, color: 'text-orange-500' },
-                            { sym: '↓↓', label: `${baseInfo?.shortLabel}跌+对比跌`, color: 'text-green-600' },
-                            { sym: '↓↑', label: `${baseInfo?.shortLabel}跌+对比涨`, color: 'text-emerald-500' },
-                          ].map(item => (
-                            <span key={item.sym} className="text-xs text-gray-400">
-                              <span className={`font-bold ${item.color}`}>{item.sym}</span> = {item.label}
-                            </span>
-                          ))}
-                        </div>
+
                         {/* 各币对共同日期范围说明 */}
                         <div className="flex flex-wrap gap-x-4 gap-y-1 px-1 pb-1">
                           {corrData.pairs.map(pair => {
