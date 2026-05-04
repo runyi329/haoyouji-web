@@ -1830,6 +1830,59 @@ export default function BeDataPage() {
           ) : (
             <div className="pt-3 space-y-0">
 
+              {/* 历史价格折线图 */}
+              {allChangePcts && allChangePcts.length > 0 && (() => {
+                const priceData = [...allChangePcts].reverse().filter(d => d.close != null).map(d => ({
+                  date: d.date,
+                  close: d.close as number,
+                }));
+                const minPrice = Math.min(...priceData.map(d => d.close));
+                const maxPrice = Math.max(...priceData.map(d => d.close));
+                return (
+                  <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
+                    <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-700 flex items-center gap-1">
+                        {currentStockInfo?.icon && <img src={currentStockInfo.icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+                        历史价格
+                      </span>
+                      <span className="text-xs text-gray-400">{priceData[0]?.date} ~ {priceData[priceData.length - 1]?.date}</span>
+                    </div>
+                    <div className="px-2 py-3">
+                      <ResponsiveContainer width="100%" height={180}>
+                        <ComposedChart data={priceData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+                          <XAxis
+                            dataKey="date"
+                            tick={{ fontSize: 8, fill: '#bbb' }}
+                            tickFormatter={(v: string) => v.slice(0, 4)}
+                            interval={Math.floor(priceData.length / 6)}
+                          />
+                          <YAxis
+                            tick={{ fontSize: 8, fill: '#bbb' }}
+                            domain={[minPrice * 0.95, maxPrice * 1.05]}
+                            tickFormatter={(v: number) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v.toFixed(0)}
+                            width={40}
+                          />
+                          <Tooltip
+                            contentStyle={{ fontSize: 10, padding: '3px 7px' }}
+                            formatter={(value: number) => [`$${value.toLocaleString()}`, '收盘价']}
+                            labelFormatter={(label: string) => label}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="close"
+                            stroke="#ef4444"
+                            strokeWidth={1.5}
+                            dot={false}
+                            connectNulls
+                          />
+                        </ComposedChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* 涨跌天数概览 */}
               <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
                 <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
