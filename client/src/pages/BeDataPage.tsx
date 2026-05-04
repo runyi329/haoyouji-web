@@ -1476,11 +1476,13 @@ export default function BeDataPage() {
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: hideSymbolTabs ? "#EEF2F8" : "#F5F5F5" }}>
 
-      {/* 右上角悬浮币种切换按鈕（仅数字币模式显示） */}
+      {/* 底部居中悬浮币种切换按鈕（仅数字币模式显示） */}
       {urlFilter === 'crypto' && (
         <div style={{
-          position: 'fixed', top: 14, right: 12, zIndex: 100,
-          display: 'flex', flexDirection: 'column', gap: 6,
+          position: 'fixed', bottom: 24, left: 0, right: 0, zIndex: 100,
+          display: 'flex', flexDirection: 'row', gap: 16,
+          justifyContent: 'center', alignItems: 'center',
+          pointerEvents: 'none',
         }}>
           {filteredSymbols.map(s => {
             const isActive = activeSymbol === s.key;
@@ -1489,14 +1491,15 @@ export default function BeDataPage() {
                 key={s.key}
                 onClick={() => handleSymbolChange(s.key)}
                 style={{
-                  width: 38, height: 38, borderRadius: '50%', padding: 0,
-                  border: isActive ? '2.5px solid #fff' : '2px solid rgba(255,255,255,0.35)',
-                  background: isActive ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.12)',
-                  boxShadow: isActive ? '0 2px 10px rgba(0,0,0,0.22)' : '0 1px 4px rgba(0,0,0,0.12)',
+                  width: 44, height: 44, borderRadius: '50%', padding: 0,
+                  border: isActive ? '2.5px solid #D32F2F' : '2px solid rgba(0,0,0,0.10)',
+                  background: isActive ? '#fff' : 'rgba(255,255,255,0.85)',
+                  boxShadow: isActive ? '0 4px 16px rgba(211,47,47,0.28)' : '0 2px 8px rgba(0,0,0,0.13)',
                   cursor: 'pointer', transition: 'all 0.18s',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  backdropFilter: 'blur(6px)',
-                  WebkitBackdropFilter: 'blur(6px)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  pointerEvents: 'auto',
                 }}
               >
                 <img src={s.icon} alt={s.shortLabel} style={{ width: 26, height: 26, objectFit: 'contain', borderRadius: '50%' }} />
