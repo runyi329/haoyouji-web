@@ -187,18 +187,124 @@ export default function InsurancePage() {
             </div>
 
             <div className="bg-white rounded-2xl p-4 shadow-sm">
-              <div className="text-sm font-semibold text-gray-700 mb-3">历年总保费（万亿元）</div>
-              {mainlandPremiumData.slice().reverse().map(d => (
-                <ProgressBar
-                  key={d.year}
-                  label={`${d.year}年`}
-                  value={d.total}
-                  max={6}
-                  unit="万亿"
-                  color="#6366f1"
-                  sub={`寿险${d.life} / 财险${d.property}`}
-                />
-              ))}
+              <div className="text-sm font-semibold text-gray-700 mb-2">历年总保费（万亿元）</div>
+              {/* 图例 */}
+              <div className="flex flex-wrap gap-3 mb-2">
+                <span className="flex items-center gap-1" style={{ fontSize: 10, color: '#9ca3af' }}>
+                  <span style={{ display: 'inline-block', width: 12, height: 7, borderRadius: 2, background: 'linear-gradient(90deg,#6366f1,#818cf8)' }} />总保费
+                </span>
+                <span className="flex items-center gap-1" style={{ fontSize: 10, color: '#9ca3af' }}>
+                  <span style={{ display: 'inline-block', width: 12, height: 7, borderRadius: 2, background: '#10b981' }} />寿险
+                </span>
+                <span className="flex items-center gap-1" style={{ fontSize: 10, color: '#9ca3af' }}>
+                  <span style={{ display: 'inline-block', width: 12, height: 7, borderRadius: 2, background: '#f59e0b' }} />财险
+                </span>
+              </div>
+              {(() => {
+                const ROW_H = 14;
+                const BAR_H = 10;
+                const LABEL_W = 36;
+                const maxTotal = Math.max(...mainlandPremiumData.map(d => d.total));
+                const rows = mainlandPremiumData.slice().reverse();
+                return rows.map((d, idx) => {
+                  const prev = rows[idx + 1];
+                  const pct = prev ? ((d.total - prev.total) / prev.total * 100) : null;
+                  const barPct = (d.total / maxTotal) * 100;
+                  const lifePct = (d.life / maxTotal) * 100;
+                  const propPct = (d.property / maxTotal) * 100;
+                  const isUp = pct !== null && pct > 0;
+                  const pctLabel = pct !== null ? `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%` : '';
+                  return (
+                    <div
+                      key={d.year}
+                      className="flex items-center"
+                      style={{ height: ROW_H, marginBottom: 1 }}
+                    >
+                      {/* 年份标签 */}
+                      <div
+                        className="flex-shrink-0 text-right pr-1.5"
+                        style={{
+                          width: LABEL_W,
+                          fontSize: 9,
+                          color: '#9ca3af',
+                          fontWeight: 400,
+                          lineHeight: `${ROW_H}px`,
+                        }}
+                      >
+                        {d.year}
+                      </div>
+                      {/* 条形轨道 */}
+                      <div
+                        className="relative flex-1"
+                        style={{ height: BAR_H, borderRadius: 2, background: '#ede9fe' }}
+                      >
+                        {/* 总保费条 */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            height: '100%',
+                            width: `${Math.max(barPct, 0.5)}%`,
+                            background: 'linear-gradient(90deg,#6366f1 0%,#818cf8 100%)',
+                            borderRadius: '2px 3px 3px 2px',
+                            transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${idx * 15}ms`,
+                            boxShadow: 'inset 0 -1px 3px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.2)',
+                          }}
+                        />
+                        {/* 寿险细条（叠加在上方，半透明） */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            height: '50%',
+                            width: `${Math.max(lifePct, 0.5)}%`,
+                            background: 'rgba(16,185,129,0.55)',
+                            borderRadius: '2px 0 0 0',
+                            transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${idx * 15 + 80}ms`,
+                            pointerEvents: 'none',
+                          }}
+                        />
+                        {/* 财险细条（叠加在下方，半透明） */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            left: 0,
+                            height: '50%',
+                            width: `${Math.max(propPct, 0.5)}%`,
+                            background: 'rgba(245,158,11,0.55)',
+                            borderRadius: '0 0 0 2px',
+                            transition: `width 0.75s cubic-bezier(0.4,0,0.2,1) ${idx * 15 + 160}ms`,
+                            pointerEvents: 'none',
+                          }}
+                        />
+                        {/* 数值标签：总保费值 + 同比 */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            ...(barPct >= 25
+                              ? { right: `${100 - Math.max(barPct, 0.5)}%`, paddingRight: 3, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.35)' }
+                              : { left: `${Math.max(barPct, 0.5)}%`, paddingLeft: 3, color: '#374151' }
+                            ),
+                            fontSize: 8,
+                            fontWeight: 700,
+                            lineHeight: 1,
+                            whiteSpace: 'nowrap',
+                            fontVariantNumeric: 'tabular-nums',
+                            pointerEvents: 'none',
+                          }}
+                        >
+                          {d.total}万亿{pctLabel ? ` ${pctLabel}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         )}
