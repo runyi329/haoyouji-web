@@ -2039,15 +2039,18 @@ export default function BeDataPage() {
                           </div>
                           {/* 六行数据 */}
                           {([
-                            { label: '↑↑', key: 'bothUp', bg: 'bg-red-50', color: 'text-red-600' },
-                            { label: '↑↓', key: 'baseUpCompDown', bg: 'bg-orange-50', color: 'text-orange-500' },
-                            { label: '↓↓', key: 'bothDown', bg: 'bg-green-50', color: 'text-green-600' },
-                            { label: '↓↑', key: 'baseDownCompUp', bg: 'bg-emerald-50', color: 'text-emerald-500' },
-                            { label: '同向', key: 'sameDirection', bg: 'bg-gray-50', color: 'text-gray-800' },
-                            { label: '反向', key: 'oppositeDirection', bg: 'bg-gray-50', color: 'text-gray-700' },
-                          ] as { label: string; key: keyof typeof corrData.pairs[0]; bg: string; color: string }[]).map((row, ri) => (
+                            { arrow: '↑↑', text: '同涨', key: 'bothUp', bg: 'bg-red-50', color: 'text-red-600' },
+                            { arrow: '↑↓', text: '基涨对跌', key: 'baseUpCompDown', bg: 'bg-orange-50', color: 'text-orange-500' },
+                            { arrow: '↓↓', text: '同跌', key: 'bothDown', bg: 'bg-green-50', color: 'text-green-600' },
+                            { arrow: '↓↑', text: '基跌对涨', key: 'baseDownCompUp', bg: 'bg-emerald-50', color: 'text-emerald-500' },
+                            { arrow: '', text: '同向天数', key: 'sameDirection', bg: 'bg-gray-50', color: 'text-gray-800' },
+                            { arrow: '', text: '反向天数', key: 'oppositeDirection', bg: 'bg-gray-50', color: 'text-gray-700' },
+                          ] as { arrow: string; text: string; key: keyof typeof corrData.pairs[0]; bg: string; color: string }[]).map((row, ri) => (
                             <div key={ri} className={`grid border-b border-gray-100 last:border-b-0 ${row.bg}`} style={{ gridTemplateColumns: `80px repeat(${corrData.pairs.length}, 1fr)` }}>
-                              <div className="px-2 py-2 text-xs text-gray-500 flex items-center font-bold">{row.label}</div>
+                              <div className="px-2 py-2 text-xs text-gray-500 flex items-center gap-0.5">
+                                {row.arrow && <span className="font-bold">{row.arrow}</span>}
+                                <span>{row.text}</span>
+                              </div>
                               {corrData.pairs.map(pair => {
                                 const val = Number(pair[row.key]);
                                 const pct = pair.validDays > 0 ? ((val / pair.validDays) * 100).toFixed(1) : '0.0';
