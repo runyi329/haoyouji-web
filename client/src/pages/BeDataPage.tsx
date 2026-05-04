@@ -182,12 +182,11 @@ function StreakStatsPanel({ allData, latestDate, coinIcon }: { allData: { date: 
         <div className="px-4 py-3 text-xs" style={{ color: MUTED }}>暂无连涨/连跌数据</div>
       )}
       {/* 时间段切换按鈕（表格下方） */}
-      <div className="px-4 pb-3 pt-2 flex items-center gap-1.5 border-t border-gray-50">
+      <div className="px-3 pb-3 pt-2 flex flex-nowrap items-center gap-1 border-t border-gray-50 overflow-x-auto">
         {([30, 60, 90, 180, 'all'] as const).map(n => (
           <button
             key={n}
             onClick={() => setStreakTab(n)}
-            className="text-xs px-2.5 py-1"
             style={{
               background: streakTab === n ? RED : '#F0F0F0',
               color: streakTab === n ? '#fff' : MUTED,
@@ -195,8 +194,12 @@ function StreakStatsPanel({ allData, latestDate, coinIcon }: { allData: { date: 
               borderRadius: 4,
               border: 'none',
               cursor: 'pointer',
+              fontSize: 11,
+              padding: '3px 8px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
-          >{n === 'all' ? `全量（${allSorted.length}天）` : `${n}天`}</button>
+          >{n === 'all' ? `全量(${allSorted.length}天)` : `${n}天`}</button>
         ))}
       </div>
 
