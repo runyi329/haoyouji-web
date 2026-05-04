@@ -83,7 +83,7 @@ function calcStreakFromItems(data: { changePct: number | null }[]): {
 }
 
 // 连涨连跌统计组件（三列对称布局，参照 StockDetail）
-function StreakStatsPanel({ allData }: { allData: { date: string; changePct: number | null }[] }) {
+function StreakStatsPanel({ allData, latestDate }: { allData: { date: string; changePct: number | null }[]; latestDate?: string }) {
   const [streakTab, setStreakTab] = useState<30 | 60 | 90 | 180 | 'all'>(60);
 
   // 各时间段统计（前端计算）
@@ -108,6 +108,7 @@ function StreakStatsPanel({ allData }: { allData: { date: string; changePct: num
       {/* 标题 + 时间段切换 */}
       <div className="px-4 pt-3 pb-1 flex items-center justify-between">
         <span className="text-xs font-semibold" style={{ color: MUTED }}>连涨 / 连跌统计</span>
+        {latestDate && <span style={{ fontSize: 9, color: '#9CA3AF', marginLeft: 4 }}>AI追踪至{latestDate.replace(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/, '$1年$2月$3日')}</span>}
         <div className="flex items-center gap-1">
           {([30, 60, 90, 180, 'all'] as const).map(n => (
             <button
@@ -191,7 +192,7 @@ function StreakStatsPanel({ allData }: { allData: { date: string; changePct: num
 }
 
 // 涨跌幅频率分布图组件（正态分布直方图）
-function ChangePctDistChart({ allData }: { allData: { date: string; changePct: number | null }[] }) {
+function ChangePctDistChart({ allData, latestDate }: { allData: { date: string; changePct: number | null }[]; latestDate?: string }) {
   const distData = useMemo(() => {
     // 统计每1%区间的出现次数
     const bucketMap: Record<number, number> = {};
@@ -233,6 +234,7 @@ function ChangePctDistChart({ allData }: { allData: { date: string; changePct: n
         <div>
           <span className="text-sm font-semibold text-gray-700">涨跌幅频率分布</span>
           <span className="text-xs text-gray-400 ml-2">每1%一个区间 · 共{totalDays}天</span>
+          {latestDate && <span className="text-xs text-gray-400 ml-1">· AI追踪至{latestDate.replace(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/, '$1年$2月$3日')}</span>}
         </div>
         <div className="flex items-center gap-2 text-xs">
           <span className="text-red-500 font-medium">{upDays}涨</span>
@@ -1641,9 +1643,12 @@ export default function BeDataPage() {
 
               {/* 涨跌天数概览 */}
               <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <span className="text-sm font-semibold text-gray-700">涨跌天数统计</span>
-                  <span className="text-xs text-gray-400 ml-2">共 {stats.total} 天</span>
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-sm font-semibold text-gray-700">涨跌天数统计</span>
+                    <span className="text-xs text-gray-400 ml-2">共 {stats.total} 天</span>
+                  </div>
+                  {latestDate && latestDate !== '-' && <span className="text-xs text-gray-400">AI追踪至{latestDate.replace(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/, '$1年$2月$3日')}</span>}
                 </div>
                 <div className="grid grid-cols-3 divide-x divide-gray-100">
                   <div className="flex flex-col items-center py-4">
@@ -1674,9 +1679,12 @@ export default function BeDataPage() {
 
               {/* 累计涨跌幅 */}
               <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <span className="text-sm font-semibold text-gray-700">累计涨跌幅</span>
-                  <span className="text-xs text-gray-400 ml-2">所有上涨/下跌日涨跌幅累加</span>
+                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+                  <div>
+                    <span className="text-sm font-semibold text-gray-700">累计涨跌幅</span>
+                    <span className="text-xs text-gray-400 ml-2">所有上涨/下跌日涨跌幅累加</span>
+                  </div>
+                  {latestDate && latestDate !== '-' && <span className="text-xs text-gray-400">AI追踪至{latestDate.replace(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/, '$1年$2月$3日')}</span>}
                 </div>
                 <div className="grid grid-cols-2 divide-x divide-gray-100">
                   <div className="flex flex-col items-center py-4">
@@ -1691,7 +1699,14 @@ export default function BeDataPage() {
               </div>
 
               {/* 最长连涨/连跌 */}
-              <div className="grid grid-cols-2 gap-3 mx-3 mb-3">
+              <div className="mx-3 mb-3">
+                {latestDate && latestDate !== '-' && (
+                  <div className="flex items-center justify-between mb-1.5 px-1">
+                    <span className="text-xs font-semibold text-gray-600">最长连涨 / 连跌</span>
+                    <span className="text-xs text-gray-400">AI追踪至{latestDate.replace(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/, '$1年$2月$3日')}</span>
+                  </div>
+                )}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex flex-col items-center">
                   <span className="text-xs text-gray-400 mb-1">最长连涨</span>
                   <span className="text-3xl font-bold text-red-500">{stats.maxConsecUp}</span>
@@ -1703,17 +1718,18 @@ export default function BeDataPage() {
                   <span className="text-xs text-gray-400 mt-1">天</span>
                 </div>
               </div>
+              </div>
 
               {/* 连涨/连跌统计（三列对称布局，参照 StockDetail） */}
               {allChangePcts && allChangePcts.length > 0 && (
                 <div className="bg-white border border-gray-200 mx-3 rounded-xl overflow-hidden mb-3">
-                  <StreakStatsPanel allData={allChangePcts} />
+                  <StreakStatsPanel allData={allChangePcts} latestDate={latestDate} />
                 </div>
               )}
 
               {/* 涨跌幅频率分布图（正态分布直方图） */}
               {allChangePcts && allChangePcts.length > 0 && (
-                <ChangePctDistChart allData={allChangePcts} />
+                <ChangePctDistChart allData={allChangePcts} latestDate={latestDate} />
               )}
 
             </div>
