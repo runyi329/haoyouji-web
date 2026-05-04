@@ -93,6 +93,8 @@ jobs:
             cd /root/haoyouji-web && node scripts/update-gold-daily.mjs || echo "⚠️ 黄金数据更新失败（非致命）"
             echo "📊 初始化/更新数字币价格缓存..."
             cd /root/haoyouji-web && node scripts/seed-crypto-prices.mjs || echo "⚠️ 数字币价格初始化失败（非致命）"
+            echo "📊 预计算数字币相关性统计..."
+            cd /root/haoyouji-web && node scripts/compute-correlation.mjs || echo "⚠️ 相关性统计预计算失败（非致命）"
             echo "📊 插入ETH持仓模拟数据（一次性）..."
             cd /root/haoyouji-web && node scripts/seed-eth-positions.mjs || echo "⚠️ ETH持仓模拟数据插入失败（非致命）"
             # 首次部署时检查数据量，不足100条则全量导入
