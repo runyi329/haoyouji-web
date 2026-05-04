@@ -1404,26 +1404,6 @@ export default function BeDataPage() {
                         </span>
                     }
                   </div>
-                  {/* 累计涨幅 */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
-                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>累计涨幅</span>
-                    {statsLoading
-                      ? <div style={{ width: 60, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-                      : <span style={{ fontSize: 11, fontWeight: 700, color: "#FF8A80" }}>
-                          {stats ? `+${stats.totalUpPct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "—"}
-                        </span>
-                    }
-                  </div>
-                  {/* 累计跌幅 */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
-                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>累计跌幅</span>
-                    {statsLoading
-                      ? <div style={{ width: 60, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-                      : <span style={{ fontSize: 11, fontWeight: 700, color: "#69F0AE" }}>
-                          {stats ? `-${stats.totalDownPct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : "—"}
-                        </span>
-                    }
-                  </div>
                 </div>
               </div>
             </div>
@@ -1689,6 +1669,24 @@ export default function BeDataPage() {
                   <div className="bg-red-400" style={{ width: `${stats.upPct}%` }} />
                   <div className="bg-gray-200" style={{ width: `${(stats.flatDays / stats.total * 100).toFixed(2)}%` }} />
                   <div className="bg-green-500 flex-1" />
+                </div>
+              </div>
+
+              {/* 累计涨跌幅 */}
+              <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <span className="text-sm font-semibold text-gray-700">累计涨跌幅</span>
+                  <span className="text-xs text-gray-400 ml-2">所有上涨/下跌日涨跌幅累加</span>
+                </div>
+                <div className="grid grid-cols-2 divide-x divide-gray-100">
+                  <div className="flex flex-col items-center py-4">
+                    <span className="text-xl font-bold text-red-500">+{stats.totalUpPct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                    <span className="text-xs text-gray-400 mt-1">累计涨幅</span>
+                  </div>
+                  <div className="flex flex-col items-center py-4">
+                    <span className="text-xl font-bold text-green-600">-{stats.totalDownPct.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</span>
+                    <span className="text-xs text-gray-400 mt-1">累计跌幅</span>
+                  </div>
                 </div>
               </div>
 
