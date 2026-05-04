@@ -1843,22 +1843,22 @@ export default function BeDataPage() {
                 const lastIdx = priceData.length - 1;
                 // 格式化价格标签（强制转Number防止toFixed报错）
                 const fmtPrice = (v: number | string) => { const n = Number(v); if (isNaN(n)) return String(v); return n >= 1000000 ? (n/1000000).toFixed(2).concat('M') : n >= 1000 ? (n/1000).toFixed(1).concat('k') : n.toFixed(2); };
-                // 自定义dot：仅在最高/最低/最新三个点渲染标注
+                // 自定义dot：仅在最高价点渲染标注（带白底标签，不混淆坐标轴）
                 const CustomDot = (props: any) => {
                   const { cx, cy, index, value } = props;
                   const isMax = index === maxIdx;
-                  const isMin = index === minIdx;
-                  const isLast = index === lastIdx;
-                  if (!isMax && !isMin && !isLast) return null;
-                  const color = isMax ? '#f59e0b' : isMin ? '#22c55e' : '#3b82f6';
-                  const label = isMax ? '最高 $'.concat(fmtPrice(value)) : isMin ? '最低 $'.concat(fmtPrice(value)) : '现价 $'.concat(fmtPrice(value));
-                  // 标签位置：最高点标签在上方，最低点在下方，最新价在右上
-                  const dy = isMin ? 14 : -10;
-                  const anchor = isLast ? 'end' : 'middle';
+                  if (!isMax) return null;
+                  const n = Number(value);
+                  const labelText = '↑ 最高 $'.concat(fmtPrice(n));
+                  const labelW = labelText.length * 5.5 + 8;
+                  const labelH = 14;
+                  const lx = cx - labelW / 2;
+                  const ly = cy - labelH - 8;
                   return (
-                    <g key={'dot-'.concat(String(index))}>
-                      <circle cx={cx} cy={cy} r={4} fill={color} stroke="#fff" strokeWidth={1.5} />
-                      <text x={cx} y={cy + dy} textAnchor={anchor} fontSize={8} fill={color} fontWeight={600}>{label}</text>
+                    <g key={'dot-max'}>
+                      <circle cx={cx} cy={cy} r={5} fill="#f59e0b" stroke="#fff" strokeWidth={2} />
+                      <rect x={lx} y={ly} width={labelW} height={labelH} rx={3} fill="#fff" stroke="#f59e0b" strokeWidth={1} />
+                      <text x={cx} y={ly + 10} textAnchor="middle" fontSize={8} fill="#d97706" fontWeight={700}>{labelText}</text>
                     </g>
                   );
                 };
