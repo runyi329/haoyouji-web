@@ -195,7 +195,7 @@ export default function AfWithdrawPage() {
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold text-gray-700">提现地址</span>
             <button
-              onClick={() => setLocation("/profile/wallets")}
+              onClick={() => setLocation("/payment-accounts")}
               className="text-xs text-red-600"
             >
               管理钱包
@@ -204,7 +204,7 @@ export default function AfWithdrawPage() {
 
           {blockchainWallets.length === 0 ? (
             <div
-              onClick={() => setLocation("/profile/wallets")}
+              onClick={() => setLocation("/payment-accounts")}
               className="border border-dashed border-gray-300 rounded-xl p-4 text-center text-sm text-gray-400 cursor-pointer hover:border-red-300"
             >
               暂无 APTOS / TRC20 提现地址，点击前往个人中心添加
