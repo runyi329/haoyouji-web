@@ -388,6 +388,16 @@ ${klinesSummary}
           return { analysis: '分析服务暂时不可用，请稍后重试。', symbol, stockName };
         }
       }),
+
+    // 多币相关性统计
+    getCorrelation: publicProcedure
+      .input(z.object({
+        baseSymbol: z.string(),
+        compareSymbols: z.array(z.string()).min(1),
+      }))
+      .query(async ({ input }) => {
+        return await dbCrypto.getCryptoCorrelation(input.baseSymbol, input.compareSymbols);
+      }),
   }),
 
   // 支付账户管理
