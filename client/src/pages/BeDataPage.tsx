@@ -2144,7 +2144,6 @@ export default function BeDataPage() {
                         </div>
                       </div>
                     )}
-                    )}
                   </div>
                 );
               })()}
