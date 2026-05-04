@@ -109,17 +109,18 @@ function StreakStatsPanel({ allData, latestDate }: { allData: { date: string; ch
 
   return (
     <div style={{ background: CARD, borderTop: `8px solid ${BG}` }}>
-      {/* 最长连涨/连跌（全量）展示区 */}
-      <div className="grid grid-cols-2 divide-x divide-gray-100 border-b border-gray-100">
-        <div className="flex flex-col items-center py-3">
-          <span className="text-xs text-gray-400 mb-1">最长连涨</span>
-          <span className="text-3xl font-bold text-red-500">{globalMaxUp}</span>
-          <span className="text-xs text-gray-400 mt-1">天</span>
+      {/* 最长连涨/连跌（全量）展示区，一行左右并排 */}
+      <div className="flex items-center justify-around px-4 py-2.5 border-b border-gray-100">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-xs text-gray-400">最长连涨</span>
+          <span className="text-2xl font-bold text-red-500">{globalMaxUp}</span>
+          <span className="text-xs text-gray-400">天</span>
         </div>
-        <div className="flex flex-col items-center py-3">
-          <span className="text-xs text-gray-400 mb-1">最长连跌</span>
-          <span className="text-3xl font-bold text-green-600">{globalMaxDown}</span>
-          <span className="text-xs text-gray-400 mt-1">天</span>
+        <div className="w-px h-5 bg-gray-100" />
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-xs text-gray-400">最长连跌</span>
+          <span className="text-2xl font-bold text-green-600">{globalMaxDown}</span>
+          <span className="text-xs text-gray-400">天</span>
         </div>
       </div>
       {/* 标题 + 时间段切换 */}
