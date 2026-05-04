@@ -2059,9 +2059,6 @@ export default function BeDataPage() {
                                     {compInfo?.icon && <img src={compInfo.icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }} />}
                                     <span className="text-xs font-semibold text-gray-700">{compInfo?.shortLabel ?? pair.symbol}</span>
                                   </div>
-                                  <div className="text-xs text-gray-400">{pair.validDays}天</div>
-                                  <div className="text-xs text-gray-300" style={{ fontSize: 9 }}>{(pair as any).dateStart?.slice(0,7)} ~</div>
-                                  <div className="text-xs text-gray-300" style={{ fontSize: 9 }}>{(pair as any).dateEnd?.slice(0,7)}</div>
                                 </div>
                               );
                             })}
@@ -2102,6 +2099,18 @@ export default function BeDataPage() {
                               <span className={`font-bold ${item.color}`}>{item.sym}</span> = {item.label}
                             </span>
                           ))}
+                        </div>
+                        {/* 各币对共同日期范围说明 */}
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 px-1 pb-1">
+                          {corrData.pairs.map(pair => {
+                            const compInfo = ALL_SYMBOLS.find(s => s.key === pair.symbol);
+                            return (
+                              <span key={pair.symbol} className="text-xs text-gray-400">
+                                {baseInfo?.shortLabel} vs {compInfo?.shortLabel ?? pair.symbol}：共同 {pair.validDays} 天
+                                {(pair as any).dateStart && <span className="text-gray-300 ml-1">({(pair as any).dateStart?.slice(0,7)} ~ {(pair as any).dateEnd?.slice(0,7)})</span>}
+                              </span>
+                            );
+                          })}
                         </div>
 
                         {/* 饵图可视化：每个币对一个饵图，并排 */}
