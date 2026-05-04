@@ -1327,7 +1327,7 @@ export default function BeDataPage() {
     : activeSymbol; // BTCUSDT / ETHUSDT / SOLUSDT
   const { data: metaData } = trpc.cryptoData.getMeta.useQuery(
     { symbol: metaSymbolKey },
-    { staleTime: 30 * 60 * 1000 } // 30分钟缓存
+    { staleTime: 5 * 60 * 1000, refetchInterval: 5 * 60 * 1000 } // 5分钟自动刷新，随数据库更新同步最新日期
   );
 
   const handleSync = useCallback(() => {
