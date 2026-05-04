@@ -1555,24 +1555,34 @@ export default function BeDataPage() {
               <div style={{ borderRadius: 10, padding: "8px 10px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)" }}>
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 5, textTransform: "uppercase" }}>基本信息</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {['数据条数', '起始日期', '最新日期', '交易所'].map((label, i) => {
-                    const exchangeLabel = isCryptoMode ? '欧易 / 币安' : 'NASDAQ';
+                  {['数据条数', '起始日期', '最新日期'].map((label, i) => {
                     const vals = [
                       cardLoading ? null : `${total.toLocaleString()}条`,
                       cardLoading ? null : oldestDate,
                       cardLoading ? null : latestDate,
-                      exchangeLabel,
                     ];
                     return (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
                         <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{label}</span>
                         {vals[i] == null
                           ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-                          : <span style={{ fontSize: i === 3 ? 11 : 11, fontWeight: 700, color: i === 3 ? "#E3F2FD" : "#fff" }}>{vals[i]}</span>
+                          : <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{vals[i]}</span>
                         }
                       </div>
                     );
                   })}
+                  {/* 交易所：用图标替代文字 */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>交易所</span>
+                    {isCryptoMode ? (
+                      <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                        <img src="/okx-circle-icon.png" alt="OKX" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }} />
+                        <img src="/binance-circle-icon.png" alt="Binance" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }} />
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#E3F2FD" }}>NASDAQ</span>
+                    )}
+                  </div>
                 </div>
               </div>
 
