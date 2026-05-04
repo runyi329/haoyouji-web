@@ -94,6 +94,10 @@ function StreakStatsPanel({ allData, latestDate }: { allData: { date: string; ch
   const recentData180 = useMemo(() => calcStreakFromItems(allSorted.slice(-180)), [allSorted]);
   const allStreakData = useMemo(() => calcStreakFromItems(allSorted), [allSorted]);
 
+  // 全量最长连涨/连跌（始终取全量）
+  const globalMaxUp = allStreakData.maxUpStreak;
+  const globalMaxDown = allStreakData.maxDownStreak;
+
   const curData = streakTab === 'all' ? allStreakData
     : streakTab === 30 ? recentData30
     : streakTab === 60 ? recentData60
@@ -105,6 +109,19 @@ function StreakStatsPanel({ allData, latestDate }: { allData: { date: string; ch
 
   return (
     <div style={{ background: CARD, borderTop: `8px solid ${BG}` }}>
+      {/* 最长连涨/连跌（全量）展示区 */}
+      <div className="grid grid-cols-2 divide-x divide-gray-100 border-b border-gray-100">
+        <div className="flex flex-col items-center py-3">
+          <span className="text-xs text-gray-400 mb-1">最长连涨</span>
+          <span className="text-3xl font-bold text-red-500">{globalMaxUp}</span>
+          <span className="text-xs text-gray-400 mt-1">天</span>
+        </div>
+        <div className="flex flex-col items-center py-3">
+          <span className="text-xs text-gray-400 mb-1">最长连跌</span>
+          <span className="text-3xl font-bold text-green-600">{globalMaxDown}</span>
+          <span className="text-xs text-gray-400 mt-1">天</span>
+        </div>
+      </div>
       {/* 标题 + 时间段切换 */}
       <div className="px-4 pt-3 pb-1 flex items-center justify-between">
         <span className="text-xs font-semibold" style={{ color: MUTED }}>连涨 / 连跌统计</span>
@@ -1803,21 +1820,7 @@ export default function BeDataPage() {
               {/* 累计涨跌幅 */}
               <YearlyBreakdown allChangePcts={allChangePcts ?? []} totalUpPct={stats.totalUpPct} totalDownPct={stats.totalDownPct} />
 
-              {/* 最长连涨/连跌 */}
-              <div className="grid grid-cols-2 gap-3 mx-3 mb-3">
-                <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex flex-col items-center">
-                  <span className="text-xs text-gray-400 mb-1">最长连涨</span>
-                  <span className="text-3xl font-bold text-red-500">{stats.maxConsecUp}</span>
-                  <span className="text-xs text-gray-400 mt-1">天</span>
-                </div>
-                <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 flex flex-col items-center">
-                  <span className="text-xs text-gray-400 mb-1">最长连跌</span>
-                  <span className="text-3xl font-bold text-green-600">{stats.maxConsecDown}</span>
-                  <span className="text-xs text-gray-400 mt-1">天</span>
-                </div>
-              </div>
-
-              {/* 连涨/连跌统计（三列对称布局，参照 StockDetail） */}
+              {/* 连涨/连跌统计（已内嵌最长连涨/连跌） */}
               {allChangePcts && allChangePcts.length > 0 && (
                 <div className="bg-white border border-gray-200 mx-3 rounded-xl overflow-hidden mb-3">
                   <StreakStatsPanel allData={allChangePcts} latestDate={latestDate} />
