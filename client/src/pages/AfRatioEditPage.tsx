@@ -121,6 +121,12 @@ export default function AfRatioEditPage() {
             {targetName} 的拨比设置
           </div>
         </div>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-sm text-blue-500 font-medium"
+        >
+          刷新
+        </button>
       </div>
 
       {/* 分配进度条 */}

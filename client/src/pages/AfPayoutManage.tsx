@@ -101,6 +101,13 @@ export default function AfPayoutManage() {
           <ChevronLeft className="w-5 h-5 text-gray-600" />
         </button>
         <h1 className="text-base font-semibold text-gray-800">拨比管理</h1>
+        <div className="flex-1" />
+        <button
+          onClick={() => window.location.reload()}
+          className="text-sm text-blue-500 font-medium"
+        >
+          刷新
+        </button>
       </div>
 
       <div className="max-w-lg mx-auto p-4 space-y-4">
