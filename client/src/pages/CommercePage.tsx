@@ -6,13 +6,13 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 // ── 数据 ──────────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: "food", label: "餐饮", icon: "🍜" },
-  { id: "retail", label: "零售", icon: "🏪" },
-  { id: "beauty", label: "美容", icon: "💄" },
-  { id: "health", label: "医药健身", icon: "💊" },
-  { id: "hotel", label: "酒店", icon: "🏨" },
-  { id: "service", label: "其他服务", icon: "🔧" },
-  { id: "ai", label: "AI预测", icon: "🤖" },
+  { id: "food", label: "餐饮", icon: "" },
+  { id: "retail", label: "零售", icon: "" },
+  { id: "beauty", label: "美容", icon: "" },
+  { id: "health", label: "医药健身", icon: "" },
+  { id: "hotel", label: "酒店", icon: "" },
+  { id: "service", label: "其他服务", icon: "" },
+  { id: "ai", label: "AI预测", icon: "" },
 ];
 
 // 餐饮连锁
@@ -226,7 +226,6 @@ export default function CommercePage() {
                 : "bg-white text-gray-600 border border-gray-200"
             }`}
           >
-            <span>{tab.icon}</span>
             <span>{tab.label}</span>
           </button>
         ))}
@@ -289,7 +288,7 @@ export default function CommercePage() {
             </div>
 
             <div className="bg-orange-50 rounded-2xl p-4 border border-orange-100">
-              <div className="text-xs font-bold text-orange-800 mb-2">🔍 行业洞察</div>
+              <div className="text-xs font-bold text-orange-800 mb-2">行业洞察</div>
               <div className="text-xs text-orange-700 leading-relaxed space-y-1">
                 <p>• 蜜雪冰城以 <strong>4.5万家</strong>门店位居全国餐饮连锁第一，超越所有快餐品牌</p>
                 <p>• 瑞幸咖啡（2.23万）已超越星巴克（0.8万），成为中国最大咖啡连锁</p>
@@ -336,7 +335,7 @@ export default function CommercePage() {
             </div>
 
             <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
-              <div className="text-xs font-bold text-blue-800 mb-2">🔍 行业洞察</div>
+              <div className="text-xs font-bold text-blue-800 mb-2">行业洞察</div>
               <div className="text-xs text-blue-700 leading-relaxed space-y-1">
                 <p>• 便利店行业：美宜佳（3.8万）是7-Eleven（4639）的8倍，本土品牌占绝对优势</p>
                 <p>• 两桶油旗下便利店（易捷+昆仑好客）合计近5万家，依托加油站优势</p>
@@ -377,7 +376,7 @@ export default function CommercePage() {
             </div>
 
             <div className="bg-pink-50 rounded-2xl p-4 border border-pink-100">
-              <div className="text-xs font-bold text-pink-800 mb-2">🔍 行业洞察</div>
+              <div className="text-xs font-bold text-pink-800 mb-2">行业洞察</div>
               <div className="text-xs text-pink-700 leading-relaxed space-y-1">
                 <p>• 美容行业连锁化率仅15%，大量门店仍为个体经营，连锁化空间巨大</p>
                 <p>• 植发赛道快速崛起，雍禾、碧莲盛、大麦三强竞争，年增速超30%</p>
@@ -407,7 +406,7 @@ export default function CommercePage() {
             </div>
 
             <div className="bg-green-50 rounded-2xl p-4 border border-green-100">
-              <div className="text-xs font-bold text-green-800 mb-2">🔍 行业洞察</div>
+              <div className="text-xs font-bold text-green-800 mb-2">行业洞察</div>
               <div className="text-xs text-green-700 leading-relaxed space-y-1">
                 <p>• 全国药店总数约68万家，四大连锁（大参林/老百姓/益丰/一心堂）合计约6万家</p>
                 <p>• 药店行业趋于饱和，头部企业通过并购扩张，中小药店生存压力大</p>
@@ -446,7 +445,7 @@ export default function CommercePage() {
             </div>
 
             <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100">
-              <div className="text-xs font-bold text-amber-800 mb-2">🔍 行业洞察</div>
+              <div className="text-xs font-bold text-amber-800 mb-2">行业洞察</div>
               <div className="text-xs text-amber-700 leading-relaxed space-y-1">
                 <p>• 本土酒店集团（锦江+华住+首旅）合计超3万家，占绝对主导</p>
                 <p>• 锦江国际（1.34万）是全球最大酒店集团之一，旗下含维也纳、丽笙等品牌</p>
@@ -494,7 +493,7 @@ export default function CommercePage() {
             </div>
 
             <div className="bg-purple-50 rounded-2xl p-4 border border-purple-100">
-              <div className="text-xs font-bold text-purple-800 mb-2">🔍 行业洞察</div>
+              <div className="text-xs font-bold text-purple-800 mb-2">行业洞察</div>
               <div className="text-xs text-purple-700 leading-relaxed space-y-1">
                 <p>• 途虎养车（6874家）是汽车后市场最大连锁，已上市，持续扩张</p>
                 <p>• 宠物行业连锁化加速，派多格（2000家）领跑，行业规模超3000亿</p>
@@ -555,7 +554,7 @@ export default function CommercePage() {
             </div>
 
             <div className="bg-violet-50 rounded-2xl p-4 border border-violet-100">
-              <div className="text-xs font-bold text-violet-800 mb-2">🤖 AI核心判断</div>
+              <div className="text-xs font-bold text-violet-800 mb-2">AI核心判断</div>
               <div className="text-xs text-violet-700 leading-relaxed space-y-2">
                 <p><strong>高增长赛道：</strong>新茶饮（蜜雪冰城模式下沉）、咖啡（瑞幸持续扩张）、小型健身（乐刻）、宠物服务</p>
                 <p><strong>稳健增长：</strong>药店（老龄化驱动）、中端酒店（商务出行恢复）、汽车后市场</p>
