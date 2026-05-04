@@ -6,7 +6,7 @@ import { trpc } from "@/lib/trpc";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, LabelList, ReferenceLine,
-  ComposedChart, Line, Area
+  ComposedChart, Line, Area, PieChart, Pie, Legend
 } from "recharts";
 
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK";
@@ -1418,6 +1418,22 @@ export default function BeDataPage() {
 
   // AI 分析查询（仅美股模式且数据加载完成后才请求）
   const [aiExpanded, setAiExpanded] = useState(false);
+
+  // 相关性统计：选择对比币
+  const CRYPTO_SYMBOLS = ALL_SYMBOLS.filter(s => s.type === 'crypto');
+  const [corrCompare, setCorrCompare] = useState<string[]>(() => {
+    // 默认选中除当前币之外的第一个
+    const others = CRYPTO_SYMBOLS.filter(s => s.key !== activeSymbol);
+    return others.length > 0 ? [others[0].key] : [];
+  });
+  const corrBaseSymbol = activeSymbol; // 当前币为基准
+  const { data: corrData, isLoading: corrLoading } = trpc.cryptoData.getCorrelation.useQuery(
+    {
+      baseSymbol: corrBaseSymbol,
+      compareSymbols: corrCompare,
+    },
+    { enabled: activeTab === 'analysis' && corrCompare.length > 0, staleTime: 10 * 60 * 1000 }
+  );
   const { data: aiData, isLoading: aiLoading } = trpc.cryptoData.getAIAnalysis.useQuery(
     {
       symbol: currentStockInfo?.symbol ?? activeSymbol,
@@ -1978,6 +1994,148 @@ export default function BeDataPage() {
               {allChangePcts && allChangePcts.length > 0 && (
                 <ChangePctDistChart allData={allChangePcts} latestDate={latestDate} coinIcon={currentStockInfo?.icon} />
               )}
+
+              {/* 相关性统计模块 */}
+              {(() => {
+                const baseInfo = ALL_SYMBOLS.find(s => s.key === corrBaseSymbol);
+                const otherCryptos = CRYPTO_SYMBOLS.filter(s => s.key !== corrBaseSymbol);
+                return (
+                  <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
+                    {/* 标题行 */}
+                    <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-700 flex items-center gap-1">
+                        {baseInfo?.icon && <img src={baseInfo.icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+                        相关性统计
+                      </span>
+                      <span className="text-xs text-gray-400">以 {baseInfo?.shortLabel} 为基准</span>
+                    </div>
+                    {/* 对比币选择器 */}
+                    <div className="px-4 pt-3 pb-1 flex flex-wrap gap-2">
+                      {otherCryptos.map(s => {
+                        const checked = corrCompare.includes(s.key);
+                        return (
+                          <button
+                            key={s.key}
+                            onClick={() => {
+                              setCorrCompare(prev =>
+                                checked ? prev.filter(k => k !== s.key) : [...prev, s.key]
+                              );
+                            }}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border transition-all ${
+                              checked
+                                ? 'bg-blue-50 border-blue-400 text-blue-700'
+                                : 'bg-gray-50 border-gray-200 text-gray-400'
+                            }`}
+                          >
+                            <img src={s.icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }} />
+                            {s.shortLabel}
+                            {checked && <span className="text-blue-500">✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* 统计结果 */}
+                    {corrCompare.length === 0 && (
+                      <div className="px-4 py-6 text-center text-gray-400 text-xs">请选择至少一个对比币</div>
+                    )}
+                    {corrLoading && corrCompare.length > 0 && (
+                      <div className="px-4 py-6 text-center text-gray-400 text-xs">计算中...</div>
+                    )}
+                    {corrData && corrData.pairs.length > 0 && (
+                      <div className="px-4 pb-4 pt-2 space-y-5">
+                        <div className="text-xs text-gray-400 text-center">
+                          共同有数据日期：{corrData.dateRange.start} ~ {corrData.dateRange.end}（{corrData.dateRange.totalDays}天）
+                        </div>
+                        {corrData.pairs.map(pair => {
+                          const compInfo = ALL_SYMBOLS.find(s => s.key === pair.symbol);
+                          const pieData = [
+                            { name: `${baseInfo?.shortLabel}涨+${compInfo?.shortLabel}涨`, value: pair.bothUp, color: '#ef4444' },
+                            { name: `${baseInfo?.shortLabel}涨+${compInfo?.shortLabel}跌`, value: pair.baseUpCompDown, color: '#f97316' },
+                            { name: `${baseInfo?.shortLabel}跌+${compInfo?.shortLabel}跌`, value: pair.bothDown, color: '#22c55e' },
+                            { name: `${baseInfo?.shortLabel}跌+${compInfo?.shortLabel}涨`, value: pair.baseDownCompUp, color: '#86efac' },
+                          ];
+                          return (
+                            <div key={pair.symbol} className="border border-gray-100 rounded-xl p-3">
+                              {/* 对比币标题 */}
+                              <div className="flex items-center gap-2 mb-3">
+                                {compInfo?.icon && <img src={compInfo.icon} alt="" style={{ width: 18, height: 18, borderRadius: '50%', objectFit: 'cover' }} />}
+                                <span className="text-sm font-semibold text-gray-700">{baseInfo?.shortLabel} vs {compInfo?.shortLabel ?? pair.symbol}</span>
+                                <span className="ml-auto text-xs text-gray-400">{pair.validDays}天有效数据</span>
+                              </div>
+                              {/* 四象限数字表格 */}
+                              <div className="grid grid-cols-2 gap-2 mb-3">
+                                <div className="bg-red-50 rounded-lg p-2 text-center">
+                                  <div className="text-xs text-gray-500 mb-1">{baseInfo?.shortLabel}涨 → {compInfo?.shortLabel}涨</div>
+                                  <div className="text-lg font-bold text-red-600">{pair.bothUp}</div>
+                                  <div className="text-xs text-red-400">{pair.validDays > 0 ? ((pair.bothUp / pair.validDays) * 100).toFixed(1) : 0}%</div>
+                                </div>
+                                <div className="bg-orange-50 rounded-lg p-2 text-center">
+                                  <div className="text-xs text-gray-500 mb-1">{baseInfo?.shortLabel}涨 → {compInfo?.shortLabel}跌</div>
+                                  <div className="text-lg font-bold text-orange-500">{pair.baseUpCompDown}</div>
+                                  <div className="text-xs text-orange-400">{pair.validDays > 0 ? ((pair.baseUpCompDown / pair.validDays) * 100).toFixed(1) : 0}%</div>
+                                </div>
+                                <div className="bg-green-50 rounded-lg p-2 text-center">
+                                  <div className="text-xs text-gray-500 mb-1">{baseInfo?.shortLabel}跌 → {compInfo?.shortLabel}跌</div>
+                                  <div className="text-lg font-bold text-green-600">{pair.bothDown}</div>
+                                  <div className="text-xs text-green-400">{pair.validDays > 0 ? ((pair.bothDown / pair.validDays) * 100).toFixed(1) : 0}%</div>
+                                </div>
+                                <div className="bg-emerald-50 rounded-lg p-2 text-center">
+                                  <div className="text-xs text-gray-500 mb-1">{baseInfo?.shortLabel}跌 → {compInfo?.shortLabel}涨</div>
+                                  <div className="text-lg font-bold text-emerald-500">{pair.baseDownCompUp}</div>
+                                  <div className="text-xs text-emerald-400">{pair.validDays > 0 ? ((pair.baseDownCompUp / pair.validDays) * 100).toFixed(1) : 0}%</div>
+                                </div>
+                              </div>
+                              {/* 同向/反向汇总 */}
+                              <div className="flex gap-2 mb-3">
+                                <div className="flex-1 bg-gray-50 rounded-lg p-2 text-center">
+                                  <div className="text-xs text-gray-500">同向天数</div>
+                                  <div className="text-base font-bold text-gray-800">{pair.sameDirection}</div>
+                                  <div className="text-xs text-gray-400">{pair.sameDirectionPct}%</div>
+                                </div>
+                                <div className="flex-1 bg-gray-50 rounded-lg p-2 text-center">
+                                  <div className="text-xs text-gray-500">反向天数</div>
+                                  <div className="text-base font-bold text-gray-800">{pair.oppositeDirection}</div>
+                                  <div className="text-xs text-gray-400">{pair.oppositeDirectionPct}%</div>
+                                </div>
+                              </div>
+                              {/* 饼图可视化 */}
+                              <ResponsiveContainer width="100%" height={160}>
+                                <PieChart>
+                                  <Pie
+                                    data={pieData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={38}
+                                    outerRadius={60}
+                                    paddingAngle={2}
+                                    dataKey="value"
+                                    label={({ name, percent }) => percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''}
+                                    labelLine={false}
+                                    fontSize={9}
+                                  >
+                                    {pieData.map((entry, i) => (
+                                      <Cell key={i} fill={entry.color} />
+                                    ))}
+                                  </Pie>
+                                  <Legend
+                                    iconType="circle"
+                                    iconSize={8}
+                                    formatter={(value) => <span style={{ fontSize: 9, color: '#666' }}>{value}</span>}
+                                  />
+                                  <Tooltip
+                                    formatter={(value: number, name: string) => [`${value}天`, name]}
+                                    contentStyle={{ fontSize: 10, padding: '3px 7px', borderRadius: 6 }}
+                                  />
+                                </PieChart>
+                              </ResponsiveContainer>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
             </div>
           )}

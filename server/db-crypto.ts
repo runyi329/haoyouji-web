@@ -895,3 +895,112 @@ export async function getLatestStockPrices(symbols: string[]): Promise<Record<st
     return {};
   }
 }
+
+/**
+ * 多币相关性统计：取所选币对共同有数据的日期，以baseSymbol为基准，
+ * 统计每个对比币与基准币的涨跌同向/反向天数
+ */
+export async function getCryptoCorrelation(
+  baseSymbol: string,
+  compareSymbols: string[]
+): Promise<{
+  dateRange: { start: string; end: string; totalDays: number };
+  pairs: {
+    symbol: string;
+    bothUp: number;       // 基准涨，对比也涨
+    baseUpCompDown: number; // 基准涨，对比跌
+    bothDown: number;     // 基准跌，对比也跌
+    baseDownCompUp: number; // 基准跌，对比涨
+    sameDirection: number;  // 同向天数
+    oppositeDirection: number; // 反向天数
+    sameDirectionPct: number;
+    oppositeDirectionPct: number;
+    validDays: number;
+  }[];
+}> {
+  const conn = await getDbConnection();
+  if (!conn) return { dateRange: { start: '-', end: '-', totalDays: 0 }, pairs: [] };
+
+  const allSymbols = [baseSymbol, ...compareSymbols];
+
+  // 取所有币共同有数据（change_pct不为null）的日期
+  const placeholders = allSymbols.map(() => '?').join(', ');
+  const [dateRows] = await conn.execute(
+    `SELECT date FROM crypto_klines WHERE symbol = ? AND change_pct IS NOT NULL
+     AND date IN (
+       SELECT date FROM crypto_klines
+       WHERE symbol IN (${placeholders}) AND change_pct IS NOT NULL
+       GROUP BY date HAVING COUNT(DISTINCT symbol) = ?
+     )
+     ORDER BY date ASC`,
+    [baseSymbol, ...allSymbols, allSymbols.length]
+  ) as any[];
+
+  const commonDates = (dateRows as any[]).map((r: any) => r.date as string);
+  if (commonDates.length === 0) {
+    return { dateRange: { start: '-', end: '-', totalDays: 0 }, pairs: [] };
+  }
+
+  const startDate = commonDates[0];
+  const endDate = commonDates[commonDates.length - 1];
+
+  // 取基准币在共同日期的涨跌
+  const [baseRows] = await conn.execute(
+    `SELECT DATE_FORMAT(date, '%Y-%m-%d') as date, change_pct
+     FROM crypto_klines WHERE symbol = ? AND date BETWEEN ? AND ? AND change_pct IS NOT NULL
+     ORDER BY date ASC`,
+    [baseSymbol, startDate, endDate]
+  ) as any[];
+
+  const baseMap = new Map<string, number>();
+  for (const r of baseRows as any[]) {
+    baseMap.set(r.date, parseFloat(r.change_pct));
+  }
+
+  const pairs = [];
+  for (const sym of compareSymbols) {
+    const [compRows] = await conn.execute(
+      `SELECT DATE_FORMAT(date, '%Y-%m-%d') as date, change_pct
+       FROM crypto_klines WHERE symbol = ? AND date BETWEEN ? AND ? AND change_pct IS NOT NULL
+       ORDER BY date ASC`,
+      [sym, startDate, endDate]
+    ) as any[];
+
+    let bothUp = 0, baseUpCompDown = 0, bothDown = 0, baseDownCompUp = 0;
+    for (const r of compRows as any[]) {
+      const baseChg = baseMap.get(r.date);
+      if (baseChg == null) continue;
+      const compChg = parseFloat(r.change_pct);
+      const baseUp = baseChg > 0;
+      const compUp = compChg > 0;
+      if (baseUp && compUp) bothUp++;
+      else if (baseUp && !compUp) baseUpCompDown++;
+      else if (!baseUp && !compUp) bothDown++;
+      else if (!baseUp && compUp) baseDownCompUp++;
+    }
+    const validDays = bothUp + baseUpCompDown + bothDown + baseDownCompUp;
+    const sameDirection = bothUp + bothDown;
+    const oppositeDirection = baseUpCompDown + baseDownCompUp;
+    pairs.push({
+      symbol: sym,
+      bothUp,
+      baseUpCompDown,
+      bothDown,
+      baseDownCompUp,
+      sameDirection,
+      oppositeDirection,
+      sameDirectionPct: validDays > 0 ? Math.round((sameDirection / validDays) * 1000) / 10 : 0,
+      oppositeDirectionPct: validDays > 0 ? Math.round((oppositeDirection / validDays) * 1000) / 10 : 0,
+      validDays,
+    });
+  }
+
+  return {
+    dateRange: {
+      start: (startDate as string).replace(/-/g, '/'),
+      end: (endDate as string).replace(/-/g, '/'),
+      totalDays: commonDates.length,
+    },
+    pairs,
+  };
+}
