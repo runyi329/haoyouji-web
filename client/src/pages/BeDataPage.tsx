@@ -1545,7 +1545,86 @@ export default function BeDataPage() {
 
 
 
-          {/* 第二行：左右分栏信息卡片（始终占位，加载中显示骨架） */}
+          {/* AI × 股票名 三段式分析（在基本信息上方） */}
+          <div
+            onClick={() => setAiExpanded(v => !v)}
+            style={{
+              borderRadius: 12,
+              background: "rgba(255,255,255,0.08)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              padding: "9px 12px",
+              cursor: "pointer",
+              marginBottom: 10,
+            }}
+          >
+            {/* 标题行 */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: 0.3 }}>
+                  AI × {currentStockInfo?.shortLabel ?? activeSymbol}
+                </span>
+                {aiLoading && (
+                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)" }}>分析中...</span>
+                )}
+              </div>
+              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>{aiExpanded ? '▲ 收起' : '▼ 展开'}</span>
+            </div>
+
+            {/* 展开后显示 AI 三段式分析 */}
+            {aiExpanded && (
+              <div style={{ marginTop: 10 }}>
+                {aiLoading ? (
+                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", textAlign: "center", padding: "8px 0" }}>
+                    正在生成 AI 分析，请稍候...
+                  </div>
+                ) : (() => {
+                  const raw = String(aiData?.analysis ?? '');
+                  const trend = aiData?.trend ?? '';
+                  const keyLevel = aiData?.keyLevel ?? '';
+                  const tip = aiData?.tip ?? '';
+                  const hasSections = trend || keyLevel || tip;
+
+                  if (hasSections) {
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {trend && (
+                          <div style={{ borderRadius: 8, background: "rgba(255,255,255,0.08)", padding: "8px 10px" }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "#90CAF9", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                              <span>📈</span> 趋势判断
+                            </div>
+                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65 }}>{trend}</div>
+                          </div>
+                        )}
+                        {keyLevel && (
+                          <div style={{ borderRadius: 8, background: "rgba(255,255,255,0.08)", padding: "8px 10px" }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "#FFE082", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                              <span>🎯</span> 关键位置
+                            </div>
+                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65 }}>{keyLevel}</div>
+                          </div>
+                        )}
+                        {tip && (
+                          <div style={{ borderRadius: 8, background: "rgba(255,255,255,0.08)", padding: "8px 10px" }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "#A5D6A7", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                              <span>💡</span> 投资提示
+                            </div>
+                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65 }}>{tip}</div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
+                      {raw || '暂无分析结果'}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+
+          {/* 基本信息 + 实时行情 左右分栏 */}
           {(() => {
             const cardLoading = isLoading || !metaData;
             const skeletonStyle: React.CSSProperties = { height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)", marginBottom: 4 };
@@ -1637,88 +1716,6 @@ export default function BeDataPage() {
             );
           })()}
 
-          {/* 第三行： AI × 股票名 三段式分析 */}
-          <div
-            onClick={() => setAiExpanded(v => !v)}
-            style={{
-              borderRadius: 12,
-              background: "rgba(255,255,255,0.08)",
-              border: "1px solid rgba(255,255,255,0.18)",
-              padding: "9px 12px",
-              cursor: "pointer",
-            }}
-          >
-            {/* 标题行 */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: 0.3 }}>
-                  ✨ AI × {currentStockInfo?.shortLabel ?? activeSymbol}
-                </span>
-                {aiLoading && (
-                  <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)" }}>分析中...</span>
-                )}
-              </div>
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>{aiExpanded ? '▲ 收起' : '▼ 展开'}</span>
-            </div>
-
-            {/* 展开后显示 AI 三段式分析 */}
-            {aiExpanded && (
-              <div style={{ marginTop: 10 }}>
-                {aiLoading ? (
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", textAlign: "center", padding: "8px 0" }}>
-                    正在生成 AI 分析，请稍候...
-                  </div>
-                ) : (() => {
-                  // 解析三段内容
-                  const raw = String(aiData?.analysis ?? '');
-                  const trend = aiData?.trend ?? '';
-                  const keyLevel = aiData?.keyLevel ?? '';
-                  const tip = aiData?.tip ?? '';
-                  const hasSections = trend || keyLevel || tip;
-
-                  if (hasSections) {
-                    return (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {/* 趋势判断 */}
-                        {trend && (
-                          <div style={{ borderRadius: 8, background: "rgba(255,255,255,0.08)", padding: "8px 10px" }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: "#90CAF9", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                              <span>📈</span> 趋势判断
-                            </div>
-                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65 }}>{trend}</div>
-                          </div>
-                        )}
-                        {/* 关键位置 */}
-                        {keyLevel && (
-                          <div style={{ borderRadius: 8, background: "rgba(255,255,255,0.08)", padding: "8px 10px" }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: "#FFE082", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                              <span>🎯</span> 关键位置
-                            </div>
-                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65 }}>{keyLevel}</div>
-                          </div>
-                        )}
-                        {/* 投资提示 */}
-                        {tip && (
-                          <div style={{ borderRadius: 8, background: "rgba(255,255,255,0.08)", padding: "8px 10px" }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: "#A5D6A7", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                              <span>💡</span> 投资提示
-                            </div>
-                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65 }}>{tip}</div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
-                  // 备用：直接显示原始文本
-                  return (
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
-                      {raw || '暂无分析结果'}
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
         </div>
       ) : (
         // 其他模式：保持原来的白色导航栏
