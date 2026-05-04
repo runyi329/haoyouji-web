@@ -84,7 +84,7 @@ function calcStreakFromItems(data: { changePct: number | null }[]): {
 
 // 连涨连跌统计组件（三列对称布局，参照 StockDetail）
 function StreakStatsPanel({ allData, latestDate, coinIcon }: { allData: { date: string; changePct: number | null }[]; latestDate?: string; coinIcon?: string }) {
-  const [streakTab, setStreakTab] = useState<30 | 60 | 90 | 180 | 'all'>(60);
+  const [streakTab, setStreakTab] = useState<30 | 60 | 90 | 180 | 'all'>('all');
 
   // 各时间段统计（前端计算）
   const allSorted = allData; // 已按日期升序
@@ -123,27 +123,12 @@ function StreakStatsPanel({ allData, latestDate, coinIcon }: { allData: { date: 
           <span className="text-xs text-gray-400">天</span>
         </div>
       </div>
-      {/* 标题 + 时间段切换 */}
-      <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+      {/* 标题 */}
+      <div className="px-4 pt-3 pb-1">
         <span className="text-xs font-semibold flex items-center gap-1" style={{ color: MUTED }}>
           {coinIcon && <img src={coinIcon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
           连涨 / 连跌统计
         </span>
-        <div className="flex items-center gap-1">
-          {([30, 60, 90, 180, 'all'] as const).map(n => (
-            <button
-              key={n}
-              onClick={() => setStreakTab(n)}
-              className="text-xs px-2 py-0.5"
-              style={{
-                background: streakTab === n ? RED : '#F0F0F0',
-                color: streakTab === n ? '#fff' : MUTED,
-                fontWeight: streakTab === n ? 700 : 400,
-                borderRadius: 2,
-              }}
-            >{n === 'all' ? '全量' : `${n}天`}</button>
-          ))}
-        </div>
       </div>
       {/* 表头 */}
       <div className="px-4 pb-1" style={{ display: 'grid', gridTemplateColumns: '1fr 36px 1fr', gap: 0 }}>
@@ -205,6 +190,24 @@ function StreakStatsPanel({ allData, latestDate, coinIcon }: { allData: { date: 
           }
         </div>
       )}
+      {/* 时间段切换按鈕（表格下方） */}
+      <div className="px-4 pb-3 pt-1 flex items-center gap-1.5 border-t border-gray-50">
+        {([30, 60, 90, 180, 'all'] as const).map(n => (
+          <button
+            key={n}
+            onClick={() => setStreakTab(n)}
+            className="text-xs px-2.5 py-1"
+            style={{
+              background: streakTab === n ? RED : '#F0F0F0',
+              color: streakTab === n ? '#fff' : MUTED,
+              fontWeight: streakTab === n ? 700 : 400,
+              borderRadius: 4,
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >{n === 'all' ? '全量' : `${n}天`}</button>
+        ))}
+      </div>
 
 
     </div>
