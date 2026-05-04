@@ -222,4 +222,10 @@ jobs:
             else
               echo "DATABASE_URL not found, 跳过建表"
             fi
+            echo "📊 同步数字币历史资金费率（增量/全量）..."
+            cd /root/haoyouji-web && node scripts/sync-funding-rates.mjs >> /var/log/funding-rates-sync.log 2>&1 || echo "⚠️ 资金费率同步失败（非致命）"
+            # 设置每8小时同步一次资金费率的cron任务（覆盖旧任务）
+            FUNDING_CRON="0 0,8,16 * * * cd /root/haoyouji-web && node scripts/sync-funding-rates.mjs >> /var/log/funding-rates-sync.log 2>&1"
+            (crontab -l 2>/dev/null | grep -v "sync-funding-rates"; echo "$FUNDING_CRON") | crontab -
+            echo "✅ 资金费率每8小时自动同步cron任务已设置"
           ENDSSH
