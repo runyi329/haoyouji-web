@@ -181,17 +181,8 @@ function StreakStatsPanel({ allData, latestDate, coinIcon }: { allData: { date: 
       {maxStreak === 0 && (
         <div className="px-4 py-3 text-xs" style={{ color: MUTED }}>暂无连涨/连跌数据</div>
       )}
-      {maxStreak > 0 && (
-        <div className="px-4 py-2 text-xs" style={{ color: MUTED }}>
-          最长连涨{maxUpStreak}天 · 最长连跌{maxDownStreak}天
-          {streakTab === 'all'
-            ? <span style={{ marginLeft: 6 }}>（全历史 {allSorted.length} 天）</span>
-            : <span style={{ marginLeft: 6 }}>（近{streakTab}天）</span>
-          }
-        </div>
-      )}
       {/* 时间段切换按鈕（表格下方） */}
-      <div className="px-4 pb-3 pt-1 flex items-center gap-1.5 border-t border-gray-50">
+      <div className="px-4 pb-3 pt-2 flex items-center gap-1.5 border-t border-gray-50">
         {([30, 60, 90, 180, 'all'] as const).map(n => (
           <button
             key={n}
@@ -205,7 +196,7 @@ function StreakStatsPanel({ allData, latestDate, coinIcon }: { allData: { date: 
               border: 'none',
               cursor: 'pointer',
             }}
-          >{n === 'all' ? '全量' : `${n}天`}</button>
+          >{n === 'all' ? `全量（${allSorted.length}天）` : `${n}天`}</button>
         ))}
       </div>
 
