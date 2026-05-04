@@ -777,30 +777,49 @@ function YearlyBreakdown({
       {/* 按年明细（可折叠） */}
       {expanded && (
         <div className="border-t border-gray-100">
-          {/* 表头 */}
-          <div className="grid grid-cols-4 px-4 py-2 bg-gray-50 border-b border-gray-100">
-            <span className="text-xs font-semibold text-gray-500">年份</span>
-            <span className="text-xs font-semibold text-red-500 text-right">涨幅累加</span>
-            <span className="text-xs font-semibold text-gray-500 text-right">线性净值</span>
-            <span className="text-xs font-semibold text-blue-600 text-right">实际涨幅</span>
+          {/* 表头 - 5列，像Excel表格用细线分割 */}
+          <div className="grid grid-cols-5 border-b border-gray-200 bg-gray-50">
+            <div className="px-2 py-2 border-r border-gray-200">
+              <span className="text-xs font-semibold text-gray-500">年份</span>
+            </div>
+            <div className="px-2 py-2 border-r border-gray-200 text-right">
+              <span className="text-xs font-semibold text-red-500">涨幅累加</span>
+            </div>
+            <div className="px-2 py-2 border-r border-gray-200 text-right">
+              <span className="text-xs font-semibold text-green-600">跌幅累加</span>
+            </div>
+            <div className="px-2 py-2 border-r border-gray-200 text-right">
+              <span className="text-xs font-semibold text-gray-500">线性净值</span>
+            </div>
+            <div className="px-2 py-2 text-right">
+              <span className="text-xs font-semibold text-blue-600">实际涨幅</span>
+            </div>
           </div>
-          {yearlyData.map(row => (
-            <div key={row.year} className="border-b border-gray-50 last:border-0">
-              {/* 主行：年份 + 涨幅累加 + 线性净值 + 实际涨幅 */}
-              <div className="grid grid-cols-4 px-4 py-2.5">
+          {yearlyData.map((row, idx) => (
+            <div key={row.year} className={`grid grid-cols-5 border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
+              <div className="px-2 py-2 border-r border-gray-100">
                 <span className="text-xs font-medium text-gray-700">{row.year}年</span>
-                <span className="text-xs font-mono text-red-500 text-right">+{fmt(row.upPct)}%</span>
-                <span className={`text-xs font-mono text-right ${row.linearNet >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+              </div>
+              <div className="px-2 py-2 border-r border-gray-100 text-right">
+                <span className="text-xs font-mono text-red-500">+{fmt(row.upPct)}%</span>
+              </div>
+              <div className="px-2 py-2 border-r border-gray-100 text-right">
+                <span className="text-xs font-mono text-green-600">-{fmt(row.downPct)}%</span>
+              </div>
+              <div className="px-2 py-2 border-r border-gray-100 text-right">
+                <span className={`text-xs font-mono ${row.linearNet >= 0 ? 'text-red-500' : 'text-green-600'}`}>
                   {fmtSigned(row.linearNet)}%
                 </span>
-                <span className={`text-xs font-mono text-right ${row.actualPct == null ? 'text-gray-400' : row.actualPct >= 0 ? 'text-red-500' : 'text-green-600'}`}>
+              </div>
+              <div className="px-2 py-2 text-right">
+                <span className={`text-xs font-mono ${row.actualPct == null ? 'text-gray-400' : row.actualPct >= 0 ? 'text-red-500' : 'text-green-600'}`}>
                   {row.actualPct != null ? fmtSigned(row.actualPct) + '%' : '-'}
                 </span>
               </div>
             </div>
           ))}
           {/* 说明 */}
-          <div className="px-4 py-2 bg-gray-50 border-t border-gray-100">
+          <div className="px-4 py-2 bg-gray-50 border-t border-gray-200">
             <p className="text-xs text-gray-400">线性净值=涨幅累加-跌幅累加；实际涨幅=年末/年初收盘价</p>
           </div>
         </div>
