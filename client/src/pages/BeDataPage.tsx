@@ -1476,6 +1476,36 @@ export default function BeDataPage() {
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: hideSymbolTabs ? "#EEF2F8" : "#F5F5F5" }}>
 
+      {/* 右上角悬浮币种切换按鈕（仅数字币模式显示） */}
+      {urlFilter === 'crypto' && (
+        <div style={{
+          position: 'fixed', top: 14, right: 12, zIndex: 100,
+          display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          {filteredSymbols.map(s => {
+            const isActive = activeSymbol === s.key;
+            return (
+              <button
+                key={s.key}
+                onClick={() => handleSymbolChange(s.key)}
+                style={{
+                  width: 38, height: 38, borderRadius: '50%', padding: 0,
+                  border: isActive ? '2.5px solid #fff' : '2px solid rgba(255,255,255,0.35)',
+                  background: isActive ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.12)',
+                  boxShadow: isActive ? '0 2px 10px rgba(0,0,0,0.22)' : '0 1px 4px rgba(0,0,0,0.12)',
+                  cursor: 'pointer', transition: 'all 0.18s',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  backdropFilter: 'blur(6px)',
+                  WebkitBackdropFilter: 'blur(6px)',
+                }}
+              >
+                <img src={s.icon} alt={s.shortLabel} style={{ width: 26, height: 26, objectFit: 'contain', borderRadius: '50%' }} />
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* 顶部导航 */}
       {hideSymbolTabs ? (
         // 美股模式：全新设计蓝色头部
@@ -1509,26 +1539,7 @@ export default function BeDataPage() {
             </button>
           </div>
 
-          {/* 数字币模式：币种切换按鈕横排 */}
-          {urlFilter === 'crypto' && (
-            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-              {filteredSymbols.map(s => (
-                <button
-                  key={s.key}
-                  onClick={() => { handleSymbolChange(s.key); }}
-                  style={{
-                    flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-                    padding: "5px 0", borderRadius: 10, cursor: "pointer", transition: "all 0.2s",
-                    background: activeSymbol === s.key ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)",
-                    border: activeSymbol === s.key ? "1.5px solid rgba(255,255,255,0.7)" : "1.5px solid rgba(255,255,255,0.15)",
-                  }}
-                >
-                  <img src={s.icon} alt={s.shortLabel} style={{ width: 22, height: 22, objectFit: "contain" }} />
-                  <span style={{ fontSize: 9, fontWeight: 700, color: activeSymbol === s.key ? "#fff" : "rgba(255,255,255,0.55)" }}>{s.shortLabel}</span>
-                </button>
-              ))}
-            </div>
-          )}
+
 
           {/* 第二行：左右分栏信息卡片（始终占位，加载中显示骨架） */}
           {(() => {
@@ -1705,19 +1716,7 @@ export default function BeDataPage() {
             <span className="font-semibold text-gray-800 text-base flex-1">{pageTitle}</span>
             <button onClick={handleSync} className="text-xs font-medium text-white bg-[#D32F2F] rounded-full px-3 py-1 active:opacity-70">更新</button>
           </div>
-          {/* 币种 Tab */}
-          <div className="flex overflow-x-auto border-b border-gray-200 scrollbar-hide px-2 gap-1 py-1.5" style={{ WebkitOverflowScrolling: 'touch' }}>
-            {filteredSymbols.map((s) => (
-              <button key={s.key} onClick={() => handleSymbolChange(s.key)} title={s.label}
-                className={`shrink-0 flex flex-col items-center justify-center w-12 h-12 rounded-xl transition-all ${
-                  activeSymbol === s.key ? "border-2 border-[#D32F2F] bg-red-50 shadow-sm" : "border-2 border-transparent hover:bg-gray-50"
-                }`}
-              >
-                <img src={s.icon} alt={s.shortLabel} className="w-6 h-6 rounded-sm object-contain" />
-                <span className={`text-[9px] font-bold mt-0.5 ${activeSymbol === s.key ? 'text-[#D32F2F]' : 'text-gray-400'}`}>{s.shortLabel}</span>
-              </button>
-            ))}
-          </div>
+
           {/* 统计栏 */}
           {!isLoading && total > 0 && (
             <div className="bg-white border-b border-gray-200 px-3 py-2.5">
