@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { MarketBetPanelWithTabs } from "./CryptoPrediction";
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft } from "lucide-react";
@@ -1510,12 +1510,40 @@ export default function BeDataPage() {
   const hideSymbolTabs = urlFilter === 'stocks' || urlFilter === 'crypto';
 
   // 美股模式下，优先用 URL 中的 symbol 参数确定初始股票
-  const initialSymbol = urlFilter === 'stocks' && urlSymbol
+  // 数字币模式下，也优先读 URL 中的 symbol 参数（切换币种时写入）
+  const initialSymbol = urlSymbol
     ? (ALL_SYMBOLS.find(s => s.symbol === urlSymbol || s.key === urlSymbol || s.key === urlSymbol.replace('.US', ''))?.key ?? filteredSymbols[0]?.key ?? ALL_SYMBOLS[0].key)
     : (filteredSymbols[0]?.key ?? ALL_SYMBOLS[0].key);
 
   const [activeSymbol, setActiveSymbol] = useState(initialSymbol);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // 页面加载时，从 sessionStorage 恢复滚动位置（必须用 useEffect 确保 DOM 已挂载）
+  useEffect(() => {
+    const savedScroll = sessionStorage.getItem(`bedata_scroll_${initialSymbol}`);
+    if (savedScroll && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = parseInt(savedScroll, 10);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 只在首次挂载时执行一次
+  // 监听滚动事件，实时保存滚动位置到 sessionStorage
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    let ticking = false;
+    const handleScroll = () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          sessionStorage.setItem(`bedata_scroll_${activeSymbol}`, String(container.scrollTop));
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [activeSymbol]);
+
   // 美股模式和数字币模式下默认显示数据分析
   const [activeTab, setActiveTab] = useState(hideSymbolTabs ? "analysis" : "data");
   const [page, setPage] = useState(1);
@@ -1637,15 +1665,26 @@ export default function BeDataPage() {
   );
 
   const handleSymbolChange = (sym: string) => {
-    // 保存当前滚动位置，切换后恢复
-    const savedScrollTop = scrollContainerRef.current?.scrollTop ?? 0;
+    // 保存当前币种的滚动位置到 sessionStorage
+    const currentScrollTop = scrollContainerRef.current?.scrollTop ?? 0;
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(`bedata_scroll_${activeSymbol}`, String(currentScrollTop));
+    }
+    // 更新 URL 中的 symbol 参数（刷新页面后能恢复币种）
+    if (typeof window !== 'undefined') {
+      const newParams = new URLSearchParams(window.location.search);
+      newParams.set('symbol', sym);
+      const newUrl = window.location.pathname + '?' + newParams.toString();
+      window.history.replaceState(null, '', newUrl);
+    }
     setActiveSymbol(sym);
     setPage(1);
     setFundingPage(1);
-    // 用 requestAnimationFrame 确保 DOM 更新后再恢复滚动位置
+    // 恢复新币种的历史滚动位置（如果有的话）
+    const savedScroll = typeof window !== 'undefined' ? sessionStorage.getItem(`bedata_scroll_${sym}`) : null;
     requestAnimationFrame(() => {
       if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = savedScrollTop;
+        scrollContainerRef.current.scrollTop = savedScroll ? parseInt(savedScroll, 10) : 0;
       }
     });
   };
