@@ -2907,7 +2907,7 @@ export default function LedgerDetail() {
                       <div
                         className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0"
                         style={{ border: '1.5px solid rgba(255,255,255,0.5)', backgroundColor: 'rgba(255,255,255,0.15)' }}
-                        onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
+                        onClick={() => setLocation(`/ledger/${ledgerId}/position-calc${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
                         title="ETH持仓计算器"
                       >
                         <svg width="18" height="18" viewBox="0 0 256 417" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -2974,7 +2974,7 @@ export default function LedgerDetail() {
                       </div>
                     )}
                     {(myShortcuts as any).ethPosition && (
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)', backgroundColor: 'rgba(255,255,255,0.15)' }} onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)} title="ETH持仓计算器">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)', backgroundColor: 'rgba(255,255,255,0.15)' }} onClick={() => setLocation(`/ledger/${ledgerId}/position-calc${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)} title="ETH持仓计算器">
                         <svg width="18" height="18" viewBox="0 0 256 417" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M127.961 0L125.166 9.5V285.168L127.961 287.958L255.923 212.32L127.961 0Z" fill="#FFFFFF"/>
                           <path d="M127.962 0L0 212.32L127.962 287.958V154.158V0Z" fill="rgba(255,255,255,0.6)"/>
@@ -3186,7 +3186,7 @@ export default function LedgerDetail() {
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
                     style={{ backgroundColor: '#FFFFFF' }}
-                    onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
+                    onClick={() => setLocation(`/ledger/${ledgerId}/position-calc${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
                     title="ETH持仓计算器"
                   >
                     <svg width="22" height="22" viewBox="0 0 256 417" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -4222,7 +4222,7 @@ export default function LedgerDetail() {
                 </button>
                 {/* 右半：ETH 持仓计算器快捷入口 + 预览 */}
                 <button
-                  onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
+                  onClick={() => setLocation(`/ledger/${ledgerId}/position-calc${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
                   className="flex-1 rounded-2xl p-4 flex flex-col justify-between shadow-sm active:opacity-90"
                   style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)', minHeight: '72px' }}
                 >

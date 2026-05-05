@@ -68,6 +68,10 @@ export default function PositionCalc() {
   const [, setLocation] = useLocation();
   const ledgerId = params ? parseInt(params.id) : 0;
   const { user } = useAuth();
+  // 视角查看：从URL读取viewAs参数
+  const urlSearchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const viewAsUserId = urlSearchParams.get('viewAs') ? Number(urlSearchParams.get('viewAs')) : undefined;
+  const isViewAs = !!viewAsUserId; // 视角查看时禁用写入操作
 
   // 注入双端滑块 CSS
   useEffect(() => {
@@ -214,7 +218,7 @@ export default function PositionCalc() {
 
   // 获取持仓数据
   const { data: positionData, isLoading: positionLoading } = trpc.ethPositionGetLevels.useQuery(
-    { ledgerId },
+    { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: ledgerId > 0 }
   );
 
@@ -241,7 +245,7 @@ export default function PositionCalc() {
   });
   // 从数据库读取目标止盈和汇率设置
   const { data: settingsData } = trpc.ethPositionGetSettings.useQuery(
-    { ledgerId },
+    { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: ledgerId > 0 }
   );
   const saveSettingsMutation = trpc.ethPositionSaveSettings.useMutation();
@@ -259,6 +263,7 @@ export default function PositionCalc() {
   }, []);
 
   const handleStrategyDragSave = useCallback((val: number) => {
+    if (isViewAs) return; // 视角查看时禁用写入
     saveSettingsMutation.mutate({
       ledgerId,
       targetProfitCny: parseFloat(targetProfitCny) || 0,
@@ -479,6 +484,7 @@ export default function PositionCalc() {
   });
   const confirmModal = () => {
     if (!modal) return;
+    if (isViewAs) { setModal(null); return; } // 视角查看时禁用写入
     const num = parseFloat(modal.inputValue);
     const val = isNaN(num) || num < 0 ? 0 : num;
     if (modal.mode === 'editPlanned') {

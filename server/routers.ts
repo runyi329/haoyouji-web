@@ -20075,9 +20075,10 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
 
   // ========== ETH 持仓计算 (已从 adminFeatureRouter 移入 appRouter) ==========
   ethPositionGetLevels: protectedProcedure
-    .input(z.object({ ledgerId: z.number() }))
+    .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
     .query(async ({ input, ctx }) => {
-      const levels = await dbEthPosition.getEthPositionLevels(input.ledgerId, ctx.user.id);
+      const targetUserId = input.viewAsUserId ?? ctx.user.id;
+      const levels = await dbEthPosition.getEthPositionLevels(input.ledgerId, targetUserId);
       return { levels };
     }),
   ethPositionSaveLevel: protectedProcedure
@@ -20111,9 +20112,10 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       return { success: true };
     }),
   ethPositionGetSettings: protectedProcedure
-    .input(z.object({ ledgerId: z.number() }))
+    .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
     .query(async ({ input, ctx }) => {
-      const settings = await dbEthPosition.getEthPositionSettings(input.ledgerId, ctx.user.id);
+      const targetUserId = input.viewAsUserId ?? ctx.user.id;
+      const settings = await dbEthPosition.getEthPositionSettings(input.ledgerId, targetUserId);
       return settings;
     }),
   ethPositionSaveSettings: protectedProcedure
