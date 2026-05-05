@@ -1901,26 +1901,25 @@ export default function BeDataPage() {
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 5, textTransform: "uppercase" }}>基本信息</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {isCryptoMode ? (
-                    // 数字币模式：显示 CoinGecko 市场数据
-                    ['市値', '完全稀释市値', '市场占有率', '流通数量', '最大供应量', '发行日期'].map((label, i) => {
-                      const vals = coinInfoData ? [
-                        fmtBig(coinInfoData.marketCap),
-                        fmtBig(coinInfoData.fullyDilutedValuation),
-                        coinInfoData.dominance != null ? `${coinInfoData.dominance.toFixed(2)}%` : '—',
-                        fmtSupply(coinInfoData.circulatingSupply, activeSymbol),
-                        fmtSupply(coinInfoData.maxSupply, activeSymbol),
-                        coinInfoData.genesisDate ?? '—',
-                      ] : null;
-                      return (
-                        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                    // 数字币模式：显示固定基本信息（不随价格变动）
+                    (() => {
+                      const COIN_STATIC: Record<string, { genesisDate: string; maxSupply: string; circulatingSupply: string }> = {
+                        BTCUSDT: { genesisDate: '2009-01-03', maxSupply: '2,100万 BTC', circulatingSupply: '1,976万 BTC' },
+                        ETHUSDT: { genesisDate: '2015-07-30', maxSupply: '无上限', circulatingSupply: '1.20亿 ETH' },
+                        SOLUSDT: { genesisDate: '2020-03-16', maxSupply: '无上限', circulatingSupply: '5.10亿 SOL' },
+                      };
+                      const info = COIN_STATIC[activeSymbol] ?? { genesisDate: '—', maxSupply: '—', circulatingSupply: '—' };
+                      return [
+                        { label: '发行日期', value: info.genesisDate },
+                        { label: '最大供给量', value: info.maxSupply },
+                        { label: '流通数量', value: info.circulatingSupply },
+                      ].map(({ label, value }) => (
+                        <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
                           <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", flexShrink: 0 }}>{label}</span>
-                          {vals == null
-                            ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-                            : <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", textAlign: 'right', maxWidth: '65%', wordBreak: 'break-all' }}>{vals[i]}</span>
-                          }
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", textAlign: 'right', maxWidth: '65%' }}>{value}</span>
                         </div>
-                      );
-                    })
+                      ));
+                    })()
                   ) : (
                     // 非数字币模式：保持原交易所显示
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
