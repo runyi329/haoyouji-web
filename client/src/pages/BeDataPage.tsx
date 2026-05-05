@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { MarketBetPanelWithTabs } from "./CryptoPrediction";
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft } from "lucide-react";
@@ -1148,7 +1148,7 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
     `linear-gradient(to right, ${color} 0%, ${color} ${((val - min) / (max - min)) * 100}%, rgba(255,255,255,0.08) ${((val - min) / (max - min)) * 100}%, rgba(255,255,255,0.08) 100%)`;
 
   return (
-    <div className="flex-1 overflow-auto pb-10" style={{
+    <div ref={scrollContainerRef} className="flex-1 overflow-auto pb-10" style={{
       background: 'linear-gradient(160deg, #0a0800 0%, #110e00 50%, #0a0800 100%)',
       minHeight: '100%',
     }}>
@@ -1515,6 +1515,7 @@ export default function BeDataPage() {
     : (filteredSymbols[0]?.key ?? ALL_SYMBOLS[0].key);
 
   const [activeSymbol, setActiveSymbol] = useState(initialSymbol);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   // 美股模式和数字币模式下默认显示数据分析
   const [activeTab, setActiveTab] = useState(hideSymbolTabs ? "analysis" : "data");
   const [page, setPage] = useState(1);
@@ -1636,9 +1637,17 @@ export default function BeDataPage() {
   );
 
   const handleSymbolChange = (sym: string) => {
+    // 保存当前滚动位置，切换后恢复
+    const savedScrollTop = scrollContainerRef.current?.scrollTop ?? 0;
     setActiveSymbol(sym);
     setPage(1);
     setFundingPage(1);
+    // 用 requestAnimationFrame 确保 DOM 更新后再恢复滚动位置
+    requestAnimationFrame(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = savedScrollTop;
+      }
+    });
   };
 
   // 构建连涨/连跌图表数据（最多显示到10天，用于柱状图）
