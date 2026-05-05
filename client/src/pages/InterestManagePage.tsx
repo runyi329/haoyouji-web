@@ -113,7 +113,8 @@ export default function InterestManagePage() {
       toast.success('手工调息已记录');
       setShowManualForm(null);
       setManualForm({ amount: '', remark: '', isPlus: true });
-      utils.ledger.getTagInterestManualLogs.invalidate({ ledgerId: lid });
+      utils.ledger.getTagInterestManualLogs.invalidate();
+      refetchLogs();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -122,7 +123,8 @@ export default function InterestManagePage() {
   const deleteManualMutation = trpc.ledger.deleteTagInterestManualLog.useMutation({
     onSuccess: () => {
       toast.success('已删除');
-      utils.ledger.getTagInterestManualLogs.invalidate({ ledgerId: lid });
+      utils.ledger.getTagInterestManualLogs.invalidate();
+      refetchLogs();
     },
     onError: (e) => toast.error(e.message),
   });
