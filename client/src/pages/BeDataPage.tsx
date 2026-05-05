@@ -1318,11 +1318,36 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
 function FundingYearlyStats({
   years,
   yearMap,
+  rawData,
 }: {
   years: string[];
   yearMap: Record<string, { sumRate: number; count: number; periodH: number }>;
+  rawData: { fundingTime: number; fundingRate: number }[];
 }) {
   const [open, setOpen] = useState(false);
+
+  // 动态计算近N天的平均年化（实时，每次打开都基于最新数据）
+  const recentStats = useMemo(() => {
+    if (!rawData || rawData.length === 0) return [];
+    const now = rawData[0].fundingTime; // 数据已按时间倒序，第0条是最新
+    const intervals = [
+      { label: '近半年', days: 182 },
+      { label: '近1年', days: 365 },
+      { label: '近2年', days: 730 },
+      { label: '近3年', days: 1095 },
+    ];
+    return intervals.map(({ label, days }) => {
+      const cutoff = now - days * 24 * 3600 * 1000;
+      const slice = rawData.filter(d => d.fundingTime >= cutoff);
+      const count = slice.length;
+      const sumRate = slice.reduce((s, d) => s + d.fundingRate, 0);
+      // 年化 = 平均单次费率 × 1095
+      const avgRate = count > 0 ? sumRate / count : 0;
+      const longAnnual = avgRate * 1095 * 100;
+      const shortAnnual = -avgRate * 1095 * 100;
+      return { label, count, longAnnual, shortAnnual };
+    });
+  }, [rawData]);
   return (
     <div className="border-t border-gray-100">
       {/* 折叠触发按钮 */}
@@ -1391,6 +1416,36 @@ function FundingYearlyStats({
                   </tr>
                 );
               })()}
+              {/* 动态近期区间行 */}
+              {recentStats.map((r) => {
+                const longDir = r.longAnnual > 0.001 ? '净付出' : r.longAnnual < -0.001 ? '净收入' : '持平';
+                const shortDir = r.shortAnnual > 0.001 ? '净付出' : r.shortAnnual < -0.001 ? '净收入' : '持平';
+                const longColor = r.longAnnual > 0.001 ? '#EF4444' : r.longAnnual < -0.001 ? '#16A34A' : '#9CA3AF';
+                const shortColor = r.shortAnnual > 0.001 ? '#EF4444' : r.shortAnnual < -0.001 ? '#16A34A' : '#9CA3AF';
+                const cellStyle: React.CSSProperties = {
+                  border: '1px solid #D1D5DB',
+                  padding: '5px 2px',
+                  textAlign: 'center',
+                  fontFamily: 'monospace',
+                  fontSize: 10.5,
+                  whiteSpace: 'nowrap',
+                  background: '#F0FDF4',
+                };
+                return (
+                  <tr key={r.label}>
+                    <td style={{ ...cellStyle, color: '#166534', fontWeight: 700 }}>{r.label}</td>
+                    <td style={{ ...cellStyle, color: '#6B7280' }}>{r.count}</td>
+                    <td style={{ ...cellStyle, color: longColor, fontWeight: 700 }}>
+                      {(r.longAnnual >= 0 ? '+' : '') + r.longAnnual.toFixed(2)}%
+                    </td>
+                    <td style={{ ...cellStyle, color: longColor }}>{longDir}</td>
+                    <td style={{ ...cellStyle, color: shortColor, fontWeight: 700 }}>
+                      {(r.shortAnnual >= 0 ? '+' : '') + r.shortAnnual.toFixed(2)}%
+                    </td>
+                    <td style={{ ...cellStyle, color: shortColor }}>{shortDir}</td>
+                  </tr>
+                );
+              })}
               {years.map((year, idx) => {
                 const { sumRate, count } = yearMap[year];
                 const longPay = sumRate * 100;
@@ -2353,7 +2408,7 @@ export default function BeDataPage() {
                       // 多头年化 = 如果 sumRate > 0，多头净付出 sumRate*100%；空头净收入
                       // 空头年化 = 如果 sumRate < 0，空头净付出 |sumRate|*100%；多头净收入
                       return (
-                        <FundingYearlyStats years={years} yearMap={yearMap} />
+                        <FundingYearlyStats years={years} yearMap={yearMap} rawData={fundingChartData} />
                       );
                     })()}
 
