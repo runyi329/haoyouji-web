@@ -4275,8 +4275,8 @@ export default function LedgerDetail() {
                 </div>
               </button>
 
-              {/* GTO 德州扑克入口 - 仅创建者可见 */}
-              {isOwner && <button
+              {/* GTO 德州扑克入口 - 仅创建者/管理员可见，视角查看时隐藏 */}
+              {(isOwner || isAdmin) && !viewAsUserId && <button
                 onClick={() => setLocation(`/ledger/${ledgerId}/gto`)}
                 className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
                 style={{ background: 'linear-gradient(135deg, #0a3d1f 0%, #1a5c2e 50%, #0d4a25 100%)', border: '1px solid #2d7a3a', boxShadow: '0 2px 12px rgba(0,80,20,0.18)' }}
