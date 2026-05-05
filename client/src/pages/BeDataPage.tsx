@@ -1357,13 +1357,16 @@ function FundingYearlyStats({
             <tbody>
               {years.map((year, idx) => {
                 const { sumRate, count } = yearMap[year];
-                // 多头：sumRate>0 付出（负收益），sumRate<0 收入（正收益）
-                const longAnnual = sumRate * 100; // 单位%，正=多头付出，负=多头收入
-                const shortAnnual = -sumRate * 100; // 正=空头收入，负=空头付出
-                const longDir = longAnnual > 0.001 ? '净付出' : longAnnual < -0.001 ? '净收入' : '持平';
-                const shortDir = shortAnnual > 0.001 ? '净收入' : shortAnnual < -0.001 ? '净付出' : '持平';
-                const longColor = longAnnual > 0.001 ? '#EF4444' : longAnnual < -0.001 ? '#16A34A' : '#9CA3AF';
-                const shortColor = shortAnnual > 0.001 ? '#16A34A' : shortAnnual < -0.001 ? '#EF4444' : '#9CA3AF';
+                // 多头：sumRate>0 多付空，多头净付出（负收益）；sumRate<0 空付多，多头净收入（正收益）
+                // 空头相反
+                const longPay = sumRate * 100;   // 多头净支出（正=付出，负=收入）
+                const shortPay = -sumRate * 100; // 空头净支出（正=付出，负=收入）
+                // 方向文字：正数=净付出，负数=净收入
+                const longDir = longPay > 0.001 ? '净付出' : longPay < -0.001 ? '净收入' : '持平';
+                const shortDir = shortPay > 0.001 ? '净付出' : shortPay < -0.001 ? '净收入' : '持平';
+                // 颜色：净付出=红（不利），净收入=绿（有利）
+                const longColor = longPay > 0.001 ? '#EF4444' : longPay < -0.001 ? '#16A34A' : '#9CA3AF';
+                const shortColor = shortPay > 0.001 ? '#EF4444' : shortPay < -0.001 ? '#16A34A' : '#9CA3AF';
                 const rowBg = idx % 2 === 0 ? '#fff' : '#F9FAFB';
                 const cellStyle: React.CSSProperties = {
                   border: '1px solid #E5E7EB',
@@ -1378,11 +1381,11 @@ function FundingYearlyStats({
                     <td style={{ ...cellStyle, color: '#374151', fontWeight: 600 }}>{year}</td>
                     <td style={{ ...cellStyle, color: '#6B7280' }}>{count}</td>
                     <td style={{ ...cellStyle, color: longColor, fontWeight: 600 }}>
-                      {(longAnnual >= 0 ? '+' : '') + longAnnual.toFixed(2)}%
+                      {(longPay >= 0 ? '+' : '') + longPay.toFixed(2)}%
                     </td>
                     <td style={{ ...cellStyle, color: longColor }}>{longDir}</td>
                     <td style={{ ...cellStyle, color: shortColor, fontWeight: 600 }}>
-                      {(shortAnnual >= 0 ? '+' : '') + shortAnnual.toFixed(2)}%
+                      {(shortPay >= 0 ? '+' : '') + shortPay.toFixed(2)}%
                     </td>
                     <td style={{ ...cellStyle, color: shortColor }}>{shortDir}</td>
                   </tr>
@@ -1391,7 +1394,7 @@ function FundingYearlyStats({
             </tbody>
           </table>
           <div className="mt-2 text-xs text-gray-400 leading-relaxed">
-            假设持有固定数量持满全年，多头年化 = 全年累计资金费率之和（正=净付出，负=净收入）；空头方向相反。
+            假设持有固定数量持满全年。正值=净付出（红），负值=净收入（绿），多空方向相反。
           </div>
         </div>
       )}
