@@ -428,6 +428,57 @@ ${klinesSummary}
       .query(async ({ input }) => {
         return await dbCrypto.getFundingRateChart(input.symbol, input.limit);
       }),
+
+    // 获取币种基本信息（市値、占比、流通量等）——来自 CoinGecko
+    getCoinInfo: publicProcedure
+      .input(z.object({
+        symbol: z.string(), // BTCUSDT / ETHUSDT / SOLUSDT
+      }))
+      .query(async ({ input }) => {
+        const coinIdMap: Record<string, string> = {
+          BTCUSDT: 'bitcoin',
+          ETHUSDT: 'ethereum',
+          SOLUSDT: 'solana',
+        };
+        const coinId = coinIdMap[input.symbol.toUpperCase()];
+        if (!coinId) return null;
+
+        try {
+          // 币种详情（市値、供应量、发行日期）
+          const coinRes = await fetch(
+            `https://api.coingecko.com/api/v3/coins/${coinId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false`,
+            { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
+          );
+          if (!coinRes.ok) return null;
+          const coin = await coinRes.json() as any;
+          const md = coin.market_data ?? {};
+
+          // 全局市场占比（BTC dominance）
+          const globalRes = await fetch(
+            'https://api.coingecko.com/api/v3/global',
+            { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
+          );
+          let dominance: number | null = null;
+          if (globalRes.ok) {
+            const globalData = await globalRes.json() as any;
+            const pct = globalData?.data?.market_cap_percentage ?? {};
+            const key = coinId === 'bitcoin' ? 'btc' : coinId === 'ethereum' ? 'eth' : coinId === 'solana' ? 'sol' : null;
+            if (key && pct[key] != null) dominance = Number(pct[key]);
+          }
+
+          return {
+            marketCap: md.market_cap?.usd ?? null,           // 市値 USD
+            fullyDilutedValuation: md.fully_diluted_valuation?.usd ?? null, // 完全稀释市値
+            dominance,                                        // 市场占有率 %
+            circulatingSupply: md.circulating_supply ?? null, // 流通数量
+            maxSupply: md.max_supply ?? null,                 // 最大供应量
+            genesisDate: coin.genesis_date ?? null,           // 发行日期
+          };
+        } catch (e) {
+          console.error('[getCoinInfo] fetch error:', e);
+          return null;
+        }
+      }),
   }),
 
   // 支付账户管理

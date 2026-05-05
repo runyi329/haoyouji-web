@@ -1676,6 +1676,12 @@ export default function BeDataPage() {
     }
   );
 
+  // 币种基本信息（CoinGecko）
+  const { data: coinInfoData } = trpc.cryptoData.getCoinInfo.useQuery(
+    { symbol: activeSymbol },
+    { enabled: isCryptoMode, staleTime: 5 * 60 * 1000 }
+  );
+
   const handleSymbolChange = (sym: string) => {
     // 保存当前币种的滚动位置到 sessionStorage
     const currentScrollTop = scrollContainerRef.current?.scrollTop ?? 0;
@@ -1872,41 +1878,56 @@ export default function BeDataPage() {
           {/* 基本信息 + 实时行情 左右分栏 */}
           {(() => {
             const cardLoading = isLoading || !metaData;
+            // 格式化大数字（如市値）
+            const fmtBig = (v: number | null | undefined) => {
+              if (v == null) return '—';
+              if (v >= 1e12) return `$${(v / 1e12).toFixed(2)}兆`;
+              if (v >= 1e8) return `$${(v / 1e8).toFixed(2)}亿`;
+              if (v >= 1e4) return `$${(v / 1e4).toFixed(0)}万`;
+              return `$${v.toLocaleString()}`;
+            };
+            const fmtSupply = (v: number | null | undefined, sym: string) => {
+              if (v == null) return '—';
+              const unit = sym.replace('USDT', '');
+              if (v >= 1e8) return `${(v / 1e8).toFixed(2)}亿 ${unit}`;
+              if (v >= 1e4) return `${(v / 1e4).toFixed(0)}万 ${unit}`;
+              return `${v.toLocaleString()} ${unit}`;
+            };
             const skeletonStyle: React.CSSProperties = { height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)", marginBottom: 4 };
             return (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-              {/* 左列：静态信息 */}
+              {/* 左列：币种基本信息 */}
               <div style={{ borderRadius: 10, padding: "8px 10px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)" }}>
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 5, textTransform: "uppercase" }}>基本信息</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {['数据条数', '起始日期', '最新日期'].map((label, i) => {
-                    const vals = [
-                      cardLoading ? null : `${total.toLocaleString()}条`,
-                      cardLoading ? null : oldestDate,
-                      cardLoading ? null : latestDate,
-                    ];
-                    return (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
-                        <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{label}</span>
-                        {vals[i] == null
-                          ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-                          : <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>{vals[i]}</span>
-                        }
-                      </div>
-                    );
-                  })}
-                  {/* 交易所：用图标替代文字 */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
-                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>交易所</span>
-                    {isCryptoMode ? (
-                      <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-                        <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logos/okx-circle-icon.png" alt="OKX" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
-                        <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logos/binance-circle-icon.png" alt="Binance" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
-                      </div>
-                    ) : (
+                  {isCryptoMode ? (
+                    // 数字币模式：显示 CoinGecko 市场数据
+                    ['市値', '完全稀释市値', '市场占有率', '流通数量', '最大供应量', '发行日期'].map((label, i) => {
+                      const vals = coinInfoData ? [
+                        fmtBig(coinInfoData.marketCap),
+                        fmtBig(coinInfoData.fullyDilutedValuation),
+                        coinInfoData.dominance != null ? `${coinInfoData.dominance.toFixed(2)}%` : '—',
+                        fmtSupply(coinInfoData.circulatingSupply, activeSymbol),
+                        fmtSupply(coinInfoData.maxSupply, activeSymbol),
+                        coinInfoData.genesisDate ?? '—',
+                      ] : null;
+                      return (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                          <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", flexShrink: 0 }}>{label}</span>
+                          {vals == null
+                            ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
+                            : <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", textAlign: 'right', maxWidth: '65%', wordBreak: 'break-all' }}>{vals[i]}</span>
+                          }
+                        </div>
+                      );
+                    })
+                  ) : (
+                    // 非数字币模式：保持原交易所显示
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                      <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>交易所</span>
                       <span style={{ fontSize: 11, fontWeight: 700, color: "#E3F2FD" }}>NASDAQ</span>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
