@@ -2215,7 +2215,7 @@ export default function BeDataPage() {
                 </colgroup>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr style={{ background: '#F3F4F6' }}>
-                    <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>时间 (UTC)</th>
+                    <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>时间 (北京)</th>
                     <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>周期</th>
                     <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>方向</th>
                     <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>费率</th>
@@ -2247,7 +2247,7 @@ export default function BeDataPage() {
                     const rateStr = (rate * 100).toFixed(4) + '%';
                     // 按日分隔线
                     const isNewDay = idx === 0 || (() => {
-                      const prevDt = new Date(fundingData.rows[idx - 1].fundingTime);
+                      const prevDt = new Date(fundingData.rows[idx - 1].fundingTime + 8 * 3600 * 1000);
                       return dt.getUTCDate() !== prevDt.getUTCDate() || dt.getUTCMonth() !== prevDt.getUTCMonth();
                     })();
                     const topBorder = isNewDay && idx > 0 ? '1px solid #D1D5DB' : '1px solid #E5E7EB';
@@ -2464,7 +2464,7 @@ export default function BeDataPage() {
               {isCryptoMode && fundingChartData && fundingChartData.length > 0 && (() => {
                 const chartData = fundingChartData.map(d => ({
                   date: (() => {
-                    const dt = new Date(d.fundingTime);
+                    const dt = new Date(d.fundingTime + 8 * 3600 * 1000); // UTC+8 北京时间
                     return `${dt.getUTCFullYear()}/${String(dt.getUTCMonth()+1).padStart(2,'0')}/${String(dt.getUTCDate()).padStart(2,'0')}`;
                   })(),
                   rate: parseFloat((d.fundingRate * 100).toFixed(4)),
@@ -2549,7 +2549,7 @@ export default function BeDataPage() {
                       // 按年分组，每年实际累计费率之和即为年化
                       const yearMap2: Record<string, { sumRate: number; count: number }> = {};
                       fundingChartData.forEach(d => {
-                        const year = String(new Date(d.fundingTime).getUTCFullYear());
+                        const year = String(new Date(d.fundingTime + 8 * 3600 * 1000).getUTCFullYear()); // 北京时间
                         if (!yearMap2[year]) yearMap2[year] = { sumRate: 0, count: 0 };
                         yearMap2[year].sumRate += d.fundingRate;
                         yearMap2[year].count += 1;
@@ -2610,7 +2610,7 @@ export default function BeDataPage() {
                       // 按年分组计算
                       const yearMap: Record<string, { sumRate: number; count: number; periodH: number }> = {};
                       fundingChartData.forEach((d, i) => {
-                        const dt = new Date(d.fundingTime);
+                        const dt = new Date(d.fundingTime + 8 * 3600 * 1000); // 北京时间
                         const year = String(dt.getUTCFullYear());
                         const next = fundingChartData[i + 1];
                         const ph = next ? Math.round((d.fundingTime - next.fundingTime) / 1000 / 3600) : 8;
