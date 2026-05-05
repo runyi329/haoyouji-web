@@ -1440,7 +1440,7 @@ export default function BeDataPage() {
   );
   // 资金费率折线图数据（数据分析Tab使用）
   const { data: fundingChartData } = trpc.cryptoData.getFundingRateChart.useQuery(
-    { symbol: activeSymbol, limit: 500 },
+    { symbol: activeSymbol, limit: 10000 },
     { enabled: activeTab === 'analysis' && isCryptoMode, staleTime: 5 * 60 * 1000 }
   );
 

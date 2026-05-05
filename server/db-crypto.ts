@@ -1300,7 +1300,7 @@ export async function getLatestFundingTime(symbol: string): Promise<number> {
 export async function getFundingRateChart(symbol: string, limit: number = 500): Promise<FundingRate[]> {
   const conn = await getDbConnection();
   if (!conn) return [];
-  const safeLimit = Math.min(2000, Math.max(1, limit));
+  const safeLimit = Math.min(10000, Math.max(1, limit));
   const [rows] = await conn.execute(
     `SELECT symbol, funding_time, funding_rate, mark_price
      FROM (
