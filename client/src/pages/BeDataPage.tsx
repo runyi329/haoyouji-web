@@ -1329,7 +1329,8 @@ function FundingYearlyStats({
   // 动态计算近N天的平均年化（实时，每次打开都基于最新数据）
   const recentStats = useMemo(() => {
     if (!rawData || rawData.length === 0) return [];
-    const now = rawData[0].fundingTime; // 数据已按时间倒序，第0条是最新
+    // 数据是正序（最旧在前），最后一条是最新的
+    const now = rawData[rawData.length - 1].fundingTime;
     const intervals = [
       { label: '近半年', days: 182 },
       { label: '近1年', days: 365 },
