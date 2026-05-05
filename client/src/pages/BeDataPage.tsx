@@ -1875,45 +1875,31 @@ export default function BeDataPage() {
             <>
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <colgroup>
+                  <col style={{ width: '38%' }} />
+                  <col style={{ width: '30%' }} />
                   <col style={{ width: '32%' }} />
-                  <col style={{ width: '28%' }} />
-                  <col style={{ width: '20%' }} />
-                  <col style={{ width: '20%' }} />
                 </colgroup>
                 <thead>
                   <tr style={{ background: '#F9FAFB', position: 'sticky', top: 0, zIndex: 1 }}>
-                    <th style={{ border: '1px solid #E5E7EB', padding: '6px 4px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#374151' }}>结算时间</th>
-                    <th style={{ border: '1px solid #E5E7EB', padding: '6px 4px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#374151' }}>资金费率</th>
-                    <th style={{ border: '1px solid #E5E7EB', padding: '6px 4px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#374151' }}>周期</th>
-                    <th style={{ border: '1px solid #E5E7EB', padding: '6px 4px', textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#374151' }}>标记价</th>
+                    <th style={{ borderBottom: '1px solid #E5E7EB', padding: '4px 6px', textAlign: 'left', fontSize: 10, fontWeight: 600, color: '#6B7280' }}>结算时间 (UTC)</th>
+                    <th style={{ borderBottom: '1px solid #E5E7EB', padding: '4px 4px', textAlign: 'right', fontSize: 10, fontWeight: 600, color: '#6B7280' }}>资金费率</th>
+                    <th style={{ borderBottom: '1px solid #E5E7EB', padding: '4px 6px', textAlign: 'right', fontSize: 10, fontWeight: 600, color: '#6B7280' }}>标记价</th>
                   </tr>
                 </thead>
                 <tbody>
                   {fundingData.rows.map((row, idx) => {
                     const rate = row.fundingRate;
-                    const isPositive = rate > 0;
-                    const isNegative = rate < 0;
-                    const rateColor = isPositive ? '#D32F2F' : isNegative ? '#388E3C' : '#6B7280';
-                    const rowBg = idx % 2 === 0 ? '#fff' : '#FAFAFA';
-                    // 时间格式化：UTC时间戳 -> 日期+时间
+                    const rateColor = rate > 0 ? '#D32F2F' : rate < 0 ? '#388E3C' : '#6B7280';
+                    const rowBg = idx % 2 === 0 ? '#fff' : '#F9FAFB';
                     const dt = new Date(row.fundingTime);
-                    const dateStr = `${dt.getUTCFullYear()}/${String(dt.getUTCMonth()+1).padStart(2,'0')}/${String(dt.getUTCDate()).padStart(2,'0')}`;
-                    const timeStr = `${String(dt.getUTCHours()).padStart(2,'0')}:00`;
-                    // 资金费率格式化：保畖4位小数百分比
+                    const timeStr = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')} ${String(dt.getUTCHours()).padStart(2,'0')}:00`;
                     const rateStr = (rate * 100).toFixed(4) + '%';
-                    // 结算周期：每8小时一次
-                    const period = '8h';
-                    // 标记价格式化
-                    const markStr = row.markPrice != null ? (row.markPrice >= 1000 ? row.markPrice.toLocaleString('en-US', { maximumFractionDigits: 2 }) : row.markPrice.toFixed(4)) : '-';
+                    const markStr = row.markPrice != null ? (row.markPrice >= 1000 ? row.markPrice.toLocaleString('en-US', { maximumFractionDigits: 1 }) : row.markPrice.toFixed(3)) : '-';
                     return (
                       <tr key={row.fundingTime} style={{ background: rowBg }}>
-                        <td style={{ border: '1px solid #E5E7EB', padding: '4px 2px', textAlign: 'center', color: '#6B7280', fontFamily: 'monospace', fontSize: 9, whiteSpace: 'nowrap' }}>
-                          <div>{dateStr}</div>
-                          <div style={{ color: '#9CA3AF' }}>{timeStr} UTC</div>
-                        </td>
-                        <td style={{ border: '1px solid #E5E7EB', padding: '4px 2px', textAlign: 'center', color: rateColor, fontFamily: 'monospace', fontSize: 11, fontWeight: 600 }}>{rateStr}</td>
-                        <td style={{ border: '1px solid #E5E7EB', padding: '4px 2px', textAlign: 'center', color: '#6B7280', fontFamily: 'monospace', fontSize: 10 }}>{period}</td>
-                        <td style={{ border: '1px solid #E5E7EB', padding: '4px 2px', textAlign: 'center', color: '#374151', fontFamily: 'monospace', fontSize: 9 }}>{markStr}</td>
+                        <td style={{ borderBottom: '1px solid #F3F4F6', padding: '3px 6px', color: '#6B7280', fontFamily: 'monospace', fontSize: 10, whiteSpace: 'nowrap' }}>{timeStr}</td>
+                        <td style={{ borderBottom: '1px solid #F3F4F6', padding: '3px 4px', textAlign: 'right', color: rateColor, fontFamily: 'monospace', fontSize: 10, fontWeight: 600 }}>{rateStr}</td>
+                        <td style={{ borderBottom: '1px solid #F3F4F6', padding: '3px 6px', textAlign: 'right', color: '#374151', fontFamily: 'monospace', fontSize: 10 }}>{markStr}</td>
                       </tr>
                     );
                   })}
