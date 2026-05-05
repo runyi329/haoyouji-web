@@ -566,6 +566,13 @@ export default function LedgerSettings() {
  )}
  {ledgerId === 37 && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem
+ label="利息管理"
+ showIcon
+ onClick={() => setLocation(`/ledger/${ledgerId}/interest-manage`)}
+ />
+ )}
+ {ledgerId === 37 && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ <SettingItem
  label="波比管理"
  showIcon
  onClick={() => setLocation(`/ledger/${ledgerId}/wave-ratio-manage`)}
