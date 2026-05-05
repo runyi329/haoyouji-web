@@ -133,7 +133,7 @@ export default function RechargeHistory() {
                         <div className="text-xs text-gray-400 mb-1">{item.note}</div>
                       )}
                       <div className="flex items-center justify-between text-xs text-gray-600">
-                        <span></span>
+                        <span>{item.balanceAfter != null ? `余额 ${parseFloat(String(item.balanceAfter)).toFixed(2)}` : ''}</span>
                         <span>{formatDate(item.createdAt)}</span>
                       </div>
                     </div>

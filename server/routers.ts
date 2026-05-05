@@ -11660,7 +11660,25 @@ ${klinesSummary}
         const combined = [...rechargeList, ...manualList].sort(
           (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
-        return combined;
+        // 4. 计算每条记录后的余额快照（从最早到最新累加）
+        const chronological = [...combined].reverse();
+        let runningBalance = 0;
+        const balanceMap = new Map<string, number>();
+        for (const item of chronological) {
+          const amt = parseFloat(String((item as any).amount));
+          const srcType = (item as any).sourceType;
+          const status = (item as any).status;
+          if (srcType === 'recharge' && status === 'completed') {
+            runningBalance += amt;
+          } else if (srcType === 'manual') {
+            runningBalance += amt;
+          }
+          balanceMap.set(String((item as any).id), runningBalance);
+        }
+        return combined.map(item => ({
+          ...item,
+          balanceAfter: balanceMap.get(String((item as any).id)) ?? null,
+        }));
       }),
     // AF 提交委托订单
     afSubmitOrder: protectedProcedure
