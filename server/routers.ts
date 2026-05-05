@@ -305,8 +305,9 @@ export const appRouter = router({
     // AI 分析该股票（调用 LLM 生成简要分析）
     getAIAnalysis: publicProcedure
       .input(z.object({
-        symbol: z.string(),       // 如 AAPL.US
-        stockName: z.string(),    // 如 苹果
+        symbol: z.string(),
+        stockName: z.string(),
+        // 以下字段由前端传入（可选），后端也会自行从数据库获取更完整的数据
         latestClose: z.number().nullable().optional(),
         latestChangePct: z.number().nullable().optional(),
         total: z.number().optional(),
@@ -315,77 +316,196 @@ export const appRouter = router({
       }))
       .query(async ({ input }) => {
         const { invokeLLM } = await import('./_core/llm');
-        const { symbol, stockName, latestClose, latestChangePct, total, oldestDate, latestDate } = input;
+        const { symbol, stockName } = input;
+        const isCrypto = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'].includes(symbol);
+        const binanceSymbol = symbol; // e.g. BTCUSDT
+        const coinId = symbol === 'BTCUSDT' ? 'bitcoin' : symbol === 'ETHUSDT' ? 'ethereum' : 'solana';
+        const coinName = symbol === 'BTCUSDT' ? 'BTC/比特币' : symbol === 'ETHUSDT' ? 'ETH/以太坊' : 'SOL/Solana';
 
-        // 从数据库取最近 20 条日线作为上下文
-        let recentKlines: any[] = [];
-        try {
-          const conn = await getDbConnection();
-          if (conn) {
-            const [rows] = await (conn as any).execute(
-              `SELECT date, open, close, high, low, change_pct FROM crypto_klines WHERE symbol = ? ORDER BY date DESC LIMIT 20`,
-              [symbol.replace('.US', '')]
-            );
-            recentKlines = (rows as any[]).map((r: any) => ({
-              date: r.date,
-              open: parseFloat(r.open),
-              close: parseFloat(r.close),
-              high: parseFloat(r.high),
-              low: parseFloat(r.low),
-              changePct: r.change_pct != null ? parseFloat(r.change_pct) : null,
-            }));
-          }
-        } catch (e) {
-          console.error('[getAIAnalysis] klines fetch error:', e);
-        }
+        // ===== 并行获取所有数据 =====
+        const fetchJson = async (url: string) => {
+          try {
+            const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            if (!r.ok) return null;
+            return await r.json();
+          } catch { return null; }
+        };
 
-        const klinesSummary = recentKlines.length > 0
-          ? recentKlines.map(r => `${r.date}: 开${r.open} 收${r.close} 高${r.high} 低${r.low} 涨跌${r.changePct != null ? r.changePct.toFixed(2) + '%' : '-'}`).join('\n')
+        const [recentKlinesRaw, fundingRatesRaw, statsRaw, corrRaw, fngRaw, globalRaw, premiumRaw, oiRaw, lsRatioRaw] = await Promise.all([
+          // 最近30条日线
+          (async () => {
+            try {
+              const conn = await getDbConnection();
+              if (!conn) return [];
+              const [rows] = await (conn as any).execute(
+                `SELECT DATE_FORMAT(date,'%Y-%m-%d') as date, open, close, high, low, change_pct FROM crypto_klines WHERE symbol = ? ORDER BY date DESC LIMIT 30`,
+                [symbol]
+              );
+              return (rows as any[]).map((r: any) => ({
+                date: r.date,
+                open: parseFloat(r.open),
+                close: parseFloat(r.close),
+                high: parseFloat(r.high),
+                low: parseFloat(r.low),
+                changePct: r.change_pct != null ? parseFloat(r.change_pct) : null,
+              }));
+            } catch { return []; }
+          })(),
+          // 最近10条资金费率（仅数字币）
+          isCrypto ? (async () => {
+            try {
+              const conn = await getDbConnection();
+              if (!conn) return [];
+              const [rows] = await (conn as any).execute(
+                `SELECT funding_time, funding_rate FROM crypto_funding_rates WHERE symbol = ? ORDER BY funding_time DESC LIMIT 10`,
+                [symbol]
+              );
+              return (rows as any[]).map((r: any) => ({
+                time: Number(r.funding_time),
+                rate: Number(r.funding_rate),
+              }));
+            } catch { return []; }
+          })() : Promise.resolve([]),
+          // 历史统计（上涨/下跌天数等）
+          dbCrypto.getCryptoStats(symbol).catch(() => null),
+          // 相关性（仅数字币）
+          isCrypto ? dbCrypto.getCorrelationFromCache(symbol, ['BTCUSDT','ETHUSDT','SOLUSDT'].filter(s => s !== symbol)).catch(() => null) : Promise.resolve(null),
+          // 恐惧贪婪指数
+          isCrypto ? fetchJson('https://api.alternative.me/fng/?limit=1') : Promise.resolve(null),
+          // CoinGecko 全球市场
+          isCrypto ? fetchJson('https://api.coingecko.com/api/v3/global') : Promise.resolve(null),
+          // Binance 期货溢价指数（含预测资金费率）
+          isCrypto ? fetchJson(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${binanceSymbol}`) : Promise.resolve(null),
+          // Binance 持仓量
+          isCrypto ? fetchJson(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${binanceSymbol}`) : Promise.resolve(null),
+          // Binance 多空比（全球账户）
+          isCrypto ? fetchJson(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${binanceSymbol}&period=1d&limit=1`) : Promise.resolve(null),
+        ]);
+
+        // ===== 整理数据 =====
+        const klines = recentKlinesRaw as any[];
+        const fundingRates = fundingRatesRaw as any[];
+        const stats = statsRaw as any;
+        const corr = corrRaw as any;
+        const fng = fngRaw?.data?.[0];
+        const globalData = globalRaw?.data;
+        const premium = premiumRaw as any;
+        const oi = oiRaw as any;
+        const lsRatio = (lsRatioRaw as any[])?.[0];
+
+        // 最近30日日线摘要
+        const klinesSummary = klines.length > 0
+          ? klines.map(r => `${r.date}: 开${r.open} 收${r.close} 高${r.high} 低${r.low} 涨跌${r.changePct != null ? (r.changePct >= 0 ? '+' : '') + r.changePct.toFixed(2) + '%' : '-'}`).join('\n')
           : '暂无日线数据';
 
-        const prompt = `你是一个专业的金融分析师。请对以下股票做结构化分析，返回 JSON 格式：
+        // 资金费率摘要
+        const latestFundingRate = fundingRates[0]?.rate ?? null;
+        const avgFundingRate = fundingRates.length > 0
+          ? fundingRates.reduce((s: number, r: any) => s + r.rate, 0) / fundingRates.length
+          : null;
+        const fundingSummary = isCrypto && fundingRates.length > 0
+          ? `最新资金费率: ${(latestFundingRate * 100).toFixed(4)}%（${latestFundingRate > 0 ? '多头付空头' : '空头付多头'}），近10期平均: ${(avgFundingRate! * 100).toFixed(4)}%，年化约 ${(avgFundingRate! * 3 * 365 * 100).toFixed(1)}%`
+          : '暂无资金费率数据';
 
-股票：${stockName}（${symbol}）
-最新收盘：${latestClose != null ? latestClose.toFixed(2) : '-'} 美元，当日涨跌：${latestChangePct != null ? (latestChangePct >= 0 ? '+' : '') + latestChangePct.toFixed(2) + '%' : '-'}
-历史数据：${total ?? '-'} 条日线，时间跨度 ${oldestDate ?? '-'} 至 ${latestDate ?? '-'}
+        // 历史统计摘要
+        const statsSummary = stats
+          ? `历史共 ${stats.total} 个交易日，上涨 ${stats.upDays} 天(${stats.upPct}%)，下跌 ${stats.downDays} 天(${stats.downPct}%)，累计上涨幅度 ${stats.totalUpPct}%，累计下跌幅度 ${stats.totalDownPct}%，最长连涨 ${stats.maxConsecUp} 天，最长连跌 ${stats.maxConsecDown} 天`
+          : '暂无历史统计';
 
-最近 20 交易日日线：
+        // 相关性摘要
+        const corrSummary = corr?.pairs?.length > 0
+          ? corr.pairs.map((p: any) => `${p.symbol} 同向概率 ${p.sameDirectionPct}%`).join('，')
+          : '暂无相关性数据';
+
+        // 实时市场数据
+        const currentPrice = klines[0]?.close ?? input.latestClose;
+        const fngValue = fng ? `${fng.value}（${fng.value_classification}）` : '未知';
+        const btcDominance = globalData?.market_cap_percentage?.btc?.toFixed(1);
+        const totalMarketCap = globalData?.total_market_cap?.usd ? (globalData.total_market_cap.usd / 1e12).toFixed(2) + '兆美元' : '未知';
+        const nextFundingRate = premium?.lastFundingRate ? (parseFloat(premium.lastFundingRate) * 100).toFixed(4) + '%' : '未知';
+        const nextFundingTime = premium?.nextFundingTime ? new Date(premium.nextFundingTime).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '未知';
+        const openInterest = oi?.openInterest ? parseFloat(oi.openInterest).toFixed(0) + ' 张' : '未知';
+        const longRatio = lsRatio?.longAccount ? (parseFloat(lsRatio.longAccount) * 100).toFixed(1) + '%' : '未知';
+        const shortRatio = lsRatio?.shortAccount ? (parseFloat(lsRatio.shortAccount) * 100).toFixed(1) + '%' : '未知';
+
+        const systemPrompt = `你是一位在数字货币领域拥有超过10年经验的顶级专家和职业交易员。你精通链上数据分析、期货市场微观结构、资金费率套利策略、技术分析（多周期共振、关键支撑压力位、量价关系）以及宏观经济对加密市场的影响。你的分析风格专业、犀利、有深度，能从数据中发现普通人看不到的机会和风险。你的目标是帮助用户做出更明智的交易决策，而不是给出模糊的废话。`;
+
+        const userPrompt = `请对 ${coinName}（${symbol}）进行深度综合分析。以下是当前所有可用数据：
+
+【实时市场数据】
+- 当前价格: $${currentPrice?.toFixed ? currentPrice.toFixed(2) : currentPrice ?? '未知'}
+- 恐惧贪婪指数: ${fngValue}（0=极度恐惧，100=极度贪婪）
+- BTC市场占有率: ${btcDominance ?? '未知'}%
+- 加密总市值: ${totalMarketCap}
+- 当前持仓量(OI): ${openInterest}
+- 多空比: 多头 ${longRatio} / 空头 ${shortRatio}
+- 下期资金费率: ${nextFundingRate}（结算时间: ${nextFundingTime}）
+
+【资金费率分析】
+${fundingSummary}
+
+【历史统计（全量数据）】
+${statsSummary}
+
+【与其他主流币相关性】
+${corrSummary}
+
+【最近30个交易日日线数据】
 ${klinesSummary}
 
-请返回以下 JSON 格式（每段 60-80 字，简洁专业）：
+请基于以上数据，返回以下 JSON 格式的深度分析报告（每段100-150字，专业深度，直接说结论）：
 {
-  "trend": "趋势判断：近期价格走势和动能分析",
-  "keyLevel": "关键位置：支撑位和压力位参考",
-  "tip": "投资提示：短期注意事项"
+  "marketSentiment": "市场情绪与宏观环境：当前市场整体情绪、恐惧贪婪指数含义、BTC主导地位变化及其对本币的影响",
+  "trend": "趋势判断：结合近30日K线走势、价格动能、量价关系，判断当前处于什么趋势阶段，关键支撑位和压力位",
+  "fundingSignal": "资金费率信号：当前资金费率水平代表什么市场状态，多空双方的资金成本，是否存在套利机会或风险",
+  "positionSignal": "持仓量与多空信号：持仓量变化趋势，多空比例失衡程度，市场是否存在过度拥挤的风险",
+  "historicalPattern": "历史规律：基于${stats?.total ?? '数千'}天历史数据的统计规律，当前走势在历史中的位置，连涨连跌规律的参考意义",
+  "tradingAdvice": "交易建议：综合以上所有信号，给出具体的短期（1-3天）和中期（1-2周）操作思路，包括关键价位、仓位管理建议"
 }
 只返回 JSON，不要其他内容。`;
 
         try {
           const res = await invokeLLM({
             messages: [
-              { role: 'system', content: '你是一个专业的金融分析师，擅长股票技术分析。' },
-              { role: 'user', content: prompt },
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
             ],
+            maxTokens: 4096,
           });
           const raw = res?.choices?.[0]?.message?.content ?? '';
-          // 尝试解析结构化 JSON
-          let trend = '', keyLevel = '', tip = '', analysis = raw;
+          // 解析结构化 JSON
+          let sections: Record<string, string> = {};
+          let analysis = raw;
           try {
             const jsonMatch = raw.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
-              const parsed = JSON.parse(jsonMatch[0]);
-              trend = parsed.trend ?? '';
-              keyLevel = parsed.keyLevel ?? '';
-              tip = parsed.tip ?? '';
-              analysis = [trend, keyLevel, tip].filter(Boolean).join('\n\n');
+              sections = JSON.parse(jsonMatch[0]);
+              analysis = Object.values(sections).filter(Boolean).join('\n\n');
             }
-          } catch (_) {
-            // 解析失败则保留原始文本
-          }
-          return { analysis, trend, keyLevel, tip, symbol, stockName };
+          } catch (_) { /* 解析失败保留原始文本 */ }
+          return {
+            analysis,
+            sections,
+            // 兼容旧字段
+            trend: sections.trend ?? '',
+            keyLevel: '',
+            tip: sections.tradingAdvice ?? '',
+            symbol,
+            stockName,
+            // 附带实时数据摘要
+            marketData: {
+              price: currentPrice,
+              fngValue,
+              btcDominance,
+              openInterest,
+              longRatio,
+              shortRatio,
+              nextFundingRate,
+            },
+          };
         } catch (e) {
           console.error('[getAIAnalysis] LLM error:', e);
-          return { analysis: '分析服务暂时不可用，请稍后重试。', symbol, stockName };
+          return { analysis: '分析服务暂时不可用，请稍后重试。', sections: {}, trend: '', keyLevel: '', tip: '', symbol, stockName, marketData: null };
         }
       }),
 

@@ -8,6 +8,12 @@ body {
   overscroll-behavior-x: none; /* 禁用浏览器横向滑动返回手势 */
 }
 
+/* spin 旋转动画 */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* 价格涨跌箭头呼吸灯动画（0.5秒一次） */
 @keyframes price-blink {
   0%, 100% { opacity: 1; }

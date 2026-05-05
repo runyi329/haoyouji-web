@@ -1821,50 +1821,69 @@ export default function BeDataPage() {
               <span style={{ fontSize: 10, color: "rgba(255,255,255,0.5)" }}>{aiExpanded ? '▲ 收起' : '▼ 展开'}</span>
             </div>
 
-            {/* 展开后显示 AI 三段式分析 */}
+            {/* 展开后显示 AI 深度分析报告（6段式） */}
             {aiExpanded && (
               <div style={{ marginTop: 10 }}>
                 {aiLoading ? (
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", textAlign: "center", padding: "8px 0" }}>
-                    正在生成 AI 分析，请稍候...
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "16px 0" }}>
+                    <div style={{ width: 28, height: 28, border: "2.5px solid rgba(255,255,255,0.15)", borderTop: "2.5px solid #90CAF9", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", textAlign: "center" }}>
+                      顶级交易员正在分析中...<br />
+                      <span style={{ fontSize: 10, opacity: 0.7 }}>整合实时市场数据 · 历史统计 · 资金费率</span>
+                    </div>
                   </div>
                 ) : (() => {
-                  const raw = String(aiData?.analysis ?? '');
-                  const trend = aiData?.trend ?? '';
-                  const keyLevel = aiData?.keyLevel ?? '';
-                  const tip = aiData?.tip ?? '';
-                  const hasSections = trend || keyLevel || tip;
+                  const sections = (aiData as any)?.sections ?? {};
+                  const hasSections = Object.keys(sections).length > 0;
+                  const sectionConfig = [
+                    { key: 'marketSentiment', icon: '🌐', label: '市场情绪与宏观环境', color: '#CE93D8' },
+                    { key: 'trend', icon: '📈', label: '趋势判断', color: '#90CAF9' },
+                    { key: 'fundingSignal', icon: '💰', label: '资金费率信号', color: '#FFE082' },
+                    { key: 'positionSignal', icon: '⚖️', label: '持仓量与多空信号', color: '#FFAB91' },
+                    { key: 'historicalPattern', icon: '📊', label: '历史规律', color: '#80DEEA' },
+                    { key: 'tradingAdvice', icon: '🎯', label: '交易建议', color: '#A5D6A7' },
+                  ];
 
                   if (hasSections) {
+                    // 实时数据摘要行
+                    const md = (aiData as any)?.marketData;
                     return (
                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                        {trend && (
-                          <div style={{ borderRadius: 8, background: "rgba(255,255,255,0.08)", padding: "8px 10px" }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: "#90CAF9", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                              <span>📈</span> 趋势判断
+                        {/* 实时数据速览 */}
+                        {md && (
+                          <div style={{ borderRadius: 8, background: "rgba(255,255,255,0.06)", padding: "7px 10px", border: "1px solid rgba(255,255,255,0.1)" }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.5)", marginBottom: 5, letterSpacing: 0.5 }}>实时数据速览</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 8px" }}>
+                              {md.fngValue && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>😱 恐贪指数: <span style={{ color: '#FFE082', fontWeight: 600 }}>{md.fngValue}</span></div>}
+                              {md.btcDominance && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>₿ BTC占有率: <span style={{ color: '#90CAF9', fontWeight: 600 }}>{md.btcDominance}%</span></div>}
+                              {md.longRatio && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>📊 多空比: <span style={{ color: '#A5D6A7', fontWeight: 600 }}>多{md.longRatio}/空{md.shortRatio}</span></div>}
+                              {md.openInterest && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>📌 持仓量: <span style={{ color: '#FFAB91', fontWeight: 600 }}>{md.openInterest}</span></div>}
+                              {md.nextFundingRate && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>💸 下期费率: <span style={{ color: '#CE93D8', fontWeight: 600 }}>{md.nextFundingRate}</span></div>}
                             </div>
-                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65 }}>{trend}</div>
                           </div>
                         )}
-                        {keyLevel && (
-                          <div style={{ borderRadius: 8, background: "rgba(255,255,255,0.08)", padding: "8px 10px" }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: "#FFE082", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                              <span>🎯</span> 关键位置
+                        {/* 6段式分析 */}
+                        {sectionConfig.map(({ key, icon, label, color }) => {
+                          const text = sections[key];
+                          if (!text) return null;
+                          return (
+                            <div key={key} style={{ borderRadius: 8, background: "rgba(255,255,255,0.07)", padding: "8px 10px", border: "1px solid rgba(255,255,255,0.08)" }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color, marginBottom: 5, display: "flex", alignItems: "center", gap: 4 }}>
+                                <span>{icon}</span> {label}
+                              </div>
+                              <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.7 }}>{text}</div>
                             </div>
-                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65 }}>{keyLevel}</div>
-                          </div>
-                        )}
-                        {tip && (
-                          <div style={{ borderRadius: 8, background: "rgba(255,255,255,0.08)", padding: "8px 10px" }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, color: "#A5D6A7", marginBottom: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                              <span>💡</span> 投资提示
-                            </div>
-                            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65 }}>{tip}</div>
-                          </div>
-                        )}
+                          );
+                        })}
+                        {/* 免责声明 */}
+                        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.3)", textAlign: "center", paddingTop: 2 }}>
+                          以上分析仅供参考，不构成投资建议。数字货币市场风险极高，请谨慎决策。
+                        </div>
                       </div>
                     );
                   }
+                  // 降级：显示原始文本
+                  const raw = String(aiData?.analysis ?? '');
                   return (
                     <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.65, whiteSpace: "pre-wrap" }}>
                       {raw || '暂无分析结果'}
