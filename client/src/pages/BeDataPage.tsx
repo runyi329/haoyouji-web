@@ -212,6 +212,7 @@ function StreakStatsPanel({ allData, latestDate, coinIcon }: { allData: { date: 
 
 // 涨跌幅频率分布图组件（正态分布直方图）
 function ChangePctDistChart({ allData, latestDate, coinIcon }: { allData: { date: string; changePct: number | null }[]; latestDate?: string; coinIcon?: string }) {
+  const [rangeExpanded, setRangeExpanded] = useState(false);
   const distData = useMemo(() => {
     // 统计每1%区间的出现次数
     const bucketMap: Record<number, number> = {};
@@ -318,9 +319,16 @@ function ChangePctDistChart({ allData, latestDate, coinIcon }: { allData: { date
         <span className="ml-auto">众数：{modeEntry.label}（{modeEntry.count}天）</span>
       </div>
 
-      {/* 区间明细表格：涨幅 vs 跌幅对称展示 */}
-      <div className="border-t border-gray-100 px-4 pt-2 pb-3">
-        <div className="text-xs font-semibold text-gray-500 mb-2">区间明细统计</div>
+      {/* 区间明细表格：折叠式 */}
+      <div className="border-t border-gray-100">
+        <div
+          className="px-4 py-2 flex items-center justify-between cursor-pointer select-none"
+          onClick={() => setRangeExpanded(v => !v)}
+        >
+          <span className="text-xs font-semibold text-gray-500">区间明细统计</span>
+          <span className="text-xs text-gray-400">{rangeExpanded ? '▲ 收起' : '▼ 展开'}</span>
+        </div>
+        {rangeExpanded && <div className="px-4 pb-3">
         {/* 表头 */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px 1fr 1fr', gap: 0 }} className="mb-1">
           <span className="text-xs text-right pr-2 font-medium" style={{ color: RED }}>涨天数</span>
@@ -353,6 +361,7 @@ function ChangePctDistChart({ allData, latestDate, coinIcon }: { allData: { date
             </div>
           );
         })}
+        </div>}
       </div>
 
       {/* 赔率表 已删除 */}
