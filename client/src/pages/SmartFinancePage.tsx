@@ -1,7 +1,7 @@
 /**
  * 智能财务 汇总入口页
  * 路由：/smart-finance
- * 5 个模块：人口×AI、房产×AI、社保×AI、医疗×AI、存款×AI
+ * 8 个模块：人口×AI、房产×AI、社保×AI、医疗×AI、存款×AI、商业×AI、保险×AI、税务×AI
  * 风格：浅色背景 + 渐变大卡片
  */
 import { useLocation } from "wouter";
@@ -138,6 +138,24 @@ export default function SmartFinancePage() {
       ],
       badge: '保险数据',
       highlight: '#e879f9',
+    },
+    {
+      key: 'tax',
+      title: '税务',
+      tag: '×AI',
+      sub: '税收总量 · 税种结构 · 减税降费',
+      path: '/tax-data',
+      gradient: 'linear-gradient(135deg, #0a1628 0%, #1e3a5f 40%, #1d6a9e 100%)',
+      circle1: 'rgba(29,106,158,0.40)',
+      circle2: 'rgba(255,255,255,0.06)',
+      icon: 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icon-commerce-new2_e31808b0.png',
+      stats: [
+        { label: '2024年税收', value: '18.0万亿' },
+        { label: '增值税占比', value: '38.5%' },
+        { label: '减税降费', value: '2.2万亿' },
+      ],
+      badge: '税收数据',
+      highlight: '#38bdf8',
     },
   ];
 
