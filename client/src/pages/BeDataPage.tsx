@@ -1518,14 +1518,12 @@ export default function BeDataPage() {
   const [activeSymbol, setActiveSymbol] = useState(initialSymbol);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  // 页面加载时，从 sessionStorage 恢复滚动位置（必须用 useEffect 确保 DOM 已挂载）
-  useEffect(() => {
-    const savedScroll = sessionStorage.getItem(`bedata_scroll_${initialSymbol}`);
-    if (savedScroll && scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTop = parseInt(savedScroll, 10);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 只在首次挂载时执行一次
+  // 待恢复的滚动位置（切换币种时设置，数据加载完后执行）
+  const pendingScrollRef = useRef<number | null>(
+    typeof window !== 'undefined'
+      ? (() => { const s = sessionStorage.getItem(`bedata_scroll_${initialSymbol}`); return s ? parseInt(s, 10) : null; })()
+      : null
+  );
   // 监听滚动事件，实时保存滚动位置到 sessionStorage
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -1587,6 +1585,20 @@ export default function BeDataPage() {
 
   const rows = data?.rows ?? [];
   const total = metaData?.total ?? data?.total ?? 0;
+
+  // 数据加载完成后，恢复待恢复的滚动位置
+  useEffect(() => {
+    if (!isLoading && pendingScrollRef.current !== null) {
+      const target = pendingScrollRef.current;
+      pendingScrollRef.current = null;
+      // 稍延一帧，确保 DOM 已完全渲染
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = target;
+        }
+      });
+    }
+  }, [isLoading]);
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const latestRow = page === 1 ? rows[0] : null;
@@ -1680,13 +1692,9 @@ export default function BeDataPage() {
     setActiveSymbol(sym);
     setPage(1);
     setFundingPage(1);
-    // 恢复新币种的历史滚动位置（如果有的话）
+    // 把新币种的历史滚动位置存入 pendingScrollRef，等数据加载完成后再恢复
     const savedScroll = typeof window !== 'undefined' ? sessionStorage.getItem(`bedata_scroll_${sym}`) : null;
-    requestAnimationFrame(() => {
-      if (scrollContainerRef.current) {
-        scrollContainerRef.current.scrollTop = savedScroll ? parseInt(savedScroll, 10) : 0;
-      }
-    });
+    pendingScrollRef.current = savedScroll ? parseInt(savedScroll, 10) : 0;
   };
 
   // 构建连涨/连跌图表数据（最多显示到10天，用于柱状图）
