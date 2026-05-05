@@ -1314,6 +1314,91 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
   );
 }
 
+// 历年多空资金费率统计折叠组件
+function FundingYearlyStats({
+  years,
+  yearMap,
+}: {
+  years: string[];
+  yearMap: Record<string, { sumRate: number; count: number; periodH: number }>;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-t border-gray-100">
+      {/* 折叠触发按钮 */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-gray-500 hover:bg-gray-50 transition-colors"
+      >
+        <span className="font-medium text-gray-600">历年多空资金费率统计</span>
+        <span style={{ fontSize: 10, color: '#9CA3AF', transform: open ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block', transition: 'transform 0.2s' }}>▼</span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3">
+          <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <colgroup>
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '18%' }} />
+              <col style={{ width: '18%' }} />
+            </colgroup>
+            <thead>
+              <tr style={{ background: '#F3F4F6' }}>
+                <th style={{ border: '1px solid #D1D5DB', padding: '5px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 10 }}>年份</th>
+                <th style={{ border: '1px solid #D1D5DB', padding: '5px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 10 }}>结算次数</th>
+                <th style={{ border: '1px solid #D1D5DB', padding: '5px 2px', textAlign: 'center', color: '#EF4444', fontWeight: 500, fontSize: 10 }}>多头年化</th>
+                <th style={{ border: '1px solid #D1D5DB', padding: '5px 2px', textAlign: 'center', color: '#EF4444', fontWeight: 500, fontSize: 10 }}>多头方向</th>
+                <th style={{ border: '1px solid #D1D5DB', padding: '5px 2px', textAlign: 'center', color: '#16A34A', fontWeight: 500, fontSize: 10 }}>空头年化</th>
+                <th style={{ border: '1px solid #D1D5DB', padding: '5px 2px', textAlign: 'center', color: '#16A34A', fontWeight: 500, fontSize: 10 }}>空头方向</th>
+              </tr>
+            </thead>
+            <tbody>
+              {years.map((year, idx) => {
+                const { sumRate, count } = yearMap[year];
+                // 多头：sumRate>0 付出（负收益），sumRate<0 收入（正收益）
+                const longAnnual = sumRate * 100; // 单位%，正=多头付出，负=多头收入
+                const shortAnnual = -sumRate * 100; // 正=空头收入，负=空头付出
+                const longDir = longAnnual > 0.001 ? '净付出' : longAnnual < -0.001 ? '净收入' : '持平';
+                const shortDir = shortAnnual > 0.001 ? '净收入' : shortAnnual < -0.001 ? '净付出' : '持平';
+                const longColor = longAnnual > 0.001 ? '#EF4444' : longAnnual < -0.001 ? '#16A34A' : '#9CA3AF';
+                const shortColor = shortAnnual > 0.001 ? '#16A34A' : shortAnnual < -0.001 ? '#EF4444' : '#9CA3AF';
+                const rowBg = idx % 2 === 0 ? '#fff' : '#F9FAFB';
+                const cellStyle: React.CSSProperties = {
+                  border: '1px solid #E5E7EB',
+                  padding: '4px 2px',
+                  textAlign: 'center',
+                  fontFamily: 'monospace',
+                  fontSize: 10.5,
+                  whiteSpace: 'nowrap',
+                };
+                return (
+                  <tr key={year} style={{ background: rowBg }}>
+                    <td style={{ ...cellStyle, color: '#374151', fontWeight: 600 }}>{year}</td>
+                    <td style={{ ...cellStyle, color: '#6B7280' }}>{count}</td>
+                    <td style={{ ...cellStyle, color: longColor, fontWeight: 600 }}>
+                      {(longAnnual >= 0 ? '+' : '') + longAnnual.toFixed(2)}%
+                    </td>
+                    <td style={{ ...cellStyle, color: longColor }}>{longDir}</td>
+                    <td style={{ ...cellStyle, color: shortColor, fontWeight: 600 }}>
+                      {(shortAnnual >= 0 ? '+' : '') + shortAnnual.toFixed(2)}%
+                    </td>
+                    <td style={{ ...cellStyle, color: shortColor }}>{shortDir}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="mt-2 text-xs text-gray-400 leading-relaxed">
+            假设持有固定数量持满全年，多头年化 = 全年累计资金费率之和（正=净付出，负=净收入）；空头方向相反。
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function BeDataPage() {
   const params = useParams();
   const [location, setLocation] = useLocation();
@@ -2213,6 +2298,30 @@ export default function BeDataPage() {
                         <div className="text-sm font-semibold text-green-600">{minRate.toFixed(4)}%</div>
                       </div>
                     </div>
+
+                    {/* 历年多空资金费率统计（可折叠） */}
+                    {(() => {
+                      // 按年分组计算
+                      const yearMap: Record<string, { sumRate: number; count: number; periodH: number }> = {};
+                      fundingChartData.forEach((d, i) => {
+                        const dt = new Date(d.fundingTime);
+                        const year = String(dt.getUTCFullYear());
+                        const next = fundingChartData[i + 1];
+                        const ph = next ? Math.round((d.fundingTime - next.fundingTime) / 1000 / 3600) : 8;
+                        const safePh = (ph > 0 && ph <= 24) ? ph : 8;
+                        if (!yearMap[year]) yearMap[year] = { sumRate: 0, count: 0, periodH: safePh };
+                        yearMap[year].sumRate += d.fundingRate;
+                        yearMap[year].count += 1;
+                        yearMap[year].periodH = safePh;
+                      });
+                      const years = Object.keys(yearMap).sort((a, b) => Number(b) - Number(a));
+                      // 每年实际结算次数 = count，年化 = sumRate * (8760 / periodH) * 100
+                      // 多头年化 = 如果 sumRate > 0，多头净付出 sumRate*100%；空头净收入
+                      // 空头年化 = 如果 sumRate < 0，空头净付出 |sumRate|*100%；多头净收入
+                      return (
+                        <FundingYearlyStats years={years} yearMap={yearMap} />
+                      );
+                    })()}
                   </div>
                 );
               })()}
