@@ -137,20 +137,20 @@ export default function InterestManagePage() {
       const tagLogs = allLogs.filter((l: any) => l.tag_name === tagName);
       const manualAdj = tagLogs.reduce((sum: number, l: any) => sum + parseFloat(l.amount || '0'), 0);
 
-      // 各段利息
+      // 各段利息（is_manual=1的手工调息直接用principal作为利息金额）
       const periodDetails = periods.map((p: any) => {
         const principal = parseFloat(p.principal) || 0;
         const annualRate = parseFloat(p.annual_rate) || 0;
         const days = calcPeriodDays(p.start_date, p.end_date);
-        const interest = calcPeriodInterest(principal, annualRate, days);
-        const dailyInterest = principal > 0 && annualRate > 0 ? principal * annualRate / 100 / 365 : 0;
-        return { ...p, principal, annualRate, days, interest, dailyInterest };
+        const isManual = p.is_manual === 1 || p.is_manual === '1' || p.is_manual === true;
+        const interest = isManual ? principal : calcPeriodInterest(principal, annualRate, days);
+        const dailyInterest = (!isManual && principal > 0 && annualRate > 0) ? principal * annualRate / 100 / 365 : 0;
+        return { ...p, principal, annualRate, days, interest, dailyInterest, isManual };
       });
-
-      const autoInterest = periodDetails.reduce((sum, p) => sum + p.interest, 0);
-      const totalInterest = autoInterest + manualAdj;
-
-      return { tagName, periods: periodDetails, tagLogs, manualAdj, autoInterest, totalInterest };
+      const autoInterest = periodDetails.filter(p => !p.isManual).reduce((sum, p) => sum + p.interest, 0);
+      const manualTotal = periodDetails.filter(p => p.isManual).reduce((sum, p) => sum + p.interest, 0);
+      const totalInterest = autoInterest + manualTotal;
+      return { tagName, periods: periodDetails, tagLogs, manualAdj: manualTotal, autoInterest, totalInterest };
     });
   }, [categories, allPeriods, allLogs]);
 
@@ -267,55 +267,81 @@ export default function InterestManagePage() {
                             /* 展示模式 */
                             <div className="flex items-start justify-between">
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-xs font-semibold text-gray-700">
-                                    {period.period_label || `第 ${idx + 1} 段`}
-                                  </span>
-                                  <span className="text-xs text-gray-400">
-                                    {period.start_date} → {period.end_date || '至今'}
-                                  </span>
-                                </div>
-                                <div className="grid grid-cols-3 gap-1 text-xs">
+                                {period.isManual ? (
+                                  /* 手工调息展示 */
                                   <div>
-                                    <span className="text-gray-400">本金 </span>
-                                    <span className="font-medium text-gray-700">¥{fmt(period.principal)}</span>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${period.principal >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                        {period.principal >= 0 ? '手工加息' : '手工减息'}
+                                      </span>
+                                      <span className="text-xs text-gray-400">{period.created_at?.slice(0, 10)}</span>
+                                    </div>
+                                    <div className="text-xs">
+                                      <span className="text-gray-400">调整金额 </span>
+                                      <span className={`font-semibold ${period.principal >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                        {period.principal >= 0 ? '+' : ''}¥{fmt(period.principal)}
+                                      </span>
+                                      {period.manual_remark && (
+                                        <span className="ml-2 text-gray-400">备注：{period.manual_remark}</span>
+                                      )}
+                                    </div>
                                   </div>
+                                ) : (
+                                  /* 普通分段展示 */
                                   <div>
-                                    <span className="text-gray-400">年化 </span>
-                                    <span className="font-medium text-blue-600">{period.annualRate}%</span>
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="text-xs font-semibold text-gray-700">
+                                        {period.period_label || `第 ${idx + 1} 段`}
+                                      </span>
+                                      <span className="text-xs text-gray-400">
+                                        {period.start_date} → {period.end_date || '至今'}
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-1 text-xs">
+                                      <div>
+                                        <span className="text-gray-400">本金 </span>
+                                        <span className="font-medium text-gray-700">¥{fmt(period.principal)}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-400">年化 </span>
+                                        <span className="font-medium text-blue-600">{period.annualRate}%</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-400">天数 </span>
+                                        <span className="font-medium text-gray-700">{period.days}天</span>
+                                      </div>
+                                    </div>
+                                    <div className="mt-1 text-xs">
+                                      <span className="text-gray-400">日利息 </span>
+                                      <span className="text-orange-500 font-medium">¥{fmt(period.dailyInterest)}</span>
+                                      <span className="mx-2 text-gray-300">|</span>
+                                      <span className="text-gray-400">本段利息 </span>
+                                      <span className="text-green-600 font-semibold">¥{fmt(period.interest)}</span>
+                                    </div>
                                   </div>
-                                  <div>
-                                    <span className="text-gray-400">天数 </span>
-                                    <span className="font-medium text-gray-700">{period.days}天</span>
-                                  </div>
-                                </div>
-                                <div className="mt-1 text-xs">
-                                  <span className="text-gray-400">日利息 </span>
-                                  <span className="text-orange-500 font-medium">¥{fmt(period.dailyInterest)}</span>
-                                  <span className="mx-2 text-gray-300">|</span>
-                                  <span className="text-gray-400">本段利息 </span>
-                                  <span className="text-green-600 font-semibold">¥{fmt(period.interest)}</span>
-                                </div>
+                                )}
                               </div>
                               <div className="flex gap-1 ml-2 flex-shrink-0">
+                                {!period.isManual && (
+                                  <button
+                                    onClick={() => {
+                                      setEditingPeriodId(period.id);
+                                      setEditForm({
+                                        periodLabel: period.period_label || '',
+                                        principal: String(period.principal),
+                                        annualRate: String(period.annualRate),
+                                        startDate: period.start_date || '',
+                                        endDate: period.end_date || '',
+                                      });
+                                    }}
+                                    className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-blue-50 text-gray-400 hover:text-blue-500"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => {
-                                    setEditingPeriodId(period.id);
-                                    setEditForm({
-                                      periodLabel: period.period_label || '',
-                                      principal: String(period.principal),
-                                      annualRate: String(period.annualRate),
-                                      startDate: period.start_date || '',
-                                      endDate: period.end_date || '',
-                                    });
-                                  }}
-                                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-blue-50 text-gray-400 hover:text-blue-500"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    if (confirm('确认删除此分段？')) {
+                                    if (confirm(period.isManual ? '确认删除此手工调息记录？' : '确认删除此分段？')) {
                                       deletePeriodMutation.mutate({ ledgerId: lid, periodId: period.id });
                                     }
                                   }}
