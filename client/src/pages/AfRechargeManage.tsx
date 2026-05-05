@@ -305,7 +305,12 @@ export default function AfRechargeManage() {
                       size="sm"
                       className="w-8 h-8 rounded-lg flex-shrink-0"
                     />
-                    <span className="text-sm">{m.nickname || m.username}</span>
+                    <span className="text-sm flex-1 min-w-0">
+                      <span className="font-medium">{m.nickname || m.username}</span>
+                      {m.nickname && m.username && (
+                        <span className="text-xs text-gray-400 ml-1">@{m.username}</span>
+                      )}
+                    </span>
                   </button>
                 ))}
               </div>
