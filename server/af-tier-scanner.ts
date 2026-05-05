@@ -281,16 +281,16 @@ export function triggerImmediateScan(orderId: number) {
 }
 
 /**
- * 启动定时扫描（每10秒一次，规范：crypto-price-unified）
+ * 启动定时扫描（每3秒一次，规范：crypto-price-unified）
  */
 export function startTierScanner() {
   // 先立即执行一次
-  runTierScan().catch(e => console.error('[AF扫描] 初始扫描失败:', e));
+  runTierScan().catch(e => console.error('[层次扫描] 初始扫描失败:', e));
 
-  // 每10秒扫描一次（与 price-scanner.ts 保持一致）
+  // 每3秒扫描一次（与 price-scanner.ts 保持一致）
   setInterval(() => {
-    runTierScan().catch(e => console.error('[AF扫描] 定时扫描失败:', e));
-  }, 10 * 1000);
+    runTierScan().catch(e => console.error('[层次扫描] 定时扫描失败:', e));
+  }, 3 * 1000);
 
-  console.log('[AF扫描] 收益权档位监控已启动，每10秒扫描一次（规范：crypto-price-unified）');
+  console.log('[层次扫描] 收益权档位监控已启动，每3秒扫描一次（规范：crypto-price-unified）');
 }

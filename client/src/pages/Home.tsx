@@ -688,7 +688,7 @@ const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
   const { data: oilPrice } = trpc.stock.getOilPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
   const { data: dollarIndex } = trpc.stock.getDollarIndex.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
   const { data: usdCnh } = trpc.stock.getUsdCnh.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
-  const { data: btcPrice } = trpc.stock.getBtcPrice.useQuery(undefined, { refetchInterval: 5000, staleTime: 2000 });
+  const { data: btcPrice } = trpc.stock.getBtcPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
 
   const [globalMarketStatus, setGlobalMarketStatus] = useState<'open' | 'closed'>(() => getGlobalMarketStatusOuter(new Date()));
   const [globalCountdown, setGlobalCountdown] = useState('');
@@ -1601,14 +1601,14 @@ export default function Home() {
 
   // 获取恒生指数实时数据（港股市场时间：9:30-12:00, 13:00-16:00 HKT）
   const { data: hangSengIndex } = trpc.stock.getHangSengIndex.useQuery(undefined, {
-    refetchInterval: 5000, // 港股市场状态判断复杂，简化为定时刷新
-    staleTime: 5000,
+    refetchInterval: 3000, // 港股市场状态判断复杂，简化为定时刷新
+    staleTime: 1000,
   });
 
   // 获取标普500实时数据（美股）
   const { data: sp500Index } = trpc.stock.getSP500Index.useQuery(undefined, {
-    refetchInterval: usMarketStatus === 'open' ? 5000 : 60000,
-    staleTime: 5000,
+    refetchInterval: usMarketStatus === 'open' ? 3000 : 60000,
+    staleTime: 1000,
   });
 
   // 全球市场卡片已移至独立的 GlobalMarketStrip 组件

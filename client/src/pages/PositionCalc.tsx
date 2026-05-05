@@ -192,10 +192,10 @@ export default function PositionCalc() {
     return levels.reduce((s, p) => s + (parseFloat(allocManualQtys[p] || '0') || 0), 0);
   }, [allocManualQtys, allocMinPrice, allocMaxPrice]);
 
-  // 获取实时 USDT/CNY 汇率 — 10秒刷新，保留上次值
+  // 获取实时 USDT/CNY 汇率 — 3秒刷新，保留上次値
   const { data: rateData } = trpc.exchange.getRate.useQuery(
     { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
-    { staleTime: 8000, refetchInterval: 10000 }
+    { staleTime: 1000, refetchInterval: 3000 }
   );
   useEffect(() => {
     if (rateData?.success && rateData.money) {
@@ -353,10 +353,10 @@ export default function PositionCalc() {
     }
   }, [positionData, positionLoading, dataLoaded]);
 
-  // ETH 价格 — 10秒刷新，保留上次值（新数据未到前不清空）
+  // ETH 价格 — 3秒刷新，保留上次値（新数据未到前不清空）
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 10000,
-    staleTime: 8000,
+    refetchInterval: 3000,
+    staleTime: 1000,
   });
 
   useEffect(() => {

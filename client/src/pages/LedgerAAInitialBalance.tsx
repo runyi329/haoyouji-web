@@ -88,7 +88,7 @@ export default function LedgerAAInitialBalance() {
   const [savingUsers, setSavingUsers] = useState<Set<number>>(new Set());
 
   // 数字币价格（USDT），统一走后端代理（规范：crypto-price-unified）
-  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 10000, staleTime: 0, placeholderData: (prev: any) => prev });
+  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 0, placeholderData: (prev: any) => prev });
   // 价格单位为 USDT，需乘以 CNY_RATE 转换为人民币
   const cryptoPrices: Record<string, number> = {};
   if (cryptoPricesRaw) {
