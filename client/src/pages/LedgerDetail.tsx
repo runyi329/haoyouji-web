@@ -2328,7 +2328,7 @@ export default function LedgerDetail() {
   const inviteTreeViewAsId = (isOwner || isAdmin) && (user as any)?.id !== YJH_USER_ID ? YJH_USER_ID : (viewAsUserId || undefined);
   const { data: inviteTreeData, isLoading: inviteTreeLoading } = trpc.ledger.afGetInviteTree.useQuery(
     { ledgerId: Number(ledgerId), ...(inviteTreeViewAsId ? { viewAsUserId: inviteTreeViewAsId } : {}) },
-    { enabled: isCustomAF && showInviteTree }
+    { enabled: isCustomAF && (showInviteTree || isOwner || isAdmin || (user as any)?.id === YJH_USER_ID) }
   );
   // AF账本推荐页动态消息（仅yjh和管理员可见）
   const YJH_USER_ID_CONST = 4957151;
