@@ -3396,7 +3396,7 @@ export default function LedgerDetail() {
                     </span>
                     <span className="text-xs text-white/60">USDT</span>
                   </div>
-                )
+                )}
               </div>
               )}
               {/* 卡片 3：仓位 & 累计盈亏（合并，占满整行）——资金方不显示 */}
