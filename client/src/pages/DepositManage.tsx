@@ -74,7 +74,7 @@ export default function DepositManage() {
 
   // 实时价格
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 10000,
+    refetchInterval: 3000,
     staleTime: 0,
     placeholderData: (prev: any) => prev,
   });

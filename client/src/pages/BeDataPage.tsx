@@ -1637,15 +1637,15 @@ export default function BeDataPage() {
 
   const { data: btcPriceData } = trpc.cryptoData.getBtcPrice.useQuery(
     undefined,
-    { enabled: isCryptoMode && isBtcActive, refetchInterval: 10000 }
+    { enabled: isCryptoMode && isBtcActive, refetchInterval: 3000 }
   );
   const { data: ethPriceData } = trpc.cryptoData.getEthPrice.useQuery(
     undefined,
-    { enabled: isCryptoMode && isEthActive, refetchInterval: 10000 }
+    { enabled: isCryptoMode && isEthActive, refetchInterval: 3000 }
   );
   const { data: solPriceData } = trpc.cryptoData.getSolPrice.useQuery(
     undefined,
-    { enabled: isCryptoMode && isSolActive, refetchInterval: 10000 }
+    { enabled: isCryptoMode && isSolActive, refetchInterval: 3000 }
   );
 
   // 实时价格（数字币模式下优先用实时价格，否则用日线数据的收盘价）

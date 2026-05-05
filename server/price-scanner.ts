@@ -251,9 +251,9 @@ export function startPriceScanner() {
   scanPrices().then(() => {
     console.log('[价格扫描] 首次扫描完成:', Object.entries(latestPrices).map(([k, v]) => `${k}=${v.price}`).join(', '));
   });
-  // 每10秒扫描一次（规范：crypto-price-unified，前端 refetchInterval: 10000）
+  // 每3秒扫描一次（规范：crypto-price-unified，前端 refetchInterval: 3000）
   setInterval(() => {
     scanPrices().catch(err => console.error('[价格扫描] 定时扫描失败:', err));
-  }, 10 * 1000);
-  console.log('[价格扫描] 已启动，每10秒刷新加密货币+股票合约价格（含文件持久化）');
+  }, 3 * 1000);
+  console.log('[价格扫描] 已启动，每3秒刷新加密货币+股票合约价格（含文件持久化）');
 }

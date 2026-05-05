@@ -74,9 +74,9 @@ export default function LedgerDetailAA({
     { enabled: true }
   );
 
-  // 数字币价格（每10秒刷新，规范：crypto-price-unified）
+  // 数字币价格（每3秒刷新，规范：crypto-price-unified）
   const { data: cryptoPricesData } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 10000,
+    refetchInterval: 3000,
     staleTime: 0,
     placeholderData: (prev: any) => prev,
   });

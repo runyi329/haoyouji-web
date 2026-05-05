@@ -254,8 +254,8 @@ export default function USStockTracker() {
 
   // 标普500指数
   const { data: sp500 } = trpc.stock.getSP500Index.useQuery(undefined, {
-    refetchInterval: 5000,
-    staleTime: 2000,
+    refetchInterval: 3000,
+    staleTime: 1000,
   });
 
   const sp500Up = (sp500?.changePercent ?? 0) >= 0;

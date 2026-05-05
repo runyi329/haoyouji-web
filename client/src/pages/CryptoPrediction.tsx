@@ -410,7 +410,7 @@ export function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   // 实时价格（吤24h涨跌幅）——用于订单卡片底部显示
   // placeholderData: keepPreviousData 确保刷新时不闪烁，保留上次数据
   const { data: betCardPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 10000,
+    refetchInterval: 3000,
     staleTime: 0,
     placeholderData: (prev: any) => prev,
   });
@@ -1350,12 +1350,12 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 }) {
   const { data: tierData, isLoading: tierLoading } = trpc.ledger.afGetTierData.useQuery(
     { orderId: order.id, ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: order.side === 'buy', staleTime: 8000, refetchInterval: 10000, refetchOnWindowFocus: false } // 每10秒刷新，与 crypto-price-unified 规范一致
+    { enabled: order.side === 'buy', staleTime: 8000, refetchInterval: 3000, refetchOnWindowFocus: false } // 每3秒刷新，与 crypto-price-unified 规范一致
   );
   // 实时价格（用于计算当前市値）- 使用统一价格接口
   const { data: cryptoPricesForOrder } = trpc.getCryptoPrices.useQuery(undefined, {
     enabled: order.side === 'buy',
-    refetchInterval: 10000,
+    refetchInterval: 3000,
     staleTime: 0,
     placeholderData: (prev: any) => prev,
   });
@@ -2102,7 +2102,7 @@ export default function CryptoPrediction() {
     trpc.ledger.getBinanceKlines.useQuery({ symbol: coin.symbol, interval, limit: 60 }, { staleTime: 30000 });
   // 当前价格使用统一价格接口（三级备用，更稳定）
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 10000,
+    refetchInterval: 3000,
     staleTime: 0,
     placeholderData: (prev: any) => prev,
   });
