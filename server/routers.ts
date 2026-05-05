@@ -10665,6 +10665,139 @@ ${klinesSummary}
         };
       }),
 
+    // ===== 标签利息管理（37号账本专用）=====
+
+    // 获取账本所有标签的利息设置
+    getTagInterestSettings: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+        }
+        const db = await getLedgerDb();
+        const rows = await db.execute(
+          sql`SELECT tag_name, interest_rate, interest_base_amount, interest_start_date
+              FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId}`
+        );
+        return (rows as any)[0] as any[];
+      }),
+
+    // 保存单个标签的利息设置（本金+年化利率+起息日期）
+    saveTagInterestSetting: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        tagName: z.string(),
+        principal: z.string().optional(),      // 本金
+        annualRate: z.string().optional(),     // 年化利率(%)
+        startDate: z.string().optional(),      // 起息日期 YYYY-MM-DD
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const db = await getLedgerDb();
+        const existing = await db.execute(
+          sql`SELECT id FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName} LIMIT 1`
+        );
+        const existingList = (existing as any)[0] as any[];
+        if (existingList.length > 0) {
+          await db.execute(
+            sql`UPDATE ledger_tag_config SET
+              interest_base_amount = ${input.principal ?? null},
+              interest_rate = ${input.annualRate ?? null},
+              interest_start_date = ${input.startDate ?? null}
+              WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}`
+          );
+        } else {
+          await db.execute(
+            sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, interest_base_amount, interest_rate, interest_start_date, created_by)
+              VALUES (${input.ledgerId}, ${input.tagName}, ${input.principal ?? null}, ${input.annualRate ?? null}, ${input.startDate ?? null}, ${ctx.user.id})`
+          );
+        }
+        return { success: true };
+      }),
+
+    // 获取标签手工调息日志
+    getTagInterestManualLogs: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        tagName: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+        }
+        const db = await getLedgerDb();
+        let rows;
+        if (input.tagName) {
+          rows = await db.execute(
+            sql`SELECT l.*, u.username, u.nickname as user_nickname
+                FROM tag_interest_manual_logs l
+                LEFT JOIN users u ON u.id = l.created_by
+                WHERE l.ledger_id = ${input.ledgerId} AND l.tag_name = ${input.tagName}
+                ORDER BY l.created_at DESC LIMIT 200`
+          );
+        } else {
+          rows = await db.execute(
+            sql`SELECT l.*, u.username, u.nickname as user_nickname
+                FROM tag_interest_manual_logs l
+                LEFT JOIN users u ON u.id = l.created_by
+                WHERE l.ledger_id = ${input.ledgerId}
+                ORDER BY l.created_at DESC LIMIT 200`
+          );
+        }
+        return (rows as any)[0] as any[];
+      }),
+
+    // 新增手工调息记录
+    addTagInterestManualLog: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        tagName: z.string(),
+        amount: z.number(),   // 正数加，负数减
+        remark: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const db = await getLedgerDb();
+        await db.execute(
+          sql`INSERT INTO tag_interest_manual_logs (ledger_id, tag_name, amount, remark, created_by)
+              VALUES (${input.ledgerId}, ${input.tagName}, ${input.amount}, ${input.remark ?? null}, ${ctx.user.id})`
+        );
+        return { success: true };
+      }),
+
+    // 删除手工调息记录
+    deleteTagInterestManualLog: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        logId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const db = await getLedgerDb();
+        await db.execute(
+          sql`DELETE FROM tag_interest_manual_logs WHERE id = ${input.logId} AND ledger_id = ${input.ledgerId}`
+        );
+        return { success: true };
+      }),
+
+    // ===== 标签利息管理结束 =====
+
     // AF 手动调账 - 获取列表
     afGetManualBalances: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
