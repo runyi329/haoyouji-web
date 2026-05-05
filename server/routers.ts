@@ -572,17 +572,25 @@ ${klinesSummary}
           const price = ticker?.price ?? 0;
           const marketCap = price > 0 ? price * meta.circulatingSupply : null;
 
-          // 从 CoinGecko global 接口获取市场占比（轻量接口，被封风险较小）
+          // 从 Alternative.me v2 ticker 接口计算市场占比
           let dominance: number | null = null;
           try {
-            const globalRes = await fetch(
-              'https://api.coingecko.com/api/v3/global',
-              { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(6000) }
+            const altRes = await fetch(
+              'https://api.alternative.me/v2/ticker/?limit=100&convert=USD',
+              { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
             );
-            if (globalRes.ok) {
-              const globalData = await globalRes.json() as any;
-              const pct = globalData?.data?.market_cap_percentage ?? {};
-              if (pct[meta.globalKey] != null) dominance = Number(pct[meta.globalKey]);
+            if (altRes.ok) {
+              const altData = await altRes.json() as any;
+              const coins = altData?.data ?? {};
+              // 币种 ID 映射
+              const coinIdMap: Record<string, string> = { BTCUSDT: '1', ETHUSDT: '1027', SOLUSDT: '5426' };
+              const targetId = coinIdMap[sym];
+              const totalMc = Object.values(coins).reduce((sum: number, v: any) => {
+                const mc = v?.quotes?.USD?.market_cap;
+                return sum + (mc ? Number(mc) : 0);
+              }, 0);
+              const targetMc = targetId ? (coins[targetId]?.quotes?.USD?.market_cap ?? 0) : 0;
+              if (totalMc > 0 && targetMc > 0) dominance = Number(((targetMc / totalMc) * 100).toFixed(2));
             }
           } catch (_) { /* 占比获取失败不影响其他字段 */ }
 
