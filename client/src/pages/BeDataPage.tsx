@@ -2389,6 +2389,65 @@ export default function BeDataPage() {
                       </div>
                     </div>
 
+                    {/* 滚动年化资金费率图（多空两条线） */}
+                    {(() => {
+                      // 用365天滚动窗口计算每个时间点的年化费率
+                      // 数据正序，对每个点向前看1095条（8h周期年化）
+                      const windowSize = 1095; // 365天 × 3次/天
+                      const annualData: { date: string; long: number; short: number }[] = [];
+                      for (let i = windowSize - 1; i < fundingChartData.length; i++) {
+                        const slice = fundingChartData.slice(i - windowSize + 1, i + 1);
+                        const avgRate = slice.reduce((s, d) => s + d.fundingRate, 0) / slice.length;
+                        const longAnnual = avgRate * 1095 * 100;
+                        const dt = new Date(fundingChartData[i].fundingTime);
+                        const dateStr = `${dt.getUTCFullYear()}/${String(dt.getUTCMonth()+1).padStart(2,'0')}/${String(dt.getUTCDate()).padStart(2,'0')}`;
+                        annualData.push({ date: dateStr, long: parseFloat(longAnnual.toFixed(2)), short: parseFloat((-longAnnual).toFixed(2)) });
+                      }
+                      if (annualData.length === 0) return null;
+                      const allVals = annualData.flatMap(d => [d.long, d.short]);
+                      const yMin = Math.min(...allVals);
+                      const yMax = Math.max(...allVals);
+                      const yPad = (yMax - yMin) * 0.1 || 1;
+                      return (
+                        <div className="border-t border-gray-100 pt-3 pb-1 px-3 mb-1">
+                          <div className="text-xs font-medium text-gray-600 mb-2 px-1">滚动年化资金费率（365天窗口）</div>
+                          <ResponsiveContainer width="100%" height={160}>
+                            <ComposedChart data={annualData} margin={{ top: 4, right: 28, left: -10, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                              <XAxis
+                                dataKey="date"
+                                tick={{ fontSize: 8, fill: '#bbb' }}
+                                tickFormatter={(v: string) => v.slice(0, 4)}
+                                interval={Math.floor(annualData.length / 5)}
+                                axisLine={false}
+                                tickLine={false}
+                              />
+                              <YAxis
+                                tick={{ fontSize: 8, fill: '#bbb' }}
+                                tickFormatter={(v: number) => v.toFixed(0) + '%'}
+                                domain={[yMin - yPad, yMax + yPad]}
+                                axisLine={false}
+                                tickLine={false}
+                                width={40}
+                              />
+                              <Tooltip
+                                contentStyle={{ fontSize: 11, borderRadius: 8, border: '1px solid #e5e7eb', padding: '6px 10px' }}
+                                formatter={(value: number, name: string) => [value.toFixed(2) + '%', name === 'long' ? '多头年化' : '空头年化']}
+                                labelFormatter={(label: string) => `时间: ${label}`}
+                              />
+                              <ReferenceLine y={0} stroke="#9CA3AF" strokeDasharray="3 3" />
+                              <Line type="monotone" dataKey="long" stroke="#EF4444" strokeWidth={1.5} dot={false} name="long" />
+                              <Line type="monotone" dataKey="short" stroke="#16A34A" strokeWidth={1.5} dot={false} name="short" />
+                            </ComposedChart>
+                          </ResponsiveContainer>
+                          <div className="flex gap-4 justify-center mt-1 mb-1">
+                            <span className="text-xs flex items-center gap-1"><span style={{ display: 'inline-block', width: 16, height: 2, background: '#EF4444', verticalAlign: 'middle' }}></span><span className="text-gray-500">多头年化（正=付出）</span></span>
+                            <span className="text-xs flex items-center gap-1"><span style={{ display: 'inline-block', width: 16, height: 2, background: '#16A34A', verticalAlign: 'middle' }}></span><span className="text-gray-500">空头年化（正=收入）</span></span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* 历年多空资金费率统计（可折叠） */}
                     {(() => {
                       // 按年分组计算
