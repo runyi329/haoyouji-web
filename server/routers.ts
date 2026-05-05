@@ -10722,6 +10722,7 @@ ${klinesSummary}
       }),
 
     // 获取标签手工调息日志
+    // 手工调息：查询（从tag_interest_periods中取is_manual=1的记录）
     getTagInterestManualLogs: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
@@ -10737,30 +10738,31 @@ ${klinesSummary}
         let rows;
         if (input.tagName) {
           rows = await db.execute(
-            sql`SELECT l.*, u.username, u.nickname as user_nickname
-                FROM tag_interest_manual_logs l
-                LEFT JOIN users u ON u.id = l.created_by
-                WHERE l.ledger_id = ${input.ledgerId} AND l.tag_name = ${input.tagName}
-                ORDER BY l.created_at DESC LIMIT 200`
+            sql`SELECT p.id, p.ledger_id, p.tag_name, p.principal as amount, p.manual_remark as remark,
+                p.created_by, p.created_at, u.username, u.nickname as user_nickname
+                FROM tag_interest_periods p
+                LEFT JOIN users u ON u.id = p.created_by
+                WHERE p.ledger_id = ${input.ledgerId} AND p.tag_name = ${input.tagName} AND p.is_manual = 1
+                ORDER BY p.created_at DESC LIMIT 200`
           );
         } else {
           rows = await db.execute(
-            sql`SELECT l.*, u.username, u.nickname as user_nickname
-                FROM tag_interest_manual_logs l
-                LEFT JOIN users u ON u.id = l.created_by
-                WHERE l.ledger_id = ${input.ledgerId}
-                ORDER BY l.created_at DESC LIMIT 200`
+            sql`SELECT p.id, p.ledger_id, p.tag_name, p.principal as amount, p.manual_remark as remark,
+                p.created_by, p.created_at, u.username, u.nickname as user_nickname
+                FROM tag_interest_periods p
+                LEFT JOIN users u ON u.id = p.created_by
+                WHERE p.ledger_id = ${input.ledgerId} AND p.is_manual = 1
+                ORDER BY p.created_at DESC LIMIT 200`
           );
         }
         return (rows as any)[0] as any[];
       }),
-
-    // 新增手工调息记录
+    // 手工调息：新增（写入tag_interest_periods，is_manual=1）
     addTagInterestManualLog: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
         tagName: z.string(),
-        amount: z.number(),   // 正数加，负数减
+        amount: z.number(),
         remark: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -10770,14 +10772,14 @@ ${klinesSummary}
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         }
         const db = await getLedgerDb();
+        const today = new Date().toISOString().slice(0, 10);
         await db.execute(
-          sql`INSERT INTO tag_interest_manual_logs (ledger_id, tag_name, amount, remark, created_by)
-              VALUES (${input.ledgerId}, ${input.tagName}, ${input.amount}, ${input.remark ?? null}, ${ctx.user.id})`
+          sql`INSERT INTO tag_interest_periods (ledger_id, tag_name, period_label, principal, annual_rate, start_date, end_date, is_manual, manual_remark, created_by)
+              VALUES (${input.ledgerId}, ${input.tagName}, ${input.amount > 0 ? '手工加息' : '手工减息'}, ${input.amount}, 0, ${today}, ${today}, 1, ${input.remark ?? null}, ${ctx.user.id})`
         );
         return { success: true };
       }),
-
-    // 删除手工调息记录
+    // 手工调息：删除（从tag_interest_periods删除is_manual=1的记录）
     deleteTagInterestManualLog: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
@@ -10791,12 +10793,11 @@ ${klinesSummary}
         }
         const db = await getLedgerDb();
         await db.execute(
-          sql`DELETE FROM tag_interest_manual_logs WHERE id = ${input.logId} AND ledger_id = ${input.ledgerId}`
+          sql`DELETE FROM tag_interest_periods WHERE id = ${input.logId} AND ledger_id = ${input.ledgerId} AND is_manual = 1`
         );
         return { success: true };
       }),
-
-    // 获取标签所有利息分段
+        // 获取标签所有利息分段
     getTagInterestPeriods: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
