@@ -243,6 +243,19 @@ export default function PositionCalc() {
       utils.ethPositionGetLevels.invalidate({ ledgerId });
     }
   });
+  // 视角查看时获取被查看用户信息
+  const { data: membersData } = trpc.ledger.getMembers.useQuery(
+    { ledgerId },
+    { enabled: isViewAs && ledgerId > 0 }
+  );
+  const viewAsUserName = useMemo(() => {
+    if (!isViewAs || !viewAsUserId || !membersData) return null;
+    const member = (membersData as any[]).find((m: any) => m.userId === viewAsUserId);
+    return member?.realName || member?.username || null;
+  }, [isViewAs, viewAsUserId, membersData]);
+  // 显示名：视角查看时用被查看用户名，否则用当前登录用户名
+  const displayName = isViewAs ? viewAsUserName : (user?.name || null);
+
   // 从数据库读取目标止盈和汇率设置
   const { data: settingsData } = trpc.ethPositionGetSettings.useQuery(
     { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
@@ -597,13 +610,13 @@ export default function PositionCalc() {
                 {/* 左栏：目标止盈利润 */}
                 <div className="flex-1 pr-4">
                   <div className="flex items-center justify-end mb-2" style={{ gap: 0 }}>
-                    {user?.name && (
+                    {displayName && (
                       <>
                         <span
                           className="text-xs font-medium tracking-widest"
                           style={{ color: 'rgba(212,175,55,0.5)', letterSpacing: '0.2em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '80px' }}
                         >
-                          {user.name}
+                          {displayName}
                         </span>
                         <span
                           className="text-xs font-medium"
