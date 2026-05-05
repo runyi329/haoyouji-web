@@ -1939,7 +1939,7 @@ export default function BeDataPage() {
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 5, textTransform: "uppercase" }}>基本信息</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {isCryptoMode ? (
-                    // 数字币模式：显示固定基本信息（不随价格变动）
+                    // 数字币模式：显示6行基本信息（与右侧实时行情行数对齐）
                     (() => {
                       const COIN_STATIC: Record<string, { genesisDate: string; maxSupply: string; circulatingSupply: string }> = {
                         BTCUSDT: { genesisDate: '2009-01-03', maxSupply: '2,100万 BTC', circulatingSupply: '1,976万 BTC' },
@@ -1947,20 +1947,32 @@ export default function BeDataPage() {
                         SOLUSDT: { genesisDate: '2020-03-16', maxSupply: '无上限', circulatingSupply: '5.10亿 SOL' },
                       };
                       const info = COIN_STATIC[activeSymbol] ?? { genesisDate: '—', maxSupply: '—', circulatingSupply: '—' };
-                      return [
+                      // 市值和市场占比从 coinInfoData 读取
+                      const marketCap = coinInfoData?.marketCap != null
+                        ? (coinInfoData.marketCap >= 1e12 ? `$${(coinInfoData.marketCap / 1e12).toFixed(2)}T`
+                          : coinInfoData.marketCap >= 1e9 ? `$${(coinInfoData.marketCap / 1e9).toFixed(0)}B`
+                          : `$${(coinInfoData.marketCap / 1e6).toFixed(0)}M`)
+                        : '—';
+                      const dominance = coinInfoData?.dominance != null
+                        ? `${coinInfoData.dominance.toFixed(1)}%` : '—';
+                      const rows = [
                         { label: '发行日期', value: info.genesisDate },
-                        { label: '最大供给量', value: info.maxSupply },
+                        { label: '最大供给', value: info.maxSupply },
                         { label: '流通数量', value: info.circulatingSupply },
-                      ].map(({ label, value }) => (
-                        <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                        { label: '总市值', value: marketCap },
+                        { label: '市场占比', value: dominance },
+                        { label: '全球排名', value: coinInfoData?.marketCapRank != null ? `#${coinInfoData.marketCapRank}` : '—' },
+                      ];
+                      return rows.map(({ label, value }) => (
+                        <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 20 }}>
                           <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", flexShrink: 0 }}>{label}</span>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", textAlign: 'right', maxWidth: '65%' }}>{value}</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", textAlign: 'right', maxWidth: '65%' }}>{value}</span>
                         </div>
                       ));
                     })()
                   ) : (
                     // 非数字币模式：保持原交易所显示
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 20 }}>
                       <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>交易所</span>
                       <span style={{ fontSize: 11, fontWeight: 700, color: "#E3F2FD" }}>NASDAQ</span>
                     </div>
@@ -1971,9 +1983,9 @@ export default function BeDataPage() {
               {/* 右列：动态信息 */}
               <div style={{ borderRadius: 10, padding: "8px 10px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)" }}>
                 <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", fontWeight: 600, letterSpacing: 0.5, marginBottom: 5, textTransform: "uppercase" }}>实时行情</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                   {/* 最新收盘 / 实时价格 */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 20 }}>
                     <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>{isCryptoMode ? "实时价格" : "最新收盘"}</span>
                     {isLoading
                       ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
@@ -1981,7 +1993,7 @@ export default function BeDataPage() {
                     }
                   </div>
                   {/* 当日涨跌 */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 20 }}>
                     <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>当日涨跌</span>
                     {isLoading
                       ? <div style={{ width: 40, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
@@ -1991,7 +2003,7 @@ export default function BeDataPage() {
                     }
                   </div>
                   {/* 开盘价 */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 20 }}>
                     <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>开盘价</span>
                     {isLoading
                       ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
@@ -2003,7 +2015,7 @@ export default function BeDataPage() {
                     }
                   </div>
                   {/* 24h最高 */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 20 }}>
                     <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>24h最高</span>
                     {isLoading
                       ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
@@ -2015,7 +2027,7 @@ export default function BeDataPage() {
                     }
                   </div>
                   {/* 24h最低 */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 20 }}>
                     <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>24h最低</span>
                     {isLoading
                       ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
@@ -2027,7 +2039,7 @@ export default function BeDataPage() {
                     }
                   </div>
                   {/* 24h成交量 */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 20 }}>
                     <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>24h成交量</span>
                     {isLoading
                       ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
