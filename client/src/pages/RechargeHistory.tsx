@@ -113,7 +113,8 @@ export default function RechargeHistory() {
                   const statusStyle = isRecharge
                     ? (statusStyleMap[item.status] || { bg: 'bg-gray-800/40', text: 'text-gray-400', border: 'border-gray-600/40' })
                     : { bg: 'bg-blue-900/30', text: 'text-blue-300', border: 'border-blue-700/40' };
-                  const label = isRecharge ? (item.note || '充值') : '系统结算';
+                  const isManual = item.sourceType === 'manual';
+                  const label = isRecharge ? (item.note || '充值') : (isManual ? '手动调账' : '系统结算');
                   return (
                     <div key={item.id} className="px-4 py-3">
                       <div className="flex items-center justify-between mb-1.5">
@@ -122,6 +123,9 @@ export default function RechargeHistory() {
                           {label}
                         </span>
                       </div>
+                      {isManual && item.note && (
+                        <div className="text-xs text-gray-400 mb-1">{item.note}</div>
+                      )}
                       <div className="flex items-center justify-between text-xs text-gray-600">
                         <span></span>
                         <span>{formatDate(item.createdAt)}</span>
