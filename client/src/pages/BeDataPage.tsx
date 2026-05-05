@@ -1990,26 +1990,55 @@ export default function BeDataPage() {
                         </span>
                     }
                   </div>
-                  {/* 涨跌天数 */}
+                  {/* 开盘价 */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
-                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>涨跌天数</span>
-                    {statsLoading
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>开盘价</span>
+                    {isLoading
                       ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-                      : <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
-                          {stats
-                            ? <span><span style={{ color: "#FF8A80" }}>↑{stats.upDays}</span><span style={{ color: "rgba(255,255,255,0.4)", margin: "0 2px" }}>/</span><span style={{ color: "#69F0AE" }}>↓{stats.downDays}</span></span>
-                            : "—"
-                          }
+                      : <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.9)" }}>
+                          {(isCryptoMode && livePriceData?.success && livePriceData.todayOpen > 0)
+                            ? formatPrice(livePriceData.todayOpen)
+                            : "—"}
                         </span>
                     }
                   </div>
-                  {/* 涨跌比 */}
+                  {/* 24h最高 */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
-                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>涨跌比</span>
-                    {statsLoading
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>24h最高</span>
+                    {isLoading
                       ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
-                      : <span style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
-                          {stats ? `${stats.upPct}% / ${stats.downPct}%` : "—"}
+                      : <span style={{ fontSize: 11, fontWeight: 700, color: "#FF8A80" }}>
+                          {(isCryptoMode && livePriceData?.success && livePriceData.high24h > 0)
+                            ? formatPrice(livePriceData.high24h)
+                            : "—"}
+                        </span>
+                    }
+                  </div>
+                  {/* 24h最低 */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>24h最低</span>
+                    {isLoading
+                      ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
+                      : <span style={{ fontSize: 11, fontWeight: 700, color: "#69F0AE" }}>
+                          {(isCryptoMode && livePriceData?.success && livePriceData.low24h > 0)
+                            ? formatPrice(livePriceData.low24h)
+                            : "—"}
+                        </span>
+                    }
+                  </div>
+                  {/* 24h成交量 */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", minHeight: 18 }}>
+                    <span style={{ fontSize: 9, color: "rgba(255,255,255,0.55)" }}>24h成交量</span>
+                    {isLoading
+                      ? <div style={{ width: 52, height: 10, borderRadius: 4, background: "rgba(255,255,255,0.15)" }} />
+                      : <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.9)" }}>
+                          {(isCryptoMode && livePriceData?.success && livePriceData.quoteVolume24h > 0)
+                            ? (livePriceData.quoteVolume24h >= 1e9
+                              ? `${(livePriceData.quoteVolume24h / 1e9).toFixed(2)}B`
+                              : livePriceData.quoteVolume24h >= 1e6
+                              ? `${(livePriceData.quoteVolume24h / 1e6).toFixed(2)}M`
+                              : livePriceData.quoteVolume24h.toFixed(0)) + ' USDT'
+                            : "—"}
                         </span>
                     }
                   </div>

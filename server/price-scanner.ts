@@ -12,8 +12,8 @@ import path from 'path';
 // 持久化缓存文件路径（服务器本地）
 const CACHE_FILE = path.join(process.cwd(), 'price-cache.json');
 
-// 内存价格缓存（含今日开盘价和24h涨跌幅）
-const latestPrices: Record<string, { price: number; todayOpen: number; changePercent: number; updatedAt: string }> = {};
+// 内存价格缓存（含今日开盘价、24h高低价、成交量）
+const latestPrices: Record<string, { price: number; todayOpen: number; changePercent: number; high24h: number; low24h: number; volume24h: number; quoteVolume24h: number; updatedAt: string }> = {};
 
 const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM'];
 // 股票类合约（仅 OKX SWAP 有价格，Gate.io/火币无此品种）
@@ -27,7 +27,7 @@ function loadCacheFromFile() {
       const cached = JSON.parse(raw);
       for (const coin of [...COINS, ...STOCK_COINS]) {
         if (cached[coin]?.price && cached[coin]?.updatedAt) {
-          latestPrices[coin] = { price: cached[coin].price, todayOpen: cached[coin].todayOpen ?? 0, changePercent: cached[coin].changePercent ?? 0, updatedAt: cached[coin].updatedAt };
+          latestPrices[coin] = { price: cached[coin].price, todayOpen: cached[coin].todayOpen ?? 0, changePercent: cached[coin].changePercent ?? 0, high24h: cached[coin].high24h ?? 0, low24h: cached[coin].low24h ?? 0, volume24h: cached[coin].volume24h ?? 0, quoteVolume24h: cached[coin].quoteVolume24h ?? 0, updatedAt: cached[coin].updatedAt };
         }
       }
       const coins = Object.entries(latestPrices).map(([k, v]) => `${k}=${v.price}`).join(', ');
@@ -68,10 +68,14 @@ async function fetchTodayOpen(coin: string): Promise<number | null> {
   return null;
 }
 
-async function fetchPriceWithChange(coin: string): Promise<{ price: number; todayOpen: number | null; changePercent: number | null } | null> {
+async function fetchPriceWithChange(coin: string): Promise<{ price: number; todayOpen: number | null; changePercent: number | null; high24h: number | null; low24h: number | null; volume24h: number | null; quoteVolume24h: number | null } | null> {
   let price: number | null = null;
+  let high24h: number | null = null;
+  let low24h: number | null = null;
+  let volume24h: number | null = null;
+  let quoteVolume24h: number | null = null;
 
-  // Gate.io 主用（只取价格）
+  // Gate.io 主用（取价格 + 高低价 + 成交量）
   try {
     const pair = `${coin}_USDT`;
     const r = await fetch(
@@ -82,12 +86,18 @@ async function fetchPriceWithChange(coin: string): Promise<{ price: number; toda
       const data: any[] = await r.json();
       if (Array.isArray(data) && data.length > 0 && data[0].last) {
         const p = parseFloat(data[0].last);
-        if (!isNaN(p) && p > 0) price = p;
+        if (!isNaN(p) && p > 0) {
+          price = p;
+          if (data[0].high_24h) high24h = parseFloat(data[0].high_24h);
+          if (data[0].low_24h) low24h = parseFloat(data[0].low_24h);
+          if (data[0].base_volume) volume24h = parseFloat(data[0].base_volume);
+          if (data[0].quote_volume) quoteVolume24h = parseFloat(data[0].quote_volume);
+        }
       }
     }
   } catch {}
 
-  // 火币备用（获取价格）
+  // 火币备用（获取价格 + 高低价 + 成交量）
   if (!price) {
     try {
       const sym = `${coin.toLowerCase()}usdt`;
@@ -99,12 +109,16 @@ async function fetchPriceWithChange(coin: string): Promise<{ price: number; toda
         const j: any = await r.json();
         if (j.status === 'ok' && j.tick?.close) {
           price = j.tick.close;
+          if (j.tick.high) high24h = j.tick.high;
+          if (j.tick.low) low24h = j.tick.low;
+          if (j.tick.amount) volume24h = j.tick.amount;
+          if (j.tick.vol) quoteVolume24h = j.tick.vol;
         }
       }
     } catch {}
   }
 
-  // OKX 备用（获取价格）
+  // OKX 备用（获取价格 + 高低价 + 成交量）
   if (!price) {
     try {
       const instId = `${coin}-USDT`;
@@ -116,6 +130,10 @@ async function fetchPriceWithChange(coin: string): Promise<{ price: number; toda
         const j: any = await r.json();
         if (j.code === '0' && j.data?.[0]?.last) {
           price = parseFloat(j.data[0].last);
+          if (j.data[0].high24h) high24h = parseFloat(j.data[0].high24h);
+          if (j.data[0].low24h) low24h = parseFloat(j.data[0].low24h);
+          if (j.data[0].vol) volume24h = parseFloat(j.data[0].vol);
+          if (j.data[0].volCcy) quoteVolume24h = parseFloat(j.data[0].volCcy);
         }
       }
     } catch {}
@@ -130,7 +148,7 @@ async function fetchPriceWithChange(coin: string): Promise<{ price: number; toda
     ? ((price - todayOpen) / todayOpen) * 100
     : null;
 
-  return { price, todayOpen, changePercent };
+  return { price, todayOpen, changePercent, high24h, low24h, volume24h, quoteVolume24h };
 }
 
 async function fetchPrice(coin: string): Promise<number | null> {
@@ -169,6 +187,10 @@ async function scanPrices() {
           price: result.price,
           todayOpen: result.todayOpen !== null ? result.todayOpen : prevOpen,
           changePercent: result.changePercent !== null ? result.changePercent : prevChange,
+          high24h: result.high24h !== null ? result.high24h : (latestPrices[coin]?.high24h ?? 0),
+          low24h: result.low24h !== null ? result.low24h : (latestPrices[coin]?.low24h ?? 0),
+          volume24h: result.volume24h !== null ? result.volume24h : (latestPrices[coin]?.volume24h ?? 0),
+          quoteVolume24h: result.quoteVolume24h !== null ? result.quoteVolume24h : (latestPrices[coin]?.quoteVolume24h ?? 0),
           updatedAt: new Date().toISOString()
         };
         updated = true;
@@ -185,7 +207,7 @@ async function scanPrices() {
         // 股票类合约保留已有的 todayOpen 和 changePercent，暂不计算
         const prevChange = latestPrices[coin]?.changePercent ?? 0;
         const prevOpen = latestPrices[coin]?.todayOpen ?? 0;
-        latestPrices[coin] = { price, todayOpen: prevOpen, changePercent: prevChange, updatedAt: new Date().toISOString() };
+        latestPrices[coin] = { price, todayOpen: prevOpen, changePercent: prevChange, high24h: latestPrices[coin]?.high24h ?? 0, low24h: latestPrices[coin]?.low24h ?? 0, volume24h: latestPrices[coin]?.volume24h ?? 0, quoteVolume24h: latestPrices[coin]?.quoteVolume24h ?? 0, updatedAt: new Date().toISOString() };
         updated = true;
       }
     } catch (err) {
@@ -206,7 +228,7 @@ export function getLatestPrice(coin: string): number | null {
   return entry.price;
 }
 
-export function getAllLatestPrices(): Record<string, { price: number; todayOpen: number; changePercent: number; updatedAt: string }> {
+export function getAllLatestPrices(): Record<string, { price: number; todayOpen: number; changePercent: number; high24h: number; low24h: number; volume24h: number; quoteVolume24h: number; updatedAt: string }> {
   return { ...latestPrices };
 }
 
@@ -214,6 +236,12 @@ export function getLatestChangePercent(coin: string): number | null {
   const entry = latestPrices[coin.toUpperCase()];
   if (!entry) return null;
   return entry.changePercent;
+}
+
+export function getLatestTickerData(coin: string): { price: number; todayOpen: number; changePercent: number; high24h: number; low24h: number; volume24h: number; quoteVolume24h: number } | null {
+  const entry = latestPrices[coin.toUpperCase()];
+  if (!entry) return null;
+  return { price: entry.price, todayOpen: entry.todayOpen, changePercent: entry.changePercent, high24h: entry.high24h, low24h: entry.low24h, volume24h: entry.volume24h, quoteVolume24h: entry.quoteVolume24h };
 }
 
 export function startPriceScanner() {

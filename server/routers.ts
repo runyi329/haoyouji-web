@@ -20494,30 +20494,33 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       }),
     /** 比特币实时行情（从 price-scanner 内存缓存读取，遵循 crypto-price-unified 规范） */
     getBtcPrice: publicProcedure.query(async () => {
-      const { getLatestPrice, getLatestChangePercent } = await import('./price-scanner');
-      const price = getLatestPrice('BTC') ?? 0;
-      const changePercent = getLatestChangePercent('BTC') ?? 0;
+      const { getLatestTickerData } = await import('./price-scanner');
+      const t = getLatestTickerData('BTC');
+      const price = t?.price ?? 0;
+      const changePercent = t?.changePercent ?? 0;
       const change = price > 0 ? price * changePercent / 100 : 0;
       const prevClose = price > 0 ? price - change : 0;
-      return { price, prevClose, change, changePercent, success: price > 0 };
+      return { price, prevClose, change, changePercent, todayOpen: t?.todayOpen ?? 0, high24h: t?.high24h ?? 0, low24h: t?.low24h ?? 0, volume24h: t?.volume24h ?? 0, quoteVolume24h: t?.quoteVolume24h ?? 0, success: price > 0 };
     }),
     /** 以太坊实时行情（从 price-scanner 内存缓存读取，遵循 crypto-price-unified 规范） */
     getEthPrice: publicProcedure.query(async () => {
-      const { getLatestPrice, getLatestChangePercent } = await import('./price-scanner');
-      const price = getLatestPrice('ETH') ?? 0;
-      const changePercent = getLatestChangePercent('ETH') ?? 0;
+      const { getLatestTickerData } = await import('./price-scanner');
+      const t = getLatestTickerData('ETH');
+      const price = t?.price ?? 0;
+      const changePercent = t?.changePercent ?? 0;
       const change = price > 0 ? price * changePercent / 100 : 0;
       const prevClose = price > 0 ? price - change : 0;
-      return { price, prevClose, change, changePercent, success: price > 0 };
+      return { price, prevClose, change, changePercent, todayOpen: t?.todayOpen ?? 0, high24h: t?.high24h ?? 0, low24h: t?.low24h ?? 0, volume24h: t?.volume24h ?? 0, quoteVolume24h: t?.quoteVolume24h ?? 0, success: price > 0 };
     }),
     /** 索拉纳实时行情（从 price-scanner 内存缓存读取，遵循 crypto-price-unified 规范） */
     getSolPrice: publicProcedure.query(async () => {
-      const { getLatestPrice, getLatestChangePercent } = await import('./price-scanner');
-      const price = getLatestPrice('SOL') ?? 0;
-      const changePercent = getLatestChangePercent('SOL') ?? 0;
+      const { getLatestTickerData } = await import('./price-scanner');
+      const t = getLatestTickerData('SOL');
+      const price = t?.price ?? 0;
+      const changePercent = t?.changePercent ?? 0;
       const change = price > 0 ? price * changePercent / 100 : 0;
       const prevClose = price > 0 ? price - change : 0;
-      return { price, prevClose, change, changePercent, success: price > 0 };
+      return { price, prevClose, change, changePercent, todayOpen: t?.todayOpen ?? 0, high24h: t?.high24h ?? 0, low24h: t?.low24h ?? 0, volume24h: t?.volume24h ?? 0, quoteVolume24h: t?.quoteVolume24h ?? 0, success: price > 0 };
     }),
     // ========== 港股全生命周期相关接口 ==========
     /** 港股全生命周期趋势折线图（hk_trend_cache）*/
