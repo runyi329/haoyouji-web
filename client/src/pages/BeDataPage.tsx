@@ -1355,16 +1355,48 @@ function FundingYearlyStats({
               </tr>
             </thead>
             <tbody>
+              {/* 全周期汇总行 */}
+              {(() => {
+                const totalCount = years.reduce((s, y) => s + yearMap[y].count, 0);
+                const totalSumRate = years.reduce((s, y) => s + yearMap[y].sumRate, 0);
+                // 全周期平均年化 = 全期平均单次费率 × 1095
+                const avgRate = totalCount > 0 ? totalSumRate / totalCount : 0;
+                const longAnnual = avgRate * 1095 * 100;
+                const shortAnnual = -avgRate * 1095 * 100;
+                const longDir = longAnnual > 0.001 ? '净付出' : longAnnual < -0.001 ? '净收入' : '持平';
+                const shortDir = shortAnnual > 0.001 ? '净付出' : shortAnnual < -0.001 ? '净收入' : '持平';
+                const longColor = longAnnual > 0.001 ? '#EF4444' : longAnnual < -0.001 ? '#16A34A' : '#9CA3AF';
+                const shortColor = shortAnnual > 0.001 ? '#EF4444' : shortAnnual < -0.001 ? '#16A34A' : '#9CA3AF';
+                const cellStyle: React.CSSProperties = {
+                  border: '1px solid #D1D5DB',
+                  padding: '5px 2px',
+                  textAlign: 'center',
+                  fontFamily: 'monospace',
+                  fontSize: 10.5,
+                  whiteSpace: 'nowrap',
+                  background: '#EFF6FF',
+                };
+                return (
+                  <tr key="total">
+                    <td style={{ ...cellStyle, color: '#1D4ED8', fontWeight: 700 }}>全周期</td>
+                    <td style={{ ...cellStyle, color: '#6B7280' }}>{totalCount}</td>
+                    <td style={{ ...cellStyle, color: longColor, fontWeight: 700 }}>
+                      {(longAnnual >= 0 ? '+' : '') + longAnnual.toFixed(2)}%
+                    </td>
+                    <td style={{ ...cellStyle, color: longColor }}>{longDir}</td>
+                    <td style={{ ...cellStyle, color: shortColor, fontWeight: 700 }}>
+                      {(shortAnnual >= 0 ? '+' : '') + shortAnnual.toFixed(2)}%
+                    </td>
+                    <td style={{ ...cellStyle, color: shortColor }}>{shortDir}</td>
+                  </tr>
+                );
+              })()}
               {years.map((year, idx) => {
                 const { sumRate, count } = yearMap[year];
-                // 多头：sumRate>0 多付空，多头净付出（负收益）；sumRate<0 空付多，多头净收入（正收益）
-                // 空头相反
-                const longPay = sumRate * 100;   // 多头净支出（正=付出，负=收入）
-                const shortPay = -sumRate * 100; // 空头净支出（正=付出，负=收入）
-                // 方向文字：正数=净付出，负数=净收入
+                const longPay = sumRate * 100;
+                const shortPay = -sumRate * 100;
                 const longDir = longPay > 0.001 ? '净付出' : longPay < -0.001 ? '净收入' : '持平';
                 const shortDir = shortPay > 0.001 ? '净付出' : shortPay < -0.001 ? '净收入' : '持平';
-                // 颜色：净付出=红（不利），净收入=绿（有利）
                 const longColor = longPay > 0.001 ? '#EF4444' : longPay < -0.001 ? '#16A34A' : '#9CA3AF';
                 const shortColor = shortPay > 0.001 ? '#EF4444' : shortPay < -0.001 ? '#16A34A' : '#9CA3AF';
                 const rowBg = idx % 2 === 0 ? '#fff' : '#F9FAFB';
@@ -1394,206 +1426,8 @@ function FundingYearlyStats({
             </tbody>
           </table>
           <div className="mt-2 text-xs text-gray-400 leading-relaxed">
-            假设持有固定数量持满全年。正值=净付出（红），负值=净收入（绿），多空方向相反。
+假设持有固定数量持满全年。年化 = 全年实际累计费率之和；全周期年化 = 全期平均单次费率 × 1095（8h周期）。正值=净付出（红），负值=净收入（绿）。
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// 三币资金费率对比组件
-type FundingRow = { fundingTime: number; fundingRate: number; markPrice?: number | null };
-
-function calcCorr(a: number[], b: number[]): number {
-  const n = Math.min(a.length, b.length);
-  if (n < 2) return 0;
-  const meanA = a.slice(0, n).reduce((s, v) => s + v, 0) / n;
-  const meanB = b.slice(0, n).reduce((s, v) => s + v, 0) / n;
-  let num = 0, da = 0, db = 0;
-  for (let i = 0; i < n; i++) {
-    num += (a[i] - meanA) * (b[i] - meanB);
-    da += (a[i] - meanA) ** 2;
-    db += (b[i] - meanB) ** 2;
-  }
-  return da === 0 || db === 0 ? 0 : num / Math.sqrt(da * db);
-}
-
-function FundingComparePanel({
-  btc, eth, sol,
-}: {
-  btc: FundingRow[];
-  eth: FundingRow[];
-  sol: FundingRow[];
-}) {
-  const [open, setOpen] = useState(false);
-
-  // 对齐时间轴：取三者共同有的时间点（以BTC为基准，匹配 ETH/SOL）
-  const aligned = useMemo(() => {
-    const ethMap = new Map(eth.map(d => [d.fundingTime, d.fundingRate]));
-    const solMap = new Map(sol.map(d => [d.fundingTime, d.fundingRate]));
-    const rows: { date: string; btc: number; eth: number; sol: number }[] = [];
-    for (const b of btc) {
-      const e = ethMap.get(b.fundingTime);
-      const s = solMap.get(b.fundingTime);
-      if (e !== undefined && s !== undefined) {
-        const dt = new Date(b.fundingTime);
-        rows.push({
-          date: `${dt.getUTCFullYear()}/${String(dt.getUTCMonth()+1).padStart(2,'0')}/${String(dt.getUTCDate()).padStart(2,'0')}`,
-          btc: parseFloat((b.fundingRate * 100).toFixed(4)),
-          eth: parseFloat((e * 100).toFixed(4)),
-          sol: parseFloat((s * 100).toFixed(4)),
-        });
-      }
-    }
-    return rows;
-  }, [btc, eth, sol]);
-
-  const stats = useMemo(() => {
-    if (!aligned.length) return null;
-    const btcRates = aligned.map(d => d.btc);
-    const ethRates = aligned.map(d => d.eth);
-    const solRates = aligned.map(d => d.sol);
-    const mean = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
-    const std = (arr: number[], m: number) => Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length);
-    const mBtc = mean(btcRates), mEth = mean(ethRates), mSol = mean(solRates);
-    return {
-      mBtc, mEth, mSol,
-      sBtc: std(btcRates, mBtc), sEth: std(ethRates, mEth), sSol: std(solRates, mSol),
-      corrBE: calcCorr(btcRates, ethRates),
-      corrBS: calcCorr(btcRates, solRates),
-      corrES: calcCorr(ethRates, solRates),
-      n: aligned.length,
-    };
-  }, [aligned]);
-
-  return (
-    <div className="border-t border-gray-100">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-gray-500 hover:bg-gray-50 transition-colors"
-      >
-        <span className="font-medium text-gray-600">三币资金费率对比</span>
-        <span style={{ fontSize: 10, color: '#9CA3AF', transform: open ? 'rotate(180deg)' : 'rotate(0deg)', display: 'inline-block', transition: 'transform 0.2s' }}>▼</span>
-      </button>
-      {open && (
-        <div className="px-3 pb-4">
-          {/* 对比折线图 */}
-          {aligned.length > 0 && (
-            <div className="mb-3">
-              <ResponsiveContainer width="100%" height={180}>
-                <ComposedChart data={aligned} margin={{ top: 8, right: 28, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 8, fill: '#bbb' }}
-                    tickFormatter={(v: string) => v.slice(0, 4)}
-                    interval={Math.floor(aligned.length / 5)}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 8, fill: '#bbb' }}
-                    tickFormatter={(v: number) => v.toFixed(3) + '%'}
-                    axisLine={false}
-                    tickLine={false}
-                    width={52}
-                  />
-                  <Tooltip
-                    contentStyle={{ fontSize: 10, borderRadius: 8, border: '1px solid #e5e7eb', padding: '5px 8px' }}
-                    formatter={(value: number, name: string) => [value.toFixed(4) + '%', name.toUpperCase()]}
-                    labelFormatter={(label: string) => `时间: ${label}`}
-                  />
-                  <ReferenceLine y={0} stroke="#9CA3AF" strokeDasharray="3 3" />
-                  <Line type="monotone" dataKey="btc" stroke="#F59E0B" strokeWidth={1.2} dot={false} name="btc" />
-                  <Line type="monotone" dataKey="eth" stroke="#6366F1" strokeWidth={1.2} dot={false} name="eth" />
-                  <Line type="monotone" dataKey="sol" stroke="#10B981" strokeWidth={1.2} dot={false} name="sol" />
-                </ComposedChart>
-              </ResponsiveContainer>
-              {/* 图例 */}
-              <div className="flex items-center justify-center gap-4 mt-1">
-                {[{ color: '#F59E0B', label: 'BTC' }, { color: '#6366F1', label: 'ETH' }, { color: '#10B981', label: 'SOL' }].map(item => (
-                  <div key={item.label} className="flex items-center gap-1">
-                    <div style={{ width: 16, height: 2, background: item.color, borderRadius: 1 }} />
-                    <span style={{ fontSize: 10, color: '#6B7280' }}>{item.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 文字统计表 */}
-          {stats && (
-            <>
-              {/* 均值与波动性 */}
-              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', marginBottom: 8 }}>
-                <colgroup>
-                  <col style={{ width: '25%' }} />
-                  <col style={{ width: '25%' }} />
-                  <col style={{ width: '25%' }} />
-                  <col style={{ width: '25%' }} />
-                </colgroup>
-                <thead>
-                  <tr style={{ background: '#F3F4F6' }}>
-                    <th style={{ border: '1px solid #D1D5DB', padding: '5px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 10 }}>指标</th>
-                    <th style={{ border: '1px solid #D1D5DB', padding: '5px 2px', textAlign: 'center', color: '#F59E0B', fontWeight: 600, fontSize: 10 }}>BTC</th>
-                    <th style={{ border: '1px solid #D1D5DB', padding: '5px 2px', textAlign: 'center', color: '#6366F1', fontWeight: 600, fontSize: 10 }}>ETH</th>
-                    <th style={{ border: '1px solid #D1D5DB', padding: '5px 2px', textAlign: 'center', color: '#10B981', fontWeight: 600, fontSize: 10 }}>SOL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { label: '平均费率', vals: [stats.mBtc, stats.mEth, stats.mSol], fmt: (v: number) => (v >= 0 ? '+' : '') + v.toFixed(4) + '%', color: (v: number) => v > 0.0001 ? '#EF4444' : v < -0.0001 ? '#16A34A' : '#9CA3AF' },
-                    { label: '波动性(标准差)', vals: [stats.sBtc, stats.sEth, stats.sSol], fmt: (v: number) => v.toFixed(4) + '%', color: () => '#6B7280' },
-                    // 年化 = 平均费率 × 1095（8h周期每年365天×3次）
-                    { label: '年化平均', vals: [stats.mBtc * 1095, stats.mEth * 1095, stats.mSol * 1095], fmt: (v: number) => (v >= 0 ? '+' : '') + v.toFixed(2) + '%', color: (v: number) => v > 0.01 ? '#EF4444' : v < -0.01 ? '#16A34A' : '#9CA3AF' },
-                  ].map((row, i) => (
-                    <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#F9FAFB' }}>
-                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 2px', textAlign: 'center', fontSize: 10, color: '#6B7280' }}>{row.label}</td>
-                      {row.vals.map((v, j) => (
-                        <td key={j} style={{ border: '1px solid #E5E7EB', padding: '4px 2px', textAlign: 'center', fontFamily: 'monospace', fontSize: 10.5, fontWeight: 600, color: row.color(v) }}>{row.fmt(v)}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {/* 相关系数表 */}
-              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                <colgroup>
-                  <col style={{ width: '34%' }} />
-                  <col style={{ width: '22%' }} />
-                  <col style={{ width: '22%' }} />
-                  <col style={{ width: '22%' }} />
-                </colgroup>
-                <thead>
-                  <tr style={{ background: '#F3F4F6' }}>
-                    <th style={{ border: '1px solid #D1D5DB', padding: '5px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 10 }}>相关系数</th>
-                    <th style={{ border: '1px solid #D1D5DB', padding: '5px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 10 }}>BTC-ETH</th>
-                    <th style={{ border: '1px solid #D1D5DB', padding: '5px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 10 }}>BTC-SOL</th>
-                    <th style={{ border: '1px solid #D1D5DB', padding: '5px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 10 }}>ETH-SOL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr style={{ background: '#fff' }}>
-                    <td style={{ border: '1px solid #E5E7EB', padding: '4px 2px', textAlign: 'center', fontSize: 10, color: '#6B7280' }}>相关系数 r</td>
-                    {[stats.corrBE, stats.corrBS, stats.corrES].map((r, i) => {
-                      const absR = Math.abs(r);
-                      const color = absR > 0.7 ? '#7C3AED' : absR > 0.4 ? '#2563EB' : '#9CA3AF';
-                      const label = absR > 0.7 ? '高相关' : absR > 0.4 ? '中相关' : '弱相关';
-                      return (
-                        <td key={i} style={{ border: '1px solid #E5E7EB', padding: '4px 2px', textAlign: 'center', fontFamily: 'monospace', fontSize: 10.5 }}>
-                          <div style={{ color, fontWeight: 600 }}>{r.toFixed(3)}</div>
-                          <div style={{ fontSize: 9, color: '#9CA3AF' }}>{label}</div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                </tbody>
-              </table>
-              <div className="mt-2 text-xs text-gray-400">共同对齐时间点 {stats.n} 个。年化平均 = 平均单次费率 × 1095（8h周期，每年 365×3=1095 次结算）。</div>
-            </>
-          )}
         </div>
       )}
     </div>
@@ -1729,20 +1563,6 @@ export default function BeDataPage() {
     { symbol: activeSymbol, limit: 10000 },
     { enabled: activeTab === 'analysis' && isCryptoMode, staleTime: 5 * 60 * 1000 }
   );
-  // 三币资金费率对比数据（固定拉取BTC/ETH/SOL）
-  const { data: fundingBtc } = trpc.cryptoData.getFundingRateChart.useQuery(
-    { symbol: 'BTCUSDT', limit: 10000 },
-    { enabled: activeTab === 'analysis' && isCryptoMode, staleTime: 5 * 60 * 1000 }
-  );
-  const { data: fundingEth } = trpc.cryptoData.getFundingRateChart.useQuery(
-    { symbol: 'ETHUSDT', limit: 10000 },
-    { enabled: activeTab === 'analysis' && isCryptoMode, staleTime: 5 * 60 * 1000 }
-  );
-  const { data: fundingSol } = trpc.cryptoData.getFundingRateChart.useQuery(
-    { symbol: 'SOLUSDT', limit: 10000 },
-    { enabled: activeTab === 'analysis' && isCryptoMode, staleTime: 5 * 60 * 1000 }
-  );
-
   const { data: aiData, isLoading: aiLoading } = trpc.cryptoData.getAIAnalysis.useQuery(
     {
       symbol: currentStockInfo?.symbol ?? activeSymbol,
@@ -2537,10 +2357,6 @@ export default function BeDataPage() {
                       );
                     })()}
 
-                    {/* 三币资金费率对比（可折叠） */}
-                    {fundingBtc && fundingEth && fundingSol && (
-                      <FundingComparePanel btc={fundingBtc} eth={fundingEth} sol={fundingSol} />
-                    )}
                   </div>
                 );
               })()}
