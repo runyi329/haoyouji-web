@@ -2434,8 +2434,12 @@ export default function BeDataPage() {
                                 labelFormatter={(label: string) => `${label}年`}
                               />
                               <ReferenceLine y={0} stroke="#9CA3AF" strokeDasharray="3 3" />
-                              <Line type="monotone" dataKey="long" stroke="#EF4444" strokeWidth={2} dot={{ r: 3, fill: '#EF4444' }} name="long" />
-                              <Line type="monotone" dataKey="short" stroke="#16A34A" strokeWidth={2} dot={{ r: 3, fill: '#16A34A' }} name="short" />
+                              <Line type="monotone" dataKey="long" stroke="#EF4444" strokeWidth={2} dot={{ r: 3, fill: '#EF4444' }} name="long">
+                                <LabelList dataKey="long" position="top" style={{ fontSize: 8, fill: '#EF4444', fontWeight: 600 }} formatter={(v: number) => (v >= 0 ? '+' : '') + v.toFixed(1) + '%'} />
+                              </Line>
+                              <Line type="monotone" dataKey="short" stroke="#16A34A" strokeWidth={2} dot={{ r: 3, fill: '#16A34A' }} name="short">
+                                <LabelList dataKey="short" position="bottom" style={{ fontSize: 8, fill: '#16A34A', fontWeight: 600 }} formatter={(v: number) => (v >= 0 ? '+' : '') + v.toFixed(1) + '%'} />
+                              </Line>
                             </ComposedChart>
                           </ResponsiveContainer>
                           <div className="flex gap-4 justify-center mt-1 mb-1">
