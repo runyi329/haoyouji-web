@@ -423,7 +423,7 @@ ${klinesSummary}
     getFundingRateChart: publicProcedure
       .input(z.object({
         symbol: z.string(),
-        limit: z.number().min(1).max(2000).default(500),
+        limit: z.number().min(1).max(10000).default(500),
       }))
       .query(async ({ input }) => {
         return await dbCrypto.getFundingRateChart(input.symbol, input.limit);
