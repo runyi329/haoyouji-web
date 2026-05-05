@@ -3388,6 +3388,15 @@ export default function LedgerDetail() {
                     <span className="text-xs text-white/60">人</span>
                   </div>
                 )}
+                {inviteTreeData?.users && inviteTreeData.users.length > 0 && (
+                  <div className="flex items-baseline gap-1 mt-1">
+                    <span className="text-xs text-white/60">总余额</span>
+                    <span className="text-sm font-bold text-white">
+                      {inviteTreeData.users.reduce((sum: number, u: any) => sum + (u.balance ?? 0), 0).toFixed(2)}
+                    </span>
+                    <span className="text-xs text-white/60">USDT</span>
+                  </div>
+                )
               </div>
               )}
               {/* 卡片 3：仓位 & 累计盈亏（合并，占满整行）——资金方不显示 */}
