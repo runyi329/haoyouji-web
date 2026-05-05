@@ -555,44 +555,43 @@ ${klinesSummary}
         symbol: z.string(), // BTCUSDT / ETHUSDT / SOLUSDT
       }))
       .query(async ({ input }) => {
-        const coinIdMap: Record<string, string> = {
-          BTCUSDT: 'bitcoin',
-          ETHUSDT: 'ethereum',
-          SOLUSDT: 'solana',
+        const sym = input.symbol.toUpperCase();
+        // 币种静态信息（排名、流通量、最大供应量）
+        const COIN_META: Record<string, { rank: number; circulatingSupply: number; maxSupply: number | null; globalKey: string }> = {
+          BTCUSDT: { rank: 1, circulatingSupply: 19_700_000, maxSupply: 21_000_000, globalKey: 'btc' },
+          ETHUSDT: { rank: 2, circulatingSupply: 120_000_000, maxSupply: null, globalKey: 'eth' },
+          SOLUSDT: { rank: 5, circulatingSupply: 510_000_000, maxSupply: null, globalKey: 'sol' },
         };
-        const coinId = coinIdMap[input.symbol.toUpperCase()];
-        if (!coinId) return null;
+        const meta = COIN_META[sym];
+        if (!meta) return null;
 
         try {
-          // 币种详情（市値、供应量、发行日期）
-          const coinRes = await fetch(
-            `https://api.coingecko.com/api/v3/coins/${coinId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false`,
-            { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
-          );
-          if (!coinRes.ok) return null;
-          const coin = await coinRes.json() as any;
-          const md = coin.market_data ?? {};
+          // 从 price-scanner 获取实时价格（用于估算市値）
+          const { getLatestTickerData } = await import('./price-scanner');
+          const ticker = getLatestTickerData(sym.replace('USDT', ''));
+          const price = ticker?.price ?? 0;
+          const marketCap = price > 0 ? price * meta.circulatingSupply : null;
 
-          // 全局市场占比（BTC dominance）
-          const globalRes = await fetch(
-            'https://api.coingecko.com/api/v3/global',
-            { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(8000) }
-          );
+          // 从 CoinGecko global 接口获取市场占比（轻量接口，被封风险较小）
           let dominance: number | null = null;
-          if (globalRes.ok) {
-            const globalData = await globalRes.json() as any;
-            const pct = globalData?.data?.market_cap_percentage ?? {};
-            const key = coinId === 'bitcoin' ? 'btc' : coinId === 'ethereum' ? 'eth' : coinId === 'solana' ? 'sol' : null;
-            if (key && pct[key] != null) dominance = Number(pct[key]);
-          }
+          try {
+            const globalRes = await fetch(
+              'https://api.coingecko.com/api/v3/global',
+              { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(6000) }
+            );
+            if (globalRes.ok) {
+              const globalData = await globalRes.json() as any;
+              const pct = globalData?.data?.market_cap_percentage ?? {};
+              if (pct[meta.globalKey] != null) dominance = Number(pct[meta.globalKey]);
+            }
+          } catch (_) { /* 占比获取失败不影响其他字段 */ }
 
           return {
-            marketCap: md.market_cap?.usd ?? null,           // 市値 USD
-            fullyDilutedValuation: md.fully_diluted_valuation?.usd ?? null, // 完全稀释市値
+            marketCap,                                        // 市値 USD（实时价格×流通量估算）
             dominance,                                        // 市场占有率 %
-            circulatingSupply: md.circulating_supply ?? null, // 流通数量
-            maxSupply: md.max_supply ?? null,                 // 最大供应量
-            genesisDate: coin.genesis_date ?? null,           // 发行日期
+            circulatingSupply: meta.circulatingSupply,        // 流通数量
+            maxSupply: meta.maxSupply,                        // 最大供应量
+            marketCapRank: meta.rank,                         // 全球排名
           };
         } catch (e) {
           console.error('[getCoinInfo] fetch error:', e);
