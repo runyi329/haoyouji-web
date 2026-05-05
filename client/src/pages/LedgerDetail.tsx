@@ -2328,7 +2328,7 @@ export default function LedgerDetail() {
   const inviteTreeViewAsId = (isOwner || isAdmin) && (user as any)?.id !== YJH_USER_ID ? YJH_USER_ID : (viewAsUserId || undefined);
   const { data: inviteTreeData, isLoading: inviteTreeLoading } = trpc.ledger.afGetInviteTree.useQuery(
     { ledgerId: Number(ledgerId), ...(inviteTreeViewAsId ? { viewAsUserId: inviteTreeViewAsId } : {}) },
-    { enabled: isCustomAF && (showInviteTree || isOwner || isAdmin || (user as any)?.id === YJH_USER_ID) }
+    { enabled: isCustomAF && (showInviteTree || (!viewAsUserId && (isOwner || isAdmin || (user as any)?.id === YJH_USER_ID))) }
   );
   // AF账本推荐页动态消息（仅yjh和管理员可见）
   const YJH_USER_ID_CONST = 4957151;
@@ -3388,7 +3388,7 @@ export default function LedgerDetail() {
                     <span className="text-xs text-white/60">人</span>
                   </div>
                 )}
-                {inviteTreeData?.users && inviteTreeData.users.length > 0 && (
+                {inviteTreeData?.users && inviteTreeData.users.length > 0 && !viewAsUserId && (
                   <div className="flex items-baseline gap-1 mt-1">
                     <span className="text-xs text-white/60">总余额</span>
                     <span className="text-sm font-bold text-white">
