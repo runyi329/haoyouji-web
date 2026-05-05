@@ -1256,7 +1256,8 @@ export async function getFundingRates(
 ): Promise<{ total: number; rows: FundingRate[] }> {
   const conn = await getDbConnection();
   if (!conn) return { total: 0, rows: [] };
-  const offset = (page - 1) * pageSize;
+  const safePageSize = Math.min(200, Math.max(1, pageSize));
+  const offset = Math.max(0, (page - 1) * safePageSize);
   const [[{ total }]] = await conn.execute(
     'SELECT COUNT(*) as total FROM crypto_funding_rates WHERE symbol = ?',
     [symbol]
@@ -1266,8 +1267,8 @@ export async function getFundingRates(
      FROM crypto_funding_rates
      WHERE symbol = ?
      ORDER BY funding_time DESC
-     LIMIT ? OFFSET ?`,
-    [symbol, pageSize, offset]
+     LIMIT ${safePageSize} OFFSET ${offset}`,
+    [symbol]
   ) as any;
   return {
     total: Number(total),
@@ -1299,6 +1300,7 @@ export async function getLatestFundingTime(symbol: string): Promise<number> {
 export async function getFundingRateChart(symbol: string, limit: number = 500): Promise<FundingRate[]> {
   const conn = await getDbConnection();
   if (!conn) return [];
+  const safeLimit = Math.min(2000, Math.max(1, limit));
   const [rows] = await conn.execute(
     `SELECT symbol, funding_time, funding_rate, mark_price
      FROM (
@@ -1306,10 +1308,10 @@ export async function getFundingRateChart(symbol: string, limit: number = 500): 
        FROM crypto_funding_rates
        WHERE symbol = ?
        ORDER BY funding_time DESC
-       LIMIT ?
+       LIMIT ${safeLimit}
      ) sub
      ORDER BY funding_time ASC`,
-    [symbol, limit]
+    [symbol]
   ) as any;
   return rows.map((r: any) => ({
     symbol: r.symbol,
