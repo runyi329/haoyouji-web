@@ -10796,6 +10796,118 @@ ${klinesSummary}
         return { success: true };
       }),
 
+    // 获取标签所有利息分段
+    getTagInterestPeriods: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        tagName: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+        }
+        const db = await getLedgerDb();
+        let rows;
+        if (input.tagName) {
+          rows = await db.execute(
+            sql`SELECT * FROM tag_interest_periods
+                WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}
+                ORDER BY sort_order ASC, start_date ASC`
+          );
+        } else {
+          rows = await db.execute(
+            sql`SELECT * FROM tag_interest_periods
+                WHERE ledger_id = ${input.ledgerId}
+                ORDER BY tag_name ASC, sort_order ASC, start_date ASC`
+          );
+        }
+        return (rows as any)[0] as any[];
+      }),
+
+    // 新增利息分段
+    addTagInterestPeriod: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        tagName: z.string(),
+        periodLabel: z.string().optional(),
+        principal: z.number(),
+        annualRate: z.number(),
+        startDate: z.string(),
+        endDate: z.string().optional(),
+        sortOrder: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const db = await getLedgerDb();
+        // 自动排序：取当前最大sort_order+1
+        const maxRows = await db.execute(
+          sql`SELECT COALESCE(MAX(sort_order), 0) as maxOrder FROM tag_interest_periods
+              WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}`
+        );
+        const maxOrder = (maxRows as any)[0][0]?.maxOrder ?? 0;
+        const sortOrder = input.sortOrder ?? (maxOrder + 1);
+        await db.execute(
+          sql`INSERT INTO tag_interest_periods (ledger_id, tag_name, period_label, principal, annual_rate, start_date, end_date, sort_order, created_by)
+              VALUES (${input.ledgerId}, ${input.tagName}, ${input.periodLabel ?? null}, ${input.principal}, ${input.annualRate}, ${input.startDate}, ${input.endDate ?? null}, ${sortOrder}, ${ctx.user.id})`
+        );
+        return { success: true };
+      }),
+
+    // 更新利息分段
+    updateTagInterestPeriod: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        periodId: z.number(),
+        periodLabel: z.string().optional(),
+        principal: z.number(),
+        annualRate: z.number(),
+        startDate: z.string(),
+        endDate: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const db = await getLedgerDb();
+        await db.execute(
+          sql`UPDATE tag_interest_periods SET
+              period_label = ${input.periodLabel ?? null},
+              principal = ${input.principal},
+              annual_rate = ${input.annualRate},
+              start_date = ${input.startDate},
+              end_date = ${input.endDate ?? null}
+              WHERE id = ${input.periodId} AND ledger_id = ${input.ledgerId}`
+        );
+        return { success: true };
+      }),
+
+    // 删除利息分段
+    deleteTagInterestPeriod: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        periodId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const db = await getLedgerDb();
+        await db.execute(
+          sql`DELETE FROM tag_interest_periods WHERE id = ${input.periodId} AND ledger_id = ${input.ledgerId}`
+        );
+        return { success: true };
+      }),
+
     // ===== 标签利息管理结束 =====
 
     // AF 手动调账 - 获取列表

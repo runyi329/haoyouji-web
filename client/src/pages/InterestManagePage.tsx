@@ -1,75 +1,107 @@
 import { useState, useMemo } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
-import { ChevronLeft, Settings, Plus, Minus, Trash2, ChevronDown, ChevronUp, TrendingUp, Calendar, DollarSign, FileText } from 'lucide-react';
+import {
+  ChevronLeft, Plus, Minus, Trash2, ChevronDown, ChevronUp,
+  TrendingUp, FileText, Edit2, Check, X, PlusCircle
+} from 'lucide-react';
 import { toast } from 'sonner';
 
-// 计算已过天数（北京时间，过0点算一天）
-function calcDays(startDateStr: string): number {
+// 计算某一分段的天数（北京时间，过0点算一天）
+function calcPeriodDays(startDateStr: string, endDateStr?: string | null): number {
   if (!startDateStr) return 0;
-  // 解析起息日期（按北京时间0点）
-  const [y, m, d] = startDateStr.split('-').map(Number);
-  const startMs = new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
-  // 今天北京时间0点
-  const now = new Date();
-  const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
-  const diff = todayMs - startMs;
+  const [sy, sm, sd] = startDateStr.split('-').map(Number);
+  const startMs = new Date(sy, sm - 1, sd, 0, 0, 0, 0).getTime();
+
+  let endMs: number;
+  if (endDateStr) {
+    const [ey, em, ed] = endDateStr.split('-').map(Number);
+    endMs = new Date(ey, em - 1, ed, 0, 0, 0, 0).getTime();
+  } else {
+    const now = new Date();
+    endMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+  }
+
+  const diff = endMs - startMs;
   if (diff <= 0) return 0;
   return Math.floor(diff / 86400000) + 1; // 当天算1天
 }
 
-// 计算利息：本金 × 年化利率/365 × 天数 + 手工调整
-function calcInterest(principal: number, annualRate: number, days: number, manualAdj: number): number {
-  const dailyRate = annualRate / 100 / 365;
-  return principal * dailyRate * days + manualAdj;
+// 计算单段利息
+function calcPeriodInterest(principal: number, annualRate: number, days: number): number {
+  if (principal <= 0 || annualRate <= 0 || days <= 0) return 0;
+  return principal * (annualRate / 100 / 365) * days;
 }
 
 function fmt(n: number): string {
   return n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+const EMPTY_PERIOD_FORM = { periodLabel: '', principal: '', annualRate: '', startDate: '', endDate: '' };
+
 export default function InterestManagePage() {
   const { id: ledgerId } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const lid = parseInt(ledgerId || '0');
 
-  // 当前展开的标签
   const [expandedTag, setExpandedTag] = useState<string | null>(null);
-  // 编辑模式
-  const [editingTag, setEditingTag] = useState<string | null>(null);
-  // 编辑表单
-  const [editForm, setEditForm] = useState({ principal: '', annualRate: '', startDate: '' });
-  // 手工调息表单
-  const [manualForm, setManualForm] = useState({ amount: '', remark: '', isPlus: true });
+  // 新增分段表单
+  const [showAddPeriod, setShowAddPeriod] = useState<string | null>(null);
+  const [addForm, setAddForm] = useState(EMPTY_PERIOD_FORM);
+  // 编辑分段
+  const [editingPeriodId, setEditingPeriodId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState(EMPTY_PERIOD_FORM);
+  // 手工调息
   const [showManualForm, setShowManualForm] = useState<string | null>(null);
-  // 日志展开
+  const [manualForm, setManualForm] = useState({ amount: '', remark: '', isPlus: true });
+  // 日志
   const [showLogs, setShowLogs] = useState<string | null>(null);
 
-  // 获取账本分类（标签列表）
+  // 账本分类（标签）
   const { data: rawCategories = [] } = trpc.ledger.getCategories.useQuery(
     { ledgerId: lid, parentId: null },
     { enabled: lid > 0 }
   );
   const categories = useMemo(() => rawCategories.filter((c: any) => !c.isDefault), [rawCategories]);
 
-  // 获取利息设置
-  const { data: interestSettings = [], refetch: refetchSettings } = trpc.ledger.getTagInterestSettings.useQuery(
+  // 所有分段
+  const { data: allPeriods = [], refetch: refetchPeriods } = trpc.ledger.getTagInterestPeriods.useQuery(
     { ledgerId: lid },
     { enabled: lid > 0 }
   );
 
-  // 获取手工调息日志（全部）
+  // 手工调息日志
   const { data: allLogs = [], refetch: refetchLogs } = trpc.ledger.getTagInterestManualLogs.useQuery(
     { ledgerId: lid },
     { enabled: lid > 0 }
   );
 
-  // 保存利息设置
-  const saveMutation = trpc.ledger.saveTagInterestSetting.useMutation({
+  // 新增分段
+  const addPeriodMutation = trpc.ledger.addTagInterestPeriod.useMutation({
     onSuccess: () => {
-      toast.success('保存成功');
-      setEditingTag(null);
-      refetchSettings();
+      toast.success('分段已添加');
+      setShowAddPeriod(null);
+      setAddForm(EMPTY_PERIOD_FORM);
+      refetchPeriods();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // 更新分段
+  const updatePeriodMutation = trpc.ledger.updateTagInterestPeriod.useMutation({
+    onSuccess: () => {
+      toast.success('已保存');
+      setEditingPeriodId(null);
+      refetchPeriods();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // 删除分段
+  const deletePeriodMutation = trpc.ledger.deleteTagInterestPeriod.useMutation({
+    onSuccess: () => {
+      toast.success('已删除');
+      refetchPeriods();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -86,11 +118,8 @@ export default function InterestManagePage() {
   });
 
   // 删除手工调息
-  const deleteMutation = trpc.ledger.deleteTagInterestManualLog.useMutation({
-    onSuccess: () => {
-      toast.success('已删除');
-      refetchLogs();
-    },
+  const deleteManualMutation = trpc.ledger.deleteTagInterestManualLog.useMutation({
+    onSuccess: () => { toast.success('已删除'); refetchLogs(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -98,40 +127,54 @@ export default function InterestManagePage() {
   const tagData = useMemo(() => {
     return categories.map((cat: any) => {
       const tagName = cat.name;
-      const setting = interestSettings.find((s: any) => s.tag_name === tagName) || {};
-      const principal = parseFloat(setting.interest_base_amount || '0') || 0;
-      const annualRate = parseFloat(setting.interest_rate || '0') || 0;
-      const startDate = setting.interest_start_date || '';
-      const days = startDate ? calcDays(startDate) : 0;
-      const dailyRate = annualRate > 0 ? annualRate / 100 / 365 : 0;
-      const dailyInterest = principal * dailyRate;
-
-      // 该标签的手工调整合计
+      const periods = allPeriods.filter((p: any) => p.tag_name === tagName);
       const tagLogs = allLogs.filter((l: any) => l.tag_name === tagName);
       const manualAdj = tagLogs.reduce((sum: number, l: any) => sum + parseFloat(l.amount || '0'), 0);
 
-      const totalInterest = calcInterest(principal, annualRate, days, manualAdj);
+      // 各段利息
+      const periodDetails = periods.map((p: any) => {
+        const principal = parseFloat(p.principal) || 0;
+        const annualRate = parseFloat(p.annual_rate) || 0;
+        const days = calcPeriodDays(p.start_date, p.end_date);
+        const interest = calcPeriodInterest(principal, annualRate, days);
+        const dailyInterest = principal > 0 && annualRate > 0 ? principal * annualRate / 100 / 365 : 0;
+        return { ...p, principal, annualRate, days, interest, dailyInterest };
+      });
 
-      return { tagName, principal, annualRate, startDate, days, dailyInterest, manualAdj, totalInterest, tagLogs };
+      const autoInterest = periodDetails.reduce((sum, p) => sum + p.interest, 0);
+      const totalInterest = autoInterest + manualAdj;
+
+      return { tagName, periods: periodDetails, tagLogs, manualAdj, autoInterest, totalInterest };
     });
-  }, [categories, interestSettings, allLogs]);
+  }, [categories, allPeriods, allLogs]);
 
-  const handleEditOpen = (tagName: string, data: any) => {
-    setEditingTag(tagName);
-    setEditForm({
-      principal: data.principal > 0 ? String(data.principal) : '',
-      annualRate: data.annualRate > 0 ? String(data.annualRate) : '',
-      startDate: data.startDate || '',
+  const handleAddPeriod = (tagName: string) => {
+    const principal = parseFloat(addForm.principal);
+    const annualRate = parseFloat(addForm.annualRate);
+    if (!principal || isNaN(principal)) return toast.error('请输入本金');
+    if (!annualRate || isNaN(annualRate)) return toast.error('请输入年化利率');
+    if (!addForm.startDate) return toast.error('请选择起息日期');
+    addPeriodMutation.mutate({
+      ledgerId: lid, tagName,
+      periodLabel: addForm.periodLabel || undefined,
+      principal, annualRate,
+      startDate: addForm.startDate,
+      endDate: addForm.endDate || undefined,
     });
   };
 
-  const handleSave = (tagName: string) => {
-    saveMutation.mutate({
-      ledgerId: lid,
-      tagName,
-      principal: editForm.principal || undefined,
-      annualRate: editForm.annualRate || undefined,
-      startDate: editForm.startDate || undefined,
+  const handleUpdatePeriod = (periodId: number) => {
+    const principal = parseFloat(editForm.principal);
+    const annualRate = parseFloat(editForm.annualRate);
+    if (!principal || isNaN(principal)) return toast.error('请输入本金');
+    if (!annualRate || isNaN(annualRate)) return toast.error('请输入年化利率');
+    if (!editForm.startDate) return toast.error('请选择起息日期');
+    updatePeriodMutation.mutate({
+      ledgerId: lid, periodId,
+      periodLabel: editForm.periodLabel || undefined,
+      principal, annualRate,
+      startDate: editForm.startDate,
+      endDate: editForm.endDate || undefined,
     });
   };
 
@@ -139,8 +182,7 @@ export default function InterestManagePage() {
     const amt = parseFloat(manualForm.amount);
     if (!amt || isNaN(amt)) return toast.error('请输入有效金额');
     addManualMutation.mutate({
-      ledgerId: lid,
-      tagName,
+      ledgerId: lid, tagName,
       amount: manualForm.isPlus ? Math.abs(amt) : -Math.abs(amt),
       remark: manualForm.remark || undefined,
     });
@@ -158,7 +200,7 @@ export default function InterestManagePage() {
         </button>
         <div>
           <div className="text-base font-bold text-gray-900">利息管理</div>
-          <div className="text-xs text-gray-400">按标签设置本金·年化利率·起息日期</div>
+          <div className="text-xs text-gray-400">按标签·分段设置本金与年化利率</div>
         </div>
       </div>
 
@@ -168,7 +210,7 @@ export default function InterestManagePage() {
         ) : (
           tagData.map((tag) => (
             <div key={tag.tagName} className="bg-white rounded-2xl overflow-hidden shadow-sm">
-              {/* 标签标题行 - 点击展开/收起 */}
+              {/* 标签标题行 */}
               <div
                 className="px-4 py-3 flex items-center justify-between cursor-pointer"
                 onClick={() => setExpandedTag(expandedTag === tag.tagName ? null : tag.tagName)}
@@ -176,219 +218,219 @@ export default function InterestManagePage() {
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-blue-500" />
                   <span className="text-sm font-bold text-gray-900">{tag.tagName}</span>
-                  {tag.days > 0 && (
-                    <span className="text-xs text-gray-400">已计息 {tag.days} 天</span>
-                  )}
+                  <span className="text-xs text-gray-400">{tag.periods.length} 段</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <div className="text-sm font-bold text-green-600">
-                      ¥ {fmt(tag.totalInterest)}
-                    </div>
+                    <div className="text-sm font-bold text-green-600">¥ {fmt(tag.totalInterest)}</div>
                     <div className="text-xs text-gray-400">累计利息</div>
                   </div>
-                  {expandedTag === tag.tagName ? (
-                    <ChevronUp className="w-4 h-4 text-gray-400" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  )}
+                  {expandedTag === tag.tagName
+                    ? <ChevronUp className="w-4 h-4 text-gray-400" />
+                    : <ChevronDown className="w-4 h-4 text-gray-400" />}
                 </div>
               </div>
 
-              {/* 展开内容 */}
               {expandedTag === tag.tagName && (
                 <div className="border-t border-gray-50">
-                  {/* 利息概览 */}
-                  <div className="px-4 py-3 grid grid-cols-3 gap-2 bg-blue-50/50">
-                    <div className="text-center">
-                      <div className="text-xs text-gray-500 mb-0.5">本金</div>
-                      <div className="text-sm font-semibold text-gray-800">
-                        {tag.principal > 0 ? `¥${fmt(tag.principal)}` : '未设置'}
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xs text-gray-500 mb-0.5">年化利率</div>
-                      <div className="text-sm font-semibold text-blue-600">
-                        {tag.annualRate > 0 ? `${tag.annualRate}%` : '未设置'}
-                      </div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-xs text-gray-500 mb-0.5">日利息</div>
-                      <div className="text-sm font-semibold text-orange-600">
-                        {tag.dailyInterest > 0 ? `¥${fmt(tag.dailyInterest)}` : '-'}
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* 利息明细 */}
-                  <div className="px-4 py-3 space-y-1.5 bg-gray-50/50">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">起息日期</span>
-                      <span className="text-gray-700 font-medium">{tag.startDate || '未设置'}</span>
+                  {/* 分段列表 */}
+                  {tag.periods.length === 0 ? (
+                    <div className="px-4 py-4 text-center text-xs text-gray-400">暂无分段，点击下方「添加分段」</div>
+                  ) : (
+                    <div className="divide-y divide-gray-50">
+                      {tag.periods.map((period: any, idx: number) => (
+                        <div key={period.id} className="px-4 py-3">
+                          {editingPeriodId === period.id ? (
+                            /* 编辑模式 */
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-semibold text-blue-600">编辑第 {idx + 1} 段</span>
+                                <div className="flex gap-2">
+                                  <button onClick={() => handleUpdatePeriod(period.id)} className="w-7 h-7 flex items-center justify-center rounded-full bg-green-100 text-green-600">
+                                    <Check className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button onClick={() => setEditingPeriodId(null)} className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-500">
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              <PeriodForm form={editForm} setForm={setEditForm} />
+                            </div>
+                          ) : (
+                            /* 展示模式 */
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-xs font-semibold text-gray-700">
+                                    {period.period_label || `第 ${idx + 1} 段`}
+                                  </span>
+                                  <span className="text-xs text-gray-400">
+                                    {period.start_date} → {period.end_date || '至今'}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-1 text-xs">
+                                  <div>
+                                    <span className="text-gray-400">本金 </span>
+                                    <span className="font-medium text-gray-700">¥{fmt(period.principal)}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400">年化 </span>
+                                    <span className="font-medium text-blue-600">{period.annualRate}%</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-400">天数 </span>
+                                    <span className="font-medium text-gray-700">{period.days}天</span>
+                                  </div>
+                                </div>
+                                <div className="mt-1 text-xs">
+                                  <span className="text-gray-400">日利息 </span>
+                                  <span className="text-orange-500 font-medium">¥{fmt(period.dailyInterest)}</span>
+                                  <span className="mx-2 text-gray-300">|</span>
+                                  <span className="text-gray-400">本段利息 </span>
+                                  <span className="text-green-600 font-semibold">¥{fmt(period.interest)}</span>
+                                </div>
+                              </div>
+                              <div className="flex gap-1 ml-2 flex-shrink-0">
+                                <button
+                                  onClick={() => {
+                                    setEditingPeriodId(period.id);
+                                    setEditForm({
+                                      periodLabel: period.period_label || '',
+                                      principal: String(period.principal),
+                                      annualRate: String(period.annualRate),
+                                      startDate: period.start_date || '',
+                                      endDate: period.end_date || '',
+                                    });
+                                  }}
+                                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-blue-50 text-gray-400 hover:text-blue-500"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm('确认删除此分段？')) {
+                                      deletePeriodMutation.mutate({ ledgerId: lid, periodId: period.id });
+                                    }
+                                  }}
+                                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">计息天数</span>
-                      <span className="text-gray-700 font-medium">{tag.days} 天</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-gray-500">自动计息</span>
-                      <span className="text-green-600 font-medium">¥ {fmt(tag.totalInterest - tag.manualAdj)}</span>
-                    </div>
-                    {tag.manualAdj !== 0 && (
+                  )}
+
+                  {/* 利息汇总 */}
+                  {tag.periods.length > 0 && (
+                    <div className="mx-4 mb-3 px-3 py-2 bg-green-50 rounded-xl">
                       <div className="flex justify-between text-xs">
-                        <span className="text-gray-500">手工调整</span>
-                        <span className={`font-medium ${tag.manualAdj > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                          {tag.manualAdj > 0 ? '+' : ''}{fmt(tag.manualAdj)}
-                        </span>
+                        <span className="text-gray-500">自动计息合计</span>
+                        <span className="text-green-600 font-semibold">¥ {fmt(tag.autoInterest)}</span>
                       </div>
-                    )}
-                    <div className="flex justify-between text-xs border-t border-gray-200 pt-1.5 mt-1">
-                      <span className="text-gray-700 font-semibold">合计利息</span>
-                      <span className="text-green-600 font-bold text-sm">¥ {fmt(tag.totalInterest)}</span>
+                      {tag.manualAdj !== 0 && (
+                        <div className="flex justify-between text-xs mt-0.5">
+                          <span className="text-gray-500">手工调整</span>
+                          <span className={`font-semibold ${tag.manualAdj > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                            {tag.manualAdj > 0 ? '+' : ''}{fmt(tag.manualAdj)}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-xs border-t border-green-100 mt-1.5 pt-1.5">
+                        <span className="font-semibold text-gray-700">累计利息合计</span>
+                        <span className="text-green-600 font-bold text-sm">¥ {fmt(tag.totalInterest)}</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* 操作按钮 */}
-                  <div className="px-4 py-3 flex gap-2 border-t border-gray-100">
-                    <button
-                      onClick={() => {
-                        if (editingTag === tag.tagName) {
-                          setEditingTag(null);
-                        } else {
-                          handleEditOpen(tag.tagName, tag);
-                        }
-                      }}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-blue-50 text-blue-600 text-xs font-medium"
-                    >
-                      <Settings className="w-3.5 h-3.5" />
-                      {editingTag === tag.tagName ? '取消编辑' : '编辑设置'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowManualForm(showManualForm === tag.tagName ? null : tag.tagName);
-                        setManualForm({ amount: '', remark: '', isPlus: true });
-                      }}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-orange-50 text-orange-600 text-xs font-medium"
-                    >
-                      <TrendingUp className="w-3.5 h-3.5" />
-                      手工调息
-                    </button>
-                    <button
-                      onClick={() => setShowLogs(showLogs === tag.tagName ? null : tag.tagName)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gray-100 text-gray-600 text-xs font-medium"
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                      日志({tag.tagLogs.length})
-                    </button>
-                  </div>
-
-                  {/* 编辑设置表单 */}
-                  {editingTag === tag.tagName && (
-                    <div className="px-4 pb-4 space-y-3 border-t border-gray-100 pt-3">
-                      <div className="text-xs font-semibold text-gray-600 mb-2">编辑利息设置</div>
-                      <div className="space-y-2.5">
-                        <div>
-                          <label className="text-xs text-gray-500 mb-1 block">本金（元）</label>
-                          <input
-                            type="number"
-                            value={editForm.principal}
-                            onChange={(e) => setEditForm(f => ({ ...f, principal: e.target.value }))}
-                            placeholder="请输入本金金额"
-                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 mb-1 block">年化利率（%）</label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              value={editForm.annualRate}
-                              onChange={(e) => setEditForm(f => ({ ...f, annualRate: e.target.value }))}
-                              placeholder="如：12（代表12%）"
-                              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50 pr-16"
-                            />
-                            {editForm.annualRate && parseFloat(editForm.annualRate) > 0 && (
-                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-blue-500">
-                                日利率 {(parseFloat(editForm.annualRate) / 365).toFixed(4)}%
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 mb-1 block">起息日期</label>
-                          <input
-                            type="date"
-                            value={editForm.startDate}
-                            onChange={(e) => setEditForm(f => ({ ...f, startDate: e.target.value }))}
-                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
-                          />
-                        </div>
-                        {/* 预览 */}
-                        {editForm.principal && editForm.annualRate && editForm.startDate && (
-                          <div className="bg-green-50 rounded-xl px-3 py-2 text-xs text-green-700">
-                            预览：本金 ¥{fmt(parseFloat(editForm.principal))} × {editForm.annualRate}% ÷ 365 = 日利息 ¥{fmt(parseFloat(editForm.principal) * parseFloat(editForm.annualRate) / 100 / 365)}
-                            {' '}· 起息 {editForm.startDate} · 已 {calcDays(editForm.startDate)} 天 · 自动利息 ¥{fmt(parseFloat(editForm.principal) * parseFloat(editForm.annualRate) / 100 / 365 * calcDays(editForm.startDate))}
-                          </div>
-                        )}
-                        <button
-                          onClick={() => handleSave(tag.tagName)}
-                          disabled={saveMutation.isPending}
-                          className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl disabled:opacity-50"
-                        >
-                          {saveMutation.isPending ? '保存中...' : '保存设置'}
-                        </button>
+                  {/* 添加分段表单 */}
+                  {showAddPeriod === tag.tagName ? (
+                    <div className="px-4 pb-4 border-t border-gray-100 pt-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-semibold text-gray-600">添加新分段</span>
+                        <button onClick={() => setShowAddPeriod(null)} className="text-xs text-gray-400">取消</button>
                       </div>
+                      <PeriodForm form={addForm} setForm={setAddForm} />
+                      <button
+                        onClick={() => handleAddPeriod(tag.tagName)}
+                        disabled={addPeriodMutation.isPending}
+                        className="w-full mt-3 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl disabled:opacity-50"
+                      >
+                        {addPeriodMutation.isPending ? '添加中...' : '确认添加'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="px-4 pb-3 border-t border-gray-100 pt-3 flex gap-2">
+                      <button
+                        onClick={() => { setShowAddPeriod(tag.tagName); setAddForm(EMPTY_PERIOD_FORM); }}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-blue-50 text-blue-600 text-xs font-medium"
+                      >
+                        <PlusCircle className="w-3.5 h-3.5" />
+                        添加分段
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowManualForm(showManualForm === tag.tagName ? null : tag.tagName);
+                          setManualForm({ amount: '', remark: '', isPlus: true });
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-orange-50 text-orange-600 text-xs font-medium"
+                      >
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        手工调息
+                      </button>
+                      <button
+                        onClick={() => setShowLogs(showLogs === tag.tagName ? null : tag.tagName)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gray-100 text-gray-600 text-xs font-medium"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        日志({tag.tagLogs.length})
+                      </button>
                     </div>
                   )}
 
                   {/* 手工调息表单 */}
                   {showManualForm === tag.tagName && (
-                    <div className="px-4 pb-4 space-y-3 border-t border-gray-100 pt-3">
-                      <div className="text-xs font-semibold text-gray-600 mb-2">手工调息</div>
-                      <div className="space-y-2.5">
-                        {/* 加减切换 */}
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setManualForm(f => ({ ...f, isPlus: true }))}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium border transition-colors ${manualForm.isPlus ? 'bg-green-500 text-white border-green-500' : 'bg-white text-gray-500 border-gray-200'}`}
-                          >
-                            <Plus className="w-4 h-4" /> 加息
-                          </button>
-                          <button
-                            onClick={() => setManualForm(f => ({ ...f, isPlus: false }))}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium border transition-colors ${!manualForm.isPlus ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-500 border-gray-200'}`}
-                          >
-                            <Minus className="w-4 h-4" /> 减息
-                          </button>
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 mb-1 block">金额（元）</label>
-                          <input
-                            type="number"
-                            value={manualForm.amount}
-                            onChange={(e) => setManualForm(f => ({ ...f, amount: e.target.value }))}
-                            placeholder="请输入调整金额"
-                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs text-gray-500 mb-1 block">备注</label>
-                          <input
-                            type="text"
-                            value={manualForm.remark}
-                            onChange={(e) => setManualForm(f => ({ ...f, remark: e.target.value }))}
-                            placeholder="请输入备注说明"
-                            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
-                          />
-                        </div>
+                    <div className="px-4 pb-4 space-y-2.5 border-t border-gray-100 pt-3">
+                      <div className="text-xs font-semibold text-gray-600">手工调息</div>
+                      <div className="flex gap-2">
                         <button
-                          onClick={() => handleAddManual(tag.tagName)}
-                          disabled={addManualMutation.isPending || !manualForm.amount}
-                          className={`w-full py-2.5 text-white text-sm font-semibold rounded-xl disabled:opacity-50 ${manualForm.isPlus ? 'bg-green-500' : 'bg-red-500'}`}
+                          onClick={() => setManualForm(f => ({ ...f, isPlus: true }))}
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium border transition-colors ${manualForm.isPlus ? 'bg-green-500 text-white border-green-500' : 'bg-white text-gray-500 border-gray-200'}`}
                         >
-                          {addManualMutation.isPending ? '提交中...' : `确认${manualForm.isPlus ? '加息' : '减息'} ${manualForm.amount ? `¥${manualForm.amount}` : ''}`}
+                          <Plus className="w-4 h-4" /> 加息
+                        </button>
+                        <button
+                          onClick={() => setManualForm(f => ({ ...f, isPlus: false }))}
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium border transition-colors ${!manualForm.isPlus ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-500 border-gray-200'}`}
+                        >
+                          <Minus className="w-4 h-4" /> 减息
                         </button>
                       </div>
+                      <input
+                        type="number"
+                        value={manualForm.amount}
+                        onChange={(e) => setManualForm(f => ({ ...f, amount: e.target.value }))}
+                        placeholder="金额（元）"
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
+                      />
+                      <input
+                        type="text"
+                        value={manualForm.remark}
+                        onChange={(e) => setManualForm(f => ({ ...f, remark: e.target.value }))}
+                        placeholder="备注说明"
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
+                      />
+                      <button
+                        onClick={() => handleAddManual(tag.tagName)}
+                        disabled={addManualMutation.isPending || !manualForm.amount}
+                        className={`w-full py-2.5 text-white text-sm font-semibold rounded-xl disabled:opacity-50 ${manualForm.isPlus ? 'bg-green-500' : 'bg-red-500'}`}
+                      >
+                        {addManualMutation.isPending ? '提交中...' : `确认${manualForm.isPlus ? '加息' : '减息'}${manualForm.amount ? ` ¥${manualForm.amount}` : ''}`}
+                      </button>
                     </div>
                   )}
 
@@ -417,10 +459,10 @@ export default function InterestManagePage() {
                               <button
                                 onClick={() => {
                                   if (confirm('确认删除此调息记录？')) {
-                                    deleteMutation.mutate({ ledgerId: lid, logId: log.id });
+                                    deleteManualMutation.mutate({ ledgerId: lid, logId: log.id });
                                   }
                                 }}
-                                className="ml-2 w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+                                className="ml-2 w-7 h-7 flex items-center justify-center rounded-full hover:bg-red-50 text-gray-400 hover:text-red-500 flex-shrink-0"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -436,6 +478,82 @@ export default function InterestManagePage() {
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+// 分段表单组件（新增/编辑共用）
+function PeriodForm({ form, setForm }: {
+  form: { periodLabel: string; principal: string; annualRate: string; startDate: string; endDate: string };
+  setForm: (f: any) => void;
+}) {
+  const previewDays = form.startDate ? calcPeriodDays(form.startDate, form.endDate || undefined) : 0;
+  const previewInterest = form.principal && form.annualRate && previewDays > 0
+    ? calcPeriodInterest(parseFloat(form.principal) || 0, parseFloat(form.annualRate) || 0, previewDays)
+    : null;
+
+  return (
+    <div className="space-y-2">
+      <input
+        type="text"
+        value={form.periodLabel}
+        onChange={(e) => setForm((f: any) => ({ ...f, periodLabel: e.target.value }))}
+        placeholder="阶段名称（选填，如：第一阶段）"
+        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-gray-400 mb-0.5 block">本金（元）</label>
+          <input
+            type="number"
+            value={form.principal}
+            onChange={(e) => setForm((f: any) => ({ ...f, principal: e.target.value }))}
+            placeholder="如：1000000"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-400 mb-0.5 block">年化利率（%）</label>
+          <input
+            type="number"
+            value={form.annualRate}
+            onChange={(e) => setForm((f: any) => ({ ...f, annualRate: e.target.value }))}
+            placeholder="如：12"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs text-gray-400 mb-0.5 block">起息日期</label>
+          <input
+            type="date"
+            value={form.startDate}
+            onChange={(e) => setForm((f: any) => ({ ...f, startDate: e.target.value }))}
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-gray-400 mb-0.5 block">结束日期（空=至今）</label>
+          <input
+            type="date"
+            value={form.endDate}
+            onChange={(e) => setForm((f: any) => ({ ...f, endDate: e.target.value }))}
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
+          />
+        </div>
+      </div>
+      {/* 实时预览 */}
+      {form.principal && form.annualRate && form.startDate && (
+        <div className="bg-blue-50 rounded-xl px-3 py-2 text-xs text-blue-700 space-y-0.5">
+          <div>日利率：{(parseFloat(form.annualRate) / 365).toFixed(6)}%</div>
+          <div>日利息：¥{fmt((parseFloat(form.principal) || 0) * (parseFloat(form.annualRate) || 0) / 100 / 365)}</div>
+          <div>计息天数：{previewDays} 天</div>
+          {previewInterest !== null && (
+            <div className="font-semibold">本段利息预计：¥{fmt(previewInterest)}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
