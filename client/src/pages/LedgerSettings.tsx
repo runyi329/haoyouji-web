@@ -566,6 +566,13 @@ export default function LedgerSettings() {
  )}
  {ledgerData?.type === 'custom_af' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem
+ label="波比管理"
+ showIcon
+ onClick={() => setLocation(`/ledger/${ledgerId}/wave-ratio-manage`)}
+ />
+ )}
+ {ledgerData?.type === 'custom_af' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ <SettingItem
  label="行情评估设置"
  showIcon
  onClick={() => setLocation(`/ledger/${ledgerId}/market-eval-settings`)}
