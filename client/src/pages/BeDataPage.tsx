@@ -1436,7 +1436,7 @@ export default function BeDataPage() {
   const [fundingPage, setFundingPage] = useState(1);
   const { data: fundingData, isLoading: fundingLoading } = trpc.cryptoData.getFundingRates.useQuery(
     { symbol: activeSymbol, page: fundingPage, pageSize: 100 },
-    { enabled: activeTab === 'funding' && isCryptoMode }
+    { enabled: isCryptoMode, staleTime: 5 * 60 * 1000 }
   );
   // 资金费率折线图数据（数据分析Tab使用）
   const { data: fundingChartData } = trpc.cryptoData.getFundingRateChart.useQuery(
@@ -1787,7 +1787,9 @@ export default function BeDataPage() {
               ? `日线历史${total > 0 ? `（${total}条）` : ''}`
               : t.key === 'analysis' && latestDate && latestDate !== '-'
                 ? (() => { const parts = latestDate.split('/'); return `数据分析（${parts[1] ? (+parts[1]) + '/' + (+parts[2]) : latestDate}）`; })()
-                : t.label}
+                : t.key === 'funding'
+                  ? `资金费率${fundingData?.total ? `（${fundingData.total}条）` : ''}`
+                  : t.label}
           </button>
         ))}
       </div>
@@ -1875,56 +1877,68 @@ export default function BeDataPage() {
             <>
               <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                 <colgroup>
-                  <col style={{ width: '30%' }} />
-                  <col style={{ width: '10%' }} />
-                  <col style={{ width: '16%' }} />
-                  <col style={{ width: '20%' }} />
-                  <col style={{ width: '24%' }} />
+                  <col style={{ width: '26%' }} />
+                  <col style={{ width: '9%' }} />
+                  <col style={{ width: '15%' }} />
+                  <col style={{ width: '25%' }} />
+                  <col style={{ width: '25%' }} />
                 </colgroup>
-                <thead>
-                  <tr style={{ background: '#F9FAFB', position: 'sticky', top: 0, zIndex: 1, borderBottom: '2px solid #E5E7EB' }}>
-                    <th style={{ padding: '4px 6px', textAlign: 'left', fontSize: 10, fontWeight: 600, color: '#6B7280' }}>时间 (UTC)</th>
-                    <th style={{ padding: '4px 2px', textAlign: 'center', fontSize: 10, fontWeight: 600, color: '#6B7280' }}>周期</th>
-                    <th style={{ padding: '4px 2px', textAlign: 'center', fontSize: 10, fontWeight: 600, color: '#6B7280' }}>方向</th>
-                    <th style={{ padding: '4px 4px', textAlign: 'right', fontSize: 10, fontWeight: 600, color: '#6B7280' }}>费率</th>
-                    <th style={{ padding: '4px 6px', textAlign: 'right', fontSize: 10, fontWeight: 600, color: '#6B7280' }}>年化</th>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                  <tr style={{ background: '#F3F4F6' }}>
+                    <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>时间 (UTC)</th>
+                    <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>周期</th>
+                    <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>方向</th>
+                    <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>费率</th>
+                    <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>年化</th>
                   </tr>
                 </thead>
                 <tbody>
                   {fundingData.rows.map((row, idx) => {
                     const rate = row.fundingRate;
-                    const rateColor = rate > 0 ? '#D32F2F' : rate < 0 ? '#388E3C' : '#6B7280';
+                    const rateColor = rate > 0 ? '#EF4444' : rate < 0 ? '#16A34A' : '#9CA3AF';
                     const rowBg = idx % 2 === 0 ? '#fff' : '#F9FAFB';
-                    // 时间
                     const dt = new Date(row.fundingTime);
-                    const timeStr = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')} ${String(dt.getUTCHours()).padStart(2,'0')}:00`;
-                    // 周期：根据前后两条时间差自动计算，默认8h
+                    // 时间：26/05/05 08:00 格式
+                    const yy = String(dt.getUTCFullYear()).slice(-2);
+                    const mm = String(dt.getUTCMonth()+1).padStart(2,'0');
+                    const dd = String(dt.getUTCDate()).padStart(2,'0');
+                    const hh = String(dt.getUTCHours()).padStart(2,'0');
+                    const timeStr = `${yy}/${mm}/${dd} ${hh}:00`;
+                    // 周期
                     const prevRow = fundingData.rows[idx + 1];
                     const periodH = prevRow ? Math.round((row.fundingTime - prevRow.fundingTime) / 1000 / 3600) : 8;
                     const periodStr = `${periodH}h`;
-                    // 年化：费率 × (8760 / 周期小时)
+                    // 年化
                     const annualRate = rate * (8760 / periodH) * 100;
                     const annualStr = (annualRate >= 0 ? '+' : '') + annualRate.toFixed(2) + '%';
-                    // 方向：费率>0多付空，费率<0空付多
+                    // 方向
                     const dirLabel = rate > 0 ? '多付空' : rate < 0 ? '空付多' : '平衡';
-                    const dirColor = rate > 0 ? '#D32F2F' : rate < 0 ? '#388E3C' : '#6B7280';
-                    const dirBg = rate > 0 ? '#FEF2F2' : rate < 0 ? '#F0FDF4' : '#F9FAFB';
+                    const dirColor = rate > 0 ? '#EF4444' : rate < 0 ? '#16A34A' : '#9CA3AF';
                     const rateStr = (rate * 100).toFixed(4) + '%';
-                    // 行间分隔线：每8条加一条较粗的线（按日分组）
+                    // 按日分隔线
                     const isNewDay = idx === 0 || (() => {
                       const prevDt = new Date(fundingData.rows[idx - 1].fundingTime);
                       return dt.getUTCDate() !== prevDt.getUTCDate() || dt.getUTCMonth() !== prevDt.getUTCMonth();
                     })();
-                    const borderStyle = isNewDay ? '1px solid #D1D5DB' : '1px solid #F3F4F6';
+                    const topBorder = isNewDay && idx > 0 ? '1px solid #D1D5DB' : '1px solid #E5E7EB';
+                    const cellStyle = (extra?: React.CSSProperties): React.CSSProperties => ({
+                      border: '1px solid #E5E7EB',
+                      borderTop: topBorder,
+                      padding: '4px 0',
+                      textAlign: 'center' as const,
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      whiteSpace: 'nowrap' as const,
+                      overflow: 'hidden',
+                      ...extra,
+                    });
                     return (
                       <tr key={row.fundingTime} style={{ background: rowBg }}>
-                        <td style={{ borderTop: isNewDay && idx > 0 ? '1px solid #D1D5DB' : undefined, borderBottom: borderStyle, padding: '3px 6px', color: '#6B7280', fontFamily: 'monospace', fontSize: 9.5, whiteSpace: 'nowrap' }}>{timeStr}</td>
-                        <td style={{ borderTop: isNewDay && idx > 0 ? '1px solid #D1D5DB' : undefined, borderBottom: borderStyle, padding: '3px 2px', textAlign: 'center', color: '#9CA3AF', fontSize: 9 }}>{periodStr}</td>
-                        <td style={{ borderTop: isNewDay && idx > 0 ? '1px solid #D1D5DB' : undefined, borderBottom: borderStyle, padding: '3px 2px', textAlign: 'center' }}>
-                          <span style={{ background: dirBg, color: dirColor, fontSize: 8.5, fontWeight: 600, padding: '1px 3px', borderRadius: 3 }}>{dirLabel}</span>
-                        </td>
-                        <td style={{ borderTop: isNewDay && idx > 0 ? '1px solid #D1D5DB' : undefined, borderBottom: borderStyle, padding: '3px 4px', textAlign: 'right', color: rateColor, fontFamily: 'monospace', fontSize: 9.5, fontWeight: 600 }}>{rateStr}</td>
-                        <td style={{ borderTop: isNewDay && idx > 0 ? '1px solid #D1D5DB' : undefined, borderBottom: borderStyle, padding: '3px 6px', textAlign: 'right', color: rateColor, fontFamily: 'monospace', fontSize: 9.5 }}>{annualStr}</td>
+                        <td style={cellStyle({ color: '#6B7280' })}>{timeStr}</td>
+                        <td style={cellStyle({ color: '#9CA3AF' })}>{periodStr}</td>
+                        <td style={cellStyle({ color: dirColor, fontWeight: 600 })}>{dirLabel}</td>
+                        <td style={cellStyle({ color: rateColor, fontWeight: 600 })}>{rateStr}</td>
+                        <td style={cellStyle({ color: rateColor })}>{annualStr}</td>
                       </tr>
                     );
                   })}
