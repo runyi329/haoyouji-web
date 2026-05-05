@@ -564,7 +564,7 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/ledger/${ledgerId}/af-payout-manage`)}
  />
  )}
- {ledgerData?.type === 'custom_af' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ {ledgerId === 37 && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem
  label="波比管理"
  showIcon
