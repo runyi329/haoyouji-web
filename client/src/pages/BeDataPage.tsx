@@ -1545,7 +1545,8 @@ function FundingComparePanel({
                   {[
                     { label: '平均费率', vals: [stats.mBtc, stats.mEth, stats.mSol], fmt: (v: number) => (v >= 0 ? '+' : '') + v.toFixed(4) + '%', color: (v: number) => v > 0.0001 ? '#EF4444' : v < -0.0001 ? '#16A34A' : '#9CA3AF' },
                     { label: '波动性(标准差)', vals: [stats.sBtc, stats.sEth, stats.sSol], fmt: (v: number) => v.toFixed(4) + '%', color: () => '#6B7280' },
-                    { label: '年化平均', vals: [stats.mBtc * stats.n, stats.mEth * stats.n, stats.mSol * stats.n], fmt: (v: number) => (v >= 0 ? '+' : '') + v.toFixed(2) + '%', color: (v: number) => v > 0.01 ? '#EF4444' : v < -0.01 ? '#16A34A' : '#9CA3AF' },
+                    // 年化 = 平均费率 × 1095（8h周期每年365天×3次）
+                    { label: '年化平均', vals: [stats.mBtc * 1095, stats.mEth * 1095, stats.mSol * 1095], fmt: (v: number) => (v >= 0 ? '+' : '') + v.toFixed(2) + '%', color: (v: number) => v > 0.01 ? '#EF4444' : v < -0.01 ? '#16A34A' : '#9CA3AF' },
                   ].map((row, i) => (
                     <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#F9FAFB' }}>
                       <td style={{ border: '1px solid #E5E7EB', padding: '4px 2px', textAlign: 'center', fontSize: 10, color: '#6B7280' }}>{row.label}</td>
@@ -1590,7 +1591,7 @@ function FundingComparePanel({
                   </tr>
                 </tbody>
               </table>
-              <div className="mt-2 text-xs text-gray-400">共同对齐时间点 {stats.n} 个，年化平均 = 全期平均费率 × 全期结算次数。</div>
+              <div className="mt-2 text-xs text-gray-400">共同对齐时间点 {stats.n} 个。年化平均 = 平均单次费率 × 1095（8h周期，每年 365×3=1095 次结算）。</div>
             </>
           )}
         </div>
