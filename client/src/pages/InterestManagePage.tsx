@@ -50,6 +50,8 @@ export default function InterestManagePage() {
   const [addForm, setAddForm] = useState(EMPTY_PERIOD_FORM);
   // 编辑分段
   const [editingPeriodId, setEditingPeriodId] = useState<number | null>(null);
+  const [editingManualId, setEditingManualId] = useState<number | null>(null);
+  const [editManualForm, setEditManualForm] = useState({ amount: '', remark: '', isPlus: true });
   const [editForm, setEditForm] = useState(EMPTY_PERIOD_FORM);
   // 手工调息
   const [showManualForm, setShowManualForm] = useState<string | null>(null);
@@ -98,6 +100,16 @@ export default function InterestManagePage() {
   });
 
   // 删除分段
+  const updateManualMutation = trpc.ledger.updateTagInterestPeriod.useMutation({
+    onSuccess: () => {
+      toast.success('手工调息已更新');
+      setEditingManualId(null);
+      refetchPeriods();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+
   const deletePeriodMutation = trpc.ledger.deleteTagInterestPeriod.useMutation({
     onSuccess: () => {
       toast.success('已删除');
@@ -268,24 +280,76 @@ export default function InterestManagePage() {
                             <div className="flex items-start justify-between">
                               <div className="flex-1 min-w-0">
                                 {period.isManual ? (
-                                  /* 手工调息展示 */
-                                  <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${period.principal >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                                        {period.principal >= 0 ? '手工加息' : '手工减息'}
-                                      </span>
-                                      <span className="text-xs text-gray-400">{period.created_at?.slice(0, 10)}</span>
+                                  /* 手工调息展示/编辑 */
+                                  editingManualId === period.id ? (
+                                    <div className="flex-1 space-y-2">
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          onClick={() => setEditManualForm(f => ({ ...f, isPlus: true }))}
+                                          className={`text-xs px-2 py-0.5 rounded-full border ${editManualForm.isPlus ? 'bg-green-100 text-green-700 border-green-300' : 'bg-white text-gray-400 border-gray-200'}`}
+                                        >加息</button>
+                                        <button
+                                          onClick={() => setEditManualForm(f => ({ ...f, isPlus: false }))}
+                                          className={`text-xs px-2 py-0.5 rounded-full border ${!editManualForm.isPlus ? 'bg-red-100 text-red-700 border-red-300' : 'bg-white text-gray-400 border-gray-200'}`}
+                                        >减息</button>
+                                      </div>
+                                      <input
+                                        type="number"
+                                        placeholder="金额"
+                                        value={editManualForm.amount}
+                                        onChange={e => setEditManualForm(f => ({ ...f, amount: e.target.value }))}
+                                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm"
+                                      />
+                                      <input
+                                        type="text"
+                                        placeholder="备注（选填）"
+                                        value={editManualForm.remark}
+                                        onChange={e => setEditManualForm(f => ({ ...f, remark: e.target.value }))}
+                                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm"
+                                      />
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={() => {
+                                            const amt = parseFloat(editManualForm.amount);
+                                            if (!amt || isNaN(amt)) return toast.error('请输入金额');
+                                            const finalAmt = editManualForm.isPlus ? Math.abs(amt) : -Math.abs(amt);
+                                            updateManualMutation.mutate({
+                                              ledgerId: lid,
+                                              periodId: period.id,
+                                              principal: finalAmt,
+                                              annualRate: 0,
+                                              startDate: period.start_date || new Date().toISOString().slice(0, 10),
+                                              endDate: period.start_date || new Date().toISOString().slice(0, 10),
+                                              periodLabel: finalAmt > 0 ? '手工加息' : '手工减息',
+                                            });
+                                          }}
+                                          className="flex-1 bg-green-500 text-white text-xs py-1.5 rounded-lg"
+                                        >保存</button>
+                                        <button
+                                          onClick={() => setEditingManualId(null)}
+                                          className="flex-1 bg-gray-100 text-gray-600 text-xs py-1.5 rounded-lg"
+                                        >取消</button>
+                                      </div>
                                     </div>
-                                    <div className="text-xs">
-                                      <span className="text-gray-400">调整金额 </span>
-                                      <span className={`font-semibold ${period.principal >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-                                        {period.principal >= 0 ? '+' : ''}¥{fmt(period.principal)}
-                                      </span>
-                                      {period.manual_remark && (
-                                        <span className="ml-2 text-gray-400">备注：{period.manual_remark}</span>
-                                      )}
+                                  ) : (
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${period.principal >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                          {period.principal >= 0 ? '手工加息' : '手工减息'}
+                                        </span>
+                                        <span className="text-xs text-gray-400">{period.created_at?.slice(0, 10)}</span>
+                                      </div>
+                                      <div className="text-xs">
+                                        <span className="text-gray-400">调整金额 </span>
+                                        <span className={`font-semibold ${period.principal >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                          {period.principal >= 0 ? '+' : ''}¥{fmt(period.principal)}
+                                        </span>
+                                        {period.manual_remark && (
+                                          <span className="ml-2 text-gray-400">备注：{period.manual_remark}</span>
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
+                                  )
                                 ) : (
                                   /* 普通分段展示 */
                                   <div>
@@ -321,10 +385,18 @@ export default function InterestManagePage() {
                                   </div>
                                 )}
                               </div>
+                              {editingManualId !== period.id && (
                               <div className="flex gap-1 ml-2 flex-shrink-0">
-                                {!period.isManual && (
-                                  <button
-                                    onClick={() => {
+                                <button
+                                  onClick={() => {
+                                    if (period.isManual) {
+                                      setEditingManualId(period.id);
+                                      setEditManualForm({
+                                        amount: String(Math.abs(period.principal)),
+                                        remark: period.manual_remark || '',
+                                        isPlus: period.principal >= 0,
+                                      });
+                                    } else {
                                       setEditingPeriodId(period.id);
                                       setEditForm({
                                         periodLabel: period.period_label || '',
@@ -333,12 +405,12 @@ export default function InterestManagePage() {
                                         startDate: period.start_date || '',
                                         endDate: period.end_date || '',
                                       });
-                                    }}
-                                    className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-blue-50 text-gray-400 hover:text-blue-500"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
+                                    }
+                                  }}
+                                  className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-blue-50 text-gray-400 hover:text-blue-500"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
                                 <button
                                   onClick={() => {
                                     if (confirm(period.isManual ? '确认删除此手工调息记录？' : '确认删除此分段？')) {
@@ -350,6 +422,7 @@ export default function InterestManagePage() {
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                               </div>
+                              )}
                             </div>
                           )}
                         </div>
