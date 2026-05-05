@@ -22,7 +22,13 @@ export default function RechargeHistory() {
     { limit: 50 },
     { enabled: !ledgerId }
   );
-  const balanceQuery = trpc.recharge.getBalance.useQuery();
+  const balanceQuery = trpc.recharge.getBalance.useQuery(
+    ledgerId && viewAsUserId
+      ? { viewAsUserId, ledgerId }
+      : ledgerId
+      ? { ledgerId }
+      : undefined
+  );
   const displayBalance = balanceQuery.data;
 
   const formatDate = (dateStr: string | Date) => {
