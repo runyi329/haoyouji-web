@@ -107,19 +107,23 @@ export default function InterestManagePage() {
   });
 
   // 新增手工调息
+  const utils = trpc.useUtils();
   const addManualMutation = trpc.ledger.addTagInterestManualLog.useMutation({
     onSuccess: () => {
       toast.success('手工调息已记录');
       setShowManualForm(null);
       setManualForm({ amount: '', remark: '', isPlus: true });
-      refetchLogs();
+      utils.ledger.getTagInterestManualLogs.invalidate({ ledgerId: lid });
     },
     onError: (e) => toast.error(e.message),
   });
 
   // 删除手工调息
   const deleteManualMutation = trpc.ledger.deleteTagInterestManualLog.useMutation({
-    onSuccess: () => { toast.success('已删除'); refetchLogs(); },
+    onSuccess: () => {
+      toast.success('已删除');
+      utils.ledger.getTagInterestManualLogs.invalidate({ ledgerId: lid });
+    },
     onError: (e) => toast.error(e.message),
   });
 
