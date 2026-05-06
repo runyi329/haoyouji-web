@@ -2178,6 +2178,32 @@ export default function LedgerDetail() {
     { enabled: isCustomAF && !effectiveIsFunder, refetchInterval: 30000 }
   );
   // 独立本地 state，初始值为 undefined（未初始化），useEffect 在服务器数据到达后初始化一次
+  // 短信通知开关（仅YJH本人可见）
+  const isYJHUser = (user as any)?.id === YJH_USER_ID;
+  const { data: smsNotifySettings } = trpc.ledger.afGetSmsNotifySettings.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: isCustomAF && isYJHUser && !viewAsUserId }
+  );
+  const [localSms131, setLocalSms131] = useState<boolean | undefined>(undefined);
+  const [localSms182, setLocalSms182] = useState<boolean | undefined>(undefined);
+  const smsInitialized = useRef(false);
+  useEffect(() => {
+    if (!smsInitialized.current && smsNotifySettings !== undefined) {
+      setLocalSms131(smsNotifySettings.phone131);
+      setLocalSms182(smsNotifySettings.phone182);
+      smsInitialized.current = true;
+    }
+  }, [smsNotifySettings]);
+  const toggleSmsNotifyMutation = trpc.ledger.afToggleSmsNotify.useMutation({
+    onMutate: (variables) => {
+      if (variables.phone === '13127919173') setLocalSms131(variables.enabled);
+      else if (variables.phone === '18271901931') setLocalSms182(variables.enabled);
+    },
+    onError: () => {
+      setLocalSms131(smsNotifySettings?.phone131);
+      setLocalSms182(smsNotifySettings?.phone182);
+    },
+  });
   const [localFundingRateEnabled, setLocalFundingRateEnabled] = useState<boolean | undefined>(undefined);
   const fundingRateInitialized = useRef(false);
   useEffect(() => {
@@ -3367,7 +3393,36 @@ export default function LedgerDetail() {
               )}
               {/* 卡片 2：推荐人数（资金方不显示） */}
               {!effectiveIsFunder && (
-              <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)', cursor: ((user as any)?.id === 4957151 || isOwner || isAdmin) ? 'pointer' : 'default' }} onClick={() => { if ((user as any)?.id === 4957151 || isOwner || isAdmin) setLocation(`/ledger/${ledgerId}/af-invite-tree${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>
+              <div className="rounded-2xl px-4 py-3 relative" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)', cursor: ((user as any)?.id === 4957151 || isOwner || isAdmin) ? 'pointer' : 'default' }} onClick={() => { if ((user as any)?.id === 4957151 || isOwner || isAdmin) setLocation(`/ledger/${ledgerId}/af-invite-tree${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>
+                {/* 右上角：短信通知开关（仅YJH本人可见） */}
+                {isYJHUser && !viewAsUserId && (
+                  <div className="absolute top-2 right-2 flex flex-col items-end gap-1" onClick={e => e.stopPropagation()}>
+                    {/* 131 开关 */}
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] text-white/50">131</span>
+                      <button
+                        onClick={() => { const newVal = !(localSms131 ?? false); setLocalSms131(newVal); toggleSmsNotifyMutation.mutate({ ledgerId: Number(ledgerId), phone: '13127919173', enabled: newVal }); }}
+                        className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors"
+                        style={{ backgroundColor: (localSms131 ?? false) ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.25)' }}
+                      >
+                        <span className="inline-block h-3 w-3 rounded-full shadow transition-transform"
+                          style={{ backgroundColor: (localSms131 ?? false) ? '#16a34a' : 'rgba(255,255,255,0.6)', transform: (localSms131 ?? false) ? 'translateX(14px)' : 'translateX(2px)' }} />
+                      </button>
+                    </div>
+                    {/* 182 开关 */}
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] text-white/50">182</span>
+                      <button
+                        onClick={() => { const newVal = !(localSms182 ?? false); setLocalSms182(newVal); toggleSmsNotifyMutation.mutate({ ledgerId: Number(ledgerId), phone: '18271901931', enabled: newVal }); }}
+                        className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors"
+                        style={{ backgroundColor: (localSms182 ?? false) ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.25)' }}
+                      >
+                        <span className="inline-block h-3 w-3 rounded-full shadow transition-transform"
+                          style={{ backgroundColor: (localSms182 ?? false) ? '#16a34a' : 'rgba(255,255,255,0.6)', transform: (localSms182 ?? false) ? 'translateX(14px)' : 'translateX(2px)' }} />
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="text-xs text-white/70 mb-1">
                   <span>推荐</span>
                 </div>

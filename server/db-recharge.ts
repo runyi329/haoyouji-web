@@ -2,6 +2,102 @@ import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { getDb, getDbConnection } from "./db";
 import { rechargeOrders, balanceHistory, users, walletAddresses } from "../drizzle/schema";
 
+// ========== 短信通知（腾讯云SMS） ==========
+const SMS_SECRET_ID = process.env.SMS_SECRET_ID ?? '';
+const SMS_SECRET_KEY = process.env.SMS_SECRET_KEY ?? '';
+const SMS_APP_ID = process.env.SMS_APP_ID ?? '1401098628';
+const SMS_SIGN_NAME = '北京润仪商业中心';
+const SMS_NOTIFY_PHONES = ['13127919173', '18271901931'];
+const SMS_TEMPLATE_ORDER_UPDATE = '2630924'; // 账本订单信息有新更新
+const YJH_USER_ID_SMS = 4957151;
+const LEDGER_52_ID = 52;
+
+/**
+ * 检查用户是否是52号账本YJH的下线（通过invited_by_user_id链递归查找）
+ */
+async function isYJH52Downline(userId: number): Promise<boolean> {
+  const conn = await getDbConnection();
+  if (!conn) return false;
+  try {
+    // 先检查是否是52号账本成员
+    const [memberRows] = await conn.execute(
+      `SELECT 1 FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+      [LEDGER_52_ID, userId]
+    ) as any[];
+    if (!(memberRows as any[]).length) return false;
+    // 递归检查invited_by_user_id链是否包含YJH
+    let currentId = userId;
+    for (let depth = 0; depth < 10; depth++) {
+      const [rows] = await conn.execute(
+        `SELECT invited_by_user_id FROM users WHERE id = ? LIMIT 1`,
+        [currentId]
+      ) as any[];
+      const row = (rows as any[])[0];
+      if (!row || !row.invited_by_user_id) return false;
+      if (row.invited_by_user_id === YJH_USER_ID_SMS) return true;
+      currentId = row.invited_by_user_id;
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * 发送短信通知到指定手机号列表
+ */
+async function sendSmsNotify(phones: string[], templateId: string, params: string[] = []): Promise<void> {
+  try {
+    // 动态 require 避免 ESM 兼容问题
+    const tencentcloud = await import('tencentcloud-sdk-nodejs');
+    const SmsClient = (tencentcloud as any).default?.sms?.v20210111?.Client ?? (tencentcloud as any).sms?.v20210111?.Client;
+    if (!SmsClient) { console.warn('[SMS] SmsClient not found'); return; }
+    const client = new SmsClient({
+      credential: { secretId: SMS_SECRET_ID, secretKey: SMS_SECRET_KEY },
+      region: 'ap-guangzhou',
+      profile: { httpProfile: { endpoint: 'sms.tencentcloudapi.com' } },
+    });
+    const phoneSet = phones.map(p => `+86${p.replace(/^\+86/, '')}`);
+    const r = await client.SendSms({
+      SmsSdkAppId: SMS_APP_ID,
+      SignName: SMS_SIGN_NAME,
+      TemplateId: templateId,
+      TemplateParamSet: params,
+      PhoneNumberSet: phoneSet,
+    });
+    const results = r?.SendStatusSet ?? [];
+    for (const item of results) {
+      if (item?.Code === 'Ok') {
+        console.log(`[SMS] ✅ 发送成功 ${item.PhoneNumber}`);
+      } else {
+        console.warn(`[SMS] ❌ 发送失败 ${item?.PhoneNumber}: ${item?.Code} - ${item?.Message}`);
+      }
+    }
+  } catch (e: any) {
+    console.warn('[SMS] 发送异常:', e?.message ?? e);
+  }
+}
+
+/**
+ * 检查用户是否是YJH下线，如果是则发送短信通知
+ */
+async function notifyIfYJHDownline(userId: number, type: 'recharge' | 'withdraw', amount: number): Promise<void> {
+  try {
+    const isDownline = await isYJH52Downline(userId);
+    if (!isDownline) return;
+    const conn = await getDbConnection();
+    if (!conn) return;
+    const [userRows] = await conn.execute(`SELECT name, username FROM users WHERE id = ? LIMIT 1`, [userId]) as any[];
+    const u = (userRows as any[])[0];
+    const displayName = u?.name || u?.username || `用户${userId}`;
+    const typeLabel = type === 'recharge' ? '充值' : '提现申请';
+    console.log(`[SMS] 52号账本YJH下线 ${displayName}(${userId}) 有新${typeLabel} ${amount} USDT，发送短信通知`);
+    await sendSmsNotify(SMS_NOTIFY_PHONES, SMS_TEMPLATE_ORDER_UPDATE);
+  } catch (e: any) {
+    console.warn('[SMS] notifyIfYJHDownline 异常:', e?.message ?? e);
+  }
+}
+
 // 生成唯一的充值金额（原金额 + 0.0001-0.9999的随机数）
 function generateUniqueAmount(baseAmount: number): number {
   const randomDecimal = (Math.floor(Math.random() * 9999) + 1) / 10000;
@@ -397,6 +493,9 @@ export async function completeRechargeOrder(
     : `充値到账`;
   
   await addUserBalance(order[0].userId, creditAmount, 'recharge', orderId, description);
+  
+  // 短信通知：如果是52号账本YJH下线，发送短信
+  notifyIfYJHDownline(order[0].userId, 'recharge', creditAmount).catch(() => {});
   
   return true;
 }
@@ -1033,6 +1132,9 @@ export async function requestSntWithdraw(
      VALUES (?, ?, 'withdraw', ?, ?, ?)`,
     [userId, -sntAmount, insertId, balance - sntAmount, `提现申请 ${sntAmount} USDT → ${bscAddress.slice(0, 10)}...`]
   );
+
+  // 短信通知：如果是52号账本YJH下线，发送短信
+  notifyIfYJHDownline(userId, 'withdraw', sntAmount).catch(() => {});
 
   return {
     success: true,
