@@ -38,17 +38,14 @@ import { useAuth } from "@/_core/hooks/useAuth";
 
 const MIN_PRICE = 1000;
 const MAX_PRICE = 3500;
-const STEP = 50;
 
-function generatePriceLevels(): number[] {
+function generatePriceLevels(step: number = 50): number[] {
   const levels: number[] = [];
-  for (let p = MAX_PRICE; p >= MIN_PRICE; p -= STEP) {
+  for (let p = MAX_PRICE; p >= MIN_PRICE; p -= step) {
     levels.push(p);
   }
   return levels;
 }
-
-const PRICE_LEVELS = generatePriceLevels();
 
 // 弹窗状态
 interface ModalState {
@@ -102,6 +99,9 @@ export default function PositionCalc() {
   const [targetProfitCny, setTargetProfitCny] = useState<string>('');  // 目标止盈利润（人民币）
   const [targetEthQty, setTargetEthQty] = useState<string>('');  // 目标持仓 ETH 数量
   const [strategyRatio, setStrategyRatio] = useState<number>(50); // 策略持仓占比 0-100（战略=100-strategyRatio）
+  const [priceStep, setPriceStep] = useState<number>(50); // 档位粒度：20/50/100/200
+  // 动态档位列表，随 priceStep 变化重新生成
+  const priceLevels = useMemo(() => generatePriceLevels(priceStep), [priceStep]);
   const strategyBarRef = useRef<HTMLDivElement>(null); // 进度条容器 ref
   const isDraggingStrategy = useRef(false); // 是否正在拖动
   const strategyRatioRef = useRef(strategyRatio); // 实时值 ref，避免闭包问题
@@ -133,7 +133,7 @@ export default function PositionCalc() {
   const calcAutoAlloc = (method: 'equal' | 'geometric' | 'normal' | 'manual', minP: number, maxP: number): Record<number, number> => {
     const totalQty = Math.round(parseFloat(targetEthQty) || 0);
     if (totalQty <= 0) return {};
-    const levels = PRICE_LEVELS.filter(p => p >= minP && p <= maxP);
+    const levels = priceLevels.filter(p => p >= minP && p <= maxP);
     if (levels.length === 0) return {};
     const result: Record<number, number> = {};
     const n = levels.length;
@@ -200,7 +200,7 @@ export default function PositionCalc() {
   const manualTotal = useMemo(() => {
     const minP = parseFloat(allocMinPrice) || 0;
     const maxP = parseFloat(allocMaxPrice) || 0;
-    const levels = PRICE_LEVELS.filter(p => p >= minP && p <= maxP);
+    const levels = priceLevels.filter(p => p >= minP && p <= maxP);
     return levels.reduce((s, p) => s + (parseFloat(allocManualQtys[p] || '0') || 0), 0);
   }, [allocManualQtys, allocMinPrice, allocMaxPrice]);
 
@@ -292,8 +292,9 @@ export default function PositionCalc() {
       cnyRate: 0,
       targetEthQty: parseFloat(targetEthQty) || 0,
       strategyRatio: val,
+      priceStep,
     });
-  }, [ledgerId, targetProfitCny, targetEthQty, saveSettingsMutation]);
+  }, [ledgerId, targetProfitCny, targetEthQty, priceStep, saveSettingsMutation]);
 
   // 监听全局 touchmove/touchend/mousemove/mouseup
   useEffect(() => {
@@ -354,6 +355,9 @@ export default function PositionCalc() {
       if (settingsData.strategyRatio !== undefined) {
         setStrategyRatio(settingsData.strategyRatio);
       }
+      if (settingsData.priceStep && [20,50,100,200].includes(settingsData.priceStep)) {
+        setPriceStep(settingsData.priceStep);
+      }
     }
   }, [settingsData]);
 
@@ -377,7 +381,7 @@ export default function PositionCalc() {
         });
       } else {
         // 无数据时用默认展示（不写入数据库）
-        PRICE_LEVELS.forEach(p => {
+        priceLevels.forEach(p => {
           newPlanned[p] = 0;
           newActual[p] = 0;
           newBase[p] = 0;
@@ -414,7 +418,7 @@ export default function PositionCalc() {
   const summary = useMemo(() => {
     let totalQty = 0;
     let totalCost = 0;
-    PRICE_LEVELS.forEach(p => {
+    priceLevels.forEach(p => {
       const qty = actual[p] || 0;
       if (qty > 0) { totalQty += qty; totalCost += qty * p; }
     });
@@ -423,7 +427,7 @@ export default function PositionCalc() {
     const totalValue = totalQty * curPrice;
     const totalPnl = totalQty > 0 && curPrice > 0 ? (curPrice - avgPrice) * totalQty : 0;
     const pnlPct = avgPrice > 0 && curPrice > 0 ? ((curPrice - avgPrice) / avgPrice) * 100 : 0;
-    const totalPlanned = PRICE_LEVELS.reduce((s, p) => s + (planned[p] || 0), 0);
+    const totalPlanned = priceLevels.reduce((s, p) => s + (planned[p] || 0), 0);
     return { totalQty, avgPrice, totalValue, totalPnl, pnlPct, totalPlanned };
   }, [actual, planned, currentPrice]);
 
@@ -431,14 +435,14 @@ export default function PositionCalc() {
 
   const visibleLevels = useMemo(() => {
     // 找出所有有数据的档位索引
-    const dataIndices = PRICE_LEVELS.map((p, i) => hasData(p) ? i : -1).filter(i => i >= 0);
+    const dataIndices = priceLevels.map((p, i) => hasData(p) ? i : -1).filter(i => i >= 0);
     
     if (dataIndices.length === 0) {
       // 全部为空时：只显示当前价格附近的一行空白行
       const nearPrice = currentPrice || 1800;
-      const nearIdx = PRICE_LEVELS.reduce((best, p, i) =>
-        Math.abs(p - nearPrice) < Math.abs(PRICE_LEVELS[best] - nearPrice) ? i : best, 0);
-      return [PRICE_LEVELS[nearIdx]];
+      const nearIdx = priceLevels.reduce((best, p, i) =>
+        Math.abs(p - nearPrice) < Math.abs(priceLevels[best] - nearPrice) ? i : best, 0);
+      return [priceLevels[nearIdx]];
     }
     
     const minIdx = dataIndices[0];
@@ -446,20 +450,20 @@ export default function PositionCalc() {
     
     // 显示所有有数据的行，上下各保留一行空白行
     const startIdx = Math.max(0, minIdx - 1);
-    const endIdx = Math.min(PRICE_LEVELS.length - 1, maxIdx + 1);
+    const endIdx = Math.min(priceLevels.length - 1, maxIdx + 1);
     
-    return PRICE_LEVELS.slice(startIdx, endIdx + 1);
+    return priceLevels.slice(startIdx, endIdx + 1);
   }, [planned, actual, currentPrice]);
   // 所有档位中最大的计划数量，用于进度条背景宽度比例
   const maxPlannedQty = useMemo(() => {
-    const vals = PRICE_LEVELS.map(p => planned[p] || 0);
+    const vals = priceLevels.map(p => planned[p] || 0);
     return Math.max(...vals, 1);
   }, [planned]);
 
   // 全局最大值：计划和实际中取最大，作为进度条等比例基准
   const maxGlobalQty = useMemo(() => {
-    const planVals = PRICE_LEVELS.map(p => planned[p] || 0);
-    const actualVals = PRICE_LEVELS.map(p => actual[p] || 0);
+    const planVals = priceLevels.map(p => planned[p] || 0);
+    const actualVals = priceLevels.map(p => actual[p] || 0);
     return Math.max(...planVals, ...actualVals, 1);
   }, [planned, actual]);
 
@@ -470,34 +474,34 @@ export default function PositionCalc() {
     const val = isNaN(num) || num < 0 ? 0 : num;
     if (summaryEdit.field === 'totalActual') {
       // 按比例分配到各有计划的档位
-      const totalPlan = PRICE_LEVELS.reduce((s, p) => s + (planned[p] || 0), 0);
+      const totalPlan = priceLevels.reduce((s, p) => s + (planned[p] || 0), 0);
       if (totalPlan > 0) {
         const ratio = val / totalPlan;
         const newActual: Record<number, number> = {};
-        PRICE_LEVELS.forEach(p => {
+        priceLevels.forEach(p => {
           if ((planned[p] || 0) > 0) newActual[p] = parseFloat(((planned[p] || 0) * ratio).toFixed(4));
           else newActual[p] = actual[p] || 0;
         });
         setActual(newActual);
         // 批量保存到数据库
-        const levels = PRICE_LEVELS
+        const levels = priceLevels
           .filter(p => (planned[p] || 0) > 0 || (newActual[p] || 0) > 0)
           .map(p => ({ price: p, plannedQty: planned[p] || 0, actualQty: newActual[p] || 0 }));
         batchSaveMutation.mutate({ ledgerId, levels });
       }
     } else {
       // 按比例缩放各档计划
-      const totalPlan = PRICE_LEVELS.reduce((s, p) => s + (planned[p] || 0), 0);
+      const totalPlan = priceLevels.reduce((s, p) => s + (planned[p] || 0), 0);
       if (totalPlan > 0) {
         const ratio = val / totalPlan;
         const newPlanned: Record<number, number> = {};
-        PRICE_LEVELS.forEach(p => {
+        priceLevels.forEach(p => {
           if ((planned[p] || 0) > 0) newPlanned[p] = parseFloat(((planned[p] || 0) * ratio).toFixed(4));
           else newPlanned[p] = 0;
         });
         setPlanned(newPlanned);
         // 批量保存到数据库
-        const levels = PRICE_LEVELS
+        const levels = priceLevels
           .filter(p => (newPlanned[p] || 0) > 0 || (actual[p] || 0) > 0)
           .map(p => ({ price: p, plannedQty: newPlanned[p] || 0, actualQty: actual[p] || 0 }));
         batchSaveMutation.mutate({ ledgerId, levels });
@@ -740,11 +744,11 @@ export default function PositionCalc() {
                   const profitUsdt = targetProfitCny && cnyRate ? parseFloat(targetProfitCny) / cnyRate : 0;
                   // 目标均价：按计划档位数量加权均价
                   let _planCost = 0, _planQty = 0;
-                  PRICE_LEVELS.forEach(p => { const q = planned[p] || 0; if (q > 0) { _planCost += q * p; _planQty += q; } });
+                  priceLevels.forEach(p => { const q = planned[p] || 0; if (q > 0) { _planCost += q * p; _planQty += q; } });
                   const targetAvgPrice = _planQty > 0 ? _planCost / _planQty : 0;
                   // 实际均价：按实际买入数量加权均价
                   let _actCost = 0, _actQty = 0;
-                  PRICE_LEVELS.forEach(p => { const q = actual[p] || 0; if (q > 0) { _actCost += q * p; _actQty += q; } });
+                  priceLevels.forEach(p => { const q = actual[p] || 0; if (q > 0) { _actCost += q * p; _actQty += q; } });
                   const actualAvgPrice = _actQty > 0 ? _actCost / _actQty : 0;
                   // 止盈价 = 均价 + 目标利润(USDT) ÷ 持仓数量（从成本出发，不依赖当前价）
                   const targetExitPrice = targetAvgPrice > 0 && targetQty > 0 ? targetAvgPrice + profitUsdt / targetQty : 0;
@@ -965,10 +969,10 @@ export default function PositionCalc() {
                       {(() => {
                         // 均价计算
                         let planCost2 = 0, planQtyTotal2 = 0;
-                        PRICE_LEVELS.forEach(p => { const q = planned[p] || 0; if (q > 0) { planCost2 += q * p; planQtyTotal2 += q; } });
+                        priceLevels.forEach(p => { const q = planned[p] || 0; if (q > 0) { planCost2 += q * p; planQtyTotal2 += q; } });
                         const targetAvg2 = planQtyTotal2 > 0 ? planCost2 / planQtyTotal2 : 0;
                         let actCost2 = 0, actQtyTotal2 = 0;
-                        PRICE_LEVELS.forEach(p => { const q = actual[p] || 0; if (q > 0) { actCost2 += q * p; actQtyTotal2 += q; } });
+                        priceLevels.forEach(p => { const q = actual[p] || 0; if (q > 0) { actCost2 += q * p; actQtyTotal2 += q; } });
                         const actualAvg2 = actQtyTotal2 > 0 ? actCost2 / actQtyTotal2 : 0;
 
                         const showExitRow = actualExitPrice > 0 || targetExitPrice > 0;
@@ -1121,7 +1125,7 @@ export default function PositionCalc() {
                 setEditingRate(false);
                 // 保存到数据库（汇率不保存，始终用实时值）
                 if (ledgerId > 0) {
-                  saveSettingsMutation.mutate({ ledgerId, targetProfitCny: profit, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0 });
+                  saveSettingsMutation.mutate({ ledgerId, targetProfitCny: profit, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0, priceStep });
                 }
               }}
               className="w-full py-2.5 rounded-xl text-sm font-bold text-white"
@@ -1383,7 +1387,7 @@ export default function PositionCalc() {
 
       {/* 计划总量 vs 目标仓位 统计行 */}
       {(() => {
-        const planTotal = PRICE_LEVELS.reduce((s, p) => s + (planned[p] || 0), 0);
+        const planTotal = priceLevels.reduce((s, p) => s + (planned[p] || 0), 0);
         const targetTotal = parseFloat(targetEthQty) || 0;
         const diff = planTotal - targetTotal;
         const hasPlan = planTotal > 0;
@@ -1484,7 +1488,7 @@ export default function PositionCalc() {
         const totalQty = parseFloat(targetEthQty) || 0;
         const minP = parseFloat(allocMinPrice) || 0;
         const maxP = parseFloat(allocMaxPrice) || 0;
-        const allocLevels = PRICE_LEVELS.filter(p => p >= minP && p <= maxP);
+        const allocLevels = priceLevels.filter(p => p >= minP && p <= maxP);
         const previewResult = allocStep === 'preview' ? allocPreview : {};
         const previewTotal = Object.values(previewResult).reduce((s, v) => s + v, 0);
         return (
@@ -1544,7 +1548,7 @@ export default function PositionCalc() {
                   const maxVal2 = parseFloat(allocMaxPrice) || SLIDER_MAX;
                   const minPct2 = ((minVal2 - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
                   const maxPct2 = ((maxVal2 - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)) * 100;
-                  const allocLevels2 = PRICE_LEVELS.filter(p => p >= minVal2 && p <= maxVal2);
+                  const allocLevels2 = priceLevels.filter(p => p >= minVal2 && p <= maxVal2);
 
                   // 统一卡片样式
                   const cardStyle: React.CSSProperties = {
@@ -1709,11 +1713,41 @@ export default function PositionCalc() {
                         </div>
                       </div>
 
-                      {/* 操作按钮 */}
+                      {/* 区坘5：档位粒度 */}
+                      <div style={cardStyle}>
+                        <span style={labelStyle}>档位粒度</span>
+                        <div className="grid grid-cols-4 gap-2">
+                          {([20, 50, 100, 200] as const).map(step => (
+                            <button
+                              key={step}
+                              onClick={() => setPriceStep(step)}
+                              className="py-2 rounded-xl text-sm font-bold relative"
+                              style={{
+                                background: priceStep === step
+                                  ? 'linear-gradient(135deg, #888888 0%, #c0c0c0 40%, #e8e8e8 55%, #c0c0c0 70%, #888888 100%)'
+                                  : 'rgba(255,255,255,0.06)',
+                                color: priceStep === step ? '#0a0800' : 'rgba(255,255,255,0.55)',
+                                border: priceStep === step ? '1px solid rgba(255,255,255,0.3)' : '1px solid rgba(255,255,255,0.1)',
+                              }}
+                            >
+                              {step}
+                              {step === 50 && (
+                                <span className="absolute -top-1.5 -right-1 text-[9px] px-1 rounded-full font-bold"
+                                  style={{ background: '#f59e0b', color: '#0a0800' }}>推荐</span>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="mt-2 text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                          当前：每 ${priceStep} 一档，共 {Math.floor((3500 - 1000) / priceStep) + 1} 个档位
+                        </div>
+                      </div>
+
+                      {/* 操作按鈕 */}
                       <button
                         onClick={() => {
                           if (ledgerId > 0) {
-                            saveSettingsMutation.mutate({ ledgerId, targetProfitCny: parseFloat(targetProfitCny) || 0, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0 });
+                            saveSettingsMutation.mutate({ ledgerId, targetProfitCny: parseFloat(targetProfitCny) || 0, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0, priceStep });
                           }
                           setAllocStep('method');
                         }}
@@ -1726,7 +1760,7 @@ export default function PositionCalc() {
                       <button
                         onClick={() => {
                           if (ledgerId > 0) {
-                            saveSettingsMutation.mutate({ ledgerId, targetProfitCny: parseFloat(targetProfitCny) || 0, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0 });
+                            saveSettingsMutation.mutate({ ledgerId, targetProfitCny: parseFloat(targetProfitCny) || 0, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0, priceStep });
                           }
                           setShowAutoAlloc(false);
                         }}
@@ -2219,14 +2253,14 @@ export default function PositionCalc() {
                           // 将实时计算结果写入 planned
                           // 先将所有档位的 planned 清零，防止旧方案超出新区间的档位数据残留
                           const newPlanned: Record<number, number> = {};
-                          PRICE_LEVELS.forEach(p => { newPlanned[p] = 0; });
+                          priceLevels.forEach(p => { newPlanned[p] = 0; });
                           // 将新方案的分配结果写入对应档位
                           allocLevels.forEach(p => {
                             newPlanned[p] = liveResult[p] || 0;
                           });
                           setPlanned(newPlanned);
                           // 保存到数据库
-                          const levels = PRICE_LEVELS.map(p => ({ price: p, plannedQty: newPlanned[p] || 0, actualQty: actual[p] || 0 }));
+                          const levels = priceLevels.map(p => ({ price: p, plannedQty: newPlanned[p] || 0, actualQty: actual[p] || 0 }));
                           batchSaveMutation.mutate({ ledgerId, levels });
                           // 将分配方式和参数存入 localStorage，下次打开时恢复
                           try {
@@ -2265,11 +2299,11 @@ export default function PositionCalc() {
         const profitUsdt = cnyRate > 0 ? profitCny / cnyRate : 0;
         // 目标均价（按计划档位加权）
         let _mPlanCost = 0, _mPlanQty = 0;
-        PRICE_LEVELS.forEach(p => { const q = planned[p] || 0; if (q > 0) { _mPlanCost += q * p; _mPlanQty += q; } });
+        priceLevels.forEach(p => { const q = planned[p] || 0; if (q > 0) { _mPlanCost += q * p; _mPlanQty += q; } });
         const targetAvgForModal = _mPlanQty > 0 ? _mPlanCost / _mPlanQty : 0;
         // 实际均价（按实际买入加权）
         let _mActCost = 0, _mActQty = 0;
-        PRICE_LEVELS.forEach(p => { const q = actual[p] || 0; if (q > 0) { _mActCost += q * p; _mActQty += q; } });
+        priceLevels.forEach(p => { const q = actual[p] || 0; if (q > 0) { _mActCost += q * p; _mActQty += q; } });
         const actualAvgForModal = _mActQty > 0 ? _mActCost / _mActQty : 0;
         // 止盈价 = 均价 + 目标利润(USDT) ÷ 持仓数量
         const exitPrice = targetAvgForModal > 0 && ethQty > 0 ? targetAvgForModal + profitUsdt / ethQty : null;

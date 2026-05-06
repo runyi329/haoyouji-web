@@ -20248,6 +20248,7 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       cnyRate: z.number().min(0),
       targetEthQty: z.number().min(0).optional().default(0),
       strategyRatio: z.number().min(0).max(100).optional().default(50),
+      priceStep: z.number().refine(v => [20,50,100,200].includes(v)).optional().default(50),
     }))
     .mutation(async ({ input, ctx }) => {
       await dbEthPosition.upsertEthPositionSettings(
@@ -20256,7 +20257,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         input.targetProfitCny,
         input.cnyRate,
         input.targetEthQty ?? 0,
-        input.strategyRatio ?? 50
+        input.strategyRatio ?? 50,
+        input.priceStep ?? 50
       );
       return { success: true };
     }),
@@ -21924,6 +21926,7 @@ export const adminFeatureRouter = router({
       cnyRate: z.number().min(0),
       targetEthQty: z.number().min(0).optional().default(0),
       strategyRatio: z.number().min(0).max(100).optional().default(50),
+      priceStep: z.number().refine(v => [20,50,100,200].includes(v)).optional().default(50),
     }))
     .mutation(async ({ input }) => {
       await dbEthPosition.upsertEthPositionSettings(
@@ -21931,7 +21934,8 @@ export const adminFeatureRouter = router({
         input.targetProfitCny,
         input.cnyRate,
         input.targetEthQty ?? 0,
-        input.strategyRatio ?? 50
+        input.strategyRatio ?? 50,
+        input.priceStep ?? 50
       );
       return { success: true };
     }),
