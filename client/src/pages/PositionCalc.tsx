@@ -91,6 +91,8 @@ export default function PositionCalc() {
   const [actual, setActual] = useState<Record<number, number>>({});
   const [baseQty, setBaseQty] = useState<Record<number, number>>({}); // 底仓
   const [tacticalQty, setTacticalQty] = useState<Record<number, number>>({}); // 机动仓
+  const [baseNotes, setBaseNotes] = useState<Record<number, Array<{text: string; time: string}>>>({}); // 底仓备注
+  const [tacticalNotes, setTacticalNotes] = useState<Record<number, Array<{text: string; time: string}>>>({}); // 机动仓备注
   const [dataLoaded, setDataLoaded] = useState(false);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [modal, setModal] = useState<ModalState | null>(null);
@@ -243,6 +245,7 @@ export default function PositionCalc() {
 
   // 保存单个档位
   const saveLevelMutation = trpc.ethPositionSaveLevel.useMutation();
+  const updateNotesMutation = trpc.ethPositionUpdateNotes.useMutation();
   const batchSaveMutation = trpc.ethPositionBatchSave.useMutation({
     onSuccess: () => {
       utils.ethPositionGetLevels.invalidate({ ledgerId });
@@ -360,12 +363,16 @@ export default function PositionCalc() {
       const newActual: Record<number, number> = {};
       const newBase: Record<number, number> = {};
       const newTactical: Record<number, number> = {};
+      const newBaseNotes: Record<number, Array<{text: string; time: string}>> = {};
+      const newTacticalNotes: Record<number, Array<{text: string; time: string}>> = {};
       if (positionData.levels.length > 0) {
         positionData.levels.forEach((l: any) => {
           newPlanned[l.price] = l.plannedQty;
           newActual[l.price] = l.actualQty;
           newBase[l.price] = l.baseQty ?? 0;
           newTactical[l.price] = l.tacticalQty ?? 0;
+          try { newBaseNotes[l.price] = l.baseNotes ? JSON.parse(l.baseNotes) : []; } catch { newBaseNotes[l.price] = []; }
+          try { newTacticalNotes[l.price] = l.tacticalNotes ? JSON.parse(l.tacticalNotes) : []; } catch { newTacticalNotes[l.price] = []; }
         });
       } else {
         // 无数据时用默认展示（不写入数据库）
@@ -374,12 +381,16 @@ export default function PositionCalc() {
           newActual[p] = 0;
           newBase[p] = 0;
           newTactical[p] = 0;
+          newBaseNotes[p] = [];
+          newTacticalNotes[p] = [];
         });
       }
       setPlanned(newPlanned);
       setActual(newActual);
       setBaseQty(newBase);
       setTacticalQty(newTactical);
+      setBaseNotes(newBaseNotes);
+      setTacticalNotes(newTacticalNotes);
       setDataLoaded(true);
     }
   }, [positionData, positionLoading, dataLoaded]);
@@ -2488,6 +2499,80 @@ export default function PositionCalc() {
                     </div>
                   </div>
 
+                  {/* 底仓备注区域 */}
+                  {(() => {
+                    const price = modal.price;
+                    const notes = baseNotes[price] || [];
+                    const noteCount = notes.length;
+                    const [baseExpanded, setBaseExpanded] = [modal as any, (v: boolean) => setModal(prev => prev ? { ...prev, _baseExpanded: v } as any : null)];
+                    const isExpanded = (modal as any)._baseExpanded ?? false;
+                    return (
+                      <div className="mb-3">
+                        <div
+                          className="flex items-center gap-1.5 cursor-pointer select-none"
+                          style={{ color: '#4aa8ff', opacity: 0.7 }}
+                          onClick={() => setModal(prev => prev ? { ...prev, _baseExpanded: !isExpanded } as any : null)}
+                        >
+                          <span className="text-xs">{isExpanded ? '▼' : '▶'}</span>
+                          <span className="text-xs">底仓备注</span>
+                          {noteCount > 0 && <span className="text-xs rounded-full px-1.5" style={{ background: 'rgba(74,168,255,0.2)', color: '#4aa8ff' }}>{noteCount}</span>}
+                        </div>
+                        {isExpanded && (
+                          <div className="mt-1.5 space-y-1.5">
+                            {notes.map((n: any, i: number) => (
+                              <div key={i} className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(74,168,255,0.06)', border: '1px solid rgba(74,168,255,0.15)' }}>
+                                <span className="flex-1 text-xs break-all" style={{ color: 'rgba(255,255,255,0.7)' }}>{n.text}</span>
+                                <span className="text-xs shrink-0" style={{ color: 'rgba(255,255,255,0.25)' }}>{n.time?.slice(5,16)}</span>
+                                <button
+                                  className="shrink-0 text-xs px-1"
+                                  style={{ color: 'rgba(255,80,80,0.6)' }}
+                                  onClick={() => {
+                                    const newNotes = notes.filter((_: any, j: number) => j !== i);
+                                    setBaseNotes(prev => ({ ...prev, [price]: newNotes }));
+                                    updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(newNotes), tacticalNotes: JSON.stringify(tacticalNotes[price] || []) });
+                                  }}
+                                >×</button>
+                              </div>
+                            ))}
+                            {/* 添加新备注输入框 */}
+                            <div className="flex gap-1.5">
+                              <input
+                                type="text"
+                                placeholder="添加底仓备注..."
+                                className="flex-1 text-xs px-2 py-1.5 rounded-lg outline-none bg-transparent"
+                                style={{ border: '1px solid rgba(74,168,255,0.25)', color: 'rgba(255,255,255,0.7)' }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
+                                    const text = (e.target as HTMLInputElement).value.trim();
+                                    const newNote = { text, time: new Date().toISOString().slice(0,16).replace('T',' ') };
+                                    const newNotes = [...notes, newNote];
+                                    setBaseNotes(prev => ({ ...prev, [price]: newNotes }));
+                                    updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(newNotes), tacticalNotes: JSON.stringify(tacticalNotes[price] || []) });
+                                    (e.target as HTMLInputElement).value = '';
+                                  }
+                                }}
+                              />
+                              <button
+                                className="text-xs px-2 py-1.5 rounded-lg"
+                                style={{ background: 'rgba(74,168,255,0.15)', color: '#4aa8ff', border: '1px solid rgba(74,168,255,0.3)' }}
+                                onClick={e => {
+                                  const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                                  const text = input?.value?.trim();
+                                  if (!text) return;
+                                  const newNote = { text, time: new Date().toISOString().slice(0,16).replace('T',' ') };
+                                  const newNotes = [...notes, newNote];
+                                  setBaseNotes(prev => ({ ...prev, [price]: newNotes }));
+                                  updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(newNotes), tacticalNotes: JSON.stringify(tacticalNotes[price] || []) });
+                                  if (input) input.value = '';
+                                }}
+                              >+</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* 机动仓输入 */}
                   <div className="mb-3">
                     <div className="flex items-center justify-between mb-1">
@@ -2508,6 +2593,79 @@ export default function PositionCalc() {
                       />
                     </div>
                   </div>
+
+                  {/* 机动仓备注区域 */}
+                  {(() => {
+                    const price = modal.price;
+                    const notes = tacticalNotes[price] || [];
+                    const noteCount = notes.length;
+                    const isExpanded = (modal as any)._tacticalExpanded ?? false;
+                    return (
+                      <div className="mb-3">
+                        <div
+                          className="flex items-center gap-1.5 cursor-pointer select-none"
+                          style={{ color: '#ff9040', opacity: 0.7 }}
+                          onClick={() => setModal(prev => prev ? { ...prev, _tacticalExpanded: !isExpanded } as any : null)}
+                        >
+                          <span className="text-xs">{isExpanded ? '▼' : '▶'}</span>
+                          <span className="text-xs">机动仓备注</span>
+                          {noteCount > 0 && <span className="text-xs rounded-full px-1.5" style={{ background: 'rgba(255,144,64,0.2)', color: '#ff9040' }}>{noteCount}</span>}
+                        </div>
+                        {isExpanded && (
+                          <div className="mt-1.5 space-y-1.5">
+                            {notes.map((n: any, i: number) => (
+                              <div key={i} className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,144,64,0.06)', border: '1px solid rgba(255,144,64,0.15)' }}>
+                                <span className="flex-1 text-xs break-all" style={{ color: 'rgba(255,255,255,0.7)' }}>{n.text}</span>
+                                <span className="text-xs shrink-0" style={{ color: 'rgba(255,255,255,0.25)' }}>{n.time?.slice(5,16)}</span>
+                                <button
+                                  className="shrink-0 text-xs px-1"
+                                  style={{ color: 'rgba(255,80,80,0.6)' }}
+                                  onClick={() => {
+                                    const newNotes = notes.filter((_: any, j: number) => j !== i);
+                                    setTacticalNotes(prev => ({ ...prev, [price]: newNotes }));
+                                    updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(baseNotes[price] || []), tacticalNotes: JSON.stringify(newNotes) });
+                                  }}
+                                >×</button>
+                              </div>
+                            ))}
+                            {/* 添加新备注输入框 */}
+                            <div className="flex gap-1.5">
+                              <input
+                                type="text"
+                                placeholder="添加机动仓备注..."
+                                className="flex-1 text-xs px-2 py-1.5 rounded-lg outline-none bg-transparent"
+                                style={{ border: '1px solid rgba(255,144,64,0.25)', color: 'rgba(255,255,255,0.7)' }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
+                                    const text = (e.target as HTMLInputElement).value.trim();
+                                    const newNote = { text, time: new Date().toISOString().slice(0,16).replace('T',' ') };
+                                    const newNotes = [...notes, newNote];
+                                    setTacticalNotes(prev => ({ ...prev, [price]: newNotes }));
+                                    updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(baseNotes[price] || []), tacticalNotes: JSON.stringify(newNotes) });
+                                    (e.target as HTMLInputElement).value = '';
+                                  }
+                                }}
+                              />
+                              <button
+                                className="text-xs px-2 py-1.5 rounded-lg"
+                                style={{ background: 'rgba(255,144,64,0.15)', color: '#ff9040', border: '1px solid rgba(255,144,64,0.3)' }}
+                                onClick={e => {
+                                  const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                                  const text = input?.value?.trim();
+                                  if (!text) return;
+                                  const newNote = { text, time: new Date().toISOString().slice(0,16).replace('T',' ') };
+                                  const newNotes = [...notes, newNote];
+                                  setTacticalNotes(prev => ({ ...prev, [price]: newNotes }));
+                                  updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(baseNotes[price] || []), tacticalNotes: JSON.stringify(newNotes) });
+                                  if (input) input.value = '';
+                                }}
+                              >+</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* 总和预览进度条 */}
                   <div className="mb-4">

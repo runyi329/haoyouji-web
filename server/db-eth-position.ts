@@ -8,6 +8,8 @@ export interface EthPositionLevel {
   actualQty: number;
   baseQty: number;     // 底仓数量
   tacticalQty: number; // 机动仓数量
+  baseNotes?: string;     // 底仓备注（JSON字符串）
+  tacticalNotes?: string; // 机动仓备注（JSON字符串）
 }
 
 /**
@@ -30,6 +32,8 @@ export async function getEthPositionLevels(ledgerId: number, userId: number): Pr
       actualQty,
       baseQty,
       tacticalQty,
+      baseNotes: (r as any).baseNotes ?? null,
+      tacticalNotes: (r as any).tacticalNotes ?? null,
     };
   });
 }
@@ -44,7 +48,9 @@ export async function upsertEthPositionLevel(
   plannedQty: number,
   actualQty: number,
   baseQty: number = 0,
-  tacticalQty: number = 0
+  tacticalQty: number = 0,
+  baseNotes?: string | null,
+  tacticalNotes?: string | null
 ): Promise<void> {
   const db = await getLedgerDb();
   if (!db) return;
@@ -60,6 +66,8 @@ export async function upsertEthPositionLevel(
       actualQty: String(finalActual),
       baseQty: String(baseQty),
       tacticalQty: String(tacticalQty),
+      baseNotes: baseNotes ?? null,
+      tacticalNotes: tacticalNotes ?? null,
     } as any)
     .onDuplicateKeyUpdate({
       set: {
@@ -67,8 +75,32 @@ export async function upsertEthPositionLevel(
         actualQty: String(finalActual),
         baseQty: String(baseQty),
         tacticalQty: String(tacticalQty),
+        baseNotes: baseNotes ?? null,
+        tacticalNotes: tacticalNotes ?? null,
       } as any,
     });
+}
+
+/**
+ * 仅更新某档位的备注（不改变数量）
+ */
+export async function updateEthPositionLevelNotes(
+  ledgerId: number,
+  userId: number,
+  price: number,
+  baseNotes: string | null,
+  tacticalNotes: string | null
+): Promise<void> {
+  const db = await getLedgerDb();
+  if (!db) return;
+  await db
+    .update(ethPositionLevels)
+    .set({ baseNotes, tacticalNotes } as any)
+    .where(and(
+      eq(ethPositionLevels.ledgerId, ledgerId),
+      eq(ethPositionLevels.userId, userId),
+      eq(ethPositionLevels.price, price)
+    ));
 }
 
 /**
@@ -96,6 +128,8 @@ export async function batchUpsertEthPositionLevels(
         actualQty: String(finalActual),
         baseQty: String(baseQty),
         tacticalQty: String(tacticalQty),
+        baseNotes: level.baseNotes ?? null,
+        tacticalNotes: level.tacticalNotes ?? null,
       } as any)
       .onDuplicateKeyUpdate({
         set: {
@@ -103,6 +137,8 @@ export async function batchUpsertEthPositionLevels(
           actualQty: String(finalActual),
           baseQty: String(baseQty),
           tacticalQty: String(tacticalQty),
+          baseNotes: level.baseNotes ?? null,
+          tacticalNotes: level.tacticalNotes ?? null,
         } as any,
       });
   }

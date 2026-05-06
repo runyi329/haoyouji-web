@@ -20176,6 +20176,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       actualQty: z.number().min(0),
       baseQty: z.number().min(0).optional().default(0),
       tacticalQty: z.number().min(0).optional().default(0),
+      baseNotes: z.string().nullable().optional(),
+      tacticalNotes: z.string().nullable().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       await dbEthPosition.upsertEthPositionLevel(
@@ -20185,7 +20187,27 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         input.plannedQty,
         input.actualQty,
         input.baseQty ?? 0,
-        input.tacticalQty ?? 0
+        input.tacticalQty ?? 0,
+        input.baseNotes ?? null,
+        input.tacticalNotes ?? null
+      );
+      return { success: true };
+    }),
+  // 仅更新底仓/机动仓备注（不改变数量）
+  ethPositionUpdateNotes: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      price: z.number(),
+      baseNotes: z.string().nullable(),
+      tacticalNotes: z.string().nullable(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      await dbEthPosition.updateEthPositionLevelNotes(
+        input.ledgerId,
+        ctx.user.id,
+        input.price,
+        input.baseNotes,
+        input.tacticalNotes
       );
       return { success: true };
     }),
@@ -20198,6 +20220,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         actualQty: z.number().min(0),
         baseQty: z.number().min(0).optional().default(0),
         tacticalQty: z.number().min(0).optional().default(0),
+        baseNotes: z.string().nullable().optional(),
+        tacticalNotes: z.string().nullable().optional(),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -20205,6 +20229,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         ...l,
         baseQty: l.baseQty ?? 0,
         tacticalQty: l.tacticalQty ?? 0,
+        baseNotes: l.baseNotes ?? null,
+        tacticalNotes: l.tacticalNotes ?? null,
       })));
       return { success: true };
     }),
@@ -21825,6 +21851,8 @@ export const adminFeatureRouter = router({
       actualQty: z.number().min(0),
       baseQty: z.number().min(0).optional().default(0),
       tacticalQty: z.number().min(0).optional().default(0),
+      baseNotes: z.string().nullable().optional(),
+      tacticalNotes: z.string().nullable().optional(),
     }))
     .mutation(async ({ input }) => {
       await dbEthPosition.upsertEthPositionLevel(
@@ -21834,7 +21862,28 @@ export const adminFeatureRouter = router({
         input.plannedQty,
         input.actualQty,
         input.baseQty ?? 0,
-        input.tacticalQty ?? 0
+        input.tacticalQty ?? 0,
+        input.baseNotes ?? null,
+        input.tacticalNotes ?? null
+      );
+      return { success: true };
+    }),
+
+  // 仅更新底仓/机动仓备注（不改变数量）
+  ethPositionUpdateNotes: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      price: z.number(),
+      baseNotes: z.string().nullable(),
+      tacticalNotes: z.string().nullable(),
+    }))
+    .mutation(async ({ input }) => {
+      await dbEthPosition.updateEthPositionLevelNotes(
+        input.ledgerId,
+        0,
+        input.price,
+        input.baseNotes,
+        input.tacticalNotes
       );
       return { success: true };
     }),
@@ -21848,6 +21897,8 @@ export const adminFeatureRouter = router({
         actualQty: z.number().min(0),
         baseQty: z.number().min(0).optional().default(0),
         tacticalQty: z.number().min(0).optional().default(0),
+        baseNotes: z.string().nullable().optional(),
+        tacticalNotes: z.string().nullable().optional(),
       })),
     }))
     .mutation(async ({ input }) => {
@@ -21855,6 +21906,8 @@ export const adminFeatureRouter = router({
         ...l,
         baseQty: l.baseQty ?? 0,
         tacticalQty: l.tacticalQty ?? 0,
+        baseNotes: l.baseNotes ?? null,
+        tacticalNotes: l.tacticalNotes ?? null,
       })));
       return { success: true };
     }),
