@@ -3115,7 +3115,10 @@ export default function CryptoPrediction() {
                                               </div>
                                               <div className="p-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                                                 <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>担保价値 = 担保数量 × 实时币价</div>
-                                                <div style={{ color: '#1F2937' }}>{collQty % 1 === 0 ? collQty.toFixed(0) : collQty.toFixed(4)} {collCoin} × {collPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} U = <span style={{ color: '#D97706', fontWeight: 600 }}>{collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                                                {collAssetValues.map((a, i) => (
+                                                  <div key={i} style={{ color: '#1F2937' }}>{a.qty % 1 === 0 ? a.qty.toFixed(0) : a.qty.toFixed(4)} {a.coin} × {a.price.toLocaleString(undefined, { maximumFractionDigits: 2 })} U = <span style={{ color: '#D97706', fontWeight: 600 }}>{a.value.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                                                ))}
+                                                {collAssetValues.length > 1 && <div style={{ color: '#1F2937', borderTop: '1px solid #E5E7EB', marginTop: 4, paddingTop: 4, fontWeight: 600 }}>合计 <span style={{ color: '#D97706' }}>{collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>}
                                               </div>
                                               <div className="p-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                                                 <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>代付利息 = 本金 × 年利率 / 365 × 天数</div>
@@ -3151,7 +3154,10 @@ export default function CryptoPrediction() {
                                               </div>
                                               <div className="p-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                                                 <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>担保价値 = 担保数量 × 实时币价</div>
-                                                <div style={{ color: '#1F2937' }}>{collQty % 1 === 0 ? collQty.toFixed(0) : collQty.toFixed(4)} {collCoin} × {collPrice.toLocaleString(undefined, { maximumFractionDigits: 2 })} U = <span style={{ color: '#D97706', fontWeight: 600 }}>{collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                                                {collAssetValues.map((a, i) => (
+                                                  <div key={i} style={{ color: '#1F2937' }}>{a.qty % 1 === 0 ? a.qty.toFixed(0) : a.qty.toFixed(4)} {a.coin} × {a.price.toLocaleString(undefined, { maximumFractionDigits: 2 })} U = <span style={{ color: '#D97706', fontWeight: 600 }}>{a.value.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                                                ))}
+                                                {collAssetValues.length > 1 && <div style={{ color: '#1F2937', borderTop: '1px solid #E5E7EB', marginTop: 4, paddingTop: 4, fontWeight: 600 }}>合计 <span style={{ color: '#D97706' }}>{collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>}
                                               </div>
                                               <div className="p-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
                                                 <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>买入价値</div>
