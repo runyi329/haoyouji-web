@@ -21915,8 +21915,8 @@ export const adminFeatureRouter = router({
     }),
   ethPositionGetSettings: protectedProcedure
     .input(z.object({ ledgerId: z.number() }))
-    .query(async ({ input }) => {
-      const settings = await dbEthPosition.getEthPositionSettings(input.ledgerId);
+    .query(async ({ input, ctx }) => {
+      const settings = await dbEthPosition.getEthPositionSettings(input.ledgerId, ctx.user.id);
       return settings;
     }),
   ethPositionSaveSettings: protectedProcedure
@@ -21928,9 +21928,10 @@ export const adminFeatureRouter = router({
       strategyRatio: z.number().min(0).max(100).optional().default(50),
       priceStep: z.number().refine(v => [20,50,100,200].includes(v)).optional().default(50),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       await dbEthPosition.upsertEthPositionSettings(
         input.ledgerId,
+        ctx.user.id,
         input.targetProfitCny,
         input.cnyRate,
         input.targetEthQty ?? 0,
