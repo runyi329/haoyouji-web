@@ -1320,3 +1320,91 @@ export async function getFundingRateChart(symbol: string, limit: number = 500): 
     markPrice: r.mark_price != null ? Number(r.mark_price) : null,
   }));
 }
+
+// ============================================================
+// 小时 K 线（crypto_klines_1h）
+// ============================================================
+
+export interface CryptoKline1h {
+  symbol: string;
+  openTime: number;
+  datetime: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  quoteVolume: number;
+  changePct: number | null;
+  amplitudePct: number | null;
+}
+
+/**
+ * 查询小时 K 线（分页，倒序）
+ */
+export async function getCryptoHourlyKlines(
+  symbol: string,
+  page: number = 1,
+  pageSize: number = 50
+): Promise<{ rows: CryptoKline1h[]; total: number }> {
+  const conn = await getDbConnection();
+  if (!conn) return { rows: [], total: 0 };
+  const safePageSize = Math.min(200, Math.max(1, pageSize));
+  const safeOffset = Math.max(0, (page - 1) * safePageSize);
+  const [countRows] = await conn.execute(
+    `SELECT COUNT(*) as total FROM crypto_klines_1h WHERE symbol = ?`,
+    [symbol]
+  ) as any[];
+  const total = (countRows as any[])[0]?.total ?? 0;
+  const [rows] = await conn.execute(
+    `SELECT symbol, open_time as openTime,
+            DATE_FORMAT(datetime, '%Y/%m/%d %H:00') as datetime,
+            open, high, low, close,
+            volume,
+            quote_volume as quoteVolume,
+            change_pct as changePct,
+            amplitude_pct as amplitudePct
+     FROM crypto_klines_1h
+     WHERE symbol = ?
+     ORDER BY open_time DESC
+     LIMIT ${safePageSize} OFFSET ${safeOffset}`,
+    [symbol]
+  ) as any[];
+  return {
+    rows: (rows as any[]).map(r => ({
+      symbol: r.symbol,
+      openTime: Number(r.openTime),
+      datetime: r.datetime,
+      open: parseFloat(r.open),
+      high: parseFloat(r.high),
+      low: parseFloat(r.low),
+      close: parseFloat(r.close),
+      volume: parseFloat(r.volume),
+      quoteVolume: parseFloat(r.quoteVolume),
+      changePct: r.changePct != null ? parseFloat(r.changePct) : null,
+      amplitudePct: r.amplitudePct != null ? parseFloat(r.amplitudePct) : null,
+    })),
+    total,
+  };
+}
+
+/**
+ * 获取小时 K 线总条数和日期范围（用于 Tab 标签显示）
+ */
+export async function getHourlyKlinesMeta(symbol: string): Promise<{ total: number; oldest: string | null; latest: string | null }> {
+  const conn = await getDbConnection();
+  if (!conn) return { total: 0, oldest: null, latest: null };
+  const [rows] = await conn.execute(
+    `SELECT COUNT(*) as total,
+            DATE_FORMAT(MIN(datetime), '%Y/%m/%d %H:00') as oldest,
+            DATE_FORMAT(MAX(datetime), '%Y/%m/%d %H:00') as latest
+     FROM crypto_klines_1h WHERE symbol = ?`,
+    [symbol]
+  ) as any[];
+  const r = (rows as any[])[0];
+  return {
+    total: r?.total ?? 0,
+    oldest: r?.oldest ?? null,
+    latest: r?.latest ?? null,
+  };
+}

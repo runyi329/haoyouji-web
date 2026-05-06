@@ -302,6 +302,24 @@ export const appRouter = router({
         return await dbCrypto.getKlinesMeta(input.symbol);
       }),
 
+    // 获取小时 K 线（分页）
+    getHourlyKlines: publicProcedure
+      .input(z.object({
+        symbol: z.string(),
+        page: z.number().optional().default(1),
+        pageSize: z.number().optional().default(50),
+      }))
+      .query(async ({ input }) => {
+        return await dbCrypto.getCryptoHourlyKlines(input.symbol, input.page, input.pageSize);
+      }),
+
+    // 获取小时 K 线元数据（条数、日期范围）
+    getHourlyMeta: publicProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        return await dbCrypto.getHourlyKlinesMeta(input.symbol);
+      }),
+
     // AI 分析该股票（调用 LLM 生成简要分析）
     getAIAnalysis: publicProcedure
       .input(z.object({
