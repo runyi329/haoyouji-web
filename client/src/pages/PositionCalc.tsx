@@ -1257,8 +1257,6 @@ export default function PositionCalc() {
                     : (isBelowCurrent ? '#080600' : '#040300'),
                   boxShadow: selectedPrice === price
                     ? '0 0 0 2px rgba(192,192,192,0.9), 0 0 12px rgba(192,192,192,0.3)'
-                    : isNearCurrent
-                    ? '0 0 0 1px rgba(255,245,192,0.65), 0 0 16px rgba(192,192,192,0.1)'
                     : 'none',
                 }}
               >
@@ -1338,27 +1336,28 @@ export default function PositionCalc() {
                   >
                     {price}
                   </span>
-                  {isNearCurrent && (
+  
+                </div>
+
+                {/* 当前价格区间 ETH logo：靠右对齐 */}
+                {isNearCurrent && (
+                  <div className="absolute right-1 top-0 h-full flex items-center pointer-events-none" style={{ zIndex: 20 }}>
                     <svg
-                      className="ml-1.5 flex-shrink-0"
-                      width="22" height="22"
+                      width="18" height="18"
                       viewBox="0 0 22 22"
                       fill="none"
                       xmlns="http://www.w3.org/2000/svg"
                     >
-                      {/* 深色不透明圆圈衬底 */}
                       <circle cx="11" cy="11" r="11" fill="rgba(0,0,0,0.6)" />
-                      {/* 白色实心 ETH 菱形，上半亮下半稍暗 */}
                       <polygon points="11,3 17,11 11,9" fill="#ffffff" />
                       <polygon points="11,3 5,11 11,9" fill="rgba(255,255,255,0.7)" />
                       <polygon points="11,19 17,13 11,15" fill="rgba(255,255,255,0.9)" />
                       <polygon points="11,19 5,13 11,15" fill="rgba(255,255,255,0.55)" />
                     </svg>
-                  )}
-                </div>
-
+                  </div>
+                )}
                 {/* 右侧数量标注：智能颜色——进度条覆盖到右侧时用白色+阴影，否则用深色 */}
-                <div className="absolute right-3 top-0 h-full flex items-center pointer-events-none" style={{ zIndex: 10 }}>
+                <div className="absolute top-0 h-full flex items-center pointer-events-none" style={{ zIndex: 10, right: isNearCurrent ? '22px' : '12px' }}>
                     <span
                       className="text-[11px] font-bold tabular-nums"
                       style={{
