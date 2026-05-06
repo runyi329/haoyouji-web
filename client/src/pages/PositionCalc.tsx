@@ -868,6 +868,7 @@ export default function PositionCalc() {
                                   borderRadius: '4px 0 0 4px',
                                   overflow: 'hidden',
                                   paddingLeft: '6px',
+                                  clipPath: 'inset(0 0 0 0 round 4px 0 0 4px)',
                                 }}
                               >
                                 {/* 战略段：百分比+ETH数量都靠左，紧挨，字重相同，颜色略有区分 */}
@@ -882,7 +883,6 @@ export default function PositionCalc() {
                                   width: `${strategyRatio}%`,
                                   background: 'linear-gradient(90deg, rgba(139,100,0,0.7) 0%, rgba(90,60,0,0.5) 100%)',
                                   borderRadius: '0 4px 4px 0',
-                                  borderLeft: '1px solid rgba(192,192,192,0.3)',
                                   overflow: 'hidden',
                                   paddingRight: '6px',
                                 }}
