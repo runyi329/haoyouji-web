@@ -1,0 +1,28 @@
+name: 迁移eth_position_settings表结构
+on:
+  push:
+    branches:
+      - migrate-eth-settings
+jobs:
+  migrate:
+    name: 给eth_position_settings表加缺失字段
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 执行数据库迁移
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e \"
+              SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='eth_position_settings';
+              ALTER TABLE eth_position_settings ADD COLUMN IF NOT EXISTS user_id INT NOT NULL DEFAULT 0 AFTER ledger_id;
+              ALTER TABLE eth_position_settings ADD COLUMN IF NOT EXISTS strategy_ratio INT NOT NULL DEFAULT 50;
+              ALTER TABLE eth_position_settings ADD COLUMN IF NOT EXISTS price_step INT NOT NULL DEFAULT 50;
+              ALTER TABLE eth_position_settings ADD COLUMN IF NOT EXISTS target_eth_qty DECIMAL(18,8) NOT NULL DEFAULT '0.00000000';
+              SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='eth_position_settings';
+              SELECT * FROM eth_position_settings LIMIT 5;
+            \""
