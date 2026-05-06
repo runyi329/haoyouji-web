@@ -79,10 +79,8 @@ export default function PositionLevelEdit() {
 
   // mutations
   const saveLevelMutation = trpc.ethPositionSaveLevel.useMutation({
-    onSuccess: async () => {
-      await utils.ethPositionGetLevels.invalidate();
-      await utils.ethPositionGetLogs.invalidate();
-      setLocation(`/ledger/${ledgerId}/position-calc`);
+    onSuccess: () => {
+      window.location.href = `/ledger/${ledgerId}/position-calc`;
     },
     onError: (err) => {
       alert(`保存失败：${err.message}`);
