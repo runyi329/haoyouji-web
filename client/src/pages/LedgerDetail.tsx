@@ -347,10 +347,11 @@ function AngelShareCard({ shares, isMarket, totalWithDividend }: { shares: any[]
 }
 
 // 单张资金方订单卡片右栏（包含扫描数据查询）
-function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, collateralValue, buyValue, currentValue, accrued, paidInterest, shortfall, floatPnl }: {
+function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, collateralItemPrices, collateralValue, buyValue, currentValue, accrued, paidInterest, shortfall, floatPnl }: {
   onClose: () => void;
   collateral: { coin: string; qty: string }[];
   collateralItemValues: (number | null)[];
+  collateralItemPrices: (number | null)[];
   collateralValue: number;
   buyValue: number;
   currentValue: number | null;
@@ -397,14 +398,17 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, 
               : <>
                   {collateral.map((a, idx) => {
                     const itemVal = collateralItemValues[idx];
+                    const itemPrice = collateralItemPrices[idx];
                     return (
                       <div key={idx} className="mt-1">
-                        <div className="font-mono" style={{ color: '#3B82F6' }}>
-                          {a.qty} {a.coin}
-                        </div>
                         {itemVal !== null
-                          ? <div className="font-mono" style={{ color: '#3B82F6' }}>≈ {itemVal.toFixed(2)} U</div>
-                          : <div className="font-mono" style={{ color: '#D1D5DB' }}>（暂无实时价）</div>
+                          ? <div className="font-mono" style={{ color: '#3B82F6' }}>
+                              {a.coin === 'USDT'
+                                ? <>{a.qty} USDT = <strong>{itemVal.toFixed(2)} U</strong></>
+                                : <>{a.qty} {a.coin} × {itemPrice !== null ? itemPrice.toFixed(2) : '---'} = <strong>{itemVal.toFixed(2)} U</strong></>
+                              }
+                            </div>
+                          : <div className="font-mono" style={{ color: '#D1D5DB' }}>{a.qty} {a.coin} × ---（暂无实时价）</div>
                         }
                       </div>
                     );
@@ -814,22 +818,24 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
           // 担保物为空时：collateralCoin 不显示，但 collateralValue/collateral 开关开着时仍需显示（値为0）
           // 如果三个开关都关闭，才不渲染
           if (!show('collateralCoin') && !show('collateralValue') && !show('collateral')) return null;
-          // 计算担保价值（同时记录每条担保物的单独折算值）
+          // 计算担保价值（同时记录每条担保物的单独折算值和单价）
           let collateralValue = 0;
           let hasValue = false;
           const collateralItemValues: (number | null)[] = [];
+          const collateralItemPrices: (number | null)[] = [];
           for (const item of collateral) {
-            if (!item.coin) { collateralItemValues.push(null); continue; }
+            if (!item.coin) { collateralItemValues.push(null); collateralItemPrices.push(null); continue; }
             const qty = parseFloat(item.qty);
-            if (item.qty === '' || isNaN(qty)) { collateralItemValues.push(null); continue; }
+            if (item.qty === '' || isNaN(qty)) { collateralItemValues.push(null); collateralItemPrices.push(null); continue; }
             hasValue = true;
             if (item.coin === 'USDT') {
               collateralValue += qty;
               collateralItemValues.push(qty);
+              collateralItemPrices.push(1);
             } else {
               const p = livePrices?.[item.coin];
-              if (p) { collateralValue += qty * p; collateralItemValues.push(qty * p); }
-              else collateralItemValues.push(null);
+              if (p) { collateralValue += qty * p; collateralItemValues.push(qty * p); collateralItemPrices.push(p); }
+              else { collateralItemValues.push(null); collateralItemPrices.push(null); }
             }
           }
           // 买入价值 = 买入价 × 数量（仅用于展示，不参与担保缺口计算）
@@ -857,6 +863,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
                   onClose={() => setShowCollateralInfo(false)}
                   collateral={collateral}
                   collateralItemValues={collateralItemValues}
+                  collateralItemPrices={collateralItemPrices}
                   collateralValue={collateralValue}
                   buyValue={interestBaseNum}
                   currentValue={currentValue}
