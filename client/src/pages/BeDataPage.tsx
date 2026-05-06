@@ -1863,7 +1863,7 @@ export default function BeDataPage() {
                         boxShadow: "0 2px 8px rgba(21,101,192,0.4)",
                       }}
                     >
-                      🤖 生成 AI 分析
+                      生成 AI 分析
                     </button>
                   </div>
                 )}
@@ -1880,12 +1880,12 @@ export default function BeDataPage() {
                   const sections = (aiData as any)?.sections ?? {};
                   const hasSections = Object.keys(sections).length > 0;
                   const sectionConfig = [
-                    { key: 'marketSentiment', icon: '🌐', label: '市场情绪与宏观环境', color: '#CE93D8' },
-                    { key: 'trend', icon: '📈', label: '趋势判断', color: '#90CAF9' },
-                    { key: 'fundingSignal', icon: '💰', label: '资金费率信号', color: '#FFE082' },
-                    { key: 'positionSignal', icon: '⚖️', label: '持仓量与多空信号', color: '#FFAB91' },
-                    { key: 'historicalPattern', icon: '📊', label: '历史规律', color: '#80DEEA' },
-                    { key: 'tradingAdvice', icon: '🎯', label: '交易建议', color: '#A5D6A7' },
+                    { key: 'marketSentiment', icon: '', label: '市场情绪与宏观环境', color: '#CE93D8' },
+                    { key: 'trend', icon: '', label: '趋势判断', color: '#90CAF9' },
+                    { key: 'fundingSignal', icon: '', label: '资金费率信号', color: '#FFE082' },
+                    { key: 'positionSignal', icon: '', label: '持仓量与多空信号', color: '#FFAB91' },
+                    { key: 'historicalPattern', icon: '', label: '历史规律', color: '#80DEEA' },
+                    { key: 'tradingAdvice', icon: '', label: '交易建议', color: '#A5D6A7' },
                   ];
 
                   if (hasSections) {
@@ -1898,11 +1898,11 @@ export default function BeDataPage() {
                           <div style={{ borderRadius: 8, background: "rgba(255,255,255,0.06)", padding: "7px 10px", border: "1px solid rgba(255,255,255,0.1)" }}>
                             <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.5)", marginBottom: 5, letterSpacing: 0.5 }}>实时数据速览</div>
                             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 8px" }}>
-                              {md.fngValue && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>😱 恐贪指数: <span style={{ color: '#FFE082', fontWeight: 600 }}>{md.fngValue}</span></div>}
-                              {md.btcDominance && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>₿ BTC占有率: <span style={{ color: '#90CAF9', fontWeight: 600 }}>{md.btcDominance}%</span></div>}
-                              {md.longRatio && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>📊 多空比: <span style={{ color: '#A5D6A7', fontWeight: 600 }}>多{md.longRatio}/空{md.shortRatio}</span></div>}
-                              {md.openInterest && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>📌 持仓量: <span style={{ color: '#FFAB91', fontWeight: 600 }}>{md.openInterest}</span></div>}
-                              {md.nextFundingRate && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>💸 下期费率: <span style={{ color: '#CE93D8', fontWeight: 600 }}>{md.nextFundingRate}</span></div>}
+                              {md.fngValue && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>恐贪指数: <span style={{ color: '#FFE082', fontWeight: 600 }}>{md.fngValue}</span></div>}
+                              {md.btcDominance && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>BTC占有率: <span style={{ color: '#90CAF9', fontWeight: 600 }}>{md.btcDominance}%</span></div>}
+                              {md.longRatio && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>多空比: <span style={{ color: '#A5D6A7', fontWeight: 600 }}>多{md.longRatio}/空{md.shortRatio}</span></div>}
+                              {md.openInterest && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>持仓量: <span style={{ color: '#FFAB91', fontWeight: 600 }}>{md.openInterest}</span></div>}
+                              {md.nextFundingRate && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.75)" }}>下期费率: <span style={{ color: '#CE93D8', fontWeight: 600 }}>{md.nextFundingRate}</span></div>}
                             </div>
                           </div>
                         )}
@@ -1912,8 +1912,8 @@ export default function BeDataPage() {
                           if (!text) return null;
                           return (
                             <div key={key} style={{ borderRadius: 8, background: "rgba(255,255,255,0.07)", padding: "8px 10px", border: "1px solid rgba(255,255,255,0.08)" }}>
-                              <div style={{ fontSize: 10, fontWeight: 700, color, marginBottom: 5, display: "flex", alignItems: "center", gap: 4 }}>
-                                <span>{icon}</span> {label}
+                              <div style={{ fontSize: 10, fontWeight: 700, color, marginBottom: 5 }}>
+                                {label}
                               </div>
                               <div style={{ fontSize: 11, color: "rgba(255,255,255,0.88)", lineHeight: 1.7 }}>{text}</div>
                             </div>
