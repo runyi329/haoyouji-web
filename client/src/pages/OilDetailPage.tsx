@@ -381,6 +381,7 @@ export default function OilDetailPage() {
   const [historyType, setHistoryType] = useState<"WTI" | "BRENT">("WTI");
   const [page, setPage] = useState(1);
   const [aiExpanded, setAiExpanded] = useState(false);
+  const [aiTriggered, setAiTriggered] = useState(false);
 
   // ── WTI 数据查询 ────────────────────────────────────────────────────────────
   const { data: wtiMeta,    isLoading: wtiMetaLoading }    = trpc.cryptoData.getMeta.useQuery({ symbol: "WTI" });
@@ -423,7 +424,7 @@ export default function OilDetailPage() {
       latestDate:      wtiMeta?.latestDate ?? "",
     },
     {
-      enabled: !wtiMetaLoading && !wtiKlinesLoading,
+      enabled: !wtiMetaLoading && !wtiKlinesLoading && aiExpanded && aiTriggered,
       staleTime: 10 * 60 * 1000,
     }
   );
@@ -508,7 +509,7 @@ export default function OilDetailPage() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", letterSpacing: 0.3 }}>
-                ✨ AI × 原油市场分析
+                AI × 原油市场分析
               </span>
               {aiLoading && <span style={{ fontSize: 10, color: "rgba(255,255,255,0.55)" }}>分析中...</span>}
             </div>
@@ -517,26 +518,50 @@ export default function OilDetailPage() {
 
           {aiExpanded && (
             <div style={{ marginTop: 10 }}>
-              {aiLoading ? (
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", textAlign: "center", padding: "8px 0" }}>AI 分析生成中...</div>
-              ) : aiData ? (
+              {!aiTriggered && (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "12px 0" }}>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", textAlign: "center", marginBottom: 4 }}>点击下方按钮，AI 将整合实时市场数据进行深度分析</div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setAiTriggered(true); }}
+                    style={{
+                      background: "linear-gradient(135deg, #2E7D32, #1B5E20)",
+                      border: "none", borderRadius: 20, padding: "8px 24px",
+                      color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                      letterSpacing: 0.5, boxShadow: "0 2px 8px rgba(46,125,50,0.4)",
+                    }}
+                  >
+                    生成 AI 分析
+                  </button>
+                </div>
+              )}
+              {aiTriggered && aiLoading && (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "16px 0" }}>
+                  <div style={{ width: 28, height: 28, border: "2.5px solid rgba(255,255,255,0.15)", borderTop: "2.5px solid #A5D6A7", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", textAlign: "center" }}>分析中...</div>
+                </div>
+              )}
+              {aiTriggered && !aiLoading && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {[
-                    { label: "📈 趋势判断", content: aiData.trend },
-                    { label: "🎯 关键位置", content: aiData.keyLevel },
-                    { label: "💡 投资提示", content: aiData.tip },
-                  ].filter(s => s.content).map((section, i) => (
-                    <div key={i} style={{ background: "rgba(255,255,255,0.08)", borderRadius: 8, padding: "8px 10px" }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>{section.label}</div>
-                      <div style={{ fontSize: 11, color: "rgba(255,255,255,0.9)", lineHeight: 1.6 }}>{section.content}</div>
-                    </div>
-                  ))}
-                  {!aiData.trend && aiData.analysis && (
-                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.85)", lineHeight: 1.6 }}>{aiData.analysis}</div>
+                  {aiData ? (
+                    <>
+                      {[
+                        { label: "趋势判断", content: aiData.trend },
+                        { label: "关键位置", content: aiData.keyLevel },
+                        { label: "投资提示", content: aiData.tip },
+                      ].filter(s => s.content).map((section, i) => (
+                        <div key={i} style={{ background: "rgba(255,255,255,0.08)", borderRadius: 8, padding: "8px 10px" }}>
+                          <div style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>{section.label}</div>
+                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.9)", lineHeight: 1.6 }}>{section.content}</div>
+                        </div>
+                      ))}
+                      {!aiData.trend && aiData.analysis && (
+                        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.85)", lineHeight: 1.6 }}>{aiData.analysis}</div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", textAlign: "center", padding: "8px 0" }}>暂无分析</div>
                   )}
                 </div>
-              ) : (
-                <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", textAlign: "center", padding: "8px 0" }}>暂无分析</div>
               )}
             </div>
           )}
