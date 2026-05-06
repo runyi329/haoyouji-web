@@ -558,11 +558,7 @@ export default function GoldAIPage() {
               opacity: (!goldData?.success) ? 0.5 : 1,
             }}
           >
-            {aiLoading ? (
-              生成中...
-            ) : (
-              生成分析
-            )}
+            {aiLoading ? '生成中...' : '生成分析'}
           </button>
         </div>
 
