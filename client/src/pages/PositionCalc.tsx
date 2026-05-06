@@ -765,7 +765,7 @@ export default function PositionCalc() {
                         <div>
                           <div className="text-[11px] mb-0.5 font-medium tracking-wider" style={{ color: 'rgba(192,192,192,0.45)' }}>实际持仓</div>
                           <span className="text-2xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,1))' }}>
-                            {actualQty > 0 ? actualQty.toFixed(0) : '--'}
+                            {actualQty > 0 ? actualQty.toFixed(1) : '--'}
                           </span>
                           <span className="text-xs ml-1" style={{ color: 'rgba(192,192,192,0.3)' }}>ETH</span>
                         </div>
@@ -773,7 +773,7 @@ export default function PositionCalc() {
                           <div className="text-right">
                             <div className="text-[11px] mb-0.5 font-medium tracking-wider" style={{ color: 'rgba(192,192,192,0.45)' }}>目标持仓</div>
                             <span className="text-2xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,1))' }}>
-                              {targetQty > 0 ? targetQty.toFixed(0) : '--'}
+                              {targetQty > 0 ? targetQty.toFixed(1) : '--'}
                             </span>
                             <span className="text-xs ml-1" style={{ color: 'rgba(192,192,192,0.25)' }}>ETH</span>
                           </div>
@@ -803,7 +803,7 @@ export default function PositionCalc() {
                                 className="text-[10px] font-bold whitespace-nowrap"
                                 style={{ color: 'rgba(255,255,255,0.95)', textShadow: '0 0 4px rgba(79,70,229,0.8)' }}
                               >
-                                {(pct * 100).toFixed(0)}%
+                                {(pct * 100).toFixed(1)}%
                               </span>
                             )}
                           </div>
@@ -1368,11 +1368,11 @@ export default function PositionCalc() {
                       }}
                     >
                       <span>
-                        {Math.round(actualQty)}
+                        {actualQty.toFixed(1)}
                       </span>
                       <span style={{ opacity: 0.6, margin: '0 1px' }}>/</span>
                       <span style={{ opacity: 0.85 }}>
-                        {Math.round(planQty)}
+                        {planQty.toFixed(1)}
                       </span>
                     </span>
                   </div>
