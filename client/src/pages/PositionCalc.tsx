@@ -1283,8 +1283,10 @@ export default function PositionCalc() {
                           className="absolute left-0 top-0 h-full transition-all duration-300"
                           style={{
                             width: `${basePct}%`,
-                            background: 'linear-gradient(90deg, #003a7a 0%, #0055b3 45%, #1a7fd4 80%, #4aa8ff 100%)',
-                            boxShadow: '0 0 6px rgba(26,127,212,0.5)',
+                            background: tq > 0
+                              ? 'linear-gradient(90deg, #003a7a 0%, #0055b3 50%, #1a6db8 100%)'
+                              : 'linear-gradient(90deg, #003a7a 0%, #0055b3 45%, #1a7fd4 80%, #4aa8ff 100%)',
+                            boxShadow: tq > 0 ? 'none' : '0 0 6px rgba(26,127,212,0.5)',
                             minWidth: '4px',
                             borderRadius: tq > 0 ? '0 0 0 0' : '0 3px 3px 0',
                             zIndex: 2,
@@ -1298,8 +1300,8 @@ export default function PositionCalc() {
                           style={{
                             left: `${basePct}%`,
                             width: `${tacticalPct}%`,
-                            background: 'linear-gradient(90deg, #7a3500 0%, #c85a0a 45%, #e87020 80%, #ff9040 100%)',
-                            boxShadow: '0 0 6px rgba(232,112,32,0.5)',
+                            background: 'linear-gradient(90deg, #8a3e00 0%, #c85a0a 45%, #e87020 80%, #ff9040 100%)',
+                            boxShadow: 'none',
                             minWidth: '4px',
                             borderRadius: '0 3px 3px 0',
                             zIndex: 2,
