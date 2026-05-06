@@ -783,9 +783,9 @@ export default function PositionCalc() {
                             style={{
                               width: `${pct * 100}%`,
                               background: pct >= 1
-                                ? 'linear-gradient(90deg, #888888 0%, #c0c0c0 45%, #e8e8e8 80%, #fffbe8 100%)'
-                                : 'linear-gradient(90deg, #606060 0%, #a0a0a0 45%, #c0c0c0 80%, #e8e8e8 100%)',
-                              boxShadow: '0 0 14px rgba(192,192,192,0.55), 0 0 5px rgba(255,245,192,0.25)',
+                                ? 'linear-gradient(90deg, #9a7000 0%, #d4af37 45%, #f5e27a 80%, #fffbe8 100%)'
+                                : 'linear-gradient(90deg, #7a5500 0%, #c8960a 45%, #d4af37 80%, #f0d060 100%)',
+                              boxShadow: '0 0 14px rgba(212,175,55,0.6), 0 0 5px rgba(255,245,192,0.4)',
                               minWidth: targetQty > 0 ? '2rem' : '0',
                               borderRadius: '0 4px 4px 0',
                             }}
