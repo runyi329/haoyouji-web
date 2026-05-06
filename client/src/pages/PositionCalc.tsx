@@ -2075,7 +2075,10 @@ export default function PositionCalc() {
                       <button
                         onClick={() => {
                           // 将实时计算结果写入 planned
-                          const newPlanned = { ...planned };
+                          // 先将所有档位的 planned 清零，防止旧方案超出新区间的档位数据残留
+                          const newPlanned: Record<number, number> = {};
+                          PRICE_LEVELS.forEach(p => { newPlanned[p] = 0; });
+                          // 将新方案的分配结果写入对应档位
                           allocLevels.forEach(p => {
                             newPlanned[p] = liveResult[p] || 0;
                           });
