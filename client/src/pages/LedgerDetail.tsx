@@ -2179,7 +2179,7 @@ export default function LedgerDetail() {
   );
   // 独立本地 state，初始值为 undefined（未初始化），useEffect 在服务器数据到达后初始化一次
   // 短信通知开关（仅YJH本人可见）
-  const isYJHUser = (user as any)?.id === YJH_USER_ID;
+  const isYJHUser = (user as any)?.id === 4957151;
   const { data: smsNotifySettings } = trpc.ledger.afGetSmsNotifySettings.useQuery(
     { ledgerId: Number(ledgerId) },
     { enabled: isCustomAF && isYJHUser && !viewAsUserId }
