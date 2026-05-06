@@ -57,6 +57,7 @@ interface ModalState {
   inputValue: string;
   baseValue: string;     // 底仓输入值
   tacticalValue: string; // 机动仓输入值
+  plannedValue: string;  // 计划仓位输入值
 }
 
 // 汇总卡片编辑弹窗
@@ -497,12 +498,14 @@ export default function PositionCalc() {
   const openModal = (price: number) => {
     const bq = baseQty[price] || 0;
     const tq = tacticalQty[price] || 0;
+    const pq = planned[price] || 0;
     setModal({
       price,
       mode: 'editActual',
       inputValue: String(actual[price] || ''),
       baseValue: bq > 0 ? String(bq) : '',
       tacticalValue: tq > 0 ? String(tq) : '',
+      plannedValue: pq > 0 ? String(pq) : '',
     });
   };
 
@@ -542,21 +545,27 @@ export default function PositionCalc() {
     } else if (modal.mode === 'editActual') {
       const bqNum = parseFloat(modal.baseValue);
       const tqNum = parseFloat(modal.tacticalValue);
+      const pqNum = parseFloat(modal.plannedValue);
       const bqVal = isNaN(bqNum) || bqNum < 0 ? 0 : bqNum;
       const tqVal = isNaN(tqNum) || tqNum < 0 ? 0 : tqNum;
       const totalVal = bqVal + tqVal; // 总已买 = 底仓 + 机动仓
+      // 计划仓位：如果用户修改了，就用新值；否则保持原有值
+      const oldPlannedVal = planned[modal.price] || 0;
+      const newPlannedVal = !isNaN(pqNum) && pqNum >= 0 ? pqNum : oldPlannedVal;
       const oldVal = actual[modal.price] || 0;
       const newActual = { ...actual, [modal.price]: totalVal };
       const newBase = { ...baseQty, [modal.price]: bqVal };
       const newTactical = { ...tacticalQty, [modal.price]: tqVal };
+      const newPlanned = { ...planned, [modal.price]: newPlannedVal };
       setActual(newActual);
       setBaseQty(newBase);
       setTacticalQty(newTactical);
+      setPlanned(newPlanned);
       // 保存到数据库
       saveLevelMutation.mutate({
         ledgerId,
         price: modal.price,
-        plannedQty: planned[modal.price] || 0,
+        plannedQty: newPlannedVal,
         actualQty: totalVal,
         baseQty: bqVal,
         tacticalQty: tqVal,
@@ -569,6 +578,16 @@ export default function PositionCalc() {
         oldValue: oldVal,
         newValue: totalVal,
       });
+      // 如果计划仓位有变化，也记录日志
+      if (newPlannedVal !== oldPlannedVal) {
+        addChangeLogMutation.mutate({
+          ledgerId,
+          price: modal.price,
+          changeType: 'planned',
+          oldValue: oldPlannedVal,
+          newValue: newPlannedVal,
+        });
+      }
     }
     setModal(null);
   };
@@ -1351,6 +1370,46 @@ export default function PositionCalc() {
           );
         })}
       </div>
+
+      {/* 计划总量 vs 目标仓位 统计行 */}
+      {(() => {
+        const planTotal = PRICE_LEVELS.reduce((s, p) => s + (planned[p] || 0), 0);
+        const targetTotal = parseFloat(targetEthQty) || 0;
+        const diff = planTotal - targetTotal;
+        const hasPlan = planTotal > 0;
+        const hasTarget = targetTotal > 0;
+        if (!hasPlan && !hasTarget) return null;
+        const isOver = diff > 0.5;
+        const isUnder = diff < -0.5;
+        const isMatch = !isOver && !isUnder;
+        return (
+          <div className="mx-4 mt-2 mb-1 px-3 py-2 rounded-xl flex items-center justify-between"
+            style={{
+              background: isOver ? 'rgba(255,80,80,0.08)' : isUnder ? 'rgba(255,200,0,0.07)' : 'rgba(74,222,128,0.07)',
+              border: `1px solid ${isOver ? 'rgba(255,80,80,0.25)' : isUnder ? 'rgba(255,200,0,0.2)' : 'rgba(74,222,128,0.2)'}`,
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>计划合计</span>
+              <span className="text-sm font-bold tabular-nums" style={{ color: '#f0d060' }}>{Math.round(planTotal)} ETH</span>
+              {hasTarget && (
+                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>目标 {Math.round(targetTotal)}</span>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              {isMatch && hasTarget && (
+                <span className="text-xs font-medium" style={{ color: '#4ade80' }}>✓ 已匹配</span>
+              )}
+              {isOver && (
+                <span className="text-xs font-medium" style={{ color: '#ff5050' }}>超出 +{Math.round(diff)} ETH</span>
+              )}
+              {isUnder && (
+                <span className="text-xs font-medium" style={{ color: '#ffc800' }}>缺口 −{Math.round(Math.abs(diff))} ETH</span>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 底部提示 */}
       <div className="px-4 pt-4 pb-2 text-center text-xs" style={{ color: 'rgba(212,175,55,0.3)' }}>
@@ -2386,6 +2445,28 @@ export default function PositionCalc() {
                     <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>ETH</span>
                   </div>
 
+                  {/* 计划仓位输入 */}
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium" style={{ color: '#4ade80' }}>计划仓位</span>
+                      <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>ETH</span>
+                    </div>
+                    <div className="px-3 py-2 rounded-xl" style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.35)' }}>
+                      <input
+                        autoFocus
+                        type="number"
+                        value={modal.plannedValue}
+                        onChange={e => setModal(prev => prev ? { ...prev, plannedValue: e.target.value } : null)}
+                        onKeyDown={e => { if (e.key === 'Enter') confirmModal(); if (e.key === 'Escape') setModal(null); }}
+                        placeholder="0"
+                        className="w-full text-center text-2xl font-bold outline-none bg-transparent"
+                        style={{ color: '#4ade80', fontVariantNumeric: 'tabular-nums' }}
+                        step="1"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+
                   {/* 底仓输入 */}
                   <div className="mb-3">
                     <div className="flex items-center justify-between mb-1">
@@ -2394,7 +2475,6 @@ export default function PositionCalc() {
                     </div>
                     <div className="px-3 py-2 rounded-xl" style={{ background: 'rgba(26,127,212,0.1)', border: '1px solid rgba(74,168,255,0.4)' }}>
                       <input
-                        autoFocus
                         type="number"
                         value={modal.baseValue}
                         onChange={e => setModal(prev => prev ? { ...prev, baseValue: e.target.value } : null)}
