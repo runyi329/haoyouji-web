@@ -639,7 +639,7 @@ export default function PositionCalc() {
           <button
             onClick={() => window.location.reload()}
             className="px-3 py-1 rounded-lg text-sm font-medium"
-            style={{ backgroundColor: 'transparent', color: 'rgba(192,192,192,0.35)', border: '1px solid rgba(192,192,192,0.12)' }}
+            style={{ backgroundColor: 'rgba(192,192,192,0.08)', color: '#c0c0c0', border: '1px solid rgba(192,192,192,0.28)' }}
           >
             刷新
           </button>
