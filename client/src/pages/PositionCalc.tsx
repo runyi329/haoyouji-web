@@ -96,6 +96,7 @@ export default function PositionCalc() {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [modal, setModal] = useState<ModalState | null>(null);
+  const [selectedPrice, setSelectedPrice] = useState<number | null>(null); // 单击高亮选中
   const [summaryEdit, setSummaryEdit] = useState<SummaryEditModal | null>(null);
   const [saving, setSaving] = useState(false);
   const [targetProfitCny, setTargetProfitCny] = useState<string>('');  // 目标止盈利润（人民币）
@@ -1243,6 +1244,7 @@ export default function PositionCalc() {
           return (
             <button
               key={price}
+              onClick={() => setSelectedPrice(prev => prev === price ? null : price)}
               onDoubleClick={() => openModal(price)}
               className="w-full block"
             >
@@ -1253,7 +1255,9 @@ export default function PositionCalc() {
                   background: isNearCurrent
                     ? 'linear-gradient(90deg, #100c00 0%, #1a1200 50%, #100c00 100%)'
                     : (isBelowCurrent ? '#080600' : '#040300'),
-                  boxShadow: isNearCurrent
+                  boxShadow: selectedPrice === price
+                    ? '0 0 0 2px rgba(192,192,192,0.9), 0 0 12px rgba(192,192,192,0.3)'
+                    : isNearCurrent
                     ? '0 0 0 1px rgba(255,245,192,0.65), 0 0 16px rgba(192,192,192,0.1)'
                     : 'none',
                 }}
