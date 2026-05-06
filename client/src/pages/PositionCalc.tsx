@@ -812,6 +812,8 @@ export default function PositionCalc() {
                       {/* ===== 战略/策略持仓细分 ===== */}
                       {actualQty > 0 && (
                         <div className="mt-3 mb-1">
+                          {/* 标题行，与"实际持仓"同风格 */}
+                          <div className="text-[11px] mb-1.5 font-medium tracking-wider" style={{ color: 'rgba(192,192,192,0.45)' }}>战略筹码 VS 策略筹码比例分配</div>
                           {/* 一体化细分进度条+圆形手柄：纯 touch/mouse 事件拖动 */}
                           <div
                             ref={strategyBarRef}
@@ -854,29 +856,37 @@ export default function PositionCalc() {
                               setStrategyRatio(val);
                             }}
                           >
-                            {/* 进度条容器，垂直居中 18px */}
-                            <div className="absolute rounded overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', height: '18px' }}>
-                              {/* 战略持仓段（左侧，亮金） */}
+                            {/* 进度条容器，垂直居中 24px（加高容纳内嵌文字） */}
+                            <div className="absolute rounded overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', height: '24px' }}>
+                              {/* 战略持仓段（左侧，亮银） */}
                               <div
-                                className="absolute top-0 left-0 h-full"
+                                className="absolute top-0 left-0 h-full flex items-center"
                                 style={{
                                   width: `${100 - strategyRatio}%`,
                                   background: 'linear-gradient(90deg, #888888 0%, #c0c0c0 60%, #e8e8e8 100%)',
                                   boxShadow: '2px 0 8px rgba(192,192,192,0.4)',
                                   borderRadius: '4px 0 0 4px',
+                                  overflow: 'hidden',
                                 }}
-                              />
-                              {/* 策略持仓段（右侧，暗金半透明） */}
+                              >
+                                <span className="text-[10px] font-bold pl-1.5 shrink-0" style={{ color: 'rgba(20,20,20,0.85)' }}>{100 - strategyRatio}%</span>
+                                <span className="text-[10px] font-mono ml-auto pr-1.5 shrink-0 whitespace-nowrap" style={{ color: 'rgba(20,20,20,0.65)' }}>{Math.round(actualQty * (100 - strategyRatio) / 100)}E</span>
+                              </div>
+                              {/* 策略持仓段（右侧，暗金） */}
                               <div
-                                className="absolute top-0 h-full"
+                                className="absolute top-0 h-full flex items-center"
                                 style={{
                                   left: `${100 - strategyRatio}%`,
                                   width: `${strategyRatio}%`,
                                   background: 'linear-gradient(90deg, rgba(139,100,0,0.7) 0%, rgba(90,60,0,0.5) 100%)',
                                   borderRadius: '0 4px 4px 0',
                                   borderLeft: '1px solid rgba(192,192,192,0.3)',
+                                  overflow: 'hidden',
                                 }}
-                              />
+                              >
+                                <span className="text-[10px] font-mono pl-1 shrink-0 whitespace-nowrap" style={{ color: 'rgba(255,220,100,0.8)' }}>{Math.round(actualQty * strategyRatio / 100)}E</span>
+                                <span className="text-[10px] font-bold ml-auto pr-1.5 shrink-0" style={{ color: 'rgba(255,220,100,0.95)' }}>{strategyRatio}%</span>
+                              </div>
                             </div>
                             {/* 圆形手柄：金色圆底 + 立体 ETH 图标 */}
                             <div
