@@ -1564,9 +1564,11 @@ export default function BeDataPage() {
   // 美股模式和数字币模式下默认显示数据分析
   const [activeTab, setActiveTab] = useState(hideSymbolTabs ? "analysis" : "data");
   const [page, setPage] = useState(1);
-  // 历史数据子Tab：日线 / 小时（仅数字币显示小时Tab）
-  const [dataSubTab, setDataSubTab] = useState<'daily' | 'hourly'>('daily');
+  // 历史数据子Tab：日线 / 小时 / 分钟（仅数字币显示）
+  const [dataSubTab, setDataSubTab] = useState<'daily' | 'hourly' | 'minute'>('daily');
   const [hourlyPage, setHourlyPage] = useState(1);
+  // 分钟数据实时计数器（每分钟 +1）
+  const [minuteCounter, setMinuteCounter] = useState(0);
   // isSyncing已不再使用，保留占位避免引用错误
   const isSyncing = false;
 
@@ -1611,6 +1613,21 @@ export default function BeDataPage() {
     { symbol: activeSymbol },
     { enabled: isCryptoSymbol, staleTime: 5 * 60 * 1000 }
   );
+
+  // 分钟 K 线元数据（仅数字币）
+  const { data: minuteMeta } = trpc.cryptoData.getMinuteMeta.useQuery(
+    { symbol: activeSymbol },
+    { enabled: isCryptoSymbol && activeTab === 'data' && dataSubTab === 'minute', staleTime: 60 * 1000 }
+  );
+
+  // 分钟数据实时计数器：切到分钟Tab后每分钟自动+1
+  useEffect(() => {
+    if (dataSubTab !== 'minute') return;
+    const timer = setInterval(() => {
+      setMinuteCounter(c => c + 1);
+    }, 60 * 1000);
+    return () => clearInterval(timer);
+  }, [dataSubTab]);
 
   const handleSync = useCallback(() => {
     window.location.reload();
@@ -2168,7 +2185,7 @@ export default function BeDataPage() {
       {/* ===== 历史数据 Tab ===== */}
       {activeTab === "data" && (
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* 日线 / 小时 子Tab（仅数字币显示） */}
+          {/* 日线 / 小时 / 分钟 子Tab（仅数字币显示） */}
           {isCryptoSymbol && (
             <div style={{ background: '#fff', borderBottom: '1px solid #E5E7EB', display: 'flex', flexShrink: 0 }}>
               <button
@@ -2192,6 +2209,17 @@ export default function BeDataPage() {
                 }}
               >
                 {`小时${hourlyTotal > 0 ? `（${hourlyTotal}条）` : ''}`}
+              </button>
+              <button
+                onClick={() => { setDataSubTab('minute'); }}
+                style={{
+                  flex: 1, padding: '8px 0', fontSize: 12, fontWeight: 500,
+                  color: dataSubTab === 'minute' ? '#D32F2F' : '#9CA3AF',
+                  borderBottom: dataSubTab === 'minute' ? '2px solid #D32F2F' : '2px solid transparent',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                }}
+              >
+                分钟
               </button>
             </div>
           )}
@@ -2330,6 +2358,35 @@ export default function BeDataPage() {
           )}
           </div>
           )}
+        </div>
+      )}
+
+      {/* ===== 分钟数据 Tab（权限锁定） ===== */}
+      {activeTab === 'data' && isCryptoSymbol && dataSubTab === 'minute' && (
+        <div className="flex-1 overflow-auto flex flex-col items-center justify-center" style={{ background: '#fff', minHeight: 320 }}>
+          {/* 数据条数展示 */}
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 8 }}>分钟数据总量</div>
+            <div style={{ fontSize: 36, fontWeight: 700, color: '#D32F2F', fontFamily: 'monospace', letterSpacing: 1 }}>
+              {minuteMeta ? (minuteMeta.total + minuteCounter).toLocaleString() : '--'}
+            </div>
+            <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>条（每分钟实时更新）</div>
+            {minuteMeta?.latestDatetime && (
+              <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>最新数据：{String(minuteMeta.latestDatetime).slice(0, 16)}</div>
+            )}
+          </div>
+          {/* 锁定提示 */}
+          <div style={{
+            background: '#FEF3C7',
+            border: '1px solid #FDE68A',
+            borderRadius: 8,
+            padding: '16px 24px',
+            maxWidth: 280,
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: 13, color: '#92400E', fontWeight: 600, marginBottom: 6 }}>需要更高权限</div>
+            <div style={{ fontSize: 12, color: '#B45309', lineHeight: 1.6 }}>查看分钟详细数据需要更高级别的访问权限，请联系管理员开通</div>
+          </div>
         </div>
       )}
 

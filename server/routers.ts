@@ -320,6 +320,28 @@ export const appRouter = router({
         return await dbCrypto.getHourlyKlinesMeta(input.symbol);
       }),
 
+    // 获取分钟 K 线条数（不返回详细数据，仅供展示）
+    getMinuteMeta: publicProcedure
+      .input(z.object({ symbol: z.string() }))
+      .query(async ({ input }) => {
+        try {
+          const conn = await getDbConnection();
+          if (!conn) return { total: 0, latestDatetime: null };
+          const [rows] = await (conn as any).execute(
+            `SELECT COUNT(*) as total, MAX(datetime) as latestDatetime FROM crypto_klines_1m WHERE symbol = ?`,
+            [input.symbol]
+          );
+          const row = (rows as any[])[0];
+          return {
+            total: Number(row?.total ?? 0),
+            latestDatetime: row?.latestDatetime ?? null,
+          };
+        } catch (e) {
+          // 表不存在时返回 0
+          return { total: 0, latestDatetime: null };
+        }
+      }),
+
     // AI 分析该股票（调用 LLM 生成简要分析）
     getAIAnalysis: publicProcedure
       .input(z.object({
