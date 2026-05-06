@@ -1564,6 +1564,9 @@ export default function BeDataPage() {
   // 美股模式和数字币模式下默认显示数据分析
   const [activeTab, setActiveTab] = useState(hideSymbolTabs ? "analysis" : "data");
   const [page, setPage] = useState(1);
+  // 历史数据子Tab：日线 / 小时（仅数字币显示小时Tab）
+  const [dataSubTab, setDataSubTab] = useState<'daily' | 'hourly'>('daily');
+  const [hourlyPage, setHourlyPage] = useState(1);
   // isSyncing已不再使用，保留占位避免引用错误
   const isSyncing = false;
 
@@ -1598,6 +1601,17 @@ export default function BeDataPage() {
     { staleTime: 5 * 60 * 1000, refetchInterval: 5 * 60 * 1000 } // 5分钟自动刷新，随数据库更新同步最新日期
   );
 
+  // 小时 K 线数据（仅数字币且切换到小时Tab时加载）
+  const isCryptoSymbol = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'].includes(activeSymbol);
+  const { data: hourlyData, isLoading: hourlyLoading } = trpc.cryptoData.getHourlyKlines.useQuery(
+    { symbol: activeSymbol, page: hourlyPage, pageSize: PAGE_SIZE },
+    { enabled: activeTab === 'data' && dataSubTab === 'hourly' && isCryptoSymbol, keepPreviousData: true } as any
+  );
+  const { data: hourlyMeta } = trpc.cryptoData.getHourlyMeta.useQuery(
+    { symbol: activeSymbol },
+    { enabled: isCryptoSymbol, staleTime: 5 * 60 * 1000 }
+  );
+
   const handleSync = useCallback(() => {
     window.location.reload();
   }, []);
@@ -1619,6 +1633,8 @@ export default function BeDataPage() {
     }
   }, [isLoading]);
   const totalPages = Math.ceil(total / PAGE_SIZE);
+  const hourlyTotal = hourlyMeta?.total ?? hourlyData?.total ?? 0;
+  const hourlyTotalPages = Math.ceil(hourlyTotal / PAGE_SIZE);
 
   const latestRow = page === 1 ? rows[0] : null;
   const oldestDate = metaData?.oldestDate ?? (total > 0 ? "-" : "-");
@@ -2139,7 +2155,7 @@ export default function BeDataPage() {
             }}
           >
             {t.key === 'data'
-              ? `日线历史${total > 0 ? `（${total}条）` : ''}`
+              ? `历史数据${total > 0 ? `（${total}条）` : ''}`
               : t.key === 'analysis' && latestDate && latestDate !== '-'
                 ? (() => { const parts = latestDate.split('/'); return `数据分析（${parts[1] ? (+parts[1]) + '/' + (+parts[2]) : latestDate}）`; })()
                 : t.key === 'funding'
@@ -2149,9 +2165,39 @@ export default function BeDataPage() {
         ))}
       </div>
 
-      {/* ===== 日线数据 Tab ===== */}
+      {/* ===== 历史数据 Tab ===== */}
       {activeTab === "data" && (
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* 日线 / 小时 子Tab（仅数字币显示） */}
+          {isCryptoSymbol && (
+            <div style={{ background: '#fff', borderBottom: '1px solid #E5E7EB', display: 'flex', flexShrink: 0 }}>
+              <button
+                onClick={() => { setDataSubTab('daily'); setPage(1); }}
+                style={{
+                  flex: 1, padding: '8px 0', fontSize: 12, fontWeight: 500,
+                  color: dataSubTab === 'daily' ? '#D32F2F' : '#9CA3AF',
+                  borderBottom: dataSubTab === 'daily' ? '2px solid #D32F2F' : '2px solid transparent',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                }}
+              >
+                {`日线${total > 0 ? `（${total}条）` : ''}`}
+              </button>
+              <button
+                onClick={() => { setDataSubTab('hourly'); setHourlyPage(1); }}
+                style={{
+                  flex: 1, padding: '8px 0', fontSize: 12, fontWeight: 500,
+                  color: dataSubTab === 'hourly' ? '#D32F2F' : '#9CA3AF',
+                  borderBottom: dataSubTab === 'hourly' ? '2px solid #D32F2F' : '2px solid transparent',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                }}
+              >
+                {`小时${hourlyTotal > 0 ? `（${hourlyTotal}条）` : ''}`}
+              </button>
+            </div>
+          )}
+          {/* 日线数据内容 */}
+          {(!isCryptoSymbol || dataSubTab === 'daily') && (
+          <div className="flex-1 overflow-auto">
           {isLoading ? (
             <div className="flex items-center justify-center py-20 text-gray-400 text-sm">加载中...</div>
           ) : rows.length === 0 ? (
@@ -2214,6 +2260,75 @@ export default function BeDataPage() {
                 })}
               </tbody>
             </table>
+          )}
+          </div>
+          )}
+          {/* 小时数据内容 */}
+          {isCryptoSymbol && dataSubTab === 'hourly' && (
+          <div className="flex-1 overflow-auto">
+          {hourlyLoading ? (
+            <div className="flex items-center justify-center py-20 text-gray-400 text-sm">加载中...</div>
+          ) : !hourlyData || hourlyData.rows.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400 text-sm gap-2">
+              <span>暂无小时数据</span>
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+              <colgroup>
+                <col style={{ width: '18%' }} />
+                <col style={{ width: '13.7%' }} />
+                <col style={{ width: '13.7%' }} />
+                <col style={{ width: '13.7%' }} />
+                <col style={{ width: '13.7%' }} />
+                <col style={{ width: '13.7%' }} />
+                <col style={{ width: '13.5%' }} />
+              </colgroup>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                <tr style={{ background: '#F3F4F6' }}>
+                  <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>时间</th>
+                  <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>开盘</th>
+                  <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>收盘</th>
+                  <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>最高</th>
+                  <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>最低</th>
+                  <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>涨跌%</th>
+                  <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 11 }}>振幅%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {hourlyData.rows.map((row, idx) => {
+                  const up = row.changePct != null && row.changePct > 0;
+                  const down = row.changePct != null && row.changePct < 0;
+                  const color = up ? '#EF4444' : down ? '#16A34A' : '#9CA3AF';
+                  const rowBg = idx % 2 === 0 ? '#fff' : '#F9FAFB';
+                  // 时间格式：26/05/06 08:00
+                  const shortDt = (() => {
+                    const d = row.datetime || '';
+                    const parts = d.replace(/-/g, '/').split('/');
+                    if (parts.length >= 3) {
+                      const yy = parts[0].length === 4 ? parts[0].slice(-2) : parts[0];
+                      const rest = parts.slice(1).join('/');
+                      return `${yy}/${rest}`;
+                    }
+                    return d;
+                  })();
+                  return (
+                    <tr key={row.openTime} style={{ background: rowBg }}>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#6B7280', fontFamily: 'monospace', fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden' }}>{shortDt}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#374151', fontFamily: 'monospace', fontSize: 10 }}>{formatPrice(row.open)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color, fontFamily: 'monospace', fontSize: 10, fontWeight: 600 }}>{formatPrice(row.close)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#4B5563', fontFamily: 'monospace', fontSize: 10 }}>{formatPrice(row.high)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#4B5563', fontFamily: 'monospace', fontSize: 10 }}>{formatPrice(row.low)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color, fontFamily: 'monospace', fontSize: 10 }}>{formatPct(row.changePct)}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#6B7280', fontFamily: 'monospace', fontSize: 10 }}>
+                        {row.amplitudePct != null ? row.amplitudePct.toFixed(2) + '%' : '-'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          </div>
           )}
         </div>
       )}
@@ -2813,8 +2928,8 @@ export default function BeDataPage() {
         </div>
       )}
 
-      {/* 分页（仅日线数据 Tab 显示） */}
-      {activeTab === "data" && totalPages > 1 && (
+      {/* 分页（日线数据） */}
+      {activeTab === "data" && dataSubTab === 'daily' && totalPages > 1 && (
         <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-between">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -2829,6 +2944,28 @@ export default function BeDataPage() {
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page >= totalPages || isFetching}
+            className="px-4 py-1.5 text-sm rounded border border-gray-200 text-gray-600 disabled:opacity-40"
+          >
+            下一页
+          </button>
+        </div>
+      )}
+      {/* 分页（小时数据） */}
+      {activeTab === "data" && dataSubTab === 'hourly' && hourlyTotalPages > 1 && (
+        <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-between">
+          <button
+            onClick={() => setHourlyPage((p) => Math.max(1, p - 1))}
+            disabled={hourlyPage <= 1 || hourlyLoading}
+            className="px-4 py-1.5 text-sm rounded border border-gray-200 text-gray-600 disabled:opacity-40"
+          >
+            上一页
+          </button>
+          <span className="text-xs text-gray-400">
+            第 {hourlyPage} / {hourlyTotalPages} 页 · 共 {hourlyTotal} 条
+          </span>
+          <button
+            onClick={() => setHourlyPage((p) => Math.min(hourlyTotalPages, p + 1))}
+            disabled={hourlyPage >= hourlyTotalPages || hourlyLoading}
             className="px-4 py-1.5 text-sm rounded border border-gray-200 text-gray-600 disabled:opacity-40"
           >
             下一页
