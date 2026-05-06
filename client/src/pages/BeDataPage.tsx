@@ -1690,7 +1690,7 @@ export default function BeDataPage() {
       latestDate,
     },
     {
-      enabled: hideSymbolTabs && !isLoading,
+      enabled: hideSymbolTabs && !isLoading && aiExpanded,
       staleTime: 10 * 60 * 1000, // 10分钟内不重新请求
     }
   );
