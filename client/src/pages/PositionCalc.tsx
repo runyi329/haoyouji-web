@@ -1243,7 +1243,7 @@ export default function PositionCalc() {
           return (
             <button
               key={price}
-              onClick={() => openModal(price)}
+              onDoubleClick={() => openModal(price)}
               className="w-full block"
             >
               {/* 进度条容器 */}
