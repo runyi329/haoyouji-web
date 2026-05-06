@@ -117,13 +117,15 @@ async function processERC20Transaction(tx: any, walletAddress: string) {
 
     // 提取金额 (USDT有6位小数)
     const amount = parseFloat(tx.value) / 1e6;
+    // Etherscan API 返回的 timeStamp 是秒级时间戳，转换为毫秒
+    const blockTimestamp = tx.timeStamp ? parseInt(tx.timeStamp) * 1000 : undefined;
     
     if (amount > 0) {
       scanStats.foundTransactions++;
       console.log(`[ERC20 Scanner] Detected transfer: ${amount} USDT from ${tx.from} to ${walletAddress.slice(0, 10)}... (tx: ${txnHash})`);
       
-      // 匹配订单
-      const matchResult = await dbRecharge.findOrderByAmount(amount, txnHash);
+      // 匹配订单（传入txnHash + blockTimestamp双重防重复）
+      const matchResult = await dbRecharge.findOrderByAmount(amount, txnHash, blockTimestamp);
       
       if (matchResult) {
         scanStats.matchedOrders++;

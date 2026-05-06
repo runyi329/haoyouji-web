@@ -186,6 +186,8 @@ async function processTransaction(signature: string, tokenAccount: string, walle
     }
 
     const tx = txData.result;
+    // Solana 的 blockTime 是秒级 Unix 时间戳，转换为毫秒
+    const blockTimestamp = tx.blockTime ? tx.blockTime * 1000 : undefined;
     const instructions = tx.transaction?.message?.instructions || [];
 
     // 查找SPL Token转账指令
@@ -213,8 +215,8 @@ async function processTransaction(signature: string, tokenAccount: string, walle
             scanStats.foundTransactions++;
             console.log(`[Solana Scanner] ✅ Detected transfer: ${amount} USDT to ${walletAddress.slice(0, 10)}... (tx: ${signature.slice(0, 10)}...)`);
             
-            // 匹配订单
-            const matchResult = await dbRecharge.findOrderByAmount(amount, signature);
+            // 匹配订单（传入signature + blockTimestamp双重防重复）
+            const matchResult = await dbRecharge.findOrderByAmount(amount, signature, blockTimestamp);
             
             if (matchResult) {
               scanStats.matchedOrders++;

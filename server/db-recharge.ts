@@ -336,13 +336,54 @@ export async function getUserRechargeOrders(userId: number, limit: number = 20) 
  * 
  * @param amount 交易金额
  * @param txnHash 交易哈希（用于防止重复匹配）
+ * @param blockTimestamp 区块链交易时间戳（毫秒，用于时间校验防止重放旧交易）
  */
-export async function findOrderByAmount(amount: number, txnHash?: string): Promise<{
+export async function findOrderByAmount(amount: number, txnHash?: string, blockTimestamp?: number): Promise<{
   order: any;
   matchType: 'exact' | 'fuzzy' | 'none';
   amountDiff: number;
 } | null> {
   const db = await getDb();
+
+  // ===== 双重防护 =====
+  // 防护1：txn_hash 数据库唯一性检查
+  // 如果该 txn_hash 已经在 recharge_orders 表中存在（无论什么状态），直接拒绝
+  // 这是最强的防重复保障，即使内存集合 processedTxns 重启后清空也能防住
+  if (txnHash) {
+    const existingByHash = await db
+      .select({ id: rechargeOrders.id, orderNo: rechargeOrders.orderNo, status: rechargeOrders.status })
+      .from(rechargeOrders)
+      .where(eq(rechargeOrders.txnHash, txnHash))
+      .limit(1);
+    if (existingByHash.length > 0) {
+      console.warn(`[Recharge] ⛔ DUPLICATE txn_hash detected: ${txnHash} already used by order ${existingByHash[0].orderNo} (status: ${existingByHash[0].status}). Skipping.`);
+      return null;
+    }
+  }
+
+  // 防护2：区块链交易时间校验
+  // 如果区块链交易发生时间早于订单系统最早的 pending/submitted 订单创建时间，
+  // 说明这笔链上交易不可能对应任何当前待处理订单，直接拒绝（防止重放旧交易）
+  if (blockTimestamp) {
+    const txBlockTime = new Date(blockTimestamp);
+    // 查找最早的 pending/submitted 订单创建时间
+    const earliestOrder = await db
+      .select({ createdAt: rechargeOrders.createdAt })
+      .from(rechargeOrders)
+      .where(sql`${rechargeOrders.status} IN ('pending', 'submitted')`)
+      .orderBy(sql`${rechargeOrders.createdAt} ASC`)
+      .limit(1);
+    if (earliestOrder.length > 0) {
+      const earliestOrderTime = new Date(earliestOrder[0].createdAt);
+      // 给5分钟宽限（防止时钟偏差），如果区块链交易时间早于最早订单创建时间5分钟以上，拒绝
+      const toleranceMs = 5 * 60 * 1000;
+      if (txBlockTime.getTime() < earliestOrderTime.getTime() - toleranceMs) {
+        console.warn(`[Recharge] ⛔ STALE transaction rejected: block_time=${txBlockTime.toISOString()} is before earliest pending order created_at=${earliestOrderTime.toISOString()} (diff=${Math.round((earliestOrderTime.getTime() - txBlockTime.getTime()) / 60000)}min). Skipping.`);
+        return null;
+      }
+    }
+  }
+  // ===== 双重防护结束 =====
   
   // 按优先级搜索：先submitted，再pending
   // 注意：submitted 状态优先，因为用户已确认转账，即使订单过期也应尝试匹配

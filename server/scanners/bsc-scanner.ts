@@ -115,15 +115,17 @@ async function processBSCTransaction(tx: any, walletAddress: string) {
       return;
     }
 
-    // 提取金额 (USDT有18位小数在BSC上)
+    // 提取金额 (USDT朐18位小数在BSC上)
     const amount = parseFloat(tx.value) / 1e18;
+    // BSCScan API 返回的 timeStamp 是秒级时间戳，转换为毫秒
+    const blockTimestamp = tx.timeStamp ? parseInt(tx.timeStamp) * 1000 : undefined;
     
     if (amount > 0) {
       scanStats.foundTransactions++;
       console.log(`[BSC Scanner] Detected transfer: ${amount} USDT from ${tx.from} to ${walletAddress.slice(0, 10)}... (tx: ${txnHash})`);
       
-      // 匹配订单
-      const matchResult = await dbRecharge.findOrderByAmount(amount, txnHash);
+      // 匹配订单（传入txnHash + blockTimestamp双重防重复）
+      const matchResult = await dbRecharge.findOrderByAmount(amount, txnHash, blockTimestamp);
       
       if (matchResult) {
         scanStats.matchedOrders++;

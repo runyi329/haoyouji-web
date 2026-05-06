@@ -158,10 +158,12 @@ async function processDepositActivity(activity: any, walletAddress: string) {
     scanStats.foundTransactions++;
 
     const timestamp = new Date(activity.transaction_timestamp).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+    // Aptos 的 transaction_timestamp 是 ISO 字符串，转换为毫秒时间戳
+    const blockTimestamp = activity.transaction_timestamp ? new Date(activity.transaction_timestamp).getTime() : undefined;
     console.log(`[Aptos Scanner] 🎯 Detected INCOMING transfer: ${amount} USDT to ${walletAddress.slice(0, 10)}... (version: ${txVersion}, time: ${timestamp})`);
 
-    // 匹配订单
-    const matchResult = await dbRecharge.findOrderByAmount(amount, txVersion);
+    // 匹配订单（传入txVersion + blockTimestamp双重防重复）
+    const matchResult = await dbRecharge.findOrderByAmount(amount, txVersion, blockTimestamp);
 
     if (!matchResult) {
       // 未匹配时不加入 processedTxns，下次扫描会重试
