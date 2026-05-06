@@ -2942,7 +2942,7 @@ export default function LedgerDetail() {
                         className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0"
                         style={{ border: '1.5px solid rgba(255,255,255,0.5)', backgroundColor: 'rgba(255,255,255,0.15)' }}
                         onClick={() => setLocation(`/ledger/${ledgerId}/position-calc${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
-                        title="ETH持仓计算器"
+                        title="Eth智能仓位管理"
                       >
                         <svg width="18" height="18" viewBox="0 0 256 417" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M127.961 0L125.166 9.5V285.168L127.961 287.958L255.923 212.32L127.961 0Z" fill="#FFFFFF"/>
@@ -3008,7 +3008,7 @@ export default function LedgerDetail() {
                       </div>
                     )}
                     {(myShortcuts as any).ethPosition && (
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)', backgroundColor: 'rgba(255,255,255,0.15)' }} onClick={() => setLocation(`/ledger/${ledgerId}/position-calc${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)} title="ETH持仓计算器">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)', backgroundColor: 'rgba(255,255,255,0.15)' }} onClick={() => setLocation(`/ledger/${ledgerId}/position-calc${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)} title="Eth智能仓位管理">
                         <svg width="18" height="18" viewBox="0 0 256 417" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M127.961 0L125.166 9.5V285.168L127.961 287.958L255.923 212.32L127.961 0Z" fill="#FFFFFF"/>
                           <path d="M127.962 0L0 212.32L127.962 287.958V154.158V0Z" fill="rgba(255,255,255,0.6)"/>
@@ -3221,7 +3221,7 @@ export default function LedgerDetail() {
                     className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
                     style={{ backgroundColor: '#FFFFFF' }}
                     onClick={() => setLocation(`/ledger/${ledgerId}/position-calc${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
-                    title="ETH持仓计算器"
+                    title="Eth智能仓位管理"
                   >
                     <svg width="22" height="22" viewBox="0 0 256 417" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M127.961 0L125.166 9.5V285.168L127.961 287.958L255.923 212.32L127.961 0Z" fill="#343434"/>
@@ -4302,7 +4302,7 @@ export default function LedgerDetail() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5">
                       <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-7 h-7 object-contain rounded-full flex-shrink-0" />
-                      <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>持仓计算</span>
+                      <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>Eth智能仓位</span>
                     </div>
                     <ChevronRight className="w-4 h-4" style={{ color: '#3B5BDB' }} />
                   </div>
