@@ -870,9 +870,9 @@ export default function PositionCalc() {
                                   paddingLeft: '6px',
                                 }}
                               >
-                                {/* 战略段：百分比+ETH数量都靠左，紧挨 */}
-                                <span className="text-[10px] font-bold shrink-0" style={{ color: 'rgba(20,20,20,0.85)' }}>{100 - strategyRatio}%</span>
-                                <span className="text-[10px] font-mono shrink-0 whitespace-nowrap ml-0.5" style={{ color: 'rgba(20,20,20,0.65)' }}>{Math.round(actualQty * (100 - strategyRatio) / 100)}E</span>
+                                {/* 战略段：百分比+ETH数量都靠左，紧挨，字重相同，颜色略有区分 */}
+                                <span className="text-[10px] font-semibold shrink-0" style={{ color: 'rgba(10,10,10,0.95)' }}>{100 - strategyRatio}%</span>
+                                <span className="text-[10px] font-semibold shrink-0 whitespace-nowrap ml-0.5" style={{ color: 'rgba(60,40,0,0.75)' }}>{Math.round(actualQty * (100 - strategyRatio) / 100)}E</span>
                               </div>
                               {/* 策略持仓段（右侧，暗金） */}
                               <div
@@ -887,9 +887,9 @@ export default function PositionCalc() {
                                   paddingRight: '6px',
                                 }}
                               >
-                                {/* 策略段：ETH数量+百分比都靠右，紧挨 */}
-                                <span className="text-[10px] font-mono shrink-0 whitespace-nowrap mr-0.5" style={{ color: 'rgba(255,220,100,0.8)' }}>{Math.round(actualQty * strategyRatio / 100)}E</span>
-                                <span className="text-[10px] font-bold shrink-0" style={{ color: 'rgba(255,220,100,0.95)' }}>{strategyRatio}%</span>
+                                {/* 策略段：ETH数量+百分比都靠右，紧挨，字重相同，颜色略有区分 */}
+                                <span className="text-[10px] font-semibold shrink-0 whitespace-nowrap mr-0.5" style={{ color: 'rgba(255,200,60,0.75)' }}>{Math.round(actualQty * strategyRatio / 100)}E</span>
+                                <span className="text-[10px] font-semibold shrink-0" style={{ color: 'rgba(255,240,160,0.98)' }}>{strategyRatio}%</span>
                               </div>
                             </div>
                             {/* 圆形手柄：金色圆底 + 立体 ETH 图标 */}
