@@ -2178,11 +2178,13 @@ export default function LedgerDetail() {
     { enabled: isCustomAF && !effectiveIsFunder, refetchInterval: 30000 }
   );
   // 独立本地 state，初始值为 undefined（未初始化），useEffect 在服务器数据到达后初始化一次
-  // 短信通知开关（仅YJH本人可见）
+  // 短信通知开关（YJH本人或管理员视角切换到YJH时可见）
   const isYJHUser = (user as any)?.id === 4957151;
+  const isViewingAsYJH = viewAsUserId === 4957151;
+  const showSmsSwitch = isCustomAF && (isYJHUser || isViewingAsYJH);
   const { data: smsNotifySettings } = trpc.ledger.afGetSmsNotifySettings.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF && isYJHUser && !viewAsUserId }
+    { enabled: showSmsSwitch }
   );
   const [localSms131, setLocalSms131] = useState<boolean | undefined>(undefined);
   const [localSms182, setLocalSms182] = useState<boolean | undefined>(undefined);
@@ -3394,8 +3396,8 @@ export default function LedgerDetail() {
               {/* 卡片 2：推荐人数（资金方不显示） */}
               {!effectiveIsFunder && (
               <div className="rounded-2xl px-4 py-3 relative" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)', cursor: ((user as any)?.id === 4957151 || isOwner || isAdmin) ? 'pointer' : 'default' }} onClick={() => { if ((user as any)?.id === 4957151 || isOwner || isAdmin) setLocation(`/ledger/${ledgerId}/af-invite-tree${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>
-                {/* 右上角：短信通知开关（仅YJH本人可见） */}
-                {isYJHUser && !viewAsUserId && (
+                {/* 右上角：短信通知开关（YJH本人或管理员视角切换到YJH时可见） */}
+                {showSmsSwitch && (
                   <div className="absolute top-2 right-2 flex flex-col items-end gap-1" onClick={e => e.stopPropagation()}>
                     {/* 131 开关 */}
                     <div className="flex items-center gap-1">
