@@ -2178,32 +2178,6 @@ ${klinesSummary}
       .input(z.object({
         userId: z.number(),
         newPassword: z.string().min(6),
-  // 短信通知开关（仅YJH本人可见）
-  const isYJHUser = (user as any)?.id === YJH_USER_ID;
-  const { data: smsNotifySettings, refetch: refetchSmsSettings } = trpc.ledger.afGetSmsNotifySettings.useQuery(
-    { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF && isYJHUser && !viewAsUserId }
-  );
-  const [localSms131, setLocalSms131] = useState<boolean | undefined>(undefined);
-  const [localSms182, setLocalSms182] = useState<boolean | undefined>(undefined);
-  const smsInitialized = useRef(false);
-  useEffect(() => {
-    if (!smsInitialized.current && smsNotifySettings !== undefined) {
-      setLocalSms131(smsNotifySettings.phone131);
-      setLocalSms182(smsNotifySettings.phone182);
-      smsInitialized.current = true;
-    }
-  }, [smsNotifySettings]);
-  const toggleSmsNotifyMutation = trpc.ledger.afToggleSmsNotify.useMutation({
-    onMutate: (variables) => {
-      if (variables.phone === '13127919173') setLocalSms131(variables.enabled);
-      else if (variables.phone === '18271901931') setLocalSms182(variables.enabled);
-    },
-    onError: () => {
-      setLocalSms131(smsNotifySettings?.phone131);
-      setLocalSms182(smsNotifySettings?.phone182);
-    },
-  });
       }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user.role !== "super_admin") {
