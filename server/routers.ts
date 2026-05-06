@@ -20263,8 +20263,49 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       return { success: true };
     }),
 
+   // ========== 临时：修复 eth_position_settings 表结构 ==========
+  ethPositionMigrateSettings: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const results: string[] = [];
+      try {
+        const [cols] = await dbConn.execute('DESCRIBE eth_position_settings') as any;
+        const colNames = (cols as any[]).map((c: any) => c.Field);
+        results.push('当前字段: ' + colNames.join(', '));
+        if (!colNames.includes('user_id')) {
+          await dbConn.execute('ALTER TABLE eth_position_settings ADD COLUMN user_id INT NOT NULL DEFAULT 0 AFTER ledger_id');
+          results.push('✅ 已添加 user_id');
+        } else { results.push('ℹ️ user_id 已存在'); }
+        if (!colNames.includes('strategy_ratio')) {
+          await dbConn.execute('ALTER TABLE eth_position_settings ADD COLUMN strategy_ratio INT NOT NULL DEFAULT 50');
+          results.push('✅ 已添加 strategy_ratio');
+        } else { results.push('ℹ️ strategy_ratio 已存在'); }
+        if (!colNames.includes('price_step')) {
+          await dbConn.execute('ALTER TABLE eth_position_settings ADD COLUMN price_step INT NOT NULL DEFAULT 50');
+          results.push('✅ 已添加 price_step');
+        } else { results.push('ℹ️ price_step 已存在'); }
+        if (!colNames.includes('target_eth_qty')) {
+          await dbConn.execute("ALTER TABLE eth_position_settings ADD COLUMN target_eth_qty DECIMAL(18,8) NOT NULL DEFAULT '0.00000000'");
+          results.push('✅ 已添加 target_eth_qty');
+        } else { results.push('ℹ️ target_eth_qty 已存在'); }
+        // 修复唯一索引
+        try {
+          const [idxRows] = await dbConn.execute("SHOW INDEX FROM eth_position_settings WHERE Key_name != 'PRIMARY'") as any;
+          const idxNames = [...new Set((idxRows as any[]).map((i: any) => i.Key_name))] as string[];
+          for (const n of idxNames) {
+            try { await dbConn.execute(`DROP INDEX \`${n}\` ON eth_position_settings`); results.push(`✅ 删除索引 ${n}`); } catch(e: any) { results.push(`跳过索引 ${n}: ${e.message}`); }
+          }
+          await dbConn.execute('CREATE UNIQUE INDEX eth_settings_ledger_user_uniq ON eth_position_settings (ledger_id, user_id)');
+          results.push('✅ 已添加 (ledger_id, user_id) 唯一索引');
+        } catch(e: any) { results.push('索引: ' + e.message); }
+      } catch(e: any) { results.push('错误: ' + e.message); }
+      return { success: true, results };
+    }),
   // ========== ETH 持仓修改日志 ==========
-
   ethPositionAddLog: protectedProcedure
     .input(z.object({
       ledgerId: z.number(),
