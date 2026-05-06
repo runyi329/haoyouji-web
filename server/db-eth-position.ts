@@ -151,6 +151,7 @@ export interface EthPositionSettingsData {
   cnyRate: number;
   targetEthQty: number;
   strategyRatio: number; // 策略持仓占比 0-100，战略持仓 = 100 - strategyRatio
+  priceStep: number; // 档位粒度：20/50/100/200，默认50
 }
 
 /**
@@ -158,17 +159,18 @@ export interface EthPositionSettingsData {
  */
 export async function getEthPositionSettings(ledgerId: number, userId: number): Promise<EthPositionSettingsData> {
   const db = await getLedgerDb();
-  if (!db) return { targetProfitCny: 0, cnyRate: 7.28, targetEthQty: 0, strategyRatio: 50 };
+  if (!db) return { targetProfitCny: 0, cnyRate: 7.28, targetEthQty: 0, strategyRatio: 50, priceStep: 50 };
   const rows = await db
     .select()
     .from(ethPositionSettings)
     .where(and(eq(ethPositionSettings.ledgerId, ledgerId), eq(ethPositionSettings.userId, userId)));
-  if (rows.length === 0) return { targetProfitCny: 0, cnyRate: 7.28, targetEthQty: 0, strategyRatio: 50 };
+  if (rows.length === 0) return { targetProfitCny: 0, cnyRate: 7.28, targetEthQty: 0, strategyRatio: 50, priceStep: 50 };
   return {
     targetProfitCny: parseFloat(rows[0].targetProfitCny as string),
     cnyRate: parseFloat(rows[0].cnyRate as string),
     targetEthQty: parseFloat((rows[0] as any).targetEthQty as string || '0'),
     strategyRatio: (rows[0] as any).strategyRatio ?? 50,
+    priceStep: (rows[0] as any).priceStep ?? 50,
   };
 }
 
@@ -181,7 +183,8 @@ export async function upsertEthPositionSettings(
   targetProfitCny: number,
   cnyRate: number,
   targetEthQty: number = 0,
-  strategyRatio: number = 50
+  strategyRatio: number = 50,
+  priceStep: number = 50
 ): Promise<void> {
   const db = await getLedgerDb();
   if (!db) return;
@@ -194,14 +197,16 @@ export async function upsertEthPositionSettings(
       cnyRate: String(cnyRate),
       targetEthQty: String(targetEthQty),
       strategyRatio,
-    })
+      priceStep,
+    } as any)
     .onDuplicateKeyUpdate({
       set: {
         targetProfitCny: String(targetProfitCny),
         cnyRate: String(cnyRate),
         targetEthQty: String(targetEthQty),
         strategyRatio,
-      },
+        priceStep,
+      } as any,
     });
 }
 
