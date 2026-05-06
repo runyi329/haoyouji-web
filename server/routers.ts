@@ -14105,11 +14105,13 @@ ${klinesSummary}
           financeType: 'finance_type',
         };
         // 特殊处理 collateralAssets（JSON 序列化）
+        // 判断是否正在清空担保物（collateralAssets 为空数组）
+        const isClearingCollateral = input.collateralAssets !== undefined && input.collateralAssets.length === 0;
         if (input.collateralAssets !== undefined) {
           updateCols.push('collateral_assets = ?');
           updateVals.push(input.collateralAssets && input.collateralAssets.length > 0 ? JSON.stringify(input.collateralAssets) : null);
           // 清空担保物时，同时清空旧的单笔字段，避免兼容逻辑重新读出来
-          if (input.collateralAssets.length === 0) {
+          if (isClearingCollateral) {
             updateCols.push('collateral_coin = ?');
             updateVals.push(null);
             updateCols.push('collateral_qty = ?');
@@ -14120,6 +14122,9 @@ ${klinesSummary}
         // DECIMAL/数字列：空字符串需转为 null，否则 MySQL 报 Incorrect decimal value
         const decimalCols = new Set(['amount', 'buy_price', 'buy_quantity', 'interest_rate_annual', 'interest_base', 'collateral_qty']);
         for (const [key, col] of Object.entries(fieldMap)) {
+          // 如果正在清空担保物（collateralAssets=[]），跳过 collateralCoin/collateralQty，
+          // 避免 fieldMap 循环把旧字段重新写入，覆盖上面刚清空的值
+          if (isClearingCollateral && (key === 'collateralCoin' || key === 'collateralQty')) continue;
           if ((input as any)[key] !== undefined) {
             let val = (input as any)[key];
             if (decimalCols.has(col) && (val === '' || val === null)) val = null;
