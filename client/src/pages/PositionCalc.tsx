@@ -610,17 +610,17 @@ export default function PositionCalc() {
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-20 flex items-center px-4 py-3"
-        style={{ background: '#000000', borderBottom: '1px solid rgba(212,175,55,0.18)' }}
+        style={{ background: '#000000', borderBottom: '1px solid rgba(192,192,192,0.18)' }}
       >
         <button
           onClick={() => setLocation(`/ledger/${ledgerId}`)}
           className="w-8 h-8 rounded-full flex items-center justify-center mr-3"
-            style={{ backgroundColor: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.28)' }}
+            style={{ backgroundColor: 'rgba(192,192,192,0.08)', border: '1px solid rgba(192,192,192,0.28)' }}
         >
           <ChevronLeft className="w-5 h-5 text-white" />
         </button>
         <div className="flex-1">
-          <div className="flex items-center gap-1.5 font-semibold text-base" style={{ color: '#d4af37', letterSpacing: '0.05em' }}>
+          <div className="flex items-center gap-1.5 font-semibold text-base" style={{ letterSpacing: '0.05em', background: 'linear-gradient(180deg, #f0f0f0 0%, #c8c8c8 30%, #a0a0a0 60%, #d0d0d0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.8))' }}>
             <img src="/eth-circle-icon.webp" alt="ETH" className="w-5 h-5 object-contain rounded-full flex-shrink-0" />
             智能仓位管理
           </div>
@@ -640,14 +640,14 @@ export default function PositionCalc() {
               setShowAutoAlloc(true);
             }}
             className="px-3 py-1 rounded-lg text-sm font-medium"
-            style={{ backgroundColor: 'rgba(212,175,55,0.08)', color: '#d4af37', border: '1px solid rgba(212,175,55,0.28)' }}
+            style={{ backgroundColor: 'rgba(192,192,192,0.08)', color: '#c0c0c0', border: '1px solid rgba(192,192,192,0.28)' }}
           >
             配置
           </button>
           <button
             onClick={() => window.location.reload()}
             className="px-3 py-1 rounded-lg text-sm font-medium"
-            style={{ backgroundColor: 'transparent', color: 'rgba(212,175,55,0.35)', border: '1px solid rgba(212,175,55,0.12)' }}
+            style={{ backgroundColor: 'transparent', color: 'rgba(192,192,192,0.35)', border: '1px solid rgba(192,192,192,0.12)' }}
           >
             刷新
           </button>
@@ -660,12 +660,12 @@ export default function PositionCalc() {
           // 展示模式：财经质感卡片
           <div
             className="relative overflow-hidden rounded-2xl"
-            style={{ background: 'linear-gradient(160deg, #060400 0%, #0c0900 50%, #060400 100%)', border: '1px solid rgba(212,175,55,0.2)', boxShadow: '0 0 0 1px rgba(245,226,122,0.05) inset, 0 8px 40px rgba(0,0,0,0.98)' }}
+            style={{ background: 'linear-gradient(160deg, #060400 0%, #0c0900 50%, #060400 100%)', border: '1px solid rgba(192,192,192,0.2)', boxShadow: '0 0 0 1px rgba(245,226,122,0.05) inset, 0 8px 40px rgba(0,0,0,0.98)' }}
           >
             {/* 装饰光晕 */}
             <div className="absolute top-0 right-0 w-28 h-28 rounded-full" style={{ background: 'radial-gradient(circle, rgba(245,226,122,0.06) 0%, transparent 60%)', transform: 'translate(40%, -40%)' }} />
             {/* 顶部金属高光线 */}
-            <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.15) 15%, #f0d060 42%, #fffbe8 50%, #f0d060 58%, rgba(212,175,55,0.15) 85%, transparent 100%)' }} />
+            <div className="absolute top-0 left-0 right-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 0%, rgba(192,192,192,0.15) 15%, #f0d060 42%, #fffbe8 50%, #f0d060 58%, rgba(192,192,192,0.15) 85%, transparent 100%)' }} />
             {/* 底部暗线 */}
             <div className="absolute bottom-0 left-0 right-0 h-px" style={{ background: 'transparent' }} />
             <div className="relative px-5 py-4">
@@ -678,13 +678,13 @@ export default function PositionCalc() {
                       <>
                         <span
                           className="text-xs font-medium tracking-widest"
-                          style={{ color: 'rgba(212,175,55,0.5)', letterSpacing: '0.2em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '80px' }}
+                          style={{ color: 'rgba(192,192,192,0.5)', letterSpacing: '0.2em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '80px' }}
                         >
                           {displayName}
                         </span>
                         <span
                           className="text-xs font-medium"
-                          style={{ color: 'rgba(212,175,55,0.3)', margin: '0 0.3em', letterSpacing: 0 }}
+                          style={{ color: 'rgba(192,192,192,0.3)', margin: '0 0.3em', letterSpacing: 0 }}
                         >
                           ·
                         </span>
@@ -692,7 +692,7 @@ export default function PositionCalc() {
                     )}
                     <span
                       className="text-xs font-medium tracking-widest"
-                      style={{ color: 'rgba(212,175,55,0.4)', letterSpacing: '0.2em', whiteSpace: 'nowrap' }}
+                      style={{ color: 'rgba(192,192,192,0.4)', letterSpacing: '0.2em', whiteSpace: 'nowrap' }}
                     >
                       目标止盈利润
                     </span>
@@ -720,25 +720,25 @@ export default function PositionCalc() {
                   </div>
                 </div>
                 {/* 竖分割线 */}
-                <div className="w-px self-stretch" style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(212,175,55,0.3) 20%, rgba(212,175,55,0.3) 80%, transparent 100%)' }} />
+                <div className="w-px self-stretch" style={{ background: 'linear-gradient(180deg, transparent 0%, rgba(192,192,192,0.3) 20%, rgba(192,192,192,0.3) 80%, transparent 100%)' }} />
                 {/* 右栏：ETH/USDT + USDT/CNY */}
                 <div className="pl-3 flex flex-col justify-start gap-3" style={{ minWidth: 0, width: '90px', flexShrink: 0 }}>
                   <div style={{ minWidth: 0 }}>
-                    <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.45)' }}>ETH/USDT</div>
-                    <div className="text-base font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', display: 'block', width: '84px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: 'linear-gradient(180deg, #f5e27a 0%, #d4af37 50%, #b8860b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.9))' }}>
+                    <div className="text-[10px] mb-0.5" style={{ color: 'rgba(192,192,192,0.45)' }}>ETH/USDT</div>
+                    <div className="text-base font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', display: 'block', width: '84px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: 'linear-gradient(180deg, #e8e8e8 0%, #c0c0c0 50%, #a0a0a0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.9))' }}>
                       {currentPrice
                         ? currentPrice.toFixed(2)
                         : '--'}
                     </div>
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <div className="text-[10px] mb-0.5" style={{ color: 'rgba(212,175,55,0.45)' }}>USDT/CNY</div>
-                    <div className="text-base font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', display: 'block', width: '84px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: 'linear-gradient(180deg, #f5e27a 0%, #d4af37 50%, #b8860b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.9))' }}>{cnyRate.toFixed(5)}</div>
+                    <div className="text-[10px] mb-0.5" style={{ color: 'rgba(192,192,192,0.45)' }}>USDT/CNY</div>
+                    <div className="text-base font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em', display: 'block', width: '84px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: 'linear-gradient(180deg, #e8e8e8 0%, #c0c0c0 50%, #a0a0a0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.9))' }}>{cnyRate.toFixed(5)}</div>
                   </div>
                 </div>
               </div>
               {/* 持仓进度区 - ETH 蓝色系 */}
-              <div className="mb-3 pt-2" style={{ borderTop: '1px solid rgba(212,175,55,0.1)' }}>
+              <div className="mb-3 pt-2" style={{ borderTop: '1px solid rgba(192,192,192,0.1)' }}>
                 {/* 数量标注行 */}
                 {(() => {
                   const targetQty = parseFloat(targetEthQty) || 0;
@@ -762,19 +762,19 @@ export default function PositionCalc() {
                       {/* 数量对比行 */}
                       <div className="flex items-end justify-between mb-1.5">
                         <div>
-                          <div className="text-[11px] mb-0.5 font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.45)' }}>实际持仓</div>
-                          <span className="text-2xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #fff5c0 0%, #f5e27a 30%, #d4af37 65%, #b8860b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,1))' }}>
+                          <div className="text-[11px] mb-0.5 font-medium tracking-wider" style={{ color: 'rgba(192,192,192,0.45)' }}>实际持仓</div>
+                          <span className="text-2xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,1))' }}>
                             {actualQty > 0 ? actualQty.toFixed(0) : '--'}
                           </span>
-                          <span className="text-xs ml-1" style={{ color: 'rgba(212,175,55,0.3)' }}>ETH</span>
+                          <span className="text-xs ml-1" style={{ color: 'rgba(192,192,192,0.3)' }}>ETH</span>
                         </div>
                         <div className="flex items-end gap-2">
                           <div className="text-right">
-                            <div className="text-[11px] mb-0.5 font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.45)' }}>目标持仓</div>
-                            <span className="text-2xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #fff5c0 0%, #f5e27a 30%, #d4af37 65%, #b8860b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,1))' }}>
+                            <div className="text-[11px] mb-0.5 font-medium tracking-wider" style={{ color: 'rgba(192,192,192,0.45)' }}>目标持仓</div>
+                            <span className="text-2xl font-bold font-mono" style={{ fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,1))' }}>
                               {targetQty > 0 ? targetQty.toFixed(0) : '--'}
                             </span>
-                            <span className="text-xs ml-1" style={{ color: 'rgba(212,175,55,0.25)' }}>ETH</span>
+                            <span className="text-xs ml-1" style={{ color: 'rgba(192,192,192,0.25)' }}>ETH</span>
                           </div>
                         </div>
                       </div>
@@ -782,7 +782,7 @@ export default function PositionCalc() {
                       {/* 进度条：目标=深蓝底，实际=亮蓝高光，百分比内嵌右端 */}
                       <div className="relative rounded overflow-hidden" style={{ height: '18px', background: 'rgba(255,255,255,0.04)' }}>
                         {/* 目标底条（满宽，深蓝低光） */}
-                        <div className="absolute inset-0 rounded" style={{ background: 'linear-gradient(90deg, rgba(212,175,55,0.1) 0%, rgba(212,175,55,0.03) 100%)' }} />
+                        <div className="absolute inset-0 rounded" style={{ background: 'linear-gradient(90deg, rgba(192,192,192,0.1) 0%, rgba(192,192,192,0.03) 100%)' }} />
                         {/* 实际填充（亮蓝高光），内含百分比数字 */}
                         {pct > 0 && (
                           <div
@@ -790,9 +790,9 @@ export default function PositionCalc() {
                             style={{
                               width: `${pct * 100}%`,
                               background: pct >= 1
-                                ? 'linear-gradient(90deg, #9a7000 0%, #d4af37 45%, #f5e27a 80%, #fffbe8 100%)'
-                                : 'linear-gradient(90deg, #6a4800 0%, #b8860b 45%, #d4af37 80%, #f5e27a 100%)',
-                              boxShadow: '0 0 14px rgba(212,175,55,0.55), 0 0 5px rgba(255,245,192,0.25)',
+                                ? 'linear-gradient(90deg, #888888 0%, #c0c0c0 45%, #e8e8e8 80%, #fffbe8 100%)'
+                                : 'linear-gradient(90deg, #606060 0%, #a0a0a0 45%, #c0c0c0 80%, #e8e8e8 100%)',
+                              boxShadow: '0 0 14px rgba(192,192,192,0.55), 0 0 5px rgba(255,245,192,0.25)',
                               minWidth: targetQty > 0 ? '2rem' : '0',
                               borderRadius: '0 4px 4px 0',
                             }}
@@ -860,8 +860,8 @@ export default function PositionCalc() {
                                 className="absolute top-0 left-0 h-full"
                                 style={{
                                   width: `${100 - strategyRatio}%`,
-                                  background: 'linear-gradient(90deg, #9a7000 0%, #d4af37 60%, #f5e27a 100%)',
-                                  boxShadow: '2px 0 8px rgba(212,175,55,0.4)',
+                                  background: 'linear-gradient(90deg, #888888 0%, #c0c0c0 60%, #e8e8e8 100%)',
+                                  boxShadow: '2px 0 8px rgba(192,192,192,0.4)',
                                   borderRadius: '4px 0 0 4px',
                                 }}
                               />
@@ -873,7 +873,7 @@ export default function PositionCalc() {
                                   width: `${strategyRatio}%`,
                                   background: 'linear-gradient(90deg, rgba(139,100,0,0.7) 0%, rgba(90,60,0,0.5) 100%)',
                                   borderRadius: '0 4px 4px 0',
-                                  borderLeft: '1px solid rgba(212,175,55,0.3)',
+                                  borderLeft: '1px solid rgba(192,192,192,0.3)',
                                 }}
                               />
                             </div>
@@ -898,14 +898,14 @@ export default function PositionCalc() {
                                 height: '32px',
                                 borderRadius: '50%',
                                 background: strategyUnlocked
-                                  ? 'linear-gradient(135deg, #fff5c0 0%, #f5e27a 30%, #d4af37 65%, #b8860b 100%)'
-                                  : 'linear-gradient(135deg, #3a2800 0%, #7a5500 50%, #4a3200 100%)',
+                                  ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)'
+                                  : 'linear-gradient(135deg, #383838 0%, #707070 50%, #404040 100%)',
                                 boxShadow: strategyUnlocked
                                   ? '0 0 14px rgba(255,235,100,1), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.5)'
-                                  : '0 0 6px rgba(212,175,55,0.4), 0 2px 6px rgba(0,0,0,0.8)',
+                                  : '0 0 6px rgba(192,192,192,0.4), 0 2px 6px rgba(0,0,0,0.8)',
                                 border: strategyUnlocked
                                   ? '1.5px solid rgba(255,245,192,0.9)'
-                                  : '1.5px solid rgba(212,175,55,0.4)',
+                                  : '1.5px solid rgba(192,192,192,0.4)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -915,20 +915,20 @@ export default function PositionCalc() {
                                 <svg width="16" height="20" viewBox="0 0 16 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                                   <defs>
                                     <linearGradient id="ethTop" x1="0" y1="0" x2="1" y2="1">
-                                      <stop offset="0%" stopColor={strategyUnlocked ? '#fffbe8' : '#d4af37'} />
-                                      <stop offset="100%" stopColor={strategyUnlocked ? '#f5e27a' : '#9a7000'} />
+                                      <stop offset="0%" stopColor={strategyUnlocked ? '#fffbe8' : '#c0c0c0'} />
+                                      <stop offset="100%" stopColor={strategyUnlocked ? '#e8e8e8' : '#888888'} />
                                     </linearGradient>
                                     <linearGradient id="ethMidL" x1="0" y1="0" x2="1" y2="0">
-                                      <stop offset="0%" stopColor={strategyUnlocked ? '#fff5c0' : '#b8860b'} />
-                                      <stop offset="100%" stopColor={strategyUnlocked ? '#d4af37' : '#7a5500'} />
+                                      <stop offset="0%" stopColor={strategyUnlocked ? '#fff5c0' : '#a0a0a0'} />
+                                      <stop offset="100%" stopColor={strategyUnlocked ? '#c0c0c0' : '#707070'} />
                                     </linearGradient>
                                     <linearGradient id="ethMidR" x1="0" y1="0" x2="1" y2="0">
-                                      <stop offset="0%" stopColor={strategyUnlocked ? '#f5e27a' : '#9a7000'} />
-                                      <stop offset="100%" stopColor={strategyUnlocked ? '#b8860b' : '#5a3800'} />
+                                      <stop offset="0%" stopColor={strategyUnlocked ? '#e8e8e8' : '#888888'} />
+                                      <stop offset="100%" stopColor={strategyUnlocked ? '#a0a0a0' : '#505050'} />
                                     </linearGradient>
                                     <linearGradient id="ethBot" x1="0" y1="0" x2="1" y2="1">
-                                      <stop offset="0%" stopColor={strategyUnlocked ? '#d4af37' : '#7a5500'} />
-                                      <stop offset="100%" stopColor={strategyUnlocked ? '#9a7000' : '#4a3000'} />
+                                      <stop offset="0%" stopColor={strategyUnlocked ? '#c0c0c0' : '#707070'} />
+                                      <stop offset="100%" stopColor={strategyUnlocked ? '#888888' : '#4a3000'} />
                                     </linearGradient>
                                   </defs>
                                   {/* 上半菱形 */}
@@ -948,22 +948,22 @@ export default function PositionCalc() {
                             {/* 左：战略筹码 */}
                             <div className="flex flex-col items-start gap-0.5">
                               <div className="flex items-center gap-1">
-                                <span className="text-[10px] font-bold" style={{ color: '#d4af37' }}>{100 - strategyRatio}%</span>
-                                <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.3)' }}>·</span>
-                                <span className="text-[10px] font-mono" style={{ color: 'rgba(212,175,55,0.5)' }}>{Math.round(actualQty * (100 - strategyRatio) / 100)} ETH</span>
+                                <span className="text-[10px] font-bold" style={{ color: '#c0c0c0' }}>{100 - strategyRatio}%</span>
+                                <span className="text-[10px]" style={{ color: 'rgba(192,192,192,0.3)' }}>·</span>
+                                <span className="text-[10px] font-mono" style={{ color: 'rgba(192,192,192,0.5)' }}>{Math.round(actualQty * (100 - strategyRatio) / 100)} ETH</span>
                               </div>
-                              <span className="text-[10px] font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.6)' }}>战略筹码</span>
-                              <span className="text-[9px] italic" style={{ color: 'rgba(212,175,55,0.3)' }}>要像山一样坚定</span>
+                              <span className="text-[10px] font-medium tracking-wider" style={{ color: 'rgba(192,192,192,0.6)' }}>战略筹码</span>
+                              <span className="text-[9px] italic" style={{ color: 'rgba(192,192,192,0.3)' }}>要像山一样坚定</span>
                             </div>
                             {/* 右：策略筹码 */}
                             <div className="flex flex-col items-end gap-0.5">
                               <div className="flex items-center gap-1">
-                                <span className="text-[10px] font-mono" style={{ color: 'rgba(212,175,55,0.5)' }}>{Math.round(actualQty * strategyRatio / 100)} ETH</span>
-                                <span className="text-[10px]" style={{ color: 'rgba(212,175,55,0.3)' }}>·</span>
-                                <span className="text-[10px] font-bold" style={{ color: '#b8860b' }}>{strategyRatio}%</span>
+                                <span className="text-[10px] font-mono" style={{ color: 'rgba(192,192,192,0.5)' }}>{Math.round(actualQty * strategyRatio / 100)} ETH</span>
+                                <span className="text-[10px]" style={{ color: 'rgba(192,192,192,0.3)' }}>·</span>
+                                <span className="text-[10px] font-bold" style={{ color: '#a0a0a0' }}>{strategyRatio}%</span>
                               </div>
-                              <span className="text-[10px] font-medium tracking-wider" style={{ color: 'rgba(212,175,55,0.6)' }}>策略筹码</span>
-                              <span className="text-[9px] italic" style={{ color: 'rgba(212,175,55,0.3)' }}>要像水一样灵活</span>
+                              <span className="text-[10px] font-medium tracking-wider" style={{ color: 'rgba(192,192,192,0.6)' }}>策略筹码</span>
+                              <span className="text-[9px] italic" style={{ color: 'rgba(192,192,192,0.3)' }}>要像水一样灵活</span>
                             </div>
                           </div>
                         </div>
@@ -984,10 +984,10 @@ export default function PositionCalc() {
 
                         // 统一行样式
                         const rowCls = "grid mt-2 pt-2 items-center" as const;
-                        const rowStyle = { borderTop: '1px solid rgba(212,175,55,0.08)', gridTemplateColumns: '1fr 28px 1fr' };
-                        const labelStyle2: React.CSSProperties = { color: 'rgba(212,175,55,0.38)', fontSize: '11px', letterSpacing: '0.05em', marginBottom: '3px', fontWeight: 500 };
-                        const numStyle: React.CSSProperties = { fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #fff5c0 0%, #f5e27a 30%, #d4af37 65%, #b8860b 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,1))' };
-                        const vsStyle: React.CSSProperties = { color: 'rgba(212,175,55,0.2)', fontSize: '11px', fontWeight: 700, textAlign: 'center', letterSpacing: '0.05em', lineHeight: 1 };
+                        const rowStyle = { borderTop: '1px solid rgba(192,192,192,0.08)', gridTemplateColumns: '1fr 28px 1fr' };
+                        const labelStyle2: React.CSSProperties = { color: 'rgba(192,192,192,0.38)', fontSize: '11px', letterSpacing: '0.05em', marginBottom: '3px', fontWeight: 500 };
+                        const numStyle: React.CSSProperties = { fontVariantNumeric: 'tabular-nums', background: 'linear-gradient(180deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,1))' };
+                        const vsStyle: React.CSSProperties = { color: 'rgba(192,192,192,0.2)', fontSize: '11px', fontWeight: 700, textAlign: 'center', letterSpacing: '0.05em', lineHeight: 1 };
 
                         return (
                           <>
@@ -999,8 +999,8 @@ export default function PositionCalc() {
                                   <div style={labelStyle2}>实际止盈</div>
                                   <span className="text-xl font-bold font-mono" style={numStyle}>
                                     {actualExitPrice > 0
-                                      ? <>{Math.round(actualExitPrice)}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
-                                      : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
+                                      ? <>{Math.round(actualExitPrice)}<span style={{ color: 'rgba(192,192,192,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
+                                      : <span style={{ color: 'rgba(192,192,192,0.25)' }}>--</span>}
                                   </span>
                                 </div>
                                 {/* 中：VS */}
@@ -1008,15 +1008,15 @@ export default function PositionCalc() {
                                 {/* 右：目标止盈 */}
                                 <div className="text-right">
                                   <div className="flex items-center gap-0.5 justify-end">
-                                    <button onClick={(e) => { e.stopPropagation(); setShowExitPriceInfo(true); }} style={{ color: 'rgba(212,175,55,0.4)', lineHeight: 1 }}>
+                                    <button onClick={(e) => { e.stopPropagation(); setShowExitPriceInfo(true); }} style={{ color: 'rgba(192,192,192,0.4)', lineHeight: 1 }}>
                                       <HelpCircle className="w-2.5 h-2.5" />
                                     </button>
                                     <span style={labelStyle2}>目标止盈</span>
                                   </div>
                                   <span className="text-xl font-bold font-mono" style={numStyle}>
                                     {targetExitPrice > 0
-                                      ? <>{Math.round(targetExitPrice)}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
-                                      : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
+                                      ? <>{Math.round(targetExitPrice)}<span style={{ color: 'rgba(192,192,192,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
+                                      : <span style={{ color: 'rgba(192,192,192,0.25)' }}>--</span>}
                                   </span>
                                 </div>
                               </div>
@@ -1031,7 +1031,7 @@ export default function PositionCalc() {
                                   <span className="text-xl font-bold font-mono" style={numStyle}>
                                     {actualAvgPrice > 0 && actualExitPrice > actualAvgPrice
                                       ? `+${((actualExitPrice - actualAvgPrice) / actualAvgPrice * 100).toFixed(1)}%`
-                                      : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
+                                      : <span style={{ color: 'rgba(192,192,192,0.25)' }}>--</span>}
                                   </span>
                                 </div>
                                 {/* 中：VS */}
@@ -1042,7 +1042,7 @@ export default function PositionCalc() {
                                   <span className="text-xl font-bold font-mono" style={numStyle}>
                                     {targetAvgPrice > 0 && targetExitPrice > targetAvgPrice
                                       ? `+${((targetExitPrice - targetAvgPrice) / targetAvgPrice * 100).toFixed(1)}%`
-                                      : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
+                                      : <span style={{ color: 'rgba(192,192,192,0.25)' }}>--</span>}
                                   </span>
                                 </div>
                               </div>
@@ -1056,8 +1056,8 @@ export default function PositionCalc() {
                                   <div style={labelStyle2}>实际均价</div>
                                   <span className="text-xl font-bold font-mono" style={numStyle}>
                                     {actualAvg2 > 0
-                                      ? <>{Math.round(actualAvg2)}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
-                                      : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
+                                      ? <>{Math.round(actualAvg2)}<span style={{ color: 'rgba(192,192,192,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
+                                      : <span style={{ color: 'rgba(192,192,192,0.25)' }}>--</span>}
                                   </span>
                                 </div>
                                 {/* 中：VS */}
@@ -1067,8 +1067,8 @@ export default function PositionCalc() {
                                   <div style={labelStyle2}>目标均价</div>
                                   <span className="text-xl font-bold font-mono" style={numStyle}>
                                     {targetAvg2 > 0
-                                      ? <>{Math.round(targetAvg2)}<span style={{ color: 'rgba(212,175,55,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
-                                      : <span style={{ color: 'rgba(212,175,55,0.25)' }}>--</span>}
+                                      ? <>{Math.round(targetAvg2)}<span style={{ color: 'rgba(192,192,192,0.5)', fontSize: '10px', marginLeft: '2px' }}>U</span></>
+                                      : <span style={{ color: 'rgba(192,192,192,0.25)' }}>--</span>}
                                   </span>
                                 </div>
                               </div>
@@ -1086,7 +1086,7 @@ export default function PositionCalc() {
           </div>
         ) : (
           // 编辑模式
-          <div className="rounded-2xl px-5 py-4" style={{ background: 'linear-gradient(160deg, #0d0900 0%, #1a1200 100%)', border: '1px solid rgba(212,175,55,0.22)', boxShadow: '0 12px 40px rgba(0,0,0,0.9), inset 0 1px 0 rgba(212,175,55,0.15)' }}>
+          <div className="rounded-2xl px-5 py-4" style={{ background: 'linear-gradient(160deg, #0d0900 0%, #1a1200 100%)', border: '1px solid rgba(192,192,192,0.22)', boxShadow: '0 12px 40px rgba(0,0,0,0.9), inset 0 1px 0 rgba(192,192,192,0.15)' }}>
             <div className="text-xs font-medium text-gray-500 mb-3 tracking-wide">目标止盈利润—编辑</div>
             {/* 人民币输入 */}
             <div className="mb-3">
@@ -1132,7 +1132,7 @@ export default function PositionCalc() {
                 }
               }}
               className="w-full py-2.5 rounded-xl text-sm font-bold text-white"
-              style={{ background: 'linear-gradient(135deg, #9a7000 0%, #d4af37 40%, #f5e27a 55%, #d4af37 70%, #9a7000 100%)', color: '#0a0800', fontWeight: 700 }}
+              style={{ background: 'linear-gradient(135deg, #888888 0%, #c0c0c0 40%, #e8e8e8 55%, #c0c0c0 70%, #888888 100%)', color: '#0a0800', fontWeight: 700 }}
             >
               保存
             </button>
@@ -1197,17 +1197,17 @@ export default function PositionCalc() {
                 />
               </div>
             </div>
-            <div className="rounded-xl p-3" style={{ background: '#0d0900', border: '1px solid rgba(212,175,55,0.12)' }}>
-              <div className="text-xs mb-1 tracking-widest" style={{ color: 'rgba(212,175,55,0.4)' }}>当前市值</div>
-              <div className="text-xl font-bold" style={{ color: '#d4af37', textShadow: '0 0 12px rgba(212,175,55,0.35)' }}>
+            <div className="rounded-xl p-3" style={{ background: '#0d0900', border: '1px solid rgba(192,192,192,0.12)' }}>
+              <div className="text-xs mb-1 tracking-widest" style={{ color: 'rgba(192,192,192,0.4)' }}>当前市值</div>
+              <div className="text-xl font-bold" style={{ color: '#c0c0c0', textShadow: '0 0 12px rgba(192,192,192,0.35)' }}>
                 {summary.totalValue > 0 ? `$${summary.totalValue.toFixed(0)}` : '--'}
               </div>
-              <div className="text-xs mt-0.5" style={{ color: 'rgba(212,175,55,0.35)' }}>
+              <div className="text-xs mt-0.5" style={{ color: 'rgba(192,192,192,0.35)' }}>
                 成本 ${summary.avgPrice > 0 ? (summary.avgPrice * summary.totalQty).toFixed(0) : '--'}
               </div>
             </div>
             <div className="rounded-xl p-3" style={{ background: '#0d0900', border: `1px solid ${isPnlPositive ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)'}` }}>
-              <div className="text-xs mb-1 tracking-widest" style={{ color: 'rgba(212,175,55,0.4)' }}>总浮盈亏</div>
+              <div className="text-xs mb-1 tracking-widest" style={{ color: 'rgba(192,192,192,0.4)' }}>总浮盈亏</div>
               <div className={`text-xl font-bold flex items-center gap-1 ${isPnlPositive ? 'text-red-500' : 'text-green-600'}`}>
                 {isPnlPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                 {summary.totalPnl !== 0 ? `${isPnlPositive ? '+' : ''}$${summary.totalPnl.toFixed(0)}` : '--'}
@@ -1262,7 +1262,7 @@ export default function PositionCalc() {
                     ? 'linear-gradient(90deg, #100c00 0%, #1a1200 50%, #100c00 100%)'
                     : (isBelowCurrent ? '#080600' : '#040300'),
                   boxShadow: isNearCurrent
-                    ? '0 0 0 1px rgba(255,245,192,0.65), 0 0 16px rgba(212,175,55,0.1)'
+                    ? '0 0 0 1px rgba(255,245,192,0.65), 0 0 16px rgba(192,192,192,0.1)'
                     : 'none',
                 }}
               >
@@ -1272,8 +1272,8 @@ export default function PositionCalc() {
                     className="absolute left-0 top-0 h-full transition-all duration-300"
                     style={{
                       width: `${planPct}%`,
-                      background: 'linear-gradient(90deg, rgba(212,175,55,0.18) 0%, rgba(212,175,55,0.12) 100%)',
-                      borderRight: '1px solid rgba(212,175,55,0.35)',
+                      background: 'linear-gradient(90deg, rgba(192,192,192,0.18) 0%, rgba(192,192,192,0.12) 100%)',
+                      borderRight: '1px solid rgba(192,192,192,0.35)',
                       borderRadius: '0 3px 3px 0',
                       zIndex: 1,
                     }}
@@ -1320,9 +1320,9 @@ export default function PositionCalc() {
                       style={{
                         width: `${actualPct}%`,
                         background: isFullyBought
-                          ? 'linear-gradient(90deg, #9a7000 0%, #d4af37 45%, #f5e27a 80%, #fffbe8 100%)'
-                          : 'linear-gradient(90deg, #7a5500 0%, #c8960a 45%, #d4af37 80%, #f0d060 100%)',
-                        boxShadow: '0 0 8px rgba(212,175,55,0.4)',
+                          ? 'linear-gradient(90deg, #888888 0%, #c0c0c0 45%, #e8e8e8 80%, #fffbe8 100%)'
+                          : 'linear-gradient(90deg, #707070 0%, #c8960a 45%, #c0c0c0 80%, #f0d060 100%)',
+                        boxShadow: '0 0 8px rgba(192,192,192,0.4)',
                         minWidth: '4px',
                         borderRadius: '0 3px 3px 0',
                         zIndex: 2,
@@ -1426,7 +1426,7 @@ export default function PositionCalc() {
       })()}
 
       {/* 底部提示 */}
-      <div className="px-4 pt-4 pb-2 text-center text-xs" style={{ color: 'rgba(212,175,55,0.3)' }}>
+      <div className="px-4 pt-4 pb-2 text-center text-xs" style={{ color: 'rgba(192,192,192,0.3)' }}>
         价格范围 $1,000 ~ $3,500 · 每50元一档 · 共50档
       </div>
 
@@ -1641,7 +1641,7 @@ export default function PositionCalc() {
                             onChange={e => setTargetEthQty(e.target.value)}
                             className="min-w-0 flex-1 text-2xl font-bold outline-none bg-transparent placeholder:text-gray-600 placeholder:font-normal placeholder:text-lg" style={{ color: '#fff' }}
                           />
-                          <span className="text-sm font-medium flex-shrink-0" style={{ color: 'rgba(212,175,55,0.5)' }}>ETH</span>
+                          <span className="text-sm font-medium flex-shrink-0" style={{ color: 'rgba(192,192,192,0.5)' }}>ETH</span>
                         </div>
                         {/* 滑动条 */}
                         <div className="relative" style={{ height: '32px' }}>
@@ -1723,7 +1723,7 @@ export default function PositionCalc() {
                         }}
                         disabled={parseFloat(targetEthQty) <= 0 || !targetProfitCny}
                         className="w-full py-3 rounded-xl text-sm font-bold text-white mb-3 disabled:opacity-40"
-                        style={{ background: 'linear-gradient(135deg, #9a7000 0%, #d4af37 40%, #f5e27a 55%, #d4af37 70%, #9a7000 100%)', color: '#0a0800', fontWeight: 700 }}
+                        style={{ background: 'linear-gradient(135deg, #888888 0%, #c0c0c0 40%, #e8e8e8 55%, #c0c0c0 70%, #888888 100%)', color: '#0a0800', fontWeight: 700 }}
                       >
                         下一步：选择分配方式
                       </button>
@@ -1863,7 +1863,7 @@ export default function PositionCalc() {
                       disabled={allocLevels.length === 0 || totalQty <= 0}
                       onClick={() => setAllocStep('method')}
                       className="w-full py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40"
-                      style={{ background: 'linear-gradient(135deg, #9a7000 0%, #d4af37 40%, #f5e27a 55%, #d4af37 70%, #9a7000 100%)', color: '#0a0800', fontWeight: 700 }}
+                      style={{ background: 'linear-gradient(135deg, #888888 0%, #c0c0c0 40%, #e8e8e8 55%, #c0c0c0 70%, #888888 100%)', color: '#0a0800', fontWeight: 700 }}
                     >
                       下一步：选择分配方式
                     </button>
@@ -1906,7 +1906,7 @@ export default function PositionCalc() {
                               </div>
                             )}
                           </div>
-                          <div className="text-xs mt-0.5" style={{ color: 'rgba(212,175,55,0.35)' }}>{allocEqualAsc && allocMethod === 'equal' ? '越高价格买越多' : '越低价格买越多'}，相邻档位数量差异固定</div>
+                          <div className="text-xs mt-0.5" style={{ color: 'rgba(192,192,192,0.35)' }}>{allocEqualAsc && allocMethod === 'equal' ? '越高价格买越多' : '越低价格买越多'}，相邻档位数量差异固定</div>
                           {allocMethod === 'equal' && (
                             <div className="mt-2" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-between mb-1">
@@ -1963,7 +1963,7 @@ export default function PositionCalc() {
                               </div>
                             )}
                           </div>
-                          <div className="text-xs mt-0.5" style={{ color: 'rgba(212,175,55,0.35)' }}>{allocGeomAsc && allocMethod === 'geometric' ? '越高价格分配越多' : '越低价格分配越多'}，按等比递增</div>
+                          <div className="text-xs mt-0.5" style={{ color: 'rgba(192,192,192,0.35)' }}>{allocGeomAsc && allocMethod === 'geometric' ? '越高价格分配越多' : '越低价格分配越多'}，按等比递增</div>
                           {allocMethod === 'geometric' && (
                             <div className="mt-2" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-between mb-1">
@@ -2004,7 +2004,7 @@ export default function PositionCalc() {
                         </div>
                         <div className="flex-1">
                           <div className="text-sm font-semibold text-gray-800">正态分布</div>
-                          <div className="text-xs mt-0.5" style={{ color: 'rgba(212,175,55,0.35)' }}>中间价格区间买最多，两端价格区间买最少</div>
+                          <div className="text-xs mt-0.5" style={{ color: 'rgba(192,192,192,0.35)' }}>中间价格区间买最多，两端价格区间买最少</div>
                           {allocMethod === 'normal' && (
                             <div className="mt-2" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-between mb-1">
@@ -2054,7 +2054,7 @@ export default function PositionCalc() {
                         </div>
                         <div>
                           <div className="text-sm font-semibold text-gray-800">手动分配</div>
-                          <div className="text-xs mt-0.5" style={{ color: 'rgba(212,175,55,0.35)' }}>自定义每档数量，总量必须等于目标持仓</div>
+                          <div className="text-xs mt-0.5" style={{ color: 'rgba(192,192,192,0.35)' }}>自定义每档数量，总量必须等于目标持仓</div>
                         </div>
                       </button>
                     </div>
@@ -2168,7 +2168,7 @@ export default function PositionCalc() {
                           setAllocStep('preview');
                         }}
                         className="flex-2 flex-1 py-3 rounded-xl text-sm font-bold text-white disabled:opacity-40"
-                        style={{ background: 'linear-gradient(135deg, #9a7000 0%, #d4af37 40%, #f5e27a 55%, #d4af37 70%, #9a7000 100%)', color: '#0a0800', fontWeight: 700 }}
+                        style={{ background: 'linear-gradient(135deg, #888888 0%, #c0c0c0 40%, #e8e8e8 55%, #c0c0c0 70%, #888888 100%)', color: '#0a0800', fontWeight: 700 }}
                       >
                         {allocMethod === 'manual' && Math.abs(manualTotal - totalQty) > 0.001
                           ? `差 ${(totalQty - manualTotal).toFixed(4)} ETH`
@@ -2425,19 +2425,19 @@ export default function PositionCalc() {
           style={{ paddingTop: '15vh', backgroundColor: 'rgba(0,0,0,0.6)' }}
           onClick={(e) => { if (e.target === e.currentTarget) setModal(null); }}
         >
-          <div className="w-full max-w-md rounded-2xl px-5 pt-5 pb-8 mx-4" style={{ background: 'linear-gradient(160deg, #2a1f00 0%, #1e1500 50%, #2a1f00 100%)', border: '1px solid rgba(212,175,55,0.45)', boxShadow: '0 0 40px rgba(0,0,0,0.8), 0 0 20px rgba(212,175,55,0.12), inset 0 1px 0 rgba(212,175,55,0.15)' }}>
+          <div className="w-full max-w-md rounded-2xl px-5 pt-5 pb-8 mx-4" style={{ background: 'linear-gradient(160deg, #2a1f00 0%, #1e1500 50%, #2a1f00 100%)', border: '1px solid rgba(192,192,192,0.45)', boxShadow: '0 0 40px rgba(0,0,0,0.8), 0 0 20px rgba(192,192,192,0.12), inset 0 1px 0 rgba(192,192,192,0.15)' }}>
             {/* 弹窗标题 */}
             <div className="flex items-center justify-between mb-4">
               <div>
-                <div className="text-base font-semibold" style={{ background: 'linear-gradient(90deg, #f5e27a, #d4af37)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
+                <div className="text-base font-semibold" style={{ background: 'linear-gradient(90deg, #e8e8e8, #c0c0c0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
                   {modal.price} 档位
                 </div>
-                <div className="text-xs mt-0.5" style={{ color: 'rgba(212,175,55,0.5)' }}>
+                <div className="text-xs mt-0.5" style={{ color: 'rgba(192,192,192,0.5)' }}>
                   已买 {(actual[modal.price] || 0).toFixed(2)} ETH &nbsp;·&nbsp; 计划 {(planned[modal.price] || 0).toFixed(2)} ETH
                 </div>
               </div>
               <button onClick={() => setModal(null)} className="p-1.5 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                <X className="w-4 h-4" style={{ color: 'rgba(212,175,55,0.5)' }} />
+                <X className="w-4 h-4" style={{ color: 'rgba(192,192,192,0.5)' }} />
               </button>
             </div>
 
@@ -2455,7 +2455,7 @@ export default function PositionCalc() {
                 <div>
                   {/* 标题行 */}
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-semibold" style={{ color: '#d4af37' }}>修改已买数量</span>
+                    <span className="text-sm font-semibold" style={{ color: '#c0c0c0' }}>修改已买数量</span>
                     <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>ETH</span>
                   </div>
 
@@ -2798,16 +2798,16 @@ export default function PositionCalc() {
                     <button
                       onClick={confirmModal}
                       className="flex-2 py-2.5 rounded-xl text-sm font-bold"
-                      style={{ flex: 2, background: 'linear-gradient(135deg, #9a7000 0%, #d4af37 40%, #f5e27a 55%, #d4af37 70%, #9a7000 100%)', color: '#0a0800', fontWeight: 700 }}
+                      style={{ flex: 2, background: 'linear-gradient(135deg, #888888 0%, #c0c0c0 40%, #e8e8e8 55%, #c0c0c0 70%, #888888 100%)', color: '#0a0800', fontWeight: 700 }}
                     >
                       确认保存
                     </button>
                   </div>
 
                   {/* 修改日志 */}
-                  <div className="mt-3" style={{ borderTop: '1px solid rgba(212,175,55,0.15)', paddingTop: '12px' }}>
+                  <div className="mt-3" style={{ borderTop: '1px solid rgba(192,192,192,0.15)', paddingTop: '12px' }}>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium tracking-widest" style={{ color: 'rgba(212,175,55,0.6)' }}>修改日志</span>
+                      <span className="text-xs font-medium tracking-widest" style={{ color: 'rgba(192,192,192,0.6)' }}>修改日志</span>
                       <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>自动记录 · 可编辑/删除</span>
                     </div>
                     <div className="space-y-1.5" style={{ maxHeight: '160px', overflowY: 'auto' }}>
@@ -2818,11 +2818,11 @@ export default function PositionCalc() {
                         <div className="text-center py-3 text-xs" style={{ color: 'rgba(255,255,255,0.25)' }}>暂无修改记录</div>
                       )}
                       {getLogsQuery.data?.map(log => (
-                        <div key={log.id} className="rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(212,175,55,0.1)' }}>
+                        <div key={log.id} className="rounded-lg px-3 py-2" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(192,192,192,0.1)' }}>
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: log.changeType === 'actual' ? 'rgba(212,175,55,0.2)' : 'rgba(212,175,55,0.1)', color: log.changeType === 'actual' ? '#f0d060' : 'rgba(212,175,55,0.7)', fontSize: '10px' }}>
+                                <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: log.changeType === 'actual' ? 'rgba(192,192,192,0.2)' : 'rgba(192,192,192,0.1)', color: log.changeType === 'actual' ? '#f0d060' : 'rgba(192,192,192,0.7)', fontSize: '10px' }}>
                                   {log.changeType === 'actual' ? '已买' : '计划'}
                                 </span>
                                 <span className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>
@@ -2836,7 +2836,7 @@ export default function PositionCalc() {
                                     onChange={e => setEditingLogNote(e.target.value)}
                                     placeholder="添加备注…"
                                     className="flex-1 text-xs px-2 py-1 rounded"
-                                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(212,175,55,0.3)', color: 'rgba(255,255,255,0.85)', outline: 'none' }}
+                                    style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(192,192,192,0.3)', color: 'rgba(255,255,255,0.85)', outline: 'none' }}
                                     autoFocus
                                     onKeyDown={e => {
                                       if (e.key === 'Enter') {
@@ -2867,7 +2867,7 @@ export default function PositionCalc() {
                                 <button
                                   onClick={() => { setEditingLogId(log.id); setEditingLogNote(log.note || ''); }}
                                   className="p-0.5 rounded"
-                                  style={{ color: 'rgba(212,175,55,0.5)' }}
+                                  style={{ color: 'rgba(192,192,192,0.5)' }}
                                   title="编辑备注"
                                 >
                                   <Pencil className="w-3 h-3" />
