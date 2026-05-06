@@ -13320,7 +13320,7 @@ ${klinesSummary}
         // 附带实时价格
         const { getLatestPrice } = await import('./price-scanner');
         const livePrices: Record<string, number> = {};
-        for (const coin of ['BTC', 'ETH', 'SOL', 'USDT', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG']) {
+        for (const coin of ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG']) {
           const p = getLatestPrice(coin);
           if (p) livePrices[coin] = p;
         }
