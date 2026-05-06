@@ -860,23 +860,23 @@ export default function PositionCalc() {
                             <div className="absolute rounded overflow-hidden" style={{ background: 'rgba(255,255,255,0.04)', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', height: '24px' }}>
                               {/* 战略持仓段（左侧，亮银） */}
                               <div
-                                className="absolute top-0 left-0 h-full flex items-center justify-between"
+                                className="absolute top-0 left-0 h-full flex items-center"
                                 style={{
                                   width: `${100 - strategyRatio}%`,
                                   background: 'linear-gradient(90deg, #888888 0%, #c0c0c0 60%, #e8e8e8 100%)',
                                   boxShadow: '2px 0 8px rgba(192,192,192,0.4)',
                                   borderRadius: '4px 0 0 4px',
                                   overflow: 'hidden',
-                                  padding: '0 6px',
+                                  paddingLeft: '6px',
                                 }}
                               >
-                                {/* 战略段：百分比靠左，ETH数量靠右 */}
+                                {/* 战略段：百分比+ETH数量都靠左，紧挨 */}
                                 <span className="text-[10px] font-bold shrink-0" style={{ color: 'rgba(20,20,20,0.85)' }}>{100 - strategyRatio}%</span>
-                                <span className="text-[10px] font-mono shrink-0 whitespace-nowrap" style={{ color: 'rgba(20,20,20,0.65)' }}>{Math.round(actualQty * (100 - strategyRatio) / 100)}E</span>
+                                <span className="text-[10px] font-mono shrink-0 whitespace-nowrap ml-0.5" style={{ color: 'rgba(20,20,20,0.65)' }}>{Math.round(actualQty * (100 - strategyRatio) / 100)}E</span>
                               </div>
                               {/* 策略持仓段（右侧，暗金） */}
                               <div
-                                className="absolute top-0 h-full flex items-center justify-between"
+                                className="absolute top-0 h-full flex items-center justify-end"
                                 style={{
                                   left: `${100 - strategyRatio}%`,
                                   width: `${strategyRatio}%`,
@@ -884,11 +884,11 @@ export default function PositionCalc() {
                                   borderRadius: '0 4px 4px 0',
                                   borderLeft: '1px solid rgba(192,192,192,0.3)',
                                   overflow: 'hidden',
-                                  padding: '0 6px',
+                                  paddingRight: '6px',
                                 }}
                               >
-                                {/* 策略段：ETH数量靠左，百分比靠右 */}
-                                <span className="text-[10px] font-mono shrink-0 whitespace-nowrap" style={{ color: 'rgba(255,220,100,0.8)' }}>{Math.round(actualQty * strategyRatio / 100)}E</span>
+                                {/* 策略段：ETH数量+百分比都靠右，紧挨 */}
+                                <span className="text-[10px] font-mono shrink-0 whitespace-nowrap mr-0.5" style={{ color: 'rgba(255,220,100,0.8)' }}>{Math.round(actualQty * strategyRatio / 100)}E</span>
                                 <span className="text-[10px] font-bold shrink-0" style={{ color: 'rgba(255,220,100,0.95)' }}>{strategyRatio}%</span>
                               </div>
                             </div>
