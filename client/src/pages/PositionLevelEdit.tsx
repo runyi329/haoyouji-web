@@ -181,7 +181,7 @@ export default function PositionLevelEdit() {
 
           {/* 底仓 */}
           <div className="mb-2">
-            <div className="text-xs font-medium mb-1.5 tracking-wider" style={{ color: 'rgba(74,168,255,0.8)' }}>底仓 (ETH)</div>
+            <div className="text-xs font-medium mb-1.5 tracking-wider" style={{ color: 'rgba(74,168,255,0.8)' }}>战略筹码（底仓）(ETH)</div>
             <div className="rounded-xl px-4 py-2" style={{ background: 'rgba(74,168,255,0.06)', border: '1px solid rgba(74,168,255,0.4)' }}>
               <input
                 type="number"
@@ -204,7 +204,7 @@ export default function PositionLevelEdit() {
               onClick={() => setBaseExpanded(v => !v)}
             >
               <span className="text-xs">{baseExpanded ? '▼' : '▶'}</span>
-              <span className="text-xs">底仓备注</span>
+              <span className="text-xs">战略筹码备注</span>
               {baseNotes.length > 0 && <span className="text-xs rounded-full px-1.5" style={{ background: 'rgba(74,168,255,0.2)', color: '#4aa8ff' }}>{baseNotes.length}</span>}
             </div>
             {baseExpanded && (
@@ -266,7 +266,7 @@ export default function PositionLevelEdit() {
                 <div className="flex gap-1.5">
                   <input
                     type="text"
-                    placeholder="添加底仓备注…"
+                    placeholder="添加战略筹码备注…"
                     className="flex-1 text-xs px-2 py-1.5 rounded-lg outline-none"
                     style={{ background: 'rgba(74,168,255,0.06)', border: '1px solid rgba(74,168,255,0.2)', color: 'rgba(255,255,255,0.7)' }}
                     onKeyDown={e => {
@@ -302,7 +302,7 @@ export default function PositionLevelEdit() {
 
           {/* 机动仓 */}
           <div className="mb-2">
-            <div className="text-xs font-medium mb-1.5 tracking-wider" style={{ color: 'rgba(232,112,32,0.8)' }}>机动仓 (ETH)</div>
+            <div className="text-xs font-medium mb-1.5 tracking-wider" style={{ color: 'rgba(232,112,32,0.8)' }}>战术筹码（滚动仓）(ETH)</div>
             <div className="rounded-xl px-4 py-2" style={{ background: 'rgba(232,112,32,0.06)', border: '1px solid rgba(232,112,32,0.4)' }}>
               <input
                 type="number"
@@ -325,7 +325,7 @@ export default function PositionLevelEdit() {
               onClick={() => setTacticalExpanded(v => !v)}
             >
               <span className="text-xs">{tacticalExpanded ? '▼' : '▶'}</span>
-              <span className="text-xs">机动仓备注</span>
+              <span className="text-xs">战术筹码备注</span>
               {tacticalNotes.length > 0 && <span className="text-xs rounded-full px-1.5" style={{ background: 'rgba(232,112,32,0.2)', color: '#e87020' }}>{tacticalNotes.length}</span>}
             </div>
             {tacticalExpanded && (
@@ -386,7 +386,7 @@ export default function PositionLevelEdit() {
                 <div className="flex gap-1.5">
                   <input
                     type="text"
-                    placeholder="添加机动仓备注…"
+                    placeholder="添加战术筹码备注…"
                     className="flex-1 text-xs px-2 py-1.5 rounded-lg outline-none"
                     style={{ background: 'rgba(232,112,32,0.06)', border: '1px solid rgba(232,112,32,0.2)', color: 'rgba(255,255,255,0.7)' }}
                     onKeyDown={e => {
