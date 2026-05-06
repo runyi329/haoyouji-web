@@ -353,7 +353,8 @@ export default function FinanceManagement() {
         status: formData.status,
         collateralCoin: formData.collateralCoin || undefined,
         collateralQty: formData.collateralQty || undefined,
-        collateralAssets: formData.collateralAssets.length > 0 ? formData.collateralAssets : undefined,
+        // 编辑模式：始终传 collateralAssets（空数组表示用户明确清空）
+        collateralAssets: formData.collateralAssets,
         financeType: formData.financeType,
       });
     } else {
