@@ -392,7 +392,7 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, 
             </div>
           </div>
           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 担保价値</div>
+            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 担保价値</div>
             {collateral.length === 0
               ? <div className="font-mono mt-1" style={{ color: '#9CA3AF' }}>0.00 U（无担保物）</div>
               : <>
@@ -422,7 +422,7 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, 
             }
           </div>
           <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
-            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>④ 风险敞口</div>
+            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敎口</div>
             <div>担保物 + 浮动盈亏 − 代结利息 + 已结利息（正数充足，负数缺口）</div>
             <div className="mt-1 font-mono">
               {floatPnl !== null
