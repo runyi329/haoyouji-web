@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import {
-  ChevronLeft, RefreshCw, TrendingUp, TrendingDown, Sparkles,
+  ChevronLeft, RefreshCw, TrendingUp, TrendingDown,
   Plus, Trash2
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -545,7 +545,6 @@ export default function GoldAIPage() {
       <div className="mx-0" style={{ background: CARD, boxShadow: CARD_SHADOW }}>
         <div className="flex items-center justify-between px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
           <div className="flex items-center gap-2">
-            <Sparkles size={15} style={{ color: RED }} />
             <span className="text-sm font-semibold" style={{ color: TEXT }}>AI 行情分析</span>
           </div>
           <button
@@ -560,9 +559,9 @@ export default function GoldAIPage() {
             }}
           >
             {aiLoading ? (
-              <><RefreshCw size={12} className="animate-spin" />生成中...</>
+              生成中...
             ) : (
-              <><Sparkles size={12} />生成分析</>
+              生成分析
             )}
           </button>
         </div>
@@ -587,7 +586,6 @@ export default function GoldAIPage() {
               className="text-center py-6 rounded-xl"
               style={{ background: "#FFF8F2", border: `1px dashed ${BORDER}` }}
             >
-              <Sparkles size={24} style={{ color: MUTED, margin: "0 auto 8px" }} />
               <div className="text-sm" style={{ color: MUTED }}>
                 点击「生成分析」获取 AI 黄金行情分析报告
               </div>
