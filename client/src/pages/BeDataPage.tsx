@@ -1655,6 +1655,7 @@ export default function BeDataPage() {
 
   // AI 分析查询（仅美股模式且数据加载完成后才请求）
   const [aiExpanded, setAiExpanded] = useState(false);
+  const [aiTriggered, setAiTriggered] = useState(false); // 用户主动点击「生成分析」才为true
 
   // 相关性统计：选择对比币
   const CRYPTO_SYMBOLS = ALL_SYMBOLS.filter(s => s.type === 'crypto');
@@ -1690,7 +1691,7 @@ export default function BeDataPage() {
       latestDate,
     },
     {
-      enabled: hideSymbolTabs && !isLoading && aiExpanded,
+      enabled: hideSymbolTabs && !isLoading && aiExpanded && aiTriggered,
       staleTime: 10 * 60 * 1000, // 10分钟内不重新请求
     }
   );
@@ -1843,7 +1844,30 @@ export default function BeDataPage() {
             {/* 展开后显示 AI 深度分析报告（6段式） */}
             {aiExpanded && (
               <div style={{ marginTop: 10 }}>
-                {aiLoading ? (
+                {/* 未触发时显示生成按钮 */}
+                {!aiTriggered && (
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "12px 0" }}>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", textAlign: "center", marginBottom: 4 }}>点击下方按钮，AI 将整合实时市场数据进行深度分析</div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setAiTriggered(true); }}
+                      style={{
+                        background: "linear-gradient(135deg, #1565C0, #0D47A1)",
+                        border: "none",
+                        borderRadius: 20,
+                        padding: "8px 24px",
+                        color: "#fff",
+                        fontSize: 13,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        letterSpacing: 0.5,
+                        boxShadow: "0 2px 8px rgba(21,101,192,0.4)",
+                      }}
+                    >
+                      🤖 生成 AI 分析
+                    </button>
+                  </div>
+                )}
+                {aiTriggered && aiLoading && (
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: "16px 0" }}>
                     <div style={{ width: 28, height: 28, border: "2.5px solid rgba(255,255,255,0.15)", borderTop: "2.5px solid #90CAF9", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
                     <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", textAlign: "center" }}>
@@ -1851,7 +1875,8 @@ export default function BeDataPage() {
                       <span style={{ fontSize: 10, opacity: 0.7 }}>整合实时市场数据 · 历史统计 · 资金费率</span>
                     </div>
                   </div>
-                ) : (() => {
+                )}
+                {aiTriggered && !aiLoading && (() => {
                   const sections = (aiData as any)?.sections ?? {};
                   const hasSections = Object.keys(sections).length > 0;
                   const sectionConfig = [
