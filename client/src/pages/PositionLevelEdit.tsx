@@ -59,7 +59,9 @@ export default function PositionLevelEdit() {
   // 初始化表单数据
   useEffect(() => {
     if (!positionData) return;
-    const level = positionData.find((l: any) => l.price === price);
+    const levels = Array.isArray(positionData) ? positionData : (positionData as any).levels;
+    if (!levels) return;
+    const level = levels.find((l: any) => l.price === price);
     if (level) {
       const bq = level.baseQty ?? 0;
       const tq = level.tacticalQty ?? 0;
