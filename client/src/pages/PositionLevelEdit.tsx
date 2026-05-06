@@ -81,7 +81,11 @@ export default function PositionLevelEdit() {
   const saveLevelMutation = trpc.ethPositionSaveLevel.useMutation({
     onSuccess: () => {
       utils.ethPositionGetLevels.invalidate({ ledgerId });
+      utils.ethPositionGetLogs.invalidate({ ledgerId });
       setLocation(`/ledger/${ledgerId}/position-calc`);
+    },
+    onError: (err) => {
+      alert(`保存失败：${err.message}`);
     }
   });
   const updateNotesMutation = trpc.ethPositionUpdateNotes.useMutation();
@@ -124,6 +128,8 @@ export default function PositionLevelEdit() {
       actualQty: totalVal,
       baseQty: bqVal,
       tacticalQty: tqVal,
+      baseNotes: JSON.stringify(baseNotes),
+      tacticalNotes: JSON.stringify(tacticalNotes),
     });
   };
 
