@@ -620,7 +620,10 @@ export default function PositionCalc() {
           <ChevronLeft className="w-5 h-5 text-white" />
         </button>
         <div className="flex-1">
-          <div className="font-semibold text-base" style={{ color: '#d4af37', letterSpacing: '0.05em' }}>Eth智能仓位管理</div>
+          <div className="flex items-center gap-1.5 font-semibold text-base" style={{ color: '#d4af37', letterSpacing: '0.05em' }}>
+            <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-5 h-5 object-contain rounded-full flex-shrink-0" />
+            智能仓位管理
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
