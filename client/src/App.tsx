@@ -252,6 +252,7 @@ const LotteryCreate = lazy(() => import("./pages/LotteryCreate"));
 const CryptoPrediction = lazy(() => import("./pages/CryptoPrediction"));
 // ETH 持仓计算
 const PositionCalc = lazy(() => import("./pages/PositionCalc"));
+const PositionLevelEdit = lazy(() => import("./pages/PositionLevelEdit"));
 // GTO 德州扑克
 const GtoPoker = lazy(() => import("./pages/GtoPoker"));
 const LotteryEdit = lazy(() => import("./pages/LotteryEdit"));
@@ -606,6 +607,7 @@ function Router() {
         <Route path="/ledger/:id/crypto-prediction" component={CryptoPrediction} />
         {/* ETH 持仓计算 */}
         <Route path="/ledger/:id/position-calc" component={PositionCalc} />
+        <Route path="/ledger/:id/position-calc/:price" component={PositionLevelEdit} />
         {/* GTO 德州扑克 */}
         <Route path="/ledger/:id/gto" component={GtoPoker} />
         {/* QQ 在线人数记录 */}

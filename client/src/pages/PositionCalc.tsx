@@ -505,19 +505,11 @@ export default function PositionCalc() {
     setSummaryEdit(null);
   };
 
-  // 打开弹窗 - 直接进入编辑实际已买模式（计划数量只在配置里修改）
+  // 点击档位进度条 - 跳转到档位编辑子页面
   const openModal = (price: number) => {
-    const bq = baseQty[price] || 0;
-    const tq = tacticalQty[price] || 0;
-    const pq = planned[price] || 0;
-    setModal({
-      price,
-      mode: 'editActual',
-      inputValue: String(actual[price] || ''),
-      baseValue: bq > 0 ? String(bq) : '',
-      tacticalValue: tq > 0 ? String(tq) : '',
-      plannedValue: pq > 0 ? String(pq) : '',
-    });
+    if (isViewAs) return; // 视角查看时禁用写入
+    const viewAsParam = viewAsUserId ? `?viewAs=${viewAsUserId}` : '';
+    setLocation(`/ledger/${ledgerId}/position-calc/${price}${viewAsParam}`);
   };
 
   // 弹窗确认
