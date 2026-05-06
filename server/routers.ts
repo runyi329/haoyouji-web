@@ -2178,6 +2178,32 @@ ${klinesSummary}
       .input(z.object({
         userId: z.number(),
         newPassword: z.string().min(6),
+  // 短信通知开关（仅YJH本人可见）
+  const isYJHUser = (user as any)?.id === YJH_USER_ID;
+  const { data: smsNotifySettings, refetch: refetchSmsSettings } = trpc.ledger.afGetSmsNotifySettings.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: isCustomAF && isYJHUser && !viewAsUserId }
+  );
+  const [localSms131, setLocalSms131] = useState<boolean | undefined>(undefined);
+  const [localSms182, setLocalSms182] = useState<boolean | undefined>(undefined);
+  const smsInitialized = useRef(false);
+  useEffect(() => {
+    if (!smsInitialized.current && smsNotifySettings !== undefined) {
+      setLocalSms131(smsNotifySettings.phone131);
+      setLocalSms182(smsNotifySettings.phone182);
+      smsInitialized.current = true;
+    }
+  }, [smsNotifySettings]);
+  const toggleSmsNotifyMutation = trpc.ledger.afToggleSmsNotify.useMutation({
+    onMutate: (variables) => {
+      if (variables.phone === '13127919173') setLocalSms131(variables.enabled);
+      else if (variables.phone === '18271901931') setLocalSms182(variables.enabled);
+    },
+    onError: () => {
+      setLocalSms131(smsNotifySettings?.phone131);
+      setLocalSms182(smsNotifySettings?.phone182);
+    },
+  });
       }))
       .mutation(async ({ ctx, input }) => {
         if (ctx.user.role !== "super_admin") {
@@ -12700,6 +12726,39 @@ ${klinesSummary}
             [input.ledgerId, ctx.user.id]
           );
         }
+        return { success: true };
+      }),
+    // 短信通知开关：获取YJH的两个手机号开关状态
+    afGetSmsNotifySettings: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const YJH_ID = 4957151;
+        if (ctx.user.id !== YJH_ID) return { phone131: false, phone182: false };
+        const dbConn = await getDbConnection();
+        if (!dbConn) return { phone131: false, phone182: false };
+        const [rows] = await dbConn.execute(
+          `SELECT phone, enabled FROM sms_notify_settings WHERE user_id = ? AND ledger_id = ?`,
+          [YJH_ID, input.ledgerId]
+        ) as any[];
+        const settings = rows as any[];
+        const phone131 = settings.find((r: any) => r.phone === '13127919173')?.enabled === 1;
+        const phone182 = settings.find((r: any) => r.phone === '18271901931')?.enabled === 1;
+        return { phone131, phone182 };
+      }),
+    // 短信通知开关：切换指定手机号的开关
+    afToggleSmsNotify: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), phone: z.string(), enabled: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const YJH_ID = 4957151;
+        if (ctx.user.id !== YJH_ID) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await dbConn.execute(
+          `INSERT INTO sms_notify_settings (user_id, phone, ledger_id, enabled)
+           VALUES (?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = NOW()`,
+          [YJH_ID, input.phone, input.ledgerId, input.enabled ? 1 : 0]
+        );
         return { success: true };
       }),
 

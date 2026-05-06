@@ -16,6 +16,9 @@ export const ENV = {
   deepseekApiKey: process.env.DEEPSEEK_API_KEY ?? "",
   qichachaAppKey: process.env.QICHACHA_APP_KEY ?? "",
   qichachaSecretKey: process.env.QICHACHA_SECRET_KEY ?? "",
+  smsSecretId: process.env.SMS_SECRET_ID ?? "",
+  smsSecretKey: process.env.SMS_SECRET_KEY ?? "",
+  smsAppId: process.env.SMS_APP_ID ?? "1401098628",
 };
 
 // 启动时调试日志
