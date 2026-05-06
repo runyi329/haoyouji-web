@@ -12707,7 +12707,8 @@ ${klinesSummary}
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
         const YJH_ID = 4957151;
-        if (ctx.user.id !== YJH_ID) return { phone131: false, phone182: false };
+        const isAdminOrOwner = ctx.user.role === 'admin' || ctx.user.role === 'owner' || ctx.user.role === 'super_admin';
+        if (ctx.user.id !== YJH_ID && !isAdminOrOwner) return { phone131: false, phone182: false };
         const dbConn = await getDbConnection();
         if (!dbConn) return { phone131: false, phone182: false };
         const [rows] = await dbConn.execute(
@@ -12724,7 +12725,8 @@ ${klinesSummary}
       .input(z.object({ ledgerId: z.number(), phone: z.string(), enabled: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
         const YJH_ID = 4957151;
-        if (ctx.user.id !== YJH_ID) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const isAdminOrOwner = ctx.user.role === 'admin' || ctx.user.role === 'owner' || ctx.user.role === 'super_admin';
+        if (ctx.user.id !== YJH_ID && !isAdminOrOwner) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         await dbConn.execute(
