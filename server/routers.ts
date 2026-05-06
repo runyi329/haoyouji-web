@@ -14108,6 +14108,13 @@ ${klinesSummary}
         if (input.collateralAssets !== undefined) {
           updateCols.push('collateral_assets = ?');
           updateVals.push(input.collateralAssets && input.collateralAssets.length > 0 ? JSON.stringify(input.collateralAssets) : null);
+          // 清空担保物时，同时清空旧的单笔字段，避免兼容逻辑重新读出来
+          if (input.collateralAssets.length === 0) {
+            updateCols.push('collateral_coin = ?');
+            updateVals.push(null);
+            updateCols.push('collateral_qty = ?');
+            updateVals.push(null);
+          }
         }
         if (input.userId !== undefined) { updateCols.push('user_id = ?'); updateVals.push(input.userId); }
         // DECIMAL/数字列：空字符串需转为 null，否则 MySQL 报 Incorrect decimal value
