@@ -2178,10 +2178,14 @@ export default function LedgerDetail() {
     { enabled: isCustomAF && !effectiveIsFunder, refetchInterval: 30000 }
   );
   // 独立本地 state，初始值为 undefined（未初始化），useEffect 在服务器数据到达后初始化一次
-  // 短信通知开关（YJH本人或管理员视角切换到YJH时可见）
+  // 短信通知开关
   const isYJHUser = (user as any)?.id === 4957151;
   const isViewingAsYJH = viewAsUserId === 4957151;
-  const showSmsSwitch = isCustomAF && (isYJHUser || isViewingAsYJH);
+  // 管理员自己视角（未切换）：显示131开关
+  const showSms131 = isCustomAF && (isAdmin || isOwner) && !viewAsUserId;
+  // 管理员切换到YJH视角：显示182开关
+  const showSms182 = isCustomAF && (isAdmin || isOwner) && isViewingAsYJH;
+  const showSmsSwitch = showSms131 || showSms182;
   const { data: smsNotifySettings } = trpc.ledger.afGetSmsNotifySettings.useQuery(
     { ledgerId: Number(ledgerId) },
     { enabled: showSmsSwitch }
@@ -3399,8 +3403,8 @@ export default function LedgerDetail() {
                 {/* 右上角：短信通知开关（YJH本人或管理员视角切换到YJH时可见） */}
                 {showSmsSwitch && (
                   <div className="absolute top-2 right-2 flex flex-col items-end gap-1" onClick={e => e.stopPropagation()}>
-                    {/* 131 开关：仅管理员（含视角切换到YJH）可见 */}
-                    {(isAdmin || isOwner) && (
+                    {/* 131 开关：管理员自己视角（未切换）时可见 */}
+                    {showSms131 && (
                     <div className="flex items-center gap-1">
                       <span className="text-[9px] text-white/50">131</span>
                       <button
@@ -3413,8 +3417,8 @@ export default function LedgerDetail() {
                       </button>
                     </div>
                     )}
-                    {/* 182 开关：YJH本人或管理员视角切换到YJH时可见 */}
-                    <div className="flex items-center gap-1">
+                    {/* 182 开关：管理员切换到YJH视角时可见 */}
+                    {showSms182 && <div className="flex items-center gap-1">
                       <span className="text-[9px] text-white/50">182</span>
                       <button
                         onClick={() => { const newVal = !(localSms182 ?? false); setLocalSms182(newVal); toggleSmsNotifyMutation.mutate({ ledgerId: Number(ledgerId), phone: '18271901931', enabled: newVal }); }}
@@ -3424,7 +3428,7 @@ export default function LedgerDetail() {
                         <span className="inline-block h-3 w-3 rounded-full shadow transition-transform"
                           style={{ backgroundColor: (localSms182 ?? false) ? '#16a34a' : 'rgba(255,255,255,0.6)', transform: (localSms182 ?? false) ? 'translateX(14px)' : 'translateX(2px)' }} />
                       </button>
-                    </div>
+                    </div>}
                   </div>
                 )}
                 <div className="text-xs text-white/70 mb-1">
