@@ -20174,6 +20174,8 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
       price: z.number(),
       plannedQty: z.number().min(0),
       actualQty: z.number().min(0),
+      baseQty: z.number().min(0).optional().default(0),
+      tacticalQty: z.number().min(0).optional().default(0),
     }))
     .mutation(async ({ input, ctx }) => {
       await dbEthPosition.upsertEthPositionLevel(
@@ -20181,7 +20183,9 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         ctx.user.id,
         input.price,
         input.plannedQty,
-        input.actualQty
+        input.actualQty,
+        input.baseQty ?? 0,
+        input.tacticalQty ?? 0
       );
       return { success: true };
     }),
@@ -20192,10 +20196,16 @@ ${dailyData.slice(-15).map(d => `${d.day}:${d.bets}笔,净${d.netProfit > 0 ? '+
         price: z.number(),
         plannedQty: z.number().min(0),
         actualQty: z.number().min(0),
+        baseQty: z.number().min(0).optional().default(0),
+        tacticalQty: z.number().min(0).optional().default(0),
       })),
     }))
     .mutation(async ({ input, ctx }) => {
-      await dbEthPosition.batchUpsertEthPositionLevels(input.ledgerId, ctx.user.id, input.levels);
+      await dbEthPosition.batchUpsertEthPositionLevels(input.ledgerId, ctx.user.id, input.levels.map(l => ({
+        ...l,
+        baseQty: l.baseQty ?? 0,
+        tacticalQty: l.tacticalQty ?? 0,
+      })));
       return { success: true };
     }),
   ethPositionGetSettings: protectedProcedure
@@ -21813,13 +21823,18 @@ export const adminFeatureRouter = router({
       price: z.number(),
       plannedQty: z.number().min(0),
       actualQty: z.number().min(0),
+      baseQty: z.number().min(0).optional().default(0),
+      tacticalQty: z.number().min(0).optional().default(0),
     }))
     .mutation(async ({ input }) => {
       await dbEthPosition.upsertEthPositionLevel(
         input.ledgerId,
+        0,
         input.price,
         input.plannedQty,
-        input.actualQty
+        input.actualQty,
+        input.baseQty ?? 0,
+        input.tacticalQty ?? 0
       );
       return { success: true };
     }),
@@ -21831,10 +21846,16 @@ export const adminFeatureRouter = router({
         price: z.number(),
         plannedQty: z.number().min(0),
         actualQty: z.number().min(0),
+        baseQty: z.number().min(0).optional().default(0),
+        tacticalQty: z.number().min(0).optional().default(0),
       })),
     }))
     .mutation(async ({ input }) => {
-      await dbEthPosition.batchUpsertEthPositionLevels(input.ledgerId, input.levels);
+      await dbEthPosition.batchUpsertEthPositionLevels(input.ledgerId, 0, input.levels.map(l => ({
+        ...l,
+        baseQty: l.baseQty ?? 0,
+        tacticalQty: l.tacticalQty ?? 0,
+      })));
       return { success: true };
     }),
   ethPositionGetSettings: protectedProcedure

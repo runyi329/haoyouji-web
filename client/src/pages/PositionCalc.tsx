@@ -55,6 +55,8 @@ interface ModalState {
   price: number;
   mode: 'choose' | 'editPlanned' | 'editActual';
   inputValue: string;
+  baseValue: string;     // 底仓输入值
+  tacticalValue: string; // 机动仓输入值
 }
 
 // 汇总卡片编辑弹窗
@@ -86,6 +88,8 @@ export default function PositionCalc() {
 
   const [planned, setPlanned] = useState<Record<number, number>>({});
   const [actual, setActual] = useState<Record<number, number>>({});
+  const [baseQty, setBaseQty] = useState<Record<number, number>>({}); // 底仓
+  const [tacticalQty, setTacticalQty] = useState<Record<number, number>>({}); // 机动仓
   const [dataLoaded, setDataLoaded] = useState(false);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [modal, setModal] = useState<ModalState | null>(null);
@@ -353,20 +357,28 @@ export default function PositionCalc() {
     if (!positionLoading && positionData && !dataLoaded) {
       const newPlanned: Record<number, number> = {};
       const newActual: Record<number, number> = {};
+      const newBase: Record<number, number> = {};
+      const newTactical: Record<number, number> = {};
       if (positionData.levels.length > 0) {
-        positionData.levels.forEach(l => {
+        positionData.levels.forEach((l: any) => {
           newPlanned[l.price] = l.plannedQty;
           newActual[l.price] = l.actualQty;
+          newBase[l.price] = l.baseQty ?? 0;
+          newTactical[l.price] = l.tacticalQty ?? 0;
         });
       } else {
         // 无数据时用默认展示（不写入数据库）
         PRICE_LEVELS.forEach(p => {
           newPlanned[p] = 0;
           newActual[p] = 0;
+          newBase[p] = 0;
+          newTactical[p] = 0;
         });
       }
       setPlanned(newPlanned);
       setActual(newActual);
+      setBaseQty(newBase);
+      setTacticalQty(newTactical);
       setDataLoaded(true);
     }
   }, [positionData, positionLoading, dataLoaded]);
@@ -483,7 +495,15 @@ export default function PositionCalc() {
 
   // 打开弹窗 - 直接进入编辑实际已买模式（计划数量只在配置里修改）
   const openModal = (price: number) => {
-    setModal({ price, mode: 'editActual', inputValue: String(actual[price] || '') });
+    const bq = baseQty[price] || 0;
+    const tq = tacticalQty[price] || 0;
+    setModal({
+      price,
+      mode: 'editActual',
+      inputValue: String(actual[price] || ''),
+      baseValue: bq > 0 ? String(bq) : '',
+      tacticalValue: tq > 0 ? String(tq) : '',
+    });
   };
 
   // 弹窗确认
@@ -520,15 +540,26 @@ export default function PositionCalc() {
         newValue: val,
       });
     } else if (modal.mode === 'editActual') {
+      const bqNum = parseFloat(modal.baseValue);
+      const tqNum = parseFloat(modal.tacticalValue);
+      const bqVal = isNaN(bqNum) || bqNum < 0 ? 0 : bqNum;
+      const tqVal = isNaN(tqNum) || tqNum < 0 ? 0 : tqNum;
+      const totalVal = bqVal + tqVal; // 总已买 = 底仓 + 机动仓
       const oldVal = actual[modal.price] || 0;
-      const newActual = { ...actual, [modal.price]: val };
+      const newActual = { ...actual, [modal.price]: totalVal };
+      const newBase = { ...baseQty, [modal.price]: bqVal };
+      const newTactical = { ...tacticalQty, [modal.price]: tqVal };
       setActual(newActual);
+      setBaseQty(newBase);
+      setTacticalQty(newTactical);
       // 保存到数据库
       saveLevelMutation.mutate({
         ledgerId,
         price: modal.price,
         plannedQty: planned[modal.price] || 0,
-        actualQty: val,
+        actualQty: totalVal,
+        baseQty: bqVal,
+        tacticalQty: tqVal,
       });
       // 记录修改日志
       addChangeLogMutation.mutate({
@@ -536,7 +567,7 @@ export default function PositionCalc() {
         price: modal.price,
         changeType: 'actual',
         oldValue: oldVal,
-        newValue: val,
+        newValue: totalVal,
       });
     }
     setModal(null);
@@ -1161,10 +1192,17 @@ export default function PositionCalc() {
         {visibleLevels.map(price => {
           const planQty = planned[price] || 0;
           const actualQty = actual[price] || 0;
+          const bq = baseQty[price] || 0;     // 底仓
+          const tq = tacticalQty[price] || 0; // 机动仓
           // 计划条宽度：以全局最大值为基准等比例，最小显示8%（有数据时）
           const planPct = planQty > 0 ? Math.max(Math.round(planQty / maxGlobalQty * 100), 8) : 0;
           // 实际条宽度：以全局最大值为基准等比例（不再 cap 到计划量）
           const actualPct = actualQty > 0 ? Math.max(Math.round(actualQty / maxGlobalQty * 100), 4) : 0;
+          // 底仓和机动仓的宽度（按各自比例叠加，总宽度=actualPct）
+          const basePct = actualQty > 0 ? Math.round(actualPct * (bq / actualQty)) : 0;
+          const tacticalPct = actualQty > 0 ? Math.round(actualPct * (tq / actualQty)) : 0;
+          // 是否有子仓位数据
+          const hasSubQty = bq > 0 || tq > 0;
           // 文字颜色判断用：实际条是否覆盖到左侧/右侧
           const actualPctForColor = planQty > 0
             ? Math.min((actualQty / planQty) * 100, 100)
@@ -1208,21 +1246,56 @@ export default function PositionCalc() {
                     }}
                   />
                 )}
-                {/* 实际已买：实心金色进度条（zIndex 2，叠在计划条上） */}
+                {/* 实际已买：底仓（蓝色）+ 机动仓（橙色）叠加显示 */}
                 {actualQty > 0 && (
-                  <div
-                    className="absolute left-0 top-0 h-full transition-all duration-300"
-                    style={{
-                      width: `${actualPct}%`,
-                      background: isFullyBought
-                        ? 'linear-gradient(90deg, #9a7000 0%, #d4af37 45%, #f5e27a 80%, #fffbe8 100%)'
-                        : 'linear-gradient(90deg, #7a5500 0%, #c8960a 45%, #d4af37 80%, #f0d060 100%)',
-                      boxShadow: '0 0 8px rgba(212,175,55,0.4)',
-                      minWidth: '4px',
-                      borderRadius: '0 3px 3px 0',
-                      zIndex: 2,
-                    }}
-                  />
+                  hasSubQty ? (
+                    <>
+                      {/* 底仓：蓝色，从左起 */}
+                      {bq > 0 && (
+                        <div
+                          className="absolute left-0 top-0 h-full transition-all duration-300"
+                          style={{
+                            width: `${basePct}%`,
+                            background: 'linear-gradient(90deg, #003a7a 0%, #0055b3 45%, #1a7fd4 80%, #4aa8ff 100%)',
+                            boxShadow: '0 0 6px rgba(26,127,212,0.5)',
+                            minWidth: '4px',
+                            borderRadius: '0 3px 3px 0',
+                            zIndex: 2,
+                          }}
+                        />
+                      )}
+                      {/* 机动仓：橙色，接在底仓后面 */}
+                      {tq > 0 && (
+                        <div
+                          className="absolute top-0 h-full transition-all duration-300"
+                          style={{
+                            left: `${basePct}%`,
+                            width: `${tacticalPct}%`,
+                            background: 'linear-gradient(90deg, #7a3500 0%, #c85a0a 45%, #e87020 80%, #ff9040 100%)',
+                            boxShadow: '0 0 6px rgba(232,112,32,0.5)',
+                            minWidth: '4px',
+                            borderRadius: '0 3px 3px 0',
+                            zIndex: 2,
+                          }}
+                        />
+                      )}
+                    </>
+                  ) : (
+                    /* 旧数据兼容：没有底仓/机动仓数据时，显示金色条 */
+                    <div
+                      className="absolute left-0 top-0 h-full transition-all duration-300"
+                      style={{
+                        width: `${actualPct}%`,
+                        background: isFullyBought
+                          ? 'linear-gradient(90deg, #9a7000 0%, #d4af37 45%, #f5e27a 80%, #fffbe8 100%)'
+                          : 'linear-gradient(90deg, #7a5500 0%, #c8960a 45%, #d4af37 80%, #f0d060 100%)',
+                        boxShadow: '0 0 8px rgba(212,175,55,0.4)',
+                        minWidth: '4px',
+                        borderRadius: '0 3px 3px 0',
+                        zIndex: 2,
+                      }}
+                    />
+                  )
                 )}
 
                 {/* 价格文字（叠加在进度条上，始终可见） */}
@@ -2298,98 +2371,115 @@ export default function PositionCalc() {
 
 
             {modal.mode === 'editActual' && (() => {
-              const isActual = true;
-              const accentColor = '#d4af37';
-              const currentVal = parseFloat(modal.inputValue) || 0;
-              // 参考值：目标持仓总量用于计算百分比快捷按钮
+              const bqCur = parseFloat(modal.baseValue) || 0;
+              const tqCur = parseFloat(modal.tacticalValue) || 0;
+              const totalCur = bqCur + tqCur;
               const totalTarget = parseFloat(targetEthQty) || 0;
-              // 滑块范围：左辸0，右辸500
-              const sliderMin = 0;
               const sliderMax = 500;
-              // 当前值在滑块范围内的百分比
-              const sliderPct = Math.min(Math.max(currentVal / sliderMax, 0), 1);
-              // 快捷百分比按钮（基于目标总持仓量）
-              const pctBtns = [5, 10, 20, 50];
-              const adjust = (delta: number) => {
-                const next = Math.max(0, (parseFloat(modal.inputValue) || 0) + delta);
-                setModal(prev => prev ? { ...prev, inputValue: String(next) } : null);
-              };
+              const basePctPreview = totalCur > 0 ? Math.round((bqCur / totalCur) * Math.min(totalCur / sliderMax, 1) * 100) : 0;
+              const tacticalPctPreview = totalCur > 0 ? Math.round((tqCur / totalCur) * Math.min(totalCur / sliderMax, 1) * 100) : 0;
               return (
                 <div>
                   {/* 标题行 */}
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-semibold" style={{ color: isActual ? '#d4af37' : 'rgba(212,175,55,0.7)' }}>
-                      {isActual ? '修改已买数量' : '修改计划数量'}
-                    </span>
+                    <span className="text-sm font-semibold" style={{ color: '#d4af37' }}>修改已买数量</span>
                     <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>ETH</span>
                   </div>
 
-                  {/* 输入框 */}
-                  <div className="mb-4 px-3 py-2 rounded-xl" style={{ background: 'rgba(212,175,55,0.08)', border: `1px solid ${isActual ? 'rgba(212,175,55,0.4)' : 'rgba(212,175,55,0.2)'}` }}>
-                    <input
-                      autoFocus
-                      type="number"
-                      value={modal.inputValue}
-                      onChange={e => setModal(prev => prev ? { ...prev, inputValue: e.target.value } : null)}
-                      onKeyDown={e => { if (e.key === 'Enter') confirmModal(); if (e.key === 'Escape') setModal(null); }}
-                      placeholder="0"
-                      className="w-full text-center text-2xl font-bold outline-none bg-transparent"
-                      style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}
-                      step="1"
-                      min="0"
-                    />
-                  </div>
-
-                  {/* 滑动进度条：0 → 500，实时显示占总计划仓位百分比 */}
-                  <div className="mb-4">
-                    <div className="flex justify-between text-xs mb-2" style={{ color: 'rgba(212,175,55,0.4)' }}>
-                      <span>0</span>
-                      <span className="text-sm font-bold" style={{ color: '#f0d060', letterSpacing: '0.02em' }}>
-                        {currentVal > 0 && totalTarget > 0
-                          ? `${(currentVal / totalTarget * 100).toFixed(1)}%  占总计划仓`
-                          : currentVal > 0 ? `${currentVal} ETH` : '--'
-                        }
-                      </span>
-                      <span>500</span>
+                  {/* 底仓输入 */}
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium" style={{ color: '#4aa8ff' }}>底仓</span>
+                      <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>ETH</span>
                     </div>
-                    {/* 进度条轨道 */}
-                    <div className="relative h-5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                      <div
-                        className="absolute top-0 left-0 h-full rounded-full transition-all duration-150"
-                        style={{
-                          width: `${sliderPct * 100}%`,
-                          background: isActual
-                            ? 'linear-gradient(90deg, #7a5500 0%, #c8960a 45%, #d4af37 80%, #f0d060 100%)'
-                            : 'linear-gradient(90deg, rgba(212,175,55,0.3) 0%, rgba(212,175,55,0.6) 100%)',
-                          boxShadow: isActual ? '0 0 6px rgba(212,175,55,0.4)' : 'none',
-                        }}
+                    <div className="px-3 py-2 rounded-xl" style={{ background: 'rgba(26,127,212,0.1)', border: '1px solid rgba(74,168,255,0.4)' }}>
+                      <input
+                        autoFocus
+                        type="number"
+                        value={modal.baseValue}
+                        onChange={e => setModal(prev => prev ? { ...prev, baseValue: e.target.value } : null)}
+                        onKeyDown={e => { if (e.key === 'Enter') confirmModal(); if (e.key === 'Escape') setModal(null); }}
+                        placeholder="0"
+                        className="w-full text-center text-2xl font-bold outline-none bg-transparent"
+                        style={{ color: '#4aa8ff', fontVariantNumeric: 'tabular-nums' }}
+                        step="1"
+                        min="0"
                       />
                     </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={500}
-                      step={1}
-                      value={Math.min(Math.max(currentVal, 0), 500)}
-                      onChange={e => setModal(prev => prev ? { ...prev, inputValue: e.target.value } : null)}
-                      className="w-full mt-1"
-                      style={{ accentColor: '#d4af37', height: '20px' }}
-                    />
+                  </div>
+
+                  {/* 机动仓输入 */}
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium" style={{ color: '#ff9040' }}>机动仓</span>
+                      <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>ETH</span>
+                    </div>
+                    <div className="px-3 py-2 rounded-xl" style={{ background: 'rgba(232,112,32,0.1)', border: '1px solid rgba(255,144,64,0.4)' }}>
+                      <input
+                        type="number"
+                        value={modal.tacticalValue}
+                        onChange={e => setModal(prev => prev ? { ...prev, tacticalValue: e.target.value } : null)}
+                        onKeyDown={e => { if (e.key === 'Enter') confirmModal(); if (e.key === 'Escape') setModal(null); }}
+                        placeholder="0"
+                        className="w-full text-center text-2xl font-bold outline-none bg-transparent"
+                        style={{ color: '#ff9040', fontVariantNumeric: 'tabular-nums' }}
+                        step="1"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+
+                  {/* 总和预览进度条 */}
+                  <div className="mb-4">
+                    <div className="flex justify-between text-xs mb-1.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                      <span>总已买</span>
+                      <span className="font-bold" style={{ color: totalCur > 0 ? '#f0d060' : 'rgba(255,255,255,0.3)' }}>
+                        {totalCur > 0
+                          ? (totalTarget > 0
+                            ? `${totalCur.toFixed(0)} ETH · ${(totalCur / totalTarget * 100).toFixed(1)}% 占总计划仓`
+                            : `${totalCur.toFixed(0)} ETH`)
+                          : '--'}
+                      </span>
+                    </div>
+                    {/* 叠加进度条预览 */}
+                    <div className="relative h-4 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                      {bqCur > 0 && (
+                        <div className="absolute left-0 top-0 h-full rounded-full transition-all duration-150"
+                          style={{ width: `${basePctPreview}%`, background: 'linear-gradient(90deg, #003a7a 0%, #1a7fd4 80%, #4aa8ff 100%)', minWidth: '4px' }}
+                        />
+                      )}
+                      {tqCur > 0 && (
+                        <div className="absolute top-0 h-full rounded-full transition-all duration-150"
+                          style={{ left: `${basePctPreview}%`, width: `${tacticalPctPreview}%`, background: 'linear-gradient(90deg, #7a3500 0%, #e87020 80%, #ff9040 100%)', minWidth: '4px' }}
+                        />
+                      )}
+                    </div>
+                    {/* 图例 */}
+                    <div className="flex gap-3 mt-1.5">
+                      <div className="flex items-center gap-1">
+                        <div className="w-2.5 h-2.5 rounded-sm" style={{ background: '#1a7fd4' }} />
+                        <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>底仓 {bqCur > 0 ? bqCur.toFixed(0) : '0'}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-2.5 h-2.5 rounded-sm" style={{ background: '#e87020' }} />
+                        <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>机动仓 {tqCur > 0 ? tqCur.toFixed(0) : '0'}</span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* 操作按鈕 */}
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setModal({ ...modal, mode: 'choose', inputValue: '' })}
+                      onClick={() => setModal(null)}
                       className="flex-1 py-2.5 rounded-xl text-sm font-medium"
                       style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)', border: '1px solid rgba(255,255,255,0.1)' }}
                     >
-                      返回
+                      取消
                     </button>
                     <button
                       onClick={confirmModal}
                       className="flex-2 py-2.5 rounded-xl text-sm font-bold"
-                      style={{ flex: 2, background: isActual ? 'linear-gradient(135deg, #9a7000 0%, #d4af37 40%, #f5e27a 55%, #d4af37 70%, #9a7000 100%)' : 'linear-gradient(135deg, rgba(212,175,55,0.5) 0%, rgba(212,175,55,0.8) 50%, rgba(212,175,55,0.5) 100%)', color: '#0a0800', fontWeight: 700 }}
+                      style={{ flex: 2, background: 'linear-gradient(135deg, #9a7000 0%, #d4af37 40%, #f5e27a 55%, #d4af37 70%, #9a7000 100%)', color: '#0a0800', fontWeight: 700 }}
                     >
                       确认保存
                     </button>

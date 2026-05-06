@@ -1903,6 +1903,8 @@ export const ethPositionLevels = mysqlTable("eth_position_levels", {
   price: int('price').notNull(),
   plannedQty: decimal('planned_qty', { precision: 18, scale: 8 }).default('0').notNull(),
   actualQty: decimal('actual_qty', { precision: 18, scale: 8 }).default('0').notNull(),
+  baseQty: decimal('base_qty', { precision: 18, scale: 8 }).default('0').notNull(),     // 底仓数量
+  tacticalQty: decimal('tactical_qty', { precision: 18, scale: 8 }).default('0').notNull(), // 机动仓数量
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 }, (table) => [
