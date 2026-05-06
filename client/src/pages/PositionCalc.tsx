@@ -1286,7 +1286,7 @@ export default function PositionCalc() {
                             background: 'linear-gradient(90deg, #003a7a 0%, #0055b3 45%, #1a7fd4 80%, #4aa8ff 100%)',
                             boxShadow: '0 0 6px rgba(26,127,212,0.5)',
                             minWidth: '4px',
-                            borderRadius: '0 3px 3px 0',
+                            borderRadius: tq > 0 ? '0 0 0 0' : '0 3px 3px 0',
                             zIndex: 2,
                           }}
                         />
