@@ -91,8 +91,22 @@ async function notifyIfYJHDownline(userId: number, type: 'recharge' | 'withdraw'
     const u = (userRows as any[])[0];
     const displayName = u?.name || u?.username || `用户${userId}`;
     const typeLabel = type === 'recharge' ? '充值' : '提现申请';
-    console.log(`[SMS] 52号账本YJH下线 ${displayName}(${userId}) 有新${typeLabel} ${amount} USDT，发送短信通知`);
-    await sendSmsNotify(SMS_NOTIFY_PHONES, SMS_TEMPLATE_ORDER_UPDATE);
+    // 根据开关状态决定发给哪些号码
+    const [settingRows] = await conn.execute(
+      `SELECT phone, enabled FROM sms_notify_settings WHERE user_id = ? AND ledger_id = ?`,
+      [YJH_USER_ID_SMS, LEDGER_52_ID]
+    ) as any[];
+    const settings = settingRows as any[];
+    const enabledPhones = SMS_NOTIFY_PHONES.filter(phone => {
+      const row = settings.find((r: any) => r.phone === phone);
+      return row?.enabled === 1;
+    });
+    if (enabledPhones.length === 0) {
+      console.log(`[SMS] 所有短信开关均已关闭，不发送通知`);
+      return;
+    }
+    console.log(`[SMS] 52号账本YJH下线 ${displayName}(${userId}) 有新${typeLabel} ${amount} USDT，发送短信通知到: ${enabledPhones.join(', ')}`);
+    await sendSmsNotify(enabledPhones, SMS_TEMPLATE_ORDER_UPDATE);
   } catch (e: any) {
     console.warn('[SMS] notifyIfYJHDownline 异常:', e?.message ?? e);
   }
@@ -551,6 +565,9 @@ export async function adminConfirmRecharge(
     }
   }
   
+  // 短信通知：如果是52号账本YJH下线，发送短信
+  notifyIfYJHDownline(order[0].userId, 'recharge', actualAmount).catch(() => {});
+
   return { success: true, userId: order[0].userId, amount: actualAmount };
 }
 
