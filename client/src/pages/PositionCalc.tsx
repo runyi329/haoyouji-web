@@ -270,7 +270,11 @@ export default function PositionCalc() {
     { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: ledgerId > 0 }
   );
-  const saveSettingsMutation = trpc.ethPositionSaveSettings.useMutation();
+  const saveSettingsMutation = trpc.ethPositionSaveSettings.useMutation({
+    onSuccess: () => {
+      utils.ethPositionGetSettings.invalidate({ ledgerId });
+    }
+  });
 
   // 战略/策略拖动交互：纯 touch/mouse 事件，不依赖 range input
   const calcStrategyRatioFromX = useCallback((clientX: number): number => {
