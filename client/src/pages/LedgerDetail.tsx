@@ -398,17 +398,12 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, 
               : <>
                   {collateral.map((a, idx) => {
                     const itemVal = collateralItemValues[idx];
-                    const itemPrice = collateralItemPrices[idx];
                     return (
-                      <div key={idx} className="mt-1">
+                      <div key={idx} className="mt-1 flex justify-between">
+                        <span className="font-mono" style={{ color: '#6B7280' }}>{a.qty} {a.coin}</span>
                         {itemVal !== null
-                          ? <div className="font-mono" style={{ color: '#3B82F6' }}>
-                              {a.coin === 'USDT'
-                                ? <>{a.qty} USDT = <strong>{itemVal.toFixed(2)} U</strong></>
-                                : <>{a.qty} {a.coin} × {itemPrice !== null ? itemPrice.toFixed(2) : '---'} = <strong>{itemVal.toFixed(2)} U</strong></>
-                              }
-                            </div>
-                          : <div className="font-mono" style={{ color: '#D1D5DB' }}>{a.qty} {a.coin} × ---（暂无实时价）</div>
+                          ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{itemVal.toFixed(2)} U</span>
+                          : <span className="font-mono" style={{ color: '#D1D5DB' }}>暂无实时价</span>
                         }
                       </div>
                     );
