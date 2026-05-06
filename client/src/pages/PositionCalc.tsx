@@ -2519,9 +2519,47 @@ export default function PositionCalc() {
                         </div>
                         {isExpanded && (
                           <div className="mt-1.5 space-y-1.5">
-                            {notes.map((n: any, i: number) => (
-                              <div key={i} className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(74,168,255,0.06)', border: '1px solid rgba(74,168,255,0.15)' }}>
-                                <span className="flex-1 text-xs break-all" style={{ color: 'rgba(255,255,255,0.7)' }}>{n.text}</span>
+                            {notes.map((n: any, i: number) => {
+                              const editKey = `base-${price}-${i}`;
+                              const isEditing = (modal as any)._editingNoteKey === editKey;
+                              return (
+                              <div key={i} className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(74,168,255,0.06)', border: `1px solid ${isEditing ? 'rgba(74,168,255,0.5)' : 'rgba(74,168,255,0.15)'}` }}>
+                                {isEditing ? (
+                                  <input
+                                    autoFocus
+                                    type="text"
+                                    defaultValue={n.text}
+                                    className="flex-1 text-xs outline-none bg-transparent"
+                                    style={{ color: 'rgba(255,255,255,0.9)' }}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        const newText = (e.target as HTMLInputElement).value.trim();
+                                        if (newText) {
+                                          const newNotes = notes.map((x: any, j: number) => j === i ? { ...x, text: newText } : x);
+                                          setBaseNotes(prev => ({ ...prev, [price]: newNotes }));
+                                          updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(newNotes), tacticalNotes: JSON.stringify(tacticalNotes[price] || []) });
+                                        }
+                                        setModal(prev => prev ? { ...prev, _editingNoteKey: null } as any : null);
+                                      }
+                                      if (e.key === 'Escape') setModal(prev => prev ? { ...prev, _editingNoteKey: null } as any : null);
+                                    }}
+                                    onBlur={e => {
+                                      const newText = e.target.value.trim();
+                                      if (newText && newText !== n.text) {
+                                        const newNotes = notes.map((x: any, j: number) => j === i ? { ...x, text: newText } : x);
+                                        setBaseNotes(prev => ({ ...prev, [price]: newNotes }));
+                                        updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(newNotes), tacticalNotes: JSON.stringify(tacticalNotes[price] || []) });
+                                      }
+                                      setModal(prev => prev ? { ...prev, _editingNoteKey: null } as any : null);
+                                    }}
+                                  />
+                                ) : (
+                                  <span
+                                    className="flex-1 text-xs break-all cursor-pointer"
+                                    style={{ color: 'rgba(255,255,255,0.7)' }}
+                                    onClick={() => setModal(prev => prev ? { ...prev, _editingNoteKey: editKey } as any : null)}
+                                  >{n.text}</span>
+                                )}
                                 <span className="text-xs shrink-0" style={{ color: 'rgba(255,255,255,0.25)' }}>{n.time?.slice(5,16)}</span>
                                 <button
                                   className="shrink-0 text-xs px-1"
@@ -2533,7 +2571,8 @@ export default function PositionCalc() {
                                   }}
                                 >×</button>
                               </div>
-                            ))}
+                              );
+                            })}
                             {/* 添加新备注输入框 */}
                             <div className="flex gap-1.5">
                               <input
@@ -2613,9 +2652,47 @@ export default function PositionCalc() {
                         </div>
                         {isExpanded && (
                           <div className="mt-1.5 space-y-1.5">
-                            {notes.map((n: any, i: number) => (
-                              <div key={i} className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,144,64,0.06)', border: '1px solid rgba(255,144,64,0.15)' }}>
-                                <span className="flex-1 text-xs break-all" style={{ color: 'rgba(255,255,255,0.7)' }}>{n.text}</span>
+                            {notes.map((n: any, i: number) => {
+                              const editKey = `tactical-${price}-${i}`;
+                              const isEditing = (modal as any)._editingNoteKey === editKey;
+                              return (
+                              <div key={i} className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,144,64,0.06)', border: `1px solid ${isEditing ? 'rgba(255,144,64,0.5)' : 'rgba(255,144,64,0.15)'}` }}>
+                                {isEditing ? (
+                                  <input
+                                    autoFocus
+                                    type="text"
+                                    defaultValue={n.text}
+                                    className="flex-1 text-xs outline-none bg-transparent"
+                                    style={{ color: 'rgba(255,255,255,0.9)' }}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') {
+                                        const newText = (e.target as HTMLInputElement).value.trim();
+                                        if (newText) {
+                                          const newNotes = notes.map((x: any, j: number) => j === i ? { ...x, text: newText } : x);
+                                          setTacticalNotes(prev => ({ ...prev, [price]: newNotes }));
+                                          updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(baseNotes[price] || []), tacticalNotes: JSON.stringify(newNotes) });
+                                        }
+                                        setModal(prev => prev ? { ...prev, _editingNoteKey: null } as any : null);
+                                      }
+                                      if (e.key === 'Escape') setModal(prev => prev ? { ...prev, _editingNoteKey: null } as any : null);
+                                    }}
+                                    onBlur={e => {
+                                      const newText = e.target.value.trim();
+                                      if (newText && newText !== n.text) {
+                                        const newNotes = notes.map((x: any, j: number) => j === i ? { ...x, text: newText } : x);
+                                        setTacticalNotes(prev => ({ ...prev, [price]: newNotes }));
+                                        updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(baseNotes[price] || []), tacticalNotes: JSON.stringify(newNotes) });
+                                      }
+                                      setModal(prev => prev ? { ...prev, _editingNoteKey: null } as any : null);
+                                    }}
+                                  />
+                                ) : (
+                                  <span
+                                    className="flex-1 text-xs break-all cursor-pointer"
+                                    style={{ color: 'rgba(255,255,255,0.7)' }}
+                                    onClick={() => setModal(prev => prev ? { ...prev, _editingNoteKey: editKey } as any : null)}
+                                  >{n.text}</span>
+                                )}
                                 <span className="text-xs shrink-0" style={{ color: 'rgba(255,255,255,0.25)' }}>{n.time?.slice(5,16)}</span>
                                 <button
                                   className="shrink-0 text-xs px-1"
@@ -2627,7 +2704,8 @@ export default function PositionCalc() {
                                   }}
                                 >×</button>
                               </div>
-                            ))}
+                              );
+                            })}
                             {/* 添加新备注输入框 */}
                             <div className="flex gap-1.5">
                               <input
