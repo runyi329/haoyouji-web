@@ -6,6 +6,8 @@ export interface EthPositionLevel {
   price: number;
   plannedQty: number;
   actualQty: number;
+  baseQty: number;     // 底仓数量
+  tacticalQty: number; // 机动仓数量
 }
 
 /**
@@ -18,11 +20,18 @@ export async function getEthPositionLevels(ledgerId: number, userId: number): Pr
     .select()
     .from(ethPositionLevels)
     .where(and(eq(ethPositionLevels.ledgerId, ledgerId), eq(ethPositionLevels.userId, userId)));
-  return rows.map(r => ({
-    price: r.price,
-    plannedQty: parseFloat(r.plannedQty as string),
-    actualQty: parseFloat(r.actualQty as string),
-  }));
+  return rows.map(r => {
+    const baseQty = parseFloat((r as any).baseQty as string || '0') || 0;
+    const tacticalQty = parseFloat((r as any).tacticalQty as string || '0') || 0;
+    const actualQty = parseFloat(r.actualQty as string);
+    return {
+      price: r.price,
+      plannedQty: parseFloat(r.plannedQty as string),
+      actualQty,
+      baseQty,
+      tacticalQty,
+    };
+  });
 }
 
 /**
@@ -33,10 +42,14 @@ export async function upsertEthPositionLevel(
   userId: number,
   price: number,
   plannedQty: number,
-  actualQty: number
+  actualQty: number,
+  baseQty: number = 0,
+  tacticalQty: number = 0
 ): Promise<void> {
   const db = await getLedgerDb();
   if (!db) return;
+  // actualQty 始终等于 baseQty + tacticalQty（如果两者都有值），否则用传入的 actualQty
+  const finalActual = (baseQty > 0 || tacticalQty > 0) ? baseQty + tacticalQty : actualQty;
   await db
     .insert(ethPositionLevels)
     .values({
@@ -44,13 +57,17 @@ export async function upsertEthPositionLevel(
       userId,
       price,
       plannedQty: String(plannedQty),
-      actualQty: String(actualQty),
-    })
+      actualQty: String(finalActual),
+      baseQty: String(baseQty),
+      tacticalQty: String(tacticalQty),
+    } as any)
     .onDuplicateKeyUpdate({
       set: {
         plannedQty: String(plannedQty),
-        actualQty: String(actualQty),
-      },
+        actualQty: String(finalActual),
+        baseQty: String(baseQty),
+        tacticalQty: String(tacticalQty),
+      } as any,
     });
 }
 
@@ -66,6 +83,9 @@ export async function batchUpsertEthPositionLevels(
   if (!db) return;
   if (levels.length === 0) return;
   for (const level of levels) {
+    const baseQty = level.baseQty ?? 0;
+    const tacticalQty = level.tacticalQty ?? 0;
+    const finalActual = (baseQty > 0 || tacticalQty > 0) ? baseQty + tacticalQty : level.actualQty;
     await db
       .insert(ethPositionLevels)
       .values({
@@ -73,13 +93,17 @@ export async function batchUpsertEthPositionLevels(
         userId,
         price: level.price,
         plannedQty: String(level.plannedQty),
-        actualQty: String(level.actualQty),
-      })
+        actualQty: String(finalActual),
+        baseQty: String(baseQty),
+        tacticalQty: String(tacticalQty),
+      } as any)
       .onDuplicateKeyUpdate({
         set: {
           plannedQty: String(level.plannedQty),
-          actualQty: String(level.actualQty),
-        },
+          actualQty: String(finalActual),
+          baseQty: String(baseQty),
+          tacticalQty: String(tacticalQty),
+        } as any,
       });
   }
 }
