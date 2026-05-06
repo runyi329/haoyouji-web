@@ -3389,12 +3389,10 @@ export default function LedgerDetail() {
                   </div>
                 )}
                 {inviteTreeData?.users && inviteTreeData.users.length > 0 && !viewAsUserId && (
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-xs text-white/60">总余额</span>
-                    <span className="text-sm font-bold text-white">
-                      {inviteTreeData.users.reduce((sum: number, u: any) => sum + (u.balance ?? 0), 0).toFixed(2)}
-                    </span>
-                    <span className="text-xs text-white/60">USDT</span>
+                  <div className="flex items-baseline gap-1 mt-0.5">
+                    <span className="text-[10px] text-white/50">总余额</span>
+                    <span className="text-xs font-bold text-white/90">{inviteTreeData.users.reduce((sum: number, u: any) => sum + (u.balance ?? 0), 0).toFixed(2)}</span>
+                    <span className="text-[10px] text-white/50">U</span>
                   </div>
                 )}
               </div>
