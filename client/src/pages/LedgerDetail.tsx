@@ -3399,7 +3399,8 @@ export default function LedgerDetail() {
                 {/* 右上角：短信通知开关（YJH本人或管理员视角切换到YJH时可见） */}
                 {showSmsSwitch && (
                   <div className="absolute top-2 right-2 flex flex-col items-end gap-1" onClick={e => e.stopPropagation()}>
-                    {/* 131 开关 */}
+                    {/* 131 开关：仅管理员（含视角切换到YJH）可见 */}
+                    {(isAdmin || isOwner) && (
                     <div className="flex items-center gap-1">
                       <span className="text-[9px] text-white/50">131</span>
                       <button
@@ -3411,7 +3412,8 @@ export default function LedgerDetail() {
                           style={{ backgroundColor: (localSms131 ?? false) ? '#16a34a' : 'rgba(255,255,255,0.6)', transform: (localSms131 ?? false) ? 'translateX(14px)' : 'translateX(2px)' }} />
                       </button>
                     </div>
-                    {/* 182 开关 */}
+                    )}
+                    {/* 182 开关：YJH本人或管理员视角切换到YJH时可见 */}
                     <div className="flex items-center gap-1">
                       <span className="text-[9px] text-white/50">182</span>
                       <button
