@@ -4068,53 +4068,36 @@ function ProfitPathPanel({
               return n.toFixed(0);
             };
             return (
-              <div style={{ borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(192,200,210,0.12)', padding: '10px 12px' }}>
-                {/* 标题行 */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <span style={{ fontSize: 11, color: 'rgba(192,200,210,0.7)', fontWeight: 600 }}>所需资金</span>
-                  {/* 杠杆倍数标签，点击弹出修改 */}
+              <div style={{ borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(192,200,210,0.12)', padding: '10px 14px' }}>
+                {/* 第一行：标题 + 杠杆标签 */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, color: 'rgba(192,200,210,0.55)', fontWeight: 600, letterSpacing: '0.02em' }}>所需资金</span>
                   <span
                     onClick={() => { setLeverageInput(String(leverage)); setShowLeverageEdit(true); }}
                     style={{
-                      fontSize: 12, fontWeight: 700,
-                      color: leverage > 1 ? 'rgba(255,154,48,0.9)' : 'rgba(192,200,210,0.7)',
-                      border: `1px solid ${leverage > 1 ? 'rgba(255,154,48,0.35)' : 'rgba(192,200,210,0.2)'}`,
-                      borderRadius: 6, padding: '2px 8px', cursor: 'pointer',
-                      background: leverage > 1 ? 'rgba(255,154,48,0.08)' : 'rgba(192,200,210,0.05)',
+                      fontSize: 11, fontWeight: 600,
+                      color: 'rgba(192,200,210,0.65)',
+                      border: '1px solid rgba(192,200,210,0.18)',
+                      borderRadius: 5, padding: '1px 7px', cursor: 'pointer',
+                      background: 'rgba(192,200,210,0.05)',
                       userSelect: 'none',
                     }}
                   >{leverage}x 杠杆</span>
                 </div>
-                {/* 主要数据行 */}
-                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                  {/* 持仓总市値 */}
-                  <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 9, color: 'rgba(148,163,184,0.5)', marginBottom: 3 }}>持仓总市値</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#60a5fa', fontVariantNumeric: 'tabular-nums' }}>
-                      ¥{fmtCny(positionUsdt * (cnyRate || 7.2))}
-                    </div>
-                  </div>
-                  {/* 所需本金 */}
-                  <div style={{ flex: 1, background: leverage > 1 ? 'rgba(255,154,48,0.06)' : 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '8px 10px', textAlign: 'center', border: leverage > 1 ? '1px solid rgba(255,154,48,0.15)' : 'none' }}>
-                    <div style={{ fontSize: 9, color: 'rgba(148,163,184,0.5)', marginBottom: 3 }}>所需本金</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: leverage > 1 ? '#ff9a30' : 'rgba(255,215,100,0.9)', fontVariantNumeric: 'tabular-nums' }}>
-                      ¥{fmtCny(requiredCny)}
-                    </div>
-                  </div>
-                  {/* 占用比例 */}
-                  <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 9, color: 'rgba(148,163,184,0.5)', marginBottom: 3 }}>占用比例</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: leverage > 1 ? '#f97316' : 'rgba(192,200,210,0.7)', fontVariantNumeric: 'tabular-nums' }}>
-                      {marginRatio.toFixed(leverage > 1 ? 1 : 0)}%
-                    </div>
-                  </div>
+                {/* 第二行：所需本金（金色大字） */}
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 8 }}>
+                  <span style={{ fontSize: 22, fontWeight: 800, color: 'rgba(255,215,100,0.92)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>¥{fmtCny(requiredCny)}</span>
+                  <span style={{ fontSize: 10, color: 'rgba(192,200,210,0.4)', fontWeight: 400 }}>所需本金</span>
                 </div>
-                {/* 说明文字 */}
-                <div style={{ fontSize: 10, color: 'rgba(148,163,184,0.45)', lineHeight: 1.6 }}>
-                  {leverage === 1
-                    ? `全仓现购，需全额本金 ¥${fmtCny(requiredCny)}（币价 $${curPrice > 0 ? curPrice.toFixed(0) : '--'}）`
-                    : `${leverage}x 杠杆，仅需占用 ${marginRatio.toFixed(1)}% 资金（约 ¥${fmtCny(requiredCny)}）即可持有 ${sliderQty.toFixed(1)} ETH`
-                  }
+                {/* 第三行：市值 + 占用比 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 11, color: 'rgba(192,200,210,0.5)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    市值&nbsp;<span style={{ color: 'rgba(192,200,210,0.75)', fontWeight: 600 }}>¥{fmtCny(positionUsdt * (cnyRate || 7.2))}</span>
+                  </span>
+                  <span style={{ fontSize: 11, color: 'rgba(192,200,210,0.35)' }}>·</span>
+                  <span style={{ fontSize: 11, color: 'rgba(192,200,210,0.5)', whiteSpace: 'nowrap' }}>
+                    占用&nbsp;<span style={{ color: 'rgba(192,200,210,0.75)', fontWeight: 600 }}>{marginRatio.toFixed(leverage > 1 ? 1 : 0)}%</span>
+                  </span>
                 </div>
 
                 {/* 杠杆倒数修改弹窗 */}
