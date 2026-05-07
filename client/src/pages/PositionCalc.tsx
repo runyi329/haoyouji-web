@@ -73,8 +73,19 @@ export default function PositionCalc() {
   const viewAsUserId = urlSearchParams.get('viewAs') ? Number(urlSearchParams.get('viewAs')) : undefined;
   const isViewAs = !!viewAsUserId; // 视角查看时禁用写入操作
 
-  // 禁止左右滑动切换页面（防止滑块误触发浏览器返回）
+  // 禁止左右滑动切换页面（包括 iOS 边缘返回手势）
   useEffect(() => {
+    // CSS 方案：覆盖 html/body 的 overscroll 行为
+    const prevHtmlOverscroll = document.documentElement.style.overscrollBehaviorX;
+    const prevBodyOverscroll = document.body.style.overscrollBehaviorX;
+    const prevHtmlTouchAction = document.documentElement.style.touchAction;
+    const prevBodyTouchAction = document.body.style.touchAction;
+    document.documentElement.style.overscrollBehaviorX = 'none';
+    document.body.style.overscrollBehaviorX = 'none';
+    document.documentElement.style.touchAction = 'pan-y';
+    document.body.style.touchAction = 'pan-y';
+
+    // JS 方案：拦截水平主导的 touch 事件
     let touchStartX = 0;
     let touchStartY = 0;
     const onTouchStart = (e: TouchEvent) => {
@@ -84,7 +95,6 @@ export default function PositionCalc() {
     const onTouchMove = (e: TouchEvent) => {
       const dx = e.touches[0].clientX - touchStartX;
       const dy = e.touches[0].clientY - touchStartY;
-      // 如果水平方向为主（左右滑动），阻止默认行为（防止页面左右切换）
       if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) {
         e.preventDefault();
       }
@@ -92,6 +102,11 @@ export default function PositionCalc() {
     document.addEventListener('touchstart', onTouchStart, { passive: true });
     document.addEventListener('touchmove', onTouchMove, { passive: false });
     return () => {
+      // 离开页面时恢复原来的设置
+      document.documentElement.style.overscrollBehaviorX = prevHtmlOverscroll;
+      document.body.style.overscrollBehaviorX = prevBodyOverscroll;
+      document.documentElement.style.touchAction = prevHtmlTouchAction;
+      document.body.style.touchAction = prevBodyTouchAction;
       document.removeEventListener('touchstart', onTouchStart);
       document.removeEventListener('touchmove', onTouchMove);
     };
@@ -631,7 +646,7 @@ export default function PositionCalc() {
   const isPnlPositive = summary.totalPnl >= 0;
 
   return (
-    <div className="min-h-screen pb-20 max-w-md mx-auto relative" style={{ background: '#000000' }}>
+    <div className="min-h-screen pb-20 max-w-md mx-auto relative" style={{ background: '#000000', overscrollBehaviorX: 'none', touchAction: 'pan-y', overflowX: 'hidden' }}>
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-20 flex items-center px-4 py-3"
