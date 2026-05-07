@@ -2970,7 +2970,7 @@ export default function PositionCalc() {
         const basePrice = avgPrice > 0 ? avgPrice : (curPrice || 2000);
 
         // 滑块范围
-        const maxQty = Math.max(200, Math.ceil((parseFloat(targetEthQty) || 50) * 2));
+        const maxQty = 10000; // 固定为 ETH_MAX，不再依赖 targetEthQty
         const maxRisePct = 500;
 
         // 联动计算
@@ -2985,7 +2985,7 @@ export default function PositionCalc() {
           const exitPrice = curPrice * (1 + rise / 100);
           const perCoin = exitPrice - basePrice;
           if (perCoin <= 0 || profitUsdt <= 0) return 0;
-          return Math.min(maxQty, profitUsdt / perCoin);
+          return Math.min(ETH_MAX, profitUsdt / perCoin);
         };
 
         return (
@@ -3131,7 +3131,7 @@ function ProfitPathPanel({
           const targetUsdt = val / (cnyRate || 7.2);
           if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
             const exitP = curPrice * (1 + sliderRise / 100);
-            const qty = exitP > avgPrice ? Math.min(targetUsdt / (exitP - avgPrice), maxQty) : maxQty;
+            const qty = exitP > avgPrice ? Math.min(targetUsdt / (exitP - avgPrice), ETH_MAX) : ETH_MAX;
             const qtyVal = Math.max(ETH_MIN, Math.min(ETH_MAX, Math.round(qty * 10) / 10));
             setSliderQty(qtyVal);
             sessionStorage.setItem(SESSION_KEY_QTY, String(qtyVal));
@@ -3248,7 +3248,7 @@ function ProfitPathPanel({
         const targetUsdt = target / (cnyRate || 7.2);
         if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
           const exitP = curPrice * (1 + sliderRise / 100);
-          const qty = exitP > avgPrice ? Math.min(targetUsdt / (exitP - avgPrice), maxQty) : maxQty;
+          const qty = exitP > avgPrice ? Math.min(targetUsdt / (exitP - avgPrice), ETH_MAX) : ETH_MAX;
           const qtyVal = Math.max(ETH_MIN, Math.min(ETH_MAX, Math.round(qty * 10) / 10));
           setSliderQty(qtyVal);
           sessionStorage.setItem(SESSION_KEY_QTY, String(qtyVal));
