@@ -2999,6 +2999,7 @@ export default function PositionCalc() {
             qtyToRise={qtyToRise}
             riseToQty={riseToQty}
             actualQty={_actQty2}
+            cnyRate={cnyRate}
           />
         );
       })()}
@@ -3018,17 +3019,31 @@ interface ProfitPathPanelProps {
   qtyToRise: (qty: number) => number;
   riseToQty: (rise: number) => number;
   actualQty: number;
+  cnyRate: number;
 }
+
+// 对数刻度：1万～1亿，映射到 0～1
+const CNY_MIN = 10000;    // 1万
+const CNY_MAX = 100000000; // 1亿
+const logToSlider = (val: number) => (Math.log(val) - Math.log(CNY_MIN)) / (Math.log(CNY_MAX) - Math.log(CNY_MIN));
+const sliderToLog = (s: number) => Math.round(Math.exp(Math.log(CNY_MIN) + s * (Math.log(CNY_MAX) - Math.log(CNY_MIN))));
 
 function ProfitPathPanel({
   profitUsdt, targetProfitCny, curPrice, avgPrice,
-  maxQty, maxRisePct, qtyToRise, riseToQty, actualQty
+  maxQty, maxRisePct, qtyToRise, riseToQty, actualQty, cnyRate
 }: ProfitPathPanelProps) {
   // 用 sessionStorage 持久化滑块位置（页面内导航保持，刷新页面恢复初始值）
   const SESSION_KEY_QTY = 'profit_path_qty';
   const SESSION_KEY_RISE = 'profit_path_rise';
+  const SESSION_KEY_TARGET = 'profit_path_target';
   const SESSION_KEY_INIT = 'profit_path_initialized';
 
+  // 目标止盈金额（人民币），默认取 targetProfitCny，范围 1万～1亿
+  const [sliderTarget, setSliderTarget] = React.useState<number>(() => {
+    const saved = sessionStorage.getItem(SESSION_KEY_TARGET);
+    if (saved !== null) return parseFloat(saved);
+    return Math.max(CNY_MIN, Math.min(CNY_MAX, targetProfitCny || 1000000));
+  });
   const [sliderQty, setSliderQty] = React.useState<number>(() => {
     const saved = sessionStorage.getItem(SESSION_KEY_QTY);
     return saved !== null ? parseFloat(saved) : Math.min(actualQty || 10, maxQty);
@@ -3038,21 +3053,36 @@ function ProfitPathPanel({
     return saved !== null ? parseFloat(saved) : 0;
   });
 
-  // 双击切换锁定/解锁状态：true = 解锁（可被联动），false = 锁定（定量）
-  const [qtyUnlocked, setQtyUnlocked] = React.useState(false);
-  const [riseUnlocked, setRiseUnlocked] = React.useState(false);
-  // 移动端单指双击检测
+  // 解锁状态：true = 解锁（变量，可手动拖动）；false = 锁定（定量，不可拖动）
+  // 新逻辑：只有解锁的滑块才能被手动拖动；锁定的滑块只能被联动更新
+  const [targetUnlocked, setTargetUnlocked] = React.useState(false); // 目标止盈金额，默认锁定
+  const [qtyUnlocked, setQtyUnlocked] = React.useState(false);       // 持仓数量，默认锁定
+  const [riseUnlocked, setRiseUnlocked] = React.useState(false);     // 目标涨幅，默认锁定
+
+  // 移动端双击检测
+  const targetTapRef = React.useRef<{ time: number } | null>(null);
   const qtyTapRef = React.useRef<{ time: number } | null>(null);
   const riseTapRef = React.useRef<{ time: number } | null>(null);
 
   // 滑块拖动 ref
+  const targetBarRef = React.useRef<HTMLDivElement>(null);
   const qtyBarRef = React.useRef<HTMLDivElement>(null);
   const riseBarRef = React.useRef<HTMLDivElement>(null);
+  const isDraggingTarget = React.useRef(false);
   const isDraggingQty = React.useRef(false);
   const isDraggingRise = React.useRef(false);
 
+  const toggleTargetLock = () => setTargetUnlocked(v => !v);
   const toggleQtyLock = () => setQtyUnlocked(v => !v);
   const toggleRiseLock = () => setRiseUnlocked(v => !v);
+
+  // 从 clientX 计算目标止盈金额（对数刻度）
+  const calcTargetFromX = React.useCallback((clientX: number): number => {
+    if (!targetBarRef.current) return sliderTarget;
+    const rect = targetBarRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return sliderToLog(ratio);
+  }, [sliderTarget]);
 
   // 从 clientX 计算持仓数量
   const calcQtyFromX = React.useCallback((clientX: number): number => {
@@ -3072,54 +3102,99 @@ function ProfitPathPanel({
     return Math.max(0, Math.round(raw * 2) / 2);
   }, [maxRisePct, sliderRise]);
 
+  // 根据目标金额和持仓量计算所需涨幅
+  const calcRiseFromTargetAndQty = React.useCallback((targetCny: number, qty: number): number => {
+    if (!cnyRate || cnyRate <= 0 || qty <= 0 || avgPrice <= 0) return 0;
+    const targetUsdt = targetCny / cnyRate;
+    const exitPriceCalc = avgPrice + targetUsdt / qty;
+    if (curPrice <= 0) return 0;
+    return Math.max(0, (exitPriceCalc - curPrice) / curPrice * 100);
+  }, [cnyRate, avgPrice, curPrice]);
+
   // 全局 mousemove/mouseup/touchmove/touchend 监听
+  // 新逻辑：只有解锁（变量）的滑块才能被手动拖动
   React.useEffect(() => {
+    const handleTargetDrag = (clientX: number) => {
+      if (!isDraggingTarget.current) return;
+      const target = calcTargetFromX(clientX);
+      setSliderTarget(target);
+      sessionStorage.setItem(SESSION_KEY_TARGET, String(target));
+      // 目标金额变化时，联动锁定的滑块（锁定 = 定量，被动更新）
+      if (!qtyUnlocked && !riseUnlocked) {
+        // 两个都锁定：保持持仓量不变，联动涨幅
+        const rise = Math.min(calcRiseFromTargetAndQty(target, sliderQty), maxRisePct);
+        setSliderRise(rise);
+        sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+      } else if (!qtyUnlocked && riseUnlocked) {
+        // 持仓量锁定，涨幅解锁：保持持仓量不变，联动涨幅
+        const rise = Math.min(calcRiseFromTargetAndQty(target, sliderQty), maxRisePct);
+        setSliderRise(rise);
+        sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+      } else if (qtyUnlocked && !riseUnlocked) {
+        // 持仓量解锁，涨幅锁定：保持涨幅不变，联动持仓量
+        const targetUsdt = target / (cnyRate || 7.2);
+        if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
+          const exitP = curPrice * (1 + sliderRise / 100);
+          const qty = exitP > avgPrice ? Math.min(targetUsdt / (exitP - avgPrice), maxQty) : maxQty;
+          setSliderQty(Math.max(0.1, Math.round(qty * 10) / 10));
+          sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+        }
+      }
+    };
+    const handleQtyDrag = (clientX: number) => {
+      if (!isDraggingQty.current) return;
+      const qty = calcQtyFromX(clientX);
+      setSliderQty(qty);
+      sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+      // 持仓量变化，联动锁定的其他滑块
+      if (!riseUnlocked) {
+        // 涨幅锁定：联动涨幅
+        const rise = Math.min(calcRiseFromTargetAndQty(sliderTarget, qty), maxRisePct);
+        setSliderRise(rise);
+        sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+      }
+      if (!targetUnlocked) {
+        // 目标金额锁定：不变（它是定量）
+      }
+    };
+    const handleRiseDrag = (clientX: number) => {
+      if (!isDraggingRise.current) return;
+      const rise = calcRiseFromX(clientX);
+      setSliderRise(rise);
+      sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+      // 涨幅变化，联动锁定的其他滑块
+      if (!qtyUnlocked) {
+        // 持仓量锁定：联动持仓量
+        const qty = Math.min(riseToQty(rise), maxQty);
+        setSliderQty(Math.max(0.1, qty));
+        sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+      }
+      if (!targetUnlocked) {
+        // 目标金额锁定：不变
+      }
+    };
+
     const onMouseMove = (e: MouseEvent) => {
-      if (isDraggingQty.current) {
-        const qty = calcQtyFromX(e.clientX);
-        setSliderQty(qty);
-        sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
-        if (riseUnlocked) {
-          const rise = Math.min(qtyToRise(qty), maxRisePct);
-          setSliderRise(rise);
-          sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
-        }
-      }
-      if (isDraggingRise.current) {
-        const rise = calcRiseFromX(e.clientX);
-        setSliderRise(rise);
-        sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
-        if (qtyUnlocked) {
-          const qty = Math.min(riseToQty(rise), maxQty);
-          setSliderQty(qty);
-          sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
-        }
-      }
+      handleTargetDrag(e.clientX);
+      handleQtyDrag(e.clientX);
+      handleRiseDrag(e.clientX);
     };
-    const onMouseUp = () => { isDraggingQty.current = false; isDraggingRise.current = false; };
+    const onMouseUp = () => {
+      isDraggingTarget.current = false;
+      isDraggingQty.current = false;
+      isDraggingRise.current = false;
+    };
     const onTouchMove = (e: TouchEvent) => {
-      if (isDraggingQty.current) {
-        const qty = calcQtyFromX(e.touches[0].clientX);
-        setSliderQty(qty);
-        sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
-        if (riseUnlocked) {
-          const rise = Math.min(qtyToRise(qty), maxRisePct);
-          setSliderRise(rise);
-          sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
-        }
-      }
-      if (isDraggingRise.current) {
-        const rise = calcRiseFromX(e.touches[0].clientX);
-        setSliderRise(rise);
-        sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
-        if (qtyUnlocked) {
-          const qty = Math.min(riseToQty(rise), maxQty);
-          setSliderQty(qty);
-          sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
-        }
-      }
+      const x = e.touches[0].clientX;
+      handleTargetDrag(x);
+      handleQtyDrag(x);
+      handleRiseDrag(x);
     };
-    const onTouchEnd = () => { isDraggingQty.current = false; isDraggingRise.current = false; };
+    const onTouchEnd = () => {
+      isDraggingTarget.current = false;
+      isDraggingQty.current = false;
+      isDraggingRise.current = false;
+    };
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
     document.addEventListener('touchmove', onTouchMove, { passive: true });
@@ -3130,49 +3205,31 @@ function ProfitPathPanel({
       document.removeEventListener('touchmove', onTouchMove);
       document.removeEventListener('touchend', onTouchEnd);
     };
-  }, [calcQtyFromX, calcRiseFromX, qtyUnlocked, riseUnlocked, qtyToRise, riseToQty, maxRisePct, maxQty]);
+  }, [calcTargetFromX, calcQtyFromX, calcRiseFromX, calcRiseFromTargetAndQty,
+      targetUnlocked, qtyUnlocked, riseUnlocked,
+      qtyToRise, riseToQty, maxRisePct, maxQty,
+      sliderTarget, sliderQty, sliderRise, cnyRate, curPrice, avgPrice]);
 
   // 初始化：只在本次会话首次加载时设置初始值（刷新页面后 sessionStorage 清空，重新初始化）
   React.useEffect(() => {
     const initialized = sessionStorage.getItem(SESSION_KEY_INIT);
-    if (!initialized && actualQty && curPrice && avgPrice && profitUsdt) {
+    if (!initialized && actualQty && curPrice && avgPrice) {
       const initQty = Math.max(1, Math.min(actualQty, maxQty));
-      const rise = qtyToRise(initQty);
+      const initTarget = Math.max(CNY_MIN, Math.min(CNY_MAX, targetProfitCny || 1000000));
+      const rise = calcRiseFromTargetAndQty(initTarget, initQty);
       setSliderQty(initQty);
+      setSliderTarget(initTarget);
       setSliderRise(Math.min(rise, maxRisePct));
       sessionStorage.setItem(SESSION_KEY_QTY, String(initQty));
+      sessionStorage.setItem(SESSION_KEY_TARGET, String(initTarget));
       sessionStorage.setItem(SESSION_KEY_RISE, String(Math.min(rise, maxRisePct)));
       sessionStorage.setItem(SESSION_KEY_INIT, '1');
     }
-  }, [actualQty, curPrice, avgPrice, profitUsdt]);
+  }, [actualQty, curPrice, avgPrice, targetProfitCny]);
 
-  // 拖动币量滑块 → 若涨幅已解锁则联动涨幅
-  const handleQtyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const qty = parseFloat(e.target.value);
-    setSliderQty(qty);
-    sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
-    if (riseUnlocked) {
-      const rise = qtyToRise(qty);
-      const clampedRise = Math.min(rise, maxRisePct);
-      setSliderRise(clampedRise);
-      sessionStorage.setItem(SESSION_KEY_RISE, String(clampedRise));
-    }
-  };
-
-  // 拖动涨幅滑块 → 若币量已解锁则联动币量
-  const handleRiseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rise = parseFloat(e.target.value);
-    setSliderRise(rise);
-    sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
-    if (qtyUnlocked) {
-      const qty = Math.min(riseToQty(rise), maxQty);
-      setSliderQty(qty);
-      sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
-    }
-  };
-
-  // 目标离场价
-  const exitPrice = sliderQty > 0 ? avgPrice + profitUsdt / sliderQty : 0;
+  // 目标离场价（基于 sliderTarget 和 sliderQty 计算）
+  const effectiveProfitUsdt = cnyRate > 0 ? sliderTarget / cnyRate : profitUsdt;
+  const exitPrice = sliderQty > 0 && avgPrice > 0 ? avgPrice + effectiveProfitUsdt / sliderQty : 0;
   const riseDisplay = exitPrice > 0 && curPrice > 0 ? ((exitPrice - curPrice) / curPrice * 100) : sliderRise;
 
   // 难易度评分（0-100）
@@ -3254,6 +3311,108 @@ function ProfitPathPanel({
         </div>
       ) : (
         <>
+          {/* 滑块0：目标止盈金额（对数刻度，1万～1亿） */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  onDoubleClick={toggleTargetLock}
+                  onTouchEnd={(e) => {
+                    const now = Date.now();
+                    if (targetTapRef.current && now - targetTapRef.current.time < 350) {
+                      toggleTargetLock();
+                      targetTapRef.current = null;
+                    } else {
+                      targetTapRef.current = { time: now };
+                    }
+                  }}
+                  style={{
+                    width: 26, height: 26, borderRadius: '50%', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: targetUnlocked
+                      ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)'
+                      : 'linear-gradient(135deg, #2a3050 0%, #3a4060 100%)',
+                    border: targetUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : '1.5px solid rgba(100,120,200,0.4)',
+                    boxShadow: targetUnlocked
+                      ? '0 0 12px rgba(255,235,100,1), 0 2px 6px rgba(0,0,0,0.6)'
+                      : '0 1px 4px rgba(0,0,0,0.5)',
+                    userSelect: 'none',
+                  }}
+                  title="双击切换定量/变量"
+                >
+                  <svg width="11" height="13" viewBox="0 0 10 12" fill="none">
+                    <rect x="1.5" y="5" width="7" height="6" rx="1.5" fill={targetUnlocked ? '#888' : 'rgba(148,163,184,0.7)'} />
+                    {targetUnlocked
+                      ? <path d="M3 5V3.5C3 2.12 3.9 1 5 1" stroke="rgba(148,163,184,0.5)" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                      : <path d="M3 5V3.5C3 2.12 3.9 1 5 1C6.1 1 7 2.12 7 3.5V5" stroke="rgba(148,163,184,0.7)" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                    }
+                    <circle cx="5" cy="8" r="1" fill={targetUnlocked ? '#888' : 'rgba(255,255,255,0.5)'} />
+                  </svg>
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 600, color: targetUnlocked ? 'rgba(255,235,100,0.9)' : 'rgba(148,163,184,0.8)' }}>目标止盈</span>
+                <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10,
+                  background: targetUnlocked ? 'rgba(255,235,100,0.15)' : 'rgba(100,120,200,0.15)',
+                  color: targetUnlocked ? 'rgba(255,235,100,0.8)' : 'rgba(100,120,200,0.6)',
+                  border: `1px solid ${targetUnlocked ? 'rgba(255,235,100,0.3)' : 'rgba(100,120,200,0.2)'}`,
+                }}>{targetUnlocked ? '变量' : '定量'}</span>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa', fontVariantNumeric: 'tabular-nums' }}>
+                ¥{sliderTarget >= 100000000 ? '1亿' : sliderTarget >= 10000000 ? `${(sliderTarget/10000000).toFixed(1)}千万` : sliderTarget >= 1000000 ? `${(sliderTarget/1000000).toFixed(1)}百万` : `${(sliderTarget/10000).toFixed(1)}万`}
+              </span>
+            </div>
+            {/* 进度条区域 */}
+            <div
+              ref={targetBarRef}
+              style={{ position: 'relative', height: 32, cursor: targetUnlocked ? 'ew-resize' : 'not-allowed', touchAction: 'none', userSelect: 'none', opacity: targetUnlocked ? 1 : 0.65 }}
+              onMouseDown={(e) => {
+                if (!targetUnlocked) return;
+                isDraggingTarget.current = true;
+                const target = calcTargetFromX(e.clientX);
+                setSliderTarget(target);
+                sessionStorage.setItem(SESSION_KEY_TARGET, String(target));
+              }}
+              onTouchStart={(e) => {
+                if (!targetUnlocked) return;
+                isDraggingTarget.current = true;
+                const target = calcTargetFromX(e.touches[0].clientX);
+                setSliderTarget(target);
+                sessionStorage.setItem(SESSION_KEY_TARGET, String(target));
+              }}
+            >
+              <div className="absolute rounded overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', height: 24 }}>
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, height: '100%',
+                  width: `${logToSlider(sliderTarget) * 100}%`,
+                  background: targetUnlocked
+                    ? 'linear-gradient(90deg, #b8860b 0%, #f0d060 60%, #ffe080 100%)'
+                    : 'linear-gradient(90deg, #4c1d95 0%, #7c3aed 60%, #a78bfa 100%)',
+                  borderRadius: '4px 0 0 4px',
+                }} />
+                <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>1万</span>
+                <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>1亿</span>
+              </div>
+              <div style={{
+                position: 'absolute',
+                left: `calc(${logToSlider(sliderTarget) * 100}% - 16px)`,
+                top: '50%', transform: 'translateY(-50%)',
+                width: 32, height: 32, borderRadius: '50%',
+                zIndex: 10, pointerEvents: 'none',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: targetUnlocked
+                  ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)'
+                  : 'linear-gradient(135deg, #2d1b69 0%, #5b21b6 50%, #2d1b69 100%)',
+                boxShadow: targetUnlocked
+                  ? '0 0 14px rgba(255,235,100,1), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.5)'
+                  : '0 0 8px rgba(167,139,250,0.5), 0 2px 6px rgba(0,0,0,0.8)',
+                border: targetUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : '1.5px solid rgba(167,139,250,0.5)',
+              }}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <text x="7" y="10" textAnchor="middle" fontSize="9" fill={targetUnlocked ? '#888' : '#a78bfa'} fontWeight="700">¥</text>
+                </svg>
+              </div>
+            </div>
+          </div>
+
           {/* 热力曲线图 */}
           <div style={{ marginBottom: 16, borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(100,120,200,0.12)' }}>
             <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} style={{ display: 'block' }}>
@@ -3390,28 +3549,20 @@ function ProfitPathPanel({
             {/* 进度条区域：32px高，内嵌24px轨道+32px手柄 */}
             <div
               ref={qtyBarRef}
-              style={{ position: 'relative', height: 32, cursor: 'ew-resize', touchAction: 'none', userSelect: 'none' }}
+              style={{ position: 'relative', height: 32, cursor: qtyUnlocked ? 'ew-resize' : 'not-allowed', touchAction: 'none', userSelect: 'none', opacity: qtyUnlocked ? 1 : 0.65 }}
               onMouseDown={(e) => {
+                if (!qtyUnlocked) return;
                 isDraggingQty.current = true;
                 const qty = calcQtyFromX(e.clientX);
                 setSliderQty(qty);
                 sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
-                if (riseUnlocked) {
-                  const rise = Math.min(qtyToRise(qty), maxRisePct);
-                  setSliderRise(rise);
-                  sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
-                }
               }}
               onTouchStart={(e) => {
+                if (!qtyUnlocked) return;
                 isDraggingQty.current = true;
                 const qty = calcQtyFromX(e.touches[0].clientX);
                 setSliderQty(qty);
                 sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
-                if (riseUnlocked) {
-                  const rise = Math.min(qtyToRise(qty), maxRisePct);
-                  setSliderRise(rise);
-                  sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
-                }
               }}
             >
               {/* 24px 轨道容器（垂直居中） */}
@@ -3552,28 +3703,20 @@ function ProfitPathPanel({
             {/* 进度条区域：32px高，内嵌24px轨道+32px手柄 */}
             <div
               ref={riseBarRef}
-              style={{ position: 'relative', height: 32, cursor: 'ew-resize', touchAction: 'none', userSelect: 'none' }}
+              style={{ position: 'relative', height: 32, cursor: riseUnlocked ? 'ew-resize' : 'not-allowed', touchAction: 'none', userSelect: 'none', opacity: riseUnlocked ? 1 : 0.65 }}
               onMouseDown={(e) => {
+                if (!riseUnlocked) return;
                 isDraggingRise.current = true;
                 const rise = calcRiseFromX(e.clientX);
                 setSliderRise(rise);
                 sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
-                if (qtyUnlocked) {
-                  const qty = Math.min(riseToQty(rise), maxQty);
-                  setSliderQty(qty);
-                  sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
-                }
               }}
               onTouchStart={(e) => {
+                if (!riseUnlocked) return;
                 isDraggingRise.current = true;
                 const rise = calcRiseFromX(e.touches[0].clientX);
                 setSliderRise(rise);
                 sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
-                if (qtyUnlocked) {
-                  const qty = Math.min(riseToQty(rise), maxQty);
-                  setSliderQty(qty);
-                  sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
-                }
               }}
             >
               {/* 24px 轨道容器（垂直居中） */}
