@@ -3083,6 +3083,10 @@ function ProfitPathPanel({
 
   // 对数刻度说明弹窗
   const [showLogInfo, setShowLogInfo] = React.useState(false);
+  // 杠杆倍数（1x ~ 100x），用于所需资金计算
+  const [leverage, setLeverage] = React.useState<number>(1);
+  const [showLeverageEdit, setShowLeverageEdit] = React.useState(false);
+  const [leverageInput, setLeverageInput] = React.useState('1');
   // 涨幅上限：固定500%，不再动态扩展
   const dynamicMaxRisePct = maxRisePct;
 
@@ -3975,46 +3979,136 @@ function ProfitPathPanel({
             </div>
           </div>
 
-          {/* 难易度评估条 */}
-          <div style={{ borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(100,120,200,0.12)', padding: '10px 12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontSize: 11, color: 'rgba(148,163,184,0.7)', fontWeight: 600 }}>方案难易度</span>
-              <span style={{ fontSize: 13, fontWeight: 800, color: difficulty.color }}>{difficulty.label}</span>
-            </div>
-            {/* 难易度进度条 */}
-            <div style={{ position: 'relative', height: 8, borderRadius: 4, background: 'linear-gradient(90deg, #22c55e 0%, #84cc16 20%, #eab308 40%, #f97316 70%, #ef4444 100%)', marginBottom: 6 }}>
-              {/* 指针 */}
-              <div style={{ position: 'absolute', top: -3, left: `${difficulty.score}%`, transform: 'translateX(-50%)', width: 14, height: 14, borderRadius: '50%', background: difficulty.color, border: '2px solid white', boxShadow: `0 2px 6px ${difficulty.color}80` }} />
-            </div>
-            {/* 刻度标签 */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-              {['极易', '较易', '适中', '偏难', '较难', '极难'].map((l, i) => (
-                <span key={i} style={{ fontSize: 8, color: 'rgba(148,163,184,0.4)' }}>{l}</span>
-              ))}
-            </div>
-            {/* 描述文字 */}
-            <div style={{ fontSize: 11, color: 'rgba(148,163,184,0.6)', lineHeight: 1.5 }}>
-              {difficulty.desc}
-              {exitPrice > 0 && (
-                <span style={{ color: 'rgba(148,163,184,0.4)' }}>，目标离场价 <span style={{ color: difficulty.color, fontWeight: 600 }}>${exitPrice.toFixed(0)}</span></span>
-              )}
-            </div>
-            {/* 关键指标行 */}
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
-                <div style={{ fontSize: 9, color: 'rgba(148,163,184,0.5)', marginBottom: 2 }}>需持仓</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#60a5fa' }}>{sliderQty.toFixed(1)}<span style={{ fontSize: 9, marginLeft: 2, color: 'rgba(148,163,184,0.5)' }}>ETH</span></div>
+          {/* 所需资金计算器 */}
+          {(() => {
+            // 持仓总价値（USDT）= 持仓数量 × 实时币价
+            const positionUsdt = sliderQty * curPrice;
+            // 所需本金（CNY）= 持仓总价値 × 汇率 ÷ 杠杆倍数
+            const requiredCny = cnyRate > 0 ? positionUsdt * cnyRate / leverage : 0;
+            // 实际占用比例
+            const marginRatio = leverage > 1 ? (1 / leverage * 100) : 100;
+            // 格式化金额
+            const fmtCny = (n: number) => {
+              if (n >= 100000000) return `${(n / 100000000).toFixed(2)}亿`;
+              if (n >= 10000) return `${(n / 10000).toFixed(2)}万`;
+              return n.toFixed(0);
+            };
+            return (
+              <div style={{ borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(192,200,210,0.12)', padding: '10px 12px' }}>
+                {/* 标题行 */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, color: 'rgba(192,200,210,0.7)', fontWeight: 600 }}>所需资金</span>
+                  {/* 杠杆倍数标签，点击弹出修改 */}
+                  <span
+                    onClick={() => { setLeverageInput(String(leverage)); setShowLeverageEdit(true); }}
+                    style={{
+                      fontSize: 12, fontWeight: 700,
+                      color: leverage > 1 ? 'rgba(255,154,48,0.9)' : 'rgba(192,200,210,0.7)',
+                      border: `1px solid ${leverage > 1 ? 'rgba(255,154,48,0.35)' : 'rgba(192,200,210,0.2)'}`,
+                      borderRadius: 6, padding: '2px 8px', cursor: 'pointer',
+                      background: leverage > 1 ? 'rgba(255,154,48,0.08)' : 'rgba(192,200,210,0.05)',
+                      userSelect: 'none',
+                    }}
+                  >{leverage}x 杠杆</span>
+                </div>
+                {/* 主要数据行 */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                  {/* 持仓总市値 */}
+                  <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 9, color: 'rgba(148,163,184,0.5)', marginBottom: 3 }}>持仓总市値</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#60a5fa', fontVariantNumeric: 'tabular-nums' }}>
+                      ¥{fmtCny(positionUsdt * (cnyRate || 7.2))}
+                    </div>
+                  </div>
+                  {/* 所需本金 */}
+                  <div style={{ flex: 1, background: leverage > 1 ? 'rgba(255,154,48,0.06)' : 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '8px 10px', textAlign: 'center', border: leverage > 1 ? '1px solid rgba(255,154,48,0.15)' : 'none' }}>
+                    <div style={{ fontSize: 9, color: 'rgba(148,163,184,0.5)', marginBottom: 3 }}>所需本金</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: leverage > 1 ? '#ff9a30' : 'rgba(255,215,100,0.9)', fontVariantNumeric: 'tabular-nums' }}>
+                      ¥{fmtCny(requiredCny)}
+                    </div>
+                  </div>
+                  {/* 占用比例 */}
+                  <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 9, color: 'rgba(148,163,184,0.5)', marginBottom: 3 }}>占用比例</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: leverage > 1 ? '#f97316' : 'rgba(192,200,210,0.7)', fontVariantNumeric: 'tabular-nums' }}>
+                      {marginRatio.toFixed(leverage > 1 ? 1 : 0)}%
+                    </div>
+                  </div>
+                </div>
+                {/* 说明文字 */}
+                <div style={{ fontSize: 10, color: 'rgba(148,163,184,0.45)', lineHeight: 1.6 }}>
+                  {leverage === 1
+                    ? `全仓现购，需全额本金 ¥${fmtCny(requiredCny)}（币价 $${curPrice > 0 ? curPrice.toFixed(0) : '--'}）`
+                    : `${leverage}x 杠杆，仅需占用 ${marginRatio.toFixed(1)}% 资金（约 ¥${fmtCny(requiredCny)}）即可持有 ${sliderQty.toFixed(1)} ETH`
+                  }
+                </div>
+
+                {/* 杠杆倒数修改弹窗 */}
+                {showLeverageEdit && (
+                  <div
+                    style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    onClick={() => setShowLeverageEdit(false)}
+                  >
+                    <div
+                      style={{ background: '#1a2035', borderRadius: 16, padding: '20px 24px', minWidth: 240, boxShadow: '0 8px 32px rgba(0,0,0,0.5)', border: '1px solid rgba(192,200,210,0.15)' }}
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <div style={{ fontSize: 13, fontWeight: 700, color: 'rgba(192,200,210,0.9)', marginBottom: 12, textAlign: 'center' }}>设置杠杆倍数</div>
+                      <div style={{ fontSize: 10, color: 'rgba(148,163,184,0.5)', marginBottom: 12, textAlign: 'center' }}>1x = 全仓现购，100x = 仅需 1% 本金</div>
+                      <input
+                        type="number"
+                        min={1} max={100} step={1}
+                        value={leverageInput}
+                        onChange={e => setLeverageInput(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            const v = parseInt(leverageInput, 10);
+                            if (!isNaN(v) && v >= 1 && v <= 100) { setLeverage(v); setShowLeverageEdit(false); }
+                          }
+                        }}
+                        style={{
+                          width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,154,48,0.4)',
+                          background: 'rgba(255,154,48,0.06)', color: '#ff9a30', fontSize: 20, fontWeight: 700,
+                          textAlign: 'center', outline: 'none', boxSizing: 'border-box',
+                          fontVariantNumeric: 'tabular-nums',
+                        }}
+                        autoFocus
+                      />
+                      {/* 快捷选项 */}
+                      <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+                        {[1, 2, 3, 5, 10, 20, 50, 100].map(lv => (
+                          <span
+                            key={lv}
+                            onClick={() => { setLeverage(lv); setShowLeverageEdit(false); }}
+                            style={{
+                              padding: '4px 10px', borderRadius: 6, fontSize: 11, cursor: 'pointer',
+                              background: leverage === lv ? 'rgba(255,154,48,0.25)' : 'rgba(255,255,255,0.05)',
+                              color: leverage === lv ? '#ff9a30' : 'rgba(192,200,210,0.6)',
+                              border: `1px solid ${leverage === lv ? 'rgba(255,154,48,0.4)' : 'rgba(192,200,210,0.1)'}`,
+                              userSelect: 'none',
+                            }}
+                          >{lv}x</span>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                        <button
+                          onClick={() => setShowLeverageEdit(false)}
+                          style={{ flex: 1, padding: '8px', borderRadius: 8, border: '1px solid rgba(192,200,210,0.2)', background: 'transparent', color: 'rgba(192,200,210,0.6)', fontSize: 12, cursor: 'pointer' }}
+                        >取消</button>
+                        <button
+                          onClick={() => {
+                            const v = parseInt(leverageInput, 10);
+                            if (!isNaN(v) && v >= 1 && v <= 100) { setLeverage(v); setShowLeverageEdit(false); }
+                          }}
+                          style={{ flex: 2, padding: '8px', borderRadius: 8, border: 'none', background: 'rgba(255,154,48,0.8)', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                        >确定</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
-                <div style={{ fontSize: 9, color: 'rgba(148,163,184,0.5)', marginBottom: 2 }}>需涨幅</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b' }}>+{riseDisplay.toFixed(1)}<span style={{ fontSize: 9, marginLeft: 1, color: 'rgba(148,163,184,0.5)' }}>%</span></div>
-              </div>
-              <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
-                <div style={{ fontSize: 9, color: 'rgba(148,163,184,0.5)', marginBottom: 2 }}>离场价</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: difficulty.color }}>${exitPrice > 0 ? exitPrice.toFixed(0) : '--'}</div>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
         </>
       )}
 
