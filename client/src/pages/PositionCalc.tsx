@@ -3077,13 +3077,76 @@ function ProfitPathPanel({
   // 对数刻度说明弹窗
   const [showLogInfo, setShowLogInfo] = React.useState(false);
 
-  // 内联输入框编辑状态
-  const [editingTarget, setEditingTarget] = React.useState(false);
-  const [editingQty, setEditingQty] = React.useState(false);
-  const [inputTargetVal, setInputTargetVal] = React.useState('');
-  const [inputQtyVal, setInputQtyVal] = React.useState('');
+  // 弹出式修改弹窗状态
+  type EditField = 'target' | 'qty' | 'rise' | null;
+  const [editingField, setEditingField] = React.useState<EditField>(null);
+  const [editInputVal, setEditInputVal] = React.useState('');
+  const editInputRef = React.useRef<HTMLInputElement>(null);
+
+  // 兼容旧变量（不再使用，保d存备用）
+  const editingTarget = false;
+  const editingQty = false;
+  const inputTargetVal = '';
+  const inputQtyVal = '';
   const targetInputRef = React.useRef<HTMLInputElement>(null);
   const qtyInputRef = React.useRef<HTMLInputElement>(null);
+
+  // 打开弹出式修改弹窗
+  const openEditDialog = (field: EditField) => {
+    if (field === 'target') {
+      const wan = sliderTarget >= 99900000 ? 10000 : Math.round(sliderTarget / 10000);
+      setEditInputVal(String(wan));
+    } else if (field === 'qty') {
+      setEditInputVal(sliderQty.toFixed(1));
+    } else if (field === 'rise') {
+      setEditInputVal(riseDisplay.toFixed(2));
+    }
+    setEditingField(field);
+    setTimeout(() => { editInputRef.current?.focus(); editInputRef.current?.select(); }, 80);
+  };
+
+  // 确认弹出式修改
+  const confirmEditDialog = () => {
+    const v = parseFloat(editInputVal);
+    if (editingField === 'target') {
+      if (!isNaN(v) && v >= 1 && v <= 10000) {
+        const val = Math.round(v) * 10000;
+        setSliderTarget(val);
+        hasUserDraggedTarget.current = true;
+        // 联动涌幅
+        if (!riseUnlocked) {
+          const rise = Math.min(calcRiseFromTargetAndQty(val, sliderQty), maxRisePct);
+          setSliderRise(rise);
+          sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+        }
+      }
+    } else if (editingField === 'qty') {
+      if (!isNaN(v) && v >= ETH_MIN && v <= ETH_MAX) {
+        const val = parseFloat(v.toFixed(1));
+        setSliderQty(val);
+        sessionStorage.setItem(SESSION_KEY_QTY, String(val));
+        // 联动涌幅
+        if (!riseUnlocked) {
+          const rise = Math.min(calcRiseFromTargetAndQty(sliderTarget, val), maxRisePct);
+          setSliderRise(rise);
+          sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+        }
+      }
+    } else if (editingField === 'rise') {
+      if (!isNaN(v) && v >= 0.01 && v <= maxRisePct) {
+        const val = parseFloat(v.toFixed(2));
+        setSliderRise(val);
+        sessionStorage.setItem(SESSION_KEY_RISE, String(val));
+        // 联动持仓量
+        if (!qtyUnlocked) {
+          const qty = Math.max(ETH_MIN, Math.min(ETH_MAX, riseToQty(val)));
+          setSliderQty(qty);
+          sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+        }
+      }
+    }
+    setEditingField(null);
+  };
 
   // 滑块拖动 ref
   const targetBarRef = React.useRef<HTMLDivElement>(null);
@@ -3457,57 +3520,17 @@ function ProfitPathPanel({
                   }}
                 >对数刻度</span>
               </div>
-              {editingTarget ? (
-                <input
-                  ref={targetInputRef}
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  max={10000}
-                  value={inputTargetVal}
-                  onChange={(e) => setInputTargetVal(e.target.value)}
-                  onBlur={() => {
-                    const wan = parseFloat(inputTargetVal);
-                    if (!isNaN(wan) && wan >= 1) {
-                      const clamped = Math.max(1, Math.min(10000, wan));
-                      const val = Math.round(clamped * 10000);
-                      setSliderTarget(val);
-                      hasUserDraggedTarget.current = true;
-                    }
-                    setEditingTarget(false);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                    if (e.key === 'Escape') setEditingTarget(false);
-                  }}
-                  style={{
-                    width: 80, fontSize: 13, fontWeight: 700, color: '#a78bfa',
-                    background: 'transparent',
-                    border: '1px solid rgba(167,139,250,0.5)',
-                    borderRadius: 6, padding: '1px 4px',
-                    textAlign: 'right', outline: 'none',
-                    fontVariantNumeric: 'tabular-nums',
-                  }}
-                  placeholder="1-10000万"
-                />
-              ) : (
-                <span
-                  onClick={() => {
-                    const wan = sliderTarget >= 99900000 ? 10000 : Math.round(sliderTarget / 10000);
-                    setInputTargetVal(String(wan));
-                    setEditingTarget(true);
-                    setTimeout(() => { targetInputRef.current?.select(); }, 30);
-                  }}
+              <span
+                  onClick={() => openEditDialog('target')}
                   style={{
                     fontSize: 13, fontWeight: 700, color: '#a78bfa', fontVariantNumeric: 'tabular-nums',
                     border: '1px solid rgba(167,139,250,0.35)',
-                    borderRadius: 6, padding: '1px 6px', cursor: 'text',
+                    borderRadius: 6, padding: '1px 6px', cursor: 'pointer',
                     background: 'rgba(167,139,250,0.06)',
                   }}
                 >
                   ¥{sliderTarget >= 99900000 ? '1亿' : `${Math.round(sliderTarget / 10000)}万`}
                 </span>
-              )}
             </div>
             {/* 进度条区域 */}
             <div
@@ -3613,55 +3636,17 @@ function ProfitPathPanel({
                   }}
                 >对数刻度</span>
               </div>
-              {editingQty ? (
-                <input
-                  ref={qtyInputRef}
-                  type="number"
-                  inputMode="numeric"
-                  min={ETH_MIN}
-                  max={ETH_MAX}
-                  value={inputQtyVal}
-                  onChange={(e) => setInputQtyVal(e.target.value)}
-                  onBlur={() => {
-                    const v = parseFloat(inputQtyVal);
-                    if (!isNaN(v) && v >= ETH_MIN) {
-                      const val = Math.max(ETH_MIN, Math.min(ETH_MAX, parseFloat(v.toFixed(2))));
-                      setSliderQty(val);
-                      sessionStorage.setItem(SESSION_KEY_QTY, String(val));
-                    }
-                    setEditingQty(false);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                    if (e.key === 'Escape') setEditingQty(false);
-                  }}
-                  style={{
-                    width: 88, fontSize: 15, fontWeight: 700, color: '#60a5fa',
-                    background: 'transparent',
-                    border: '1px solid rgba(96,165,250,0.5)',
-                    borderRadius: 6, padding: '1px 4px',
-                    textAlign: 'right', outline: 'none',
-                    fontVariantNumeric: 'tabular-nums',
-                  }}
-                  placeholder="1-10000"
-                />
-              ) : (
-                <span
-                  onClick={() => {
-                    setInputQtyVal(sliderQty.toFixed(1));
-                    setEditingQty(true);
-                    setTimeout(() => { qtyInputRef.current?.select(); }, 30);
-                  }}
+              <span
+                  onClick={() => openEditDialog('qty')}
                   style={{
                     fontSize: 15, fontWeight: 700, color: '#60a5fa', fontVariantNumeric: 'tabular-nums',
                     border: '1px solid rgba(96,165,250,0.35)',
-                    borderRadius: 6, padding: '1px 6px', cursor: 'text',
+                    borderRadius: 6, padding: '1px 6px', cursor: 'pointer',
                     background: 'rgba(96,165,250,0.06)',
                   }}
                 >
                   {sliderQty.toFixed(1)} <span style={{ fontSize: 11, color: 'rgba(148,163,184,0.6)' }}>ETH</span>
                 </span>
-              )}
             </div>
             {/* 进度条区域：32px高，内嵌24px轨道+32px手柄 */}
             <div
@@ -3794,7 +3779,15 @@ function ProfitPathPanel({
                 }}>{riseUnlocked ? '变量' : '定量'}</span>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: difficulty.color, fontVariantNumeric: 'tabular-nums' }}>
+                <span
+                  onClick={() => openEditDialog('rise')}
+                  style={{
+                    fontSize: 15, fontWeight: 700, color: difficulty.color, fontVariantNumeric: 'tabular-nums',
+                    border: `1px solid ${difficulty.color}55`,
+                    borderRadius: 6, padding: '1px 6px', cursor: 'pointer',
+                    background: `${difficulty.color}0d`,
+                  }}
+                >
                   +{riseDisplay.toFixed(1)}%
                 </span>
                 {exitPrice > 0 && curPrice > 0 && (
@@ -3923,6 +3916,106 @@ function ProfitPathPanel({
           </div>
         </>
       )}
+
+      {/* 弹出式修改弹窗 */}
+      {editingField !== null && (() => {
+        const isTarget = editingField === 'target';
+        const isQty = editingField === 'qty';
+        const isRise = editingField === 'rise';
+        const fieldLabel = isTarget ? '目标止盈金额' : isQty ? '持仓数量' : '目标涌幅';
+        const fieldUnit = isTarget ? '万元' : isQty ? 'ETH' : '%';
+        const fieldColor = isTarget ? '#a78bfa' : isQty ? '#60a5fa' : difficulty.color;
+        const fieldBorder = isTarget ? 'rgba(167,139,250,0.4)' : isQty ? 'rgba(96,165,250,0.4)' : `${difficulty.color}66`;
+        const minVal = isTarget ? 1 : isQty ? ETH_MIN : 0.01;
+        const maxVal = isTarget ? 10000 : isQty ? ETH_MAX : maxRisePct;
+        const decimalNote = isTarget ? '仅接受整数' : isQty ? '小数后最多 1 位' : '小数后最多 2 位';
+        return (
+          <div
+            onClick={() => setEditingField(null)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 10000,
+              background: 'rgba(0,0,0,0.75)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: '0 24px',
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'linear-gradient(135deg, #1a1f35 0%, #0f1225 100%)',
+                border: `1px solid ${fieldBorder}`,
+                borderRadius: 18, padding: '22px 20px 18px', maxWidth: 340, width: '100%',
+                boxShadow: `0 0 40px ${fieldColor}33`,
+              }}
+            >
+              {/* 标题行 */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: fieldColor }}>修改{fieldLabel}</span>
+                <span
+                  onClick={() => setEditingField(null)}
+                  style={{ fontSize: 20, color: 'rgba(148,163,184,0.5)', cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}
+                >×</span>
+              </div>
+              {/* 输入规则提示 */}
+              <div style={{
+                background: 'rgba(255,255,255,0.04)', borderRadius: 10,
+                padding: '10px 12px', marginBottom: 14,
+                fontSize: 11, color: 'rgba(148,163,184,0.7)', lineHeight: 1.7,
+              }}>
+                <div>范围：<span style={{ color: fieldColor }}>{minVal} – {maxVal} {fieldUnit}</span></div>
+                <div>格式：{decimalNote}，仅输入数字</div>
+                {isTarget && <div>示例：输入 <span style={{ color: fieldColor }}>3000</span> 表示 3000万元</div>}
+                {isQty && <div>示例：输入 <span style={{ color: fieldColor }}>10.5</span> 表示 10.5 ETH</div>}
+                {isRise && <div>示例：输入 <span style={{ color: fieldColor }}>150.50</span> 表示 +150.50%</div>}
+              </div>
+              {/* 输入框 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+                <input
+                  ref={editInputRef}
+                  type="number"
+                  inputMode="decimal"
+                  value={editInputVal}
+                  onChange={(e) => setEditInputVal(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') confirmEditDialog();
+                    if (e.key === 'Escape') setEditingField(null);
+                  }}
+                  style={{
+                    flex: 1, fontSize: 22, fontWeight: 700, color: fieldColor,
+                    background: 'rgba(255,255,255,0.05)',
+                    border: `1.5px solid ${fieldBorder}`,
+                    borderRadius: 10, padding: '8px 12px',
+                    textAlign: 'right', outline: 'none',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                />
+                <span style={{ fontSize: 13, color: 'rgba(148,163,184,0.6)', minWidth: 32 }}>{fieldUnit}</span>
+              </div>
+              {/* 按鈕行 */}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div
+                  onClick={() => setEditingField(null)}
+                  style={{
+                    flex: 1, textAlign: 'center', padding: '10px',
+                    background: 'rgba(255,255,255,0.06)', borderRadius: 10,
+                    color: 'rgba(148,163,184,0.7)', fontSize: 14, cursor: 'pointer',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                  }}
+                >取消</div>
+                <div
+                  onClick={confirmEditDialog}
+                  style={{
+                    flex: 2, textAlign: 'center', padding: '10px',
+                    background: `${fieldColor}22`, borderRadius: 10,
+                    color: fieldColor, fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                    border: `1px solid ${fieldBorder}`,
+                  }}
+                >确认</div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 对数刻度说明弹窗 */}
       {showLogInfo && (
