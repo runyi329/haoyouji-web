@@ -1627,15 +1627,16 @@ export default function PositionCalc() {
                     <div className="flex items-center gap-1">
                       <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
                         style={{
-                          background: allocStep === step ? '#1A56DB' : (i < ['setup','method','preview'].indexOf(allocStep) ? '#10B981' : '#E5E7EB'),
-                          color: allocStep === step || i < ['setup','method','preview'].indexOf(allocStep) ? 'white' : 'rgba(255,255,255,0.3)'
+                          background: allocStep === step ? 'linear-gradient(135deg, #b8902a 0%, #d4a843 40%, #f0cc6e 55%, #d4a843 70%, #b8902a 100%)' : (i < ['setup','method','preview'].indexOf(allocStep) ? 'rgba(192,200,210,0.4)' : 'rgba(255,255,255,0.08)'),
+                          color: allocStep === step ? '#0a0800' : (i < ['setup','method','preview'].indexOf(allocStep) ? 'rgba(192,200,210,0.9)' : 'rgba(255,255,255,0.3)'),
+                          border: allocStep === step ? 'none' : '1px solid rgba(255,255,255,0.15)'
                         }}
                       >{i + 1}</div>
-                      <span className="text-xs" style={{ color: allocStep === step ? '#1A56DB' : '#9CA3AF' }}>
+                      <span className="text-xs" style={{ color: allocStep === step ? '#d4a843' : 'rgba(192,200,210,0.5)' }}>
                         {step === 'setup' ? '目标' : step === 'method' ? '分配' : '预览'}
                       </span>
                     </div>
-                    {i < 2 && <div className="flex-1 h-px bg-gray-200" />}
+                    {i < 2 && <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.1)' }} />}
                   </React.Fragment>
                 ))}
               </div>
@@ -1717,9 +1718,9 @@ export default function PositionCalc() {
                           </div>
                         </div>
                         {/* 进度条 */}
-                        <div className="relative rounded overflow-hidden mb-2" style={{ height: '14px', background: 'rgba(255,255,255,0.1)' }}>
-                          <div className="absolute top-0 left-0 h-full rounded transition-all duration-500"
-                            style={{ width: `${progressPct * 100}%`, background: 'linear-gradient(90deg, #3B82F6 0%, #60A5FA 100%)', boxShadow: '0 0 8px rgba(96,165,250,0.6)' }}
+                        <div className="relative rounded-full overflow-hidden mb-2" style={{ height: '8px', background: 'rgba(255,255,255,0.08)' }}>
+                          <div className="absolute top-0 left-0 h-full rounded-full transition-all duration-500"
+                            style={{ width: `${progressPct * 100}%`, background: 'linear-gradient(90deg, #b8902a 0%, #d4a843 50%, #f0cc6e 100%)', boxShadow: '0 0 8px rgba(212,168,67,0.5)' }}
                           />
                           {progressPct > 0 && (
                             <div className="absolute inset-0 flex items-center justify-end pr-2">
@@ -1754,8 +1755,8 @@ export default function PositionCalc() {
                         </div>
                         {/* 滑动条 */}
                         <div className="relative" style={{ height: '32px' }}>
-                          <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '5px', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)' }} />
-                          <div className="absolute top-1/2 left-0 rounded-full" style={{ height: '5px', transform: 'translateY(-50%)', width: `${qtyPct}%`, background: 'linear-gradient(90deg, #6366f1, #818cf8)' }} />
+                          <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '8px', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.08)' }} />
+                          <div className="absolute top-1/2 left-0 rounded-full" style={{ height: '8px', transform: 'translateY(-50%)', width: `${qtyPct}%`, background: 'linear-gradient(90deg, #b8902a, #d4a843, #f0cc6e)' }} />
                           <input type="range" min={QTY_MIN} max={QTY_MAX} step={QTY_STEP}
                             value={Math.min(Math.max(qtyVal, QTY_MIN), QTY_MAX)}
                             onChange={e => setTargetEthQty(e.target.value)}
@@ -1815,20 +1816,20 @@ export default function PositionCalc() {
                           }}
                         >
                           {/* 背景轨道 */}
-                          <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '5px', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)' }} />
+                          <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '8px', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.08)' }} />
                           {/* 选中区间高亮 */}
-                          <div className="absolute top-1/2 rounded-full" style={{ height: '5px', transform: 'translateY(-50%)', left: `${minPct2}%`, right: `${100 - maxPct2}%`, background: 'linear-gradient(90deg, #3B82F6, #1D4ED8)' }} />
+                          <div className="absolute top-1/2 rounded-full" style={{ height: '8px', transform: 'translateY(-50%)', left: `${minPct2}%`, right: `${100 - maxPct2}%`, background: 'linear-gradient(90deg, #b8902a, #d4a843, #f0cc6e)' }} />
                           {/* 最低价手柄 */}
                           <div
                             className="absolute"
-                            style={{ left: `clamp(0px, calc(${minPct2}% - 11px), calc(100% - 22px))`, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: '50%', background: 'white', border: '2px solid #3B82F6', boxShadow: '0 1px 4px rgba(59,130,246,0.4)', cursor: 'grab', zIndex: 4, touchAction: 'none' }}
+                            style={{ left: `clamp(0px, calc(${minPct2}% - 11px), calc(100% - 22px))`, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg, #1a1a2e, #16213e)', border: '2px solid #d4a843', boxShadow: '0 0 8px rgba(212,168,67,0.4)', cursor: 'grab', zIndex: 4, touchAction: 'none' }}
                             onMouseDown={e => { e.stopPropagation(); isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
                             onTouchStart={e => { e.stopPropagation(); isPriceSliderDragging.current = true; isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
                           />
                           {/* 最高价手柄 */}
                           <div
                             className="absolute"
-                            style={{ left: `clamp(0px, calc(${maxPct2}% - 11px), calc(100% - 22px))`, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: '50%', background: 'white', border: '2px solid #1D4ED8', boxShadow: '0 1px 4px rgba(29,78,216,0.4)', cursor: 'grab', zIndex: 5, touchAction: 'none' }}
+                            style={{ left: `clamp(0px, calc(${maxPct2}% - 11px), calc(100% - 22px))`, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg, #1a1a2e, #16213e)', border: '2px solid #f0cc6e', boxShadow: '0 0 8px rgba(240,204,110,0.4)', cursor: 'grab', zIndex: 5, touchAction: 'none' }}
                             onMouseDown={e => { e.stopPropagation(); isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
                             onTouchStart={e => { e.stopPropagation(); isPriceSliderDragging.current = true; isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
                           />
@@ -1962,24 +1963,24 @@ export default function PositionCalc() {
                               else isDraggingPriceMax.current = true;
                             }}
                           >
-                            {/* 背景轨道 */}
-                            <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '6px', transform: 'translateY(-50%)', background: '#E5E7EB' }} />
-                            {/* 选中区间高亮 */}
-                            <div className="absolute top-1/2 rounded-full" style={{ height: '6px', transform: 'translateY(-50%)', left: `${minPct}%`, right: `${100 - maxPct}%`, background: 'linear-gradient(90deg, #3B82F6, #1D4ED8)' }} />
-                            {/* 最低价手柄 */}
-                            <div
-                              className="absolute"
-                              style={{ left: `clamp(0px, calc(${minPct}% - 12px), calc(100% - 24px))`, top: '50%', transform: 'translateY(-50%)', width: 24, height: 24, borderRadius: '50%', background: 'white', border: '2px solid #3B82F6', boxShadow: '0 1px 4px rgba(59,130,246,0.4)', cursor: 'grab', zIndex: 4, touchAction: 'none' }}
-                              onMouseDown={e => { e.stopPropagation(); isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
-                              onTouchStart={e => { e.stopPropagation(); isPriceSliderDragging.current = true; isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
-                            />
-                            {/* 最高价手柄 */}
-                            <div
-                              className="absolute"
-                              style={{ left: `clamp(0px, calc(${maxPct}% - 12px), calc(100% - 24px))`, top: '50%', transform: 'translateY(-50%)', width: 24, height: 24, borderRadius: '50%', background: 'white', border: '2px solid #1D4ED8', boxShadow: '0 1px 4px rgba(29,78,216,0.4)', cursor: 'grab', zIndex: 5, touchAction: 'none' }}
-                              onMouseDown={e => { e.stopPropagation(); isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
-                              onTouchStart={e => { e.stopPropagation(); isPriceSliderDragging.current = true; isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
-                            />
+                          {/* 背景轨道 */}
+                          <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '8px', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.08)' }} />
+                          {/* 选中区间高亮 */}
+                          <div className="absolute top-1/2 rounded-full" style={{ height: '8px', transform: 'translateY(-50%)', left: `${minPct}%`, right: `${100 - maxPct}%`, background: 'linear-gradient(90deg, #b8902a, #d4a843, #f0cc6e)' }} />
+                          {/* 最低价手柄 */}
+                          <div
+                            className="absolute"
+                            style={{ left: `clamp(0px, calc(${minPct}% - 12px), calc(100% - 24px))`, top: '50%', transform: 'translateY(-50%)', width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg, #1a1a2e, #16213e)', border: '2px solid #d4a843', boxShadow: '0 0 8px rgba(212,168,67,0.4)', cursor: 'grab', zIndex: 4, touchAction: 'none' }}
+                            onMouseDown={e => { e.stopPropagation(); isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
+                            onTouchStart={e => { e.stopPropagation(); isPriceSliderDragging.current = true; isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
+                          />
+                          {/* 最高价手柄 */}
+                          <div
+                            className="absolute"
+                            style={{ left: `clamp(0px, calc(${maxPct}% - 12px), calc(100% - 24px))`, top: '50%', transform: 'translateY(-50%)', width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg, #1a1a2e, #16213e)', border: '2px solid #f0cc6e', boxShadow: '0 0 8px rgba(240,204,110,0.4)', cursor: 'grab', zIndex: 5, touchAction: 'none' }}
+                            onMouseDown={e => { e.stopPropagation(); isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
+                            onTouchStart={e => { e.stopPropagation(); isPriceSliderDragging.current = true; isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
+                          />
                           </div>
                           {/* 刻度标注 */}
                           <div className="flex justify-between mt-1 px-0.5">
@@ -2018,29 +2019,29 @@ export default function PositionCalc() {
                         onClick={() => setAllocMethod('equal')}
                         className="w-full flex items-start gap-3 px-4 py-3.5 rounded-xl text-left transition-colors"
                         style={{
-                          background: allocMethod === 'equal' ? '#EFF6FF' : '#F9FAFB',
-                          border: `1px solid ${allocMethod === 'equal' ? '#3B82F6' : '#E5E7EB'}`
+                          background: allocMethod === 'equal' ? 'rgba(212,168,67,0.08)' : 'rgba(255,255,255,0.03)',
+                          border: `1px solid ${allocMethod === 'equal' ? 'rgba(212,168,67,0.5)' : 'rgba(255,255,255,0.1)'}`
                         }}
                       >
                         <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0"
-                          style={{ borderColor: allocMethod === 'equal' ? '#3B82F6' : '#D1D5DB' }}
+                          style={{ borderColor: allocMethod === 'equal' ? '#d4a843' : 'rgba(255,255,255,0.2)' }}
                         >
-                          {allocMethod === 'equal' && <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />}
+                          {allocMethod === 'equal' && <div className="w-2.5 h-2.5 rounded-full" style={{ background: '#d4a843' }} />}
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
-                            <div className="text-sm font-semibold text-gray-800">等差分配</div>
+                            <div className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>等差分配</div>
                             {allocMethod === 'equal' && (
                               <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                                 <button
                                   onClick={() => setAllocEqualAsc(false)}
                                   className="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
-                                  style={{ background: !allocEqualAsc ? '#3B82F6' : '#E5E7EB', color: !allocEqualAsc ? '#fff' : '#6B7280' }}
+                                  style={{ background: !allocEqualAsc ? 'rgba(212,168,67,0.8)' : 'rgba(255,255,255,0.08)', color: !allocEqualAsc ? '#0a0800' : 'rgba(192,200,210,0.6)' }}
                                 >越低越多</button>
                                 <button
                                   onClick={() => setAllocEqualAsc(true)}
                                   className="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
-                                  style={{ background: allocEqualAsc ? '#3B82F6' : '#E5E7EB', color: allocEqualAsc ? '#fff' : '#6B7280' }}
+                                  style={{ background: allocEqualAsc ? 'rgba(212,168,67,0.8)' : 'rgba(255,255,255,0.08)', color: allocEqualAsc ? '#0a0800' : 'rgba(192,200,210,0.6)' }}
                                 >越高越多</button>
                               </div>
                             )}
@@ -2049,8 +2050,8 @@ export default function PositionCalc() {
                           {allocMethod === 'equal' && (
                             <div className="mt-2" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs text-gray-500">公差（0=均匀，越大梯度越大）</span>
-                                <span className="text-xs font-bold" style={{ color: '#3B82F6' }}>{Math.round(parseFloat(allocArithDiff))} ETH</span>
+                                <span className="text-xs" style={{ color: 'rgba(192,200,210,0.5)' }}>公差（0=均匀，越大梯度越大）</span>
+                                <span className="text-xs font-bold" style={{ color: '#d4a843' }}>{Math.round(parseFloat(allocArithDiff))} ETH</span>
                               </div>
                               <input
                                 type="range"
@@ -2061,7 +2062,7 @@ export default function PositionCalc() {
                                 onChange={e => setAllocArithDiff(String(Math.round(parseFloat(e.target.value))))}
                                 onClick={e => e.stopPropagation()}
                                 className="w-full h-2 rounded-full appearance-none cursor-pointer"
-                                style={{ accentColor: '#3B82F6' }}
+                                style={{ accentColor: '#d4a843' }}
                               />
                               <div className="flex justify-between text-[10px] text-gray-300 mt-0.5">
                                 <span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span>
@@ -2075,29 +2076,29 @@ export default function PositionCalc() {
                         onClick={() => setAllocMethod('geometric')}
                         className="w-full flex items-start gap-3 px-4 py-3.5 rounded-xl text-left transition-colors"
                         style={{
-                          background: allocMethod === 'geometric' ? '#FFF7ED' : '#F9FAFB',
-                          border: `1px solid ${allocMethod === 'geometric' ? '#F97316' : '#E5E7EB'}`
+                          background: allocMethod === 'geometric' ? 'rgba(192,200,210,0.08)' : 'rgba(255,255,255,0.03)',
+                          border: `1px solid ${allocMethod === 'geometric' ? 'rgba(192,200,210,0.5)' : 'rgba(255,255,255,0.1)'}`
                         }}
                       >
                         <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0"
-                          style={{ borderColor: allocMethod === 'geometric' ? '#F97316' : '#D1D5DB' }}
+                          style={{ borderColor: allocMethod === 'geometric' ? 'rgba(192,200,210,0.8)' : 'rgba(255,255,255,0.2)' }}
                         >
-                          {allocMethod === 'geometric' && <div className="w-2.5 h-2.5 rounded-full bg-orange-500" />}
+                          {allocMethod === 'geometric' && <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(192,200,210,0.9)' }} />}
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
-                            <div className="text-sm font-semibold text-gray-800">等比分配</div>
+                            <div className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>等比分配</div>
                             {allocMethod === 'geometric' && (
                               <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                                 <button
                                   onClick={() => setAllocGeomAsc(false)}
                                   className="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
-                                  style={{ background: !allocGeomAsc ? '#F97316' : '#E5E7EB', color: !allocGeomAsc ? '#fff' : '#6B7280' }}
+                                  style={{ background: !allocGeomAsc ? 'rgba(192,200,210,0.7)' : 'rgba(255,255,255,0.08)', color: !allocGeomAsc ? '#0a0800' : 'rgba(192,200,210,0.6)' }}
                                 >越低越多</button>
                                 <button
                                   onClick={() => setAllocGeomAsc(true)}
                                   className="px-2 py-0.5 rounded text-[10px] font-medium transition-colors"
-                                  style={{ background: allocGeomAsc ? '#F97316' : '#E5E7EB', color: allocGeomAsc ? '#fff' : '#6B7280' }}
+                                  style={{ background: allocGeomAsc ? 'rgba(192,200,210,0.7)' : 'rgba(255,255,255,0.08)', color: allocGeomAsc ? '#0a0800' : 'rgba(192,200,210,0.6)' }}
                                 >越高越多</button>
                               </div>
                             )}
@@ -2106,8 +2107,8 @@ export default function PositionCalc() {
                           {allocMethod === 'geometric' && (
                             <div className="mt-2" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs text-gray-500">公比（1.0=均匀，越大梯度越大）</span>
-                                <span className="text-xs font-bold" style={{ color: '#F97316' }}>{(Math.round(parseFloat(allocGeomRatio) * 2) / 2).toFixed(1)}x</span>
+                                <span className="text-xs" style={{ color: 'rgba(192,200,210,0.5)' }}>公比（1.0=均匀，越大梯度越大）</span>
+                                <span className="text-xs font-bold" style={{ color: 'rgba(192,200,210,0.9)' }}>{(Math.round(parseFloat(allocGeomRatio) * 2) / 2).toFixed(1)}x</span>
                               </div>
                               <input
                                 type="range"
@@ -2118,7 +2119,7 @@ export default function PositionCalc() {
                                 onChange={e => setAllocGeomRatio(String(Math.round(parseFloat(e.target.value) * 2) / 2))}
                                 onClick={e => e.stopPropagation()}
                                 className="w-full h-2 rounded-full appearance-none cursor-pointer"
-                                style={{ accentColor: '#F97316' }}
+                                style={{ accentColor: 'rgba(192,200,210,0.9)' }}
                               />
                               <div className="flex justify-between text-[10px] text-gray-300 mt-0.5">
                                 <span>1.0</span><span>1.5</span><span>2.0</span><span>2.5</span><span>3.0</span>
@@ -2132,23 +2133,23 @@ export default function PositionCalc() {
                         onClick={() => setAllocMethod('normal')}
                         className="w-full flex items-start gap-3 px-4 py-3.5 rounded-xl text-left transition-colors"
                         style={{
-                          background: allocMethod === 'normal' ? '#F5F3FF' : '#F9FAFB',
-                          border: `1px solid ${allocMethod === 'normal' ? '#8B5CF6' : '#E5E7EB'}`
+                          background: allocMethod === 'normal' ? 'rgba(160,180,200,0.08)' : 'rgba(255,255,255,0.03)',
+                          border: `1px solid ${allocMethod === 'normal' ? 'rgba(160,180,200,0.5)' : 'rgba(255,255,255,0.1)'}`
                         }}
                       >
                         <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0"
-                          style={{ borderColor: allocMethod === 'normal' ? '#8B5CF6' : '#D1D5DB' }}
+                          style={{ borderColor: allocMethod === 'normal' ? 'rgba(160,180,200,0.8)' : 'rgba(255,255,255,0.2)' }}
                         >
-                          {allocMethod === 'normal' && <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />}
+                          {allocMethod === 'normal' && <div className="w-2.5 h-2.5 rounded-full" style={{ background: 'rgba(160,180,200,0.9)' }} />}
                         </div>
                         <div className="flex-1">
-                          <div className="text-sm font-semibold text-gray-800">正态分布</div>
+                          <div className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>正态分布</div>
                           <div className="text-xs mt-0.5" style={{ color: 'rgba(192,192,192,0.35)' }}>中间价格区间买最多，两端价格区间买最少</div>
                           {allocMethod === 'normal' && (
                             <div className="mt-2" onClick={e => e.stopPropagation()}>
                               <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs text-gray-500">集中度（1=极度集中，10=趋向均匀）</span>
-                                <span className="text-xs font-bold" style={{ color: '#8B5CF6' }}>{Math.round(parseFloat(allocNormalSigma) || 4)}</span>
+                                <span className="text-xs" style={{ color: 'rgba(192,200,210,0.5)' }}>集中度（1=极度集中，10=趋向均匀）</span>
+                                <span className="text-xs font-bold" style={{ color: 'rgba(160,180,200,0.9)' }}>{Math.round(parseFloat(allocNormalSigma) || 4)}</span>
                               </div>
                               <input
                                 type="range"
@@ -2159,7 +2160,7 @@ export default function PositionCalc() {
                                 onChange={e => setAllocNormalSigma(String(Math.round(parseFloat(e.target.value))))}
                                 onClick={e => e.stopPropagation()}
                                 className="w-full h-2 rounded-full appearance-none cursor-pointer"
-                                style={{ accentColor: '#8B5CF6' }}
+                                style={{ accentColor: 'rgba(160,180,200,0.9)' }}
                               />
                               <div className="flex justify-between text-[10px] text-gray-300 mt-0.5">
                                 <span>极集中</span><span>3</span><span>5</span><span>7</span><span>9</span><span>均匀</span>
@@ -2182,17 +2183,17 @@ export default function PositionCalc() {
                         }}
                         className="w-full flex items-start gap-3 px-4 py-3.5 rounded-xl text-left transition-colors"
                         style={{
-                          background: allocMethod === 'manual' ? '#F0FDF4' : '#F9FAFB',
-                          border: `1px solid ${allocMethod === 'manual' ? '#10B981' : '#E5E7EB'}`
+                          background: allocMethod === 'manual' ? 'rgba(212,168,67,0.05)' : 'rgba(255,255,255,0.03)',
+                          border: `1px solid ${allocMethod === 'manual' ? 'rgba(212,168,67,0.3)' : 'rgba(255,255,255,0.1)'}`
                         }}
                       >
                         <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center mt-0.5 flex-shrink-0"
-                          style={{ borderColor: allocMethod === 'manual' ? '#10B981' : '#D1D5DB' }}
+                          style={{ borderColor: allocMethod === 'manual' ? '#d4a843' : 'rgba(255,255,255,0.2)' }}
                         >
-                          {allocMethod === 'manual' && <div className="w-2.5 h-2.5 rounded-full bg-green-500" />}
+                          {allocMethod === 'manual' && <div className="w-2.5 h-2.5 rounded-full" style={{ background: '#d4a843' }} />}
                         </div>
                         <div>
-                          <div className="text-sm font-semibold text-gray-800">手动分配</div>
+                          <div className="text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.85)' }}>手动分配</div>
                           <div className="text-xs mt-0.5" style={{ color: 'rgba(192,192,192,0.35)' }}>自定义每档数量，总量必须等于目标持仓</div>
                         </div>
                       </button>
@@ -2243,17 +2244,17 @@ export default function PositionCalc() {
                             {allocLevels.map(p => {
                               const qty = previewQtys[p] || 0;
                               const pct = maxQty > 0 ? qty / maxQty * 100 : 0;
-                              const barColor = allocMethod === 'equal' ? '#3B82F6' : allocMethod === 'geometric' ? '#F97316' : '#8B5CF6';
+                              const barColor = allocMethod === 'equal' ? '#d4a843' : allocMethod === 'geometric' ? 'rgba(192,200,210,0.8)' : 'rgba(160,180,200,0.7)';
                               return (
                                 <div key={p} className="flex items-center gap-2">
                                   <span className="text-[10px] font-mono text-gray-400 w-12 flex-shrink-0 text-right">${p}</span>
-                                  <div className="flex-1 h-3 rounded-full overflow-hidden" style={{ background: '#E5E7EB' }}>
+                                  <div className="flex-1 h-3 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
                                     <div
                                       className="h-full rounded-full transition-all duration-200"
                                       style={{ width: `${pct}%`, background: barColor }}
                                     />
                                   </div>
-                                  <span className="text-[10px] font-semibold text-gray-600 w-14 flex-shrink-0 text-right tabular-nums">{qty} ETH</span>
+                                  <span className="text-[10px] font-semibold w-14 flex-shrink-0 text-right tabular-nums" style={{ color: 'rgba(192,200,210,0.7)' }}>{qty} ETH</span>
                                 </div>
                               );
                             })}
@@ -2325,8 +2326,8 @@ export default function PositionCalc() {
                   return (
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <div className="text-sm font-semibold text-gray-700">分配预览</div>
-                      <div className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#D1FAE5', color: '#059669' }}>
+                      <div className="text-sm font-semibold" style={{ color: 'rgba(212,168,67,0.9)' }}>分配预览</div>
+                      <div className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: 'rgba(212,168,67,0.12)', color: '#d4a843', border: '1px solid rgba(212,168,67,0.3)' }}>
                         共 {liveTotal} ETH
                       </div>
                     </div>
@@ -2334,20 +2335,20 @@ export default function PositionCalc() {
                       {allocLevels.map(p => {
                         const qty = liveResult[p] || 0;
                         const pct = liveMax > 0 ? qty / liveMax * 100 : 0;
-                        const barColor = allocMethod === 'equal' ? 'linear-gradient(90deg, #1A56DB, #3B82F6)'
-                          : allocMethod === 'geometric' ? 'linear-gradient(90deg, #EA580C, #F97316)'
-                          : allocMethod === 'normal' ? 'linear-gradient(90deg, #7C3AED, #8B5CF6)'
-                          : 'linear-gradient(90deg, #059669, #10B981)';
+                        const barColor = allocMethod === 'equal' ? 'linear-gradient(90deg, #b8902a, #d4a843, #f0cc6e)'
+                          : allocMethod === 'geometric' ? 'linear-gradient(90deg, #8a9aaa, #c0c8d0, #e0e8f0)'
+                          : allocMethod === 'normal' ? 'linear-gradient(90deg, #7a8a9a, #a0b0c0, #c8d8e8)'
+                          : 'linear-gradient(90deg, #b8902a, #d4a843)';
                         return (
                           <div key={p} className="flex items-center gap-2">
-                            <span className="text-xs font-mono text-gray-500 w-14 flex-shrink-0">${p}</span>
-                            <div className="flex-1 h-3 rounded-full bg-gray-100 overflow-hidden">
+                            <span className="text-xs font-mono w-14 flex-shrink-0" style={{ color: 'rgba(192,200,210,0.6)' }}>${p}</span>
+                            <div className="flex-1 h-3 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
                               <div
                                 className="h-full rounded-full transition-all duration-200"
                                 style={{ width: `${pct}%`, background: barColor }}
                               />
                             </div>
-                            <span className="text-xs font-semibold text-gray-700 w-12 text-right flex-shrink-0">{qty} ETH</span>
+                            <span className="text-xs font-semibold w-12 text-right flex-shrink-0" style={{ color: 'rgba(192,200,210,0.8)' }}>{qty} ETH</span>
                           </div>
                         );
                       })}
@@ -2386,8 +2387,8 @@ export default function PositionCalc() {
                           } catch {}
                           setShowAutoAlloc(false);
                         }}
-                        className="flex-1 py-3 rounded-xl text-sm font-bold text-white"
-                        style={{ background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)' }}
+                        className="flex-1 py-3 rounded-xl text-sm font-bold"
+                        style={{ background: 'linear-gradient(135deg, #b8902a 0%, #d4a843 40%, #f0cc6e 55%, #d4a843 70%, #b8902a 100%)', color: '#0a0800' }}
                       >
                         确认并应用
                       </button>
