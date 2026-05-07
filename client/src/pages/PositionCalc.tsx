@@ -3025,9 +3025,9 @@ interface ProfitPathPanelProps {
 // 对数刻度：1万～1亿，映射到 0～1
 const CNY_MIN = 10000;    // 1万
 const CNY_MAX = 100000000; // 1亿
-// 线性刻度：3000万 = 30% 位置，直观易理解
-const logToSlider = (val: number) => (val - CNY_MIN) / (CNY_MAX - CNY_MIN);
-const sliderToLog = (s: number) => Math.round(CNY_MIN + s * (CNY_MAX - CNY_MIN));
+// 对数刻度：1万～1亿，映射到 0～1（每个数量级占相同操作空间）
+const logToSlider = (val: number) => (Math.log(val) - Math.log(CNY_MIN)) / (Math.log(CNY_MAX) - Math.log(CNY_MIN));
+const sliderToLog = (s: number) => Math.round(Math.exp(Math.log(CNY_MIN) + s * (Math.log(CNY_MAX) - Math.log(CNY_MIN))));
 
 function ProfitPathPanel({
   profitUsdt, targetProfitCny, curPrice, avgPrice,
@@ -3067,6 +3067,9 @@ function ProfitPathPanel({
   const [targetUnlocked, setTargetUnlocked] = React.useState(false); // 目标止盈金额，默认锁定
   const [qtyUnlocked, setQtyUnlocked] = React.useState(false);       // 持仓数量，默认锁定
   const [riseUnlocked, setRiseUnlocked] = React.useState(false);     // 目标涨幅，默认锁定
+
+  // 对数刻度说明弹窗
+  const [showLogInfo, setShowLogInfo] = React.useState(false);
 
   // 移动端双击检测
   const targetTapRef = React.useRef<{ time: number } | null>(null);
@@ -3362,6 +3365,16 @@ function ProfitPathPanel({
                   color: targetUnlocked ? 'rgba(255,235,100,0.8)' : 'rgba(100,120,200,0.6)',
                   border: `1px solid ${targetUnlocked ? 'rgba(255,235,100,0.3)' : 'rgba(100,120,200,0.2)'}`,
                 }}>{targetUnlocked ? '变量' : '定量'}</span>
+                <span
+                  onClick={() => setShowLogInfo(true)}
+                  style={{
+                    fontSize: 9, padding: '1px 5px', borderRadius: 8, cursor: 'pointer',
+                    background: 'rgba(167,139,250,0.12)',
+                    color: 'rgba(167,139,250,0.7)',
+                    border: '1px solid rgba(167,139,250,0.25)',
+                    userSelect: 'none',
+                  }}
+                >对数刻度 ?</span>
               </div>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa', fontVariantNumeric: 'tabular-nums' }}>
                 ¥{sliderTarget >= 99900000 ? '1亿' : `${Math.round(sliderTarget / 10000)}万`}
@@ -3831,6 +3844,61 @@ function ProfitPathPanel({
             </div>
           </div>
         </>
+      )}
+
+      {/* 对数刻度说明弹窗 */}
+      {showLogInfo && (
+        <div
+          onClick={() => setShowLogInfo(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.7)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 20px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(135deg, #1a1f35 0%, #0f1225 100%)',
+              border: '1px solid rgba(167,139,250,0.3)',
+              borderRadius: 16, padding: '20px 18px', maxWidth: 360, width: '100%',
+              boxShadow: '0 0 40px rgba(167,139,250,0.2)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: 'rgba(167,139,250,0.9)' }}>什么是对数刻度？</span>
+              <span onClick={() => setShowLogInfo(false)} style={{ fontSize: 18, color: 'rgba(148,163,184,0.5)', cursor: 'pointer', lineHeight: 1 }}>×</span>
+            </div>
+            <div style={{ fontSize: 12, color: 'rgba(148,163,184,0.85)', lineHeight: 1.8 }}>
+              <p style={{ marginBottom: 10 }}>
+                <span style={{ color: 'rgba(167,139,250,0.9)', fontWeight: 600 }}>线性刻度</span>：把数轴均匀分割，每格代表相同的数值增量。比如 1万～1亿，3000万在 30% 位置。
+              </p>
+              <p style={{ marginBottom: 10 }}>
+                <span style={{ color: 'rgba(167,139,250,0.9)', fontWeight: 600 }}>对数刻度</span>：把数轴按「数量级」分割，每格代表数值乘以 10 倍。比如：
+              </p>
+              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '8px 10px', marginBottom: 10, fontFamily: 'monospace', fontSize: 11 }}>
+                <div style={{ color: 'rgba(148,163,184,0.6)', marginBottom: 4 }}>对数刻度：1万 → 10万 → 100万 → 1000万 → 1亿</div>
+                <div style={{ color: 'rgba(167,139,250,0.8)' }}>0%&nbsp;&nbsp;&nbsp;&nbsp;25%&nbsp;&nbsp;&nbsp;&nbsp;50%&nbsp;&nbsp;&nbsp;&nbsp;75%&nbsp;&nbsp;&nbsp;&nbsp;100%</div>
+              </div>
+              <p style={{ marginBottom: 10 }}>
+                因此 3000万（接近 1亿 这个数量级）在对数刻度下会显示在约 <span style={{ color: '#f59e0b' }}>74%</span> 位置，而不是 30%。
+              </p>
+              <p style={{ color: 'rgba(148,163,184,0.5)', fontSize: 11 }}>
+                使用对数刻度的好处：1万～100万和 100万～1亿都有足够的操作空间，不会因为数值跨度大而导致小数值区间过于拥挤。
+              </p>
+            </div>
+            <div
+              onClick={() => setShowLogInfo(false)}
+              style={{
+                marginTop: 16, textAlign: 'center', padding: '8px',
+                background: 'rgba(167,139,250,0.15)', borderRadius: 8,
+                color: 'rgba(167,139,250,0.8)', fontSize: 13, cursor: 'pointer',
+                border: '1px solid rgba(167,139,250,0.2)',
+              }}
+            >明白了</div>
+          </div>
+        </div>
       )}
     </div>
   );
