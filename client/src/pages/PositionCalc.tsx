@@ -3010,8 +3010,19 @@ function ProfitPathPanel({
   profitUsdt, targetProfitCny, curPrice, avgPrice,
   maxQty, maxRisePct, qtyToRise, riseToQty, actualQty
 }: ProfitPathPanelProps) {
-  const [sliderQty, setSliderQty] = React.useState<number>(() => Math.min(actualQty || 10, maxQty));
-  const [sliderRise, setSliderRise] = React.useState<number>(() => 0);
+  // 用 sessionStorage 持久化滑块位置（页面内导航保持，刷新页面恢复初始值）
+  const SESSION_KEY_QTY = 'profit_path_qty';
+  const SESSION_KEY_RISE = 'profit_path_rise';
+  const SESSION_KEY_INIT = 'profit_path_initialized';
+
+  const [sliderQty, setSliderQty] = React.useState<number>(() => {
+    const saved = sessionStorage.getItem(SESSION_KEY_QTY);
+    return saved !== null ? parseFloat(saved) : Math.min(actualQty || 10, maxQty);
+  });
+  const [sliderRise, setSliderRise] = React.useState<number>(() => {
+    const saved = sessionStorage.getItem(SESSION_KEY_RISE);
+    return saved !== null ? parseFloat(saved) : 0;
+  });
 
   // 双击切换锁定/解锁状态：true = 解锁（可被联动），false = 锁定（定量）
   const [qtyUnlocked, setQtyUnlocked] = React.useState(false);
@@ -3023,21 +3034,30 @@ function ProfitPathPanel({
   const toggleQtyLock = () => setQtyUnlocked(v => !v);
   const toggleRiseLock = () => setRiseUnlocked(v => !v);
 
-  // 初始化：根据 actualQty 计算初始涨幅
+  // 初始化：只在本次会话首次加载时设置初始值（刷新页面后 sessionStorage 清空，重新初始化）
   React.useEffect(() => {
-    const initQty = Math.max(1, Math.min(actualQty || 10, maxQty));
-    setSliderQty(initQty);
-    const rise = qtyToRise(initQty);
-    setSliderRise(Math.min(rise, maxRisePct));
+    const initialized = sessionStorage.getItem(SESSION_KEY_INIT);
+    if (!initialized && actualQty && curPrice && avgPrice && profitUsdt) {
+      const initQty = Math.max(1, Math.min(actualQty, maxQty));
+      const rise = qtyToRise(initQty);
+      setSliderQty(initQty);
+      setSliderRise(Math.min(rise, maxRisePct));
+      sessionStorage.setItem(SESSION_KEY_QTY, String(initQty));
+      sessionStorage.setItem(SESSION_KEY_RISE, String(Math.min(rise, maxRisePct)));
+      sessionStorage.setItem(SESSION_KEY_INIT, '1');
+    }
   }, [actualQty, curPrice, avgPrice, profitUsdt]);
 
   // 拖动币量滑块 → 若涨幅已解锁则联动涨幅
   const handleQtyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const qty = parseFloat(e.target.value);
     setSliderQty(qty);
+    sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
     if (riseUnlocked) {
       const rise = qtyToRise(qty);
-      setSliderRise(Math.min(rise, maxRisePct));
+      const clampedRise = Math.min(rise, maxRisePct);
+      setSliderRise(clampedRise);
+      sessionStorage.setItem(SESSION_KEY_RISE, String(clampedRise));
     }
   };
 
@@ -3045,9 +3065,11 @@ function ProfitPathPanel({
   const handleRiseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rise = parseFloat(e.target.value);
     setSliderRise(rise);
+    sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
     if (qtyUnlocked) {
-      const qty = riseToQty(rise);
-      setSliderQty(Math.min(qty, maxQty));
+      const qty = Math.min(riseToQty(rise), maxQty);
+      setSliderQty(qty);
+      sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
     }
   };
 
