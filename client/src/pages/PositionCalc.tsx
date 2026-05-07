@@ -3083,14 +3083,8 @@ function ProfitPathPanel({
 
   // 对数刻度说明弹窗
   const [showLogInfo, setShowLogInfo] = React.useState(false);
-  // 动态涨幅上限：至少 500%，如果当前涨幅超过 500%则自动扩展（取当前涨幅的 1.5 倍并取10的整数倍）
-  const dynamicMaxRisePct = React.useMemo(() => {
-    const base = maxRisePct; // 传入的 500
-    if (sliderRise > base) {
-      return Math.ceil(sliderRise * 1.5 / 10) * 10;
-    }
-    return base;
-  }, [sliderRise, maxRisePct]);
+  // 涨幅上限：固定500%，不再动态扩展
+  const dynamicMaxRisePct = maxRisePct;
 
   // 弹出式修改弹窗状态
   type EditField = 'target' | 'qty' | 'rise' | null;
@@ -3269,10 +3263,20 @@ function ProfitPathPanel({
       sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
       // 持仓变化：联动另两条中的「锁定条」保持不变，「另一条」被动计算
       if (lockedField === 'target') {
-        // 止盈锁定：持仓变 → 涨幅联动
-        const rise = Math.min(calcRiseFromTargetAndQty(sliderTarget, qty), dynamicMaxRisePct);
-        setSliderRise(rise);
-        sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+        // 止盈锁定：持仓变 → 涨幅联动（涨幅超过500%时，钳制涨幅=500%，同时反推持仓到最小值）
+        const rawRise = calcRiseFromTargetAndQty(sliderTarget, qty);
+        if (rawRise > maxRisePct) {
+          // 涨幅超限：把涨幅钳制在500%，反推出对应的最小持仓量
+          const minQty = riseToQty(maxRisePct);
+          const clampedQty = Math.max(ETH_MIN, Math.min(ETH_MAX, Math.round(minQty * 10) / 10));
+          setSliderQty(clampedQty);
+          sessionStorage.setItem(SESSION_KEY_QTY, String(clampedQty));
+          setSliderRise(maxRisePct);
+          sessionStorage.setItem(SESSION_KEY_RISE, String(maxRisePct));
+        } else {
+          setSliderRise(rawRise);
+          sessionStorage.setItem(SESSION_KEY_RISE, String(rawRise));
+        }
       } else if (lockedField === 'rise') {
         // 涨幅锁定：持仓变 → 止盈联动
         if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
@@ -3866,7 +3870,7 @@ function ProfitPathPanel({
                 {/* 已填充段（橙色单色系） */}
                 <div style={{
                   position: 'absolute', top: 0, left: 0, height: '100%',
-                  width: `${riseLogToSlider(Math.max(riseDisplay, RISE_LOG_MIN), dynamicMaxRisePct) * 100}%`,
+                  width: `${riseLogToSlider(Math.max(sliderRise, RISE_LOG_MIN), dynamicMaxRisePct) * 100}%`,
                   background: 'linear-gradient(90deg, #c05000 0%, #e07010 60%, #ff9a30 100%)',
                   borderRadius: '4px 0 0 4px',
                 }} />
@@ -3878,7 +3882,7 @@ function ProfitPathPanel({
               <div
                 style={{
                   position: 'absolute',
-                  left: `calc(${riseLogToSlider(Math.max(riseDisplay, RISE_LOG_MIN), dynamicMaxRisePct) * 100}% - 16px)`,
+                  left: `calc(${riseLogToSlider(Math.max(sliderRise, RISE_LOG_MIN), dynamicMaxRisePct) * 100}% - 16px)`,
                   top: '50%', transform: 'translateY(-50%)',
                   width: 32, height: 32, borderRadius: '50%',
                   zIndex: 10, pointerEvents: 'none',
