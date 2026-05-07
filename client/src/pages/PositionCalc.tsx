@@ -3025,8 +3025,9 @@ interface ProfitPathPanelProps {
 // 对数刻度：1万～1亿，映射到 0～1
 const CNY_MIN = 10000;    // 1万
 const CNY_MAX = 100000000; // 1亿
-const logToSlider = (val: number) => (Math.log(val) - Math.log(CNY_MIN)) / (Math.log(CNY_MAX) - Math.log(CNY_MIN));
-const sliderToLog = (s: number) => Math.round(Math.exp(Math.log(CNY_MIN) + s * (Math.log(CNY_MAX) - Math.log(CNY_MIN))));
+// 线性刻度：3000万 = 30% 位置，直观易理解
+const logToSlider = (val: number) => (val - CNY_MIN) / (CNY_MAX - CNY_MIN);
+const sliderToLog = (s: number) => Math.round(CNY_MIN + s * (CNY_MAX - CNY_MIN));
 
 function ProfitPathPanel({
   profitUsdt, targetProfitCny, curPrice, avgPrice,
