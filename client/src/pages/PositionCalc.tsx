@@ -3520,44 +3520,101 @@ function ProfitPathPanel({
   };
   const difficulty = calcDifficulty();
 
-  // 生成曲线图数据点（持仓量 vs 所需涨幅）
-  const chartPoints = React.useMemo(() => {
-    const pts: Array<{ qty: number; rise: number }> = [];
-    const steps = 60;
-                for (let i = 1; i <= steps; i++) {
-      const qty = ethSliderToLog(i / steps);
-      const rise = qtyToRise(qty);
-      pts.push({ qty, rise: Math.min(rise, dynamicMaxRisePct) });
+  // ── 双边难度曲线数据 ────────────────────────────────────────────────────
+  // X轴：目标涨幅 0% ~ 500%
+  // Y轴：综合难度 0 ~ 100
+  // 左边：涨幅低 → 需要大量持仓 → 资金难度高
+  // 右边：涨幅高 → 历史达成概率低 → 涨幅难度高
+  // 中间：有一个甜蜜区，综合难度最低
+  const diffCurvePoints = React.useMemo(() => {
+    const pts: Array<{ rise: number; difficulty: number; riseScore: number; fundScore: number }> = [];
+    const steps = 100;
+    // ETH历史涨幅分布参考（对数正态分布建模）：
+    // 30天内涨50%以上概率约15%，涨100%约5%，涨200%约1.5%，涨500%约0.1%
+    // 用指数函数建模涨幅难度
+    const riseScoreFn = (rise: number): number => {
+      // 0%涨幅=0分难度，500%涨幅=100分难度，中间用对数曲线
+      if (rise <= 0) return 0;
+      const normalized = rise / 500; // 0~1
+      // 对数加速：低涨幅难度低，高涨幅急剧增加
+      return Math.min(100, Math.pow(normalized, 0.55) * 100);
+    };
+    // 资金难度：在止盈金额固定的情况下，涨幅越低 → 需要持仓越多 → 资金越多 → 越难
+    // 涨幅=0时资金无穷大（极难），涨幅=500%时资金最少（最易）
+    const fundScoreFn = (rise: number): number => {
+      if (rise <= 0) return 100;
+      // 所需持仓量 = profitUsdt / (curPrice*(1+rise/100) - avgPrice)
+      const exitP = curPrice > 0 ? curPrice * (1 + rise / 100) : 1;
+      const perCoin = exitP - (avgPrice > 0 ? avgPrice : curPrice * 0.8);
+      if (perCoin <= 0) return 100;
+      const needQty = profitUsdt > 0 ? profitUsdt / perCoin : ETH_MAX;
+      // 归一化到0~1（以ETH_MAX为基准）
+      const qtyRatio = Math.min(needQty / ETH_MAX, 3); // 超过3倍ETH_MAX视为极难
+      // 对数映射：持仓量越多越难，但不是线性的
+      return Math.min(100, Math.pow(qtyRatio / 3, 0.4) * 100);
+    };
+    for (let i = 0; i <= steps; i++) {
+      const rise = (i / steps) * 500;
+      const riseScore = riseScoreFn(rise);
+      const fundScore = fundScoreFn(rise);
+      // 综合难度：两者加权平均，各占50%
+      const combined = riseScore * 0.5 + fundScore * 0.5;
+      pts.push({ rise, difficulty: combined, riseScore, fundScore });
     }
     return pts;
-  }, [maxQty, dynamicMaxRisePct, profitUsdt, avgPrice, curPrice]);
+  }, [profitUsdt, curPrice, avgPrice]);
 
-  // SVG 尺寸
-  const svgW = 320, svgH = 140;
-  const padL = 38, padR = 12, padT = 12, padB = 28;
+  // 找到难度最低点（甜蜜区）
+  const sweetSpot = React.useMemo(() => {
+    if (diffCurvePoints.length === 0) return null;
+    let minIdx = 0;
+    let minDiff = diffCurvePoints[0].difficulty;
+    diffCurvePoints.forEach((pt, i) => {
+      if (pt.difficulty < minDiff) { minDiff = pt.difficulty; minIdx = i; }
+    });
+    return diffCurvePoints[minIdx];
+  }, [diffCurvePoints]);
+
+  // 当前设置的综合难度
+  const currentDifficulty = React.useMemo(() => {
+    if (diffCurvePoints.length === 0) return 50;
+    const rise = Math.max(0, Math.min(500, riseDisplay));
+    const idx = Math.round((rise / 500) * 100);
+    return diffCurvePoints[Math.min(idx, diffCurvePoints.length - 1)]?.difficulty ?? 50;
+  }, [diffCurvePoints, riseDisplay]);
+
+  // 难度颜色
+  const diffColor = (d: number) => {
+    if (d < 25) return '#22c55e';
+    if (d < 45) return '#84cc16';
+    if (d < 60) return '#eab308';
+    if (d < 75) return '#f97316';
+    return '#ef4444';
+  };
+  const diffLabel = (d: number) => {
+    if (d < 25) return '较易';
+    if (d < 45) return '适中';
+    if (d < 60) return '偏难';
+    if (d < 75) return '较难';
+    return '极难';
+  };
+
+  // SVG 尺寸（难度曲线图）
+  const svgW = 320, svgH = 130;
+  const padL = 36, padR = 14, padT = 14, padB = 26;
   const plotW = svgW - padL - padR;
   const plotH = svgH - padT - padB;
 
-  // 坐标转换
-  const toX = (qty: number) => padL + ethLogToSlider(qty) * plotW;
-  const toY = (rise: number) => padT + plotH - (rise / dynamicMaxRisePct) * plotH;
+  // 坐标转换（X=涨幅0~500%, Y=难度0~100）
+  const toX = (rise: number) => padL + (Math.max(0, Math.min(500, rise)) / 500) * plotW;
+  const toY = (diff: number) => padT + plotH - (Math.max(0, Math.min(100, diff)) / 100) * plotH;
 
-  // 曲线路径
-  const pathD = chartPoints.length > 0
-    ? chartPoints.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${toX(pt.qty).toFixed(1)} ${toY(pt.rise).toFixed(1)}`).join(' ')
-    : '';
-
-  // 热力区域背景（按涨幅分4段，动态适配上限）
-  const heatZones = [
-    { minRise: 0,                          maxRise: dynamicMaxRisePct * 0.1,  color: 'rgba(34,197,94,0.12)',  label: '易' },
-    { minRise: dynamicMaxRisePct * 0.1,    maxRise: dynamicMaxRisePct * 0.3,  color: 'rgba(234,179,8,0.12)',  label: '中' },
-    { minRise: dynamicMaxRisePct * 0.3,    maxRise: dynamicMaxRisePct * 0.6,  color: 'rgba(249,115,22,0.12)', label: '难' },
-    { minRise: dynamicMaxRisePct * 0.6,    maxRise: dynamicMaxRisePct,        color: 'rgba(239,68,68,0.12)',  label: '极' },
-  ];
-
-  // 当前选中点坐标
-  const selX = toX(Math.max(ETH_MIN, sliderQty));
-  const selY = toY(Math.min(riseDisplay, dynamicMaxRisePct));
+  // 当前点坐标
+  const selX = toX(Math.max(0, Math.min(500, riseDisplay)));
+  const selY = toY(currentDifficulty);
+  // 甜蜜区坐标
+  const sweetX = sweetSpot ? toX(sweetSpot.rise) : 0;
+  const sweetY = sweetSpot ? toY(sweetSpot.difficulty) : 0;
 
   const hasData = profitUsdt > 0 && curPrice > 0;
 
@@ -3580,90 +3637,124 @@ function ProfitPathPanel({
         </div>
       ) : (
         <>
-          {/* 热力曲线图（移到最上方） */}
+          {/* 双边难度曲线图 */}
           <div style={{ marginBottom: 16, borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(100,120,200,0.12)' }}>
+            {/* 标题行：难度评估 + 当前难度标签 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px 2px' }}>
+              <span style={{ fontSize: 10, color: 'rgba(192,200,210,0.6)', letterSpacing: 0.5 }}>难度评估</span>
+              {hasData && (
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: '1px 7px', borderRadius: 5,
+                  color: diffColor(currentDifficulty),
+                  border: `1px solid ${diffColor(currentDifficulty)}55`,
+                  background: `${diffColor(currentDifficulty)}15`,
+                }}>
+                  {diffLabel(currentDifficulty)}&nbsp;{currentDifficulty.toFixed(0)}
+                </span>
+              )}
+            </div>
             <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} style={{ display: 'block' }}>
-              {/* 热力背景区域 */}
-              {heatZones.map((zone, zi) => {
-                const y1 = toY(zone.maxRise);
-                const y2 = toY(zone.minRise);
-                return (
-                  <g key={zi}>
-                    <rect x={padL} y={y1} width={plotW} height={y2 - y1} fill={zone.color} />
-                    <text x={svgW - padR - 2} y={(y1 + y2) / 2 + 4} textAnchor="end" fontSize="8" fill="rgba(255,255,255,0.25)">{zone.label}</text>
-                  </g>
-                );
-              })}
+              <defs>
+                {/* 曲线渐变：绿色（易）→黄色（中）→红色（难） */}
+                <linearGradient id="diffCurveGrad" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
+                  <stop offset="0%" stopColor="#ef4444" />
+                  <stop offset="20%" stopColor="#f97316" />
+                  <stop offset="40%" stopColor="#22c55e" />
+                  <stop offset="60%" stopColor="#eab308" />
+                  <stop offset="100%" stopColor="#ef4444" />
+                </linearGradient>
+                {/* 曲线下方填充渐变 */}
+                <linearGradient id="diffFillGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="rgba(96,165,250,0.15)" />
+                  <stop offset="100%" stopColor="rgba(96,165,250,0.02)" />
+                </linearGradient>
+              </defs>
+
+              {/* 背景分区（按难度分4段） */}
+              <rect x={padL} y={toY(100)} width={plotW} height={toY(75) - toY(100)} fill="rgba(239,68,68,0.07)" />
+              <rect x={padL} y={toY(75)} width={plotW} height={toY(60) - toY(75)} fill="rgba(249,115,22,0.07)" />
+              <rect x={padL} y={toY(60)} width={plotW} height={toY(45) - toY(60)} fill="rgba(234,179,8,0.07)" />
+              <rect x={padL} y={toY(45)} width={plotW} height={toY(0) - toY(45)} fill="rgba(34,197,94,0.07)" />
 
               {/* 网格线 */}
-              {[0, 0.25, 0.5, 0.75, 1].map(frac => {
-                const rise = Math.round(frac * dynamicMaxRisePct);
-                return <line key={frac} x1={padL} y1={toY(rise)} x2={svgW - padR} y2={toY(rise)}
-                  stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" strokeDasharray="3,3" />;
-              })}
-              {[0, 0.25, 0.5, 0.75, 1].map(frac => {
-                const qty = ETH_MIN + frac * (ETH_MAX - ETH_MIN);
-                return <line key={frac} x1={toX(qty)} y1={padT} x2={toX(qty)} y2={padT + plotH}
-                  stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" strokeDasharray="3,3" />;
-              })}
+              {[0, 25, 50, 75, 100].map(d => (
+                <line key={d} x1={padL} y1={toY(d)} x2={svgW - padR} y2={toY(d)}
+                  stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" strokeDasharray="3,3" />
+              ))}
+              {[0, 100, 200, 300, 400, 500].map(r => (
+                <line key={r} x1={toX(r)} y1={padT} x2={toX(r)} y2={padT + plotH}
+                  stroke="rgba(255,255,255,0.05)" strokeWidth="0.5" strokeDasharray="3,3" />
+              ))}
 
-              {/* 曲线 */}
-              {(() => {
-                const pts: string[] = [];
-                const steps = 80;
-                for (let i = 1; i <= steps; i++) {
-                  const qty = ethSliderToLog(i / steps);
-                  if (qty <= 0) continue;
-                  const rise = qtyToRise(qty);
-                  if (rise < 0 || rise > dynamicMaxRisePct) continue;
-                  pts.push(`${toX(qty)},${toY(rise)}`);
-                }
-                if (pts.length < 2) return null;
+              {/* 曲线下方填充 */}
+              {diffCurvePoints.length > 1 && (() => {
+                const fillPts = diffCurvePoints.map(pt => `${toX(pt.rise).toFixed(1)},${toY(pt.difficulty).toFixed(1)}`).join(' ');
+                const firstX = toX(diffCurvePoints[0].rise).toFixed(1);
+                const lastX = toX(diffCurvePoints[diffCurvePoints.length - 1].rise).toFixed(1);
+                const baseY = (padT + plotH).toFixed(1);
                 return (
-                  <polyline
-                    points={pts.join(' ')}
-                    fill="none"
-                    stroke="url(#curveGrad)"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                  <polygon
+                    points={`${firstX},${baseY} ${fillPts} ${lastX},${baseY}`}
+                    fill="url(#diffFillGrad)"
                   />
                 );
               })()}
 
-              {/* 渐变定义 */}
-              <defs>
-                <linearGradient id="curveGrad" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
-                  <stop offset="0%" stopColor="#22c55e" />
-                  <stop offset="40%" stopColor="#f59e0b" />
-                  <stop offset="70%" stopColor="#f97316" />
-                  <stop offset="100%" stopColor="#ef4444" />
-                </linearGradient>
-              </defs>
-
-              {/* 当前选中点 */}
-              {sliderQty > 0 && riseDisplay >= 0 && riseDisplay <= dynamicMaxRisePct && (
-                <>
-                  <line x1={selX} y1={padT} x2={selX} y2={padT + plotH} stroke="rgba(255,255,255,0.3)" strokeWidth="0.8" strokeDasharray="2,2" />
-                  <line x1={padL} y1={selY} x2={svgW - padR} y2={selY} stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" strokeDasharray="2,2" />
-                  <circle cx={selX} cy={selY} r="5" fill="#fff" stroke={difficulty.color} strokeWidth="2" />
-                  <text x={selX + 7} y={selY - 4} fontSize="8" fill="rgba(255,255,255,0.8)">{sliderQty.toFixed(1)}ETH → +{riseDisplay.toFixed(1)}%</text>
-                </>
+              {/* 双边难度曲线 */}
+              {diffCurvePoints.length > 1 && (
+                <polyline
+                  points={diffCurvePoints.map(pt => `${toX(pt.rise).toFixed(1)},${toY(pt.difficulty).toFixed(1)}`).join(' ')}
+                  fill="none"
+                  stroke="url(#diffCurveGrad)"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               )}
 
-              {/* 坐标轴标签 */}
-              <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="rgba(148,163,184,0.3)" strokeWidth="1" />
-              <line x1={padL} y1={padT + plotH} x2={svgW - padR} y2={padT + plotH} stroke="rgba(148,163,184,0.3)" strokeWidth="1" />
-              {[0, 0.25, 0.5, 0.75, 1].map(frac => {
-                const rise = Math.round(frac * dynamicMaxRisePct);
-                return <text key={frac} x={padL - 3} y={toY(rise) + 3} textAnchor="end" fontSize="7" fill="rgba(148,163,184,0.5)">{rise}%</text>;
-              })}
-              {[0, 0.25, 0.5, 0.75, 1].map(frac => {
-                const qty = ETH_MIN + frac * (ETH_MAX - ETH_MIN);
-                const label = qty >= 1000 ? `${(qty/1000).toFixed(0)}k` : qty.toFixed(0);
-                return <text key={frac} x={toX(qty)} y={padT + plotH + 10} textAnchor="middle" fontSize="7" fill="rgba(148,163,184,0.4)">{label}</text>;
-              })}
-              <text x={padL + plotW / 2} y={svgH - 1} textAnchor="middle" fontSize="8" fill="rgba(148,163,184,0.5)">持仓量 (ETH)</text>
+              {/* 甜蜜区标记 */}
+              {sweetSpot && (
+                <g>
+                  <line x1={sweetX} y1={padT} x2={sweetX} y2={padT + plotH}
+                    stroke="rgba(34,197,94,0.3)" strokeWidth="0.8" strokeDasharray="2,2" />
+                  <circle cx={sweetX} cy={sweetY} r="4" fill="#22c55e" opacity="0.9" />
+                  <text x={sweetX} y={sweetY - 6} textAnchor="middle" fontSize="7" fill="rgba(34,197,94,0.8)">甜蜜区</text>
+                </g>
+              )}
+
+              {/* 当前选中点 */}
+              {hasData && riseDisplay >= 0 && riseDisplay <= 500 && (
+                <g>
+                  <line x1={selX} y1={padT} x2={selX} y2={padT + plotH}
+                    stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" strokeDasharray="2,2" />
+                  <line x1={padL} y1={selY} x2={svgW - padR} y2={selY}
+                    stroke="rgba(255,255,255,0.2)" strokeWidth="0.8" strokeDasharray="2,2" />
+                  <circle cx={selX} cy={selY} r="5.5" fill="#fff" stroke={diffColor(currentDifficulty)} strokeWidth="2" />
+                  {/* 标注文字：靠近左边时向右显示，否则向左显示 */}
+                  {selX < padL + plotW * 0.65
+                    ? <text x={selX + 8} y={selY - 3} fontSize="8" fill="rgba(255,255,255,0.85)">+{riseDisplay.toFixed(1)}% 难度{currentDifficulty.toFixed(0)}</text>
+                    : <text x={selX - 8} y={selY - 3} textAnchor="end" fontSize="8" fill="rgba(255,255,255,0.85)">+{riseDisplay.toFixed(1)}% 难度{currentDifficulty.toFixed(0)}</text>
+                  }
+                </g>
+              )}
+
+              {/* 坐标轴 */}
+              <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="rgba(148,163,184,0.35)" strokeWidth="1" />
+              <line x1={padL} y1={padT + plotH} x2={svgW - padR} y2={padT + plotH} stroke="rgba(148,163,184,0.35)" strokeWidth="1" />
+
+              {/* Y轴标签（难度） */}
+              {[0, 25, 50, 75, 100].map(d => (
+                <text key={d} x={padL - 3} y={toY(d) + 3} textAnchor="end" fontSize="7" fill="rgba(148,163,184,0.55)">{d}</text>
+              ))}
+
+              {/* X轴标签（涨幅） */}
+              {[0, 100, 200, 300, 400, 500].map(r => (
+                <text key={r} x={toX(r)} y={padT + plotH + 10} textAnchor="middle" fontSize="7" fill="rgba(148,163,184,0.45)">{r}%</text>
+              ))}
+
+              {/* 轴标题 */}
+              <text x={padL - 2} y={padT + plotH / 2} textAnchor="middle" fontSize="7" fill="rgba(148,163,184,0.4)" transform={`rotate(-90, ${padL - 12}, ${padT + plotH / 2})`}>难度</text>
+              <text x={padL + plotW / 2} y={svgH - 1} textAnchor="middle" fontSize="8" fill="rgba(148,163,184,0.5)">目标涨幅</text>
             </svg>
           </div>
 
