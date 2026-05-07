@@ -3046,8 +3046,92 @@ function ProfitPathPanel({
   const qtyTapRef = React.useRef<{ time: number } | null>(null);
   const riseTapRef = React.useRef<{ time: number } | null>(null);
 
+  // 滑块拖动 ref
+  const qtyBarRef = React.useRef<HTMLDivElement>(null);
+  const riseBarRef = React.useRef<HTMLDivElement>(null);
+  const isDraggingQty = React.useRef(false);
+  const isDraggingRise = React.useRef(false);
+
   const toggleQtyLock = () => setQtyUnlocked(v => !v);
   const toggleRiseLock = () => setRiseUnlocked(v => !v);
+
+  // 从 clientX 计算持仓数量
+  const calcQtyFromX = React.useCallback((clientX: number): number => {
+    if (!qtyBarRef.current) return sliderQty;
+    const rect = qtyBarRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const raw = ratio * maxQty;
+    return Math.max(0.1, Math.round(raw * 10) / 10);
+  }, [maxQty, sliderQty]);
+
+  // 从 clientX 计算目标涨幅
+  const calcRiseFromX = React.useCallback((clientX: number): number => {
+    if (!riseBarRef.current) return sliderRise;
+    const rect = riseBarRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const raw = ratio * maxRisePct;
+    return Math.max(0, Math.round(raw * 2) / 2);
+  }, [maxRisePct, sliderRise]);
+
+  // 全局 mousemove/mouseup/touchmove/touchend 监听
+  React.useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (isDraggingQty.current) {
+        const qty = calcQtyFromX(e.clientX);
+        setSliderQty(qty);
+        sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+        if (riseUnlocked) {
+          const rise = Math.min(qtyToRise(qty), maxRisePct);
+          setSliderRise(rise);
+          sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+        }
+      }
+      if (isDraggingRise.current) {
+        const rise = calcRiseFromX(e.clientX);
+        setSliderRise(rise);
+        sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+        if (qtyUnlocked) {
+          const qty = Math.min(riseToQty(rise), maxQty);
+          setSliderQty(qty);
+          sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+        }
+      }
+    };
+    const onMouseUp = () => { isDraggingQty.current = false; isDraggingRise.current = false; };
+    const onTouchMove = (e: TouchEvent) => {
+      if (isDraggingQty.current) {
+        const qty = calcQtyFromX(e.touches[0].clientX);
+        setSliderQty(qty);
+        sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+        if (riseUnlocked) {
+          const rise = Math.min(qtyToRise(qty), maxRisePct);
+          setSliderRise(rise);
+          sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+        }
+      }
+      if (isDraggingRise.current) {
+        const rise = calcRiseFromX(e.touches[0].clientX);
+        setSliderRise(rise);
+        sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+        if (qtyUnlocked) {
+          const qty = Math.min(riseToQty(rise), maxQty);
+          setSliderQty(qty);
+          sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+        }
+      }
+    };
+    const onTouchEnd = () => { isDraggingQty.current = false; isDraggingRise.current = false; };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    document.addEventListener('touchmove', onTouchMove, { passive: true });
+    document.addEventListener('touchend', onTouchEnd);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [calcQtyFromX, calcRiseFromX, qtyUnlocked, riseUnlocked, qtyToRise, riseToQty, maxRisePct, maxQty]);
 
   // 初始化：只在本次会话首次加载时设置初始值（刷新页面后 sessionStorage 清空，重新初始化）
   React.useEffect(() => {
@@ -3249,11 +3333,12 @@ function ProfitPathPanel({
             </svg>
           </div>
 
-          {/* 滑块A：持仓数量 */}
+          {/* 滑块A：持仓数量 —— 战略/战术进度条风格 */}
           <div style={{ marginBottom: 14 }}>
+            {/* 标题行 */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {/* 锁定/解锁按鈕：双击切换 */}
+                {/* 锁定/解锁按鈕 */}
                 <div
                   onDoubleClick={toggleQtyLock}
                   onTouchEnd={(e) => {
@@ -3266,7 +3351,7 @@ function ProfitPathPanel({
                     }
                   }}
                   style={{
-                    width: 22, height: 22, borderRadius: '50%', cursor: 'pointer',
+                    width: 26, height: 26, borderRadius: '50%', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     transition: 'all 0.25s ease',
                     background: qtyUnlocked
@@ -3274,14 +3359,13 @@ function ProfitPathPanel({
                       : 'linear-gradient(135deg, #2a3050 0%, #3a4060 100%)',
                     border: qtyUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : '1.5px solid rgba(100,120,200,0.4)',
                     boxShadow: qtyUnlocked
-                      ? '0 0 10px rgba(255,235,100,0.9), 0 2px 6px rgba(0,0,0,0.6)'
+                      ? '0 0 12px rgba(255,235,100,1), 0 2px 6px rgba(0,0,0,0.6)'
                       : '0 1px 4px rgba(0,0,0,0.5)',
                     userSelect: 'none',
                   }}
                   title="双击切换定量/变量"
                 >
-                  {/* 锁图标 */}
-                  <svg width="10" height="12" viewBox="0 0 10 12" fill="none">
+                  <svg width="11" height="13" viewBox="0 0 10 12" fill="none">
                     <rect x="1.5" y="5" width="7" height="6" rx="1.5" fill={qtyUnlocked ? '#888' : 'rgba(148,163,184,0.7)'} />
                     {qtyUnlocked
                       ? <path d="M3 5V3.5C3 2.12 3.9 1 5 1" stroke="rgba(148,163,184,0.5)" strokeWidth="1.2" strokeLinecap="round" fill="none" />
@@ -3290,46 +3374,109 @@ function ProfitPathPanel({
                     <circle cx="5" cy="8" r="1" fill={qtyUnlocked ? '#888' : 'rgba(255,255,255,0.5)'} />
                   </svg>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 600,
+                <span style={{ fontSize: 12, fontWeight: 600,
                   color: qtyUnlocked ? 'rgba(255,235,100,0.9)' : 'rgba(148,163,184,0.8)',
                   transition: 'color 0.25s'
                 }}>持仓数量</span>
-                <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 10,
+                <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10,
                   background: qtyUnlocked ? 'rgba(255,235,100,0.15)' : 'rgba(100,120,200,0.15)',
                   color: qtyUnlocked ? 'rgba(255,235,100,0.8)' : 'rgba(100,120,200,0.6)',
                   border: `1px solid ${qtyUnlocked ? 'rgba(255,235,100,0.3)' : 'rgba(100,120,200,0.2)'}`,
                   transition: 'all 0.25s'
                 }}>{qtyUnlocked ? '变量' : '定量'}</span>
               </div>
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#60a5fa', fontVariantNumeric: 'tabular-nums' }}>
-                {sliderQty.toFixed(1)} <span style={{ fontSize: 10, color: 'rgba(148,163,184,0.6)' }}>ETH</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: '#60a5fa', fontVariantNumeric: 'tabular-nums' }}>
+                {sliderQty.toFixed(1)} <span style={{ fontSize: 11, color: 'rgba(148,163,184,0.6)' }}>ETH</span>
               </span>
             </div>
-            <div style={{ position: 'relative', height: 28, display: 'flex', alignItems: 'center' }}>
-              <div style={{ position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.08)' }} />
-              <div style={{ position: 'absolute', left: 0, width: `${(sliderQty / maxQty) * 100}%`, height: 4, borderRadius: 2,
-                background: qtyUnlocked ? 'linear-gradient(90deg, #f0d060, #ffe080)' : 'linear-gradient(90deg, #3b82f6, #60a5fa)'
-              }} />
-              <input
-                type="range" min={0.1} max={maxQty} step={0.1}
-                value={sliderQty}
-                onChange={handleQtyChange}
-                style={{ position: 'absolute', left: 0, right: 0, width: '100%', opacity: 0, height: 28, cursor: 'pointer', margin: 0 }}
-              />
-              <div style={{
-                position: 'absolute', left: `calc(${(sliderQty / maxQty) * 100}% - 11px)`,
-                width: 22, height: 22, borderRadius: '50%', pointerEvents: 'none',
-                background: qtyUnlocked
-                  ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 50%, #c0c0c0 100%)'
-                  : 'white',
-                border: qtyUnlocked ? '2.5px solid rgba(255,235,100,0.9)' : '2.5px solid #3b82f6',
-                boxShadow: qtyUnlocked ? '0 0 10px rgba(255,235,100,0.8)' : '0 2px 8px rgba(59,130,246,0.5)',
-                transition: 'all 0.25s'
-              }} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
-              <span style={{ fontSize: 9, color: 'rgba(148,163,184,0.4)' }}>0</span>
-              <span style={{ fontSize: 9, color: 'rgba(148,163,184,0.4)' }}>{maxQty} ETH</span>
+            {/* 进度条区域：32px高，内嵌24px轨道+32px手柄 */}
+            <div
+              ref={qtyBarRef}
+              style={{ position: 'relative', height: 32, cursor: 'ew-resize', touchAction: 'none', userSelect: 'none' }}
+              onMouseDown={(e) => {
+                isDraggingQty.current = true;
+                const qty = calcQtyFromX(e.clientX);
+                setSliderQty(qty);
+                sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+                if (riseUnlocked) {
+                  const rise = Math.min(qtyToRise(qty), maxRisePct);
+                  setSliderRise(rise);
+                  sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+                }
+              }}
+              onTouchStart={(e) => {
+                isDraggingQty.current = true;
+                const qty = calcQtyFromX(e.touches[0].clientX);
+                setSliderQty(qty);
+                sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+                if (riseUnlocked) {
+                  const rise = Math.min(qtyToRise(qty), maxRisePct);
+                  setSliderRise(rise);
+                  sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+                }
+              }}
+            >
+              {/* 24px 轨道容器（垂直居中） */}
+              <div className="absolute rounded overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', height: 24 }}>
+                {/* 已填充段（蓝色渐变） */}
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, height: '100%',
+                  width: `${(sliderQty / maxQty) * 100}%`,
+                  background: qtyUnlocked
+                    ? 'linear-gradient(90deg, #b8860b 0%, #f0d060 60%, #ffe080 100%)'
+                    : 'linear-gradient(90deg, #1a5faa 0%, #2a7fd4 60%, #60a5fa 100%)',
+                  borderRadius: '4px 0 0 4px',
+                  transition: 'background 0.25s',
+                }} />
+                {/* 轨道内文字：左显 0，右显 maxQty */}
+                <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>0</span>
+                <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>{maxQty}E</span>
+              </div>
+              {/* 32px 圆形手柄（内嵌 ETH 图标） */}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `calc(${(sliderQty / maxQty) * 100}% - 16px)`,
+                  top: '50%', transform: 'translateY(-50%)',
+                  width: 32, height: 32, borderRadius: '50%',
+                  zIndex: 10, pointerEvents: 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: qtyUnlocked
+                    ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)'
+                    : 'linear-gradient(135deg, #1a3a6a 0%, #2a5fa0 50%, #1a3a6a 100%)',
+                  boxShadow: qtyUnlocked
+                    ? '0 0 14px rgba(255,235,100,1), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.5)'
+                    : '0 0 8px rgba(96,165,250,0.5), 0 2px 6px rgba(0,0,0,0.8)',
+                  border: qtyUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : '1.5px solid rgba(96,165,250,0.5)',
+                  transition: 'all 0.25s ease',
+                }}
+              >
+                <svg width="16" height="20" viewBox="0 0 16 20" fill="none">
+                  <defs>
+                    <linearGradient id="qtyEthTop" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor={qtyUnlocked ? '#fffbe8' : '#90c8ff'} />
+                      <stop offset="100%" stopColor={qtyUnlocked ? '#e8e8e8' : '#4a90d9'} />
+                    </linearGradient>
+                    <linearGradient id="qtyEthMidL" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor={qtyUnlocked ? '#fff5c0' : '#60a5fa'} />
+                      <stop offset="100%" stopColor={qtyUnlocked ? '#c0c0c0' : '#2a6cb0'} />
+                    </linearGradient>
+                    <linearGradient id="qtyEthMidR" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor={qtyUnlocked ? '#e8e8e8' : '#4a90d9'} />
+                      <stop offset="100%" stopColor={qtyUnlocked ? '#a0a0a0' : '#1a4a80'} />
+                    </linearGradient>
+                    <linearGradient id="qtyEthBot" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor={qtyUnlocked ? '#c0c0c0' : '#2a6cb0'} />
+                      <stop offset="100%" stopColor={qtyUnlocked ? '#888888' : '#0a2040'} />
+                    </linearGradient>
+                  </defs>
+                  <polygon points="8,0 15,10 8,7" fill="url(#qtyEthTop)" />
+                  <polygon points="8,0 1,10 8,7" fill="url(#qtyEthMidL)" opacity="0.85" />
+                  <polygon points="1,10 8,13.5 15,10 8,7" fill="url(#qtyEthMidR)" />
+                  <polygon points="8,20 15,12 8,13.5" fill="url(#qtyEthBot)" />
+                  <polygon points="8,20 1,12 8,13.5" fill="url(#qtyEthMidL)" opacity="0.75" />
+                </svg>
+              </div>
             </div>
           </div>
 
@@ -3345,11 +3492,11 @@ function ProfitPathPanel({
             }
           </div>
 
-          {/* 滑块B：目标涨幅 */}
+          {/* 滑块B：目标涨幅 —— 战略/战术进度条风格 */}
           <div style={{ marginBottom: 16 }}>
+            {/* 标题行 */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {/* 锁定/解锁按鈕 */}
                 <div
                   onDoubleClick={toggleRiseLock}
                   onTouchEnd={(e) => {
@@ -3362,7 +3509,7 @@ function ProfitPathPanel({
                     }
                   }}
                   style={{
-                    width: 22, height: 22, borderRadius: '50%', cursor: 'pointer',
+                    width: 26, height: 26, borderRadius: '50%', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     transition: 'all 0.25s ease',
                     background: riseUnlocked
@@ -3370,13 +3517,13 @@ function ProfitPathPanel({
                       : 'linear-gradient(135deg, #2a3050 0%, #3a4060 100%)',
                     border: riseUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : '1.5px solid rgba(100,120,200,0.4)',
                     boxShadow: riseUnlocked
-                      ? '0 0 10px rgba(255,235,100,0.9), 0 2px 6px rgba(0,0,0,0.6)'
+                      ? '0 0 12px rgba(255,235,100,1), 0 2px 6px rgba(0,0,0,0.6)'
                       : '0 1px 4px rgba(0,0,0,0.5)',
                     userSelect: 'none',
                   }}
                   title="双击切换定量/变量"
                 >
-                  <svg width="10" height="12" viewBox="0 0 10 12" fill="none">
+                  <svg width="11" height="13" viewBox="0 0 10 12" fill="none">
                     <rect x="1.5" y="5" width="7" height="6" rx="1.5" fill={riseUnlocked ? '#888' : 'rgba(148,163,184,0.7)'} />
                     {riseUnlocked
                       ? <path d="M3 5V3.5C3 2.12 3.9 1 5 1" stroke="rgba(148,163,184,0.5)" strokeWidth="1.2" strokeLinecap="round" fill="none" />
@@ -3385,11 +3532,11 @@ function ProfitPathPanel({
                     <circle cx="5" cy="8" r="1" fill={riseUnlocked ? '#888' : 'rgba(255,255,255,0.5)'} />
                   </svg>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 600,
+                <span style={{ fontSize: 12, fontWeight: 600,
                   color: riseUnlocked ? 'rgba(255,235,100,0.9)' : 'rgba(148,163,184,0.8)',
                   transition: 'color 0.25s'
                 }}>目标涨幅</span>
-                <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 10,
+                <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10,
                   background: riseUnlocked ? 'rgba(255,235,100,0.15)' : 'rgba(100,120,200,0.15)',
                   color: riseUnlocked ? 'rgba(255,235,100,0.8)' : 'rgba(100,120,200,0.6)',
                   border: `1px solid ${riseUnlocked ? 'rgba(255,235,100,0.3)' : 'rgba(100,120,200,0.2)'}`,
@@ -3397,7 +3544,7 @@ function ProfitPathPanel({
                 }}>{riseUnlocked ? '变量' : '定量'}</span>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: difficulty.color, fontVariantNumeric: 'tabular-nums', transition: 'color 0.3s' }}>
                   +{riseDisplay.toFixed(1)}%
                 </span>
                 {exitPrice > 0 && curPrice > 0 && (
@@ -3407,31 +3554,94 @@ function ProfitPathPanel({
                 )}
               </div>
             </div>
-            <div style={{ position: 'relative', height: 28, display: 'flex', alignItems: 'center' }}>
-              <div style={{ position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, background: 'linear-gradient(90deg, rgba(34,197,94,0.3), rgba(234,179,8,0.3), rgba(249,115,22,0.3), rgba(239,68,68,0.3))' }} />
-              <div style={{ position: 'absolute', left: 0, width: `${(Math.min(riseDisplay, maxRisePct) / maxRisePct) * 100}%`, height: 4, borderRadius: 2,
-                background: riseUnlocked ? 'linear-gradient(90deg, #f0d060, #ffe080)' : `linear-gradient(90deg, #22c55e, ${difficulty.color})`
-              }} />
-              <input
-                type="range" min={0} max={maxRisePct} step={0.5}
-                value={Math.min(riseDisplay, maxRisePct)}
-                onChange={handleRiseChange}
-                style={{ position: 'absolute', left: 0, right: 0, width: '100%', opacity: 0, height: 28, cursor: 'pointer', margin: 0 }}
-              />
-              <div style={{
-                position: 'absolute', left: `calc(${(Math.min(riseDisplay, maxRisePct) / maxRisePct) * 100}% - 11px)`,
-                width: 22, height: 22, borderRadius: '50%', pointerEvents: 'none',
-                background: riseUnlocked
-                  ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 50%, #c0c0c0 100%)'
-                  : 'white',
-                border: riseUnlocked ? '2.5px solid rgba(255,235,100,0.9)' : `2.5px solid ${difficulty.color}`,
-                boxShadow: riseUnlocked ? '0 0 10px rgba(255,235,100,0.8)' : `0 2px 8px ${difficulty.color}80`,
-                transition: 'all 0.25s'
-              }} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
-              <span style={{ fontSize: 9, color: 'rgba(148,163,184,0.4)' }}>0%</span>
-              <span style={{ fontSize: 9, color: 'rgba(148,163,184,0.4)' }}>{maxRisePct}%</span>
+            {/* 进度条区域：32px高，内嵌24px轨道+32px手柄 */}
+            <div
+              ref={riseBarRef}
+              style={{ position: 'relative', height: 32, cursor: 'ew-resize', touchAction: 'none', userSelect: 'none' }}
+              onMouseDown={(e) => {
+                isDraggingRise.current = true;
+                const rise = calcRiseFromX(e.clientX);
+                setSliderRise(rise);
+                sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+                if (qtyUnlocked) {
+                  const qty = Math.min(riseToQty(rise), maxQty);
+                  setSliderQty(qty);
+                  sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+                }
+              }}
+              onTouchStart={(e) => {
+                isDraggingRise.current = true;
+                const rise = calcRiseFromX(e.touches[0].clientX);
+                setSliderRise(rise);
+                sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+                if (qtyUnlocked) {
+                  const qty = Math.min(riseToQty(rise), maxQty);
+                  setSliderQty(qty);
+                  sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+                }
+              }}
+            >
+              {/* 24px 轨道容器（垂直居中） */}
+              <div className="absolute rounded overflow-hidden" style={{ background: 'linear-gradient(90deg, rgba(34,197,94,0.12), rgba(234,179,8,0.12), rgba(249,115,22,0.12), rgba(239,68,68,0.12))', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', height: 24 }}>
+                {/* 已填充段（难易度渐变色） */}
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, height: '100%',
+                  width: `${(Math.min(riseDisplay, maxRisePct) / maxRisePct) * 100}%`,
+                  background: riseUnlocked
+                    ? 'linear-gradient(90deg, #b8860b 0%, #f0d060 60%, #ffe080 100%)'
+                    : `linear-gradient(90deg, #22c55e 0%, #84cc16 25%, #eab308 50%, ${difficulty.color} 100%)`,
+                  borderRadius: '4px 0 0 4px',
+                  transition: 'background 0.3s',
+                }} />
+                {/* 轨道内文字 */}
+                <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>0%</span>
+                <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>{maxRisePct}%</span>
+              </div>
+              {/* 32px 圆形手柄（内嵌 ETH 图标，颜色随难易度变化） */}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `calc(${(Math.min(riseDisplay, maxRisePct) / maxRisePct) * 100}% - 16px)`,
+                  top: '50%', transform: 'translateY(-50%)',
+                  width: 32, height: 32, borderRadius: '50%',
+                  zIndex: 10, pointerEvents: 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: riseUnlocked
+                    ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)'
+                    : `linear-gradient(135deg, rgba(34,197,94,0.3) 0%, rgba(0,0,0,0.8) 50%, rgba(0,0,0,0.9) 100%)`,
+                  boxShadow: riseUnlocked
+                    ? '0 0 14px rgba(255,235,100,1), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.5)'
+                    : `0 0 10px ${difficulty.color}80, 0 2px 6px rgba(0,0,0,0.8)`,
+                  border: riseUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : `1.5px solid ${difficulty.color}80`,
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                <svg width="16" height="20" viewBox="0 0 16 20" fill="none">
+                  <defs>
+                    <linearGradient id="riseEthTop" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor={riseUnlocked ? '#fffbe8' : difficulty.color} />
+                      <stop offset="100%" stopColor={riseUnlocked ? '#e8e8e8' : '#ffffff'} />
+                    </linearGradient>
+                    <linearGradient id="riseEthMidL" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor={riseUnlocked ? '#fff5c0' : difficulty.color} />
+                      <stop offset="100%" stopColor={riseUnlocked ? '#c0c0c0' : 'rgba(255,255,255,0.6)'} />
+                    </linearGradient>
+                    <linearGradient id="riseEthMidR" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stopColor={riseUnlocked ? '#e8e8e8' : 'rgba(255,255,255,0.8)'} />
+                      <stop offset="100%" stopColor={riseUnlocked ? '#a0a0a0' : difficulty.color} />
+                    </linearGradient>
+                    <linearGradient id="riseEthBot" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor={riseUnlocked ? '#c0c0c0' : 'rgba(255,255,255,0.5)'} />
+                      <stop offset="100%" stopColor={riseUnlocked ? '#888888' : difficulty.color} />
+                    </linearGradient>
+                  </defs>
+                  <polygon points="8,0 15,10 8,7" fill="url(#riseEthTop)" />
+                  <polygon points="8,0 1,10 8,7" fill="url(#riseEthMidL)" opacity="0.85" />
+                  <polygon points="1,10 8,13.5 15,10 8,7" fill="url(#riseEthMidR)" />
+                  <polygon points="8,20 15,12 8,13.5" fill="url(#riseEthBot)" />
+                  <polygon points="8,20 1,12 8,13.5" fill="url(#riseEthMidL)" opacity="0.75" />
+                </svg>
+              </div>
             </div>
           </div>
 
