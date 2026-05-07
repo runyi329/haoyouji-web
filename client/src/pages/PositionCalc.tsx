@@ -3074,9 +3074,12 @@ function ProfitPathPanel({
 
   // 解锁状态：true = 解锁（变量，可手动拖动）；false = 锁定（定量，不可拖动）
   // 新逻辑：只有解锁的滑块才能被手动拖动；锁定的滑块只能被联动更新
-  const [targetUnlocked, setTargetUnlocked] = React.useState(false); // 目标止盈金额，默认锁定
-  const [qtyUnlocked, setQtyUnlocked] = React.useState(false);       // 持仓数量，默认锁定
-  const [riseUnlocked, setRiseUnlocked] = React.useState(false);     // 目标涨幅，默认锁定
+  // 三条互锁：永远锁一条，另两条联动
+  // lockedField: 'target'=止盈锁定, 'qty'=持仓锁定, 'rise'=涨幅锁定
+  const [lockedField, setLockedField] = React.useState<'target' | 'qty' | 'rise'>('rise'); // 默认锁涨幅
+  const targetUnlocked = lockedField !== 'target'; // 止盈未锁定 = 可拖动
+  const qtyUnlocked = lockedField !== 'qty';       // 持仓未锁定 = 可拖动
+  const riseUnlocked = lockedField !== 'rise';     // 涨幅未锁定 = 可拖动
 
   // 对数刻度说明弹窗
   const [showLogInfo, setShowLogInfo] = React.useState(false);
@@ -3117,11 +3120,20 @@ function ProfitPathPanel({
         const val = Math.round(v) * 10000;
         setSliderTarget(val);
         hasUserDraggedTarget.current = true;
-        // 联动涌幅
-        if (!riseUnlocked) {
+        // 联动：止盈变 → 根据锁定条决定联动哪条
+        if (lockedField === 'qty') {
           const rise = Math.min(calcRiseFromTargetAndQty(val, sliderQty), maxRisePct);
           setSliderRise(rise);
           sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+        } else if (lockedField === 'rise') {
+          const targetUsdt = val / (cnyRate || 7.2);
+          if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
+            const exitP = curPrice * (1 + sliderRise / 100);
+            const qty = exitP > avgPrice ? Math.min(targetUsdt / (exitP - avgPrice), maxQty) : maxQty;
+            const qtyVal = Math.max(ETH_MIN, Math.min(ETH_MAX, Math.round(qty * 10) / 10));
+            setSliderQty(qtyVal);
+            sessionStorage.setItem(SESSION_KEY_QTY, String(qtyVal));
+          }
         }
       }
     } else if (editingField === 'qty') {
@@ -3129,11 +3141,19 @@ function ProfitPathPanel({
         const val = parseFloat(v.toFixed(1));
         setSliderQty(val);
         sessionStorage.setItem(SESSION_KEY_QTY, String(val));
-        // 联动涌幅
-        if (!riseUnlocked) {
+        // 联动：持仓变 → 根据锁定条决定联动哪条
+        if (lockedField === 'target') {
           const rise = Math.min(calcRiseFromTargetAndQty(sliderTarget, val), maxRisePct);
           setSliderRise(rise);
           sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+        } else if (lockedField === 'rise') {
+          if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
+            const exitP = curPrice * (1 + sliderRise / 100);
+            const targetUsdt = val * (exitP - avgPrice);
+            const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 7.2))));
+            setSliderTarget(targetCny);
+            sessionStorage.setItem(SESSION_KEY_TARGET, String(targetCny));
+          }
         }
       }
     } else if (editingField === 'rise') {
@@ -3141,11 +3161,19 @@ function ProfitPathPanel({
         const val = parseFloat(v.toFixed(2));
         setSliderRise(val);
         sessionStorage.setItem(SESSION_KEY_RISE, String(val));
-        // 联动持仓量
-        if (!qtyUnlocked) {
+        // 联动：涨幅变 → 根据锁定条决定联动哪条
+        if (lockedField === 'target') {
           const qty = Math.max(ETH_MIN, Math.min(ETH_MAX, riseToQty(val)));
           setSliderQty(qty);
           sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+        } else if (lockedField === 'qty') {
+          if (curPrice > 0 && avgPrice > 0) {
+            const exitP = curPrice * (1 + val / 100);
+            const targetUsdt = sliderQty * (exitP - avgPrice);
+            const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 7.2))));
+            setSliderTarget(targetCny);
+            sessionStorage.setItem(SESSION_KEY_TARGET, String(targetCny));
+          }
         }
       }
     }
@@ -3160,9 +3188,10 @@ function ProfitPathPanel({
   const isDraggingQty = React.useRef(false);
   const isDraggingRise = React.useRef(false);
 
-  const toggleTargetLock = () => setTargetUnlocked(v => !v);
-  const toggleQtyLock = () => setQtyUnlocked(v => !v);
-  const toggleRiseLock = () => setRiseUnlocked(v => !v);
+  // 点击锁图：切换到锁定该条（另两条自动解锁）
+  const toggleTargetLock = () => setLockedField('target');
+  const toggleQtyLock = () => setLockedField('qty');
+  const toggleRiseLock = () => setLockedField('rise');
 
   // 从 clientX 计算目标止盈金额（对数刻度）
   const calcTargetFromX = React.useCallback((clientX: number): number => {
@@ -3206,59 +3235,70 @@ function ProfitPathPanel({
       const target = calcTargetFromX(clientX);
       setSliderTarget(target);
       sessionStorage.setItem(SESSION_KEY_TARGET, String(target));
-      // 目标金额变化时，联动锁定的滑块（锁定 = 定量，被动更新）
-      if (!qtyUnlocked && !riseUnlocked) {
-        // 两个都锁定：保持持仓量不变，联动涨幅
+      // 止盈变化：联动另两条中的「锁定条」保持不变，「另一条」被动计算
+      if (lockedField === 'qty') {
+        // 持仓锁定：止盈变 → 涨幅联动
         const rise = Math.min(calcRiseFromTargetAndQty(target, sliderQty), maxRisePct);
         setSliderRise(rise);
         sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
-      } else if (!qtyUnlocked && riseUnlocked) {
-        // 持仓量锁定，涨幅解锁：保持持仓量不变，联动涨幅
-        const rise = Math.min(calcRiseFromTargetAndQty(target, sliderQty), maxRisePct);
-        setSliderRise(rise);
-        sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
-      } else if (qtyUnlocked && !riseUnlocked) {
-        // 持仓量解锁，涨幅锁定：保持涨幅不变，联动持仓量
+      } else if (lockedField === 'rise') {
+        // 涨幅锁定：止盈变 → 持仓联动
         const targetUsdt = target / (cnyRate || 7.2);
         if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
           const exitP = curPrice * (1 + sliderRise / 100);
           const qty = exitP > avgPrice ? Math.min(targetUsdt / (exitP - avgPrice), maxQty) : maxQty;
-          setSliderQty(Math.max(0.1, Math.round(qty * 10) / 10));
-          sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+          const qtyVal = Math.max(ETH_MIN, Math.min(ETH_MAX, Math.round(qty * 10) / 10));
+          setSliderQty(qtyVal);
+          sessionStorage.setItem(SESSION_KEY_QTY, String(qtyVal));
         }
       }
+      // lockedField === 'target' 时：止盈被锁，不应该能拖动（onMouseDown已拦截）
     };
     const handleQtyDrag = (clientX: number) => {
       if (!isDraggingQty.current) return;
       const qty = calcQtyFromX(clientX);
       setSliderQty(qty);
       sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
-      // 持仓量变化，联动锁定的其他滑块
-      if (!riseUnlocked) {
-        // 涨幅锁定：联动涨幅
+      // 持仓变化：联动另两条中的「锁定条」保持不变，「另一条」被动计算
+      if (lockedField === 'target') {
+        // 止盈锁定：持仓变 → 涨幅联动
         const rise = Math.min(calcRiseFromTargetAndQty(sliderTarget, qty), maxRisePct);
         setSliderRise(rise);
         sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
+      } else if (lockedField === 'rise') {
+        // 涨幅锁定：持仓变 → 止盈联动
+        if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
+          const exitP = curPrice * (1 + sliderRise / 100);
+          const targetUsdt = qty * (exitP - avgPrice);
+          const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 7.2))));
+          setSliderTarget(targetCny);
+          sessionStorage.setItem(SESSION_KEY_TARGET, String(targetCny));
+        }
       }
-      if (!targetUnlocked) {
-        // 目标金额锁定：不变（它是定量）
-      }
+      // lockedField === 'qty' 时：持仓被锁，不应该能拖动（onMouseDown已拦截）
     };
     const handleRiseDrag = (clientX: number) => {
       if (!isDraggingRise.current) return;
       const rise = calcRiseFromX(clientX);
       setSliderRise(rise);
       sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
-      // 涨幅变化，联动锁定的其他滑块
-      if (!qtyUnlocked) {
-        // 持仓量锁定：联动持仓量
-                  const qty = Math.max(ETH_MIN, Math.min(ETH_MAX, riseToQty(rise)));
-        setSliderQty(Math.max(0.1, qty));
+      // 涨幅变化：联动另两条中的「锁定条」保持不变，「另一条」被动计算
+      if (lockedField === 'target') {
+        // 止盈锁定：涨幅变 → 持仓联动
+        const qty = Math.max(ETH_MIN, Math.min(ETH_MAX, riseToQty(rise)));
+        setSliderQty(qty);
         sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
+      } else if (lockedField === 'qty') {
+        // 持仓锁定：涨幅变 → 止盈联动
+        if (curPrice > 0 && avgPrice > 0) {
+          const exitP = curPrice * (1 + rise / 100);
+          const targetUsdt = sliderQty * (exitP - avgPrice);
+          const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 7.2))));
+          setSliderTarget(targetCny);
+          sessionStorage.setItem(SESSION_KEY_TARGET, String(targetCny));
+        }
       }
-      if (!targetUnlocked) {
-        // 目标金额锁定：不变
-      }
+      // lockedField === 'rise' 时：涨幅被锁，不应该能拖动（onMouseDown已拦截）
     };
 
     const onMouseMove = (e: MouseEvent) => {
@@ -3729,17 +3769,7 @@ function ProfitPathPanel({
             </div>
           </div>
 
-          {/* 联动状态指示 */}
-          <div style={{ textAlign: 'center', marginBottom: 10, fontSize: 10, color: 'rgba(148,163,184,0.4)' }}>
-            {qtyUnlocked && riseUnlocked
-              ? <span style={{ color: 'rgba(255,235,100,0.7)' }}>↕ 双向联动开启</span>
-              : qtyUnlocked
-              ? <span>↓ 持仓数量随涨幅变动</span>
-              : riseUnlocked
-              ? <span>↑ 涨幅随持仓数量变动</span>
-              : <span>点击锁图可设为变量</span>
-            }
-          </div>
+
 
           {/* 滑块B：目标涨幅 —— 战略/战术进度条风格 */}
           <div style={{ marginBottom: 16 }}>
