@@ -3,12 +3,52 @@
  * 档位编辑子页面 — 从 PositionCalc 点击进度条跳转进入
  * 路由: /ledger/:id/position-calc/:price
  * 保存/取消均返回上一页
+ *
+ * 战略筹码 / 战术筹码均支持多条记录，每条含「数量 + 备注」
+ * 底部显示战略总和与战术总和
  */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
-import { ChevronLeft, Check, X, Pencil } from "lucide-react";
+import { ChevronLeft, Check, X, Pencil, Plus, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+
+/** 单条筹码记录 */
+interface ChipItem {
+  qty: string;   // 字符串，便于 input 绑定
+  note: string;
+}
+
+const emptyChip = (): ChipItem => ({ qty: '', note: '' });
+
+/** 从旧格式（单数字 + notes 数组）迁移到新格式 */
+function migrateToItems(qty: number, notesJson: string): ChipItem[] {
+  try {
+    const parsed = JSON.parse(notesJson || '[]');
+    // 新格式：[{qty, note}]
+    if (Array.isArray(parsed) && parsed.length > 0 && 'qty' in parsed[0]) {
+      return parsed.map((x: any) => ({ qty: String(x.qty ?? ''), note: x.note ?? '' }));
+    }
+    // 旧格式：[{text, time}] — 迁移：把旧备注合并成一条，数量用旧 qty
+    if (qty > 0) {
+      const noteText = parsed.map((n: any) => n.text).filter(Boolean).join('；');
+      return [{ qty: String(qty), note: noteText }];
+    }
+    return [];
+  } catch {
+    return qty > 0 ? [{ qty: String(qty), note: '' }] : [];
+  }
+}
+
+/** 序列化为 JSON 存储 */
+function serializeItems(items: ChipItem[]): string {
+  return JSON.stringify(items.map(x => ({ qty: parseFloat(x.qty) || 0, note: x.note })));
+}
+
+/** 求和 */
+function sumItems(items: ChipItem[]): number {
+  return items.reduce((s, x) => s + (parseFloat(x.qty) || 0), 0);
+}
 
 export default function PositionLevelEdit() {
   const [, params] = useRoute("/ledger/:id/position-calc/:price");
@@ -24,13 +64,10 @@ export default function PositionLevelEdit() {
 
   // 表单状态
   const [plannedValue, setPlannedValue] = useState('');
-  const [baseValue, setBaseValue] = useState('');
-  const [tacticalValue, setTacticalValue] = useState('');
 
-  // 备注展开状态
-  const [baseExpanded, setBaseExpanded] = useState(false);
-  const [tacticalExpanded, setTacticalExpanded] = useState(false);
-  const [editingNoteKey, setEditingNoteKey] = useState<string | null>(null);
+  // 多条筹码记录
+  const [baseItems, setBaseItems] = useState<ChipItem[]>([emptyChip()]);
+  const [tacticalItems, setTacticalItems] = useState<ChipItem[]>([emptyChip()]);
 
   // 日志编辑状态
   const [editingLogId, setEditingLogId] = useState<number | null>(null);
@@ -39,8 +76,6 @@ export default function PositionLevelEdit() {
   // 当前档位的实际/计划数量（从数据库读取）
   const [actualQty, setActualQty] = useState(0);
   const [plannedQty, setPlannedQty] = useState(0);
-  const [baseNotes, setBaseNotes] = useState<Array<{text: string; time: string}>>([]);
-  const [tacticalNotes, setTacticalNotes] = useState<Array<{text: string; time: string}>>([]);
 
   const utils = trpc.useUtils();
 
@@ -66,14 +101,15 @@ export default function PositionLevelEdit() {
       const bq = level.baseQty ?? 0;
       const tq = level.tacticalQty ?? 0;
       const pq = level.plannedQty ?? 0;
-      const aq = (level.actualQty ?? 0);
+      const aq = level.actualQty ?? 0;
       setActualQty(aq);
       setPlannedQty(pq);
-      setBaseValue(bq > 0 ? String(bq) : '');
-      setTacticalValue(tq > 0 ? String(tq) : '');
       setPlannedValue(pq > 0 ? String(pq) : '');
-      try { setBaseNotes(JSON.parse(level.baseNotes || '[]')); } catch { setBaseNotes([]); }
-      try { setTacticalNotes(JSON.parse(level.tacticalNotes || '[]')); } catch { setTacticalNotes([]); }
+
+      const bItems = migrateToItems(bq, level.baseNotes || '[]');
+      const tItems = migrateToItems(tq, level.tacticalNotes || '[]');
+      setBaseItems(bItems.length > 0 ? bItems : [emptyChip()]);
+      setTacticalItems(tItems.length > 0 ? tItems : [emptyChip()]);
     }
   }, [positionData, price]);
 
@@ -101,12 +137,10 @@ export default function PositionLevelEdit() {
 
   const handleSave = () => {
     if (isViewAs) { goBack(); return; }
-    const bqNum = parseFloat(baseValue);
-    const tqNum = parseFloat(tacticalValue);
-    const pqNum = parseFloat(plannedValue);
-    const bqVal = isNaN(bqNum) || bqNum < 0 ? 0 : bqNum;
-    const tqVal = isNaN(tqNum) || tqNum < 0 ? 0 : tqNum;
+    const bqVal = sumItems(baseItems);
+    const tqVal = sumItems(tacticalItems);
     const totalVal = bqVal + tqVal;
+    const pqNum = parseFloat(plannedValue);
     const newPlannedVal = !isNaN(pqNum) && pqNum >= 0 ? pqNum : plannedQty;
     const oldActual = actualQty;
     const oldPlanned = plannedQty;
@@ -126,18 +160,30 @@ export default function PositionLevelEdit() {
       actualQty: totalVal,
       baseQty: bqVal,
       tacticalQty: tqVal,
-      baseNotes: JSON.stringify(baseNotes),
-      tacticalNotes: JSON.stringify(tacticalNotes),
+      baseNotes: serializeItems(baseItems),
+      tacticalNotes: serializeItems(tacticalItems),
     });
   };
 
   // 计算预览进度条
-  const bqCur = parseFloat(baseValue) || 0;
-  const tqCur = parseFloat(tacticalValue) || 0;
+  const bqCur = sumItems(baseItems);
+  const tqCur = sumItems(tacticalItems);
   const totalCur = bqCur + tqCur;
   const planCur = parseFloat(plannedValue) || plannedQty;
   const baseWidth = planCur > 0 ? Math.min(100, (bqCur / planCur) * 100) : 0;
   const tacticalWidth = planCur > 0 ? Math.min(100 - baseWidth, (tqCur / planCur) * 100) : 0;
+
+  // ---- 辅助：更新某条记录 ----
+  const updateBase = (i: number, field: keyof ChipItem, val: string) => {
+    setBaseItems(prev => prev.map((x, j) => j === i ? { ...x, [field]: val } : x));
+  };
+  const updateTactical = (i: number, field: keyof ChipItem, val: string) => {
+    setTacticalItems(prev => prev.map((x, j) => j === i ? { ...x, [field]: val } : x));
+  };
+  const addBase = () => setBaseItems(prev => [...prev, emptyChip()]);
+  const addTactical = () => setTacticalItems(prev => [...prev, emptyChip()]);
+  const removeBase = (i: number) => setBaseItems(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : [emptyChip()]);
+  const removeTactical = (i: number) => setTacticalItems(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : [emptyChip()]);
 
   return (
     <div className="min-h-screen max-w-md mx-auto relative" style={{ background: '#000000' }}>
@@ -163,7 +209,7 @@ export default function PositionLevelEdit() {
       ) : (
         <div className="px-4 pt-4 pb-24">
           {/* 计划仓位 */}
-          <div className="mb-4">
+          <div className="mb-5">
             <div className="text-xs font-medium mb-1.5 tracking-wider" style={{ color: 'rgba(100,200,100,0.8)' }}>计划仓位 (ETH)</div>
             <div className="rounded-xl px-4 py-2" style={{ background: 'rgba(100,200,100,0.06)', border: '1px solid rgba(100,200,100,0.25)' }}>
               <input
@@ -179,267 +225,174 @@ export default function PositionLevelEdit() {
             </div>
           </div>
 
-          {/* 底仓 */}
-          <div className="mb-2">
-            <div className="text-xs font-medium mb-1.5 tracking-wider" style={{ color: 'rgba(74,168,255,0.8)' }}>战略筹码（底仓）(ETH)</div>
-            <div className="rounded-xl px-4 py-2" style={{ background: 'rgba(74,168,255,0.06)', border: '1px solid rgba(74,168,255,0.4)' }}>
-              <input
-                type="number"
-                value={baseValue}
-                onChange={e => setBaseValue(e.target.value)}
-                placeholder="0"
-                className="w-full text-center text-2xl font-bold outline-none bg-transparent"
-                style={{ color: '#4aa8ff', fontVariantNumeric: 'tabular-nums' }}
-                step="1"
-                min="0"
-              />
-            </div>
-          </div>
-
-          {/* 底仓备注 */}
-          <div className="mb-4">
-            <div
-              className="flex items-center gap-1.5 cursor-pointer select-none py-1"
-              style={{ color: '#4aa8ff', opacity: 0.7 }}
-              onClick={() => setBaseExpanded(v => !v)}
-            >
-              <span className="text-xs">{baseExpanded ? '▼' : '▶'}</span>
-              <span className="text-xs">战略筹码备注</span>
-              {baseNotes.length > 0 && <span className="text-xs rounded-full px-1.5" style={{ background: 'rgba(74,168,255,0.2)', color: '#4aa8ff' }}>{baseNotes.length}</span>}
-            </div>
-            {baseExpanded && (
-              <div className="mt-1.5 space-y-1.5">
-                {baseNotes.map((n, i) => {
-                  const editKey = `base-${price}-${i}`;
-                  const isEditing = editingNoteKey === editKey;
-                  return (
-                    <div key={i} className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(74,168,255,0.06)', border: `1px solid ${isEditing ? 'rgba(74,168,255,0.5)' : 'rgba(74,168,255,0.15)'}` }}>
-                      {isEditing ? (
-                        <input
-                          autoFocus
-                          type="text"
-                          defaultValue={n.text}
-                          className="flex-1 text-xs outline-none bg-transparent"
-                          style={{ color: 'rgba(255,255,255,0.9)' }}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              const newText = (e.target as HTMLInputElement).value.trim();
-                              if (newText) {
-                                const newNotes = baseNotes.map((x, j) => j === i ? { ...x, text: newText } : x);
-                                setBaseNotes(newNotes);
-                                updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(newNotes), tacticalNotes: JSON.stringify(tacticalNotes) });
-                              }
-                              setEditingNoteKey(null);
-                            }
-                            if (e.key === 'Escape') setEditingNoteKey(null);
-                          }}
-                          onBlur={e => {
-                            const newText = e.target.value.trim();
-                            if (newText && newText !== n.text) {
-                              const newNotes = baseNotes.map((x, j) => j === i ? { ...x, text: newText } : x);
-                              setBaseNotes(newNotes);
-                              updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(newNotes), tacticalNotes: JSON.stringify(tacticalNotes) });
-                            }
-                            setEditingNoteKey(null);
-                          }}
-                        />
-                      ) : (
-                        <span
-                          className="flex-1 text-xs cursor-pointer"
-                          style={{ color: 'rgba(255,255,255,0.75)' }}
-                          onClick={() => setEditingNoteKey(editKey)}
-                        >{n.text}</span>
-                      )}
-                      <span className="text-xs shrink-0" style={{ color: 'rgba(255,255,255,0.25)', fontSize: '10px' }}>{n.time}</span>
-                      <button
-                        onClick={() => {
-                          const newNotes = baseNotes.filter((_, j) => j !== i);
-                          setBaseNotes(newNotes);
-                          updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(newNotes), tacticalNotes: JSON.stringify(tacticalNotes) });
-                        }}
-                        style={{ color: 'rgba(255,80,80,0.5)' }}
-                      ><X className="w-3 h-3" /></button>
-                    </div>
-                  );
-                })}
-                {/* 添加备注输入 */}
-                <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    placeholder="添加战略筹码备注…"
-                    className="flex-1 text-xs px-2 py-1.5 rounded-lg outline-none"
-                    style={{ background: 'rgba(74,168,255,0.06)', border: '1px solid rgba(74,168,255,0.2)', color: 'rgba(255,255,255,0.7)' }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        const val = (e.target as HTMLInputElement).value.trim();
-                        if (val) {
-                          const newNotes = [...baseNotes, { text: val, time: new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) }];
-                          setBaseNotes(newNotes);
-                          updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(newNotes), tacticalNotes: JSON.stringify(tacticalNotes) });
-                          (e.target as HTMLInputElement).value = '';
-                        }
-                      }
-                    }}
-                  />
-                  <button
-                    className="px-2 rounded-lg text-xs"
-                    style={{ background: 'rgba(74,168,255,0.15)', color: '#4aa8ff' }}
-                    onClick={(e) => {
-                      const input = (e.currentTarget.previousSibling as HTMLInputElement);
-                      const val = input.value.trim();
-                      if (val) {
-                        const newNotes = [...baseNotes, { text: val, time: new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) }];
-                        setBaseNotes(newNotes);
-                        updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(newNotes), tacticalNotes: JSON.stringify(tacticalNotes) });
-                        input.value = '';
-                      }
-                    }}
-                  >+</button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 机动仓 */}
-          <div className="mb-2">
-            <div className="text-xs font-medium mb-1.5 tracking-wider" style={{ color: 'rgba(232,112,32,0.8)' }}>战术筹码（滚动仓）(ETH)</div>
-            <div className="rounded-xl px-4 py-2" style={{ background: 'rgba(232,112,32,0.06)', border: '1px solid rgba(232,112,32,0.4)' }}>
-              <input
-                type="number"
-                value={tacticalValue}
-                onChange={e => setTacticalValue(e.target.value)}
-                placeholder="0"
-                className="w-full text-center text-2xl font-bold outline-none bg-transparent"
-                style={{ color: '#e87020', fontVariantNumeric: 'tabular-nums' }}
-                step="1"
-                min="0"
-              />
-            </div>
-          </div>
-
-          {/* 机动仓备注 */}
-          <div className="mb-4">
-            <div
-              className="flex items-center gap-1.5 cursor-pointer select-none py-1"
-              style={{ color: '#e87020', opacity: 0.7 }}
-              onClick={() => setTacticalExpanded(v => !v)}
-            >
-              <span className="text-xs">{tacticalExpanded ? '▼' : '▶'}</span>
-              <span className="text-xs">战术筹码备注</span>
-              {tacticalNotes.length > 0 && <span className="text-xs rounded-full px-1.5" style={{ background: 'rgba(232,112,32,0.2)', color: '#e87020' }}>{tacticalNotes.length}</span>}
-            </div>
-            {tacticalExpanded && (
-              <div className="mt-1.5 space-y-1.5">
-                {tacticalNotes.map((n, i) => {
-                  const editKey = `tactical-${price}-${i}`;
-                  const isEditing = editingNoteKey === editKey;
-                  return (
-                    <div key={i} className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(232,112,32,0.06)', border: `1px solid ${isEditing ? 'rgba(232,112,32,0.5)' : 'rgba(232,112,32,0.15)'}` }}>
-                      {isEditing ? (
-                        <input
-                          autoFocus
-                          type="text"
-                          defaultValue={n.text}
-                          className="flex-1 text-xs outline-none bg-transparent"
-                          style={{ color: 'rgba(255,255,255,0.9)' }}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              const newText = (e.target as HTMLInputElement).value.trim();
-                              if (newText) {
-                                const newNotes = tacticalNotes.map((x, j) => j === i ? { ...x, text: newText } : x);
-                                setTacticalNotes(newNotes);
-                                updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(baseNotes), tacticalNotes: JSON.stringify(newNotes) });
-                              }
-                              setEditingNoteKey(null);
-                            }
-                            if (e.key === 'Escape') setEditingNoteKey(null);
-                          }}
-                          onBlur={e => {
-                            const newText = e.target.value.trim();
-                            if (newText && newText !== n.text) {
-                              const newNotes = tacticalNotes.map((x, j) => j === i ? { ...x, text: newText } : x);
-                              setTacticalNotes(newNotes);
-                              updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(baseNotes), tacticalNotes: JSON.stringify(newNotes) });
-                            }
-                            setEditingNoteKey(null);
-                          }}
-                        />
-                      ) : (
-                        <span
-                          className="flex-1 text-xs cursor-pointer"
-                          style={{ color: 'rgba(255,255,255,0.75)' }}
-                          onClick={() => setEditingNoteKey(editKey)}
-                        >{n.text}</span>
-                      )}
-                      <span className="text-xs shrink-0" style={{ color: 'rgba(255,255,255,0.25)', fontSize: '10px' }}>{n.time}</span>
-                      <button
-                        onClick={() => {
-                          const newNotes = tacticalNotes.filter((_, j) => j !== i);
-                          setTacticalNotes(newNotes);
-                          updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(baseNotes), tacticalNotes: JSON.stringify(newNotes) });
-                        }}
-                        style={{ color: 'rgba(255,80,80,0.5)' }}
-                      ><X className="w-3 h-3" /></button>
-                    </div>
-                  );
-                })}
-                <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    placeholder="添加战术筹码备注…"
-                    className="flex-1 text-xs px-2 py-1.5 rounded-lg outline-none"
-                    style={{ background: 'rgba(232,112,32,0.06)', border: '1px solid rgba(232,112,32,0.2)', color: 'rgba(255,255,255,0.7)' }}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') {
-                        const val = (e.target as HTMLInputElement).value.trim();
-                        if (val) {
-                          const newNotes = [...tacticalNotes, { text: val, time: new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) }];
-                          setTacticalNotes(newNotes);
-                          updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(baseNotes), tacticalNotes: JSON.stringify(newNotes) });
-                          (e.target as HTMLInputElement).value = '';
-                        }
-                      }
-                    }}
-                  />
-                  <button
-                    className="px-2 rounded-lg text-xs"
-                    style={{ background: 'rgba(232,112,32,0.15)', color: '#e87020' }}
-                    onClick={(e) => {
-                      const input = (e.currentTarget.previousSibling as HTMLInputElement);
-                      const val = input.value.trim();
-                      if (val) {
-                        const newNotes = [...tacticalNotes, { text: val, time: new Date().toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) }];
-                        setTacticalNotes(newNotes);
-                        updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(baseNotes), tacticalNotes: JSON.stringify(newNotes) });
-                        input.value = '';
-                      }
-                    }}
-                  >+</button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 进度条预览 */}
-          <div className="mb-5 rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(192,192,192,0.1)' }}>
+          {/* ===== 战略筹码（底仓）===== */}
+          <div className="mb-5">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs" style={{ color: 'rgba(192,192,192,0.5)' }}>进度预览</span>
-              <span className="text-xs font-mono" style={{ color: 'rgba(192,192,192,0.7)' }}>{totalCur.toFixed(0)} / {planCur.toFixed(0)} ETH</span>
+              <div className="text-xs font-medium tracking-wider" style={{ color: 'rgba(74,168,255,0.9)' }}>
+                战略筹码（底仓）
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono" style={{ color: '#4aa8ff' }}>
+                  总和 {bqCur > 0 ? bqCur.toFixed(2) : '0'} ETH
+                </span>
+                <button
+                  onClick={addBase}
+                  className="flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-xs"
+                  style={{ background: 'rgba(74,168,255,0.15)', color: '#4aa8ff', border: '1px solid rgba(74,168,255,0.3)' }}
+                >
+                  <Plus className="w-3 h-3" /> 添加
+                </button>
+              </div>
             </div>
-            <div className="h-3 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+
+            <div className="space-y-2">
+              {baseItems.map((item, i) => (
+                <div key={i} className="rounded-xl overflow-hidden" style={{ background: 'rgba(74,168,255,0.06)', border: '1px solid rgba(74,168,255,0.3)' }}>
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    {/* 序号 */}
+                    <span className="text-xs shrink-0 w-4 text-center" style={{ color: 'rgba(74,168,255,0.5)' }}>#{i + 1}</span>
+                    {/* 数量输入 */}
+                    <input
+                      type="number"
+                      value={item.qty}
+                      onChange={e => updateBase(i, 'qty', e.target.value)}
+                      placeholder="0"
+                      className="w-24 text-center text-lg font-bold outline-none bg-transparent shrink-0"
+                      style={{ color: '#4aa8ff', fontVariantNumeric: 'tabular-nums' }}
+                      step="1"
+                      min="0"
+                    />
+                    <span className="text-xs shrink-0" style={{ color: 'rgba(74,168,255,0.5)' }}>ETH</span>
+                    {/* 备注输入 */}
+                    <input
+                      type="text"
+                      value={item.note}
+                      onChange={e => updateBase(i, 'note', e.target.value)}
+                      placeholder="备注（可选）"
+                      className="flex-1 text-xs outline-none bg-transparent min-w-0"
+                      style={{ color: 'rgba(255,255,255,0.65)' }}
+                    />
+                    {/* 删除按钮 */}
+                    <button
+                      onClick={() => removeBase(i)}
+                      className="shrink-0 p-1 rounded"
+                      style={{ color: 'rgba(255,80,80,0.5)' }}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 战略总和汇总行 */}
+            {baseItems.length > 1 && (
+              <div className="mt-2 flex items-center justify-end gap-1.5 px-2">
+                <span className="text-xs" style={{ color: 'rgba(74,168,255,0.5)' }}>战略合计</span>
+                <span className="text-sm font-bold font-mono" style={{ color: '#4aa8ff' }}>{bqCur.toFixed(2)} ETH</span>
+              </div>
+            )}
+          </div>
+
+          {/* ===== 战术筹码（滚动仓）===== */}
+          <div className="mb-5">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-medium tracking-wider" style={{ color: 'rgba(232,112,32,0.9)' }}>
+                战术筹码（滚动仓）
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono" style={{ color: '#e87020' }}>
+                  总和 {tqCur > 0 ? tqCur.toFixed(2) : '0'} ETH
+                </span>
+                <button
+                  onClick={addTactical}
+                  className="flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-xs"
+                  style={{ background: 'rgba(232,112,32,0.15)', color: '#e87020', border: '1px solid rgba(232,112,32,0.3)' }}
+                >
+                  <Plus className="w-3 h-3" /> 添加
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {tacticalItems.map((item, i) => (
+                <div key={i} className="rounded-xl overflow-hidden" style={{ background: 'rgba(232,112,32,0.06)', border: '1px solid rgba(232,112,32,0.3)' }}>
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    {/* 序号 */}
+                    <span className="text-xs shrink-0 w-4 text-center" style={{ color: 'rgba(232,112,32,0.5)' }}>#{i + 1}</span>
+                    {/* 数量输入 */}
+                    <input
+                      type="number"
+                      value={item.qty}
+                      onChange={e => updateTactical(i, 'qty', e.target.value)}
+                      placeholder="0"
+                      className="w-24 text-center text-lg font-bold outline-none bg-transparent shrink-0"
+                      style={{ color: '#e87020', fontVariantNumeric: 'tabular-nums' }}
+                      step="1"
+                      min="0"
+                    />
+                    <span className="text-xs shrink-0" style={{ color: 'rgba(232,112,32,0.5)' }}>ETH</span>
+                    {/* 备注输入 */}
+                    <input
+                      type="text"
+                      value={item.note}
+                      onChange={e => updateTactical(i, 'note', e.target.value)}
+                      placeholder="备注（可选）"
+                      className="flex-1 text-xs outline-none bg-transparent min-w-0"
+                      style={{ color: 'rgba(255,255,255,0.65)' }}
+                    />
+                    {/* 删除按钮 */}
+                    <button
+                      onClick={() => removeTactical(i)}
+                      className="shrink-0 p-1 rounded"
+                      style={{ color: 'rgba(255,80,80,0.5)' }}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 战术总和汇总行 */}
+            {tacticalItems.length > 1 && (
+              <div className="mt-2 flex items-center justify-end gap-1.5 px-2">
+                <span className="text-xs" style={{ color: 'rgba(232,112,32,0.5)' }}>战术合计</span>
+                <span className="text-sm font-bold font-mono" style={{ color: '#e87020' }}>{tqCur.toFixed(2)} ETH</span>
+              </div>
+            )}
+          </div>
+
+          {/* ===== 总和汇总卡片 ===== */}
+          <div className="mb-5 rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(192,192,192,0.12)' }}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs" style={{ color: 'rgba(192,192,192,0.5)' }}>持仓汇总</span>
+              <span className="text-xs font-mono" style={{ color: 'rgba(192,192,192,0.7)' }}>{totalCur.toFixed(2)} / {planCur.toFixed(0)} ETH</span>
+            </div>
+            {/* 进度条 */}
+            <div className="h-3 rounded-full overflow-hidden mb-2" style={{ background: 'rgba(255,255,255,0.06)' }}>
               <div className="h-full flex">
                 <div style={{ width: `${baseWidth}%`, background: 'linear-gradient(90deg, #2a6aaa, #4aa8ff)', transition: 'width 0.3s' }} />
                 <div style={{ width: `${tacticalWidth}%`, background: 'linear-gradient(90deg, #a04010, #e87020)', transition: 'width 0.3s' }} />
               </div>
             </div>
-            <div className="flex items-center gap-3 mt-2">
-              <div className="flex items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-sm" style={{ background: '#4aa8ff' }} />
-                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>底仓 {bqCur > 0 ? bqCur.toFixed(0) : '0'}</span>
+            {/* 图例 + 数字 */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(74,168,255,0.08)', border: '1px solid rgba(74,168,255,0.2)' }}>
+                <div className="flex items-center gap-1 mb-0.5">
+                  <div className="w-2 h-2 rounded-sm" style={{ background: '#4aa8ff' }} />
+                  <span className="text-xs" style={{ color: 'rgba(74,168,255,0.7)' }}>战略筹码</span>
+                </div>
+                <div className="text-base font-bold font-mono" style={{ color: '#4aa8ff' }}>{bqCur.toFixed(2)}</div>
+                <div className="text-xs" style={{ color: 'rgba(74,168,255,0.5)' }}>{baseItems.filter(x => parseFloat(x.qty) > 0).length} 条记录</div>
               </div>
-              <div className="flex items-center gap-1">
-                <div className="w-2.5 h-2.5 rounded-sm" style={{ background: '#e87020' }} />
-                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>机动仓 {tqCur > 0 ? tqCur.toFixed(0) : '0'}</span>
+              <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(232,112,32,0.08)', border: '1px solid rgba(232,112,32,0.2)' }}>
+                <div className="flex items-center gap-1 mb-0.5">
+                  <div className="w-2 h-2 rounded-sm" style={{ background: '#e87020' }} />
+                  <span className="text-xs" style={{ color: 'rgba(232,112,32,0.7)' }}>战术筹码</span>
+                </div>
+                <div className="text-base font-bold font-mono" style={{ color: '#e87020' }}>{tqCur.toFixed(2)}</div>
+                <div className="text-xs" style={{ color: 'rgba(232,112,32,0.5)' }}>{tacticalItems.filter(x => parseFloat(x.qty) > 0).length} 条记录</div>
               </div>
             </div>
           </div>
@@ -447,7 +400,7 @@ export default function PositionLevelEdit() {
           {/* 修改日志 */}
           <div className="mb-5" style={{ borderTop: '1px solid rgba(192,192,192,0.15)', paddingTop: '12px' }}>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium tracking-widest" style={{ color: 'rgba(192,192,192,0.6)' }}>修改日志</span>
+              <span className="text-xs font-medium tracking-wider" style={{ color: 'rgba(192,192,192,0.5)' }}>修改日志</span>
               <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>自动记录 · 可编辑/删除</span>
             </div>
             <div className="space-y-1.5">
