@@ -73,6 +73,30 @@ export default function PositionCalc() {
   const viewAsUserId = urlSearchParams.get('viewAs') ? Number(urlSearchParams.get('viewAs')) : undefined;
   const isViewAs = !!viewAsUserId; // 视角查看时禁用写入操作
 
+  // 禁止左右滑动切换页面（防止滑块误触发浏览器返回）
+  useEffect(() => {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const onTouchStart = (e: TouchEvent) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const dx = e.touches[0].clientX - touchStartX;
+      const dy = e.touches[0].clientY - touchStartY;
+      // 如果水平方向为主（左右滑动），阻止默认行为（防止页面左右切换）
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+    };
+  }, []);
+
   // 注入双端滑块 CSS
   useEffect(() => {
     const styleEl = document.createElement('style');
