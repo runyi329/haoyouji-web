@@ -1820,8 +1820,7 @@ export default function PositionCalc() {
                           placeholder="输入 ETH 数量"
                           value={targetEthQty}
                           onChange={e => setTargetEthQty(e.target.value)}
-                          className="min-w-0 flex-1 text-2xl font-bold outline-none bg-transparent placeholder:text-gray-600 placeholder:font-normal placeholder:text-lg" style={{ color: '#fff' }}
-                          style={{ minWidth: 0 }}
+                          className="min-w-0 flex-1 text-2xl font-bold outline-none bg-transparent placeholder:text-gray-600 placeholder:font-normal placeholder:text-lg" style={{ color: '#fff', minWidth: 0 }}
                         />
                         <span className="text-sm font-medium text-gray-400 flex-shrink-0">ETH</span>
                       </div>
