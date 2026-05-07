@@ -3353,7 +3353,6 @@ function ProfitPathPanel({
                   style={{
                     width: 26, height: 26, borderRadius: '50%', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-,
                     background: qtyUnlocked
                       ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)'
                       : 'linear-gradient(135deg, #2a3050 0%, #3a4060 100%)',
@@ -3426,7 +3425,6 @@ function ProfitPathPanel({
                     ? 'linear-gradient(90deg, #b8860b 0%, #f0d060 60%, #ffe080 100%)'
                     : 'linear-gradient(90deg, #1a5faa 0%, #2a7fd4 60%, #60a5fa 100%)',
                   borderRadius: '4px 0 0 4px',
-,
                 }} />
                 {/* 轨道内文字：左显 0，右显 maxQty */}
                 <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>0</span>
@@ -3448,7 +3446,6 @@ function ProfitPathPanel({
                     ? '0 0 14px rgba(255,235,100,1), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.5)'
                     : '0 0 8px rgba(96,165,250,0.5), 0 2px 6px rgba(0,0,0,0.8)',
                   border: qtyUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : '1.5px solid rgba(96,165,250,0.5)',
-,
                 }}
               >
                 <svg width="16" height="20" viewBox="0 0 16 20" fill="none">
@@ -3511,7 +3508,6 @@ function ProfitPathPanel({
                   style={{
                     width: 26, height: 26, borderRadius: '50%', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-,
                     background: riseUnlocked
                       ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)'
                       : 'linear-gradient(135deg, #2a3050 0%, #3a4060 100%)',
@@ -3591,7 +3587,6 @@ function ProfitPathPanel({
                     ? 'linear-gradient(90deg, #b8860b 0%, #f0d060 60%, #ffe080 100%)'
                     : `linear-gradient(90deg, #22c55e 0%, #84cc16 25%, #eab308 50%, ${difficulty.color} 100%)`,
                   borderRadius: '4px 0 0 4px',
-,
                 }} />
                 {/* 轨道内文字 */}
                 <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>0%</span>
@@ -3613,7 +3608,6 @@ function ProfitPathPanel({
                     ? '0 0 14px rgba(255,235,100,1), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.5)'
                     : `0 0 10px ${difficulty.color}80, 0 2px 6px rgba(0,0,0,0.8)`,
                   border: riseUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : `1.5px solid ${difficulty.color}80`,
-,
                 }}
               >
                 <svg width="16" height="20" viewBox="0 0 16 20" fill="none">
