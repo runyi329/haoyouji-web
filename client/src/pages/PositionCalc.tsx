@@ -3969,7 +3969,7 @@ function ProfitPathPanel({
                 {isRise && <div>示例：输入 <span style={{ color: fieldColor }}>150.50</span> 表示 +150.50%</div>}
               </div>
               {/* 输入框 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+              <div style={{ position: 'relative', marginBottom: 18 }}>
                 <input
                   ref={editInputRef}
                   type="number"
@@ -3981,15 +3981,19 @@ function ProfitPathPanel({
                     if (e.key === 'Escape') setEditingField(null);
                   }}
                   style={{
-                    flex: 1, fontSize: 22, fontWeight: 700, color: fieldColor,
+                    width: '100%', boxSizing: 'border-box',
+                    fontSize: 28, fontWeight: 700, color: fieldColor,
                     background: 'rgba(255,255,255,0.05)',
                     border: `1.5px solid ${fieldBorder}`,
-                    borderRadius: 10, padding: '8px 12px',
-                    textAlign: 'right', outline: 'none',
+                    borderRadius: 10, padding: '12px 52px 12px 16px',
+                    textAlign: 'center', outline: 'none',
                     fontVariantNumeric: 'tabular-nums',
                   }}
                 />
-                <span style={{ fontSize: 13, color: 'rgba(148,163,184,0.6)', minWidth: 32 }}>{fieldUnit}</span>
+                <span style={{
+                  position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
+                  fontSize: 13, color: 'rgba(148,163,184,0.6)', pointerEvents: 'none',
+                }}>{fieldUnit}</span>
               </div>
               {/* 按鈕行 */}
               <div style={{ display: 'flex', gap: 10 }}>
