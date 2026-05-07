@@ -3359,7 +3359,10 @@ function ProfitPathPanel({
   // 目标离场价（基于 sliderTarget 和 sliderQty 计算）
   const effectiveProfitUsdt = cnyRate > 0 ? sliderTarget / cnyRate : profitUsdt;
   const exitPrice = sliderQty > 0 && avgPrice > 0 ? avgPrice + effectiveProfitUsdt / sliderQty : 0;
-  const riseDisplay = exitPrice > 0 && curPrice > 0 ? ((exitPrice - curPrice) / curPrice * 100) : sliderRise;
+  // riseDisplay: 锁定持仓时用反推值；其他情况用sliderRise（用户主动拖动的值）
+  const riseDisplay = (lockedField === 'qty' && exitPrice > 0 && curPrice > 0)
+    ? ((exitPrice - curPrice) / curPrice * 100)
+    : sliderRise;
    // 难易度评分（0-100）
   const calcDifficulty = (): { score: number; label: string; color: string; desc: string } => {
     if (profitUsdt <= 0 || curPrice <= 0) return { score: 0, label: '无数据', color: '#666', desc: '请先设置目标利润' };
