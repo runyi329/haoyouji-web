@@ -3321,6 +3321,85 @@ function ProfitPathPanel({
         </div>
       ) : (
         <>
+          {/* 热力曲线图（移到最上方） */}
+          <div style={{ marginBottom: 16, borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(100,120,200,0.12)' }}>
+            <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} style={{ display: 'block' }}>
+              {/* 热力背景区域 */}
+              {heatZones.map((zone, zi) => {
+                const y1 = toY(zone.maxRise);
+                const y2 = toY(zone.minRise);
+                return (
+                  <g key={zi}>
+                    <rect x={padL} y={y1} width={plotW} height={y2 - y1} fill={zone.color} />
+                    <text x={svgW - padR - 2} y={(y1 + y2) / 2 + 4} textAnchor="end" fontSize="8" fill="rgba(255,255,255,0.25)">{zone.label}</text>
+                  </g>
+                );
+              })}
+
+              {/* 网格线 */}
+              {[0, 100, 200, 300, 400, 500].map(rise => (
+                <line key={rise} x1={padL} y1={toY(rise)} x2={svgW - padR} y2={toY(rise)}
+                  stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" strokeDasharray="3,3" />
+              ))}
+              {[0, 0.25, 0.5, 0.75, 1].map(f => (
+                <line key={f} x1={toX(f * maxQty)} y1={padT} x2={toX(f * maxQty)} y2={padT + plotH}
+                  stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" strokeDasharray="3,3" />
+              ))}
+
+              {/* 曲线 */}
+              {(() => {
+                const pts: string[] = [];
+                const steps = 80;
+                for (let i = 0; i <= steps; i++) {
+                  const qty = (i / steps) * maxQty;
+                  if (qty <= 0) continue;
+                  const rise = qtyToRise(qty, sliderTarget, cnyRate);
+                  if (rise < 0 || rise > maxRisePct) continue;
+                  pts.push(`${toX(qty)},${toY(rise)}`);
+                }
+                if (pts.length < 2) return null;
+                return (
+                  <polyline
+                    points={pts.join(' ')}
+                    fill="none"
+                    stroke="url(#curveGrad)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                );
+              })()}
+
+              {/* 渐变定义 */}
+              <defs>
+                <linearGradient id="curveGrad" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
+                  <stop offset="0%" stopColor="#22c55e" />
+                  <stop offset="40%" stopColor="#f59e0b" />
+                  <stop offset="70%" stopColor="#f97316" />
+                  <stop offset="100%" stopColor="#ef4444" />
+                </linearGradient>
+              </defs>
+
+              {/* 当前选中点 */}
+              {sliderQty > 0 && riseDisplay >= 0 && riseDisplay <= maxRisePct && (
+                <>
+                  <line x1={selX} y1={padT} x2={selX} y2={padT + plotH} stroke="rgba(255,255,255,0.3)" strokeWidth="0.8" strokeDasharray="2,2" />
+                  <line x1={padL} y1={selY} x2={svgW - padR} y2={selY} stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" strokeDasharray="2,2" />
+                  <circle cx={selX} cy={selY} r="5" fill="#fff" stroke={difficulty.color} strokeWidth="2" />
+                  <text x={selX + 7} y={selY - 4} fontSize="8" fill="rgba(255,255,255,0.8)">{sliderQty.toFixed(1)}ETH → +{riseDisplay.toFixed(1)}%</text>
+                </>
+              )}
+
+              {/* 坐标轴标签 */}
+              <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="rgba(148,163,184,0.3)" strokeWidth="1" />
+              <line x1={padL} y1={padT + plotH} x2={svgW - padR} y2={padT + plotH} stroke="rgba(148,163,184,0.3)" strokeWidth="1" />
+              {[0, 100, 200, 300, 400, 500].map(rise => (
+                <text key={rise} x={padL - 3} y={toY(rise) + 3} textAnchor="end" fontSize="7" fill="rgba(148,163,184,0.5)">{rise}%</text>
+              ))}
+              <text x={padL + plotW / 2} y={svgH - 2} textAnchor="middle" fontSize="8" fill="rgba(148,163,184,0.5)">持仓量 (ETH)</text>
+            </svg>
+          </div>
+
           {/* 滑块0：目标止盈金额（对数刻度，1万～1亿） */}
           <div style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
@@ -3433,84 +3512,6 @@ function ProfitPathPanel({
                 </svg>
               </div>
             </div>
-          </div>
-
-          {/* 热力曲线图 */}
-          <div style={{ marginBottom: 16, borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(100,120,200,0.12)' }}>
-            <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} style={{ display: 'block' }}>
-              {/* 热力背景区域 */}
-              {heatZones.map((zone, zi) => {
-                const y1 = toY(zone.maxRise);
-                const y2 = toY(zone.minRise);
-                return (
-                  <g key={zi}>
-                    <rect x={padL} y={y1} width={plotW} height={y2 - y1} fill={zone.color} />
-                    <text x={svgW - padR - 2} y={(y1 + y2) / 2 + 4} textAnchor="end" fontSize="8" fill="rgba(255,255,255,0.25)">{zone.label}</text>
-                  </g>
-                );
-              })}
-
-              {/* 网格线 */}
-              {[0, 100, 200, 300, 400, 500].map(rise => (
-                <line key={rise} x1={padL} y1={toY(rise)} x2={svgW - padR} y2={toY(rise)}
-                  stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" strokeDasharray="3,3" />
-              ))}
-              {[0, 0.25, 0.5, 0.75, 1].map(f => (
-                <line key={f} x1={toX(f * maxQty)} y1={padT} x2={toX(f * maxQty)} y2={padT + plotH}
-                  stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" strokeDasharray="3,3" />
-              ))}
-
-              {/* Y轴标签（涨幅%） */}
-              {[0, 100, 200, 300, 400, 500].map(rise => (
-                <text key={rise} x={padL - 4} y={toY(rise) + 3.5} textAnchor="end" fontSize="8" fill="rgba(148,163,184,0.6)">{rise}%</text>
-              ))}
-
-              {/* X轴标签（持仓量） */}
-              {[0, 0.25, 0.5, 0.75, 1].map(f => (
-                <text key={f} x={toX(f * maxQty)} y={padT + plotH + 10} textAnchor="middle" fontSize="8" fill="rgba(148,163,184,0.6)">
-                  {(f * maxQty).toFixed(0)}
-                </text>
-              ))}
-
-              {/* 轴线 */}
-              <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="rgba(148,163,184,0.3)" strokeWidth="1" />
-              <line x1={padL} y1={padT + plotH} x2={svgW - padR} y2={padT + plotH} stroke="rgba(148,163,184,0.3)" strokeWidth="1" />
-
-              {/* 轴标题 */}
-              <text x={padL + plotW / 2} y={svgH - 2} textAnchor="middle" fontSize="8" fill="rgba(148,163,184,0.5)">持仓量 (ETH)</text>
-              <text x={8} y={padT + plotH / 2} textAnchor="middle" fontSize="8" fill="rgba(148,163,184,0.5)" transform={`rotate(-90, 8, ${padT + plotH / 2})`}>所需涨幅</text>
-
-              {/* 曲线渐变定义 */}
-              <defs>
-                <linearGradient id="curveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#ef4444" />
-                  <stop offset="40%" stopColor="#f97316" />
-                  <stop offset="70%" stopColor="#eab308" />
-                  <stop offset="100%" stopColor="#22c55e" />
-                </linearGradient>
-              </defs>
-
-              {/* 曲线 */}
-              {pathD && (
-                <path d={pathD} fill="none" stroke="url(#curveGrad)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              )}
-
-              {/* 当前选中点 */}
-              {sliderQty > 0 && (
-                <>
-                  {/* 十字线 */}
-                  <line x1={selX} y1={padT} x2={selX} y2={padT + plotH} stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" strokeDasharray="2,2" />
-                  <line x1={padL} y1={selY} x2={svgW - padR} y2={selY} stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" strokeDasharray="2,2" />
-                  {/* 选中点圆圈 */}
-                  <circle cx={selX} cy={selY} r={5} fill={difficulty.color} stroke="white" strokeWidth="1.5" />
-                  {/* 数值标注 */}
-                  <rect x={selX + 6} y={selY - 14} width={68} height={16} rx={4} fill="rgba(0,0,0,0.75)" />
-                  <text x={selX + 10} y={selY - 3} fontSize="9" fill="white">
-                    {sliderQty.toFixed(1)}ETH → +{riseDisplay.toFixed(1)}%
-                  </text>
-                </>
-              )}
-            </svg>
           </div>
 
           {/* 滑块A：持仓数量 —— 战略/战术进度条风格 */}
