@@ -1838,6 +1838,14 @@ export default function BeDataPage() {
                 {currentStockInfo?.shortLabel ?? ""} &middot; AI 数据追踪
               </p>
             </div>
+            {isCryptoMode && (
+              <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
+                style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer", flexShrink: 0 }}
+              >
+                计划
+              </button>
+            )}
             <button
               onClick={handleSync}
               disabled={isSyncing}
