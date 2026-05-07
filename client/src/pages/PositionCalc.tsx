@@ -3029,11 +3029,11 @@ const CNY_MAX = 100000000; // 1亿
 const logToSlider = (val: number) => (Math.log(val) - Math.log(CNY_MIN)) / (Math.log(CNY_MAX) - Math.log(CNY_MIN));
 const sliderToLog = (s: number) => Math.round(Math.exp(Math.log(CNY_MIN) + s * (Math.log(CNY_MAX) - Math.log(CNY_MIN))));
 
-// 对数刻度：1～10000 ETH，映射到 0～1
+// 线性刻度：1～10000 ETH，均匀分布
 const ETH_MIN = 1;
 const ETH_MAX = 10000;
-const ethLogToSlider = (val: number) => (Math.log(Math.max(val, ETH_MIN)) - Math.log(ETH_MIN)) / (Math.log(ETH_MAX) - Math.log(ETH_MIN));
-const ethSliderToLog = (s: number) => parseFloat(Math.exp(Math.log(ETH_MIN) + s * (Math.log(ETH_MAX) - Math.log(ETH_MIN))).toFixed(2));
+const ethLogToSlider = (val: number) => (Math.max(val, ETH_MIN) - ETH_MIN) / (ETH_MAX - ETH_MIN);
+const ethSliderToLog = (s: number) => parseFloat((ETH_MIN + s * (ETH_MAX - ETH_MIN)).toFixed(1));
 // 对数刻度：0.01%～maxRisePct%，映射到 0～1
 const RISE_LOG_MIN = 0.01;
 const riseLogToSlider = (val: number, maxRise: number) => (Math.log(Math.max(val, RISE_LOG_MIN)) - Math.log(RISE_LOG_MIN)) / (Math.log(maxRise) - Math.log(RISE_LOG_MIN));
@@ -3083,6 +3083,14 @@ function ProfitPathPanel({
 
   // 对数刻度说明弹窗
   const [showLogInfo, setShowLogInfo] = React.useState(false);
+  // 动态涨幅上限：至少 500%，如果当前涨幅超过 500%则自动扩展（取当前涨幅的 1.5 倍并取10的整数倍）
+  const dynamicMaxRisePct = React.useMemo(() => {
+    const base = maxRisePct; // 传入的 500
+    if (sliderRise > base) {
+      return Math.ceil(sliderRise * 1.5 / 10) * 10;
+    }
+    return base;
+  }, [sliderRise, maxRisePct]);
 
   // 弹出式修改弹窗状态
   type EditField = 'target' | 'qty' | 'rise' | null;
@@ -3122,7 +3130,7 @@ function ProfitPathPanel({
         hasUserDraggedTarget.current = true;
         // 联动：止盈变 → 根据锁定条决定联动哪条
         if (lockedField === 'qty') {
-          const rise = Math.min(calcRiseFromTargetAndQty(val, sliderQty), maxRisePct);
+          const rise = Math.min(calcRiseFromTargetAndQty(val, sliderQty), dynamicMaxRisePct);
           setSliderRise(rise);
           sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
         } else if (lockedField === 'rise') {
@@ -3143,7 +3151,7 @@ function ProfitPathPanel({
         sessionStorage.setItem(SESSION_KEY_QTY, String(val));
         // 联动：持仓变 → 根据锁定条决定联动哪条
         if (lockedField === 'target') {
-          const rise = Math.min(calcRiseFromTargetAndQty(sliderTarget, val), maxRisePct);
+          const rise = Math.min(calcRiseFromTargetAndQty(sliderTarget, val), dynamicMaxRisePct);
           setSliderRise(rise);
           sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
         } else if (lockedField === 'rise') {
@@ -3157,7 +3165,7 @@ function ProfitPathPanel({
         }
       }
     } else if (editingField === 'rise') {
-      if (!isNaN(v) && v >= 0.01 && v <= maxRisePct) {
+      if (!isNaN(v) && v >= 0.01 && v <= dynamicMaxRisePct) {
         const val = parseFloat(v.toFixed(2));
         setSliderRise(val);
         sessionStorage.setItem(SESSION_KEY_RISE, String(val));
@@ -3214,9 +3222,9 @@ function ProfitPathPanel({
     if (!riseBarRef.current) return sliderRise;
     const rect = riseBarRef.current.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const raw = riseSliderToLog(ratio, maxRisePct);
+    const raw = riseSliderToLog(ratio, dynamicMaxRisePct);
     return Math.max(RISE_LOG_MIN, parseFloat(raw.toFixed(2)));
-  }, [maxRisePct, sliderRise]);
+  }, [dynamicMaxRisePct, sliderRise]);
 
   // 根据目标金额和持仓量计算所需涨幅
   const calcRiseFromTargetAndQty = React.useCallback((targetCny: number, qty: number): number => {
@@ -3238,7 +3246,7 @@ function ProfitPathPanel({
       // 止盈变化：联动另两条中的「锁定条」保持不变，「另一条」被动计算
       if (lockedField === 'qty') {
         // 持仓锁定：止盈变 → 涨幅联动
-        const rise = Math.min(calcRiseFromTargetAndQty(target, sliderQty), maxRisePct);
+        const rise = Math.min(calcRiseFromTargetAndQty(target, sliderQty), dynamicMaxRisePct);
         setSliderRise(rise);
         sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
       } else if (lockedField === 'rise') {
@@ -3262,7 +3270,7 @@ function ProfitPathPanel({
       // 持仓变化：联动另两条中的「锁定条」保持不变，「另一条」被动计算
       if (lockedField === 'target') {
         // 止盈锁定：持仓变 → 涨幅联动
-        const rise = Math.min(calcRiseFromTargetAndQty(sliderTarget, qty), maxRisePct);
+        const rise = Math.min(calcRiseFromTargetAndQty(sliderTarget, qty), dynamicMaxRisePct);
         setSliderRise(rise);
         sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
       } else if (lockedField === 'rise') {
@@ -3334,7 +3342,7 @@ function ProfitPathPanel({
     };
   }, [calcTargetFromX, calcQtyFromX, calcRiseFromX, calcRiseFromTargetAndQty,
       targetUnlocked, qtyUnlocked, riseUnlocked,
-      qtyToRise, riseToQty, maxRisePct, maxQty,
+      qtyToRise, riseToQty, maxRisePct, maxQty, dynamicMaxRisePct,
       sliderTarget, sliderQty, sliderRise, cnyRate, curPrice, avgPrice]);
 
   // 初始化：只在本次会话首次加载时设置持仓量和涨幅的初始值
@@ -3345,9 +3353,9 @@ function ProfitPathPanel({
       const initQty = Math.max(ETH_MIN, Math.min(ETH_MAX, actualQty));
       const rise = calcRiseFromTargetAndQty(sliderTarget, initQty);
       setSliderQty(initQty);
-      setSliderRise(Math.min(rise, maxRisePct));
+      setSliderRise(Math.min(rise, dynamicMaxRisePct));
       sessionStorage.setItem(SESSION_KEY_QTY, String(initQty));
-      sessionStorage.setItem(SESSION_KEY_RISE, String(Math.min(rise, maxRisePct)));
+      sessionStorage.setItem(SESSION_KEY_RISE, String(Math.min(rise, dynamicMaxRisePct)));
       sessionStorage.setItem(SESSION_KEY_INIT, '1');
     }
   }, [actualQty, curPrice, avgPrice]);
@@ -3356,12 +3364,11 @@ function ProfitPathPanel({
   const effectiveProfitUsdt = cnyRate > 0 ? sliderTarget / cnyRate : profitUsdt;
   const exitPrice = sliderQty > 0 && avgPrice > 0 ? avgPrice + effectiveProfitUsdt / sliderQty : 0;
   const riseDisplay = exitPrice > 0 && curPrice > 0 ? ((exitPrice - curPrice) / curPrice * 100) : sliderRise;
-
-  // 难易度评分（0-100）
+   // 难易度评分（0-100）
   const calcDifficulty = (): { score: number; label: string; color: string; desc: string } => {
     if (profitUsdt <= 0 || curPrice <= 0) return { score: 0, label: '无数据', color: '#666', desc: '请先设置目标利润' };
     // 涨幅难度（0-60分）：涨幅越大越难
-    const riseFactor = Math.min(riseDisplay / maxRisePct, 1); // 0~1
+    const riseFactor = Math.min(riseDisplay / dynamicMaxRisePct, 1); // 0~1
     const riseScore = riseFactor * 60;
     // 持仓量难度（0-40分）：持仓量越少越难（需要更高涨幅）
     const qtyFactor = 1 - Math.min(sliderQty / maxQty, 1); // 少币=难
@@ -3383,10 +3390,10 @@ function ProfitPathPanel({
                 for (let i = 1; i <= steps; i++) {
       const qty = ethSliderToLog(i / steps);
       const rise = qtyToRise(qty);
-      pts.push({ qty, rise: Math.min(rise, maxRisePct) });
+      pts.push({ qty, rise: Math.min(rise, dynamicMaxRisePct) });
     }
     return pts;
-  }, [maxQty, maxRisePct, profitUsdt, avgPrice, curPrice]);
+  }, [maxQty, dynamicMaxRisePct, profitUsdt, avgPrice, curPrice]);
 
   // SVG 尺寸
   const svgW = 320, svgH = 140;
@@ -3396,24 +3403,24 @@ function ProfitPathPanel({
 
   // 坐标转换
   const toX = (qty: number) => padL + ethLogToSlider(qty) * plotW;
-  const toY = (rise: number) => padT + plotH - (rise / maxRisePct) * plotH;
+  const toY = (rise: number) => padT + plotH - (rise / dynamicMaxRisePct) * plotH;
 
   // 曲线路径
   const pathD = chartPoints.length > 0
     ? chartPoints.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${toX(pt.qty).toFixed(1)} ${toY(pt.rise).toFixed(1)}`).join(' ')
     : '';
 
-  // 热力区域背景（按涨幅分4段）
+  // 热力区域背景（按涨幅分4段，动态适配上限）
   const heatZones = [
-    { minRise: 0,   maxRise: 50,  color: 'rgba(34,197,94,0.12)',  label: '易' },
-    { minRise: 50,  maxRise: 150, color: 'rgba(234,179,8,0.12)',  label: '中' },
-    { minRise: 150, maxRise: 300, color: 'rgba(249,115,22,0.12)', label: '难' },
-    { minRise: 300, maxRise: 500, color: 'rgba(239,68,68,0.12)',  label: '极' },
+    { minRise: 0,                          maxRise: dynamicMaxRisePct * 0.1,  color: 'rgba(34,197,94,0.12)',  label: '易' },
+    { minRise: dynamicMaxRisePct * 0.1,    maxRise: dynamicMaxRisePct * 0.3,  color: 'rgba(234,179,8,0.12)',  label: '中' },
+    { minRise: dynamicMaxRisePct * 0.3,    maxRise: dynamicMaxRisePct * 0.6,  color: 'rgba(249,115,22,0.12)', label: '难' },
+    { minRise: dynamicMaxRisePct * 0.6,    maxRise: dynamicMaxRisePct,        color: 'rgba(239,68,68,0.12)',  label: '极' },
   ];
 
   // 当前选中点坐标
   const selX = toX(Math.max(ETH_MIN, sliderQty));
-  const selY = toY(Math.min(riseDisplay, maxRisePct));
+  const selY = toY(Math.min(riseDisplay, dynamicMaxRisePct));
 
   const hasData = profitUsdt > 0 && curPrice > 0;
 
@@ -3452,14 +3459,16 @@ function ProfitPathPanel({
               })}
 
               {/* 网格线 */}
-              {[0, 100, 200, 300, 400, 500].map(rise => (
-                <line key={rise} x1={padL} y1={toY(rise)} x2={svgW - padR} y2={toY(rise)}
-                  stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" strokeDasharray="3,3" />
-              ))}
-              {[ETH_MIN, 10, 100, 1000, ETH_MAX].map(v => (
-                <line key={v} x1={toX(v)} y1={padT} x2={toX(v)} y2={padT + plotH}
-                  stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" strokeDasharray="3,3" />
-              ))}
+              {[0, 0.25, 0.5, 0.75, 1].map(frac => {
+                const rise = Math.round(frac * dynamicMaxRisePct);
+                return <line key={frac} x1={padL} y1={toY(rise)} x2={svgW - padR} y2={toY(rise)}
+                  stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" strokeDasharray="3,3" />;
+              })}
+              {[0, 0.25, 0.5, 0.75, 1].map(frac => {
+                const qty = ETH_MIN + frac * (ETH_MAX - ETH_MIN);
+                return <line key={frac} x1={toX(qty)} y1={padT} x2={toX(qty)} y2={padT + plotH}
+                  stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" strokeDasharray="3,3" />;
+              })}
 
               {/* 曲线 */}
               {(() => {
@@ -3469,7 +3478,7 @@ function ProfitPathPanel({
                   const qty = ethSliderToLog(i / steps);
                   if (qty <= 0) continue;
                   const rise = qtyToRise(qty);
-                  if (rise < 0 || rise > maxRisePct) continue;
+                  if (rise < 0 || rise > dynamicMaxRisePct) continue;
                   pts.push(`${toX(qty)},${toY(rise)}`);
                 }
                 if (pts.length < 2) return null;
@@ -3496,7 +3505,7 @@ function ProfitPathPanel({
               </defs>
 
               {/* 当前选中点 */}
-              {sliderQty > 0 && riseDisplay >= 0 && riseDisplay <= maxRisePct && (
+              {sliderQty > 0 && riseDisplay >= 0 && riseDisplay <= dynamicMaxRisePct && (
                 <>
                   <line x1={selX} y1={padT} x2={selX} y2={padT + plotH} stroke="rgba(255,255,255,0.3)" strokeWidth="0.8" strokeDasharray="2,2" />
                   <line x1={padL} y1={selY} x2={svgW - padR} y2={selY} stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" strokeDasharray="2,2" />
@@ -3508,12 +3517,15 @@ function ProfitPathPanel({
               {/* 坐标轴标签 */}
               <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="rgba(148,163,184,0.3)" strokeWidth="1" />
               <line x1={padL} y1={padT + plotH} x2={svgW - padR} y2={padT + plotH} stroke="rgba(148,163,184,0.3)" strokeWidth="1" />
-              {[0, 100, 200, 300, 400, 500].map(rise => (
-                <text key={rise} x={padL - 3} y={toY(rise) + 3} textAnchor="end" fontSize="7" fill="rgba(148,163,184,0.5)">{rise}%</text>
-              ))}
-              {[ETH_MIN, 10, 100, 1000, ETH_MAX].map(v => (
-                <text key={v} x={toX(v)} y={padT + plotH + 10} textAnchor="middle" fontSize="7" fill="rgba(148,163,184,0.4)">{v >= 1000 ? `${v/1000}k` : v}</text>
-              ))}
+              {[0, 0.25, 0.5, 0.75, 1].map(frac => {
+                const rise = Math.round(frac * dynamicMaxRisePct);
+                return <text key={frac} x={padL - 3} y={toY(rise) + 3} textAnchor="end" fontSize="7" fill="rgba(148,163,184,0.5)">{rise}%</text>;
+              })}
+              {[0, 0.25, 0.5, 0.75, 1].map(frac => {
+                const qty = ETH_MIN + frac * (ETH_MAX - ETH_MIN);
+                const label = qty >= 1000 ? `${(qty/1000).toFixed(0)}k` : qty.toFixed(0);
+                return <text key={frac} x={toX(qty)} y={padT + plotH + 10} textAnchor="middle" fontSize="7" fill="rgba(148,163,184,0.4)">{label}</text>;
+              })}
               <text x={padL + plotW / 2} y={svgH - 1} textAnchor="middle" fontSize="8" fill="rgba(148,163,184,0.5)">持仓量 (ETH)</text>
             </svg>
           </div>
@@ -3670,15 +3682,14 @@ function ProfitPathPanel({
                   border: `1px solid ${qtyUnlocked ? 'rgba(255,235,100,0.3)' : 'rgba(100,120,200,0.2)'}`,
                 }}>{qtyUnlocked ? '变量' : '定量'}</span>
                 <span
-                  onClick={() => setShowLogInfo(true)}
                   style={{
-                    fontSize: 10, padding: '1px 7px', borderRadius: 10, cursor: 'pointer',
-                    background: 'rgba(96,165,250,0.12)',
-                    color: 'rgba(96,165,250,0.7)',
-                    border: '1px solid rgba(96,165,250,0.25)',
+                    fontSize: 10, padding: '1px 7px', borderRadius: 10,
+                    background: 'rgba(96,165,250,0.08)',
+                    color: 'rgba(96,165,250,0.5)',
+                    border: '1px solid rgba(96,165,250,0.18)',
                     userSelect: 'none',
                   }}
-                >对数刻度</span>
+                >线性刻度</span>
               </div>
               <span
                   onClick={() => openEditDialog('qty')}
@@ -3855,19 +3866,19 @@ function ProfitPathPanel({
                 {/* 已填充段（橙色单色系） */}
                 <div style={{
                   position: 'absolute', top: 0, left: 0, height: '100%',
-                  width: `${riseLogToSlider(Math.max(riseDisplay, RISE_LOG_MIN), maxRisePct) * 100}%`,
+                  width: `${riseLogToSlider(Math.max(riseDisplay, RISE_LOG_MIN), dynamicMaxRisePct) * 100}%`,
                   background: 'linear-gradient(90deg, #c05000 0%, #e07010 60%, #ff9a30 100%)',
                   borderRadius: '4px 0 0 4px',
                 }} />
                 {/* 轨道内文字 */}
                 <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>0.01%</span>
-                <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>{maxRisePct}%</span>
+                <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>{dynamicMaxRisePct}%</span>
               </div>
               {/* 32px 圆形手柄（内嵌 ETH 图标，颜色随难易度变化） */}
               <div
                 style={{
                   position: 'absolute',
-                  left: `calc(${riseLogToSlider(Math.max(riseDisplay, RISE_LOG_MIN), maxRisePct) * 100}% - 16px)`,
+                  left: `calc(${riseLogToSlider(Math.max(riseDisplay, RISE_LOG_MIN), dynamicMaxRisePct) * 100}% - 16px)`,
                   top: '50%', transform: 'translateY(-50%)',
                   width: 32, height: 32, borderRadius: '50%',
                   zIndex: 10, pointerEvents: 'none',
@@ -3961,7 +3972,7 @@ function ProfitPathPanel({
         const fieldColor = isTarget ? '#a78bfa' : isQty ? '#60a5fa' : '#ff9a30';
         const fieldBorder = isTarget ? 'rgba(167,139,250,0.4)' : isQty ? 'rgba(96,165,250,0.4)' : 'rgba(255,154,48,0.4)';
         const minVal = isTarget ? 1 : isQty ? ETH_MIN : 0.01;
-        const maxVal = isTarget ? 10000 : isQty ? ETH_MAX : maxRisePct;
+        const maxVal = isTarget ? 10000 : isQty ? ETH_MAX : dynamicMaxRisePct;
         const decimalNote = isTarget ? '仅接受整数' : isQty ? '小数后最多 1 位' : '小数后最多 2 位';
         return (
           <div
