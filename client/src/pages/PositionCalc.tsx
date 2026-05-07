@@ -3959,19 +3959,23 @@ function ProfitPathPanel({
                 <span
                   onClick={() => openEditDialog('rise')}
                   style={{
+                    display: 'inline-flex', alignItems: 'center',
                     fontSize: 15, fontWeight: 700, color: '#ff9a30', fontVariantNumeric: 'tabular-nums',
                     border: '1px solid rgba(255,154,48,0.4)',
-                    borderRadius: 6, padding: '1px 6px', cursor: 'pointer',
+                    borderRadius: 6, overflow: 'hidden', cursor: 'pointer',
                     background: 'rgba(255,154,48,0.06)',
                   }}
                 >
-                  +{riseDisplay.toFixed(1)}%
+                  <span style={{ padding: '1px 7px' }}>+{riseDisplay.toFixed(1)}%</span>
+                  {exitPrice > 0 && curPrice > 0 && (
+                    <>
+                      <span style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,154,48,0.35)' }} />
+                      <span style={{ padding: '1px 7px', fontSize: 13, fontWeight: 600, color: 'rgba(255,154,48,0.8)', whiteSpace: 'nowrap' }}>
+                        {exitPrice.toFixed(0)}<span style={{ fontSize: 10, fontWeight: 400, marginLeft: 1, opacity: 0.7 }}>u</span>
+                      </span>
+                    </>
+                  )}
                 </span>
-                {exitPrice > 0 && curPrice > 0 && (
-                  <span style={{ fontSize: 10, color: 'rgba(148,163,184,0.5)', marginLeft: 6 }}>
-                    → ${exitPrice.toFixed(0)}
-                  </span>
-                )}
               </div>
             </div>
             {/* 进度条区域：32px高，内嵌24px轨道+32px手柄 */}
