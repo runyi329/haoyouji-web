@@ -4,10 +4,10 @@
  * 路由: /ledger/:id/position-calc/:price
  * 保存/取消均返回上一页
  *
- * 战略筹码 / 战术筹码均支持多条记录，每条含「数量 + 备注」
+ * 战略筹码 / 战术筹码均支持多条记录，每条含「数量 + 止盈价 + 备注」
  * 底部显示战略总和与战术总和
  */
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { ChevronLeft, Check, X, Pencil, Plus, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -15,39 +15,62 @@ import { useAuth } from "@/_core/hooks/useAuth";
 
 /** 单条筹码记录 */
 interface ChipItem {
-  qty: string;   // 字符串，便于 input 绑定
-  note: string;
+  qty: string;         // 数量（ETH）
+  takeProfit: string;  // 止盈价（USD），可选
+  note: string;        // 备注，可选
 }
 
-const emptyChip = (): ChipItem => ({ qty: '', note: '' });
+const emptyChip = (): ChipItem => ({ qty: '', takeProfit: '', note: '' });
 
-/** 从旧格式（单数字 + notes 数组）迁移到新格式 */
+/** 从旧格式迁移到新格式 */
 function migrateToItems(qty: number, notesJson: string): ChipItem[] {
   try {
     const parsed = JSON.parse(notesJson || '[]');
-    // 新格式：[{qty, note}]
+    // 新格式：[{qty, takeProfit, note}]
     if (Array.isArray(parsed) && parsed.length > 0 && 'qty' in parsed[0]) {
-      return parsed.map((x: any) => ({ qty: String(x.qty ?? ''), note: x.note ?? '' }));
+      return parsed.map((x: any) => ({
+        qty: String(x.qty ?? ''),
+        takeProfit: String(x.takeProfit ?? ''),
+        note: x.note ?? '',
+      }));
     }
-    // 旧格式：[{text, time}] — 迁移：把旧备注合并成一条，数量用旧 qty
+    // 旧格式：[{text, time}] — 迁移
     if (qty > 0) {
       const noteText = parsed.map((n: any) => n.text).filter(Boolean).join('；');
-      return [{ qty: String(qty), note: noteText }];
+      return [{ qty: String(qty), takeProfit: '', note: noteText }];
     }
     return [];
   } catch {
-    return qty > 0 ? [{ qty: String(qty), note: '' }] : [];
+    return qty > 0 ? [{ qty: String(qty), takeProfit: '', note: '' }] : [];
   }
 }
 
 /** 序列化为 JSON 存储 */
 function serializeItems(items: ChipItem[]): string {
-  return JSON.stringify(items.map(x => ({ qty: parseFloat(x.qty) || 0, note: x.note })));
+  return JSON.stringify(items.map(x => ({
+    qty: parseFloat(x.qty) || 0,
+    takeProfit: parseFloat(x.takeProfit) || 0,
+    note: x.note,
+  })));
 }
 
-/** 求和 */
-function sumItems(items: ChipItem[]): number {
+/** 求数量总和 */
+function sumQty(items: ChipItem[]): number {
   return items.reduce((s, x) => s + (parseFloat(x.qty) || 0), 0);
+}
+
+/** 加权平均止盈价（只计算有止盈价的条目） */
+function weightedAvgTakeProfit(items: ChipItem[]): number {
+  let totalQty = 0, totalWeighted = 0;
+  for (const x of items) {
+    const q = parseFloat(x.qty) || 0;
+    const tp = parseFloat(x.takeProfit) || 0;
+    if (q > 0 && tp > 0) {
+      totalQty += q;
+      totalWeighted += q * tp;
+    }
+  }
+  return totalQty > 0 ? totalWeighted / totalQty : 0;
 }
 
 export default function PositionLevelEdit() {
@@ -122,7 +145,6 @@ export default function PositionLevelEdit() {
       alert(`保存失败：${err.message}`);
     }
   });
-  const updateNotesMutation = trpc.ethPositionUpdateNotes.useMutation();
   const addChangeLogMutation = trpc.ethPositionAddLog.useMutation({
     onSuccess: () => utils.ethPositionGetLogs.invalidate({ ledgerId }),
   });
@@ -137,15 +159,14 @@ export default function PositionLevelEdit() {
 
   const handleSave = () => {
     if (isViewAs) { goBack(); return; }
-    const bqVal = sumItems(baseItems);
-    const tqVal = sumItems(tacticalItems);
+    const bqVal = sumQty(baseItems);
+    const tqVal = sumQty(tacticalItems);
     const totalVal = bqVal + tqVal;
     const pqNum = parseFloat(plannedValue);
     const newPlannedVal = !isNaN(pqNum) && pqNum >= 0 ? pqNum : plannedQty;
     const oldActual = actualQty;
     const oldPlanned = plannedQty;
 
-    // 记录修改日志
     if (totalVal !== oldActual) {
       addChangeLogMutation.mutate({ ledgerId, price, changeType: 'actual', oldValue: oldActual, newValue: totalVal });
     }
@@ -166,12 +187,16 @@ export default function PositionLevelEdit() {
   };
 
   // 计算预览进度条
-  const bqCur = sumItems(baseItems);
-  const tqCur = sumItems(tacticalItems);
+  const bqCur = sumQty(baseItems);
+  const tqCur = sumQty(tacticalItems);
   const totalCur = bqCur + tqCur;
   const planCur = parseFloat(plannedValue) || plannedQty;
   const baseWidth = planCur > 0 ? Math.min(100, (bqCur / planCur) * 100) : 0;
   const tacticalWidth = planCur > 0 ? Math.min(100 - baseWidth, (tqCur / planCur) * 100) : 0;
+
+  // 加权平均止盈价
+  const baseAvgTP = weightedAvgTakeProfit(baseItems);
+  const tacticalAvgTP = weightedAvgTakeProfit(tacticalItems);
 
   // ---- 辅助：更新某条记录 ----
   const updateBase = (i: number, field: keyof ChipItem, val: string) => {
@@ -184,6 +209,80 @@ export default function PositionLevelEdit() {
   const addTactical = () => setTacticalItems(prev => [...prev, emptyChip()]);
   const removeBase = (i: number) => setBaseItems(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : [emptyChip()]);
   const removeTactical = (i: number) => setTacticalItems(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : [emptyChip()]);
+
+  // ---- 单条记录行组件 ----
+  const ChipRow = ({
+    item, index, color, accentRgb,
+    onChange, onRemove,
+  }: {
+    item: ChipItem;
+    index: number;
+    color: string;
+    accentRgb: string; // e.g. "74,168,255"
+    onChange: (field: keyof ChipItem, val: string) => void;
+    onRemove: () => void;
+  }) => (
+    <div
+      className="rounded-xl overflow-hidden"
+      style={{ background: `rgba(${accentRgb},0.06)`, border: `1px solid rgba(${accentRgb},0.3)` }}
+    >
+      {/* 第一行：序号 + 数量 + 止盈价 + 删除 */}
+      <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+        <span className="text-xs shrink-0 w-4 text-center" style={{ color: `rgba(${accentRgb},0.5)` }}>#{index + 1}</span>
+
+        {/* 数量 */}
+        <div className="flex items-center gap-1 flex-1">
+          <input
+            type="number"
+            value={item.qty}
+            onChange={e => onChange('qty', e.target.value)}
+            placeholder="0"
+            className="w-20 text-center text-base font-bold outline-none bg-transparent"
+            style={{ color, fontVariantNumeric: 'tabular-nums' }}
+            step="1"
+            min="0"
+          />
+          <span className="text-xs shrink-0" style={{ color: `rgba(${accentRgb},0.5)` }}>ETH</span>
+        </div>
+
+        {/* 止盈价 */}
+        <div className="flex items-center gap-1 flex-1">
+          <span className="text-xs shrink-0" style={{ color: `rgba(${accentRgb},0.5)` }}>止盈$</span>
+          <input
+            type="number"
+            value={item.takeProfit}
+            onChange={e => onChange('takeProfit', e.target.value)}
+            placeholder="—"
+            className="flex-1 text-center text-base font-bold outline-none bg-transparent min-w-0"
+            style={{ color: '#f0d060', fontVariantNumeric: 'tabular-nums' }}
+            step="100"
+            min="0"
+          />
+        </div>
+
+        {/* 删除 */}
+        <button
+          onClick={onRemove}
+          className="shrink-0 p-1 rounded"
+          style={{ color: 'rgba(255,80,80,0.5)' }}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {/* 第二行：备注 */}
+      <div className="px-3 pb-2">
+        <input
+          type="text"
+          value={item.note}
+          onChange={e => onChange('note', e.target.value)}
+          placeholder="备注（可选）"
+          className="w-full text-xs outline-none bg-transparent"
+          style={{ color: 'rgba(255,255,255,0.5)', borderTop: `1px solid rgba(${accentRgb},0.15)`, paddingTop: '4px' }}
+        />
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen max-w-md mx-auto relative" style={{ background: '#000000' }}>
@@ -233,7 +332,7 @@ export default function PositionLevelEdit() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono" style={{ color: '#4aa8ff' }}>
-                  总和 {bqCur > 0 ? bqCur.toFixed(2) : '0'} ETH
+                  {bqCur > 0 ? bqCur.toFixed(2) : '0'} ETH
                 </span>
                 <button
                   onClick={addBase}
@@ -247,49 +346,24 @@ export default function PositionLevelEdit() {
 
             <div className="space-y-2">
               {baseItems.map((item, i) => (
-                <div key={i} className="rounded-xl overflow-hidden" style={{ background: 'rgba(74,168,255,0.06)', border: '1px solid rgba(74,168,255,0.3)' }}>
-                  <div className="flex items-center gap-2 px-3 py-2">
-                    {/* 序号 */}
-                    <span className="text-xs shrink-0 w-4 text-center" style={{ color: 'rgba(74,168,255,0.5)' }}>#{i + 1}</span>
-                    {/* 数量输入 */}
-                    <input
-                      type="number"
-                      value={item.qty}
-                      onChange={e => updateBase(i, 'qty', e.target.value)}
-                      placeholder="0"
-                      className="w-24 text-center text-lg font-bold outline-none bg-transparent shrink-0"
-                      style={{ color: '#4aa8ff', fontVariantNumeric: 'tabular-nums' }}
-                      step="1"
-                      min="0"
-                    />
-                    <span className="text-xs shrink-0" style={{ color: 'rgba(74,168,255,0.5)' }}>ETH</span>
-                    {/* 备注输入 */}
-                    <input
-                      type="text"
-                      value={item.note}
-                      onChange={e => updateBase(i, 'note', e.target.value)}
-                      placeholder="备注（可选）"
-                      className="flex-1 text-xs outline-none bg-transparent min-w-0"
-                      style={{ color: 'rgba(255,255,255,0.65)' }}
-                    />
-                    {/* 删除按钮 */}
-                    <button
-                      onClick={() => removeBase(i)}
-                      className="shrink-0 p-1 rounded"
-                      style={{ color: 'rgba(255,80,80,0.5)' }}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
+                <ChipRow
+                  key={i}
+                  item={item}
+                  index={i}
+                  color="#4aa8ff"
+                  accentRgb="74,168,255"
+                  onChange={(field, val) => updateBase(i, field, val)}
+                  onRemove={() => removeBase(i)}
+                />
               ))}
             </div>
 
-            {/* 战略总和汇总行 */}
             {baseItems.length > 1 && (
-              <div className="mt-2 flex items-center justify-end gap-1.5 px-2">
-                <span className="text-xs" style={{ color: 'rgba(74,168,255,0.5)' }}>战略合计</span>
-                <span className="text-sm font-bold font-mono" style={{ color: '#4aa8ff' }}>{bqCur.toFixed(2)} ETH</span>
+              <div className="mt-2 flex items-center justify-end gap-3 px-2">
+                <span className="text-xs font-mono" style={{ color: '#4aa8ff' }}>合计 {bqCur.toFixed(2)} ETH</span>
+                {baseAvgTP > 0 && (
+                  <span className="text-xs font-mono" style={{ color: '#f0d060' }}>均止盈 ${baseAvgTP.toFixed(0)}</span>
+                )}
               </div>
             )}
           </div>
@@ -302,7 +376,7 @@ export default function PositionLevelEdit() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono" style={{ color: '#e87020' }}>
-                  总和 {tqCur > 0 ? tqCur.toFixed(2) : '0'} ETH
+                  {tqCur > 0 ? tqCur.toFixed(2) : '0'} ETH
                 </span>
                 <button
                   onClick={addTactical}
@@ -316,83 +390,74 @@ export default function PositionLevelEdit() {
 
             <div className="space-y-2">
               {tacticalItems.map((item, i) => (
-                <div key={i} className="rounded-xl overflow-hidden" style={{ background: 'rgba(232,112,32,0.06)', border: '1px solid rgba(232,112,32,0.3)' }}>
-                  <div className="flex items-center gap-2 px-3 py-2">
-                    {/* 序号 */}
-                    <span className="text-xs shrink-0 w-4 text-center" style={{ color: 'rgba(232,112,32,0.5)' }}>#{i + 1}</span>
-                    {/* 数量输入 */}
-                    <input
-                      type="number"
-                      value={item.qty}
-                      onChange={e => updateTactical(i, 'qty', e.target.value)}
-                      placeholder="0"
-                      className="w-24 text-center text-lg font-bold outline-none bg-transparent shrink-0"
-                      style={{ color: '#e87020', fontVariantNumeric: 'tabular-nums' }}
-                      step="1"
-                      min="0"
-                    />
-                    <span className="text-xs shrink-0" style={{ color: 'rgba(232,112,32,0.5)' }}>ETH</span>
-                    {/* 备注输入 */}
-                    <input
-                      type="text"
-                      value={item.note}
-                      onChange={e => updateTactical(i, 'note', e.target.value)}
-                      placeholder="备注（可选）"
-                      className="flex-1 text-xs outline-none bg-transparent min-w-0"
-                      style={{ color: 'rgba(255,255,255,0.65)' }}
-                    />
-                    {/* 删除按钮 */}
-                    <button
-                      onClick={() => removeTactical(i)}
-                      className="shrink-0 p-1 rounded"
-                      style={{ color: 'rgba(255,80,80,0.5)' }}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
+                <ChipRow
+                  key={i}
+                  item={item}
+                  index={i}
+                  color="#e87020"
+                  accentRgb="232,112,32"
+                  onChange={(field, val) => updateTactical(i, field, val)}
+                  onRemove={() => removeTactical(i)}
+                />
               ))}
             </div>
 
-            {/* 战术总和汇总行 */}
             {tacticalItems.length > 1 && (
-              <div className="mt-2 flex items-center justify-end gap-1.5 px-2">
-                <span className="text-xs" style={{ color: 'rgba(232,112,32,0.5)' }}>战术合计</span>
-                <span className="text-sm font-bold font-mono" style={{ color: '#e87020' }}>{tqCur.toFixed(2)} ETH</span>
+              <div className="mt-2 flex items-center justify-end gap-3 px-2">
+                <span className="text-xs font-mono" style={{ color: '#e87020' }}>合计 {tqCur.toFixed(2)} ETH</span>
+                {tacticalAvgTP > 0 && (
+                  <span className="text-xs font-mono" style={{ color: '#f0d060' }}>均止盈 ${tacticalAvgTP.toFixed(0)}</span>
+                )}
               </div>
             )}
           </div>
 
-          {/* ===== 总和汇总卡片 ===== */}
+          {/* ===== 持仓汇总卡片 ===== */}
           <div className="mb-5 rounded-xl p-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(192,192,192,0.12)' }}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs" style={{ color: 'rgba(192,192,192,0.5)' }}>持仓汇总</span>
               <span className="text-xs font-mono" style={{ color: 'rgba(192,192,192,0.7)' }}>{totalCur.toFixed(2)} / {planCur.toFixed(0)} ETH</span>
             </div>
             {/* 进度条 */}
-            <div className="h-3 rounded-full overflow-hidden mb-2" style={{ background: 'rgba(255,255,255,0.06)' }}>
+            <div className="h-3 rounded-full overflow-hidden mb-3" style={{ background: 'rgba(255,255,255,0.06)' }}>
               <div className="h-full flex">
                 <div style={{ width: `${baseWidth}%`, background: 'linear-gradient(90deg, #2a6aaa, #4aa8ff)', transition: 'width 0.3s' }} />
                 <div style={{ width: `${tacticalWidth}%`, background: 'linear-gradient(90deg, #a04010, #e87020)', transition: 'width 0.3s' }} />
               </div>
             </div>
-            {/* 图例 + 数字 */}
+            {/* 两列卡片 */}
             <div className="grid grid-cols-2 gap-2">
+              {/* 战略 */}
               <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(74,168,255,0.08)', border: '1px solid rgba(74,168,255,0.2)' }}>
-                <div className="flex items-center gap-1 mb-0.5">
+                <div className="flex items-center gap-1 mb-1">
                   <div className="w-2 h-2 rounded-sm" style={{ background: '#4aa8ff' }} />
                   <span className="text-xs" style={{ color: 'rgba(74,168,255,0.7)' }}>战略筹码</span>
                 </div>
                 <div className="text-base font-bold font-mono" style={{ color: '#4aa8ff' }}>{bqCur.toFixed(2)}</div>
-                <div className="text-xs" style={{ color: 'rgba(74,168,255,0.5)' }}>{baseItems.filter(x => parseFloat(x.qty) > 0).length} 条记录</div>
+                <div className="text-xs mt-0.5" style={{ color: 'rgba(74,168,255,0.5)' }}>
+                  {baseItems.filter(x => parseFloat(x.qty) > 0).length} 条记录
+                </div>
+                {baseAvgTP > 0 && (
+                  <div className="text-xs mt-0.5 font-mono" style={{ color: '#f0d060' }}>
+                    均止盈 ${baseAvgTP.toFixed(0)}
+                  </div>
+                )}
               </div>
+              {/* 战术 */}
               <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(232,112,32,0.08)', border: '1px solid rgba(232,112,32,0.2)' }}>
-                <div className="flex items-center gap-1 mb-0.5">
+                <div className="flex items-center gap-1 mb-1">
                   <div className="w-2 h-2 rounded-sm" style={{ background: '#e87020' }} />
                   <span className="text-xs" style={{ color: 'rgba(232,112,32,0.7)' }}>战术筹码</span>
                 </div>
                 <div className="text-base font-bold font-mono" style={{ color: '#e87020' }}>{tqCur.toFixed(2)}</div>
-                <div className="text-xs" style={{ color: 'rgba(232,112,32,0.5)' }}>{tacticalItems.filter(x => parseFloat(x.qty) > 0).length} 条记录</div>
+                <div className="text-xs mt-0.5" style={{ color: 'rgba(232,112,32,0.5)' }}>
+                  {tacticalItems.filter(x => parseFloat(x.qty) > 0).length} 条记录
+                </div>
+                {tacticalAvgTP > 0 && (
+                  <div className="text-xs mt-0.5 font-mono" style={{ color: '#f0d060' }}>
+                    均止盈 ${tacticalAvgTP.toFixed(0)}
+                  </div>
+                )}
               </div>
             </div>
           </div>
