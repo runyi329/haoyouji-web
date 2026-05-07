@@ -3525,45 +3525,55 @@ function ProfitPathPanel({
   // Y轴：综合难度 0 ~ 100
   // 左边：涨幅低 → 需要大量持仓 → 资金难度高
   // 右边：涨幅高 → 历史达成概率低 → 涨幅难度高
-  // 中间：有一个甜蜜区，综合难度最低
+  // 中间：有一个甸蜜区，综合难度最低
   const diffCurvePoints = React.useMemo(() => {
     const pts: Array<{ rise: number; difficulty: number; riseScore: number; fundScore: number }> = [];
-    const steps = 100;
-    // ETH历史涨幅分布参考（对数正态分布建模）：
-    // 涨幅难度：用对数尺度建模，低涨幅区间展开更宽，高涨幅快速上升
+    const steps = 200; // 提高采样密度让曲线更平滑
+
+    // 涨幅难度：用高斯函数建模，最优涨幅区间在 50%~150%
+    // 涨幅过低（<20%）：止盈太小意义不大，难度上升
+    // 涨幅过高（>200%）：历史上很少达到，难度急升
     const riseScoreFn = (rise: number): number => {
-      if (rise <= 0) return 0;
-      // 对数尺度：把 0.1%~500% 映射到0~100
-      const logMin = Math.log(0.1);
-      const logMax = Math.log(500);
-      const logRise = Math.log(Math.max(0.1, rise));
-      const normalized = (logRise - logMin) / (logMax - logMin); // 0~1
-      // 线性映射：对数尺度下涨幅均匀分布，高涨幅区间展开更宽
-      return Math.min(100, normalized * 100);
+      // 左侧上升：涨幅 < 50% 时难度升高（止盈太小）
+      const leftPenalty = rise < 50
+        ? Math.pow((50 - rise) / 50, 1.5) * 80  // 最高80分
+        : 0;
+      // 右侧上升：涨幅 > 150% 时难度升高（历史很少达到）
+      const rightPenalty = rise > 150
+        ? Math.pow((rise - 150) / 350, 1.2) * 100  // 最高100分
+        : 0;
+      return Math.min(100, leftPenalty + rightPenalty);
     };
-    // 资金难度：在止盈金额固定的情况下，涨幅越低 → 需要持仓越多 → 资金越多 → 越难
-    // 用对数尺度建模：持仓量对数映射到0~100，让甲蜜区在视觉上更居中
+
+    // 资金难度：在止盈金额固定的情况下，计算所需持仓量
+    // 持仓过少（<100 ETH）：止盈金额太小意义不大，难度上升
+    // 持仓过多（>3000 ETH）：所需资金极大，难度急升
     const fundScoreFn = (rise: number): number => {
       if (rise <= 0) return 100;
-      // 所需持仓量 = profitUsdt / (curPrice*(1+rise/100) - avgPrice)
       const exitP = curPrice > 0 ? curPrice * (1 + rise / 100) : 1;
       const perCoin = exitP - (avgPrice > 0 ? avgPrice : curPrice * 0.8);
       if (perCoin <= 0) return 100;
       const needQty = profitUsdt > 0 ? profitUsdt / perCoin : ETH_MAX;
-      if (needQty <= 0) return 0;
-      // 对数尺度归一化：把 1~ETH_MAX*10 映射到0~100
-      const logMin2 = Math.log(1);
-      const logMax2 = Math.log(ETH_MAX * 10);
-      const logQty = Math.log(Math.max(1, needQty));
-      const qtyNorm = Math.min(1, (logQty - logMin2) / (logMax2 - logMin2));
-      return Math.min(100, qtyNorm * 100);
+      if (needQty <= 0) return 5;
+      // 最优持仓区间：100~3000 ETH
+      const optMin = 100, optMax = 3000;
+      // 持仓过少：止盈金额太小
+      const leftPenalty2 = needQty < optMin
+        ? Math.pow((optMin - needQty) / optMin, 1.2) * 70
+        : 0;
+      // 持仓过多：资金要求极高
+      const rightPenalty2 = needQty > optMax
+        ? Math.min(100, Math.pow((needQty - optMax) / (ETH_MAX * 2), 0.5) * 100)
+        : 0;
+      return Math.min(100, leftPenalty2 + rightPenalty2);
     };
+
     for (let i = 0; i <= steps; i++) {
       const rise = (i / steps) * 500;
       const riseScore = riseScoreFn(rise);
       const fundScore = fundScoreFn(rise);
-      // 综合难度：两者加权平均，各占50%
-      const combined = riseScore * 0.5 + fundScore * 0.5;
+      // 综合难度：涨幅难度占小60%，资金难度占小40%
+      const combined = Math.min(100, riseScore * 0.6 + fundScore * 0.4);
       pts.push({ rise, difficulty: combined, riseScore, fundScore });
     }
     return pts;
