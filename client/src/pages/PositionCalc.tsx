@@ -3071,10 +3071,13 @@ function ProfitPathPanel({
   // 对数刻度说明弹窗
   const [showLogInfo, setShowLogInfo] = React.useState(false);
 
-  // 移动端双击检测
-  const targetTapRef = React.useRef<{ time: number } | null>(null);
-  const qtyTapRef = React.useRef<{ time: number } | null>(null);
-  const riseTapRef = React.useRef<{ time: number } | null>(null);
+  // 内联输入框编辑状态
+  const [editingTarget, setEditingTarget] = React.useState(false);
+  const [editingQty, setEditingQty] = React.useState(false);
+  const [inputTargetVal, setInputTargetVal] = React.useState('');
+  const [inputQtyVal, setInputQtyVal] = React.useState('');
+  const targetInputRef = React.useRef<HTMLInputElement>(null);
+  const qtyInputRef = React.useRef<HTMLInputElement>(null);
 
   // 滑块拖动 ref
   const targetBarRef = React.useRef<HTMLDivElement>(null);
@@ -3444,11 +3447,55 @@ function ProfitPathPanel({
                     border: '1px solid rgba(167,139,250,0.25)',
                     userSelect: 'none',
                   }}
-                >对数刻度 ?</span>
+                >对数刻度</span>
               </div>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa', fontVariantNumeric: 'tabular-nums' }}>
-                ¥{sliderTarget >= 99900000 ? '1亿' : `${Math.round(sliderTarget / 10000)}万`}
-              </span>
+              {editingTarget ? (
+                <input
+                  ref={targetInputRef}
+                  type="number"
+                  value={inputTargetVal}
+                  onChange={(e) => setInputTargetVal(e.target.value)}
+                  onBlur={() => {
+                    const wan = parseFloat(inputTargetVal);
+                    if (!isNaN(wan) && wan > 0) {
+                      const val = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(wan * 10000)));
+                      setSliderTarget(val);
+                      hasUserDraggedTarget.current = true;
+                    }
+                    setEditingTarget(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                    if (e.key === 'Escape') setEditingTarget(false);
+                  }}
+                  style={{
+                    width: 72, fontSize: 13, fontWeight: 700, color: '#a78bfa',
+                    background: 'transparent',
+                    border: '1px solid rgba(167,139,250,0.5)',
+                    borderRadius: 6, padding: '1px 4px',
+                    textAlign: 'right', outline: 'none',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                  placeholder="万"
+                />
+              ) : (
+                <span
+                  onClick={() => {
+                    const wan = sliderTarget >= 99900000 ? 10000 : Math.round(sliderTarget / 10000);
+                    setInputTargetVal(String(wan));
+                    setEditingTarget(true);
+                    setTimeout(() => { targetInputRef.current?.select(); }, 30);
+                  }}
+                  style={{
+                    fontSize: 13, fontWeight: 700, color: '#a78bfa', fontVariantNumeric: 'tabular-nums',
+                    border: '1px solid rgba(167,139,250,0.35)',
+                    borderRadius: 6, padding: '1px 6px', cursor: 'text',
+                    background: 'rgba(167,139,250,0.06)',
+                  }}
+                >
+                  ¥{sliderTarget >= 99900000 ? '1亿' : `${Math.round(sliderTarget / 10000)}万`}
+                </span>
+              )}
             </div>
             {/* 进度条区域 */}
             <div
@@ -3547,9 +3594,52 @@ function ProfitPathPanel({
 
                 }}>{qtyUnlocked ? '变量' : '定量'}</span>
               </div>
-              <span style={{ fontSize: 15, fontWeight: 700, color: '#60a5fa', fontVariantNumeric: 'tabular-nums' }}>
-                {sliderQty.toFixed(1)} <span style={{ fontSize: 11, color: 'rgba(148,163,184,0.6)' }}>ETH</span>
-              </span>
+              {editingQty ? (
+                <input
+                  ref={qtyInputRef}
+                  type="number"
+                  value={inputQtyVal}
+                  onChange={(e) => setInputQtyVal(e.target.value)}
+                  onBlur={() => {
+                    const v = parseFloat(inputQtyVal);
+                    if (!isNaN(v) && v >= 0) {
+                      const val = Math.max(0, Math.min(maxQty, Math.round(v * 10) / 10));
+                      setSliderQty(val);
+                      sessionStorage.setItem(SESSION_KEY_QTY, String(val));
+                    }
+                    setEditingQty(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                    if (e.key === 'Escape') setEditingQty(false);
+                  }}
+                  style={{
+                    width: 72, fontSize: 15, fontWeight: 700, color: '#60a5fa',
+                    background: 'transparent',
+                    border: '1px solid rgba(96,165,250,0.5)',
+                    borderRadius: 6, padding: '1px 4px',
+                    textAlign: 'right', outline: 'none',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                  placeholder="ETH"
+                />
+              ) : (
+                <span
+                  onClick={() => {
+                    setInputQtyVal(sliderQty.toFixed(1));
+                    setEditingQty(true);
+                    setTimeout(() => { qtyInputRef.current?.select(); }, 30);
+                  }}
+                  style={{
+                    fontSize: 15, fontWeight: 700, color: '#60a5fa', fontVariantNumeric: 'tabular-nums',
+                    border: '1px solid rgba(96,165,250,0.35)',
+                    borderRadius: 6, padding: '1px 6px', cursor: 'text',
+                    background: 'rgba(96,165,250,0.06)',
+                  }}
+                >
+                  {sliderQty.toFixed(1)} <span style={{ fontSize: 11, color: 'rgba(148,163,184,0.6)' }}>ETH</span>
+                </span>
+              )}
             </div>
             {/* 进度条区域：32px高，内嵌24px轨道+32px手柄 */}
             <div
