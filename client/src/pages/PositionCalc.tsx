@@ -104,6 +104,8 @@ export default function PositionCalc() {
       touchStartY = e.touches[0].clientY;
     };
     const onTouchMove = (e: TouchEvent) => {
+      // 拖动价格区间滑块时，放行水平滑动，不阐截
+      if (isPriceSliderDragging.current) return;
       const dx = e.touches[0].clientX - touchStartX;
       const dy = e.touches[0].clientY - touchStartY;
       if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) {
@@ -176,6 +178,7 @@ export default function PositionCalc() {
   const isDraggingPriceMin = useRef(false); // 是否正在拖动最低价手柄
   const isDraggingPriceMax = useRef(false); // 是否正在拖动最高价手柄
   const activePriceBarRef = useRef<React.RefObject<HTMLDivElement | null>>(priceRangeBarRef); // 当前活跃的轨道
+  const isPriceSliderDragging = useRef(false); // 标记是否正在拖动价格区间滑块，用于全局touchmove放行水平滑动
   const PRICE_SLIDER_MIN = 1000, PRICE_SLIDER_MAX = 3500, PRICE_SLIDER_STEP = 50;
   const calcPriceFromX = useCallback((clientX: number, barRef: React.RefObject<HTMLDivElement | null>) => {
     const bar = barRef.current;
@@ -441,6 +444,7 @@ export default function PositionCalc() {
     const onTouchEnd = () => {
       isDraggingPriceMin.current = false;
       isDraggingPriceMax.current = false;
+      isPriceSliderDragging.current = false;
     };
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
@@ -1819,14 +1823,14 @@ export default function PositionCalc() {
                             className="absolute"
                             style={{ left: `clamp(0px, calc(${minPct2}% - 11px), calc(100% - 22px))`, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: '50%', background: 'white', border: '2px solid #3B82F6', boxShadow: '0 1px 4px rgba(59,130,246,0.4)', cursor: 'grab', zIndex: 4, touchAction: 'none' }}
                             onMouseDown={e => { e.stopPropagation(); isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
-                            onTouchStart={e => { e.stopPropagation(); isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
+                            onTouchStart={e => { e.stopPropagation(); isPriceSliderDragging.current = true; isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
                           />
                           {/* 最高价手柄 */}
                           <div
                             className="absolute"
                             style={{ left: `clamp(0px, calc(${maxPct2}% - 11px), calc(100% - 22px))`, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: '50%', background: 'white', border: '2px solid #1D4ED8', boxShadow: '0 1px 4px rgba(29,78,216,0.4)', cursor: 'grab', zIndex: 5, touchAction: 'none' }}
                             onMouseDown={e => { e.stopPropagation(); isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
-                            onTouchStart={e => { e.stopPropagation(); isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
+                            onTouchStart={e => { e.stopPropagation(); isPriceSliderDragging.current = true; isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
                           />
                         </div>
                         <div className="flex justify-between mt-1 px-0.5">
@@ -1967,14 +1971,14 @@ export default function PositionCalc() {
                               className="absolute"
                               style={{ left: `clamp(0px, calc(${minPct}% - 12px), calc(100% - 24px))`, top: '50%', transform: 'translateY(-50%)', width: 24, height: 24, borderRadius: '50%', background: 'white', border: '2px solid #3B82F6', boxShadow: '0 1px 4px rgba(59,130,246,0.4)', cursor: 'grab', zIndex: 4, touchAction: 'none' }}
                               onMouseDown={e => { e.stopPropagation(); isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
-                              onTouchStart={e => { e.stopPropagation(); isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
+                              onTouchStart={e => { e.stopPropagation(); isPriceSliderDragging.current = true; isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
                             />
                             {/* 最高价手柄 */}
                             <div
                               className="absolute"
                               style={{ left: `clamp(0px, calc(${maxPct}% - 12px), calc(100% - 24px))`, top: '50%', transform: 'translateY(-50%)', width: 24, height: 24, borderRadius: '50%', background: 'white', border: '2px solid #1D4ED8', boxShadow: '0 1px 4px rgba(29,78,216,0.4)', cursor: 'grab', zIndex: 5, touchAction: 'none' }}
                               onMouseDown={e => { e.stopPropagation(); isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
-                              onTouchStart={e => { e.stopPropagation(); isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
+                              onTouchStart={e => { e.stopPropagation(); isPriceSliderDragging.current = true; isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
                             />
                           </div>
                           {/* 刻度标注 */}
