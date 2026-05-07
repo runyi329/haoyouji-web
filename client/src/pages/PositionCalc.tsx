@@ -3034,6 +3034,10 @@ const ETH_MIN = 1;
 const ETH_MAX = 10000;
 const ethLogToSlider = (val: number) => (Math.log(Math.max(val, ETH_MIN)) - Math.log(ETH_MIN)) / (Math.log(ETH_MAX) - Math.log(ETH_MIN));
 const ethSliderToLog = (s: number) => parseFloat(Math.exp(Math.log(ETH_MIN) + s * (Math.log(ETH_MAX) - Math.log(ETH_MIN))).toFixed(2));
+// 对数刻度：0.01%～maxRisePct%，映射到 0～1
+const RISE_LOG_MIN = 0.01;
+const riseLogToSlider = (val: number, maxRise: number) => (Math.log(Math.max(val, RISE_LOG_MIN)) - Math.log(RISE_LOG_MIN)) / (Math.log(maxRise) - Math.log(RISE_LOG_MIN));
+const riseSliderToLog = (s: number, maxRise: number) => parseFloat(Math.exp(Math.log(RISE_LOG_MIN) + s * (Math.log(maxRise) - Math.log(RISE_LOG_MIN))).toFixed(2));
 
 function ProfitPathPanel({
   profitUsdt, targetProfitCny, curPrice, avgPrice,
@@ -3176,13 +3180,13 @@ function ProfitPathPanel({
     return Math.max(ETH_MIN, ethSliderToLog(ratio));
   }, [sliderQty]);
 
-  // 从 clientX 计算目标涨幅
+  // 从 clientX 计算目标涨幅（对数刻度）
   const calcRiseFromX = React.useCallback((clientX: number): number => {
     if (!riseBarRef.current) return sliderRise;
     const rect = riseBarRef.current.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const raw = ratio * maxRisePct;
-    return Math.max(0, Math.round(raw * 2) / 2);
+    const raw = riseSliderToLog(ratio, maxRisePct);
+    return Math.max(RISE_LOG_MIN, parseFloat(raw.toFixed(2)));
   }, [maxRisePct, sliderRise]);
 
   // 根据目标金额和持仓量计算所需涨幅
@@ -3782,10 +3786,10 @@ function ProfitPathPanel({
                 <span
                   onClick={() => openEditDialog('rise')}
                   style={{
-                    fontSize: 15, fontWeight: 700, color: difficulty.color, fontVariantNumeric: 'tabular-nums',
-                    border: `1px solid ${difficulty.color}55`,
+                    fontSize: 15, fontWeight: 700, color: '#ff9a30', fontVariantNumeric: 'tabular-nums',
+                    border: '1px solid rgba(255,154,48,0.4)',
                     borderRadius: 6, padding: '1px 6px', cursor: 'pointer',
-                    background: `${difficulty.color}0d`,
+                    background: 'rgba(255,154,48,0.06)',
                   }}
                 >
                   +{riseDisplay.toFixed(1)}%
@@ -3817,51 +3821,51 @@ function ProfitPathPanel({
               }}
             >
               {/* 24px 轨道容器（垂直居中） */}
-              <div className="absolute rounded overflow-hidden" style={{ background: 'linear-gradient(90deg, rgba(34,197,94,0.12), rgba(234,179,8,0.12), rgba(249,115,22,0.12), rgba(239,68,68,0.12))', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', height: 24 }}>
-                {/* 已填充段（难易度渐变色） */}
+              <div className="absolute rounded overflow-hidden" style={{ background: 'rgba(255,140,0,0.08)', left: 0, right: 0, top: '50%', transform: 'translateY(-50%)', height: 24 }}>
+                {/* 已填充段（橙色单色系） */}
                 <div style={{
                   position: 'absolute', top: 0, left: 0, height: '100%',
-                  width: `${(Math.min(riseDisplay, maxRisePct) / maxRisePct) * 100}%`,
-                  background: `linear-gradient(90deg, #22c55e 0%, #84cc16 25%, #eab308 50%, ${difficulty.color} 100%)`,
+                  width: `${riseLogToSlider(Math.max(riseDisplay, RISE_LOG_MIN), maxRisePct) * 100}%`,
+                  background: 'linear-gradient(90deg, #c05000 0%, #e07010 60%, #ff9a30 100%)',
                   borderRadius: '4px 0 0 4px',
                 }} />
                 {/* 轨道内文字 */}
-                <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>0%</span>
+                <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>0.01%</span>
                 <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>{maxRisePct}%</span>
               </div>
               {/* 32px 圆形手柄（内嵌 ETH 图标，颜色随难易度变化） */}
               <div
                 style={{
                   position: 'absolute',
-                  left: `calc(${(Math.min(riseDisplay, maxRisePct) / maxRisePct) * 100}% - 16px)`,
+                  left: `calc(${riseLogToSlider(Math.max(riseDisplay, RISE_LOG_MIN), maxRisePct) * 100}% - 16px)`,
                   top: '50%', transform: 'translateY(-50%)',
                   width: 32, height: 32, borderRadius: '50%',
                   zIndex: 10, pointerEvents: 'none',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: `linear-gradient(135deg, rgba(34,197,94,0.3) 0%, rgba(0,0,0,0.8) 50%, rgba(0,0,0,0.9) 100%)`,
+                  background: 'linear-gradient(135deg, #7a3000 0%, #c05010 50%, #7a3000 100%)',
                   boxShadow: riseUnlocked
-                    ? `0 0 14px ${difficulty.color}cc, 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.3)`
-                    : `0 0 10px ${difficulty.color}80, 0 2px 6px rgba(0,0,0,0.8)`,
-                  border: riseUnlocked ? `1.5px solid ${difficulty.color}cc` : `1.5px solid ${difficulty.color}80`,
+                    ? '0 0 14px rgba(255,140,0,0.9), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.3)'
+                    : '0 0 10px rgba(255,140,0,0.5), 0 2px 6px rgba(0,0,0,0.8)',
+                  border: riseUnlocked ? '1.5px solid rgba(255,140,0,0.9)' : '1.5px solid rgba(255,140,0,0.5)',
                 }}
               >
                 <svg width="16" height="20" viewBox="0 0 16 20" fill="none">
                   <defs>
                     <linearGradient id="riseEthTop" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor={riseUnlocked ? '#fffbe8' : difficulty.color} />
-                      <stop offset="100%" stopColor={riseUnlocked ? '#e8e8e8' : '#ffffff'} />
+                      <stop offset="0%" stopColor={riseUnlocked ? '#fffbe8' : '#ffcc80'} />
+                      <stop offset="100%" stopColor={riseUnlocked ? '#e8e8e8' : '#ff8c00'} />
                     </linearGradient>
                     <linearGradient id="riseEthMidL" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor={riseUnlocked ? '#fff5c0' : difficulty.color} />
-                      <stop offset="100%" stopColor={riseUnlocked ? '#c0c0c0' : 'rgba(255,255,255,0.6)'} />
+                      <stop offset="0%" stopColor={riseUnlocked ? '#fff5c0' : '#ffaa40'} />
+                      <stop offset="100%" stopColor={riseUnlocked ? '#c0c0c0' : '#e06000'} />
                     </linearGradient>
                     <linearGradient id="riseEthMidR" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor={riseUnlocked ? '#e8e8e8' : 'rgba(255,255,255,0.8)'} />
-                      <stop offset="100%" stopColor={riseUnlocked ? '#a0a0a0' : difficulty.color} />
+                      <stop offset="0%" stopColor={riseUnlocked ? '#e8e8e8' : '#ff9a30'} />
+                      <stop offset="100%" stopColor={riseUnlocked ? '#a0a0a0' : '#c04000'} />
                     </linearGradient>
                     <linearGradient id="riseEthBot" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor={riseUnlocked ? '#c0c0c0' : 'rgba(255,255,255,0.5)'} />
-                      <stop offset="100%" stopColor={riseUnlocked ? '#888888' : difficulty.color} />
+                      <stop offset="0%" stopColor={riseUnlocked ? '#c0c0c0' : '#e07010'} />
+                      <stop offset="100%" stopColor={riseUnlocked ? '#888888' : '#803000'} />
                     </linearGradient>
                   </defs>
                   <polygon points="8,0 15,10 8,7" fill="url(#riseEthTop)" />
@@ -3922,10 +3926,10 @@ function ProfitPathPanel({
         const isTarget = editingField === 'target';
         const isQty = editingField === 'qty';
         const isRise = editingField === 'rise';
-        const fieldLabel = isTarget ? '目标止盈金额' : isQty ? '持仓数量' : '目标涌幅';
+        const fieldLabel = isTarget ? '目标止盈金额' : isQty ? '持仓数量' : '目标涨幅';
         const fieldUnit = isTarget ? '万元' : isQty ? 'ETH' : '%';
-        const fieldColor = isTarget ? '#a78bfa' : isQty ? '#60a5fa' : difficulty.color;
-        const fieldBorder = isTarget ? 'rgba(167,139,250,0.4)' : isQty ? 'rgba(96,165,250,0.4)' : `${difficulty.color}66`;
+        const fieldColor = isTarget ? '#a78bfa' : isQty ? '#60a5fa' : '#ff9a30';
+        const fieldBorder = isTarget ? 'rgba(167,139,250,0.4)' : isQty ? 'rgba(96,165,250,0.4)' : 'rgba(255,154,48,0.4)';
         const minVal = isTarget ? 1 : isQty ? ETH_MIN : 0.01;
         const maxVal = isTarget ? 10000 : isQty ? ETH_MAX : maxRisePct;
         const decimalNote = isTarget ? '仅接受整数' : isQty ? '小数后最多 1 位' : '小数后最多 2 位';
