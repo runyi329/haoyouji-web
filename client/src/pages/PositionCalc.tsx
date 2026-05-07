@@ -3539,8 +3539,9 @@ function ProfitPathPanel({
         ? Math.pow((50 - rise) / 50, 1.5) * 80  // 最高80分
         : 0;
       // 右侧上升：涨幅 > 150% 时难度升高（历史很少达到）
+      // 加大右侧惩罚：150%时开始，250%时达到50分，400%时达到85分，500%时达到100分
       const rightPenalty = rise > 150
-        ? Math.pow((rise - 150) / 350, 1.2) * 100  // 最高100分
+        ? Math.pow((rise - 150) / 200, 0.7) * 100  // 更陡的上升曲线
         : 0;
       return Math.min(100, leftPenalty + rightPenalty);
     };
@@ -3572,8 +3573,11 @@ function ProfitPathPanel({
       const rise = (i / steps) * 500;
       const riseScore = riseScoreFn(rise);
       const fundScore = fundScoreFn(rise);
-      // 综合难度：涨幅难度占小60%，资金难度占小40%
-      const combined = Math.min(100, riseScore * 0.6 + fundScore * 0.4);
+      // 综合难度：涨幅难度占60%，资金难度占40%
+      // 但当涨幅极高时（>300%），涨幅难度权重提升到80%，确保右侧能到红色
+      const riseWeight = rise > 300 ? 0.8 : 0.6;
+      const fundWeight = 1 - riseWeight;
+      const combined = Math.min(100, riseScore * riseWeight + fundScore * fundWeight);
       pts.push({ rise, difficulty: combined, riseScore, fundScore });
     }
     return pts;
@@ -3594,7 +3598,9 @@ function ProfitPathPanel({
   const currentDifficulty = React.useMemo(() => {
     if (diffCurvePoints.length === 0) return 50;
     const rise = Math.max(0, Math.min(500, riseDisplay));
-    const idx = Math.round((rise / 500) * 100);
+    // diffCurvePoints有steps+1=201个点，索引应该用steps而非100
+    const steps = diffCurvePoints.length - 1;
+    const idx = Math.round((rise / 500) * steps);
     return diffCurvePoints[Math.min(idx, diffCurvePoints.length - 1)]?.difficulty ?? 50;
   }, [diffCurvePoints, riseDisplay]);
 
