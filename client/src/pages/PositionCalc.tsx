@@ -170,6 +170,21 @@ export default function PositionCalc() {
   const [allocStep, setAllocStep] = useState<'setup' | 'range' | 'method' | 'preview'>('setup'); // 分配步骤
   const [allocMinPrice, setAllocMinPrice] = useState<string>(''); // 买入最低价
   const [allocMaxPrice, setAllocMaxPrice] = useState<string>(''); // 买入最高价
+  // 价格区间双滑块自定义拖拽
+  const priceRangeBarRef = useRef<HTMLDivElement>(null); // 轨道容器 ref
+  const priceRangeBarRef2 = useRef<HTMLDivElement>(null); // 第二处轨道容器 ref
+  const isDraggingPriceMin = useRef(false); // 是否正在拖动最低价手柄
+  const isDraggingPriceMax = useRef(false); // 是否正在拖动最高价手柄
+  const activePriceBarRef = useRef<React.RefObject<HTMLDivElement | null>>(priceRangeBarRef); // 当前活跃的轨道
+  const PRICE_SLIDER_MIN = 1000, PRICE_SLIDER_MAX = 3500, PRICE_SLIDER_STEP = 50;
+  const calcPriceFromX = useCallback((clientX: number, barRef: React.RefObject<HTMLDivElement | null>) => {
+    const bar = barRef.current;
+    if (!bar) return PRICE_SLIDER_MIN;
+    const rect = bar.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const raw = PRICE_SLIDER_MIN + ratio * (PRICE_SLIDER_MAX - PRICE_SLIDER_MIN);
+    return Math.round(raw / PRICE_SLIDER_STEP) * PRICE_SLIDER_STEP;
+  }, []);
   const [allocMethod, setAllocMethod] = useState<'equal' | 'geometric' | 'normal' | 'manual'>('equal'); // 分配方式
   const [allocGeomRatio, setAllocGeomRatio] = useState<string>('1.2'); // 等比公比
   const [allocArithDiff, setAllocArithDiff] = useState<string>('1'); // 等差公差
@@ -395,6 +410,49 @@ export default function PositionCalc() {
       window.removeEventListener('touchend', onTouchEnd);
     };
   }, [calcStrategyRatioFromX, handleStrategyDragSave]);
+
+  // 价格区间双滑块全局拖拽监听
+  useEffect(() => {
+    const onMove = (clientX: number) => {
+      const barRef = activePriceBarRef.current;
+      const v = calcPriceFromX(clientX, barRef);
+      if (isDraggingPriceMin.current) {
+        const curMax = parseFloat(allocMaxPrice) || PRICE_SLIDER_MAX;
+        const priceFloor = PRICE_SLIDER_MIN;
+        setAllocMinPrice(String(Math.max(priceFloor, Math.min(v, curMax - PRICE_SLIDER_STEP))));
+      } else if (isDraggingPriceMax.current) {
+        const curMin = parseFloat(allocMinPrice) || PRICE_SLIDER_MIN;
+        setAllocMaxPrice(String(Math.max(v, curMin + PRICE_SLIDER_STEP)));
+      }
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDraggingPriceMin.current && !isDraggingPriceMax.current) return;
+      onMove(e.clientX);
+    };
+    const onMouseUp = () => {
+      isDraggingPriceMin.current = false;
+      isDraggingPriceMax.current = false;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isDraggingPriceMin.current && !isDraggingPriceMax.current) return;
+      e.preventDefault();
+      onMove(e.touches[0].clientX);
+    };
+    const onTouchEnd = () => {
+      isDraggingPriceMin.current = false;
+      isDraggingPriceMax.current = false;
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [calcPriceFromX, allocMinPrice, allocMaxPrice]);
 
   // 从数据库加载目标止盈和 ETH 数量（不加载汇率，汇率始终用实时 API 值）
   useEffect(() => {
@@ -1734,30 +1792,41 @@ export default function PositionCalc() {
                             </div>
                           );
                         })()}
-                        <div className="relative mx-1 dual-range" style={{ height: '40px' }}>
+                        <div ref={priceRangeBarRef} className="relative mx-1" style={{ height: '40px' }}
+                          onMouseDown={e => {
+                            activePriceBarRef.current = priceRangeBarRef;
+                            const rect = priceRangeBarRef.current!.getBoundingClientRect();
+                            const ratio = (e.clientX - rect.left) / rect.width;
+                            const midRatio = (minPct2 + maxPct2) / 2 / 100;
+                            if (ratio <= midRatio) isDraggingPriceMin.current = true;
+                            else isDraggingPriceMax.current = true;
+                          }}
+                          onTouchStart={e => {
+                            activePriceBarRef.current = priceRangeBarRef;
+                            const rect = priceRangeBarRef.current!.getBoundingClientRect();
+                            const ratio = (e.touches[0].clientX - rect.left) / rect.width;
+                            const midRatio = (minPct2 + maxPct2) / 2 / 100;
+                            if (ratio <= midRatio) isDraggingPriceMin.current = true;
+                            else isDraggingPriceMax.current = true;
+                          }}
+                        >
+                          {/* 背景轨道 */}
                           <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '5px', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)' }} />
+                          {/* 选中区间高亮 */}
                           <div className="absolute top-1/2 rounded-full" style={{ height: '5px', transform: 'translateY(-50%)', left: `${minPct2}%`, right: `${100 - maxPct2}%`, background: 'linear-gradient(90deg, #3B82F6, #1D4ED8)' }} />
-                          {/* 双滑块：动态 z-index —— 哪个手柄靠近点击位置就把哪个置顶 */}
-                          <input type="range" min={SLIDER_MIN} max={SLIDER_MAX} step={SLIDER_STEP} value={minVal2}
-                            onChange={e => {
-                              const priceFloor = currentPrice ? Math.min(3450, Math.max(1000, Math.round(currentPrice / 50) * 50)) : SLIDER_MIN;
-                              const v = Math.max(priceFloor, Math.min(parseInt(e.target.value), maxVal2 - SLIDER_STEP));
-                              setAllocMinPrice(String(v));
-                            }}
-                            className="absolute w-full appearance-none bg-transparent cursor-pointer"
-                            style={{
-                              top: '50%', transform: 'translateY(-50%)', height: '40px',
-                              // 当 minVal2 更靠近 maxVal2 时，将左滑块置顶，否则右滑块置顶
-                              zIndex: (maxVal2 - minVal2) < (SLIDER_MAX - SLIDER_MIN) * 0.1 ? 5 : 3,
-                            }}
+                          {/* 最低价手柄 */}
+                          <div
+                            className="absolute"
+                            style={{ left: `clamp(0px, calc(${minPct2}% - 11px), calc(100% - 22px))`, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: '50%', background: 'white', border: '2px solid #3B82F6', boxShadow: '0 1px 4px rgba(59,130,246,0.4)', cursor: 'grab', zIndex: 4, touchAction: 'none' }}
+                            onMouseDown={e => { e.stopPropagation(); isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
+                            onTouchStart={e => { e.stopPropagation(); isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
                           />
-                          <input type="range" min={SLIDER_MIN} max={SLIDER_MAX} step={SLIDER_STEP} value={maxVal2}
-                            onChange={e => setAllocMaxPrice(String(Math.max(parseInt(e.target.value), minVal2 + SLIDER_STEP)))}
-                            className="absolute w-full appearance-none bg-transparent cursor-pointer"
-                            style={{
-                              top: '50%', transform: 'translateY(-50%)', height: '40px',
-                              zIndex: (maxVal2 - minVal2) < (SLIDER_MAX - SLIDER_MIN) * 0.1 ? 3 : 4,
-                            }}
+                          {/* 最高价手柄 */}
+                          <div
+                            className="absolute"
+                            style={{ left: `clamp(0px, calc(${maxPct2}% - 11px), calc(100% - 22px))`, top: '50%', transform: 'translateY(-50%)', width: 22, height: 22, borderRadius: '50%', background: 'white', border: '2px solid #1D4ED8', boxShadow: '0 1px 4px rgba(29,78,216,0.4)', cursor: 'grab', zIndex: 5, touchAction: 'none' }}
+                            onMouseDown={e => { e.stopPropagation(); isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
+                            onTouchStart={e => { e.stopPropagation(); isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
                           />
                         </div>
                         <div className="flex justify-between mt-1 px-0.5">
@@ -1871,57 +1940,41 @@ export default function PositionCalc() {
                             </div>
                           </div>
                           {/* 滑动轨道 */}
-                          <div className="relative mx-1 dual-range" style={{ height: '44px' }}>
+                          <div ref={priceRangeBarRef2} className="relative mx-1" style={{ height: '44px' }}
+                            onMouseDown={e => {
+                              activePriceBarRef.current = priceRangeBarRef2;
+                              const rect = priceRangeBarRef2.current!.getBoundingClientRect();
+                              const ratio = (e.clientX - rect.left) / rect.width;
+                              const midRatio = (minPct + maxPct) / 2 / 100;
+                              if (ratio <= midRatio) isDraggingPriceMin.current = true;
+                              else isDraggingPriceMax.current = true;
+                            }}
+                            onTouchStart={e => {
+                              activePriceBarRef.current = priceRangeBarRef2;
+                              const rect = priceRangeBarRef2.current!.getBoundingClientRect();
+                              const ratio = (e.touches[0].clientX - rect.left) / rect.width;
+                              const midRatio = (minPct + maxPct) / 2 / 100;
+                              if (ratio <= midRatio) isDraggingPriceMin.current = true;
+                              else isDraggingPriceMax.current = true;
+                            }}
+                          >
                             {/* 背景轨道 */}
                             <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '6px', transform: 'translateY(-50%)', background: '#E5E7EB' }} />
                             {/* 选中区间高亮 */}
+                            <div className="absolute top-1/2 rounded-full" style={{ height: '6px', transform: 'translateY(-50%)', left: `${minPct}%`, right: `${100 - maxPct}%`, background: 'linear-gradient(90deg, #3B82F6, #1D4ED8)' }} />
+                            {/* 最低价手柄 */}
                             <div
-                              className="absolute top-1/2 rounded-full"
-                              style={{
-                                height: '6px',
-                                transform: 'translateY(-50%)',
-                                left: `${minPct}%`,
-                                right: `${100 - maxPct}%`,
-                                background: 'linear-gradient(90deg, #3B82F6, #1D4ED8)',
-                              }}
+                              className="absolute"
+                              style={{ left: `clamp(0px, calc(${minPct}% - 12px), calc(100% - 24px))`, top: '50%', transform: 'translateY(-50%)', width: 24, height: 24, borderRadius: '50%', background: 'white', border: '2px solid #3B82F6', boxShadow: '0 1px 4px rgba(59,130,246,0.4)', cursor: 'grab', zIndex: 4, touchAction: 'none' }}
+                              onMouseDown={e => { e.stopPropagation(); isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
+                              onTouchStart={e => { e.stopPropagation(); isDraggingPriceMin.current = true; isDraggingPriceMax.current = false; }}
                             />
-                            {/* 最低价滑块：动态 z-index，两手柄靠近时将左滑块置顶避免右滑块遮挡 */}
-                            <input
-                              type="range"
-                              min={SLIDER_MIN}
-                              max={SLIDER_MAX}
-                              step={SLIDER_STEP}
-                              value={minVal}
-                              onChange={e => {
-                                const v = Math.min(parseInt(e.target.value), maxVal - SLIDER_STEP);
-                                setAllocMinPrice(String(v));
-                              }}
-                              className="absolute w-full appearance-none bg-transparent cursor-pointer"
-                              style={{
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                height: '44px',
-                                zIndex: (maxVal - minVal) < (SLIDER_MAX - SLIDER_MIN) * 0.1 ? 5 : 3,
-                              }}
-                            />
-                            {/* 最高价滑块：默认 z-index 高于左滑块，确保右滑块始终可点 */}
-                            <input
-                              type="range"
-                              min={SLIDER_MIN}
-                              max={SLIDER_MAX}
-                              step={SLIDER_STEP}
-                              value={maxVal}
-                              onChange={e => {
-                                const v = Math.max(parseInt(e.target.value), minVal + SLIDER_STEP);
-                                setAllocMaxPrice(String(v));
-                              }}
-                              className="absolute w-full appearance-none bg-transparent cursor-pointer"
-                              style={{
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                height: '44px',
-                                zIndex: (maxVal - minVal) < (SLIDER_MAX - SLIDER_MIN) * 0.1 ? 3 : 4,
-                              }}
+                            {/* 最高价手柄 */}
+                            <div
+                              className="absolute"
+                              style={{ left: `clamp(0px, calc(${maxPct}% - 12px), calc(100% - 24px))`, top: '50%', transform: 'translateY(-50%)', width: 24, height: 24, borderRadius: '50%', background: 'white', border: '2px solid #1D4ED8', boxShadow: '0 1px 4px rgba(29,78,216,0.4)', cursor: 'grab', zIndex: 5, touchAction: 'none' }}
+                              onMouseDown={e => { e.stopPropagation(); isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
+                              onTouchStart={e => { e.stopPropagation(); isDraggingPriceMax.current = true; isDraggingPriceMin.current = false; }}
                             />
                           </div>
                           {/* 刻度标注 */}
