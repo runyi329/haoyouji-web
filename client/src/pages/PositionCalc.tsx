@@ -3029,6 +3029,12 @@ const CNY_MAX = 100000000; // 1亿
 const logToSlider = (val: number) => (Math.log(val) - Math.log(CNY_MIN)) / (Math.log(CNY_MAX) - Math.log(CNY_MIN));
 const sliderToLog = (s: number) => Math.round(Math.exp(Math.log(CNY_MIN) + s * (Math.log(CNY_MAX) - Math.log(CNY_MIN))));
 
+// 对数刻度：1～10000 ETH，映射到 0～1
+const ETH_MIN = 1;
+const ETH_MAX = 10000;
+const ethLogToSlider = (val: number) => (Math.log(Math.max(val, ETH_MIN)) - Math.log(ETH_MIN)) / (Math.log(ETH_MAX) - Math.log(ETH_MIN));
+const ethSliderToLog = (s: number) => parseFloat(Math.exp(Math.log(ETH_MIN) + s * (Math.log(ETH_MAX) - Math.log(ETH_MIN))).toFixed(2));
+
 function ProfitPathPanel({
   profitUsdt, targetProfitCny, curPrice, avgPrice,
   maxQty, maxRisePct, qtyToRise, riseToQty, actualQty, cnyRate
@@ -3055,7 +3061,7 @@ function ProfitPathPanel({
   }, [targetProfitCny]);
   const [sliderQty, setSliderQty] = React.useState<number>(() => {
     const saved = sessionStorage.getItem(SESSION_KEY_QTY);
-    return saved !== null ? parseFloat(saved) : Math.min(actualQty || 10, maxQty);
+    return saved !== null ? parseFloat(saved) : Math.max(ETH_MIN, Math.min(ETH_MAX, actualQty || 10));
   });
   const [sliderRise, setSliderRise] = React.useState<number>(() => {
     const saved = sessionStorage.getItem(SESSION_KEY_RISE);
@@ -3099,14 +3105,13 @@ function ProfitPathPanel({
     return sliderToLog(ratio);
   }, [sliderTarget]);
 
-  // 从 clientX 计算持仓数量
+  // 从 clientX 计算持仓数量（对数刻度 1～10000 ETH）
   const calcQtyFromX = React.useCallback((clientX: number): number => {
     if (!qtyBarRef.current) return sliderQty;
     const rect = qtyBarRef.current.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const raw = ratio * maxQty;
-    return Math.max(0.1, Math.round(raw * 10) / 10);
-  }, [maxQty, sliderQty]);
+    return Math.max(ETH_MIN, ethSliderToLog(ratio));
+  }, [sliderQty]);
 
   // 从 clientX 计算目标涨幅
   const calcRiseFromX = React.useCallback((clientX: number): number => {
@@ -3180,7 +3185,7 @@ function ProfitPathPanel({
       // 涨幅变化，联动锁定的其他滑块
       if (!qtyUnlocked) {
         // 持仓量锁定：联动持仓量
-        const qty = Math.min(riseToQty(rise), maxQty);
+                  const qty = Math.max(ETH_MIN, Math.min(ETH_MAX, riseToQty(rise)));
         setSliderQty(Math.max(0.1, qty));
         sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
       }
@@ -3230,7 +3235,7 @@ function ProfitPathPanel({
   React.useEffect(() => {
     const initialized = sessionStorage.getItem(SESSION_KEY_INIT);
     if (!initialized && actualQty && curPrice && avgPrice) {
-      const initQty = Math.max(1, Math.min(actualQty, maxQty));
+      const initQty = Math.max(ETH_MIN, Math.min(ETH_MAX, actualQty));
       const rise = calcRiseFromTargetAndQty(sliderTarget, initQty);
       setSliderQty(initQty);
       setSliderRise(Math.min(rise, maxRisePct));
@@ -3268,8 +3273,8 @@ function ProfitPathPanel({
   const chartPoints = React.useMemo(() => {
     const pts: Array<{ qty: number; rise: number }> = [];
     const steps = 60;
-    for (let i = 1; i <= steps; i++) {
-      const qty = (i / steps) * maxQty;
+                for (let i = 1; i <= steps; i++) {
+      const qty = ethSliderToLog(i / steps);
       const rise = qtyToRise(qty);
       pts.push({ qty, rise: Math.min(rise, maxRisePct) });
     }
@@ -3283,7 +3288,7 @@ function ProfitPathPanel({
   const plotH = svgH - padT - padB;
 
   // 坐标转换
-  const toX = (qty: number) => padL + (qty / maxQty) * plotW;
+  const toX = (qty: number) => padL + ethLogToSlider(qty) * plotW;
   const toY = (rise: number) => padT + plotH - (rise / maxRisePct) * plotH;
 
   // 曲线路径
@@ -3300,7 +3305,7 @@ function ProfitPathPanel({
   ];
 
   // 当前选中点坐标
-  const selX = toX(sliderQty);
+  const selX = toX(Math.max(ETH_MIN, sliderQty));
   const selY = toY(Math.min(riseDisplay, maxRisePct));
 
   const hasData = profitUsdt > 0 && curPrice > 0;
@@ -3344,8 +3349,8 @@ function ProfitPathPanel({
                 <line key={rise} x1={padL} y1={toY(rise)} x2={svgW - padR} y2={toY(rise)}
                   stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" strokeDasharray="3,3" />
               ))}
-              {[0, 0.25, 0.5, 0.75, 1].map(f => (
-                <line key={f} x1={toX(f * maxQty)} y1={padT} x2={toX(f * maxQty)} y2={padT + plotH}
+              {[ETH_MIN, 10, 100, 1000, ETH_MAX].map(v => (
+                <line key={v} x1={toX(v)} y1={padT} x2={toX(v)} y2={padT + plotH}
                   stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" strokeDasharray="3,3" />
               ))}
 
@@ -3353,10 +3358,10 @@ function ProfitPathPanel({
               {(() => {
                 const pts: string[] = [];
                 const steps = 80;
-                for (let i = 0; i <= steps; i++) {
-                  const qty = (i / steps) * maxQty;
+                for (let i = 1; i <= steps; i++) {
+                  const qty = ethSliderToLog(i / steps);
                   if (qty <= 0) continue;
-                  const rise = qtyToRise(qty, sliderTarget, cnyRate);
+                  const rise = qtyToRise(qty);
                   if (rise < 0 || rise > maxRisePct) continue;
                   pts.push(`${toX(qty)},${toY(rise)}`);
                 }
@@ -3399,7 +3404,10 @@ function ProfitPathPanel({
               {[0, 100, 200, 300, 400, 500].map(rise => (
                 <text key={rise} x={padL - 3} y={toY(rise) + 3} textAnchor="end" fontSize="7" fill="rgba(148,163,184,0.5)">{rise}%</text>
               ))}
-              <text x={padL + plotW / 2} y={svgH - 2} textAnchor="middle" fontSize="8" fill="rgba(148,163,184,0.5)">持仓量 (ETH)</text>
+              {[ETH_MIN, 10, 100, 1000, ETH_MAX].map(v => (
+                <text key={v} x={toX(v)} y={padT + plotH + 10} textAnchor="middle" fontSize="7" fill="rgba(148,163,184,0.4)">{v >= 1000 ? `${v/1000}k` : v}</text>
+              ))}
+              <text x={padL + plotW / 2} y={svgH - 1} textAnchor="middle" fontSize="8" fill="rgba(148,163,184,0.5)">持仓量 (ETH)</text>
             </svg>
           </div>
 
@@ -3441,7 +3449,7 @@ function ProfitPathPanel({
                 <span
                   onClick={() => setShowLogInfo(true)}
                   style={{
-                    fontSize: 9, padding: '1px 5px', borderRadius: 8, cursor: 'pointer',
+                    fontSize: 10, padding: '1px 7px', borderRadius: 10, cursor: 'pointer',
                     background: 'rgba(167,139,250,0.12)',
                     color: 'rgba(167,139,250,0.7)',
                     border: '1px solid rgba(167,139,250,0.25)',
@@ -3453,12 +3461,16 @@ function ProfitPathPanel({
                 <input
                   ref={targetInputRef}
                   type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={10000}
                   value={inputTargetVal}
                   onChange={(e) => setInputTargetVal(e.target.value)}
                   onBlur={() => {
                     const wan = parseFloat(inputTargetVal);
-                    if (!isNaN(wan) && wan > 0) {
-                      const val = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(wan * 10000)));
+                    if (!isNaN(wan) && wan >= 1) {
+                      const clamped = Math.max(1, Math.min(10000, wan));
+                      const val = Math.round(clamped * 10000);
                       setSliderTarget(val);
                       hasUserDraggedTarget.current = true;
                     }
@@ -3469,14 +3481,14 @@ function ProfitPathPanel({
                     if (e.key === 'Escape') setEditingTarget(false);
                   }}
                   style={{
-                    width: 72, fontSize: 13, fontWeight: 700, color: '#a78bfa',
+                    width: 80, fontSize: 13, fontWeight: 700, color: '#a78bfa',
                     background: 'transparent',
                     border: '1px solid rgba(167,139,250,0.5)',
                     borderRadius: 6, padding: '1px 4px',
                     textAlign: 'right', outline: 'none',
                     fontVariantNumeric: 'tabular-nums',
                   }}
-                  placeholder="万"
+                  placeholder="1-10000万"
                 />
               ) : (
                 <span
@@ -3523,7 +3535,7 @@ function ProfitPathPanel({
                   position: 'absolute', top: 0, left: 0, height: '100%',
                   width: `${logToSlider(sliderTarget) * 100}%`,
                   background: targetUnlocked
-                    ? 'linear-gradient(90deg, #b8860b 0%, #f0d060 60%, #ffe080 100%)'
+                    ? 'linear-gradient(90deg, #4c1d95 0%, #7c3aed 60%, #a78bfa 100%)'
                     : 'linear-gradient(90deg, #4c1d95 0%, #7c3aed 60%, #a78bfa 100%)',
                   borderRadius: '4px 0 0 4px',
                 }} />
@@ -3537,16 +3549,14 @@ function ProfitPathPanel({
                 width: 32, height: 32, borderRadius: '50%',
                 zIndex: 10, pointerEvents: 'none',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: targetUnlocked
-                  ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)'
-                  : 'linear-gradient(135deg, #2d1b69 0%, #5b21b6 50%, #2d1b69 100%)',
+                background: 'linear-gradient(135deg, #2d1b69 0%, #5b21b6 50%, #2d1b69 100%)',
                 boxShadow: targetUnlocked
-                  ? '0 0 14px rgba(255,235,100,1), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.5)'
+                  ? '0 0 14px rgba(167,139,250,0.9), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.3)'
                   : '0 0 8px rgba(167,139,250,0.5), 0 2px 6px rgba(0,0,0,0.8)',
-                border: targetUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : '1.5px solid rgba(167,139,250,0.5)',
+                border: targetUnlocked ? '1.5px solid rgba(167,139,250,0.9)' : '1.5px solid rgba(167,139,250,0.5)',
               }}>
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <text x="7" y="10" textAnchor="middle" fontSize="9" fill={targetUnlocked ? '#888' : '#a78bfa'} fontWeight="700">¥</text>
+                  <text x="7" y="10" textAnchor="middle" fontSize="9" fill="#a78bfa" fontWeight="700">¥</text>
                 </svg>
               </div>
             </div>
@@ -3591,19 +3601,31 @@ function ProfitPathPanel({
                   background: qtyUnlocked ? 'rgba(255,235,100,0.15)' : 'rgba(100,120,200,0.15)',
                   color: qtyUnlocked ? 'rgba(255,235,100,0.8)' : 'rgba(100,120,200,0.6)',
                   border: `1px solid ${qtyUnlocked ? 'rgba(255,235,100,0.3)' : 'rgba(100,120,200,0.2)'}`,
-
                 }}>{qtyUnlocked ? '变量' : '定量'}</span>
+                <span
+                  onClick={() => setShowLogInfo(true)}
+                  style={{
+                    fontSize: 10, padding: '1px 7px', borderRadius: 10, cursor: 'pointer',
+                    background: 'rgba(96,165,250,0.12)',
+                    color: 'rgba(96,165,250,0.7)',
+                    border: '1px solid rgba(96,165,250,0.25)',
+                    userSelect: 'none',
+                  }}
+                >对数刻度</span>
               </div>
               {editingQty ? (
                 <input
                   ref={qtyInputRef}
                   type="number"
+                  inputMode="numeric"
+                  min={ETH_MIN}
+                  max={ETH_MAX}
                   value={inputQtyVal}
                   onChange={(e) => setInputQtyVal(e.target.value)}
                   onBlur={() => {
                     const v = parseFloat(inputQtyVal);
-                    if (!isNaN(v) && v >= 0) {
-                      const val = Math.max(0, Math.min(maxQty, Math.round(v * 10) / 10));
+                    if (!isNaN(v) && v >= ETH_MIN) {
+                      const val = Math.max(ETH_MIN, Math.min(ETH_MAX, parseFloat(v.toFixed(2))));
                       setSliderQty(val);
                       sessionStorage.setItem(SESSION_KEY_QTY, String(val));
                     }
@@ -3614,14 +3636,14 @@ function ProfitPathPanel({
                     if (e.key === 'Escape') setEditingQty(false);
                   }}
                   style={{
-                    width: 72, fontSize: 15, fontWeight: 700, color: '#60a5fa',
+                    width: 88, fontSize: 15, fontWeight: 700, color: '#60a5fa',
                     background: 'transparent',
                     border: '1px solid rgba(96,165,250,0.5)',
                     borderRadius: 6, padding: '1px 4px',
                     textAlign: 'right', outline: 'none',
                     fontVariantNumeric: 'tabular-nums',
                   }}
-                  placeholder="ETH"
+                  placeholder="1-10000"
                 />
               ) : (
                 <span
@@ -3665,32 +3687,28 @@ function ProfitPathPanel({
                 {/* 已填充段（蓝色渐变） */}
                 <div style={{
                   position: 'absolute', top: 0, left: 0, height: '100%',
-                  width: `${(sliderQty / maxQty) * 100}%`,
-                  background: qtyUnlocked
-                    ? 'linear-gradient(90deg, #b8860b 0%, #f0d060 60%, #ffe080 100%)'
-                    : 'linear-gradient(90deg, #1a5faa 0%, #2a7fd4 60%, #60a5fa 100%)',
+                  width: `${ethLogToSlider(Math.max(ETH_MIN, sliderQty)) * 100}%`,
+                  background: 'linear-gradient(90deg, #1a5faa 0%, #2a7fd4 60%, #60a5fa 100%)',
                   borderRadius: '4px 0 0 4px',
                 }} />
                 {/* 轨道内文字：左显 0，右显 maxQty */}
-                <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>0</span>
-                <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>{maxQty}E</span>
+                <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>1</span>
+                <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>10000E</span>
               </div>
               {/* 32px 圆形手柄（内嵌 ETH 图标） */}
               <div
                 style={{
                   position: 'absolute',
-                  left: `calc(${(sliderQty / maxQty) * 100}% - 16px)`,
+                  left: `calc(${ethLogToSlider(Math.max(ETH_MIN, sliderQty)) * 100}% - 16px)`,
                   top: '50%', transform: 'translateY(-50%)',
                   width: 32, height: 32, borderRadius: '50%',
                   zIndex: 10, pointerEvents: 'none',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: qtyUnlocked
-                    ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)'
-                    : 'linear-gradient(135deg, #1a3a6a 0%, #2a5fa0 50%, #1a3a6a 100%)',
+                  background: 'linear-gradient(135deg, #1a3a6a 0%, #2a5fa0 50%, #1a3a6a 100%)',
                   boxShadow: qtyUnlocked
-                    ? '0 0 14px rgba(255,235,100,1), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.5)'
+                    ? '0 0 14px rgba(96,165,250,0.9), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.3)'
                     : '0 0 8px rgba(96,165,250,0.5), 0 2px 6px rgba(0,0,0,0.8)',
-                  border: qtyUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : '1.5px solid rgba(96,165,250,0.5)',
+                  border: qtyUnlocked ? '1.5px solid rgba(96,165,250,0.9)' : '1.5px solid rgba(96,165,250,0.5)',
                 }}
               >
                 <svg width="16" height="20" viewBox="0 0 16 20" fill="none">
@@ -3811,9 +3829,7 @@ function ProfitPathPanel({
                 <div style={{
                   position: 'absolute', top: 0, left: 0, height: '100%',
                   width: `${(Math.min(riseDisplay, maxRisePct) / maxRisePct) * 100}%`,
-                  background: riseUnlocked
-                    ? 'linear-gradient(90deg, #b8860b 0%, #f0d060 60%, #ffe080 100%)'
-                    : `linear-gradient(90deg, #22c55e 0%, #84cc16 25%, #eab308 50%, ${difficulty.color} 100%)`,
+                  background: `linear-gradient(90deg, #22c55e 0%, #84cc16 25%, #eab308 50%, ${difficulty.color} 100%)`,
                   borderRadius: '4px 0 0 4px',
                 }} />
                 {/* 轨道内文字 */}
@@ -3829,13 +3845,11 @@ function ProfitPathPanel({
                   width: 32, height: 32, borderRadius: '50%',
                   zIndex: 10, pointerEvents: 'none',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: riseUnlocked
-                    ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)'
-                    : `linear-gradient(135deg, rgba(34,197,94,0.3) 0%, rgba(0,0,0,0.8) 50%, rgba(0,0,0,0.9) 100%)`,
+                  background: `linear-gradient(135deg, rgba(34,197,94,0.3) 0%, rgba(0,0,0,0.8) 50%, rgba(0,0,0,0.9) 100%)`,
                   boxShadow: riseUnlocked
-                    ? '0 0 14px rgba(255,235,100,1), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.5)'
+                    ? `0 0 14px ${difficulty.color}cc, 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.3)`
                     : `0 0 10px ${difficulty.color}80, 0 2px 6px rgba(0,0,0,0.8)`,
-                  border: riseUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : `1.5px solid ${difficulty.color}80`,
+                  border: riseUnlocked ? `1.5px solid ${difficulty.color}cc` : `1.5px solid ${difficulty.color}80`,
                 }}
               >
                 <svg width="16" height="20" viewBox="0 0 16 20" fill="none">
