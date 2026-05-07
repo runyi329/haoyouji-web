@@ -3530,17 +3530,19 @@ function ProfitPathPanel({
     const pts: Array<{ rise: number; difficulty: number; riseScore: number; fundScore: number }> = [];
     const steps = 100;
     // ETH历史涨幅分布参考（对数正态分布建模）：
-    // 30天内涨50%以上概率约15%，涨100%约5%，涨200%约1.5%，涨500%约0.1%
-    // 用指数函数建模涨幅难度
+    // 涨幅难度：用对数尺度建模，低涨幅区间展开更宽，高涨幅快速上升
     const riseScoreFn = (rise: number): number => {
-      // 0%涨幅=0分难度，500%涨幅=100分难度，中间用对数曲线
       if (rise <= 0) return 0;
-      const normalized = rise / 500; // 0~1
-      // 对数加速：低涨幅难度低，高涨幅急剧增加
-      return Math.min(100, Math.pow(normalized, 0.55) * 100);
+      // 对数尺度：把 0.1%~500% 映射到0~100
+      const logMin = Math.log(0.1);
+      const logMax = Math.log(500);
+      const logRise = Math.log(Math.max(0.1, rise));
+      const normalized = (logRise - logMin) / (logMax - logMin); // 0~1
+      // 线性映射：对数尺度下涨幅均匀分布，高涨幅区间展开更宽
+      return Math.min(100, normalized * 100);
     };
     // 资金难度：在止盈金额固定的情况下，涨幅越低 → 需要持仓越多 → 资金越多 → 越难
-    // 涨幅=0时资金无穷大（极难），涨幅=500%时资金最少（最易）
+    // 用对数尺度建模：持仓量对数映射到0~100，让甲蜜区在视觉上更居中
     const fundScoreFn = (rise: number): number => {
       if (rise <= 0) return 100;
       // 所需持仓量 = profitUsdt / (curPrice*(1+rise/100) - avgPrice)
@@ -3548,10 +3550,13 @@ function ProfitPathPanel({
       const perCoin = exitP - (avgPrice > 0 ? avgPrice : curPrice * 0.8);
       if (perCoin <= 0) return 100;
       const needQty = profitUsdt > 0 ? profitUsdt / perCoin : ETH_MAX;
-      // 归一化到0~1（以ETH_MAX为基准）
-      const qtyRatio = Math.min(needQty / ETH_MAX, 3); // 超过3倍ETH_MAX视为极难
-      // 对数映射：持仓量越多越难，但不是线性的
-      return Math.min(100, Math.pow(qtyRatio / 3, 0.4) * 100);
+      if (needQty <= 0) return 0;
+      // 对数尺度归一化：把 1~ETH_MAX*10 映射到0~100
+      const logMin2 = Math.log(1);
+      const logMax2 = Math.log(ETH_MAX * 10);
+      const logQty = Math.log(Math.max(1, needQty));
+      const qtyNorm = Math.min(1, (logQty - logMin2) / (logMax2 - logMin2));
+      return Math.min(100, qtyNorm * 100);
     };
     for (let i = 0; i <= steps; i++) {
       const rise = (i / steps) * 500;
@@ -3700,16 +3705,32 @@ function ProfitPathPanel({
                 );
               })()}
 
-              {/* 双边难度曲线 */}
+              {/* 双边难度曲线：每段按难度值着色，而非按X轴位置渐变 */}
               {diffCurvePoints.length > 1 && (
-                <polyline
-                  points={diffCurvePoints.map(pt => `${toX(pt.rise).toFixed(1)},${toY(pt.difficulty).toFixed(1)}`).join(' ')}
-                  fill="none"
-                  stroke="url(#diffCurveGrad)"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+                <g>
+                  {diffCurvePoints.slice(0, -1).map((pt, i) => {
+                    const next = diffCurvePoints[i + 1];
+                    const avgDiff = (pt.difficulty + next.difficulty) / 2;
+                    // 按平均难度值选色
+                    const segColor = avgDiff < 25 ? '#22c55e'
+                      : avgDiff < 45 ? '#84cc16'
+                      : avgDiff < 60 ? '#eab308'
+                      : avgDiff < 75 ? '#f97316'
+                      : '#ef4444';
+                    return (
+                      <line
+                        key={i}
+                        x1={toX(pt.rise).toFixed(1)}
+                        y1={toY(pt.difficulty).toFixed(1)}
+                        x2={toX(next.rise).toFixed(1)}
+                        y2={toY(next.difficulty).toFixed(1)}
+                        stroke={segColor}
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                      />
+                    );
+                  })}
+                </g>
               )}
 
               {/* 甜蜜区标记 */}
