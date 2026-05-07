@@ -3405,16 +3405,7 @@ function ProfitPathPanel({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div
-                  onDoubleClick={toggleTargetLock}
-                  onTouchEnd={(e) => {
-                    const now = Date.now();
-                    if (targetTapRef.current && now - targetTapRef.current.time < 350) {
-                      toggleTargetLock();
-                      targetTapRef.current = null;
-                    } else {
-                      targetTapRef.current = { time: now };
-                    }
-                  }}
+                  onClick={toggleTargetLock}
                   style={{
                     width: 26, height: 26, borderRadius: '50%', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -3427,7 +3418,7 @@ function ProfitPathPanel({
                       : '0 1px 4px rgba(0,0,0,0.5)',
                     userSelect: 'none',
                   }}
-                  title="双击切换定量/变量"
+                  title="点击切换定量/变量"
                 >
                   <svg width="11" height="13" viewBox="0 0 10 12" fill="none">
                     <rect x="1.5" y="5" width="7" height="6" rx="1.5" fill={targetUnlocked ? '#888' : 'rgba(148,163,184,0.7)'} />
@@ -3521,16 +3512,7 @@ function ProfitPathPanel({
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 {/* 锁定/解锁按鈕 */}
                 <div
-                  onDoubleClick={toggleQtyLock}
-                  onTouchEnd={(e) => {
-                    const now = Date.now();
-                    if (qtyTapRef.current && now - qtyTapRef.current.time < 350) {
-                      toggleQtyLock();
-                      qtyTapRef.current = null;
-                    } else {
-                      qtyTapRef.current = { time: now };
-                    }
-                  }}
+                  onClick={toggleQtyLock}
                   style={{
                     width: 26, height: 26, borderRadius: '50%', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -3543,7 +3525,7 @@ function ProfitPathPanel({
                       : '0 1px 4px rgba(0,0,0,0.5)',
                     userSelect: 'none',
                   }}
-                  title="双击切换定量/变量"
+                  title="点击切换定量/变量"
                 >
                   <svg width="11" height="13" viewBox="0 0 10 12" fill="none">
                     <rect x="1.5" y="5" width="7" height="6" rx="1.5" fill={qtyUnlocked ? '#888' : 'rgba(148,163,184,0.7)'} />
@@ -3658,7 +3640,7 @@ function ProfitPathPanel({
               ? <span>↓ 持仓数量随涨幅变动</span>
               : riseUnlocked
               ? <span>↑ 涨幅随持仓数量变动</span>
-              : <span>双击锁图可设为变量</span>
+              : <span>点击锁图可设为变量</span>
             }
           </div>
 
@@ -3668,16 +3650,7 @@ function ProfitPathPanel({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div
-                  onDoubleClick={toggleRiseLock}
-                  onTouchEnd={(e) => {
-                    const now = Date.now();
-                    if (riseTapRef.current && now - riseTapRef.current.time < 350) {
-                      toggleRiseLock();
-                      riseTapRef.current = null;
-                    } else {
-                      riseTapRef.current = { time: now };
-                    }
-                  }}
+                  onClick={toggleRiseLock}
                   style={{
                     width: 26, height: 26, borderRadius: '50%', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -3690,7 +3663,7 @@ function ProfitPathPanel({
                       : '0 1px 4px rgba(0,0,0,0.5)',
                     userSelect: 'none',
                   }}
-                  title="双击切换定量/变量"
+                  title="点击切换定量/变量"
                 >
                   <svg width="11" height="13" viewBox="0 0 10 12" fill="none">
                     <rect x="1.5" y="5" width="7" height="6" rx="1.5" fill={riseUnlocked ? '#888' : 'rgba(148,163,184,0.7)'} />
