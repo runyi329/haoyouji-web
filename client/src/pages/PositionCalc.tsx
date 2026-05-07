@@ -1359,6 +1359,7 @@ export default function PositionCalc() {
               onClick={() => setSelectedPrice(prev => prev === price ? null : price)}
               onDoubleClick={() => openModal(price)}
               className="w-full block"
+              style={{ touchAction: 'manipulation' }}
             >
               {/* 进度条容器 */}
               <div
