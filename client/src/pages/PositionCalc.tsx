@@ -3076,7 +3076,7 @@ function ProfitPathPanel({
   // 新逻辑：只有解锁的滑块才能被手动拖动；锁定的滑块只能被联动更新
   // 三条互锁：永远锁一条，另两条联动
   // lockedField: 'target'=止盈锁定, 'qty'=持仓锁定, 'rise'=涨幅锁定
-  const [lockedField, setLockedField] = React.useState<'target' | 'qty' | 'rise'>('rise'); // 默认锁涨幅
+  const [lockedField, setLockedField] = React.useState<'target' | 'qty' | 'rise'>('target'); // 默认锁止盈
   const targetUnlocked = lockedField !== 'target'; // 止盈未锁定 = 可拖动
   const qtyUnlocked = lockedField !== 'qty';       // 持仓未锁定 = 可拖动
   const riseUnlocked = lockedField !== 'rise';     // 涨幅未锁定 = 可拖动
