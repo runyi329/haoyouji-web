@@ -8,7 +8,12 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 // 注入双端滑块样式
 const RANGE_SLIDER_STYLE = `
-  .dual-range input[type=range] { pointer-events: none; }
+  .dual-range input[type=range] {
+    pointer-events: auto;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+  }
   .dual-range input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none;
     pointer-events: all;
@@ -20,6 +25,9 @@ const RANGE_SLIDER_STYLE = `
     box-shadow: 0 1px 4px rgba(59,130,246,0.4);
     cursor: pointer;
   }
+  .dual-range input[type=range]::-webkit-slider-runnable-track {
+    background: transparent;
+  }
   .dual-range input[type=range]::-moz-range-thumb {
     pointer-events: all;
     width: 22px;
@@ -29,6 +37,9 @@ const RANGE_SLIDER_STYLE = `
     border: 2px solid #3B82F6;
     box-shadow: 0 1px 4px rgba(59,130,246,0.4);
     cursor: pointer;
+  }
+  .dual-range input[type=range]::-moz-range-track {
+    background: transparent;
   }
 `;
 import { useRoute, useLocation } from "wouter";
@@ -1726,6 +1737,7 @@ export default function PositionCalc() {
                         <div className="relative mx-1 dual-range" style={{ height: '40px' }}>
                           <div className="absolute top-1/2 left-0 right-0 rounded-full" style={{ height: '5px', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)' }} />
                           <div className="absolute top-1/2 rounded-full" style={{ height: '5px', transform: 'translateY(-50%)', left: `${minPct2}%`, right: `${100 - maxPct2}%`, background: 'linear-gradient(90deg, #3B82F6, #1D4ED8)' }} />
+                          {/* 双滑块：动态 z-index —— 哪个手柄靠近点击位置就把哪个置顶 */}
                           <input type="range" min={SLIDER_MIN} max={SLIDER_MAX} step={SLIDER_STEP} value={minVal2}
                             onChange={e => {
                               const priceFloor = currentPrice ? Math.min(3450, Math.max(1000, Math.round(currentPrice / 50) * 50)) : SLIDER_MIN;
@@ -1733,12 +1745,19 @@ export default function PositionCalc() {
                               setAllocMinPrice(String(v));
                             }}
                             className="absolute w-full appearance-none bg-transparent cursor-pointer"
-                            style={{ top: '50%', transform: 'translateY(-50%)', height: '40px', zIndex: 3, clipPath: `inset(0 ${100 - (minPct2 + maxPct2) / 2}% 0 0)` }}
+                            style={{
+                              top: '50%', transform: 'translateY(-50%)', height: '40px',
+                              // 当 minVal2 更靠近 maxVal2 时，将左滑块置顶，否则右滑块置顶
+                              zIndex: (maxVal2 - minVal2) < (SLIDER_MAX - SLIDER_MIN) * 0.1 ? 5 : 3,
+                            }}
                           />
                           <input type="range" min={SLIDER_MIN} max={SLIDER_MAX} step={SLIDER_STEP} value={maxVal2}
                             onChange={e => setAllocMaxPrice(String(Math.max(parseInt(e.target.value), minVal2 + SLIDER_STEP)))}
                             className="absolute w-full appearance-none bg-transparent cursor-pointer"
-                            style={{ top: '50%', transform: 'translateY(-50%)', height: '40px', zIndex: 4, clipPath: `inset(0 0 0 ${(minPct2 + maxPct2) / 2}%)` }}
+                            style={{
+                              top: '50%', transform: 'translateY(-50%)', height: '40px',
+                              zIndex: (maxVal2 - minVal2) < (SLIDER_MAX - SLIDER_MIN) * 0.1 ? 3 : 4,
+                            }}
                           />
                         </div>
                         <div className="flex justify-between mt-1 px-0.5">
@@ -1866,7 +1885,7 @@ export default function PositionCalc() {
                                 background: 'linear-gradient(90deg, #3B82F6, #1D4ED8)',
                               }}
                             />
-                            {/* 最低价滑块：只在左半区域（0% ~ midPct）接收事件 */}
+                            {/* 最低价滑块：动态 z-index，两手柄靠近时将左滑块置顶避免右滑块遮挡 */}
                             <input
                               type="range"
                               min={SLIDER_MIN}
@@ -1882,11 +1901,10 @@ export default function PositionCalc() {
                                 top: '50%',
                                 transform: 'translateY(-50%)',
                                 height: '44px',
-                                zIndex: 3,
-                                clipPath: `inset(0 ${100 - (minPct + maxPct) / 2}% 0 0)`,
+                                zIndex: (maxVal - minVal) < (SLIDER_MAX - SLIDER_MIN) * 0.1 ? 5 : 3,
                               }}
                             />
-                            {/* 最高价滑块：只在右半区域（midPct ~ 100%）接收事件 */}
+                            {/* 最高价滑块：默认 z-index 高于左滑块，确保右滑块始终可点 */}
                             <input
                               type="range"
                               min={SLIDER_MIN}
@@ -1902,8 +1920,7 @@ export default function PositionCalc() {
                                 top: '50%',
                                 transform: 'translateY(-50%)',
                                 height: '44px',
-                                zIndex: 4,
-                                clipPath: `inset(0 0 0 ${(minPct + maxPct) / 2}%)`,
+                                zIndex: (maxVal - minVal) < (SLIDER_MAX - SLIDER_MIN) * 0.1 ? 3 : 4,
                               }}
                             />
                           </div>
