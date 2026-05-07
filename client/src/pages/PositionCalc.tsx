@@ -154,6 +154,7 @@ export default function PositionCalc() {
   const [priceStep, setPriceStep] = useState<number>(50); // 档位粒度：20/50/100/200
   // 动态档位列表，随 priceStep 变化重新生成
   const priceLevels = useMemo(() => generatePriceLevels(priceStep), [priceStep]);
+  const levelLastTapRef = useRef<{ price: number; time: number } | null>(null); // 价格档位双击检测
   const strategyBarRef = useRef<HTMLDivElement>(null); // 进度条容器 ref
   const isDraggingStrategy = useRef(false); // 是否正在拖动
   const strategyRatioRef = useRef(strategyRatio); // 实时值 ref，避免闭包问题
@@ -1359,7 +1360,18 @@ export default function PositionCalc() {
               onClick={() => setSelectedPrice(prev => prev === price ? null : price)}
               onDoubleClick={() => openModal(price)}
               className="w-full block"
-              style={{ touchAction: 'manipulation' }}
+              style={{ touchAction: 'manipulation', userSelect: 'none', WebkitUserSelect: 'none' } as React.CSSProperties}
+              onTouchEnd={(e) => {
+                const now = Date.now();
+                const last = levelLastTapRef.current;
+                if (last && last.price === price && now - last.time < 350) {
+                  e.preventDefault();
+                  levelLastTapRef.current = null;
+                  openModal(price);
+                } else {
+                  levelLastTapRef.current = { price, time: now };
+                }
+              }}
             >
               {/* 进度条容器 */}
               <div
