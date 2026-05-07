@@ -2920,7 +2920,502 @@ export default function PositionCalc() {
           </div>
         </div>
       )}
+      {/* ===== 盈利路径分析：联动滑块 ===== */}
+      {(() => {
+        // 基础数据
+        const profitUsdt = (parseFloat(targetProfitCny) || 0) / (cnyRate || 7.28);
+        const curPrice = currentPrice || 0;
+        // 实际均价
+        let _actCost2 = 0, _actQty2 = 0;
+        priceLevels.forEach(p => { const q = actual[p] || 0; if (q > 0) { _actCost2 += q * p; _actQty2 += q; } });
+        const avgPrice = _actQty2 > 0 ? _actCost2 / _actQty2 : (curPrice || 2000);
+        const basePrice = avgPrice > 0 ? avgPrice : (curPrice || 2000);
+
+        // 滑块范围
+        const maxQty = Math.max(200, Math.ceil((parseFloat(targetEthQty) || 50) * 2));
+        const maxRisePct = 500;
+
+        // 联动计算
+        // qty → 所需涨幅%: riseNeeded = (avgPrice + profit/qty - curPrice) / curPrice * 100
+        const qtyToRise = (qty: number): number => {
+          if (qty <= 0 || curPrice <= 0) return 0;
+          const exitPrice = basePrice + profitUsdt / qty;
+          return Math.max(0, ((exitPrice - curPrice) / curPrice) * 100);
+        };
+        // rise% → 所需数量: qty = profit / (curPrice*(1+rise/100) - avgPrice)
+        const riseToQty = (rise: number): number => {
+          const exitPrice = curPrice * (1 + rise / 100);
+          const perCoin = exitPrice - basePrice;
+          if (perCoin <= 0 || profitUsdt <= 0) return 0;
+          return Math.min(maxQty, profitUsdt / perCoin);
+        };
+
+        return (
+          <ProfitPathPanel
+            profitUsdt={profitUsdt}
+            targetProfitCny={parseFloat(targetProfitCny) || 0}
+            curPrice={curPrice}
+            avgPrice={basePrice}
+            maxQty={maxQty}
+            maxRisePct={maxRisePct}
+            qtyToRise={qtyToRise}
+            riseToQty={riseToQty}
+            actualQty={_actQty2}
+          />
+        );
+      })()}
     </div>
   );
 }
 
+
+// ===== 盈利路径分析组件 =====
+interface ProfitPathPanelProps {
+  profitUsdt: number;
+  targetProfitCny: number;
+  curPrice: number;
+  avgPrice: number;
+  maxQty: number;
+  maxRisePct: number;
+  qtyToRise: (qty: number) => number;
+  riseToQty: (rise: number) => number;
+  actualQty: number;
+}
+
+function ProfitPathPanel({
+  profitUsdt, targetProfitCny, curPrice, avgPrice,
+  maxQty, maxRisePct, qtyToRise, riseToQty, actualQty
+}: ProfitPathPanelProps) {
+  const [sliderQty, setSliderQty] = React.useState<number>(() => Math.min(actualQty || 10, maxQty));
+  const [sliderRise, setSliderRise] = React.useState<number>(() => 0);
+
+  // 双击切换锁定/解锁状态：true = 解锁（可被联动），false = 锁定（定量）
+  const [qtyUnlocked, setQtyUnlocked] = React.useState(false);
+  const [riseUnlocked, setRiseUnlocked] = React.useState(false);
+  // 移动端单指双击检测
+  const qtyTapRef = React.useRef<{ time: number } | null>(null);
+  const riseTapRef = React.useRef<{ time: number } | null>(null);
+
+  const toggleQtyLock = () => setQtyUnlocked(v => !v);
+  const toggleRiseLock = () => setRiseUnlocked(v => !v);
+
+  // 初始化：根据 actualQty 计算初始涨幅
+  React.useEffect(() => {
+    const initQty = Math.max(1, Math.min(actualQty || 10, maxQty));
+    setSliderQty(initQty);
+    const rise = qtyToRise(initQty);
+    setSliderRise(Math.min(rise, maxRisePct));
+  }, [actualQty, curPrice, avgPrice, profitUsdt]);
+
+  // 拖动币量滑块 → 若涨幅已解锁则联动涨幅
+  const handleQtyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const qty = parseFloat(e.target.value);
+    setSliderQty(qty);
+    if (riseUnlocked) {
+      const rise = qtyToRise(qty);
+      setSliderRise(Math.min(rise, maxRisePct));
+    }
+  };
+
+  // 拖动涨幅滑块 → 若币量已解锁则联动币量
+  const handleRiseChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rise = parseFloat(e.target.value);
+    setSliderRise(rise);
+    if (qtyUnlocked) {
+      const qty = riseToQty(rise);
+      setSliderQty(Math.min(qty, maxQty));
+    }
+  };
+
+  // 目标离场价
+  const exitPrice = sliderQty > 0 ? avgPrice + profitUsdt / sliderQty : 0;
+  const riseDisplay = exitPrice > 0 && curPrice > 0 ? ((exitPrice - curPrice) / curPrice * 100) : sliderRise;
+
+  // 难易度评分（0-100）
+  const calcDifficulty = (): { score: number; label: string; color: string; desc: string } => {
+    if (profitUsdt <= 0 || curPrice <= 0) return { score: 0, label: '无数据', color: '#666', desc: '请先设置目标利润' };
+    // 涨幅难度（0-60分）：涨幅越大越难
+    const riseFactor = Math.min(riseDisplay / maxRisePct, 1); // 0~1
+    const riseScore = riseFactor * 60;
+    // 持仓量难度（0-40分）：持仓量越少越难（需要更高涨幅）
+    const qtyFactor = 1 - Math.min(sliderQty / maxQty, 1); // 少币=难
+    const qtyScore = qtyFactor * 40;
+    const score = Math.round(riseScore + qtyScore);
+
+    if (score < 20) return { score, label: '较易', color: '#22c55e', desc: `持仓充足，仅需涨 ${riseDisplay.toFixed(1)}%` };
+    if (score < 40) return { score, label: '适中', color: '#84cc16', desc: `需涨 ${riseDisplay.toFixed(1)}%，可行` };
+    if (score < 60) return { score, label: '偏难', color: '#eab308', desc: `需涨 ${riseDisplay.toFixed(1)}%，有挑战` };
+    if (score < 80) return { score, label: '较难', color: '#f97316', desc: `需涨 ${riseDisplay.toFixed(1)}%，高风险` };
+    return { score, label: '极难', color: '#ef4444', desc: `需涨 ${riseDisplay.toFixed(1)}%，极高风险` };
+  };
+  const difficulty = calcDifficulty();
+
+  // 生成曲线图数据点（持仓量 vs 所需涨幅）
+  const chartPoints = React.useMemo(() => {
+    const pts: Array<{ qty: number; rise: number }> = [];
+    const steps = 60;
+    for (let i = 1; i <= steps; i++) {
+      const qty = (i / steps) * maxQty;
+      const rise = qtyToRise(qty);
+      pts.push({ qty, rise: Math.min(rise, maxRisePct) });
+    }
+    return pts;
+  }, [maxQty, maxRisePct, profitUsdt, avgPrice, curPrice]);
+
+  // SVG 尺寸
+  const svgW = 320, svgH = 140;
+  const padL = 38, padR = 12, padT = 12, padB = 28;
+  const plotW = svgW - padL - padR;
+  const plotH = svgH - padT - padB;
+
+  // 坐标转换
+  const toX = (qty: number) => padL + (qty / maxQty) * plotW;
+  const toY = (rise: number) => padT + plotH - (rise / maxRisePct) * plotH;
+
+  // 曲线路径
+  const pathD = chartPoints.length > 0
+    ? chartPoints.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${toX(pt.qty).toFixed(1)} ${toY(pt.rise).toFixed(1)}`).join(' ')
+    : '';
+
+  // 热力区域背景（按涨幅分4段）
+  const heatZones = [
+    { minRise: 0,   maxRise: 50,  color: 'rgba(34,197,94,0.12)',  label: '易' },
+    { minRise: 50,  maxRise: 150, color: 'rgba(234,179,8,0.12)',  label: '中' },
+    { minRise: 150, maxRise: 300, color: 'rgba(249,115,22,0.12)', label: '难' },
+    { minRise: 300, maxRise: 500, color: 'rgba(239,68,68,0.12)',  label: '极' },
+  ];
+
+  // 当前选中点坐标
+  const selX = toX(sliderQty);
+  const selY = toY(Math.min(riseDisplay, maxRisePct));
+
+  const hasData = profitUsdt > 0 && curPrice > 0;
+
+  return (
+    <div style={{ margin: '16px 12px 24px', borderRadius: 16, background: 'linear-gradient(160deg, #0d0f1a 0%, #0a0d18 100%)', border: '1px solid rgba(100,120,200,0.2)', boxShadow: '0 8px 32px rgba(0,0,0,0.6)', padding: '16px 14px 18px' }}>
+      {/* 标题 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <div style={{ width: 3, height: 16, borderRadius: 2, background: 'linear-gradient(180deg, #60a5fa, #3b82f6)' }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0', letterSpacing: 1 }}>盈利路径分析</span>
+        {targetProfitCny > 0 && (
+          <span style={{ fontSize: 11, color: 'rgba(148,163,184,0.7)', marginLeft: 4 }}>
+            目标 ¥{targetProfitCny.toLocaleString('zh-CN')} ≈ ${profitUsdt.toFixed(0)}
+          </span>
+        )}
+      </div>
+
+      {!hasData ? (
+        <div style={{ textAlign: 'center', padding: '20px 0', color: 'rgba(148,163,184,0.5)', fontSize: 12 }}>
+          请先在上方设置「目标止盈利润」和当前价格
+        </div>
+      ) : (
+        <>
+          {/* 热力曲线图 */}
+          <div style={{ marginBottom: 16, borderRadius: 10, overflow: 'hidden', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(100,120,200,0.12)' }}>
+            <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} style={{ display: 'block' }}>
+              {/* 热力背景区域 */}
+              {heatZones.map((zone, zi) => {
+                const y1 = toY(zone.maxRise);
+                const y2 = toY(zone.minRise);
+                return (
+                  <g key={zi}>
+                    <rect x={padL} y={y1} width={plotW} height={y2 - y1} fill={zone.color} />
+                    <text x={svgW - padR - 2} y={(y1 + y2) / 2 + 4} textAnchor="end" fontSize="8" fill="rgba(255,255,255,0.25)">{zone.label}</text>
+                  </g>
+                );
+              })}
+
+              {/* 网格线 */}
+              {[0, 100, 200, 300, 400, 500].map(rise => (
+                <line key={rise} x1={padL} y1={toY(rise)} x2={svgW - padR} y2={toY(rise)}
+                  stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" strokeDasharray="3,3" />
+              ))}
+              {[0, 0.25, 0.5, 0.75, 1].map(f => (
+                <line key={f} x1={toX(f * maxQty)} y1={padT} x2={toX(f * maxQty)} y2={padT + plotH}
+                  stroke="rgba(255,255,255,0.06)" strokeWidth="0.5" strokeDasharray="3,3" />
+              ))}
+
+              {/* Y轴标签（涨幅%） */}
+              {[0, 100, 200, 300, 400, 500].map(rise => (
+                <text key={rise} x={padL - 4} y={toY(rise) + 3.5} textAnchor="end" fontSize="8" fill="rgba(148,163,184,0.6)">{rise}%</text>
+              ))}
+
+              {/* X轴标签（持仓量） */}
+              {[0, 0.25, 0.5, 0.75, 1].map(f => (
+                <text key={f} x={toX(f * maxQty)} y={padT + plotH + 10} textAnchor="middle" fontSize="8" fill="rgba(148,163,184,0.6)">
+                  {(f * maxQty).toFixed(0)}
+                </text>
+              ))}
+
+              {/* 轴线 */}
+              <line x1={padL} y1={padT} x2={padL} y2={padT + plotH} stroke="rgba(148,163,184,0.3)" strokeWidth="1" />
+              <line x1={padL} y1={padT + plotH} x2={svgW - padR} y2={padT + plotH} stroke="rgba(148,163,184,0.3)" strokeWidth="1" />
+
+              {/* 轴标题 */}
+              <text x={padL + plotW / 2} y={svgH - 2} textAnchor="middle" fontSize="8" fill="rgba(148,163,184,0.5)">持仓量 (ETH)</text>
+              <text x={8} y={padT + plotH / 2} textAnchor="middle" fontSize="8" fill="rgba(148,163,184,0.5)" transform={`rotate(-90, 8, ${padT + plotH / 2})`}>所需涨幅</text>
+
+              {/* 曲线渐变定义 */}
+              <defs>
+                <linearGradient id="curveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#ef4444" />
+                  <stop offset="40%" stopColor="#f97316" />
+                  <stop offset="70%" stopColor="#eab308" />
+                  <stop offset="100%" stopColor="#22c55e" />
+                </linearGradient>
+              </defs>
+
+              {/* 曲线 */}
+              {pathD && (
+                <path d={pathD} fill="none" stroke="url(#curveGrad)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              )}
+
+              {/* 当前选中点 */}
+              {sliderQty > 0 && (
+                <>
+                  {/* 十字线 */}
+                  <line x1={selX} y1={padT} x2={selX} y2={padT + plotH} stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" strokeDasharray="2,2" />
+                  <line x1={padL} y1={selY} x2={svgW - padR} y2={selY} stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" strokeDasharray="2,2" />
+                  {/* 选中点圆圈 */}
+                  <circle cx={selX} cy={selY} r={5} fill={difficulty.color} stroke="white" strokeWidth="1.5" />
+                  {/* 数值标注 */}
+                  <rect x={selX + 6} y={selY - 14} width={68} height={16} rx={4} fill="rgba(0,0,0,0.75)" />
+                  <text x={selX + 10} y={selY - 3} fontSize="9" fill="white">
+                    {sliderQty.toFixed(1)}ETH → +{riseDisplay.toFixed(1)}%
+                  </text>
+                </>
+              )}
+            </svg>
+          </div>
+
+          {/* 滑块A：持仓数量 */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* 锁定/解锁按鈕：双击切换 */}
+                <div
+                  onDoubleClick={toggleQtyLock}
+                  onTouchEnd={(e) => {
+                    const now = Date.now();
+                    if (qtyTapRef.current && now - qtyTapRef.current.time < 350) {
+                      toggleQtyLock();
+                      qtyTapRef.current = null;
+                    } else {
+                      qtyTapRef.current = { time: now };
+                    }
+                  }}
+                  style={{
+                    width: 22, height: 22, borderRadius: '50%', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.25s ease',
+                    background: qtyUnlocked
+                      ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)'
+                      : 'linear-gradient(135deg, #2a3050 0%, #3a4060 100%)',
+                    border: qtyUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : '1.5px solid rgba(100,120,200,0.4)',
+                    boxShadow: qtyUnlocked
+                      ? '0 0 10px rgba(255,235,100,0.9), 0 2px 6px rgba(0,0,0,0.6)'
+                      : '0 1px 4px rgba(0,0,0,0.5)',
+                    userSelect: 'none',
+                  }}
+                  title="双击切换定量/变量"
+                >
+                  {/* 锁图标 */}
+                  <svg width="10" height="12" viewBox="0 0 10 12" fill="none">
+                    <rect x="1.5" y="5" width="7" height="6" rx="1.5" fill={qtyUnlocked ? '#888' : 'rgba(148,163,184,0.7)'} />
+                    {qtyUnlocked
+                      ? <path d="M3 5V3.5C3 2.12 3.9 1 5 1" stroke="rgba(148,163,184,0.5)" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                      : <path d="M3 5V3.5C3 2.12 3.9 1 5 1C6.1 1 7 2.12 7 3.5V5" stroke="rgba(148,163,184,0.7)" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                    }
+                    <circle cx="5" cy="8" r="1" fill={qtyUnlocked ? '#888' : 'rgba(255,255,255,0.5)'} />
+                  </svg>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600,
+                  color: qtyUnlocked ? 'rgba(255,235,100,0.9)' : 'rgba(148,163,184,0.8)',
+                  transition: 'color 0.25s'
+                }}>持仓数量</span>
+                <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 10,
+                  background: qtyUnlocked ? 'rgba(255,235,100,0.15)' : 'rgba(100,120,200,0.15)',
+                  color: qtyUnlocked ? 'rgba(255,235,100,0.8)' : 'rgba(100,120,200,0.6)',
+                  border: `1px solid ${qtyUnlocked ? 'rgba(255,235,100,0.3)' : 'rgba(100,120,200,0.2)'}`,
+                  transition: 'all 0.25s'
+                }}>{qtyUnlocked ? '变量' : '定量'}</span>
+              </div>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#60a5fa', fontVariantNumeric: 'tabular-nums' }}>
+                {sliderQty.toFixed(1)} <span style={{ fontSize: 10, color: 'rgba(148,163,184,0.6)' }}>ETH</span>
+              </span>
+            </div>
+            <div style={{ position: 'relative', height: 28, display: 'flex', alignItems: 'center' }}>
+              <div style={{ position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.08)' }} />
+              <div style={{ position: 'absolute', left: 0, width: `${(sliderQty / maxQty) * 100}%`, height: 4, borderRadius: 2,
+                background: qtyUnlocked ? 'linear-gradient(90deg, #f0d060, #ffe080)' : 'linear-gradient(90deg, #3b82f6, #60a5fa)'
+              }} />
+              <input
+                type="range" min={0.1} max={maxQty} step={0.1}
+                value={sliderQty}
+                onChange={handleQtyChange}
+                style={{ position: 'absolute', left: 0, right: 0, width: '100%', opacity: 0, height: 28, cursor: 'pointer', margin: 0 }}
+              />
+              <div style={{
+                position: 'absolute', left: `calc(${(sliderQty / maxQty) * 100}% - 11px)`,
+                width: 22, height: 22, borderRadius: '50%', pointerEvents: 'none',
+                background: qtyUnlocked
+                  ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 50%, #c0c0c0 100%)'
+                  : 'white',
+                border: qtyUnlocked ? '2.5px solid rgba(255,235,100,0.9)' : '2.5px solid #3b82f6',
+                boxShadow: qtyUnlocked ? '0 0 10px rgba(255,235,100,0.8)' : '0 2px 8px rgba(59,130,246,0.5)',
+                transition: 'all 0.25s'
+              }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+              <span style={{ fontSize: 9, color: 'rgba(148,163,184,0.4)' }}>0</span>
+              <span style={{ fontSize: 9, color: 'rgba(148,163,184,0.4)' }}>{maxQty} ETH</span>
+            </div>
+          </div>
+
+          {/* 联动状态指示 */}
+          <div style={{ textAlign: 'center', marginBottom: 10, fontSize: 10, color: 'rgba(148,163,184,0.4)' }}>
+            {qtyUnlocked && riseUnlocked
+              ? <span style={{ color: 'rgba(255,235,100,0.7)' }}>↕ 双向联动开启</span>
+              : qtyUnlocked
+              ? <span>↓ 持仓数量随涨幅变动</span>
+              : riseUnlocked
+              ? <span>↑ 涨幅随持仓数量变动</span>
+              : <span>双击锁图可设为变量</span>
+            }
+          </div>
+
+          {/* 滑块B：目标涨幅 */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* 锁定/解锁按鈕 */}
+                <div
+                  onDoubleClick={toggleRiseLock}
+                  onTouchEnd={(e) => {
+                    const now = Date.now();
+                    if (riseTapRef.current && now - riseTapRef.current.time < 350) {
+                      toggleRiseLock();
+                      riseTapRef.current = null;
+                    } else {
+                      riseTapRef.current = { time: now };
+                    }
+                  }}
+                  style={{
+                    width: 22, height: 22, borderRadius: '50%', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.25s ease',
+                    background: riseUnlocked
+                      ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)'
+                      : 'linear-gradient(135deg, #2a3050 0%, #3a4060 100%)',
+                    border: riseUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : '1.5px solid rgba(100,120,200,0.4)',
+                    boxShadow: riseUnlocked
+                      ? '0 0 10px rgba(255,235,100,0.9), 0 2px 6px rgba(0,0,0,0.6)'
+                      : '0 1px 4px rgba(0,0,0,0.5)',
+                    userSelect: 'none',
+                  }}
+                  title="双击切换定量/变量"
+                >
+                  <svg width="10" height="12" viewBox="0 0 10 12" fill="none">
+                    <rect x="1.5" y="5" width="7" height="6" rx="1.5" fill={riseUnlocked ? '#888' : 'rgba(148,163,184,0.7)'} />
+                    {riseUnlocked
+                      ? <path d="M3 5V3.5C3 2.12 3.9 1 5 1" stroke="rgba(148,163,184,0.5)" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                      : <path d="M3 5V3.5C3 2.12 3.9 1 5 1C6.1 1 7 2.12 7 3.5V5" stroke="rgba(148,163,184,0.7)" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                    }
+                    <circle cx="5" cy="8" r="1" fill={riseUnlocked ? '#888' : 'rgba(255,255,255,0.5)'} />
+                  </svg>
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 600,
+                  color: riseUnlocked ? 'rgba(255,235,100,0.9)' : 'rgba(148,163,184,0.8)',
+                  transition: 'color 0.25s'
+                }}>目标涨幅</span>
+                <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 10,
+                  background: riseUnlocked ? 'rgba(255,235,100,0.15)' : 'rgba(100,120,200,0.15)',
+                  color: riseUnlocked ? 'rgba(255,235,100,0.8)' : 'rgba(100,120,200,0.6)',
+                  border: `1px solid ${riseUnlocked ? 'rgba(255,235,100,0.3)' : 'rgba(100,120,200,0.2)'}`,
+                  transition: 'all 0.25s'
+                }}>{riseUnlocked ? '变量' : '定量'}</span>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>
+                  +{riseDisplay.toFixed(1)}%
+                </span>
+                {exitPrice > 0 && curPrice > 0 && (
+                  <span style={{ fontSize: 10, color: 'rgba(148,163,184,0.5)', marginLeft: 6 }}>
+                    → ${exitPrice.toFixed(0)}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div style={{ position: 'relative', height: 28, display: 'flex', alignItems: 'center' }}>
+              <div style={{ position: 'absolute', left: 0, right: 0, height: 4, borderRadius: 2, background: 'linear-gradient(90deg, rgba(34,197,94,0.3), rgba(234,179,8,0.3), rgba(249,115,22,0.3), rgba(239,68,68,0.3))' }} />
+              <div style={{ position: 'absolute', left: 0, width: `${(Math.min(riseDisplay, maxRisePct) / maxRisePct) * 100}%`, height: 4, borderRadius: 2,
+                background: riseUnlocked ? 'linear-gradient(90deg, #f0d060, #ffe080)' : `linear-gradient(90deg, #22c55e, ${difficulty.color})`
+              }} />
+              <input
+                type="range" min={0} max={maxRisePct} step={0.5}
+                value={Math.min(riseDisplay, maxRisePct)}
+                onChange={handleRiseChange}
+                style={{ position: 'absolute', left: 0, right: 0, width: '100%', opacity: 0, height: 28, cursor: 'pointer', margin: 0 }}
+              />
+              <div style={{
+                position: 'absolute', left: `calc(${(Math.min(riseDisplay, maxRisePct) / maxRisePct) * 100}% - 11px)`,
+                width: 22, height: 22, borderRadius: '50%', pointerEvents: 'none',
+                background: riseUnlocked
+                  ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 50%, #c0c0c0 100%)'
+                  : 'white',
+                border: riseUnlocked ? '2.5px solid rgba(255,235,100,0.9)' : `2.5px solid ${difficulty.color}`,
+                boxShadow: riseUnlocked ? '0 0 10px rgba(255,235,100,0.8)' : `0 2px 8px ${difficulty.color}80`,
+                transition: 'all 0.25s'
+              }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+              <span style={{ fontSize: 9, color: 'rgba(148,163,184,0.4)' }}>0%</span>
+              <span style={{ fontSize: 9, color: 'rgba(148,163,184,0.4)' }}>{maxRisePct}%</span>
+            </div>
+          </div>
+
+          {/* 难易度评估条 */}
+          <div style={{ borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(100,120,200,0.12)', padding: '10px 12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 11, color: 'rgba(148,163,184,0.7)', fontWeight: 600 }}>方案难易度</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: difficulty.color }}>{difficulty.label}</span>
+            </div>
+            {/* 难易度进度条 */}
+            <div style={{ position: 'relative', height: 8, borderRadius: 4, background: 'linear-gradient(90deg, #22c55e 0%, #84cc16 20%, #eab308 40%, #f97316 70%, #ef4444 100%)', marginBottom: 6 }}>
+              {/* 指针 */}
+              <div style={{ position: 'absolute', top: -3, left: `${difficulty.score}%`, transform: 'translateX(-50%)', width: 14, height: 14, borderRadius: '50%', background: difficulty.color, border: '2px solid white', boxShadow: `0 2px 6px ${difficulty.color}80`, transition: 'left 0.3s ease' }} />
+            </div>
+            {/* 刻度标签 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              {['极易', '较易', '适中', '偏难', '较难', '极难'].map((l, i) => (
+                <span key={i} style={{ fontSize: 8, color: 'rgba(148,163,184,0.4)' }}>{l}</span>
+              ))}
+            </div>
+            {/* 描述文字 */}
+            <div style={{ fontSize: 11, color: 'rgba(148,163,184,0.6)', lineHeight: 1.5 }}>
+              {difficulty.desc}
+              {exitPrice > 0 && (
+                <span style={{ color: 'rgba(148,163,184,0.4)' }}>，目标离场价 <span style={{ color: difficulty.color, fontWeight: 600 }}>${exitPrice.toFixed(0)}</span></span>
+              )}
+            </div>
+            {/* 关键指标行 */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 9, color: 'rgba(148,163,184,0.5)', marginBottom: 2 }}>需持仓</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#60a5fa' }}>{sliderQty.toFixed(1)}<span style={{ fontSize: 9, marginLeft: 2, color: 'rgba(148,163,184,0.5)' }}>ETH</span></div>
+              </div>
+              <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 9, color: 'rgba(148,163,184,0.5)', marginBottom: 2 }}>需涨幅</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b' }}>+{riseDisplay.toFixed(1)}<span style={{ fontSize: 9, marginLeft: 1, color: 'rgba(148,163,184,0.5)' }}>%</span></div>
+              </div>
+              <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 9, color: 'rgba(148,163,184,0.5)', marginBottom: 2 }}>离场价</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: difficulty.color }}>${exitPrice > 0 ? exitPrice.toFixed(0) : '--'}</div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
