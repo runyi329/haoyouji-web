@@ -3716,7 +3716,7 @@ function ProfitPathPanel({
               <span
                   onClick={() => openEditDialog('target')}
                   style={{
-                    fontSize: 13, fontWeight: 700, color: '#a78bfa', fontVariantNumeric: 'tabular-nums',
+                    fontSize: 15, fontWeight: 700, color: '#a78bfa', fontVariantNumeric: 'tabular-nums',
                     border: '1px solid rgba(167,139,250,0.35)',
                     borderRadius: 6, padding: '1px 6px', cursor: 'pointer',
                     background: 'rgba(167,139,250,0.06)',
@@ -3970,7 +3970,7 @@ function ProfitPathPanel({
                   {exitPrice > 0 && curPrice > 0 && (
                     <>
                       <span style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,154,48,0.35)' }} />
-                      <span style={{ padding: '1px 7px', fontSize: 13, fontWeight: 600, color: 'rgba(255,154,48,0.8)', whiteSpace: 'nowrap' }}>
+                      <span style={{ padding: '1px 7px', fontSize: 15, fontWeight: 700, color: 'rgba(255,154,48,0.8)', whiteSpace: 'nowrap' }}>
                         {exitPrice.toFixed(0)}<span style={{ fontSize: 10, fontWeight: 400, marginLeft: 1, opacity: 0.7 }}>u</span>
                       </span>
                     </>
