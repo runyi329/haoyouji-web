@@ -73,6 +73,79 @@ function weightedAvgTakeProfit(items: ChipItem[]): number {
   return totalQty > 0 ? totalWeighted / totalQty : 0;
 }
 
+// ---- 单条记录行组件（必须定义在组件外部，避免每次渲染重建导致输入框失焦）----
+interface ChipRowProps {
+  item: ChipItem;
+  index: number;
+  color: string;
+  accentRgb: string;
+  onChange: (field: keyof ChipItem, val: string) => void;
+  onRemove: () => void;
+}
+
+const ChipRow: React.FC<ChipRowProps> = ({ item, index, color, accentRgb, onChange, onRemove }) => (
+  <div
+    className="rounded-xl overflow-hidden"
+    style={{ background: `rgba(${accentRgb},0.06)`, border: `1px solid rgba(${accentRgb},0.3)` }}
+  >
+    {/* 第一行：序号 + 数量 + 止盈价 + 删除 */}
+    <div className="flex items-center gap-2 px-3 pt-2 pb-1">
+      <span className="text-xs shrink-0 w-4 text-center" style={{ color: `rgba(${accentRgb},0.5)` }}>#{index + 1}</span>
+
+      {/* 数量 */}
+      <div className="flex items-center gap-1 flex-1">
+        <input
+          type="number"
+          value={item.qty}
+          onChange={e => onChange('qty', e.target.value)}
+          placeholder="0"
+          className="w-20 text-center text-base font-bold outline-none bg-transparent"
+          style={{ color, fontVariantNumeric: 'tabular-nums' }}
+          step="1"
+          min="0"
+        />
+        <span className="text-xs shrink-0" style={{ color: `rgba(${accentRgb},0.5)` }}>ETH</span>
+      </div>
+
+      {/* 止盈价 */}
+      <div className="flex items-center gap-1 flex-1">
+        <span className="text-xs shrink-0" style={{ color: `rgba(${accentRgb},0.5)` }}>止盈$</span>
+        <input
+          type="number"
+          value={item.takeProfit}
+          onChange={e => onChange('takeProfit', e.target.value)}
+          placeholder="—"
+          className="flex-1 text-center text-base font-bold outline-none bg-transparent min-w-0"
+          style={{ color: '#f0d060', fontVariantNumeric: 'tabular-nums' }}
+          step="100"
+          min="0"
+        />
+      </div>
+
+      {/* 删除 */}
+      <button
+        onClick={onRemove}
+        className="shrink-0 p-1 rounded"
+        style={{ color: 'rgba(255,80,80,0.5)' }}
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+
+    {/* 第二行：备注 */}
+    <div className="px-3 pb-2">
+      <input
+        type="text"
+        value={item.note}
+        onChange={e => onChange('note', e.target.value)}
+        placeholder="备注（可选）"
+        className="w-full text-xs outline-none bg-transparent"
+        style={{ color: 'rgba(255,255,255,0.5)', borderTop: `1px solid rgba(${accentRgb},0.15)`, paddingTop: '4px' }}
+      />
+    </div>
+  </div>
+);
+
 export default function PositionLevelEdit() {
   const [, params] = useRoute("/ledger/:id/position-calc/:price");
   const [, setLocation] = useLocation();
@@ -209,80 +282,6 @@ export default function PositionLevelEdit() {
   const addTactical = () => setTacticalItems(prev => [...prev, emptyChip()]);
   const removeBase = (i: number) => setBaseItems(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : [emptyChip()]);
   const removeTactical = (i: number) => setTacticalItems(prev => prev.length > 1 ? prev.filter((_, j) => j !== i) : [emptyChip()]);
-
-  // ---- 单条记录行组件 ----
-  const ChipRow = ({
-    item, index, color, accentRgb,
-    onChange, onRemove,
-  }: {
-    item: ChipItem;
-    index: number;
-    color: string;
-    accentRgb: string; // e.g. "74,168,255"
-    onChange: (field: keyof ChipItem, val: string) => void;
-    onRemove: () => void;
-  }) => (
-    <div
-      className="rounded-xl overflow-hidden"
-      style={{ background: `rgba(${accentRgb},0.06)`, border: `1px solid rgba(${accentRgb},0.3)` }}
-    >
-      {/* 第一行：序号 + 数量 + 止盈价 + 删除 */}
-      <div className="flex items-center gap-2 px-3 pt-2 pb-1">
-        <span className="text-xs shrink-0 w-4 text-center" style={{ color: `rgba(${accentRgb},0.5)` }}>#{index + 1}</span>
-
-        {/* 数量 */}
-        <div className="flex items-center gap-1 flex-1">
-          <input
-            type="number"
-            value={item.qty}
-            onChange={e => onChange('qty', e.target.value)}
-            placeholder="0"
-            className="w-20 text-center text-base font-bold outline-none bg-transparent"
-            style={{ color, fontVariantNumeric: 'tabular-nums' }}
-            step="1"
-            min="0"
-          />
-          <span className="text-xs shrink-0" style={{ color: `rgba(${accentRgb},0.5)` }}>ETH</span>
-        </div>
-
-        {/* 止盈价 */}
-        <div className="flex items-center gap-1 flex-1">
-          <span className="text-xs shrink-0" style={{ color: `rgba(${accentRgb},0.5)` }}>止盈$</span>
-          <input
-            type="number"
-            value={item.takeProfit}
-            onChange={e => onChange('takeProfit', e.target.value)}
-            placeholder="—"
-            className="flex-1 text-center text-base font-bold outline-none bg-transparent min-w-0"
-            style={{ color: '#f0d060', fontVariantNumeric: 'tabular-nums' }}
-            step="100"
-            min="0"
-          />
-        </div>
-
-        {/* 删除 */}
-        <button
-          onClick={onRemove}
-          className="shrink-0 p-1 rounded"
-          style={{ color: 'rgba(255,80,80,0.5)' }}
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      {/* 第二行：备注 */}
-      <div className="px-3 pb-2">
-        <input
-          type="text"
-          value={item.note}
-          onChange={e => onChange('note', e.target.value)}
-          placeholder="备注（可选）"
-          className="w-full text-xs outline-none bg-transparent"
-          style={{ color: 'rgba(255,255,255,0.5)', borderTop: `1px solid rgba(${accentRgb},0.15)`, paddingTop: '4px' }}
-        />
-      </div>
-    </div>
-  );
 
   return (
     <div className="min-h-screen max-w-md mx-auto relative" style={{ background: '#000000' }}>
