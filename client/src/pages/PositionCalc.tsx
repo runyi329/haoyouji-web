@@ -3618,19 +3618,19 @@ function ProfitPathPanel({
                     <circle cx="5" cy="8" r="1" fill={targetUnlocked ? '#888' : 'rgba(255,255,255,0.5)'} />
                   </svg>
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 600, color: targetUnlocked ? 'rgba(255,235,100,0.9)' : 'rgba(148,163,184,0.8)' }}>目标止盈</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: targetUnlocked ? 'rgba(255,215,100,0.95)' : 'rgba(192,200,210,0.85)' }}>目标止盈</span>
                 <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10,
-                  background: targetUnlocked ? 'rgba(255,235,100,0.15)' : 'rgba(100,120,200,0.15)',
-                  color: targetUnlocked ? 'rgba(255,235,100,0.8)' : 'rgba(100,120,200,0.6)',
-                  border: `1px solid ${targetUnlocked ? 'rgba(255,235,100,0.3)' : 'rgba(100,120,200,0.2)'}`,
+                  background: targetUnlocked ? 'rgba(255,215,100,0.12)' : 'rgba(192,200,210,0.08)',
+                  color: targetUnlocked ? 'rgba(255,215,100,0.9)' : 'rgba(192,200,210,0.7)',
+                  border: `1px solid ${targetUnlocked ? 'rgba(255,215,100,0.3)' : 'rgba(192,200,210,0.2)'}`,
                 }}>{targetUnlocked ? '变量' : '定量'}</span>
                 <span
                   onClick={() => setShowLogInfo(true)}
                   style={{
                     fontSize: 10, padding: '1px 7px', borderRadius: 10, cursor: 'pointer',
-                    background: 'rgba(167,139,250,0.12)',
-                    color: 'rgba(167,139,250,0.7)',
-                    border: '1px solid rgba(167,139,250,0.25)',
+                    background: 'rgba(192,200,210,0.07)',
+                    color: 'rgba(192,200,210,0.55)',
+                    border: '1px solid rgba(192,200,210,0.18)',
                     userSelect: 'none',
                   }}
                 >对数刻度</span>
@@ -3731,21 +3731,18 @@ function ProfitPathPanel({
                     <circle cx="5" cy="8" r="1" fill={qtyUnlocked ? '#888' : 'rgba(255,255,255,0.5)'} />
                   </svg>
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 600,
-                  color: qtyUnlocked ? 'rgba(255,235,100,0.9)' : 'rgba(148,163,184,0.8)',
-
-                }}>持仓数量</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: qtyUnlocked ? 'rgba(255,215,100,0.95)' : 'rgba(192,200,210,0.85)' }}>持仓数量</span>
                 <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10,
-                  background: qtyUnlocked ? 'rgba(255,235,100,0.15)' : 'rgba(100,120,200,0.15)',
-                  color: qtyUnlocked ? 'rgba(255,235,100,0.8)' : 'rgba(100,120,200,0.6)',
-                  border: `1px solid ${qtyUnlocked ? 'rgba(255,235,100,0.3)' : 'rgba(100,120,200,0.2)'}`,
+                  background: qtyUnlocked ? 'rgba(255,215,100,0.12)' : 'rgba(192,200,210,0.08)',
+                  color: qtyUnlocked ? 'rgba(255,215,100,0.9)' : 'rgba(192,200,210,0.7)',
+                  border: `1px solid ${qtyUnlocked ? 'rgba(255,215,100,0.3)' : 'rgba(192,200,210,0.2)'}`,
                 }}>{qtyUnlocked ? '变量' : '定量'}</span>
                 <span
                   style={{
                     fontSize: 10, padding: '1px 7px', borderRadius: 10,
-                    background: 'rgba(96,165,250,0.08)',
-                    color: 'rgba(96,165,250,0.5)',
-                    border: '1px solid rgba(96,165,250,0.18)',
+                    background: 'rgba(192,200,210,0.07)',
+                    color: 'rgba(192,200,210,0.55)',
+                    border: '1px solid rgba(192,200,210,0.18)',
                     userSelect: 'none',
                   }}
                 >线性刻度</span>
@@ -3873,15 +3870,11 @@ function ProfitPathPanel({
                     <circle cx="5" cy="8" r="1" fill={riseUnlocked ? '#888' : 'rgba(255,255,255,0.5)'} />
                   </svg>
                 </div>
-                <span style={{ fontSize: 12, fontWeight: 600,
-                  color: riseUnlocked ? 'rgba(255,235,100,0.9)' : 'rgba(148,163,184,0.8)',
-
-                }}>目标涨幅</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: riseUnlocked ? 'rgba(255,215,100,0.95)' : 'rgba(192,200,210,0.85)' }}>目标涨幅</span>
                 <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10,
-                  background: riseUnlocked ? 'rgba(255,235,100,0.15)' : 'rgba(100,120,200,0.15)',
-                  color: riseUnlocked ? 'rgba(255,235,100,0.8)' : 'rgba(100,120,200,0.6)',
-                  border: `1px solid ${riseUnlocked ? 'rgba(255,235,100,0.3)' : 'rgba(100,120,200,0.2)'}`,
-
+                  background: riseUnlocked ? 'rgba(255,215,100,0.12)' : 'rgba(192,200,210,0.08)',
+                  color: riseUnlocked ? 'rgba(255,215,100,0.9)' : 'rgba(192,200,210,0.7)',
+                  border: `1px solid ${riseUnlocked ? 'rgba(255,215,100,0.3)' : 'rgba(192,200,210,0.2)'}`,
                 }}>{riseUnlocked ? '变量' : '定量'}</span>
               </div>
               <div style={{ textAlign: 'right' }}>
