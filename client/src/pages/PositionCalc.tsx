@@ -3086,6 +3086,57 @@ function ProfitPathPanel({
   // 涨幅上限：固定500%，不再动态扩展
   const dynamicMaxRisePct = maxRisePct;
 
+  // ── 动态软边界（锁定止盈时）──────────────────────────────────────────
+  // 持仓数量进度条最小值：在当前止盈金额 + 涨幅=500% 时反推的持仓量
+  // 公式：qty = profitUsdt / (curPrice*(1+500/100) - avgPrice)
+  const dynQtyMin = React.useMemo(() => {
+    if (lockedField !== 'target') return ETH_MIN;
+    if (!cnyRate || cnyRate <= 0 || curPrice <= 0 || avgPrice <= 0) return ETH_MIN;
+    const profitUsdtFromTarget = sliderTarget / cnyRate;
+    const exitP500 = curPrice * (1 + dynamicMaxRisePct / 100);
+    const perCoin500 = exitP500 - avgPrice;
+    if (perCoin500 <= 0) return ETH_MIN;
+    const minQty = profitUsdtFromTarget / perCoin500;
+    return Math.max(ETH_MIN, Math.min(ETH_MAX * 0.9, parseFloat(minQty.toFixed(1))));
+  }, [lockedField, sliderTarget, cnyRate, curPrice, avgPrice, dynamicMaxRisePct]);
+
+  // 涨幅进度条最小值：在当前止盈金额 + 持仓=10000 ETH 时反推的涨幅
+  // 公式：rise = (avgPrice + profitUsdt/10000 - curPrice) / curPrice * 100
+  const dynRiseMin = React.useMemo(() => {
+    if (lockedField !== 'target') return RISE_LOG_MIN;
+    if (!cnyRate || cnyRate <= 0 || curPrice <= 0 || avgPrice <= 0) return RISE_LOG_MIN;
+    const profitUsdtFromTarget = sliderTarget / cnyRate;
+    const exitPMax = avgPrice + profitUsdtFromTarget / ETH_MAX;
+    const riseMin = (exitPMax - curPrice) / curPrice * 100;
+    return Math.max(RISE_LOG_MIN, parseFloat(riseMin.toFixed(4)));
+  }, [lockedField, sliderTarget, cnyRate, curPrice, avgPrice]);
+
+  // 持仓数量进度条：将 qty 映射到 [dynQtyMin, ETH_MAX] 区间的 0~1
+  const qtyToSliderRatio = (qty: number) => {
+    if (dynQtyMin >= ETH_MAX) return 0;
+    return Math.max(0, Math.min(1, (qty - dynQtyMin) / (ETH_MAX - dynQtyMin)));
+  };
+  // 反向：将 0~1 映射回 qty
+  const sliderRatioToQty = (ratio: number) => {
+    return parseFloat((dynQtyMin + ratio * (ETH_MAX - dynQtyMin)).toFixed(1));
+  };
+
+  // 涨幅进度条：将 rise 映射到 [dynRiseMin, dynamicMaxRisePct] 区间的 0~1（对数刻度）
+  const riseToSliderRatio = (rise: number) => {
+    if (dynRiseMin >= dynamicMaxRisePct) return 0;
+    const logMin = Math.log(Math.max(dynRiseMin, 0.0001));
+    const logMax = Math.log(dynamicMaxRisePct);
+    if (logMax <= logMin) return 0;
+    return Math.max(0, Math.min(1, (Math.log(Math.max(rise, dynRiseMin)) - logMin) / (logMax - logMin)));
+  };
+  // 反向：将 0~1 映射回 rise
+  const sliderRatioToRise = (ratio: number) => {
+    const logMin = Math.log(Math.max(dynRiseMin, 0.0001));
+    const logMax = Math.log(dynamicMaxRisePct);
+    return parseFloat(Math.exp(logMin + ratio * (logMax - logMin)).toFixed(2));
+  };
+  // ─────────────────────────────────────────────────────────────────────
+
   // 弹出式修改弹窗状态
   type EditField = 'target' | 'qty' | 'rise' | null;
   const [editingField, setEditingField] = React.useState<EditField>(null);
@@ -3203,22 +3254,30 @@ function ProfitPathPanel({
     return sliderToLog(ratio);
   }, [sliderTarget]);
 
-  // 从 clientX 计算持仓数量（对数刻度 1～10000 ETH）
+  // 从 clientX 计算持仓数量（锁定止盈时用动态范围 [dynQtyMin, ETH_MAX]）
   const calcQtyFromX = React.useCallback((clientX: number): number => {
     if (!qtyBarRef.current) return sliderQty;
     const rect = qtyBarRef.current.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    // 锁定止盈时用动态范围，其他情况用全范围
+    if (lockedField === 'target') {
+      return Math.max(dynQtyMin, sliderRatioToQty(ratio));
+    }
     return Math.max(ETH_MIN, ethSliderToLog(ratio));
-  }, [sliderQty]);
+  }, [sliderQty, lockedField, dynQtyMin, sliderRatioToQty]);
 
-  // 从 clientX 计算目标涨幅（对数刻度）
+  // 从 clientX 计算目标涨幅（锁定止盈时用动态范围 [dynRiseMin, maxRisePct]）
   const calcRiseFromX = React.useCallback((clientX: number): number => {
     if (!riseBarRef.current) return sliderRise;
     const rect = riseBarRef.current.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    // 锁定止盈时用动态范围，其他情况用全范围
+    if (lockedField === 'target') {
+      return Math.max(dynRiseMin, sliderRatioToRise(ratio));
+    }
     const raw = riseSliderToLog(ratio, dynamicMaxRisePct);
     return Math.max(RISE_LOG_MIN, parseFloat(raw.toFixed(2)));
-  }, [dynamicMaxRisePct, sliderRise]);
+  }, [dynamicMaxRisePct, sliderRise, lockedField, dynRiseMin, sliderRatioToRise]);
 
   // 根据目标金额和持仓量计算所需涨幅
   const calcRiseFromTargetAndQty = React.useCallback((targetCny: number, qty: number): number => {
@@ -3339,6 +3398,7 @@ function ProfitPathPanel({
   }, [calcTargetFromX, calcQtyFromX, calcRiseFromX, calcRiseFromTargetAndQty,
       targetUnlocked, qtyUnlocked, riseUnlocked,
       qtyToRise, riseToQty, maxRisePct, maxQty, dynamicMaxRisePct,
+      dynQtyMin, dynRiseMin,
       sliderTarget, sliderQty, sliderRise, cnyRate, curPrice, avgPrice]);
 
   // 初始化：只在本次会话首次加载时设置持仓量和涨幅的初始值
@@ -3622,7 +3682,7 @@ function ProfitPathPanel({
               </div>
               <div style={{
                 position: 'absolute',
-                left: `calc(${logToSlider(sliderTarget) * 100}% - 16px)`,
+                left: `clamp(0px, calc(${logToSlider(sliderTarget) * 100}% - 16px), calc(100% - 32px))`,
                 top: '50%', transform: 'translateY(-50%)',
                 width: 32, height: 32, borderRadius: '50%',
                 zIndex: 10, pointerEvents: 'none',
@@ -3726,19 +3786,21 @@ function ProfitPathPanel({
                 {/* 已填充段（蓝色渐变） */}
                 <div style={{
                   position: 'absolute', top: 0, left: 0, height: '100%',
-                  width: `${ethLogToSlider(Math.max(ETH_MIN, sliderQty)) * 100}%`,
+                  width: `${(lockedField === 'target' ? qtyToSliderRatio(Math.max(dynQtyMin, sliderQty)) : ethLogToSlider(Math.max(ETH_MIN, sliderQty))) * 100}%`,
                   background: 'linear-gradient(90deg, #1a5faa 0%, #2a7fd4 60%, #60a5fa 100%)',
                   borderRadius: '4px 0 0 4px',
                 }} />
-                {/* 轨道内文字：左显 0，右显 maxQty */}
-                <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>1</span>
+                {/* 轨道内文字：左显最小值，右显 10000E */}
+                <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>
+                  {lockedField === 'target' && dynQtyMin > ETH_MIN ? `${dynQtyMin.toFixed(0)}` : '1'}
+                </span>
                 <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>10000E</span>
               </div>
               {/* 32px 圆形手柄（内嵌 ETH 图标） */}
               <div
                 style={{
                   position: 'absolute',
-                  left: `calc(${ethLogToSlider(Math.max(ETH_MIN, sliderQty)) * 100}% - 16px)`,
+                  left: `clamp(0px, calc(${(lockedField === 'target' ? qtyToSliderRatio(Math.max(dynQtyMin, sliderQty)) : ethLogToSlider(Math.max(ETH_MIN, sliderQty))) * 100}% - 16px), calc(100% - 32px))`,
                   top: '50%', transform: 'translateY(-50%)',
                   width: 32, height: 32, borderRadius: '50%',
                   zIndex: 10, pointerEvents: 'none',
@@ -3865,19 +3927,21 @@ function ProfitPathPanel({
                 {/* 已填充段（橙色单色系） */}
                 <div style={{
                   position: 'absolute', top: 0, left: 0, height: '100%',
-                  width: `${riseLogToSlider(Math.max(sliderRise, RISE_LOG_MIN), dynamicMaxRisePct) * 100}%`,
+                  width: `${(lockedField === 'target' ? riseToSliderRatio(Math.max(dynRiseMin, sliderRise)) : riseLogToSlider(Math.max(sliderRise, RISE_LOG_MIN), dynamicMaxRisePct)) * 100}%`,
                   background: 'linear-gradient(90deg, #c05000 0%, #e07010 60%, #ff9a30 100%)',
                   borderRadius: '4px 0 0 4px',
                 }} />
                 {/* 轨道内文字 */}
-                <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>0.01%</span>
+                <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>
+                  {lockedField === 'target' && dynRiseMin > RISE_LOG_MIN ? `${dynRiseMin.toFixed(2)}%` : '0.01%'}
+                </span>
                 <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>{dynamicMaxRisePct}%</span>
               </div>
               {/* 32px 圆形手柄（内嵌 ETH 图标，颜色随难易度变化） */}
               <div
                 style={{
                   position: 'absolute',
-                  left: `calc(${riseLogToSlider(Math.max(sliderRise, RISE_LOG_MIN), dynamicMaxRisePct) * 100}% - 16px)`,
+                  left: `clamp(0px, calc(${(lockedField === 'target' ? riseToSliderRatio(Math.max(dynRiseMin, sliderRise)) : riseLogToSlider(Math.max(sliderRise, RISE_LOG_MIN), dynamicMaxRisePct)) * 100}% - 16px), calc(100% - 32px))`,
                   top: '50%', transform: 'translateY(-50%)',
                   width: 32, height: 32, borderRadius: '50%',
                   zIndex: 10, pointerEvents: 'none',
