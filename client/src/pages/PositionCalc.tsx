@@ -3263,20 +3263,12 @@ function ProfitPathPanel({
       sessionStorage.setItem(SESSION_KEY_QTY, String(qty));
       // 持仓变化：联动另两条中的「锁定条」保持不变，「另一条」被动计算
       if (lockedField === 'target') {
-        // 止盈锁定：持仓变 → 涨幅联动（涨幅超过500%时，钳制涨幅=500%，同时反推持仓到最小值）
+        // 止盈锁定：持仓变 → 涨幅联动（涨幅超过500%时只钳制显示，不锁死持仓数量）
         const rawRise = calcRiseFromTargetAndQty(sliderTarget, qty);
-        if (rawRise > maxRisePct) {
-          // 涨幅超限：把涨幅钳制在500%，反推出对应的最小持仓量
-          const minQty = riseToQty(maxRisePct);
-          const clampedQty = Math.max(ETH_MIN, Math.min(ETH_MAX, Math.round(minQty * 10) / 10));
-          setSliderQty(clampedQty);
-          sessionStorage.setItem(SESSION_KEY_QTY, String(clampedQty));
-          setSliderRise(maxRisePct);
-          sessionStorage.setItem(SESSION_KEY_RISE, String(maxRisePct));
-        } else {
-          setSliderRise(rawRise);
-          sessionStorage.setItem(SESSION_KEY_RISE, String(rawRise));
-        }
+        // 涨幅只钳制在500%以内显示，持仓数量保持用户拖动的实际值
+        const clampedRise = Math.min(rawRise, maxRisePct);
+        setSliderRise(clampedRise);
+        sessionStorage.setItem(SESSION_KEY_RISE, String(clampedRise));
       } else if (lockedField === 'rise') {
         // 涨幅锁定：持仓变 → 止盈联动
         if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
