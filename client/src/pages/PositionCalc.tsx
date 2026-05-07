@@ -3353,7 +3353,7 @@ function ProfitPathPanel({
                   style={{
                     width: 26, height: 26, borderRadius: '50%', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'all 0.25s ease',
+,
                     background: qtyUnlocked
                       ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)'
                       : 'linear-gradient(135deg, #2a3050 0%, #3a4060 100%)',
@@ -3376,13 +3376,13 @@ function ProfitPathPanel({
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 600,
                   color: qtyUnlocked ? 'rgba(255,235,100,0.9)' : 'rgba(148,163,184,0.8)',
-                  transition: 'color 0.25s'
+
                 }}>持仓数量</span>
                 <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10,
                   background: qtyUnlocked ? 'rgba(255,235,100,0.15)' : 'rgba(100,120,200,0.15)',
                   color: qtyUnlocked ? 'rgba(255,235,100,0.8)' : 'rgba(100,120,200,0.6)',
                   border: `1px solid ${qtyUnlocked ? 'rgba(255,235,100,0.3)' : 'rgba(100,120,200,0.2)'}`,
-                  transition: 'all 0.25s'
+
                 }}>{qtyUnlocked ? '变量' : '定量'}</span>
               </div>
               <span style={{ fontSize: 15, fontWeight: 700, color: '#60a5fa', fontVariantNumeric: 'tabular-nums' }}>
@@ -3426,7 +3426,7 @@ function ProfitPathPanel({
                     ? 'linear-gradient(90deg, #b8860b 0%, #f0d060 60%, #ffe080 100%)'
                     : 'linear-gradient(90deg, #1a5faa 0%, #2a7fd4 60%, #60a5fa 100%)',
                   borderRadius: '4px 0 0 4px',
-                  transition: 'background 0.25s',
+,
                 }} />
                 {/* 轨道内文字：左显 0，右显 maxQty */}
                 <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>0</span>
@@ -3448,7 +3448,7 @@ function ProfitPathPanel({
                     ? '0 0 14px rgba(255,235,100,1), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.5)'
                     : '0 0 8px rgba(96,165,250,0.5), 0 2px 6px rgba(0,0,0,0.8)',
                   border: qtyUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : '1.5px solid rgba(96,165,250,0.5)',
-                  transition: 'all 0.25s ease',
+,
                 }}
               >
                 <svg width="16" height="20" viewBox="0 0 16 20" fill="none">
@@ -3511,7 +3511,7 @@ function ProfitPathPanel({
                   style={{
                     width: 26, height: 26, borderRadius: '50%', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'all 0.25s ease',
+,
                     background: riseUnlocked
                       ? 'linear-gradient(135deg, #fff5c0 0%, #e8e8e8 30%, #c0c0c0 65%, #a0a0a0 100%)'
                       : 'linear-gradient(135deg, #2a3050 0%, #3a4060 100%)',
@@ -3534,17 +3534,17 @@ function ProfitPathPanel({
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 600,
                   color: riseUnlocked ? 'rgba(255,235,100,0.9)' : 'rgba(148,163,184,0.8)',
-                  transition: 'color 0.25s'
+
                 }}>目标涨幅</span>
                 <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 10,
                   background: riseUnlocked ? 'rgba(255,235,100,0.15)' : 'rgba(100,120,200,0.15)',
                   color: riseUnlocked ? 'rgba(255,235,100,0.8)' : 'rgba(100,120,200,0.6)',
                   border: `1px solid ${riseUnlocked ? 'rgba(255,235,100,0.3)' : 'rgba(100,120,200,0.2)'}`,
-                  transition: 'all 0.25s'
+
                 }}>{riseUnlocked ? '变量' : '定量'}</span>
               </div>
               <div style={{ textAlign: 'right' }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: difficulty.color, fontVariantNumeric: 'tabular-nums', transition: 'color 0.3s' }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: difficulty.color, fontVariantNumeric: 'tabular-nums' }}>
                   +{riseDisplay.toFixed(1)}%
                 </span>
                 {exitPrice > 0 && curPrice > 0 && (
@@ -3591,7 +3591,7 @@ function ProfitPathPanel({
                     ? 'linear-gradient(90deg, #b8860b 0%, #f0d060 60%, #ffe080 100%)'
                     : `linear-gradient(90deg, #22c55e 0%, #84cc16 25%, #eab308 50%, ${difficulty.color} 100%)`,
                   borderRadius: '4px 0 0 4px',
-                  transition: 'background 0.3s',
+,
                 }} />
                 {/* 轨道内文字 */}
                 <span style={{ position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }}>0%</span>
@@ -3613,7 +3613,7 @@ function ProfitPathPanel({
                     ? '0 0 14px rgba(255,235,100,1), 0 2px 8px rgba(0,0,0,0.7), inset 0 1px 3px rgba(255,255,255,0.5)'
                     : `0 0 10px ${difficulty.color}80, 0 2px 6px rgba(0,0,0,0.8)`,
                   border: riseUnlocked ? '1.5px solid rgba(255,245,192,0.9)' : `1.5px solid ${difficulty.color}80`,
-                  transition: 'all 0.3s ease',
+,
                 }}
               >
                 <svg width="16" height="20" viewBox="0 0 16 20" fill="none">
@@ -3654,7 +3654,7 @@ function ProfitPathPanel({
             {/* 难易度进度条 */}
             <div style={{ position: 'relative', height: 8, borderRadius: 4, background: 'linear-gradient(90deg, #22c55e 0%, #84cc16 20%, #eab308 40%, #f97316 70%, #ef4444 100%)', marginBottom: 6 }}>
               {/* 指针 */}
-              <div style={{ position: 'absolute', top: -3, left: `${difficulty.score}%`, transform: 'translateX(-50%)', width: 14, height: 14, borderRadius: '50%', background: difficulty.color, border: '2px solid white', boxShadow: `0 2px 6px ${difficulty.color}80`, transition: 'left 0.3s ease' }} />
+              <div style={{ position: 'absolute', top: -3, left: `${difficulty.score}%`, transform: 'translateX(-50%)', width: 14, height: 14, borderRadius: '50%', background: difficulty.color, border: '2px solid white', boxShadow: `0 2px 6px ${difficulty.color}80` }} />
             </div>
             {/* 刻度标签 */}
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
