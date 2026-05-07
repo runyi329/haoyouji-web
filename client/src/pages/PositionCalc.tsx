@@ -3041,8 +3041,17 @@ function ProfitPathPanel({
   // 目标止盈金额（人民币）：每次刷新/重进都从 targetProfitCny 读取，不用 sessionStorage
   // 只有在页面内手动拖动时才会变化，不持久化
   const [sliderTarget, setSliderTarget] = React.useState<number>(
-    Math.max(CNY_MIN, Math.min(CNY_MAX, targetProfitCny || 1000000))
+    Math.max(CNY_MIN, Math.min(CNY_MAX, targetProfitCny > 0 ? targetProfitCny : 1000000))
   );
+
+  // 当 targetProfitCny 从异步加载变为真实值时，同步更新 sliderTarget
+  // 只在 sliderTarget 还是默认值（未被用户手动拖动过）时才同步
+  const hasUserDraggedTarget = React.useRef(false);
+  React.useEffect(() => {
+    if (targetProfitCny > 0 && !hasUserDraggedTarget.current) {
+      setSliderTarget(Math.max(CNY_MIN, Math.min(CNY_MAX, targetProfitCny)));
+    }
+  }, [targetProfitCny]);
   const [sliderQty, setSliderQty] = React.useState<number>(() => {
     const saved = sessionStorage.getItem(SESSION_KEY_QTY);
     return saved !== null ? parseFloat(saved) : Math.min(actualQty || 10, maxQty);
@@ -3354,7 +3363,7 @@ function ProfitPathPanel({
                 }}>{targetUnlocked ? '变量' : '定量'}</span>
               </div>
               <span style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa', fontVariantNumeric: 'tabular-nums' }}>
-                ¥{sliderTarget >= 100000000 ? '1亿' : sliderTarget >= 10000000 ? `${(sliderTarget/10000000).toFixed(1)}千万` : sliderTarget >= 1000000 ? `${(sliderTarget/1000000).toFixed(1)}百万` : `${(sliderTarget/10000).toFixed(1)}万`}
+                ¥{sliderTarget >= 99900000 ? '1亿' : `${Math.round(sliderTarget / 10000)}万`}
               </span>
             </div>
             {/* 进度条区域 */}
@@ -3364,6 +3373,7 @@ function ProfitPathPanel({
               onMouseDown={(e) => {
                 if (!targetUnlocked) return;
                 isDraggingTarget.current = true;
+                hasUserDraggedTarget.current = true;
                 const target = calcTargetFromX(e.clientX);
                 setSliderTarget(target);
                 sessionStorage.setItem(SESSION_KEY_TARGET, String(target));
@@ -3371,6 +3381,7 @@ function ProfitPathPanel({
               onTouchStart={(e) => {
                 if (!targetUnlocked) return;
                 isDraggingTarget.current = true;
+                hasUserDraggedTarget.current = true;
                 const target = calcTargetFromX(e.touches[0].clientX);
                 setSliderTarget(target);
                 sessionStorage.setItem(SESSION_KEY_TARGET, String(target));
