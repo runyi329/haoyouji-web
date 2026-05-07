@@ -3038,12 +3038,11 @@ function ProfitPathPanel({
   const SESSION_KEY_TARGET = 'profit_path_target';
   const SESSION_KEY_INIT = 'profit_path_initialized';
 
-  // 目标止盈金额（人民币），默认取 targetProfitCny，范围 1万～1亿
-  const [sliderTarget, setSliderTarget] = React.useState<number>(() => {
-    const saved = sessionStorage.getItem(SESSION_KEY_TARGET);
-    if (saved !== null) return parseFloat(saved);
-    return Math.max(CNY_MIN, Math.min(CNY_MAX, targetProfitCny || 1000000));
-  });
+  // 目标止盈金额（人民币）：每次刷新/重进都从 targetProfitCny 读取，不用 sessionStorage
+  // 只有在页面内手动拖动时才会变化，不持久化
+  const [sliderTarget, setSliderTarget] = React.useState<number>(
+    Math.max(CNY_MIN, Math.min(CNY_MAX, targetProfitCny || 1000000))
+  );
   const [sliderQty, setSliderQty] = React.useState<number>(() => {
     const saved = sessionStorage.getItem(SESSION_KEY_QTY);
     return saved !== null ? parseFloat(saved) : Math.min(actualQty || 10, maxQty);
@@ -3210,22 +3209,20 @@ function ProfitPathPanel({
       qtyToRise, riseToQty, maxRisePct, maxQty,
       sliderTarget, sliderQty, sliderRise, cnyRate, curPrice, avgPrice]);
 
-  // 初始化：只在本次会话首次加载时设置初始值（刷新页面后 sessionStorage 清空，重新初始化）
+  // 初始化：只在本次会话首次加载时设置持仓量和涨幅的初始值
+  // 目标止盈金额不用 sessionStorage，直接从 props 初始化
   React.useEffect(() => {
     const initialized = sessionStorage.getItem(SESSION_KEY_INIT);
     if (!initialized && actualQty && curPrice && avgPrice) {
       const initQty = Math.max(1, Math.min(actualQty, maxQty));
-      const initTarget = Math.max(CNY_MIN, Math.min(CNY_MAX, targetProfitCny || 1000000));
-      const rise = calcRiseFromTargetAndQty(initTarget, initQty);
+      const rise = calcRiseFromTargetAndQty(sliderTarget, initQty);
       setSliderQty(initQty);
-      setSliderTarget(initTarget);
       setSliderRise(Math.min(rise, maxRisePct));
       sessionStorage.setItem(SESSION_KEY_QTY, String(initQty));
-      sessionStorage.setItem(SESSION_KEY_TARGET, String(initTarget));
       sessionStorage.setItem(SESSION_KEY_RISE, String(Math.min(rise, maxRisePct)));
       sessionStorage.setItem(SESSION_KEY_INIT, '1');
     }
-  }, [actualQty, curPrice, avgPrice, targetProfitCny]);
+  }, [actualQty, curPrice, avgPrice]);
 
   // 目标离场价（基于 sliderTarget 和 sliderQty 计算）
   const effectiveProfitUsdt = cnyRate > 0 ? sliderTarget / cnyRate : profitUsdt;
