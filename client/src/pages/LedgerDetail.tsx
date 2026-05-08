@@ -2578,7 +2578,7 @@ export default function LedgerDetail() {
   if (!isLoading && !error && isCustomAD && ledgerData) {
     return (
       <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="text-gray-500">加载中...</div></div>}>
-        <MemoLedgerPage ledgerId={ledgerId} ledgerData={ledgerData} user={user} />
+        <MemoLedgerPage ledgerId={ledgerId} ledgerData={ledgerData} user={user} isAdmin={isOwner || isAdmin} />
       </Suspense>
     );
   }

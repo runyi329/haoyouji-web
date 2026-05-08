@@ -786,10 +786,11 @@ interface PromptItem {
 }
 
 // ===== 主页面 =====
-export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
+export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = false }: {
   ledgerId: number;
   ledgerData: any;
   user: any;
+  isAdmin?: boolean;
 }) {
   const [, setLocation] = useLocation();
   const [activeCategory, setActiveCategory] = useState("all");
@@ -913,14 +914,16 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
             >
               <RefreshCw className="w-5 h-5 text-white" />
             </button>
-            <button
-              onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
-              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
-              style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-              title="账本设置"
-            >
-              <Settings className="w-5 h-5 text-white" />
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+                className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+                title="账本设置"
+              >
+                <Settings className="w-5 h-5 text-white" />
+              </button>
+            )}
           </div>
         </div>
 
