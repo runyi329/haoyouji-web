@@ -66,11 +66,10 @@ const SUB_CATEGORIES: Record<string, string[]> = {
 // ===== 每种大类的字段模板 =====
 const FIELD_TEMPLATES: Record<string, Array<{ label: string; sensitive?: boolean }>> = {
   bank: [
+    { label: "银行名称" },
     { label: "卡号" },
-    { label: "开户人" },
-    { label: "开户行" },
-    { label: "预留手机" },
-    { label: "网银密码", sensitive: true },
+    { label: "姓名" },
+    { label: "备注" },
   ],
   account: [
     { label: "账号/用户名" },
@@ -427,10 +426,14 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
     setCategory(key);
     setSubLabel("");
     setCustomSub("");
-    // 银行账号分类：直接进入手动输入模式，跳过预设标签列表
-    setIsCustom(key === 'bank');
+    setIsCustom(false);
     setFields(FIELD_TEMPLATES[key]?.map(f => ({ ...f, value: "" })) || []);
-    setStep("sub");
+    // 银行账号分类：直接进入字段填写界面，跳过子类选择
+    if (key === 'bank') {
+      setStep("fields");
+    } else {
+      setStep("sub");
+    }
   };
 
   const handleSelectSub = (sub: string) => {
@@ -472,7 +475,13 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
   });
 
   const handleSave = () => {
-    if (!subLabel.trim()) { toast.error("请先选择或填写子类名称"); return; }
+    // 银行账号分类：用第一个字段（银行名称）的内容作为标题，如果为空则用默认标题
+    let effectiveSubLabel = subLabel;
+    if (category === 'bank') {
+      const bankNameField = fields.find(f => f.label === '银行名称');
+      effectiveSubLabel = bankNameField?.value?.trim() || '银行账号';
+    }
+    if (!effectiveSubLabel.trim()) { toast.error("请先选择或填写子类名称"); return; }
     let finalFields: MemoField[];
     if (isOuyiMode) {
       // 欧易：序列化多账户
@@ -481,12 +490,13 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
       if (!hasAny) { toast.error("请至少填写一个账户的内容"); return; }
     } else {
       finalFields = fields;
-      if (finalFields.filter(f => f.value.trim()).length === 0) { toast.error("请至少填写一个字段内容"); return; }
+      // 银行账号分类所有字段均可选填，其他分类至少填一个
+      if (category !== 'bank' && finalFields.filter(f => f.value.trim()).length === 0) { toast.error("请至少填写一个字段内容"); return; }
     }
     if (editItem) {
-      updateMutation.mutate({ id: editItem.id, category, title: subLabel, fields: finalFields, note: note.trim() || undefined });
+      updateMutation.mutate({ id: editItem.id, category, title: effectiveSubLabel, fields: finalFields, note: note.trim() || undefined });
     } else {
-      createMutation.mutate({ ledgerId, category, title: subLabel, fields: finalFields, note: note.trim() || undefined });
+      createMutation.mutate({ ledgerId, category, title: effectiveSubLabel, fields: finalFields, note: note.trim() || undefined });
     }
   };
 
@@ -586,7 +596,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
             {/* 面包屑 */}
             <div className="flex items-center gap-1.5 text-sm">
               {!editItem && (
-                <button onClick={() => setStep("sub")} className="text-gray-400 hover:text-gray-600 flex items-center gap-1">
+                <button onClick={() => setStep(category === 'bank' ? 'cat' : 'sub')} className="text-gray-400 hover:text-gray-600 flex items-center gap-1">
                   <ChevronLeft className="w-4 h-4" />
                 </button>
               )}
