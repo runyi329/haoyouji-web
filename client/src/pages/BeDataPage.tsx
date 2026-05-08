@@ -1572,6 +1572,32 @@ export default function BeDataPage() {
   // isSyncing已不再使用，保留占位避免引用错误
   const isSyncing = false;
 
+  // 各币种上市时间（毫秒），用于推算理论分钟K线条数
+  const CRYPTO_LISTING_TIME: Record<string, number> = {
+    BTCUSDT: new Date('2017-08-17T00:00:00Z').getTime(),
+    ETHUSDT: new Date('2017-08-17T00:00:00Z').getTime(),
+    SOLUSDT: new Date('2020-08-18T00:00:00Z').getTime(),
+  };
+  // 计算从上市到现在的理论分钟条数（实时）
+  const calcTheoreticalMinutes = (symbol: string): number => {
+    const listingTime = CRYPTO_LISTING_TIME[symbol] ?? CRYPTO_LISTING_TIME['BTCUSDT'];
+    return Math.floor((Date.now() - listingTime) / (60 * 1000));
+  };
+  // 理论条数（初始值 + 每分钟+1）
+  const [theoreticalBase, setTheoreticalBase] = useState(() => calcTheoreticalMinutes(activeSymbol));
+  // 格式化为万条
+  const formatWan = (n: number): string => {
+    if (n >= 10000) return `约${(n / 10000).toFixed(0)}万`;
+    return `${n}`;
+  };
+  // 估算数据容量（每条约200字节）
+  const estimateSize = (n: number): string => {
+    const bytes = n * 200;
+    if (bytes >= 1024 * 1024 * 1024) return `约${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+    if (bytes >= 1024 * 1024) return `约${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+    return `约${(bytes / 1024).toFixed(0)} KB`;
+  };
+
   const utils = trpc.useUtils();
 
   // 当前股票信息（用于美股模式下显示 logo 和名称）
@@ -1620,14 +1646,18 @@ export default function BeDataPage() {
     { enabled: isCryptoSymbol && activeTab === 'data' && dataSubTab === 'minute', staleTime: 60 * 1000 }
   );
 
-  // 分钟数据实时计数器：切到分钟Tab后每分钟自动+1
+  // 分钟数据实时计数器：每分钟重新计算理论条数（无论是否切到分钟Tab都实时更新）
   useEffect(() => {
-    if (dataSubTab !== 'minute') return;
+    // 切换币种时重置基数
+    setTheoreticalBase(calcTheoreticalMinutes(activeSymbol));
+    setMinuteCounter(0);
+  }, [activeSymbol]);
+  useEffect(() => {
     const timer = setInterval(() => {
       setMinuteCounter(c => c + 1);
     }, 60 * 1000);
     return () => clearInterval(timer);
-  }, [dataSubTab]);
+  }, []);
 
   const handleSync = useCallback(() => {
     window.location.reload();
@@ -2227,7 +2257,7 @@ export default function BeDataPage() {
                   background: 'none', border: 'none', cursor: 'pointer',
                 }}
               >
-                分钟
+                {`分钟（${formatWan(theoreticalBase + minuteCounter)}条）`}
               </button>
             </div>
           )}
@@ -2377,16 +2407,16 @@ export default function BeDataPage() {
       {/* ===== 分钟数据 Tab（权限锁定） ===== */}
       {activeTab === 'data' && isCryptoSymbol && dataSubTab === 'minute' && (
         <div className="flex-1 overflow-auto flex flex-col items-center justify-center" style={{ background: '#fff', minHeight: 320 }}>
-          {/* 数据条数展示 */}
+          {/* 理论条数展示 */}
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 8 }}>分钟数据总量</div>
+            <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 8 }}>分钟K线理论总量（从上市至今）</div>
             <div style={{ fontSize: 36, fontWeight: 700, color: '#D32F2F', fontFamily: 'monospace', letterSpacing: 1 }}>
-              {minuteMeta ? (minuteMeta.total + minuteCounter).toLocaleString() : '--'}
+              {(theoreticalBase + minuteCounter).toLocaleString()}
             </div>
-            <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>条（每分钟实时更新）</div>
-            {minuteMeta?.latestDatetime && (
-              <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>最新数据：{String(minuteMeta.latestDatetime).slice(0, 16)}</div>
-            )}
+            <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>条（每分钟实时+1）</div>
+            <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 6 }}>
+              估算占用存储空间：<span style={{ color: '#D32F2F', fontWeight: 600 }}>{estimateSize(theoreticalBase + minuteCounter)}</span>
+            </div>
           </div>
           {/* 锁定提示 */}
           <div style={{
