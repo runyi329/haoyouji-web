@@ -19,6 +19,7 @@ import {
   ChevronDown,
   ChevronUp,
   Settings,
+  RefreshCw,
   MapPin,
   KeyRound,
   Landmark,
@@ -919,6 +920,14 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.location.reload()}
+              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+              title="刷新页面"
+            >
+              <RefreshCw className="w-5 h-5 text-white" />
+            </button>
             <button
               onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
               className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
