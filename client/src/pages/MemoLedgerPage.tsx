@@ -694,14 +694,16 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                               type={field.sensitive ? "password" : "text"}
                               className="flex-1 text-sm"
                             />
-                            {/* 密码显示/隐藏切换 */}
-                            <button
-                              onClick={() => updateOuyiField(acctIdx, fidx, "sensitive", !field.sensitive)}
-                              className={`p-1.5 rounded-lg flex-shrink-0 ${field.sensitive ? 'text-[#D32F2F] bg-red-50' : 'text-gray-300 hover:bg-gray-100'}`}
-                              title={field.sensitive ? "取消隐藏" : "设为隐藏（密码类）"}
-                            >
-                              {field.sensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                            </button>
+                            {/* 密码显示/隐藏切换：只有密码字段显示 */}
+                            {(field.sensitive || field.label.includes('密码') || field.label.includes('password') || field.label.toLowerCase().includes('pwd')) && (
+                              <button
+                                onClick={() => updateOuyiField(acctIdx, fidx, "sensitive", !field.sensitive)}
+                                className={`p-1.5 rounded-lg flex-shrink-0 ${field.sensitive ? 'text-[#D32F2F] bg-red-50' : 'text-gray-300 hover:bg-gray-100'}`}
+                                title={field.sensitive ? "取消隐藏" : "设为隐藏（密码类）"}
+                              >
+                                {field.sensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            )}
                             {/* 删除按钮（所有字段均可删除） */}
                             {isDeletable ? (
                               <button
@@ -757,13 +759,15 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                       type={field.sensitive ? "password" : "text"}
                       className="flex-1 text-sm"
                     />
-                    <button
-                      onClick={() => updateField(idx, "sensitive", !field.sensitive)}
-                      className={`p-1.5 rounded-lg flex-shrink-0 ${field.sensitive ? "text-[#D32F2F] bg-red-50" : "text-gray-400 hover:bg-gray-100"}`}
-                      title={field.sensitive ? "取消隐藏" : "设为隐藏（密码类）"}
-                    >
-                      {field.sensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+                    {(field.sensitive || field.label.includes('密码') || field.label.includes('password') || field.label.toLowerCase().includes('pwd')) && (
+                      <button
+                        onClick={() => updateField(idx, "sensitive", !field.sensitive)}
+                        className={`p-1.5 rounded-lg flex-shrink-0 ${field.sensitive ? "text-[#D32F2F] bg-red-50" : "text-gray-400 hover:bg-gray-100"}`}
+                        title={field.sensitive ? "取消隐藏" : "设为隐藏（密码类）"}
+                      >
+                        {field.sensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    )}
                     <button onClick={() => removeField(idx)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 flex-shrink-0">
                       <X className="w-4 h-4" />
                     </button>
