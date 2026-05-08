@@ -2311,12 +2311,12 @@ export default function BeDataPage() {
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <colgroup>
-                <col style={{ width: '18%' }} />
-                <col style={{ width: '13.7%' }} />
-                <col style={{ width: '13.7%' }} />
-                <col style={{ width: '13.7%' }} />
-                <col style={{ width: '13.7%' }} />
-                <col style={{ width: '13.7%' }} />
+                <col style={{ width: '15%' }} />
+                <col style={{ width: '14.5%' }} />
+                <col style={{ width: '14.5%' }} />
+                <col style={{ width: '14.5%' }} />
+                <col style={{ width: '14.5%' }} />
+                <col style={{ width: '13.5%' }} />
                 <col style={{ width: '13.5%' }} />
               </colgroup>
               <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
@@ -2336,20 +2336,25 @@ export default function BeDataPage() {
                   const down = row.changePct != null && row.changePct < 0;
                   const color = up ? '#EF4444' : down ? '#16A34A' : '#9CA3AF';
                   const rowBg = idx % 2 === 0 ? '#fff' : '#F9FAFB';
-                  // 时间格式：26/05/06 08:00
+                  // 时间格式：两行显示 "26/05/06" 和 "08:00"
                   const shortDt = (() => {
                     const d = row.datetime || '';
-                    const parts = d.replace(/-/g, '/').split('/');
-                    if (parts.length >= 3) {
-                      const yy = parts[0].length === 4 ? parts[0].slice(-2) : parts[0];
-                      const rest = parts.slice(1).join('/');
-                      return `${yy}/${rest}`;
+                    // datetime 格式：2026-05-06 08:00:00 或 2026/05/06 08:00
+                    const spaceIdx = d.indexOf(' ');
+                    if (spaceIdx > 0) {
+                      const datePart = d.slice(0, spaceIdx).replace(/-/g, '/');
+                      const timePart = d.slice(spaceIdx + 1, spaceIdx + 6); // HH:mm
+                      const yy = datePart.length >= 8 ? datePart.slice(2) : datePart; // 去掉世纪
+                      return { date: yy, time: timePart };
                     }
-                    return d;
+                    return { date: d, time: '' };
                   })();
                   return (
                     <tr key={row.openTime} style={{ background: rowBg }}>
-                      <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#6B7280', fontFamily: 'monospace', fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden' }}>{shortDt}</td>
+                      <td style={{ border: '1px solid #E5E7EB', padding: '3px 0', textAlign: 'center', color: '#6B7280', fontFamily: 'monospace', fontSize: 9, lineHeight: 1.3 }}>
+                        <div style={{ whiteSpace: 'nowrap' }}>{shortDt.date}</div>
+                        <div style={{ whiteSpace: 'nowrap', color: '#9CA3AF' }}>{shortDt.time}</div>
+                      </td>
                       <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#374151', fontFamily: 'monospace', fontSize: 10 }}>{formatPrice(row.open)}</td>
                       <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color, fontFamily: 'monospace', fontSize: 10, fontWeight: 600 }}>{formatPrice(row.close)}</td>
                       <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#4B5563', fontFamily: 'monospace', fontSize: 10 }}>{formatPrice(row.high)}</td>
