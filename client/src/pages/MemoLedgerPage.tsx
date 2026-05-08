@@ -44,6 +44,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 // ===== 第1级大类 =====
@@ -189,16 +190,9 @@ function MemoCard({ item, onEdit, onDelete }: {
           </p>
         </div>
         <div className="flex items-center gap-1 ml-2">
-          <button onClick={e => { e.stopPropagation(); copyAll(); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" title="复制全部">
-            <Copy className="w-4 h-4" />
+          <button onClick={e => { e.stopPropagation(); onEdit(item); }} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
+            <Pencil className="w-5 h-5" />
           </button>
-          <button onClick={e => { e.stopPropagation(); onEdit(item); }} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
-            <Pencil className="w-4 h-4" />
-          </button>
-          <button onClick={e => { e.stopPropagation(); onDelete(item.id); }} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500">
-            <Trash2 className="w-4 h-4" />
-          </button>
-          {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
         </div>
       </div>
 
@@ -294,12 +288,13 @@ function MemoCard({ item, onEdit, onDelete }: {
 }
 
 // ===== 新建/编辑弹窗（两级分类） =====
-function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
+function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete }: {
   open: boolean;
   onClose: () => void;
   editItem?: MemoItem | null;
   ledgerId: number;
   onSuccess: () => void;
+  onDelete?: (id: number) => void;
 }) {
   const [step, setStep] = useState<"cat" | "sub" | "fields">("cat");
   const [category, setCategory] = useState("bank");
@@ -615,6 +610,28 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
         {/* ===== STEP 3: 填写字段 ===== */}
         {step === "fields" && (
           <div className="space-y-4">
+            {/* 编辑模式：删除整个项目按钮 */}
+            {editItem && onDelete && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-dashed border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 text-sm transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                    删除整个项目
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>确认删除</AlertDialogTitle>
+                    <AlertDialogDescription>删除后无法恢复，确定要删除这条备忘吗？</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction className="bg-red-500 hover:bg-red-600" onClick={() => { onDelete(editItem.id); onClose(); }}>确认删除</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+
             {/* 面包屑 */}
             <div className="flex items-center gap-1.5 text-sm">
               {!editItem && (
@@ -1097,6 +1114,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
           editItem={editItem}
           ledgerId={ledgerId}
           onSuccess={() => {}}
+          onDelete={id => deleteMutation.mutate({ id, ledgerId })}
         />
       )}
 
