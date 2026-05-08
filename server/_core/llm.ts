@@ -66,6 +66,10 @@ export type InvokeParams = {
   output_schema?: OutputSchema;
   responseFormat?: ResponseFormat;
   response_format?: ResponseFormat;
+  /** 功能标识，用于 AI 用量监控（如 'crypto_ai_analysis'） */
+  featureKey?: string;
+  /** 触发用户 ID，用于日志记录 */
+  userId?: number;
 };
 
 export type ToolCall = {
@@ -291,7 +295,6 @@ const normalizeResponseFormat = ({
 
 export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   assertApiKey();
-
   const {
     messages,
     tools,
@@ -301,7 +304,23 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     output_schema,
     responseFormat,
     response_format,
+    featureKey,
+    userId,
   } = params;
+
+  // ===== AI 监控：检查功能开关 =====
+  if (featureKey) {
+    try {
+      const { isAIFeatureEnabled } = await import('../ai-monitor');
+      const enabled = await isAIFeatureEnabled(featureKey);
+      if (!enabled) {
+        throw new Error(`AI 功能「${featureKey}」已被管理员关闭，暂停使用`);
+      }
+    } catch (monitorErr: any) {
+      if (monitorErr?.message?.includes('已被管理员关闭')) throw monitorErr;
+      // 监控模块异常时不阻断主流程
+    }
+  };
 
   const payload: Record<string, unknown> = {
     model: resolveModel(),
@@ -357,5 +376,39 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     );
   }
 
-  return (await response.json()) as InvokeResult;
+  const startTime = Date.now();
+  let result: InvokeResult;
+  let success = true;
+  let errorMsg: string | undefined;
+
+  try {
+    result = (await response.json()) as InvokeResult;
+  } catch (err: any) {
+    success = false;
+    errorMsg = err?.message;
+    throw err;
+  } finally {
+    // ===== AI 监控：写入用量日志 =====
+    if (featureKey) {
+      try {
+        const { logAIUsage } = await import('../ai-monitor');
+        const usage = (result! as any)?.usage;
+        await logAIUsage({
+          featureKey,
+          model: resolveModel(),
+          promptTokens: usage?.prompt_tokens ?? 0,
+          completionTokens: usage?.completion_tokens ?? 0,
+          totalTokens: usage?.total_tokens ?? 0,
+          durationMs: Date.now() - startTime,
+          success,
+          errorMsg,
+          userId,
+        });
+      } catch {
+        // 日志写入失败不影响主流程
+      }
+    }
+  }
+
+  return result!;
 }

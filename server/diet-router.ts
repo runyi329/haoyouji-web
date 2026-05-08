@@ -297,6 +297,7 @@ export const dietRouter = router({
       const mealTypeLabel = { breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '加餐' }[input.mealType];
       try {
         const aiResult = await invokeLLM({
+          featureKey: 'diet_analysis',
           messages: [
             {
               role: 'system',
@@ -364,6 +365,7 @@ export const dietRouter = router({
     .mutation(async ({ input }) => {
       try {
         const aiResult = await invokeLLM({
+          featureKey: 'diet_analysis',
           messages: [
             {
               role: 'system',

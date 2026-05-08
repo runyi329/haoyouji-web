@@ -257,7 +257,7 @@ export const okxTraderRouter = router({
         { role: "user" as const, content: input.message },
       ];
 
-      const response = await invokeLLM({ messages });
+      const response = await invokeLLM({ featureKey: 'okx_trader_chat', messages });
       const reply = response.choices[0]?.message?.content || "抱歉，无法生成回复";
 
       return { reply };

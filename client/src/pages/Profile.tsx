@@ -459,6 +459,7 @@ export default function Profile() {
       { id: "topology", icon: Network, label: "拓扑", color: "bg-[#F3F0FF] text-[#5E35B1]", badge: null, onClick: () => navigate("/parent/topology") },
       { id: "sms-manage", icon: MessageSquare, label: "短信管理", color: "bg-green-50 text-green-600", badge: null, onClick: () => navigate("/jiang/sms-manage") },
       { id: "add-product", icon: PackagePlus, label: "上架商品", color: "bg-amber-50 text-amber-600", badge: null, onClick: () => navigate("/admin/product/new") },
+      { id: "ai-token-monitor", icon: BarChart2, label: "Token用量", color: "bg-purple-50 text-purple-600", badge: null, onClick: () => navigate("/admin/ai-monitor") },
     ] : []),
     { id: "change-password", icon: Shield, label: "修改密码", color: "bg-indigo-50 text-indigo-600", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
     { id: "notifications", icon: Bell, label: "消息通知", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => toast("功能开发中") },

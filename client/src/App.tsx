@@ -395,6 +395,7 @@ function Router() {
         <Route path="/admin/redeem-orders" component={AdminRedeemOrders} />
         <Route path="/admin/product/new" component={ProductPublish} />
         <Route path="/admin/product/:id/edit" component={ProductPublish} />
+        <Route path="/admin/ai-monitor" component={lazy(() => import("./pages/admin/AiTokenMonitor"))} />
         <Route path="/payment/result" component={PaymentResult} />
 
         {/* 卡券相关页面 */}

@@ -18,6 +18,7 @@ export type BankAccountInfo = z.infer<typeof bankAccountSchema>;
 export async function parseBankAccountInfo(text: string): Promise<BankAccountInfo> {
   try {
     const response = await invokeLLM({
+      featureKey: 'bank_account_parser',
       messages: [
         {
           role: "system",

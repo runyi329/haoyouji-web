@@ -1083,6 +1083,7 @@ export const lotteryRouter = router({
       await ensureOrganizer(input.activityId, ctx.user.id);
       const { invokeLLM } = await import('./_core/llm');
       const llmRes = await invokeLLM({
+        featureKey: 'lottery_analysis',
         messages: [
           {
             role: 'system',
