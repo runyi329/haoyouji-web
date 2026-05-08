@@ -179,9 +179,6 @@ function MemoCard({ item, onEdit, onDelete }: {
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-3">
       {/* 卡片头部 */}
       <div className="flex items-center px-4 py-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 mr-3" style={{ backgroundColor: cat.color + "18" }}>
-          <CatIcon className="w-4.5 h-4.5" style={{ color: cat.color }} />
-        </div>
         <div className="flex-1 min-w-0">
           <p className="font-medium text-gray-900 truncate">{getSubLabel(item)}</p>
           <p className="text-xs text-gray-400 mt-0.5">
