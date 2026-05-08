@@ -62,6 +62,15 @@ export async function initAIMonitorTables(): Promise<void> {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI 功能开关'
     `);
 
+    // 清理已删除功能的残留开关记录
+    const DELETED_FEATURE_KEYS = ['analyze_qq_betting'];
+    for (const key of DELETED_FEATURE_KEYS) {
+      await (conn as any).execute(
+        `DELETE FROM ai_feature_switches WHERE feature_key = ?`,
+        [key]
+      );
+    }
+
     // 初始化所有功能开关（不存在则插入，存在则跳过）
     for (const [key, label] of Object.entries(AI_FEATURE_LABELS)) {
       await (conn as any).execute(
