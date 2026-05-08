@@ -180,14 +180,9 @@ function MemoCard({ item, onEdit, onDelete }: {
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-3">
       {/* 卡片头部 */}
       <div className="flex items-center px-4 py-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <div className="flex-1 min-w-0">
-          <p className="font-medium text-gray-900 truncate">{getSubLabel(item)}</p>
-          <p className="text-xs text-gray-400 mt-0.5">
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs mr-1" style={{ backgroundColor: cat.color + "18", color: cat.color }}>
-              {cat.label}
-            </span>
-            {ouyiAccounts.length > 1 ? `${filledCount} 条记录` : `${filledCount} 个字段`}
-          </p>
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          <p className="font-medium text-gray-900 truncate flex-1">{getSubLabel(item)}</p>
+          <span className="text-xs text-gray-400 flex-shrink-0">{filledCount}条</span>
         </div>
         <div className="flex items-center gap-1 ml-2">
           <button onClick={e => { e.stopPropagation(); onEdit(item); }} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
