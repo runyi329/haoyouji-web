@@ -23,6 +23,7 @@ import {
   KeyRound,
   Landmark,
   Globe,
+  Building2,
   StickyNote,
   ChevronRight,
   ClipboardList,
@@ -50,7 +51,7 @@ const CATEGORIES = [
   { key: "bank",    label: "银行账号", icon: Landmark,   color: "#43A047" },
   { key: "account", label: "账号密码", icon: KeyRound,   color: "#1E88E5" },
   { key: "address", label: "快递地址", icon: MapPin,     color: "#E53935" },
-  { key: "website", label: "网站登录", icon: Globe,      color: "#8E24AA" },
+  { key: "website", label: "公司",   icon: Building2,  color: "#8E24AA" },
   { key: "other",   label: "其他",   icon: StickyNote,  color: "#FB8C00" },
 ];
 
@@ -59,7 +60,7 @@ const SUB_CATEGORIES: Record<string, string[]> = {
   bank: ["工商银行", "建设银行", "招商银行", "农业银行", "中国银行", "交通银行", "邮储银行", "浦发银行", "民生银行", "光大银行", "自定义"],
   account: ["苹果ID", "华为ID", "微软账号", "谷歌账号", "淘宝/天猫", "京东", "美团", "拼多多", "微信", "支付宝", "抖音", "快手", "欧易", "自定义"],
   address: ["家庭地址", "公司地址", "常用地址1", "常用地址2", "自定义"],
-  website: ["常用网站", "工作系统", "学习平台", "游戏账号", "自定义"],
+  website: [], // 公司分类直接进入字段填写，无需选子类
   other: ["证件信息", "车牌/车险", "会员卡", "WiFi密码", "自定义"],
 };
 
@@ -92,9 +93,7 @@ const FIELD_TEMPLATES: Record<string, Array<{ label: string; sensitive?: boolean
     { label: "邮编" },
   ],
   website: [
-    { label: "网址" },
-    { label: "用户名" },
-    { label: "密码", sensitive: true },
+    { label: "公司名称" },
   ],
   other: [
     { label: "内容" },
@@ -453,10 +452,15 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
     setCustomSub("");
     setIsCustom(false);
     setFields([]);
-    // 银行账号分类：直接进入字段填写界面，跳过子类选择
+    // 银行账号、公司分类：直接进入字段填写界面，跳过子类选择
     if (key === 'bank') {
       // bank 分类直接进入字段填写，初始化一条记录
       setOuyiAccounts([[...FIELD_TEMPLATES['bank'].map(f => ({ ...f, value: '' }))]]);
+      setStep("fields");
+    } else if (key === 'website') {
+      // 公司分类：直接进入字段填写，subLabel 为空（保存时用公司名称字段值作为标题）
+      setSubLabel("");
+      setOuyiAccounts([[...FIELD_TEMPLATES['website'].map(f => ({ ...f, value: '' }))]]);
       setStep("fields");
     } else {
       setOuyiAccounts([]);
@@ -504,8 +508,13 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
       const firstRecord = ouyiAccounts[0];
       const bankNameField = firstRecord?.find(f => f.label === '银行名称');
       effectiveSubLabel = bankNameField?.value?.trim() || '银行账号';
+    } else if (category === 'website') {
+      // 公司：用第一条记录的公司名称作标题
+      const firstRecord = ouyiAccounts[0];
+      const companyNameField = firstRecord?.find(f => f.label === '公司名称');
+      effectiveSubLabel = companyNameField?.value?.trim() || subLabel || '公司';
     }
-    if (!effectiveSubLabel.trim()) { toast.error("请先选择或填写子类名称"); return; }
+    if (!effectiveSubLabel.trim()) { toast.error("请先填写公司名称"); return; }
     // 所有分类都用 serializeOuyiFields 序列化
     const finalFields = serializeOuyiFields(ouyiAccounts);
     if (editItem) {
@@ -611,7 +620,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
             {/* 面包屑 */}
             <div className="flex items-center gap-1.5 text-sm">
               {!editItem && (
-                <button onClick={() => setStep(category === 'bank' ? 'cat' : 'sub')} className="text-gray-400 hover:text-gray-600 flex items-center gap-1">
+                <button onClick={() => setStep(category === 'bank' || category === 'website' ? 'cat' : 'sub')} className="text-gray-400 hover:text-gray-600 flex items-center gap-1">
                   <ChevronLeft className="w-4 h-4" />
                 </button>
               )}
@@ -620,7 +629,12 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
                 <span className="text-xs font-medium" style={{ color: catObj.color }}>{catObj.label}</span>
               </div>
               <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
-              <span className="text-sm font-medium text-gray-800">{subLabel}</span>
+              <span className="text-sm font-medium text-gray-800">
+                {category === 'website'
+                  ? (ouyiAccounts[0]?.find(f => f.label === '公司名称')?.value?.trim() || '新建公司')
+                  : (subLabel || catObj.label)
+                }
+              </span>
             </div>
 
             {/* 欧易多账户 UI */}
