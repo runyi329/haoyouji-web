@@ -427,7 +427,8 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
     setCategory(key);
     setSubLabel("");
     setCustomSub("");
-    setIsCustom(false);
+    // 银行账号分类：直接进入手动输入模式，跳过预设标签列表
+    setIsCustom(key === 'bank');
     setFields(FIELD_TEMPLATES[key]?.map(f => ({ ...f, value: "" })) || []);
     setStep("sub");
   };
@@ -558,18 +559,22 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
               </div>
             ) : (
               <div className="space-y-2">
-                <p className="text-sm text-gray-500">输入自定义名称</p>
+                <p className="text-sm text-gray-500">
+                  {category === 'bank' ? '输入银行名称' : '输入自定义名称'}
+                </p>
                 <div className="flex gap-2">
                   <Input
                     value={customSub}
                     onChange={e => setCustomSub(e.target.value)}
-                    placeholder={`如：${catObj.label}名称...`}
+                    placeholder={category === 'bank' ? '如：招商银行、工商银行...' : `如：${catObj.label}名称...`}
                     autoFocus
                     onKeyDown={e => e.key === "Enter" && handleConfirmCustom()}
                   />
                   <Button onClick={handleConfirmCustom} className="bg-[#D32F2F] hover:bg-[#B71C1C] text-white flex-shrink-0">确认</Button>
                 </div>
-                <button onClick={() => setIsCustom(false)} className="text-xs text-gray-400 hover:text-gray-600">← 返回预设列表</button>
+                {category !== 'bank' && (
+                  <button onClick={() => setIsCustom(false)} className="text-xs text-gray-400 hover:text-gray-600">← 返回预设列表</button>
+                )}
               </div>
             )}
           </div>
