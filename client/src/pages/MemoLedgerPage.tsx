@@ -509,7 +509,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
     // 所有分类都用 serializeOuyiFields 序列化
     const finalFields = serializeOuyiFields(ouyiAccounts);
     if (editItem) {
-      updateMutation.mutate({ id: editItem.id, category, title: effectiveSubLabel, fields: finalFields, note: note.trim() || undefined });
+      updateMutation.mutate({ id: editItem.id, ledgerId, category, title: effectiveSubLabel, fields: finalFields, note: note.trim() || undefined });
     } else {
       createMutation.mutate({ ledgerId, category, title: effectiveSubLabel, fields: finalFields, note: note.trim() || undefined });
     }
@@ -1124,7 +1124,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-500 hover:bg-red-600 text-white"
-              onClick={() => deleteId && deleteMutation.mutate({ id: deleteId })}
+              onClick={() => deleteId && deleteMutation.mutate({ id: deleteId, ledgerId })}
             >
               删除
             </AlertDialogAction>

@@ -10492,6 +10492,7 @@ ${klinesSummary}
     updateMemoItem: protectedProcedure
       .input(z.object({
         id: z.number(),
+        ledgerId: z.number(),
         category: z.string().optional(),
         title: z.string().optional(),
         fields: z.array(z.object({
@@ -10502,15 +10503,15 @@ ${klinesSummary}
         note: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { id, ...data } = input;
-        await dbMemo.updateMemoItem(id, ctx.user.id, data);
+        const { id, ledgerId, ...data } = input;
+        await dbMemo.updateMemoItem(id, ledgerId, data);
         return { success: true };
       }),
     // 删除备忘录条目
     deleteMemoItem: protectedProcedure
-      .input(z.object({ id: z.number() }))
+      .input(z.object({ id: z.number(), ledgerId: z.number() }))
       .mutation(async ({ ctx, input }) => {
-        await dbMemo.deleteMemoItem(input.id, ctx.user.id);
+        await dbMemo.deleteMemoItem(input.id, input.ledgerId);
         return { success: true };
       }),
 
