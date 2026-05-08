@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
+import { toast } from 'sonner';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
@@ -28,16 +29,15 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
   if (!isUnauthorized) return;
 
-  const isPreviewMode = window.location.pathname !== '/login' && window.location.pathname !== '/';
-  if (isPreviewMode) {
-    console.log('[Preview Mode] 忽略未授权错误，允许预览模式继续');
-    return;
-  }
-
+  // token 过期或失效，提示用户并跳转到登录页
   const loginUrl = getLoginUrl();
   if (window.location.pathname !== loginUrl) {
-    window.history.pushState(null, '', loginUrl);
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    console.log('[Auth] Token 失效，跳转登录页');
+    toast.error('登录已过期，请重新登录', { duration: 3000 });
+    setTimeout(() => {
+      window.history.pushState(null, '', loginUrl);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }, 1500);
   }
 };
 
