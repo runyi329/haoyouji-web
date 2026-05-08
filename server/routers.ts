@@ -21395,6 +21395,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         return getDailyStats(input.startDate, input.endDate);
       }),
   }),
+});
 
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
@@ -22115,7 +22116,6 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         risk: string;
       };
     }),
-  }),
 });
 export type AppRouter = typeof appRouter;
 
