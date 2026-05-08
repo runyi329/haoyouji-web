@@ -968,29 +968,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
       </div>
 
       {/* 分类标签栏 */}
-      {!promptMode ? (
-        <div className="bg-white border-b border-gray-100 px-4 py-2 flex gap-2 overflow-x-auto scrollbar-hide">
-          {CATEGORIES.map(cat => {
-            const Icon = cat.icon;
-            const count = categoryCounts[cat.key] || 0;
-            const isActive = activeCategory === cat.key;
-            return (
-              <button
-                key={cat.key}
-                onClick={() => setActiveCategory(cat.key)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm whitespace-nowrap flex-shrink-0 transition-colors ${
-                  isActive ? "text-white" : "text-gray-600 bg-gray-100"
-                }`}
-                style={isActive ? { backgroundColor: cat.color } : {}}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                {cat.label}
-                {count > 0 && <span className={`text-xs ${isActive ? "opacity-80" : "text-gray-400"}`}>{count}</span>}
-              </button>
-            );
-          })}
-        </div>
-      ) : (
+      {!promptMode ? null : (
         <div className="bg-white border-b border-gray-100 px-4 py-2 flex gap-2">
           {PROMPT_CATEGORIES.map(cat => (
             <button
