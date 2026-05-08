@@ -155,7 +155,7 @@ export async function createMemoItem(data: {
 }
 
 // 更新备忘录条目
-export async function updateMemoItem(id: number, userId: number, data: {
+export async function updateMemoItem(id: number, ledgerId: number, data: {
   category?: string;
   title?: string;
   fields?: MemoField[];
@@ -167,34 +167,36 @@ export async function updateMemoItem(id: number, userId: number, data: {
 
   const fieldsJson = data.fields !== undefined ? JSON.stringify(data.fields) : undefined;
   
+  // 使用 ledgerId 做权限校验（共享账本内所有成员均可编辑）
   if (data.category !== undefined && data.title !== undefined && fieldsJson !== undefined) {
     await db.execute(sql`
       UPDATE memo_items 
       SET category = ${data.category}, title = ${data.title}, fields = ${fieldsJson}, note = ${data.note ?? null}
-      WHERE id = ${id} AND userId = ${userId}
+      WHERE id = ${id} AND ledgerId = ${ledgerId}
     `);
   } else if (data.title !== undefined && fieldsJson !== undefined) {
     await db.execute(sql`
-      UPDATE memo_items SET title = ${data.title}, fields = ${fieldsJson} WHERE id = ${id} AND userId = ${userId}
+      UPDATE memo_items SET title = ${data.title}, fields = ${fieldsJson} WHERE id = ${id} AND ledgerId = ${ledgerId}
     `);
   } else if (fieldsJson !== undefined) {
     await db.execute(sql`
-      UPDATE memo_items SET fields = ${fieldsJson} WHERE id = ${id} AND userId = ${userId}
+      UPDATE memo_items SET fields = ${fieldsJson} WHERE id = ${id} AND ledgerId = ${ledgerId}
     `);
   } else if (data.title !== undefined) {
     await db.execute(sql`
-      UPDATE memo_items SET title = ${data.title} WHERE id = ${id} AND userId = ${userId}
+      UPDATE memo_items SET title = ${data.title} WHERE id = ${id} AND ledgerId = ${ledgerId}
     `);
   }
 }
 
 // 软删除备忘录条目
-export async function deleteMemoItem(id: number, userId: number): Promise<void> {
+export async function deleteMemoItem(id: number, ledgerId: number): Promise<void> {
   await ensureMemoTables();
   const db = await getLedgerDb();
   if (!db) throw new Error('数据库不可用');
 
-  await db.execute(sql`UPDATE memo_items SET deletedAt = NOW() WHERE id = ${id} AND userId = ${userId}`);
+  // 使用 ledgerId 做权限校验（共享账本内所有成员均可删除）
+  await db.execute(sql`UPDATE memo_items SET deletedAt = NOW() WHERE id = ${id} AND ledgerId = ${ledgerId}`);
   console.log(`[memo] deleteMemoItem id=${id}`);
 }
 
