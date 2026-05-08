@@ -243,7 +243,7 @@ function MemoCard({ item, onEdit, onDelete, showAllPasswords }: {
                       <Copy className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                </div></div>
+                </div>
               ))}
             </div>
           )}
