@@ -200,18 +200,18 @@ function MemoCard({ item, onEdit, onDelete }: {
               {ouyiAccounts.map((acct, acctIdx) => (
                 <div key={acctIdx}>
                   {acctIdx > 0 && <div className="border-t border-gray-100 my-2" />}
-                  {ouyiAccounts.length > 1 && <div className="text-xs text-gray-400 mb-1.5">第 {acctIdx + 1} 条</div>}
+                  {ouyiAccounts.length > 1 && <div className="text-sm text-gray-400 mb-1.5">第 {acctIdx + 1} 条</div>}
                   <div className="space-y-1.5">
                     {acct.filter(f => f.value && f.label !== '__NOTE__').map((field, fidx) => {
                       const globalIdx = item.fields.indexOf(field);
                       return (
                         <div key={fidx} className="flex items-center gap-2">
-                          <span className="text-xs text-gray-400 w-16 flex-shrink-0">{field.label}</span>
+                          <span className="text-sm text-gray-400 w-16 flex-shrink-0">{field.label}</span>
                           <div className="flex-1 flex items-center gap-1 min-w-0">
                             {field.sensitive && !visibleFields.has(globalIdx) ? (
-                              <span className="text-sm text-gray-600 tracking-widest">••••••••</span>
+                              <span className="text-base text-gray-600 tracking-widest">········</span>
                             ) : (
-                              <span className="text-sm text-gray-800 break-all">{field.value}</span>
+                              <span className="text-base text-gray-800 break-all">{field.value}</span>
                             )}
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
@@ -230,8 +230,8 @@ function MemoCard({ item, onEdit, onDelete }: {
                     {/* 备注字段单独展示 */}
                     {acct.find(f => f.label === '__NOTE__' && f.value) && (
                       <div className="flex items-start gap-2 pt-0.5">
-                        <span className="text-xs text-gray-400 w-16 flex-shrink-0 pt-0.5">备注</span>
-                        <span className="text-xs text-gray-500 break-all">{acct.find(f => f.label === '__NOTE__')!.value}</span>
+                        <span className="text-sm text-gray-400 w-16 flex-shrink-0 pt-0.5">备注</span>
+                        <span className="text-sm text-gray-500 break-all">{acct.find(f => f.label === '__NOTE__')!.value}</span>
                       </div>
                     )}
                   </div>
@@ -243,12 +243,12 @@ function MemoCard({ item, onEdit, onDelete }: {
             <div className="space-y-2">
               {item.fields.filter(f => f.value && f.label !== '__ACCOUNT_SEPARATOR__').map((field, idx) => (
                 <div key={idx} className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 w-20 flex-shrink-0">{field.label}</span>
+                  <span className="text-sm text-gray-400 w-20 flex-shrink-0">{field.label}</span>
                   <div className="flex-1 flex items-center gap-1 min-w-0">
                     {field.sensitive && !visibleFields.has(idx) ? (
-                      <span className="text-sm text-gray-600 tracking-widest">••••••••</span>
+                      <span className="text-base text-gray-600 tracking-widest">········</span>
                     ) : (
-                      <span className="text-sm text-gray-800 break-all">{field.value}</span>
+                      <span className="text-base text-gray-800 break-all">{field.value}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
@@ -267,7 +267,7 @@ function MemoCard({ item, onEdit, onDelete }: {
           )}
           {item.note && (
             <div className="pt-2 mt-2 border-t border-gray-50">
-              <p className="text-xs text-gray-400">备注：{item.note}</p>
+              <p className="text-sm text-gray-400">备注：{item.note}</p>
             </div>
           )}
           <div className="pt-1 flex gap-2">
