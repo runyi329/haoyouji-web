@@ -1,0 +1,63 @@
+name: 删除AI功能开关残留条目
+on:
+  workflow_dispatch:
+    inputs:
+      feature_key:
+        description: '要删除的功能 key（如 analyze_qq_betting）'
+        required: true
+        default: 'analyze_qq_betting'
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 设置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 124.223.54.69 >> ~/.ssh/known_hosts 2>/dev/null || true
+      - name: 执行SQL删除
+        run: |
+          FEATURE_KEY="${{ github.event.inputs.feature_key }}"
+          ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no root@124.223.54.69 "bash -s" << ENDSSH
+            DATABASE_URL=\$(grep "^DATABASE_URL=" /root/haoyouji-web/.env 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"' || echo "")
+            if [ -z "\$DATABASE_URL" ]; then echo "❌ 未找到 DATABASE_URL"; exit 1; fi
+            pip3 install pymysql -q 2>/dev/null || true
+            python3 - "\$DATABASE_URL" "${FEATURE_KEY}" << 'PYEOF'
+import sys, re, pymysql
+DATABASE_URL = sys.argv[1]
+FEATURE_KEY = sys.argv[2]
+def parse_url(url):
+    m = re.match(r'mysql://([^:]+):([^@]+)@([^:/]+):?([0-9]*)/([^?]+)', url)
+    if not m: raise ValueError(f"无法解析: {url[:40]}")
+    user, pwd, host, port, db = m.groups()
+    return host, int(port or 4000), user, pwd, db
+DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME = parse_url(DATABASE_URL)
+conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASS, database=DB_NAME, ssl={'ssl': True}, charset='utf8mb4', connect_timeout=30)
+print(f"数据库连接成功，准备删除 feature_key='{FEATURE_KEY}'")
+with conn.cursor() as cur:
+    cur.execute("SELECT feature_key, feature_label, enabled FROM ai_feature_switches WHERE feature_key = %s", (FEATURE_KEY,))
+    rows = cur.fetchall()
+    if rows:
+        print(f"找到记录: {rows}")
+        cur.execute("DELETE FROM ai_feature_switches WHERE feature_key = %s", (FEATURE_KEY,))
+        conn.commit()
+        print(f"✅ 已删除 {cur.rowcount} 条记录")
+    else:
+        print(f"⚠️ 未找到 feature_key='{FEATURE_KEY}' 的记录，无需删除")
+    cur.execute("SELECT COUNT(*) FROM ai_usage_logs WHERE feature_key = %s", (FEATURE_KEY,))
+    cnt = cur.fetchone()[0]
+    print(f"ai_usage_logs 中有 {cnt} 条相关记录")
+    if cnt > 0:
+        cur.execute("DELETE FROM ai_usage_logs WHERE feature_key = %s", (FEATURE_KEY,))
+        conn.commit()
+        print(f"✅ 已从 ai_usage_logs 删除 {cur.rowcount} 条记录")
+    cur.execute("SELECT feature_key, feature_label, enabled FROM ai_feature_switches ORDER BY feature_key")
+    remaining = cur.fetchall()
+    print(f"\n剩余开关列表（共 {len(remaining)} 条）:")
+    for r in remaining:
+        print(f"  {r[0]}: {r[1]} ({'开' if r[2] else '关'})")
+conn.close()
+print("\n=== 完成 ===")
+PYEOF
+ENDSSH
