@@ -133,23 +133,15 @@ function copyText(text: string, label?: string) {
 }
 
 // ===== 单条备忘录卡片 =====
-function MemoCard({ item, onEdit, onDelete }: {
+function MemoCard({ item, onEdit, onDelete, showAllPasswords }: {
   item: MemoItem;
   onEdit: (item: MemoItem) => void;
   onDelete: (id: number) => void;
+  showAllPasswords: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [visibleFields, setVisibleFields] = useState<Set<number>>(new Set());
   const cat = CATEGORIES.find(c => c.key === item.category) || CATEGORIES[CATEGORIES.length - 1];
   const CatIcon = cat.icon;
-
-  const toggleVisible = (idx: number) => {
-    setVisibleFields(prev => {
-      const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx); else next.add(idx);
-      return next;
-    });
-  };
 
   const copyAll = () => {
     const text = item.fields.filter(f => f.value && f.label !== '__ACCOUNT_SEPARATOR__').map(f => `${f.label}：${f.value}`).join("\n");
@@ -208,18 +200,13 @@ function MemoCard({ item, onEdit, onDelete }: {
                         <div key={fidx} className="flex items-center gap-2">
                           <span className="text-sm text-gray-400 w-16 flex-shrink-0">{field.label}</span>
                           <div className="flex-1 flex items-center gap-1 min-w-0">
-                            {field.sensitive && !visibleFields.has(globalIdx) ? (
+                            {field.sensitive && !showAllPasswords ? (
                               <span className="text-base text-gray-600 tracking-widest">········</span>
                             ) : (
                               <span className="text-base text-gray-800 break-all">{field.value}</span>
                             )}
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            {field.sensitive && (
-                              <button onClick={() => toggleVisible(globalIdx)} className="p-1 rounded hover:bg-gray-100 text-gray-400">
-                                {visibleFields.has(globalIdx) ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                              </button>
-                            )}
                             <button onClick={() => copyText(field.value, field.label)} className="p-1 rounded hover:bg-gray-100 text-gray-400">
                               <Copy className="w-3.5 h-3.5" />
                             </button>
@@ -242,26 +229,21 @@ function MemoCard({ item, onEdit, onDelete }: {
             // 普通字段展示
             <div className="space-y-2">
               {item.fields.filter(f => f.value && f.label !== '__ACCOUNT_SEPARATOR__').map((field, idx) => (
-                <div key={idx} className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-400 w-20 flex-shrink-0">{field.label}</span>
                   <div className="flex-1 flex items-center gap-1 min-w-0">
-                    {field.sensitive && !visibleFields.has(idx) ? (
+                    {field.sensitive && !showAllPasswords ? (
                       <span className="text-base text-gray-600 tracking-widest">········</span>
                     ) : (
                       <span className="text-base text-gray-800 break-all">{field.value}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    {field.sensitive && (
-                      <button onClick={() => toggleVisible(idx)} className="p-1 rounded hover:bg-gray-100 text-gray-400">
-                        {visibleFields.has(idx) ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                      </button>
-                    )}
                     <button onClick={() => copyText(field.value, field.label)} className="p-1 rounded hover:bg-gray-100 text-gray-400" title={`复制${field.label}`}>
                       <Copy className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                </div>
+                </div></div>
               ))}
             </div>
           )}
@@ -694,16 +676,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                               type={field.sensitive ? "password" : "text"}
                               className="flex-1 text-sm"
                             />
-                            {/* 密码显示/隐藏切换：只有密码字段显示 */}
-                            {(field.sensitive || field.label.includes('密码') || field.label.includes('password') || field.label.toLowerCase().includes('pwd')) && (
-                              <button
-                                onClick={() => updateOuyiField(acctIdx, fidx, "sensitive", !field.sensitive)}
-                                className={`p-1.5 rounded-lg flex-shrink-0 ${field.sensitive ? 'text-[#D32F2F] bg-red-50' : 'text-gray-300 hover:bg-gray-100'}`}
-                                title={field.sensitive ? "取消隐藏" : "设为隐藏（密码类）"}
-                              >
-                                {field.sensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                              </button>
-                            )}
+
                             {/* 删除按钮（所有字段均可删除） */}
                             {isDeletable ? (
                               <button
@@ -759,15 +732,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                       type={field.sensitive ? "password" : "text"}
                       className="flex-1 text-sm"
                     />
-                    {(field.sensitive || field.label.includes('密码') || field.label.includes('password') || field.label.toLowerCase().includes('pwd')) && (
-                      <button
-                        onClick={() => updateField(idx, "sensitive", !field.sensitive)}
-                        className={`p-1.5 rounded-lg flex-shrink-0 ${field.sensitive ? "text-[#D32F2F] bg-red-50" : "text-gray-400 hover:bg-gray-100"}`}
-                        title={field.sensitive ? "取消隐藏" : "设为隐藏（密码类）"}
-                      >
-                        {field.sensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    )}
+
                     <button onClick={() => removeField(idx)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 flex-shrink-0">
                       <X className="w-4 h-4" />
                     </button>
@@ -833,6 +798,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
   const [editItem, setEditItem] = useState<MemoItem | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   // 提示词模式
+  const [showAllPasswords, setShowAllPasswords] = useState(false);
   const [promptMode, setPromptMode] = useState(false);
   const [activePromptCat, setActivePromptCat] = useState("image");
   const [selectedPrompts, setSelectedPrompts] = useState<Set<number>>(new Set());
@@ -932,6 +898,14 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setShowAllPasswords(v => !v)}
+              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: showAllPasswords ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.15)" }}
+              title={showAllPasswords ? "隐藏密码" : "显示密码"}
+            >
+              {showAllPasswords ? <EyeOff className="w-5 h-5 text-white" /> : <Eye className="w-5 h-5 text-white" />}
+            </button>
+            <button
               onClick={() => window.location.reload()}
               className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
               style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
@@ -1030,6 +1004,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user }: {
                 item={item}
                 onEdit={item => { setEditItem(item); setShowForm(true); }}
                 onDelete={id => setDeleteId(id)}
+                showAllPasswords={showAllPasswords}
               />
             ))
           )
