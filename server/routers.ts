@@ -511,6 +511,7 @@ ${klinesSummary}
               { role: 'user', content: userPrompt },
             ],
             maxTokens: 4096,
+            featureKey: 'crypto_ai_analysis',
           });
           const raw = res?.choices?.[0]?.message?.content ?? '';
           // 解析结构化 JSON
@@ -4552,6 +4553,7 @@ ${klinesSummary}
             { role: "system", content: "你是一个儿童故事作家，擅长创作适合学龄前儿童的故事。" },
             { role: "user", content: prompt },
           ],
+          featureKey: 'generate_story',
           response_format: {
             type: "json_schema",
             json_schema: {
@@ -4999,6 +5001,7 @@ ${klinesSummary}
       // 调用LLM识别名片
       const { invokeLLM } = await import("./_core/llm");
       const response = await invokeLLM({
+        featureKey: 'recognize_business_card',
         messages: [
           {
             role: "system",
@@ -16947,6 +16950,7 @@ insights 数组每项包含：
           '只返回JSON，不要其他文字。',
         ].join('\n');
         const response = await invokeLLM({
+          featureKey: 'recognize_qq_trade',
           messages: [
             {
               role: 'user',
@@ -20950,6 +20954,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
 
 注意：分析要客观专业，不要做出绝对性预测，要提示投资风险。`;
           const response = await invokeLLM({
+            featureKey: 'gold_ai_analysis',
             messages: [
               { role: 'system', content: '你是一位专业的黄金市场分析师，擅长技术分析和基本面分析，面向中国大陆投资者。' },
               { role: 'user', content: prompt },
@@ -22028,6 +22033,7 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
 请综合考虑：ETH 当前价格位置、历史波动率、加密市场周期、宏观环境，给出可行性预判。`;
 
       const response = await invokeLLM({
+        featureKey: 'eth_position_analyze',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
@@ -22064,6 +22070,51 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         risk: string;
       };
     }),
+
+  // ==================== AI 监控路由 ====================
+  aiMonitor: router({
+    /** 获取所有功能开关状态 */
+    getSwitches: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
+        const { getFeatureSwitches } = await import('./ai-monitor');
+        return getFeatureSwitches();
+      }),
+
+    /** 切换功能开关 */
+    toggleSwitch: protectedProcedure
+      .input(z.object({ featureKey: z.string(), enabled: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
+        const { toggleFeatureSwitch } = await import('./ai-monitor');
+        await toggleFeatureSwitch(input.featureKey, input.enabled);
+        return { ok: true };
+      }),
+
+    /** 按功能分组统计 token 消耗 */
+    getUsageStats: protectedProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
+        const { getUsageStats } = await import('./ai-monitor');
+        return getUsageStats(input.startDate, input.endDate);
+      }),
+
+    /** 每日汇总统计 */
+    getDailyStats: protectedProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
+        const { getDailyStats } = await import('./ai-monitor');
+        return getDailyStats(input.startDate, input.endDate);
+      }),
+  }),
 });
 export type AppRouter = typeof appRouter;
 

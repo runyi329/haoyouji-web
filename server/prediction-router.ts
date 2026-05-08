@@ -265,6 +265,7 @@ async function translateInBackground(coin: string, conn: any): Promise<void> {
 ${numbered.join('\n')}`;
 
     const response = await invokeLLM({
+      featureKey: 'prediction_analysis',
       messages: [
         { role: 'system', content: '你是专业的加密货币金融翻译专家，只返回翻译结果，不添加任何解释。' },
         { role: 'user', content: prompt },

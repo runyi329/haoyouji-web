@@ -23,6 +23,7 @@ export async function recognizeText(imageUrl: string, contentType?: ContentType)
   try {
     // 使用LLM的视觉能力识别图片中的文字
     const response = await invokeLLM({
+      featureKey: 'ocr_recognize',
       messages: [
         {
           role: "system",
@@ -172,6 +173,7 @@ export function extractWords(text: string, language: "chinese" | "english" | "mi
 export async function extractWordsWithLLM(text: string): Promise<string[]> {
   try {
     const response = await invokeLLM({
+      featureKey: 'ocr_recognize',
       messages: [
         {
           role: "system",

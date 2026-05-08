@@ -246,6 +246,9 @@ async function startServer() {
   const { addAdminAsMember } = await import('../add-admin-member');
   await addAdminAsMember();
 
+  // 初始化 AI 用量监控表
+  const { initAIMonitorTables } = await import('../ai-monitor');
+  await initAIMonitorTables();
   // 初始化 AG 同步数据源（确保 OpenNana 和 aiart.pics 记录存在）
   await initAgSyncSources();
   
