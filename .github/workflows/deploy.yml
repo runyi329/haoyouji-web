@@ -228,4 +228,8 @@ jobs:
             FUNDING_CRON="0 0,8,16 * * * cd /root/haoyouji-web && node scripts/sync-funding-rates.mjs >> /var/log/funding-rates-sync.log 2>&1"
             (crontab -l 2>/dev/null | grep -v "sync-funding-rates"; echo "$FUNDING_CRON") | crontab -
             echo "✅ 资金费率每8小时自动同步cron任务已设置"
+            # 设置每2小时同步一次数字币小时线K线数据的cron任务
+            HOURLY_KLINE_CRON="0 */2 * * * cd /root/haoyouji-web && for S in BTCUSDT ETHUSDT SOLUSDT; do node scripts/fetch-1h-klines-generic.mjs \$S >> /var/log/crypto-1h-sync.log 2>&1; done"
+            (crontab -l 2>/dev/null | grep -v "fetch-1h-klines-generic"; echo "$HOURLY_KLINE_CRON") | crontab -
+            echo "✅ 数字币小时线每2小时自动同步cron任务已设置"
           ENDSSH
