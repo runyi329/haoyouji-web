@@ -177,9 +177,9 @@ function MemoCard({ item, onEdit, onDelete }: {
     : item.fields.filter(f => f.value && f.label !== '__ACCOUNT_SEPARATOR__').length;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-1.5">
       {/* 卡片头部 */}
-      <div className="flex items-center px-4 py-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+      <div className="flex items-center px-3 py-2 cursor-pointer" onClick={() => setExpanded(!expanded)}>
         <div className="flex-1 min-w-0 flex items-center gap-2">
           <p className="font-medium text-gray-900 truncate flex-1">{getSubLabel(item)}</p>
           <span className="text-xs text-gray-400 flex-shrink-0">{filledCount}条</span>
@@ -193,7 +193,7 @@ function MemoCard({ item, onEdit, onDelete }: {
 
       {/* 展开内容 */}
       {expanded && (
-        <div className="border-t border-gray-50 px-4 pb-3 pt-2">
+        <div className="border-t border-gray-50 px-3 pb-2 pt-1.5">
           {isOuyi ? (
             // 所有分类多条记录分组展示
             <div className="space-y-0">
