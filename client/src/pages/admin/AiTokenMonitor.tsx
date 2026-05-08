@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { ArrowLeft, ToggleLeft, ToggleRight, BarChart2, Zap, Calendar, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
-// 功能名称映射
+// 功能名称映射（feature_key → 中文）
 const FEATURE_LABELS: Record<string, string> = {
   crypto_ai_analysis: "加密货币AI分析",
   generate_story: "儿童故事生成",
@@ -53,18 +53,18 @@ function getDateRange(days: number) {
 
 export default function AiTokenMonitor() {
   const [, navigate] = useLocation();
-  const [dateRange, setDateRange] = useState(3); // 默认最近3天
+  const [dateRange, setDateRange] = useState(3);
   const { startDate, endDate } = useMemo(() => getDateRange(dateRange), [dateRange]);
 
-  // 获取开关状态
+  // 获取开关状态（后端返回 feature_key, feature_label, enabled, updated_at）
   const { data: switches, refetch: refetchSwitches, isLoading: switchesLoading } =
     trpc.aiMonitor.getSwitches.useQuery();
 
-  // 获取用量统计
+  // 获取用量统计（后端返回 feature_key, feature_label, call_count, total_tokens, total_cost_usd...）
   const { data: usageStats, isLoading: usageLoading, refetch: refetchUsage } =
     trpc.aiMonitor.getUsageStats.useQuery({ startDate, endDate });
 
-  // 获取每日统计
+  // 获取每日统计（后端返回 date, call_count, total_tokens, total_cost_usd）
   const { data: dailyStats, isLoading: dailyLoading } =
     trpc.aiMonitor.getDailyStats.useQuery({ startDate, endDate });
 
@@ -81,10 +81,10 @@ export default function AiTokenMonitor() {
     toggleMutation.mutate({ featureKey, enabled: !currentEnabled });
   };
 
-  // 汇总统计
-  const totalTokens = usageStats?.reduce((sum, s) => sum + (s.totalTokens || 0), 0) || 0;
-  const totalCalls = usageStats?.reduce((sum, s) => sum + (s.callCount || 0), 0) || 0;
-  const estimatedCost = (totalTokens / 1_000_000 * 2).toFixed(4); // DeepSeek ~$2/M tokens
+  // 汇总统计（使用下划线字段名）
+  const totalTokens = usageStats?.reduce((sum: number, s: any) => sum + (Number(s.total_tokens) || 0), 0) || 0;
+  const totalCalls = usageStats?.reduce((sum: number, s: any) => sum + (Number(s.call_count) || 0), 0) || 0;
+  const totalCostUsd = usageStats?.reduce((sum: number, s: any) => sum + (Number(s.total_cost_usd) || 0), 0) || 0;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 max-w-md mx-auto">
@@ -133,12 +133,12 @@ export default function AiTokenMonitor() {
         </div>
         <div className="bg-white rounded-xl p-3 shadow-sm text-center">
           <div className="text-xs text-gray-500 mb-1">估算费用</div>
-          <div className="text-lg font-bold text-orange-600">${estimatedCost}</div>
+          <div className="text-lg font-bold text-orange-600">${totalCostUsd.toFixed(4)}</div>
         </div>
       </div>
 
       {/* 每日趋势 */}
-      {dailyStats && dailyStats.length > 0 && (
+      {!dailyLoading && dailyStats && dailyStats.length > 0 && (
         <div className="px-4 mt-3">
           <div className="bg-white rounded-2xl p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
@@ -147,11 +147,11 @@ export default function AiTokenMonitor() {
             </div>
             <div className="space-y-2">
               {dailyStats.map((day: any) => {
-                const maxTokens = Math.max(...dailyStats.map((d: any) => d.totalTokens || 0), 1);
-                const pct = Math.round(((day.totalTokens || 0) / maxTokens) * 100);
+                const maxTokens = Math.max(...dailyStats.map((d: any) => Number(d.total_tokens) || 0), 1);
+                const pct = Math.round(((Number(day.total_tokens) || 0) / maxTokens) * 100);
                 return (
                   <div key={day.date} className="flex items-center gap-2">
-                    <div className="text-xs text-gray-500 w-16 shrink-0">{day.date?.slice(5)}</div>
+                    <div className="text-xs text-gray-500 w-16 shrink-0">{String(day.date)?.slice(5)}</div>
                     <div className="flex-1 bg-gray-100 rounded-full h-2">
                       <div
                         className="bg-purple-500 h-2 rounded-full transition-all"
@@ -159,7 +159,7 @@ export default function AiTokenMonitor() {
                       />
                     </div>
                     <div className="text-xs text-gray-600 w-14 text-right shrink-0">
-                      {((day.totalTokens || 0) / 1000).toFixed(1)}K
+                      {((Number(day.total_tokens) || 0) / 1000).toFixed(1)}K
                     </div>
                   </div>
                 );
@@ -179,27 +179,31 @@ export default function AiTokenMonitor() {
           {usageLoading ? (
             <div className="text-center text-gray-400 text-sm py-4">加载中…</div>
           ) : !usageStats || usageStats.length === 0 ? (
-            <div className="text-center text-gray-400 text-sm py-4">暂无数据</div>
+            <div className="text-center text-gray-400 text-sm py-6">
+              <div className="text-2xl mb-2">📊</div>
+              <div>暂无数据</div>
+              <div className="text-xs mt-1 text-gray-300">功能被调用后数据将在此显示</div>
+            </div>
           ) : (
             <div className="space-y-3">
-              {usageStats
-                .sort((a: any, b: any) => (b.totalTokens || 0) - (a.totalTokens || 0))
+              {[...(usageStats as any[])]
+                .sort((a, b) => (Number(b.total_tokens) || 0) - (Number(a.total_tokens) || 0))
                 .map((stat: any, idx: number) => {
-                  const maxTokens = Math.max(...usageStats.map((s: any) => s.totalTokens || 0), 1);
-                  const pct = Math.round(((stat.totalTokens || 0) / maxTokens) * 100);
+                  const maxTokens = Math.max(...(usageStats as any[]).map((s: any) => Number(s.total_tokens) || 0), 1);
+                  const pct = Math.round(((Number(stat.total_tokens) || 0) / maxTokens) * 100);
                   const colorClass = FEATURE_COLORS[idx % FEATURE_COLORS.length];
-                  const label = FEATURE_LABELS[stat.featureKey] || stat.featureKey;
+                  const label = FEATURE_LABELS[stat.feature_key] || stat.feature_label || stat.feature_key;
                   return (
-                    <div key={stat.featureKey}>
+                    <div key={stat.feature_key}>
                       <div className="flex items-center justify-between mb-1">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colorClass}`}>
                           {label}
                         </span>
                         <div className="text-right">
-                          <span className="text-xs text-gray-500">{stat.callCount}次</span>
+                          <span className="text-xs text-gray-500">{Number(stat.call_count)}次</span>
                           <span className="text-xs text-gray-400 mx-1">·</span>
                           <span className="text-xs font-medium text-gray-700">
-                            {((stat.totalTokens || 0) / 1000).toFixed(1)}K tokens
+                            {((Number(stat.total_tokens) || 0) / 1000).toFixed(1)}K tokens
                           </span>
                         </div>
                       </div>
@@ -228,23 +232,27 @@ export default function AiTokenMonitor() {
           {switchesLoading ? (
             <div className="text-center text-gray-400 text-sm py-4">加载中…</div>
           ) : !switches || switches.length === 0 ? (
-            <div className="text-center text-gray-400 text-sm py-4">暂无功能记录（功能被调用后自动出现）</div>
+            <div className="text-center text-gray-400 text-sm py-6">
+              <div className="text-2xl mb-2">🔧</div>
+              <div>暂无功能记录</div>
+              <div className="text-xs mt-1 text-gray-300">功能被调用后自动出现在此列表</div>
+            </div>
           ) : (
             <div className="space-y-2">
-              {switches.map((sw: any) => {
-                const label = FEATURE_LABELS[sw.featureKey] || sw.featureKey;
-                const isEnabled = sw.enabled !== false;
+              {(switches as any[]).map((sw: any) => {
+                const label = FEATURE_LABELS[sw.feature_key] || sw.feature_label || sw.feature_key;
+                const isEnabled = sw.enabled !== 0 && sw.enabled !== false;
                 return (
                   <div
-                    key={sw.featureKey}
+                    key={sw.feature_key}
                     className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0"
                   >
                     <div>
                       <div className="text-sm text-gray-800">{label}</div>
-                      <div className="text-xs text-gray-400">{sw.featureKey}</div>
+                      <div className="text-xs text-gray-400">{sw.feature_key}</div>
                     </div>
                     <button
-                      onClick={() => handleToggle(sw.featureKey, isEnabled)}
+                      onClick={() => handleToggle(sw.feature_key, isEnabled)}
                       disabled={toggleMutation.isPending}
                       className="ml-3 shrink-0"
                     >
@@ -266,7 +274,7 @@ export default function AiTokenMonitor() {
       <div className="px-4 mt-3">
         <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
           <p className="text-xs text-amber-700 leading-relaxed">
-            <strong>费用估算说明：</strong>基于 DeepSeek 官方定价约 $2/百万 tokens 计算，仅供参考。实际费用以平台账单为准。关闭开关后，该功能调用将立即返回错误提示，不再消耗 Token。
+            <strong>说明：</strong>监控数据从部署后开始积累，历史调用不计入。费用基于 DeepSeek 官方定价（输入 $0.14/M、输出 $0.28/M tokens）估算，仅供参考。关闭开关后该功能 AI 调用立即停止。
           </p>
         </div>
       </div>
