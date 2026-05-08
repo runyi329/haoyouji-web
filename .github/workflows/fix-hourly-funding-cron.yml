@@ -1,0 +1,99 @@
+name: 修复并检查小时线+资金费率定时任务
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: '触发原因'
+        required: false
+        default: '修复小时线和资金费率cron任务'
+jobs:
+  fix-cron:
+    name: 修复定时任务并立即同步一次
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 🔑 配置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 124.223.54.69 >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: 📋 查看当前 crontab 和日志
+        run: |
+          ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=no root@124.223.54.69 << 'EOF'
+            echo "=== 当前 crontab ==="
+            crontab -l 2>/dev/null || echo "(空)"
+            echo ""
+            echo "=== 资金费率同步日志（最后20行）==="
+            tail -20 /var/log/funding-rates-sync.log 2>/dev/null || echo "(无日志)"
+            echo ""
+            echo "=== 小时线同步日志（最后20行）==="
+            tail -20 /var/log/crypto-1h-sync.log 2>/dev/null || echo "(无日志)"
+            echo ""
+            echo "=== 数据库最新数据时间 ==="
+            mysql -h127.0.0.1 -uroot -pMiao@20190603 crm_db -e "
+              SELECT 'BTC日线' as type, MAX(date) as latest FROM crypto_klines WHERE symbol='BTCUSDT'
+              UNION ALL
+              SELECT 'BTC小时线', FROM_UNIXTIME(MAX(open_time)/1000) FROM crypto_klines_1h WHERE symbol='BTCUSDT'
+              UNION ALL
+              SELECT 'ETH小时线', FROM_UNIXTIME(MAX(open_time)/1000) FROM crypto_klines_1h WHERE symbol='ETHUSDT'
+              UNION ALL
+              SELECT 'SOL小时线', FROM_UNIXTIME(MAX(open_time)/1000) FROM crypto_klines_1h WHERE symbol='SOLUSDT'
+              UNION ALL
+              SELECT 'BTC资金费率', FROM_UNIXTIME(MAX(funding_time)/1000) FROM crypto_funding_rates WHERE symbol='BTCUSDT'
+              UNION ALL
+              SELECT 'ETH资金费率', FROM_UNIXTIME(MAX(funding_time)/1000) FROM crypto_funding_rates WHERE symbol='ETHUSDT'
+              UNION ALL
+              SELECT 'SOL资金费率', FROM_UNIXTIME(MAX(funding_time)/1000) FROM crypto_funding_rates WHERE symbol='SOLUSDT';
+            " 2>/dev/null || echo "数据库查询失败"
+          EOF
+
+      - name: 🔧 设置小时线 cron 任务并立即执行一次
+        run: |
+          ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no root@124.223.54.69 << 'EOF'
+            set -e
+            cd /root/haoyouji-web
+            echo "=== 立即执行小时线增量同步 ==="
+            for SYMBOL in BTCUSDT ETHUSDT SOLUSDT; do
+              echo "--- 同步 $SYMBOL 小时线 ---"
+              node scripts/fetch-1h-klines-generic.mjs $SYMBOL >> /var/log/crypto-1h-sync.log 2>&1 && echo "✅ $SYMBOL 小时线同步完成" || echo "⚠️ $SYMBOL 小时线同步失败"
+            done
+            echo ""
+            echo "=== 设置小时线每2小时自动同步 cron 任务 ==="
+            HOURLY_CRON="0 */2 * * * cd /root/haoyouji-web && for S in BTCUSDT ETHUSDT SOLUSDT; do node scripts/fetch-1h-klines-generic.mjs \$S >> /var/log/crypto-1h-sync.log 2>&1; done"
+            (crontab -l 2>/dev/null | grep -v "fetch-1h-klines-generic"; echo "$HOURLY_CRON") | crontab -
+            echo "✅ 小时线每2小时自动同步cron任务已设置"
+            echo ""
+            echo "=== 重新设置资金费率 cron 任务（确保存在）==="
+            FUNDING_CRON="0 0,8,16 * * * cd /root/haoyouji-web && node scripts/sync-funding-rates.mjs >> /var/log/funding-rates-sync.log 2>&1"
+            (crontab -l 2>/dev/null | grep -v "sync-funding-rates"; echo "$FUNDING_CRON") | crontab -
+            echo "✅ 资金费率每8小时自动同步cron任务已重新设置"
+            echo ""
+            echo "=== 立即执行资金费率增量同步 ==="
+            node scripts/sync-funding-rates.mjs >> /var/log/funding-rates-sync.log 2>&1 && echo "✅ 资金费率同步完成" || echo "⚠️ 资金费率同步失败"
+            echo ""
+            echo "=== 更新后的 crontab ==="
+            crontab -l
+          EOF
+
+      - name: 📊 验证同步结果
+        run: |
+          ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=no root@124.223.54.69 << 'EOF'
+            echo "=== 同步后数据库最新数据时间 ==="
+            mysql -h127.0.0.1 -uroot -pMiao@20190603 crm_db -e "
+              SELECT 'BTC日线' as type, MAX(date) as latest FROM crypto_klines WHERE symbol='BTCUSDT'
+              UNION ALL
+              SELECT 'BTC小时线', FROM_UNIXTIME(MAX(open_time)/1000) FROM crypto_klines_1h WHERE symbol='BTCUSDT'
+              UNION ALL
+              SELECT 'ETH小时线', FROM_UNIXTIME(MAX(open_time)/1000) FROM crypto_klines_1h WHERE symbol='ETHUSDT'
+              UNION ALL
+              SELECT 'SOL小时线', FROM_UNIXTIME(MAX(open_time)/1000) FROM crypto_klines_1h WHERE symbol='SOLUSDT'
+              UNION ALL
+              SELECT 'BTC资金费率', FROM_UNIXTIME(MAX(funding_time)/1000) FROM crypto_funding_rates WHERE symbol='BTCUSDT'
+              UNION ALL
+              SELECT 'ETH资金费率', FROM_UNIXTIME(MAX(funding_time)/1000) FROM crypto_funding_rates WHERE symbol='ETHUSDT'
+              UNION ALL
+              SELECT 'SOL资金费率', FROM_UNIXTIME(MAX(funding_time)/1000) FROM crypto_funding_rates WHERE symbol='SOLUSDT';
+            " 2>/dev/null || echo "数据库查询失败"
+          EOF
