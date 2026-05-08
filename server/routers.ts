@@ -21350,7 +21350,52 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         }
       }),
   }),
-});
+
+  // ==================== AI 监控路由 ====================
+  aiMonitor: router({
+    /** 获取所有功能开关状态 */
+    getSwitches: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
+        const { getFeatureSwitches } = await import('./ai-monitor');
+        return getFeatureSwitches();
+      }),
+
+    /** 切换功能开关 */
+    toggleSwitch: protectedProcedure
+      .input(z.object({ featureKey: z.string(), enabled: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
+        const { toggleFeatureSwitch } = await import('./ai-monitor');
+        await toggleFeatureSwitch(input.featureKey, input.enabled);
+        return { ok: true };
+      }),
+
+    /** 按功能分组统计 token 消耗 */
+    getUsageStats: protectedProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
+        const { getUsageStats } = await import('./ai-monitor');
+        return getUsageStats(input.startDate, input.endDate);
+      }),
+
+    /** 每日汇总统计 */
+    getDailyStats: protectedProcedure
+      .input(z.object({
+        startDate: z.string(),
+        endDate: z.string(),
+      }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
+        const { getDailyStats } = await import('./ai-monitor');
+        return getDailyStats(input.startDate, input.endDate);
+      }),
+  }),
+
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
 export const adminFeatureRouter = router({
   // 获取所有容器定义
@@ -22070,50 +22115,6 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         risk: string;
       };
     }),
-
-  // ==================== AI 监控路由 ====================
-  aiMonitor: router({
-    /** 获取所有功能开关状态 */
-    getSwitches: protectedProcedure
-      .query(async ({ ctx }) => {
-        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
-        const { getFeatureSwitches } = await import('./ai-monitor');
-        return getFeatureSwitches();
-      }),
-
-    /** 切换功能开关 */
-    toggleSwitch: protectedProcedure
-      .input(z.object({ featureKey: z.string(), enabled: z.boolean() }))
-      .mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
-        const { toggleFeatureSwitch } = await import('./ai-monitor');
-        await toggleFeatureSwitch(input.featureKey, input.enabled);
-        return { ok: true };
-      }),
-
-    /** 按功能分组统计 token 消耗 */
-    getUsageStats: protectedProcedure
-      .input(z.object({
-        startDate: z.string(),
-        endDate: z.string(),
-      }))
-      .query(async ({ ctx, input }) => {
-        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
-        const { getUsageStats } = await import('./ai-monitor');
-        return getUsageStats(input.startDate, input.endDate);
-      }),
-
-    /** 每日汇总统计 */
-    getDailyStats: protectedProcedure
-      .input(z.object({
-        startDate: z.string(),
-        endDate: z.string(),
-      }))
-      .query(async ({ ctx, input }) => {
-        if (ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
-        const { getDailyStats } = await import('./ai-monitor');
-        return getDailyStats(input.startDate, input.endDate);
-      }),
   }),
 });
 export type AppRouter = typeof appRouter;
