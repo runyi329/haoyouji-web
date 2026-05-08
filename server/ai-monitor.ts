@@ -14,7 +14,6 @@ export const AI_FEATURE_LABELS: Record<string, string> = {
   "recognize_bank":           "银行信息识别",
   "ai_insights":              "客户意见 AI 洞察",
   "recognize_qq_trade":       "QQ 交易图识别",
-  "analyze_qq_betting":       "投注习惯分析",
   "analyze_skin":             "皮肤分析",
   "gold_ai_analysis":         "黄金 AI 分析",
   "eth_position_analyze":     "ETH 持仓退出分析",

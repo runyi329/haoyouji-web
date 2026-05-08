@@ -13,7 +13,6 @@ const FEATURE_LABELS: Record<string, string> = {
   recognize_bank: "银行信息识别",
   ai_insights: "客户意见洞察",
   recognize_qq_trade: "QQ交易图识别",
-  analyze_qq_betting: "投注习惯分析",
   analyze_skin: "皮肤分析",
   gold_ai_analysis: "黄金AI分析",
   eth_position_analyze: "ETH持仓分析",
