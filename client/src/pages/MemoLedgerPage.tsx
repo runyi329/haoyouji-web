@@ -668,9 +668,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                     )}
                     <div className="space-y-2">
                       {acct.map((field, fidx) => {
-                        // account 分类：前两个字段不可删除；其他分类：所有字段都可删除
-                        const isFixedField = category === 'account' && (fidx === 0 || field.label === '密码' || (fidx === 1 && acct[0]?.label !== '密码'));
-                        const isDeletable = field.label !== '__NOTE__' && (category !== 'account' || fidx >= 2);
+                        const isDeletable = field.label !== '__NOTE__';
                         if (field.label === '__NOTE__') {
                           // 备注字段单独渲染（标签固定为"备注"）
                           return (
@@ -709,7 +707,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                             >
                               {field.sensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
-                            {/* 删除按钮（前两个固定字段不可删除） */}
+                            {/* 删除按钮（所有字段均可删除） */}
                             {isDeletable ? (
                               <button
                                 onClick={() => removeOuyiField(acctIdx, fidx)}
