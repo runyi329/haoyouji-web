@@ -156,9 +156,10 @@ function MemoCard({ item, onEdit, onDelete }: {
   };
 
   // 账号密码分类：按分隔符分组展示多账户
-  const isOuyi = item.category === 'account';
+  // 所有分类都用多条记录模式展示
+  const isOuyi = true;
   const ouyiAccounts: MemoField[][] = [];
-  if (isOuyi) {
+  {
     let cur: MemoField[] = [];
     for (const f of item.fields) {
       if (f.label === '__ACCOUNT_SEPARATOR__') {
@@ -170,7 +171,7 @@ function MemoCard({ item, onEdit, onDelete }: {
     if (cur.length > 0) ouyiAccounts.push(cur);
   }
 
-  const filledCount = isOuyi
+  const filledCount = ouyiAccounts.length > 1
     ? ouyiAccounts.length
     : item.fields.filter(f => f.value && f.label !== '__ACCOUNT_SEPARATOR__').length;
 
@@ -187,7 +188,7 @@ function MemoCard({ item, onEdit, onDelete }: {
             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs mr-1" style={{ backgroundColor: cat.color + "18", color: cat.color }}>
               {cat.label}
             </span>
-            {isOuyi ? `${filledCount} 个账号` : `${filledCount} 个字段`}
+            {ouyiAccounts.length > 1 ? `${filledCount} 条记录` : `${filledCount} 个字段`}
           </p>
         </div>
         <div className="flex items-center gap-1 ml-2">
@@ -208,12 +209,12 @@ function MemoCard({ item, onEdit, onDelete }: {
       {expanded && (
         <div className="border-t border-gray-50 px-4 pb-3 pt-2">
           {isOuyi ? (
-            // 欧易多账户分组展示
+            // 所有分类多条记录分组展示
             <div className="space-y-0">
               {ouyiAccounts.map((acct, acctIdx) => (
                 <div key={acctIdx}>
                   {acctIdx > 0 && <div className="border-t border-gray-100 my-2" />}
-                  <div className="text-xs text-gray-400 mb-1.5">账户 {acctIdx + 1}</div>
+                  {ouyiAccounts.length > 1 && <div className="text-xs text-gray-400 mb-1.5">第 {acctIdx + 1} 条</div>}
                   <div className="space-y-1.5">
                     {acct.filter(f => f.value && f.label !== '__NOTE__').map((field, fidx) => {
                       const globalIdx = item.fields.indexOf(field);
@@ -311,13 +312,13 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
   const [fields, setFields] = useState<MemoField[]>([]);
   const [note, setNote] = useState("");
 
-  // 多账户模式：账号密码分类下所有子类都支持多账户
+  // 多记录模式：所有分类都支持多条记录
   const [ouyiAccounts, setOuyiAccounts] = useState<MemoField[][]>([]);
-  const isOuyiMode = category === 'account'; // 所有账号密码子类都用多账户模式
+  const isOuyiMode = true; // 所有分类都用多记录模式
 
-  // 根据子类生成对应的账户字段模板
+  // 根据分类生成对应的字段模板
   const newOuyiAccount = (): MemoField[] => {
-    if (subLabel === '欧易') {
+    if (category === 'account' && subLabel === '欧易') {
       return [
         { label: '手机号', value: '' },
         { label: '邮箱', value: '' },
@@ -326,13 +327,42 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
         { label: '__NOTE__', value: '' },
       ];
     }
-    // 通用账号密码模板
+    if (category === 'account') {
+      return [
+        { label: '账号/用户名', value: '' },
+        { label: '密码', value: '', sensitive: true },
+        { label: '备用邮箱', value: '' },
+        { label: '手机号', value: '' },
+        { label: '__NOTE__', value: '' },
+      ];
+    }
+    if (category === 'bank') {
+      return [
+        { label: '银行名称', value: '' },
+        { label: '卡号', value: '' },
+        { label: '姓名', value: '' },
+        { label: '备注', value: '' },
+      ];
+    }
+    if (category === 'address') {
+      return [
+        { label: '收件人', value: '' },
+        { label: '手机号', value: '' },
+        { label: '省市区', value: '' },
+        { label: '详细地址', value: '' },
+        { label: '邮编', value: '' },
+      ];
+    }
+    if (category === 'website') {
+      return [
+        { label: '网址', value: '' },
+        { label: '用户名', value: '' },
+        { label: '密码', value: '', sensitive: true },
+      ];
+    }
+    // other 及其他
     return [
-      { label: '账号/用户名', value: '' },
-      { label: '密码', value: '', sensitive: true },
-      { label: '备用邮箱', value: '' },
-      { label: '手机号', value: '' },
-      { label: '__NOTE__', value: '' },
+      { label: '内容', value: '' },
     ];
   };
 
@@ -398,14 +428,9 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
       setCustomSub(isCustomSub ? sub : "");
       setIsCustom(false);
       setNote(editItem.note || "");
-      if (cat === 'account') {
-        // 账号密码分类：反序列化为多账户
-        setOuyiAccounts(deserializeOuyiFields(editItem.fields || []));
-        setFields([]);
-      } else {
-        setFields(editItem.fields || FIELD_TEMPLATES[cat]?.map(f => ({ ...f, value: "" })) || []);
-        setOuyiAccounts([]);
-      }
+      // 所有分类都用 deserializeOuyiFields 反序列化为多条记录
+      setOuyiAccounts(deserializeOuyiFields(editItem.fields || []));
+      setFields([]);
     } else {
       setStep("cat");
       setCategory("bank");
@@ -427,11 +452,14 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
     setSubLabel("");
     setCustomSub("");
     setIsCustom(false);
-    setFields(FIELD_TEMPLATES[key]?.map(f => ({ ...f, value: "" })) || []);
+    setFields([]);
     // 银行账号分类：直接进入字段填写界面，跳过子类选择
     if (key === 'bank') {
+      // bank 分类直接进入字段填写，初始化一条记录
+      setOuyiAccounts([[...FIELD_TEMPLATES['bank'].map(f => ({ ...f, value: '' }))]]);
       setStep("fields");
     } else {
+      setOuyiAccounts([]);
       setStep("sub");
     }
   };
@@ -443,14 +471,9 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
     } else {
       setIsCustom(false);
       setSubLabel(sub);
-      if (category === 'account') {
-        // 账号密码分类下所有子类都初始化一个空账户
-        setOuyiAccounts([newOuyiAccount()]);
-        setFields([]);
-      } else {
-        setOuyiAccounts([]);
-        setFields(FIELD_TEMPLATES[category]?.map(f => ({ ...f, value: "" })) || []);
-      }
+      // 所有分类都初始化一条记录（用 newOuyiAccount 根据 category 返回对应模板）
+      setOuyiAccounts([newOuyiAccount()]);
+      setFields([]);
       setStep("fields");
     }
   };
@@ -458,10 +481,9 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
   const handleConfirmCustom = () => {
     if (!customSub.trim()) { toast.error("请输入名称"); return; }
     setSubLabel(customSub.trim());
-    if (category === 'account') {
-      setOuyiAccounts([newOuyiAccount()]);
-      setFields([]);
-    }
+    // 所有分类都初始化一条记录
+    setOuyiAccounts([newOuyiAccount()]);
+    setFields([]);
     setStep("fields");
   };
 
@@ -475,24 +497,17 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
   });
 
   const handleSave = () => {
-    // 银行账号分类：用第一个字段（银行名称）的内容作为标题，如果为空则用默认标题
+    // 所有分类统一用多记录模式
     let effectiveSubLabel = subLabel;
     if (category === 'bank') {
-      const bankNameField = fields.find(f => f.label === '银行名称');
+      // 银行账号：用第一条记录的银行名称作标题
+      const firstRecord = ouyiAccounts[0];
+      const bankNameField = firstRecord?.find(f => f.label === '银行名称');
       effectiveSubLabel = bankNameField?.value?.trim() || '银行账号';
     }
     if (!effectiveSubLabel.trim()) { toast.error("请先选择或填写子类名称"); return; }
-    let finalFields: MemoField[];
-    if (isOuyiMode) {
-      // 欧易：序列化多账户
-      finalFields = serializeOuyiFields(ouyiAccounts);
-      const hasAny = ouyiAccounts.some(acct => acct.some(f => f.value.trim()));
-      if (!hasAny) { toast.error("请至少填写一个账户的内容"); return; }
-    } else {
-      finalFields = fields;
-      // 银行账号分类所有字段均可选填，其他分类至少填一个
-      if (category !== 'bank' && finalFields.filter(f => f.value.trim()).length === 0) { toast.error("请至少填写一个字段内容"); return; }
-    }
+    // 所有分类都用 serializeOuyiFields 序列化
+    const finalFields = serializeOuyiFields(ouyiAccounts);
     if (editItem) {
       updateMutation.mutate({ id: editItem.id, category, title: effectiveSubLabel, fields: finalFields, note: note.trim() || undefined });
     } else {
@@ -614,19 +629,19 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
                 {ouyiAccounts.map((acct, acctIdx) => (
                   <div key={acctIdx}>
                     {acctIdx > 0 && <div className="border-t border-gray-100 my-3" />}
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-medium text-gray-500">账户 {acctIdx + 1}</span>
-                      {ouyiAccounts.length > 1 && (
+                    {ouyiAccounts.length > 1 && (
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-medium text-gray-500">第 {acctIdx + 1} 条</span>
                         <button onClick={() => removeOuyiAccount(acctIdx)} className="text-xs text-red-400 hover:text-red-600 px-2 py-0.5 rounded hover:bg-red-50">
-                          删除此账户
+                          删除此条
                         </button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       {acct.map((field, fidx) => {
-                        // 固定字段（账号/用户名、密码）：标签不可删除，但可编辑标签名
-                        const isFixedField = fidx === 0 || field.label === '密码' || (fidx === 1 && acct[0]?.label !== '密码');
-                        const isDeletable = field.label !== '__NOTE__' && fidx >= 2;
+                        // account 分类：前两个字段不可删除；其他分类：所有字段都可删除
+                        const isFixedField = category === 'account' && (fidx === 0 || field.label === '密码' || (fidx === 1 && acct[0]?.label !== '密码'));
+                        const isDeletable = field.label !== '__NOTE__' && (category !== 'account' || fidx >= 2);
                         if (field.label === '__NOTE__') {
                           // 备注字段单独渲染（标签固定为"备注"）
                           return (
@@ -697,7 +712,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess }: {
                     className="flex items-center gap-1.5 text-sm text-[#D32F2F] hover:bg-red-50 px-3 py-2 rounded-lg w-full justify-center border border-dashed border-red-200"
                   >
                     <Plus className="w-4 h-4" />
-                    {subLabel === '欧易' ? '添加欧易账户' : '添加账号'}
+                    {category === 'bank' ? '添加银行卡' : category === 'address' ? '添加地址' : category === 'website' ? '添加网站' : subLabel === '欧易' ? '添加欧易账户' : '添加账号'}
                   </button>
                 </div>
               </div>
