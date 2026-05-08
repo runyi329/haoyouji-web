@@ -1,5 +1,8 @@
 name: 修复并检查小时线+资金费率定时任务
 on:
+  push:
+    paths:
+      - '.github/workflows/fix-hourly-funding-cron.yml'
   workflow_dispatch:
     inputs:
       reason:
