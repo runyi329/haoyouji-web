@@ -1046,6 +1046,13 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
     onError: e => toast.error(e.message),
   });
 
+  // 历史记录（必须在 deleteMutation 之前定义，否则 deleteMutation 的 onSuccess 无法调用）
+  const { data: historyList = [], refetch: refetchHistory } = trpc.ledger.getMemoHistoryList.useQuery(
+    { ledgerId },
+    { enabled: showHistoryDialog, staleTime: 0 }
+  );
+  const saveHistoryMutation = trpc.ledger.saveMemoHistory.useMutation();
+
   const deleteMutation = trpc.ledger.deleteMemoItem.useMutation({
     onSuccess: () => {
       toast.success("已删除");
@@ -1062,13 +1069,6 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
   const reorderMutation = trpc.ledger.reorderMemoItems.useMutation({
     onError: e => toast.error("排序保存失败: " + e.message),
   });
-
-  // 历史记录
-  const { data: historyList = [], refetch: refetchHistory } = trpc.ledger.getMemoHistoryList.useQuery(
-    { ledgerId },
-    { enabled: showHistoryDialog, staleTime: 0 }
-  );
-  const saveHistoryMutation = trpc.ledger.saveMemoHistory.useMutation();
   const restoreHistoryMutation = trpc.ledger.restoreMemoFromHistory.useMutation({
     onSuccess: () => {
       toast.success("已恢复到所选历史记录");
