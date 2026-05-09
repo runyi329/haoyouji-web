@@ -421,6 +421,15 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
     return next;
   }));
 
+  // 账户上移/下移
+  const moveOuyiAccount = (idx: number, dir: -1 | 1) => setOuyiAccounts(prev => {
+    const next = [...prev];
+    const target = idx + dir;
+    if (target < 0 || target >= next.length) return prev;
+    [next[idx], next[target]] = [next[target], next[idx]];
+    return next;
+  });
+
   // 欧易 fields 序列化：账户间插入分隔符
   const serializeOuyiFields = (accounts: MemoField[][]): MemoField[] => {
     const result: MemoField[] = [];
@@ -699,7 +708,25 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                     {acctIdx > 0 && <div className="border-t border-gray-100 my-3" />}
                     {ouyiAccounts.length > 1 && (
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium text-gray-500">第 {acctIdx + 1} 条</span>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => moveOuyiAccount(acctIdx, -1)}
+                            disabled={acctIdx === 0}
+                            className="p-0.5 rounded text-gray-300 hover:text-gray-500 disabled:opacity-20"
+                            title="上移"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => moveOuyiAccount(acctIdx, 1)}
+                            disabled={acctIdx === ouyiAccounts.length - 1}
+                            className="p-0.5 rounded text-gray-300 hover:text-gray-500 disabled:opacity-20"
+                            title="下移"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="text-xs font-medium text-gray-500">第 {acctIdx + 1} 条</span>
+                        </div>
                         <button onClick={() => removeOuyiAccount(acctIdx)} className="text-xs text-red-400 hover:text-red-600 px-2 py-0.5 rounded hover:bg-red-50">
                           删除此条
                         </button>
