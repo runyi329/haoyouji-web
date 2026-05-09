@@ -324,12 +324,7 @@ function MemoCard({ item, onEdit, onDelete, showAllPasswords, editMode, onMoveUp
               <p className="text-sm text-gray-400">备注：{item.note}</p>
             </div>
           )}
-          <div className="pt-1 flex gap-2">
-            <button onClick={copyAll} className="flex items-center gap-1 text-xs text-[#D32F2F] hover:bg-red-50 px-2 py-1 rounded-lg">
-              <Copy className="w-3 h-3" />
-              复制全部字段
-            </button>
-          </div>
+
         </div>
       )}
     </div>
