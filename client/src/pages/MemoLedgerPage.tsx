@@ -707,12 +707,18 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                 <span className="text-xs font-medium" style={{ color: catObj.color }}>{catObj.label}</span>
               </div>
               <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
-              <span className="text-sm font-medium text-gray-800">
-                {category === 'website'
-                  ? (ouyiAccounts[0]?.find(f => f.label === '公司名称')?.value?.trim() || '新建公司')
-                  : (subLabel || catObj.label)
-                }
-              </span>
+              {category === 'website' ? (
+                <span className="text-sm font-medium text-gray-800">
+                  {ouyiAccounts[0]?.find(f => f.label === '公司名称')?.value?.trim() || '新建公司'}
+                </span>
+              ) : (
+                <input
+                  value={subLabel}
+                  onChange={e => setSubLabel(e.target.value)}
+                  placeholder="输入名称"
+                  className="text-sm font-medium text-gray-800 bg-transparent border-b border-dashed border-gray-300 focus:border-[#D32F2F] outline-none min-w-0 w-32 px-0.5"
+                />
+              )}
             </div>
 
             {/* 欧易多账户 UI */}
