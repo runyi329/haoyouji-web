@@ -114,50 +114,11 @@ export default function GujianPage() {
   );
   const afOrders: any[] = (ordersData as any[]) || [];
 
-  // 谷底增筹订单（finance_interest_orders 表）
-  const { data: financeOrdersData, isLoading: financeOrdersLoading } = trpc.ledger.financeGetOrders.useQuery(
-    { ledgerId },
-    { enabled: !!ledgerId, staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: "always" }
-  );
-  // 只保留谷底增筹订单（finance_type 明确为 保本分成 或 自负盈亏）
-  // 注意：融资付息订单是早期数据，finance_type 为空，所以空値不能当谷底增筹处理
-  const financeOrders: any[] = ((financeOrdersData as any)?.orders ?? []).filter((o: any) => {
-    const ft = o.finance_type || o.financeType || '';
-    return ft === '保本分成' || ft === '自负盈亏';
-  });
-
-  // 谷底实时价格（用于担保物、当前价值等计算）
-  const { data: financeAssetSummary } = trpc.ledger.financeGetAssetSummary.useQuery(
-    { ledgerId },
-    { enabled: !!ledgerId && financeOrders.length > 0, staleTime: 30000 }
-  );
-  const FINANCE_PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
-  const freshFinancePrices: Record<string, number> = (financeAssetSummary as any)?.livePrices ?? {};
-  let cachedFinancePrices: Record<string, number> = {};
-  try { cachedFinancePrices = JSON.parse(localStorage.getItem(FINANCE_PRICE_CACHE_KEY) || '{}'); } catch {}
-  const financeLivePrices: Record<string, number> = { ...cachedFinancePrices, ...freshFinancePrices };
-  if (Object.keys(freshFinancePrices).length > 0) {
-    try { localStorage.setItem(FINANCE_PRICE_CACHE_KEY, JSON.stringify(financeLivePrices)); } catch {}
-  }
-
-  // 谷底已付利息汇总
-  const { data: financeInterestSummary } = trpc.ledger.financeGetInterestPaymentSummary.useQuery(
-    { ledgerId, orderIds: financeOrders.map((o: any) => o.id) },
-    { enabled: !!ledgerId && financeOrders.length > 0 }
-  );
-
-  // 合并两类订单，统一按时间倒序排列
-  // 谷底订单加上 _source 标记
-  const mergedOrders = [
-    ...afOrders.map((o: any) => ({ ...o, _source: 'af' as const })),
-    ...financeOrders.map((o: any) => ({ ...o, _source: 'finance' as const })),
-  ].sort((a: any, b: any) => {
-    const ta = new Date(a.createdAt || a.created_at || 0).getTime();
-    const tb = new Date(b.createdAt || b.created_at || 0).getTime();
-    return tb - ta;
-  });
-  const gujianOrders = mergedOrders;
-  const ordersLoadingAll = ordersLoading || financeOrdersLoading;
+  // 从 afOrders 中按 orderType 分离谷底增筹和谷间优筹
+  // - orderType 为空或 '无损合约' 的是谷底增筹（af_orders 表）
+  // - orderType = '谷间优筹' 的是谷间优筹
+  // finance_interest_orders 表里全是融资付息订单，不在此显示
+  const gujianOrders = afOrders;
 
   // 下单
   const submitOrderMutation = trpc.ledger.afSubmitOrder.useMutation({
@@ -543,89 +504,13 @@ export default function GujianPage() {
                   const orderNo = `AF${yy2}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
 
                   // 判断是谷底增筹还是谷间优筹
-                  const isFinanceOrder = order._source === 'finance';
+                  // orderType 为空或 '无损合约' 的是谷底增筹，'谷间优筹' 的是谷间优筹
                   const isGudizengchou = !order.orderType || order.orderType === '无损合约' || order.orderType === '谷底增筹';
-                  const orderTypeName = isFinanceOrder ? '谷底增筹' : '谷间优筹';
+                  const orderTypeName = isGudizengchou ? '谷底增筹' : '谷间优筹';
 
                   // 谷底增筹：成交价值 = amount × 5.25
                   const tradeValue = isGudizengchou && !order.isGift ? parseFloat(order.amount) * 5.25 : parseFloat(order.amount);
 
-                  // 谷底订单计算变量（与谷底弹窗一致）
-                  const fAnnualRate = isFinanceOrder ? parseFloat(order.interest_rate_annual || order.annualInterestRate || '0') : 0;
-                  const fInterestBase = (() => {
-                    if (!isFinanceOrder) return 0;
-                    const raw = parseFloat(order.interest_base || order.principal || '0');
-                    return order.order_no === 'FG6127' ? raw * 2 : raw;
-                  })();
-                  const fStartDate = isFinanceOrder ? (order.interest_start_date || order.startDate || null) : null;
-                  const fCoinQty = isFinanceOrder ? parseFloat(order.buy_quantity || order.coinQuantity || '0') : 0;
-                  const fBuyPrice = isFinanceOrder ? parseFloat(order.buy_price || '0') : 0;
-                  const fBuyValue = isFinanceOrder ? parseFloat(order.amount || '0') : 0;
-                  const fCoinPrice = isFinanceOrder ? (financeLivePrices[order.coin] || 0) : 0;
-                  const fMarketValue = fCoinQty * fCoinPrice;
-                  const fNowTs = Date.now();
-                  const fStartTs = fStartDate ? new Date(fStartDate + (fStartDate.includes('T') ? '' : 'T00:00:00')).getTime() : 0;
-                  const fElapsedSeconds = fStartTs > 0 ? Math.max(0, (fNowTs - fStartTs) / 1000) : 0;
-                  const fPerSecond = fInterestBase && fAnnualRate ? (fInterestBase * Math.abs(fAnnualRate) / 100) / (365 * 24 * 3600) : 0;
-                  const fAccruedInterest = fPerSecond * fElapsedSeconds;
-                  const fAdminNote = String(order.admin_note || '');
-                  let fUnpaidInterest = fAccruedInterest;
-                  if (fAdminNote.includes('[\u5df2\u5356\u51fa]')) {
-                    const _m = fAdminNote.match(/\[\u4ee3\u4ed8:([\d.]+)\]/);
-                    if (_m) fUnpaidInterest = parseFloat(_m[1]);
-                  }
-                  const fPaidInterest = isFinanceOrder ? ((financeInterestSummary as any)?.[order.id] ?? 0) : 0;
-                  const fIsNegativeRate = true;
-                  const fFinanceType = isFinanceOrder ? (order.finance_type || '\u4fdd\u672c\u5206\u6210') : '';
-                  const fCoinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
-                  const fCc = fCoinColorMap[order.coin] || '#6B7280';
-                  // 谷底担保物计算
-                  let fCollAssets: { coin: string; qty: string }[] = [];
-                  if (isFinanceOrder) {
-                    try { if (order.collateral_assets) fCollAssets = JSON.parse(order.collateral_assets); } catch(e) {}
-                    if (fCollAssets.length === 0 && order.collateral_coin && order.collateral_qty) {
-                      fCollAssets = [{ coin: order.collateral_coin, qty: String(parseFloat(order.collateral_qty)) }];
-                    }
-                  }
-                  const fCollAssetValues = fCollAssets.map(a => {
-                    const qty = parseFloat(a.qty || '0');
-                    const price = financeLivePrices[a.coin] || 0;
-                    return { coin: a.coin, qty, price, value: qty * price };
-                  });
-                  const fCollValue = fCollAssetValues.reduce((s, a) => s + a.value, 0);
-                  const fAllPricesLoaded = fCollAssets.length === 0 || fCollAssetValues.every(a => a.price > 0);
-                  const fHasCollateral = fCollAssets.length > 0;
-                  let fGap: number | null = null;
-                  if (isFinanceOrder && fHasCollateral && fAllPricesLoaded) {
-                    if (fFinanceType === '\u4fdd\u672c\u5206\u6210') {
-                      const base = fBuyValue * 0.24;
-                      const advancedInterest = fIsNegativeRate ? fUnpaidInterest : 0;
-                      const netCollValue = fCollValue - advancedInterest + fPaidInterest;
-                      fGap = netCollValue - base;
-                    } else {
-                      if (order.coin === 'USDT') {
-                        fGap = fCollValue - fBuyValue - fUnpaidInterest + fPaidInterest;
-                      } else if (fCoinPrice > 0) {
-                        fGap = fMarketValue + fCollValue - fBuyValue - fUnpaidInterest + fPaidInterest;
-                      }
-                    }
-                  }
-                  // 谷底持有时长
-                  const fHoldingLabel = (() => {
-                    if (!isFinanceOrder || !order.buy_date || order.status !== 'active') return null;
-                    if (fAdminNote.includes('[\u5df2\u5356\u51fa]')) {
-                      const m = fAdminNote.match(/\[\u6301\u6709:([^\]]+)\]/);
-                      return m ? m[1] : '1\u4e2a\u6708';
-                    }
-                    const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
-                    if (elapsed < 0) return null;
-                    const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
-                    const days = Math.floor(totalHours / 24);
-                    const hours = totalHours % 24;
-                    return days > 0 ? `${days}\u5929 ${hours}\u5c0f\u65f6` : `${hours}\u5c0f\u65f6`;
-                  })();
-                  const fStatusLabel = isFinanceOrder ? (order.status === 'active' ? '\u6301\u6709\u4e2d' : order.status === 'settled' ? '\u5df2\u7ed3\u7b97' : '\u5df2\u53d6\u6d88') : '';
-                  const fStatusColor = isFinanceOrder ? (order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF') : '';
                   function fFormatCoinQty(qty: number, coin: string) {
                     if (coin === 'BTC') return qty.toFixed(8).replace(/\.?0+$/, '');
                     if (coin === 'ETH' || coin === 'SOL') return qty.toFixed(6).replace(/\.?0+$/, '');
@@ -668,150 +553,92 @@ export default function GujianPage() {
 
                       {/* 展开详情 */}
                       {isExpanded && (
-                        isFinanceOrder ? (
-                          /* 谷底增筹订单：完整双栏融资详情（与谷底弹窗一致） */
-                          <div className="rounded-2xl shadow-sm relative mx-2 mb-3" style={{ backgroundColor: '#FFFFFF', border: `1px solid #E0E8FF`, overflow: 'hidden' }}>
-                            {fAdminNote.includes('已卖出') && (
-                              <div className="absolute bottom-4 left-4 pointer-events-none select-none" style={{ transform: 'rotate(-30deg)', zIndex: 10 }}>
-                                <div style={{ border: '2px solid rgba(220,38,38,0.5)', color: 'rgba(220,38,38,0.5)', borderRadius: '4px', padding: '2px 8px', fontSize: '13px', fontWeight: 700, letterSpacing: '3px', lineHeight: '1.4', whiteSpace: 'nowrap' }}>已卖出</div>
-                              </div>
-                            )}
-                            <div className="h-1" style={{ background: `linear-gradient(90deg, ${fCc}, ${fCc}55)` }} />
-                            <div className="flex" style={{ minHeight: '100px' }}>
-                              {/* 左栏：融资资产 */}
-                              <div className="flex-1 p-4 pr-3">
-                                <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>融资资产<span className="text-gray-400">({fFinanceType === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span></div>
-                                <div className="flex items-baseline gap-1 mb-1">
-                                  <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>{fCoinQty > 0 ? fFormatCoinQty(fCoinQty, order.coin) : '—'}</span>
-                                  <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
-                                </div>
-                                <div className="space-y-0.5">
-                                  {fBuyPrice > 0 && (
-                                    <div className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-400 shrink-0">买入币价</span>
-                                      <span className="font-medium" style={{ color: '#4B5563' }}>{fBuyPrice.toLocaleString()} U</span>
-                                    </div>
-                                  )}
-                                  {fBuyValue > 0 && (
-                                    <div className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-400 shrink-0">买入价值</span>
-                                      <span className="font-medium" style={{ color: '#4B5563' }}>{fBuyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
-                                    </div>
-                                  )}
-                                  {order.buy_date && (
-                                    <div className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-400 shrink-0">买入时间</span>
-                                      <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
-                                    </div>
-                                  )}
-                                  {!fAdminNote.includes('已卖出') && (
-                                    <div className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-400 shrink-0">今日币价</span>
-                                      <span className="font-medium" style={{ color: '#4B5563' }}>{fCoinPrice ? fCoinPrice.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}</span>
-                                    </div>
-                                  )}
-                                  {!fAdminNote.includes('已卖出') && (
-                                    <div className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-400 shrink-0">当前价值</span>
-                                      <span className="font-medium" style={{ color: '#4B5563' }}>{fCoinPrice && fCoinQty ? (fCoinQty * fCoinPrice).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}</span>
-                                    </div>
-                                  )}
-                                  {order.order_no && (
-                                    <div className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-400 shrink-0">订单编号</span>
-                                      <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              {/* 中间分隔线 */}
-                              <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
-                              {/* 右栏：利息信息 */}
-                              <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
-                                <div className="text-[10px] mb-1" style={{ color: '#3B82F6' }}>融资利息</div>
-                                <div className="space-y-0.5 flex-1">
-                                  {fInterestBase > 0 && (
-                                    <div className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-400 shrink-0">计息本金</span>
-                                      <span className="font-medium" style={{ color: '#4B5563' }}>{fInterestBase.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
-                                    </div>
-                                  )}
-                                  {fAnnualRate !== 0 && (
-                                    <div className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-400 shrink-0">年利率</span>
-                                      <span className="font-medium" style={{ color: fAnnualRate < 0 ? '#EF4444' : '#4B5563' }}>{fAnnualRate < 0 ? '代付' : '待收'}{Math.abs(fAnnualRate)}%</span>
-                                    </div>
-                                  )}
-                                  {fStartDate && (
-                                    <div className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-400 shrink-0">计息日期</span>
-                                      <span className="font-medium" style={{ color: '#4B5563' }}>{fStartDate}</span>
-                                    </div>
-                                  )}
-                                  {fHoldingLabel && (
-                                    <div className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-400 shrink-0">持有时长</span>
-                                      <span className="font-medium" style={{ color: '#4B5563' }}>{fHoldingLabel}</span>
-                                    </div>
-                                  )}
-                                  {fAnnualRate < 0 && (
-                                    <div className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-400 shrink-0">待付利息</span>
-                                      <span className="font-medium" style={{ color: '#EF4444' }}>{fUnpaidInterest.toFixed(2)} U</span>
-                                    </div>
-                                  )}
-                                  {fAnnualRate < 0 && fPaidInterest > 0 && (
-                                    <div className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-400 shrink-0">已付利息</span>
-                                      <span className="font-medium" style={{ color: '#22C55E' }}>{fPaidInterest.toFixed(2)} U</span>
-                                    </div>
-                                  )}
-                                  {fAnnualRate > 0 && (
-                                    <div className="flex items-center justify-between text-xs">
-                                      <span className="text-gray-400 shrink-0">待收利息</span>
-                                      <span className="font-medium" style={{ color: '#22C55E' }}>{fAccruedInterest.toFixed(2)} U</span>
-                                    </div>
-                                  )}
-                                </div>
-                                {/* 状态标签 */}
-                                <div className="mt-2 pt-2" style={{ borderTop: '1px solid #E8EFFF' }}>
-                                  <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: order.status === 'active' ? '#DCFCE7' : '#F3F4F6', color: fStatusColor }}>{fStatusLabel}</span>
-                                </div>
-                              </div>
+                        isGudizengchou ? (
+                          /* 谷底增筹订单：展示 af_orders 里的字段 */
+                          <div className="px-4 pb-4 space-y-2" style={{ backgroundColor: "#FFF7ED" }}>
+                            <div className="h-px" style={{ backgroundColor: "#FED7AA" }} />
+
+                            {/* 订单编号 */}
+                            <div className="flex justify-between items-center text-sm">
+                              <span style={{ color: "#9CA3AF" }}>订单编号</span>
+                              <span className="font-mono text-xs" style={{ color: "#1A2340" }}>{orderNo}</span>
                             </div>
-                            {/* 担保物区域 */}
-                            {fHasCollateral && (
-                              <div className="px-4 pb-3 space-y-0.5">
-                                <div className="h-px mb-2" style={{ backgroundColor: '#E8EFFF' }} />
-                                {fCollAssets.map((a, i) => {
-                                  const av = fCollAssetValues[i];
-                                  return (
-                                    <div key={i}>
-                                      <div className="flex items-center justify-between text-xs">
-                                        <span className="text-gray-400">{fCollAssets.length > 1 ? `担保物${i+1}` : '担保物'}</span>
-                                        <span className="font-medium" style={{ color: '#4B5563' }}>{av.qty % 1 === 0 ? av.qty.toFixed(0) : av.qty} {a.coin}</span>
-                                      </div>
-                                      {av.price > 0 && (
-                                        <div className="flex items-center justify-between text-xs">
-                                          <span></span>
-                                          <span className="font-medium" style={{ color: '#4B5563' }}>≈ {av.value.toLocaleString(undefined, { maximumFractionDigits: 0 })} U</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-gray-400">担保价值{fCollAssets.length > 1 ? '(合计)' : ''}</span>
-                                  <span className="font-medium" style={{ color: '#4B5563' }}>{fAllPricesLoaded && fCollValue > 0 ? `${fCollValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U` : '---'}</span>
-                                </div>
-                                <div className="flex items-center justify-between text-xs">
-                                  <span className="text-gray-400">担保缺口</span>
-                                  <span className="font-medium" style={{ color: fGap === null ? '#4B5563' : fGap < 0 ? '#EF4444' : '#4B5563' }}>
-                                    {fGap === null ? '---' : fGap >= 0 ? '超过100%' : `${fGap.toLocaleString(undefined, { maximumFractionDigits: 0 })} U`}
-                                  </span>
-                                </div>
+
+                            {/* 币种 + 买卖方向 */}
+                            <div className="flex justify-between items-center text-sm">
+                              <span style={{ color: "#9CA3AF" }}>币种</span>
+                              <span style={{ color: "#1A2340", fontWeight: 500 }}>
+                                <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold mr-1.5"
+                                  style={{ backgroundColor: order.side === 'buy' ? '#EFF6FF' : '#FEF2F2', color: order.side === 'buy' ? '#1A56DB' : '#EF4444' }}>
+                                  {order.side === 'buy' ? '买' : '卖'}
+                                </span>
+                                {order.coin}
+                              </span>
+                            </div>
+
+                            {/* 买入价格 */}
+                            <div className="flex justify-between items-center text-sm">
+                              <span style={{ color: "#9CA3AF" }}>买入价格</span>
+                              <span style={{ color: "#1A2340" }}>{parseFloat(order.limitPrice).toLocaleString()} USDT</span>
+                            </div>
+
+                            {/* 实际投入 */}
+                            <div className="flex justify-between items-center text-sm">
+                              <span style={{ color: "#9CA3AF" }}>实际投入</span>
+                              <span style={{ color: "#1A2340" }}>{parseFloat(order.amount).toFixed(2)} USDT</span>
+                            </div>
+
+                            {/* 成交价值（×5.25 杠杆） */}
+                            {!order.isGift && (
+                              <div className="flex justify-between items-center text-sm">
+                                <span style={{ color: "#9CA3AF" }}>成交价值</span>
+                                <span style={{ color: "#D97706", fontWeight: 500 }}>{tradeValue.toFixed(2)} USDT <span className="text-xs text-gray-400">(×5.25)</span></span>
                               </div>
                             )}
+
+                            {/* 持仓数量 */}
+                            <div className="flex justify-between items-center text-sm">
+                              <span style={{ color: "#9CA3AF" }}>持仓数量</span>
+                              <span style={{ color: "#1A2340", fontWeight: 500 }}>{fFormatCoinQty(parseFloat(order.quantity), order.coin)} {order.coin}</span>
+                            </div>
+
+                            {/* 类型/状态 */}
+                            <div className="flex justify-between items-center text-sm">
+                              <span style={{ color: "#9CA3AF" }}>类型 / 状态</span>
+                              <span style={{ color: "#1A2340" }}>
+                                {orderTypeName}
+                                <span className="mx-1.5" style={{ color: '#CBD5E1' }}>·</span>
+                                <span style={{ color: statusColor }}>{statusLabel}</span>
+                              </span>
+                            </div>
+
+                            {/* 卖出信息 */}
+                            {order.sellStatus === "selling" && (
+                              <div className="flex justify-between items-center text-sm">
+                                <span style={{ color: "#9CA3AF" }}>委卖价格</span>
+                                <span className="font-medium" style={{ color: "#EF4444" }}>{parseFloat(order.sellPrice).toLocaleString()} USDT</span>
+                              </div>
+                            )}
+                            {order.sellStatus === "sold" && (
+                              <>
+                                <div className="flex justify-between items-center text-sm">
+                                  <span style={{ color: "#9CA3AF" }}>卖出价格</span>
+                                  <span className="font-medium" style={{ color: "#0EA56A" }}>{parseFloat(order.sellPrice).toLocaleString()} USDT</span>
+                                </div>
+                                {order.sellConfirmedAt && (
+                                  <div className="flex justify-between items-center text-sm">
+                                    <span style={{ color: "#9CA3AF" }}>卖出时间</span>
+                                    <span style={{ color: "#6B7280" }}>{order.sellConfirmedAt}</span>
+                                  </div>
+                                )}
+                              </>
+                            )}
+
+                            {/* 买入时间 */}
+                            <div className="flex justify-between items-center text-sm">
+                              <span style={{ color: "#9CA3AF" }}>买入时间</span>
+                              <span style={{ color: "#6B7280" }}>{new Date(order.createdAt).toLocaleString("zh-CN")}</span>
+                            </div>
                           </div>
                         ) : (
                           /* 谷间优筹订单：原有展开详情 */
