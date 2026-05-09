@@ -93,13 +93,13 @@ export async function getMemoItems(ledgerId: number, userId?: number, category?:
     result = await db.execute(sql`
       SELECT * FROM memo_items 
       WHERE ledgerId = ${ledgerId} AND category = ${category} AND deletedAt IS NULL 
-      ORDER BY sortOrder ASC, createdAt DESC
+      ORDER BY sortOrder ASC, createdAt ASC
     `);
   } else {
     result = await db.execute(sql`
       SELECT * FROM memo_items 
       WHERE ledgerId = ${ledgerId} AND deletedAt IS NULL 
-      ORDER BY category ASC, sortOrder ASC, createdAt DESC
+      ORDER BY sortOrder ASC, createdAt ASC
     `);
   }
 
@@ -144,13 +144,21 @@ export async function createMemoItem(data: {
   const db = await getLedgerDb();
   if (!db) throw new Error('数据库不可用');
 
+  // 获取当前最大 sortOrder，新条目排在最后
+  const maxResult = await db.execute(sql`
+    SELECT COALESCE(MAX(sortOrder), -1) as maxOrder FROM memo_items
+    WHERE ledgerId = ${data.ledgerId} AND deletedAt IS NULL
+  `);
+  const maxRows = parseRows(maxResult);
+  const nextOrder = ((maxRows[0] as any)?.maxOrder ?? -1) + 1;
+
   const fieldsJson = JSON.stringify(data.fields);
   const result = await db.execute(sql`
-    INSERT INTO memo_items (ledgerId, userId, category, title, fields, note)
-    VALUES (${data.ledgerId}, ${data.userId}, ${data.category}, ${data.title}, ${fieldsJson}, ${data.note ?? null})
+    INSERT INTO memo_items (ledgerId, userId, category, title, fields, note, sortOrder)
+    VALUES (${data.ledgerId}, ${data.userId}, ${data.category}, ${data.title}, ${fieldsJson}, ${data.note ?? null}, ${nextOrder})
   `);
   const insertId = (result as any)?.[0]?.insertId ?? (result as any)?.insertId ?? 0;
-  console.log(`[memo] createMemoItem 成功 id=${insertId} title="${data.title}"`);
+  console.log(`[memo] createMemoItem 成功 id=${insertId} title="${data.title}" sortOrder=${nextOrder}`);
   return insertId;
 }
 
