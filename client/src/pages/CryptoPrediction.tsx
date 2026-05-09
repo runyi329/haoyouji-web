@@ -11,7 +11,7 @@ import { trpc } from "@/lib/trpc";
 import {
   ChevronLeft, RefreshCw, TrendingUp, TrendingDown, Bitcoin,
   AlertCircle, WifiOff, CheckCircle2, Circle, Loader2, Users,
-  Wallet,
+  Wallet, ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -308,6 +308,8 @@ export function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   const [activeCoin, setActiveCoin] = useState('BTC');
   // 订单列表Tab：最近购买记录 / 持仓订单
   const [orderTab, setOrderTab] = useState<'recent' | 'position'>('recent');
+  // 展开的订单ID
+  const [expandedBetId, setExpandedBetId] = useState<number | null>(null);
   // 美股休市提示弹窗
   const [closedNotice, setClosedNotice] = useState<{ show: boolean; nextDay: string }>({ show: false, nextDay: '' });
 
@@ -607,97 +609,160 @@ export function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
                 }
               }
 
+              // 币种 Logo
+              const coinImgUrl = COIN_CONFIG[bet.coin]?.imgUrl
+                || MARKET_SYMBOLS.find(s => s.key === bet.coin)?.icon
+                || `https://ui-avatars.com/api/?name=${bet.coin}&background=F7931A&color=fff&size=32`;
+
+              // 订单编号
+              const betDate = new Date(bet.created_at);
+              const byy = String(betDate.getFullYear()).slice(2);
+              const bmm = String(betDate.getMonth() + 1).padStart(2, '0');
+              const bdd = String(betDate.getDate()).padStart(2, '0');
+              const betOrderNo = bet.order_no || `AF${byy}${bmm}${bdd}${String(bet.id).padStart(6, '0')}`;
+
+              // 状态标签
+              const betStatusLabel = isCancelled ? '已撤销' : bet.status === 'won' ? '中奖' : bet.status === 'lost' ? '未中' : '待结算';
+              const betStatusColor = isCancelled ? '#94A3B8' : bet.status === 'won' ? '#e53935' : bet.status === 'lost' ? '#43a047' : '#F59E0B';
+
+              const isBetExpanded = expandedBetId === bet.id;
+
               return (
-                <div
-                  key={bet.id}
-                  className="flex items-start justify-between px-4 py-3"
-                  style={{
-                    background: isEven ? '#ffffff' : '#f9f9f9',
-                    borderBottom: idx < myBets.length - 1 ? '1px solid #f0f0f0' : 'none',
-                    opacity: isCancelled ? 0.5 : 1,
-                  }}
-                >
-                  {/* 左列：第一行=区间+币种+涨跌幅，第二行=编号+时间 */}
-                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                    <div className="flex items-center gap-1" style={{ color: '#333', fontSize: '0.75rem', fontWeight: 500 }}>
-                      <span>{leftPart}</span>
-                      <span>{bet.coin} {shortDate}</span>
-                      <span style={{ color: dirColor }}>{bet.direction === 'up' ? '涨幅' : '跌幅'}</span>
-                      <span>{rightPart}</span>
-                    </div>
-                    <div className="flex items-center gap-2" style={{ fontSize: '0.7rem', color: '#999' }}>
-                      {bet.order_no && <span className="font-mono">编号{bet.order_no}</span>}
-                      {timeStr && <span className="font-mono">{timeStr}</span>}
-                    </div>
-                    {/* 实际涨跌幅（已结算订单，展示在左列） */}
-                    {!isPending && !isCancelled && (bet.actual_change_pct != null || bet.actualChangePct != null) && (() => {
-                      const actPct = parseFloat(bet.actual_change_pct ?? bet.actualChangePct);
-                      const actColor = actPct >= 0 ? '#e53935' : '#43a047';
-                      // 从 target_date 解析月日，如 "2026-04-18" -> "4月4日"
-                      const td = String(bet.target_date || '');
-                      const tdMatch = td.match(/^\d{4}-(\d{1,2})-(\d{1,2})/);
-                      const dateLabel = tdMatch ? `${parseInt(tdMatch[1])}月${parseInt(tdMatch[2])}日` : td;
-                      return (
-                        <div style={{ fontSize: '0.7rem', marginTop: 2 }}>
-                          <span style={{ color: '#aaa' }}>{dateLabel}涨跌幅</span>
-                          <span style={{ color: actColor, fontWeight: 600, marginLeft: 2 }}>
-                            {actPct >= 0 ? '+' : ''}{actPct.toFixed(2)}%
+                <div key={bet.id} style={{ opacity: isCancelled ? 0.6 : 1 }}>
+                  {/* 订单摘要行（谷间优筹风格） */}
+                  <button
+                    onClick={() => setExpandedBetId(isBetExpanded ? null : bet.id)}
+                    className="w-full px-4 py-3 flex items-center gap-3 active:bg-gray-50 text-left"
+                    style={{ borderBottom: isBetExpanded ? 'none' : (idx < myBets.length - 1 ? '1px solid #f5f5f5' : 'none') }}
+                  >
+                    <img
+                      src={coinImgUrl}
+                      alt={bet.coin}
+                      className="w-8 h-8 rounded-full object-contain border border-gray-100 flex-shrink-0"
+                      onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${bet.coin}&background=F7931A&color=fff&size=32`; }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-sm" style={{ color: '#1A2340' }}>{bet.coin}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${betStatusColor}18`, color: betStatusColor }}>{betStatusLabel}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#FFF7ED', color: '#D97706' }}>谷底</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: dirColor + '18', color: dirColor }}>
+                          {bet.direction === 'up' ? '涨' : '跌'} {leftPart}{rightPart}
+                        </span>
+                      </div>
+                      <div className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>
+                        {shortDate} · {timeStr}
+                        {hasPriceInfo && (
+                          <span className="ml-2" style={{ color: liveChangeColor }}>
+                            {fmtP(liveCurPrice!)} ({liveChangeNum >= 0 ? '+' : ''}{liveChangeNum.toFixed(2)}%)
                           </span>
-                        </div>
-                      );
-                    })()}
-                    {/* 实时价格 + 开奖倒计时（仅待结算订单，始终占位避免跳动） */}
-                    {isPending && (
-                      <div className="flex items-center gap-2" style={{ fontSize: '0.7rem', marginTop: 2, minHeight: '1rem' }}>
-                        {hasPriceInfo ? (
-                          <span style={{ color: '#555' }}>
-                            {liveTodayOpen && liveTodayOpen > 0 ? (
-                              <span style={{ color: '#999' }}>{fmtP(liveTodayOpen)}→</span>
-                            ) : null}
-                            <span style={{ color: liveChangeColor, fontWeight: 600, marginLeft: 2 }}>{fmtP(liveCurPrice!)}</span>
-                            {liveChangeNum !== 0 && (
-                              <span style={{ color: liveChangeColor, marginLeft: 3 }}>({liveChangeNum >= 0 ? '+' : ''}{liveChangeNum.toFixed(2)}%)</span>
-                            )}
-                          </span>
-                        ) : (
-                          <span style={{ display: 'inline-block', width: 80, height: 10, borderRadius: 4, background: '#f0f0f0' }} />
-                        )}
-                        {countdownStr ? (
-                          <span style={{ color: '#888', fontVariantNumeric: 'tabular-nums', fontFamily: 'monospace' }}>{countdownStr}</span>
-                        ) : (
-                          <span style={{ display: 'inline-block', width: 56, height: 10, borderRadius: 4, background: '#f0f0f0' }} />
                         )}
                       </div>
-                    )}
-                  </div>
-                  {/* 右列：第一行=金额+撤销按鈕，第二行=倍数+目标 */}
-                  <div className="flex-shrink-0 flex flex-col items-end gap-0.5 ml-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold" style={{ color: '#1a1a1a' }}>{parseFloat(bet.bet_amount).toFixed(0)}U</span>
-                      {canCancel ? (
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-sm font-semibold" style={{ color: '#1A2340' }}>{parseFloat(bet.bet_amount).toFixed(0)} U</div>
+                      <div className="text-xs" style={{ color: '#9CA3AF' }}>目标 {parseFloat(bet.expected_return).toFixed(0)}U</div>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 flex-shrink-0 ml-1 transition-transform ${isBetExpanded ? 'rotate-180' : ''}`} style={{ color: '#9CA3AF' }} />
+                  </button>
+
+                  {/* 展开详情 */}
+                  {isBetExpanded && (
+                    <div className="px-4 pb-4 space-y-2" style={{ backgroundColor: '#FFFBF5', borderBottom: idx < myBets.length - 1 ? '1px solid #f5f5f5' : 'none' }}>
+                      <div className="h-px" style={{ backgroundColor: '#FDE68A' }} />
+
+                      {/* 订单编号 */}
+                      <div className="flex justify-between items-center text-sm">
+                        <span style={{ color: '#9CA3AF' }}>订单编号</span>
+                        <span className="font-mono text-xs" style={{ color: '#1A2340' }}>{betOrderNo}</span>
+                      </div>
+
+                      {/* 币种 + 方向 */}
+                      <div className="flex justify-between items-center text-sm">
+                        <span style={{ color: '#9CA3AF' }}>币种 / 方向</span>
+                        <span style={{ color: '#1A2340' }}>
+                          <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold mr-1" style={{ backgroundColor: dirColor + '18', color: dirColor }}>
+                            {bet.direction === 'up' ? '涨' : '跌'}
+                          </span>
+                          {bet.coin} · {leftPart}{rightPart}
+                        </span>
+                      </div>
+
+                      {/* 开奖日期 */}
+                      <div className="flex justify-between items-center text-sm">
+                        <span style={{ color: '#9CA3AF' }}>开奖日期</span>
+                        <span style={{ color: '#1A2340' }}>{shortDate}</span>
+                      </div>
+
+                      {/* 投入金额 */}
+                      <div className="flex justify-between items-center text-sm">
+                        <span style={{ color: '#9CA3AF' }}>投入金额</span>
+                        <span style={{ color: '#1A2340' }}>{parseFloat(bet.bet_amount).toFixed(2)} USDT</span>
+                      </div>
+
+                      {/* 倍数 + 目标收益 */}
+                      <div className="flex justify-between items-center text-sm">
+                        <span style={{ color: '#9CA3AF' }}>倍数 / 目标</span>
+                        <span style={{ color: '#1A2340' }}>
+                          {parseFloat(bet.odds).toFixed(2)}x
+                          <span className="mx-1" style={{ color: '#CBD5E1' }}>·</span>
+                          <span style={{ color: '#e65100', fontWeight: 600 }}>{parseFloat(bet.expected_return).toFixed(0)} U</span>
+                        </span>
+                      </div>
+
+                      {/* 实时价格 + 开奖倒计时 */}
+                      {isPending && hasPriceInfo && (
+                        <div className="rounded-xl p-3" style={{ backgroundColor: '#FFF7ED', border: '1px solid #FDE68A' }}>
+                          <div className="text-xs font-semibold mb-1.5" style={{ color: '#D97706' }}>实时行情</div>
+                          <div className="flex justify-between text-xs">
+                            <span style={{ color: '#9CA3AF' }}>当前价格</span>
+                            <span style={{ color: liveChangeColor, fontWeight: 600 }}>
+                              {fmtP(liveCurPrice!)} ({liveChangeNum >= 0 ? '+' : ''}{liveChangeNum.toFixed(2)}%)
+                            </span>
+                          </div>
+                          {countdownStr && (
+                            <div className="flex justify-between text-xs mt-1">
+                              <span style={{ color: '#9CA3AF' }}>开奖倒计时</span>
+                              <span className="font-mono" style={{ color: '#D97706' }}>{countdownStr}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 已结算：实际涨跌幅 */}
+                      {!isPending && !isCancelled && (bet.actual_change_pct != null || bet.actualChangePct != null) && (() => {
+                        const actPct = parseFloat(bet.actual_change_pct ?? bet.actualChangePct);
+                        const actColor = actPct >= 0 ? '#e53935' : '#43a047';
+                        const td = String(bet.target_date || '');
+                        const tdMatch = td.match(/^\d{4}-(\d{1,2})-(\d{1,2})/);
+                        const dateLabel = tdMatch ? `${parseInt(tdMatch[1])}月${parseInt(tdMatch[2])}日` : td;
+                        return (
+                          <div className="flex justify-between items-center text-sm">
+                            <span style={{ color: '#9CA3AF' }}>{dateLabel}涨跌幅</span>
+                            <span style={{ color: actColor, fontWeight: 600 }}>{actPct >= 0 ? '+' : ''}{actPct.toFixed(2)}%</span>
+                          </div>
+                        );
+                      })()}
+
+                      {/* 状态 */}
+                      <div className="flex justify-between items-center text-sm">
+                        <span style={{ color: '#9CA3AF' }}>状态</span>
+                        <span style={{ color: betStatusColor, fontWeight: 500 }}>{betStatusLabel}</span>
+                      </div>
+
+                      {/* 撤销按鈕 */}
+                      {canCancel && (
                         <button
                           onClick={() => cancelBetMutation.mutate({ ledgerId, betId: bet.id })}
                           disabled={cancelBetMutation.isPending}
-                          className="text-xs px-2 py-0.5 rounded-lg font-medium transition-all active:scale-95"
-                          style={{ background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80' }}
+                          className="w-full mt-1 py-2 rounded-xl text-xs font-medium border active:opacity-80"
+                          style={{ borderColor: '#FDE68A', color: '#D97706', backgroundColor: '#FFFBF5' }}
                         >
-                          {cancelBetMutation.isPending ? '撤销中...' : '撤销'}
+                          {cancelBetMutation.isPending ? '撤销中...' : '撤销委托'}
                         </button>
-                      ) : (
-                        <span className="text-xs px-2 py-0.5 rounded-lg" style={{
-                          background: isCancelled ? '#f5f5f5' : bet.status === 'won' ? '#ffebee' : bet.status === 'lost' ? '#e8f5e9' : '#fffde7',
-                          color: isCancelled ? '#bbb' : bet.status === 'won' ? '#e53935' : bet.status === 'lost' ? '#43a047' : '#f9a825',
-                        }}>
-                          {isCancelled ? '已撤销' : bet.status === 'won' ? '中奖' : bet.status === 'lost' ? '未中' : '待结算'}
-                        </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1" style={{ fontSize: '0.7rem', color: '#999' }}>
-                      <span>{parseFloat(bet.odds).toFixed(2)}x</span>
-                      <span>目标<span style={{ color: '#e65100', fontWeight: 600 }}>{parseFloat(bet.expected_return).toFixed(0)}U</span></span>
-                    </div>
-
-                  </div>
+                  )}
                 </div>
               );
             })}

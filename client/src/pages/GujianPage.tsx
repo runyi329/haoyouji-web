@@ -113,8 +113,8 @@ export default function GujianPage() {
     { enabled: !!ledgerId, staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: "always" }
   );
   const allOrders: any[] = (ordersData as any[]) || [];
-  // 只显示谷间优筹的订单
-  const gujianOrders = allOrders.filter((o: any) => o.orderType === "谷间优筹");
+  // 显示全部订单（谷底增筹 + 谷间优筹打通）
+  const gujianOrders = allOrders;
 
   // 下单
   const submitOrderMutation = trpc.ledger.afSubmitOrder.useMutation({
@@ -492,6 +492,20 @@ export default function GujianPage() {
                     month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
                   });
 
+                  // 订单编号生成（与谷底增筹一致）
+                  const orderDate2 = new Date(order.createdAt);
+                  const yy2 = String(orderDate2.getFullYear()).slice(2);
+                  const mm2 = String(orderDate2.getMonth() + 1).padStart(2, '0');
+                  const dd2 = String(orderDate2.getDate()).padStart(2, '0');
+                  const orderNo = `AF${yy2}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
+
+                  // 判断是谷底增筹还是谷间优筹
+                  const isGudizengchou = !order.orderType || order.orderType === '无损合约' || order.orderType === '谷底增筹';
+                  const orderTypeName = isGudizengchou ? '谷底增筹' : '谷间优筹';
+
+                  // 谷底增筹：成交价值 = amount × 5.25
+                  const tradeValue = isGudizengchou && !order.isGift ? parseFloat(order.amount) * 5.25 : parseFloat(order.amount);
+
                   return (
                     <div key={order.id}>
                       {/* 订单摘要行 */}
@@ -506,15 +520,22 @@ export default function GujianPage() {
                           onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${order.coin}&background=1A56DB&color=fff&size=32`; }}
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-semibold text-sm" style={{ color: "#1A2340" }}>{order.coin}</span>
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${statusColor}18`, color: statusColor }}>{statusLabel}</span>
+                            {isGudizengchou && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#FFF7ED', color: '#D97706' }}>谷底</span>
+                            )}
                           </div>
-                          <div className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>${parseFloat(order.limitPrice).toLocaleString()} · {timeStr}</div>
+                          <div className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>
+                            {isGudizengchou ? '' : '$'}{parseFloat(order.limitPrice).toLocaleString()} · {timeStr}
+                          </div>
                         </div>
                         <div className="text-right flex-shrink-0">
                           <div className="text-sm font-semibold" style={{ color: "#1A2340" }}>{parseFloat(order.amount).toFixed(2)} U</div>
-                          <div className="text-xs" style={{ color: "#9CA3AF" }}>{parseFloat(order.quantity).toFixed(4)} 股</div>
+                          <div className="text-xs" style={{ color: "#9CA3AF" }}>
+                            {isGudizengchou ? `×5.25` : `${parseFloat(order.quantity).toFixed(4)} 股`}
+                          </div>
                         </div>
                         <ChevronDown className={`w-4 h-4 flex-shrink-0 ml-1 transition-transform ${isExpanded ? "rotate-180" : ""}`} style={{ color: "#9CA3AF" }} />
                       </button>
@@ -524,19 +545,69 @@ export default function GujianPage() {
                         <div className="px-4 pb-4 space-y-2" style={{ backgroundColor: "#F8FAFF" }}>
                           <div className="h-px" style={{ backgroundColor: "#E0E8FF" }} />
 
-                          {/* 基本信息 */}
-                          {[
-                            { label: "股票代码", value: order.coin },
-                            { label: "委托价格", value: `$${parseFloat(order.limitPrice).toLocaleString("en-US", { minimumFractionDigits: 2 })}` },
-                            { label: "投入金额", value: `${parseFloat(order.amount).toFixed(2)} USDT` },
-                            { label: "持股数量", value: `${parseFloat(order.quantity).toFixed(4)} 股` },
-                            { label: "类型/状态", value: `谷间优筹 · ${statusLabel}` },
-                          ].map(({ label, value }) => (
-                            <div key={label} className="flex justify-between items-center text-sm">
-                              <span style={{ color: "#9CA3AF" }}>{label}</span>
-                              <span style={{ color: "#1A2340" }}>{value}</span>
-                            </div>
-                          ))}
+                          {/* 订单编号 */}
+                          <div className="flex justify-between items-center text-sm">
+                            <span style={{ color: "#9CA3AF" }}>订单编号</span>
+                            <span className="font-mono text-xs" style={{ color: "#1A2340" }}>{orderNo}</span>
+                          </div>
+
+                          {/* 币种 + 买卖方向 */}
+                          <div className="flex justify-between items-center text-sm">
+                            <span style={{ color: "#9CA3AF" }}>币种</span>
+                            <span style={{ color: "#1A2340", fontWeight: 500 }}>
+                              <span className="px-1.5 py-0.5 rounded text-[11px] font-semibold mr-1.5"
+                                style={{ backgroundColor: order.side === 'buy' ? '#EFF6FF' : '#FEF2F2', color: order.side === 'buy' ? '#1A56DB' : '#EF4444' }}>
+                                {order.side === 'buy' ? '买' : '卖'}
+                              </span>
+                              {order.coin}
+                            </span>
+                          </div>
+
+                          {/* 委托/成交价格 */}
+                          <div className="flex justify-between items-center text-sm">
+                            <span style={{ color: "#9CA3AF" }}>成交价格</span>
+                            <span style={{ color: "#1A2340" }}>
+                              {isGudizengchou ? '' : '$'}{parseFloat(order.limitPrice).toLocaleString()} USDT
+                            </span>
+                          </div>
+
+                          {/* 实际投入 */}
+                          <div className="flex justify-between items-center text-sm">
+                            <span style={{ color: "#9CA3AF" }}>实际投入</span>
+                            <span style={{ color: "#1A2340" }}>{parseFloat(order.amount).toFixed(2)} USDT</span>
+                          </div>
+
+                          {/* 成交价值（谷底增筹 ×5.25，谷间优筹直接显示） */}
+                          <div className="flex justify-between items-center text-sm">
+                            <span style={{ color: "#9CA3AF" }}>成交价值</span>
+                            <span className="font-semibold" style={{ color: '#1A56DB' }}>
+                              {tradeValue.toFixed(2)} USDT
+                              {isGudizengchou && !order.isGift && <span className="ml-1 text-[11px] font-normal opacity-60">(×5.25)</span>}
+                            </span>
+                          </div>
+
+                          {/* 持仓数量（含计算过程） */}
+                          <div className="flex justify-between items-center text-sm">
+                            <span style={{ color: "#9CA3AF" }}>持仓数量</span>
+                            <span>
+                              <span className="text-[11px]" style={{ color: "#9CA3AF" }}>
+                                {tradeValue.toFixed(2)} ÷ {parseFloat(order.limitPrice).toLocaleString()} = 
+                              </span>
+                              <span style={{ color: "#1A2340", fontWeight: 500 }}>
+                                {parseFloat(order.quantity).toFixed(isGudizengchou ? 8 : 4).replace(/\.?0+$/, '')} {order.coin}
+                              </span>
+                            </span>
+                          </div>
+
+                          {/* 类型/状态 */}
+                          <div className="flex justify-between items-center text-sm">
+                            <span style={{ color: "#9CA3AF" }}>类型 / 状态</span>
+                            <span style={{ color: "#1A2340" }}>
+                              {orderTypeName}
+                              <span className="mx-1.5" style={{ color: '#CBD5E1' }}>·</span>
+                              <span style={{ color: statusColor }}>{statusLabel}</span>
+                            </span>
+                          </div>
 
                           {/* 持仓中：显示实时收益分配 */}
                           {order.status === "completed" && order.sellStatus !== "sold" && livePrice > 0 && (
