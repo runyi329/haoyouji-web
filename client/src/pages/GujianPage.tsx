@@ -119,10 +119,11 @@ export default function GujianPage() {
     { ledgerId },
     { enabled: !!ledgerId, staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: "always" }
   );
-  // 只保留谷底增筹订单（finance_type 为 保本分成/自负盈亏 或空），排除融资付息
+  // 只保留谷底增筹订单（finance_type 明确为 保本分成 或 自负盈亏）
+  // 注意：融资付息订单是早期数据，finance_type 为空，所以空値不能当谷底增筹处理
   const financeOrders: any[] = ((financeOrdersData as any)?.orders ?? []).filter((o: any) => {
     const ft = o.finance_type || o.financeType || '';
-    return ft === '' || ft === '保本分成' || ft === '自负盈亏';
+    return ft === '保本分成' || ft === '自负盈亏';
   });
 
   // 谷底实时价格（用于担保物、当前价值等计算）
