@@ -312,3 +312,142 @@ export async function reorderMemoItems(ledgerId: number, orderedIds: number[]): 
   }
   console.log(`[memo] reorderMemoItems ledgerId=${ledgerId} 更新 ${orderedIds.length} 条顺序`);
 }
+
+// ===== 保存历史记录 =====
+let _historyTableEnsured = false;
+
+export async function ensureHistoryTable() {
+  if (_historyTableEnsured) return;
+  const db = await getLedgerDb();
+  if (!db) return;
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS memo_save_history (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ledgerId INT NOT NULL,
+        userId INT NOT NULL,
+        snapshot JSON NOT NULL,
+        description VARCHAR(200),
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_history_ledger (ledgerId)
+      )
+    `);
+    console.log('[memo] memo_save_history 表已就绪');
+    _historyTableEnsured = true;
+  } catch (e: any) {
+    console.warn('[memo] ensureHistoryTable:', e?.message);
+    _historyTableEnsured = true;
+  }
+}
+
+export interface SaveHistoryEntry {
+  id: number;
+  ledgerId: number;
+  userId: number;
+  snapshot: MemoItem[];
+  description?: string;
+  createdAt: string;
+}
+
+// 写入一条历史快照，并保留最近10条（超出的自动删除）
+export async function saveMemoHistory(ledgerId: number, userId: number, description?: string): Promise<void> {
+  await ensureHistoryTable();
+  const db = await getLedgerDb();
+  if (!db) return;
+
+  // 获取当前所有账目作为快照
+  const items = await getMemoItems(ledgerId);
+  const snapshotJson = JSON.stringify(items);
+
+  await db.execute(sql`
+    INSERT INTO memo_save_history (ledgerId, userId, snapshot, description)
+    VALUES (${ledgerId}, ${userId}, ${snapshotJson}, ${description ?? null})
+  `);
+
+  // 保留最近10条，删除多余的
+  await db.execute(sql`
+    DELETE FROM memo_save_history
+    WHERE ledgerId = ${ledgerId}
+      AND id NOT IN (
+        SELECT id FROM (
+          SELECT id FROM memo_save_history
+          WHERE ledgerId = ${ledgerId}
+          ORDER BY createdAt DESC
+          LIMIT 10
+        ) AS t
+      )
+  `);
+
+  console.log(`[memo] saveMemoHistory ledgerId=${ledgerId}`);
+}
+
+// 查询历史记录列表（不含 snapshot 内容，减少传输量）
+export async function getMemoHistoryList(ledgerId: number): Promise<Omit<SaveHistoryEntry, 'snapshot'>[]> {
+  await ensureHistoryTable();
+  const db = await getLedgerDb();
+  if (!db) return [];
+
+  const result = await db.execute(sql`
+    SELECT id, ledgerId, userId, description, createdAt
+    FROM memo_save_history
+    WHERE ledgerId = ${ledgerId}
+    ORDER BY createdAt DESC
+    LIMIT 10
+  `);
+
+  const rows = parseRows(result);
+  return rows;
+}
+
+// 获取某条历史的完整快照
+export async function getMemoHistorySnapshot(historyId: number, ledgerId: number): Promise<MemoItem[] | null> {
+  await ensureHistoryTable();
+  const db = await getLedgerDb();
+  if (!db) return null;
+
+  const result = await db.execute(sql`
+    SELECT snapshot FROM memo_save_history
+    WHERE id = ${historyId} AND ledgerId = ${ledgerId}
+    LIMIT 1
+  `);
+
+  const rows = parseRows(result);
+  if (!rows.length) return null;
+
+  const raw = rows[0].snapshot;
+  try {
+    return typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } catch {
+    return null;
+  }
+}
+
+// 恢复到历史快照（软删除现有条目，重新插入快照中的条目）
+export async function restoreMemoFromHistory(ledgerId: number, userId: number, historyId: number): Promise<void> {
+  await ensureHistoryTable();
+  const db = await getLedgerDb();
+  if (!db) throw new Error('数据库不可用');
+
+  const snapshot = await getMemoHistorySnapshot(historyId, ledgerId);
+  if (!snapshot) throw new Error('历史记录不存在');
+
+  // 先保存当前状态到历史（恢复前备份）
+  await saveMemoHistory(ledgerId, userId, '恢复前自动备份');
+
+  // 软删除当前所有条目
+  await db.execute(sql`
+    UPDATE memo_items SET deletedAt = NOW()
+    WHERE ledgerId = ${ledgerId} AND deletedAt IS NULL
+  `);
+
+  // 重新插入快照中的条目
+  for (const item of snapshot) {
+    const fieldsJson = JSON.stringify(item.fields);
+    await db.execute(sql`
+      INSERT INTO memo_items (ledgerId, userId, category, title, fields, note, sortOrder)
+      VALUES (${ledgerId}, ${userId}, ${item.category}, ${item.title}, ${fieldsJson}, ${item.note ?? null}, ${item.sortOrder ?? 0})
+    `);
+  }
+
+  console.log(`[memo] restoreMemoFromHistory ledgerId=${ledgerId} historyId=${historyId} 恢复 ${snapshot.length} 条`);
+}

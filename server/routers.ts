@@ -10526,6 +10526,35 @@ ${klinesSummary}
         return { success: true };
       }),
 
+    // 查询保存历史列表
+    getMemoHistoryList: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        return await dbMemo.getMemoHistoryList(input.ledgerId);
+      }),
+
+    // 恢复到某次历史快照
+    restoreMemoFromHistory: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        historyId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await dbMemo.restoreMemoFromHistory(input.ledgerId, ctx.user.id, input.historyId);
+        return { success: true };
+      }),
+
+    // 手动触发保存历史（编辑保存时调用）
+    saveMemoHistory: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        description: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await dbMemo.saveMemoHistory(input.ledgerId, ctx.user.id, input.description);
+        return { success: true };
+      }),
+
     // ===== 提示词库 =====
     getPrompts: protectedProcedure
       .input(z.object({
