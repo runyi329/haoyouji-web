@@ -36,6 +36,14 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 import { UserAvatar } from "@/components/UserAvatar";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -49,6 +57,20 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+
+// 字段标签预设选项
+const FIELD_LABEL_OPTIONS = [
+  "账号",
+  "密码",
+  "备注",
+  "邮箱",
+  "卡号",
+  "税号",
+  "手机号",
+  "姓名",
+  "地址",
+  "自定义",
+];
 
 // ===== 第1级大类 =====
 const CATEGORIES = [
@@ -706,13 +728,57 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                                 <ArrowDown className="w-3 h-3" />
                               </button>
                             </div>
-                            {/* 标签名输入框（所有字段均可编辑标签） */}
-                            <Input
-                              value={field.label}
-                              onChange={e => updateOuyiField(acctIdx, fidx, "label", e.target.value)}
-                              placeholder="字段名"
-                              className="w-20 flex-shrink-0 text-xs text-gray-500"
-                            />
+                            {/* 标签下拉选择（选自定义时显示输入框） */}
+                            {FIELD_LABEL_OPTIONS.includes(field.label) && field.label !== '自定义' ? (
+                              <Select
+                                value={field.label}
+                                onValueChange={val => {
+                                  if (val === '自定义') {
+                                    updateOuyiField(acctIdx, fidx, "label", '自定义');
+                                  } else {
+                                    updateOuyiField(acctIdx, fidx, "label", val);
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="w-20 flex-shrink-0 text-xs h-9 px-2">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {FIELD_LABEL_OPTIONS.map(opt => (
+                                    <SelectItem key={opt} value={opt} className="text-xs">{opt}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : !FIELD_LABEL_OPTIONS.includes(field.label) ? (
+                              // 字段标签不在预设列表中（旧数据已有自定义标签）
+                              <div className="flex flex-col gap-0.5 w-20 flex-shrink-0">
+                                <Input
+                                  value={field.label}
+                                  onChange={e => updateOuyiField(acctIdx, fidx, "label", e.target.value)}
+                                  placeholder="字段名"
+                                  className="text-xs h-9 px-2"
+                                />
+                                <button
+                                  onClick={() => updateOuyiField(acctIdx, fidx, "label", '账号')}
+                                  className="text-xs text-gray-400 hover:text-gray-600 leading-none"
+                                >返回选择</button>
+                              </div>
+                            ) : (
+                              // 选了“自定义”，显示文字输入框
+                              <div className="flex flex-col gap-0.5 w-20 flex-shrink-0">
+                                <Input
+                                  value=""
+                                  onChange={e => updateOuyiField(acctIdx, fidx, "label", e.target.value || '自定义')}
+                                  placeholder="输入名称"
+                                  autoFocus
+                                  className="text-xs h-9 px-2"
+                                />
+                                <button
+                                  onClick={() => updateOuyiField(acctIdx, fidx, "label", '账号')}
+                                  className="text-xs text-gray-400 hover:text-gray-600 leading-none"
+                                >返回选择</button>
+                              </div>
+                            )}
                             <Input
                               value={field.value}
                               onChange={e => updateOuyiField(acctIdx, fidx, "value", e.target.value)}
