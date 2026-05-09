@@ -201,7 +201,7 @@ function MemoCard({ item, onEdit, onDelete, showAllPasswords, editMode, onMoveUp
     : item.fields.filter(f => f.value && f.label !== '__ACCOUNT_SEPARATOR__').length;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-1.5">
+    <div className={`rounded-xl shadow-sm overflow-hidden mb-1.5 transition-colors duration-200 ${expanded ? 'bg-amber-50 border border-amber-200' : 'bg-white border border-gray-100'}`}>
       {/* 卡片头部 */}
       <div className="flex items-center px-3 py-2">
         {/* 编辑模式下显示上下移按钮 */}
