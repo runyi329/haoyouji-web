@@ -136,11 +136,12 @@ function copyText(text: string, label?: string) {
 }
 
 // ===== 单条备忘录卡片 =====
-function MemoCard({ item, onEdit, onDelete, showAllPasswords, dragHandleProps }: {
+function MemoCard({ item, onEdit, onDelete, showAllPasswords, editMode, dragHandleProps }: {
   item: MemoItem;
   onEdit: (item: MemoItem) => void;
   onDelete: (id: number) => void;
   showAllPasswords: boolean;
+  editMode: boolean;
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -190,11 +191,13 @@ function MemoCard({ item, onEdit, onDelete, showAllPasswords, dragHandleProps }:
           <p className="font-medium text-gray-900 truncate flex-1">{getSubLabel(item)}</p>
           <span className="text-xs text-gray-400 flex-shrink-0">{filledCount}条</span>
         </div>
-        <div className="flex items-center gap-1 ml-2">
-          <button onClick={e => { e.stopPropagation(); onEdit(item); }} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
-            <Pencil className="w-5 h-5" />
-          </button>
-        </div>
+        {editMode && (
+          <div className="flex items-center gap-1 ml-2">
+            <button onClick={e => { e.stopPropagation(); onEdit(item); }} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
+              <Pencil className="w-5 h-5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 展开内容 */}
@@ -843,6 +846,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
   const [deleteId, setDeleteId] = useState<number | null>(null);
   // 提示词模式
   const [showAllPasswords, setShowAllPasswords] = useState(false);
+  const [editMode, setEditMode] = useState(false); // 全局编辑模式
   const [promptMode, setPromptMode] = useState(false);
   const [activePromptCat, setActivePromptCat] = useState("image");
   const [selectedPrompts, setSelectedPrompts] = useState<Set<number>>(new Set());
@@ -984,6 +988,15 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* 全局编辑模式按钮 */}
+            <button
+              onClick={() => setEditMode(v => !v)}
+              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: editMode ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.15)" }}
+              title={editMode ? "退出编辑模式" : "编辑模式"}
+            >
+              <Pencil className="w-5 h-5 text-white" />
+            </button>
             <button
               onClick={() => setShowAllPasswords(v => !v)}
               className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
@@ -1106,6 +1119,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
                     onEdit={item => { setEditItem(item); setShowForm(true); }}
                     onDelete={id => setDeleteId(id)}
                     showAllPasswords={showAllPasswords}
+                    editMode={editMode}
                     dragHandleProps={{
                       onPointerDown: (e: React.PointerEvent) => {
                         // 手机触摸拖拽支持
