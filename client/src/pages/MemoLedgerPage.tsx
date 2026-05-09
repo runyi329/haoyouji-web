@@ -1354,7 +1354,11 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
             // 每次保存后自动写入历史快照（带操作描述）
             saveHistoryMutation.mutate({ ledgerId, description });
           }}
-          onDelete={id => deleteMutation.mutate({ id, ledgerId })}
+          onDelete={id => {
+            // 删除前先记录标题，确保历史记录显示正确描述
+            setDeleteTitle(editItem?.title || "");
+            deleteMutation.mutate({ id, ledgerId });
+          }}
         />
       )}
 
