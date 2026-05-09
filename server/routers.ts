@@ -10515,6 +10515,17 @@ ${klinesSummary}
         return { success: true };
       }),
 
+    // 批量更新账目排序
+    reorderMemoItems: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        orderedIds: z.array(z.number()),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await dbMemo.reorderMemoItems(input.ledgerId, input.orderedIds);
+        return { success: true };
+      }),
+
     // ===== 提示词库 =====
     getPrompts: protectedProcedure
       .input(z.object({

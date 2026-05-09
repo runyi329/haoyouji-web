@@ -2,7 +2,7 @@
  * MemoLedgerPage.tsx - AD型定制账本：永忆
  * 两级分类：第1级大类 → 第2级子类（预设+自定义）→ 字段内容
  */
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -30,6 +30,9 @@ import {
   ClipboardList,
   CheckSquare,
   Square,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,11 +136,12 @@ function copyText(text: string, label?: string) {
 }
 
 // ===== 单条备忘录卡片 =====
-function MemoCard({ item, onEdit, onDelete, showAllPasswords }: {
+function MemoCard({ item, onEdit, onDelete, showAllPasswords, dragHandleProps }: {
   item: MemoItem;
   onEdit: (item: MemoItem) => void;
   onDelete: (id: number) => void;
   showAllPasswords: boolean;
+  dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const cat = CATEGORIES.find(c => c.key === item.category) || CATEGORIES[CATEGORIES.length - 1];
@@ -171,8 +175,18 @@ function MemoCard({ item, onEdit, onDelete, showAllPasswords }: {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-1.5">
       {/* 卡片头部 */}
-      <div className="flex items-center px-3 py-2 cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <div className="flex-1 min-w-0 flex items-center gap-2">
+      <div className="flex items-center px-3 py-2">
+        {/* 拖拽手柄 */}
+        {dragHandleProps && (
+          <div
+            {...dragHandleProps}
+            className="mr-2 flex-shrink-0 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none"
+            onClick={e => e.stopPropagation()}
+          >
+            <GripVertical className="w-5 h-5" />
+          </div>
+        )}
+        <div className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer" onClick={() => setExpanded(!expanded)}>
           <p className="font-medium text-gray-900 truncate flex-1">{getSubLabel(item)}</p>
           <span className="text-xs text-gray-400 flex-shrink-0">{filledCount}条</span>
         </div>
@@ -357,6 +371,16 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
   const removeOuyiField = (acctIdx: number, fieldIdx: number) => setOuyiAccounts(prev => prev.map((acct, ai) => {
     if (ai !== acctIdx) return acct;
     return acct.filter((_, fi) => fi !== fieldIdx);
+  }));
+
+  // 字段上移/下移
+  const moveOuyiField = (acctIdx: number, fieldIdx: number, dir: -1 | 1) => setOuyiAccounts(prev => prev.map((acct, ai) => {
+    if (ai !== acctIdx) return acct;
+    const next = [...acct];
+    const target = fieldIdx + dir;
+    if (target < 0 || target >= next.length) return acct;
+    [next[fieldIdx], next[target]] = [next[target], next[fieldIdx]];
+    return next;
   }));
 
   // 欧易 fields 序列化：账户间插入分隔符
@@ -661,7 +685,26 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                           );
                         }
                         return (
-                          <div key={fidx} className="flex items-center gap-2">
+                          <div key={fidx} className="flex items-center gap-1.5">
+                            {/* 上移/下移按钮 */}
+                            <div className="flex flex-col gap-0.5 flex-shrink-0">
+                              <button
+                                onClick={() => moveOuyiField(acctIdx, fidx, -1)}
+                                disabled={fidx === 0}
+                                className="p-0.5 rounded text-gray-300 hover:text-gray-500 disabled:opacity-20"
+                                title="上移"
+                              >
+                                <ArrowUp className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => moveOuyiField(acctIdx, fidx, 1)}
+                                disabled={fidx === acct.length - 1}
+                                className="p-0.5 rounded text-gray-300 hover:text-gray-500 disabled:opacity-20"
+                                title="下移"
+                              >
+                                <ArrowDown className="w-3 h-3" />
+                              </button>
+                            </div>
                             {/* 标签名输入框（所有字段均可编辑标签） */}
                             <Input
                               value={field.label}
@@ -805,6 +848,11 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
   const [selectedPrompts, setSelectedPrompts] = useState<Set<number>>(new Set());
   const [showPromptAdd, setShowPromptAdd] = useState(false);
   const [promptPasteText, setPromptPasteText] = useState("");
+  // 拖拽排序状态
+  const [sortedItems, setSortedItems] = useState<MemoItem[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragItemIdx = useRef<number | null>(null);
+  const dragOverIdx = useRef<number | null>(null);
   const utils = trpc.useUtils();
 
   const { data: items = [], isLoading } = trpc.ledger.getMemoItems.useQuery({
@@ -837,6 +885,44 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
     onSuccess: () => { toast.success("已删除"); utils.ledger.getMemoItems.invalidate({ ledgerId }); setDeleteId(null); },
     onError: e => toast.error(e.message),
   });
+
+  const reorderMutation = trpc.ledger.reorderMemoItems.useMutation({
+    onError: e => toast.error("排序保存失败: " + e.message),
+  });
+
+  // 当 items 变化时，同步到本地排序状态（搜索或分类切换时重置）
+  useEffect(() => {
+    setSortedItems(items as MemoItem[]);
+  }, [items]);
+
+  // 拖拽处理函数
+  const handleDragStart = useCallback((idx: number) => {
+    dragItemIdx.current = idx;
+    setIsDragging(true);
+  }, []);
+
+  const handleDragEnter = useCallback((idx: number) => {
+    dragOverIdx.current = idx;
+    if (dragItemIdx.current === null || dragItemIdx.current === idx) return;
+    setSortedItems(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(dragItemIdx.current!, 1);
+      next.splice(idx, 0, moved);
+      dragItemIdx.current = idx;
+      return next;
+    });
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
+    dragItemIdx.current = null;
+    dragOverIdx.current = null;
+    // 保存新顺序到数据库
+    reorderMutation.mutate({
+      ledgerId,
+      orderedIds: sortedItems.map(it => it.id),
+    });
+  }, [sortedItems, ledgerId]);
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { all: items.length };
@@ -1001,15 +1087,36 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
               <p className="text-sm">{keyword ? "没有找到相关备忘" : "还没有备忘，点击右下角 + 添加"}</p>
             </div>
           ) : (
-            (items as MemoItem[]).map(item => (
-              <MemoCard
-                key={item.id}
-                item={item}
-                onEdit={item => { setEditItem(item); setShowForm(true); }}
-                onDelete={id => setDeleteId(id)}
-                showAllPasswords={showAllPasswords}
-              />
-            ))
+            <div>
+              {sortedItems.map((item, idx) => (
+                <div
+                  key={item.id}
+                  draggable
+                  onDragStart={() => handleDragStart(idx)}
+                  onDragEnter={() => handleDragEnter(idx)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={e => e.preventDefault()}
+                  style={{
+                    opacity: isDragging && dragItemIdx.current === idx ? 0.5 : 1,
+                    transition: 'opacity 0.15s',
+                  }}
+                >
+                  <MemoCard
+                    item={item}
+                    onEdit={item => { setEditItem(item); setShowForm(true); }}
+                    onDelete={id => setDeleteId(id)}
+                    showAllPasswords={showAllPasswords}
+                    dragHandleProps={{
+                      onPointerDown: (e: React.PointerEvent) => {
+                        // 手机触摸拖拽支持
+                        const el = (e.currentTarget as HTMLElement).closest('[draggable]') as HTMLElement;
+                        if (el) el.draggable = true;
+                      },
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
           )
         ) : (
           // 提示词内容

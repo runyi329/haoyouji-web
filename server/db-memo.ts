@@ -297,3 +297,18 @@ export async function deletePrompt(id: number, userId: number): Promise<void> {
   if (!db) throw new Error('数据库不可用');
   await db.execute(sql`UPDATE memo_prompts SET deletedAt = NOW() WHERE id = ${id} AND userId = ${userId}`);
 }
+
+// 批量更新账目排序
+export async function reorderMemoItems(ledgerId: number, orderedIds: number[]): Promise<void> {
+  await ensureMemoTables();
+  const db = await getLedgerDb();
+  if (!db) throw new Error('数据库不可用');
+
+  // 逐条更新 sortOrder
+  for (let i = 0; i < orderedIds.length; i++) {
+    await db.execute(sql`
+      UPDATE memo_items SET sortOrder = ${i} WHERE id = ${orderedIds[i]} AND ledgerId = ${ledgerId}
+    `);
+  }
+  console.log(`[memo] reorderMemoItems ledgerId=${ledgerId} 更新 ${orderedIds.length} 条顺序`);
+}
