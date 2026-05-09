@@ -1998,10 +1998,10 @@ export default function CryptoPrediction() {
   const [interval, setIntervalVal] = useState("1h");
   const initialTab = (() => {
     const t = urlParams.get("tab");
-    if (t === "market" || t === "spot" || t === "contract" || t === "finance") return t;
+    if (t === "market" || t === "spot" || t === "contract" || t === "finance" || t === "gujian") return t;
     return "contract";
-  })() as "contract" | "spot" | "market" | "finance";
-  const [tab, setTab] = useState<"contract" | "spot" | "market" | "finance">(initialTab);
+  })() as "contract" | "spot" | "market" | "finance" | "gujian";
+  const [tab, setTab] = useState<"contract" | "spot" | "market" | "finance" | "gujian">(initialTab);
 
   // 委托交易面板状态
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
@@ -2217,6 +2217,7 @@ export default function CryptoPrediction() {
         <div className="flex rounded-xl p-1 gap-1" style={{ backgroundColor: '#E8EEFF' }}>
           {(isCustomAF && !isFunder ? [
             { key: "contract", label: "谷底增筹" },
+            { key: "gujian", label: "谷间优筹" },
             { key: "finance", label: "融资付息" },
             { key: "market", label: "行情评估" },
           ] : [
@@ -2224,6 +2225,10 @@ export default function CryptoPrediction() {
             { key: "market", label: "行情评估" },
           ]).map((t) => (
             <button key={t.key} onClick={() => {
+              if (t.key === "gujian") {
+                setLocation(`/ledger/${ledgerId}/gujian`);
+                return;
+              }
               setTab(t.key as any);
             }}
               className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${

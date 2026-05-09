@@ -21244,6 +21244,40 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         return getDailyStats(input.startDate, input.endDate);
       }),
   }),
+
+  // 美股实时行情（Yahoo Finance 代理）
+  getUsStockPrice: publicProcedure
+    .input(z.object({ symbol: z.string() }))
+    .query(async ({ input }) => {
+      const symbol = input.symbol.toUpperCase().trim();
+      try {
+        const res = await fetch(
+          `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=2d`,
+          {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Accept': 'application/json',
+            },
+            signal: AbortSignal.timeout(8000),
+          }
+        );
+        const json = await res.json() as any;
+        const meta = json?.chart?.result?.[0]?.meta;
+        if (!meta) throw new Error('行情数据解析失败');
+        const price = meta.regularMarketPrice || 0;
+        const prev = meta.previousClose || meta.chartPreviousClose || 0;
+        const change = prev > 0 ? ((price - prev) / prev) * 100 : 0;
+        return {
+          symbol,
+          price: price as number,
+          change: change as number,
+          currency: (meta.currency as string) || 'USD',
+        };
+      } catch (e: any) {
+        console.error(`[getUsStockPrice] ${symbol} 行情获取失败:`, e?.message);
+        return { symbol, price: 0, change: 0, currency: 'USD' };
+      }
+    }),
 });
 
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
@@ -21965,6 +21999,7 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         risk: string;
       };
     }),
+
 });
 export type AppRouter = typeof appRouter;
 
