@@ -136,13 +136,14 @@ function copyText(text: string, label?: string) {
 }
 
 // ===== 单条备忘录卡片 =====
-function MemoCard({ item, onEdit, onDelete, showAllPasswords, editMode, dragHandleProps }: {
+function MemoCard({ item, onEdit, onDelete, showAllPasswords, editMode, onMoveUp, onMoveDown }: {
   item: MemoItem;
   onEdit: (item: MemoItem) => void;
   onDelete: (id: number) => void;
   showAllPasswords: boolean;
   editMode: boolean;
-  dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const cat = CATEGORIES.find(c => c.key === item.category) || CATEGORIES[CATEGORIES.length - 1];
@@ -177,14 +178,25 @@ function MemoCard({ item, onEdit, onDelete, showAllPasswords, editMode, dragHand
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mb-1.5">
       {/* 卡片头部 */}
       <div className="flex items-center px-3 py-2">
-        {/* 拖拽手柄 */}
-        {dragHandleProps && (
-          <div
-            {...dragHandleProps}
-            className="mr-2 flex-shrink-0 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none"
-            onClick={e => e.stopPropagation()}
-          >
-            <GripVertical className="w-5 h-5" />
+        {/* 编辑模式下显示上下移按钮 */}
+        {editMode && (
+          <div className="flex flex-col gap-0.5 mr-1.5 flex-shrink-0">
+            <button
+              onClick={e => { e.stopPropagation(); onMoveUp?.(); }}
+              disabled={!onMoveUp}
+              className="p-0.5 rounded text-gray-300 hover:text-gray-500 disabled:opacity-20"
+              title="上移"
+            >
+              <ArrowUp className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); onMoveDown?.(); }}
+              disabled={!onMoveDown}
+              className="p-0.5 rounded text-gray-300 hover:text-gray-500 disabled:opacity-20"
+              title="下移"
+            >
+              <ArrowDown className="w-3.5 h-3.5" />
+            </button>
           </div>
         )}
         <div className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer" onClick={() => setExpanded(!expanded)}>
@@ -852,11 +864,8 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
   const [selectedPrompts, setSelectedPrompts] = useState<Set<number>>(new Set());
   const [showPromptAdd, setShowPromptAdd] = useState(false);
   const [promptPasteText, setPromptPasteText] = useState("");
-  // 拖拽排序状态
+  // 账目排序状态
   const [sortedItems, setSortedItems] = useState<MemoItem[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
-  const dragItemIdx = useRef<number | null>(null);
-  const dragOverIdx = useRef<number | null>(null);
   const utils = trpc.useUtils();
 
   const { data: items = [], isLoading } = trpc.ledger.getMemoItems.useQuery({
@@ -899,34 +908,21 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
     setSortedItems(items as MemoItem[]);
   }, [items]);
 
-  // 拖拽处理函数
-  const handleDragStart = useCallback((idx: number) => {
-    dragItemIdx.current = idx;
-    setIsDragging(true);
-  }, []);
-
-  const handleDragEnter = useCallback((idx: number) => {
-    dragOverIdx.current = idx;
-    if (dragItemIdx.current === null || dragItemIdx.current === idx) return;
+  // 上移/下移账目
+  const moveItem = useCallback((idx: number, dir: -1 | 1) => {
     setSortedItems(prev => {
       const next = [...prev];
-      const [moved] = next.splice(dragItemIdx.current!, 1);
-      next.splice(idx, 0, moved);
-      dragItemIdx.current = idx;
+      const target = idx + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[idx], next[target]] = [next[target], next[idx]];
+      // 保存新顺序到数据库
+      reorderMutation.mutate({
+        ledgerId,
+        orderedIds: next.map(it => it.id),
+      });
       return next;
     });
-  }, []);
-
-  const handleDragEnd = useCallback(() => {
-    setIsDragging(false);
-    dragItemIdx.current = null;
-    dragOverIdx.current = null;
-    // 保存新顺序到数据库
-    reorderMutation.mutate({
-      ledgerId,
-      orderedIds: sortedItems.map(it => it.id),
-    });
-  }, [sortedItems, ledgerId]);
+  }, [ledgerId]);
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { all: items.length };
@@ -1102,33 +1098,16 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
           ) : (
             <div>
               {sortedItems.map((item, idx) => (
-                <div
+                <MemoCard
                   key={item.id}
-                  draggable
-                  onDragStart={() => handleDragStart(idx)}
-                  onDragEnter={() => handleDragEnter(idx)}
-                  onDragEnd={handleDragEnd}
-                  onDragOver={e => e.preventDefault()}
-                  style={{
-                    opacity: isDragging && dragItemIdx.current === idx ? 0.5 : 1,
-                    transition: 'opacity 0.15s',
-                  }}
-                >
-                  <MemoCard
-                    item={item}
-                    onEdit={item => { setEditItem(item); setShowForm(true); }}
-                    onDelete={id => setDeleteId(id)}
-                    showAllPasswords={showAllPasswords}
-                    editMode={editMode}
-                    dragHandleProps={{
-                      onPointerDown: (e: React.PointerEvent) => {
-                        // 手机触摸拖拽支持
-                        const el = (e.currentTarget as HTMLElement).closest('[draggable]') as HTMLElement;
-                        if (el) el.draggable = true;
-                      },
-                    }}
-                  />
-                </div>
+                  item={item}
+                  onEdit={item => { setEditItem(item); setShowForm(true); }}
+                  onDelete={id => setDeleteId(id)}
+                  showAllPasswords={showAllPasswords}
+                  editMode={editMode}
+                  onMoveUp={idx > 0 ? () => moveItem(idx, -1) : undefined}
+                  onMoveDown={idx < sortedItems.length - 1 ? () => moveItem(idx, 1) : undefined}
+                />
               ))}
             </div>
           )
