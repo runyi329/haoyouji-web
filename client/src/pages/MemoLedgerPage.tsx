@@ -1006,6 +1006,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<MemoItem | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleteTitle, setDeleteTitle] = useState<string>("");
   // 提示词模式
   const [showAllPasswords, setShowAllPasswords] = useState(false);
   const [editMode, setEditMode] = useState(false); // 全局编辑模式
@@ -1046,7 +1047,15 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
   });
 
   const deleteMutation = trpc.ledger.deleteMemoItem.useMutation({
-    onSuccess: () => { toast.success("已删除"); utils.ledger.getMemoItems.invalidate({ ledgerId }); setDeleteId(null); },
+    onSuccess: () => {
+      toast.success("已删除");
+      utils.ledger.getMemoItems.invalidate({ ledgerId });
+      // 删除后保存历史快照
+      const desc = deleteTitle ? `删除了「${deleteTitle}」` : "删除了一条备忘";
+      saveHistoryMutation.mutate({ ledgerId, description: desc });
+      setDeleteId(null);
+      setDeleteTitle("");
+    },
     onError: e => toast.error(e.message),
   });
 
@@ -1277,7 +1286,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
                   key={item.id}
                   item={item}
                   onEdit={item => { setEditItem(item); setShowForm(true); }}
-                  onDelete={id => setDeleteId(id)}
+                  onDelete={id => { setDeleteId(id); setDeleteTitle(item.title || ""); }}
                   showAllPasswords={showAllPasswords}
                   editMode={editMode}
                   onMoveUp={idx > 0 ? () => moveItem(idx, -1) : undefined}
