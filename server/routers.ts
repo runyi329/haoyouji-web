@@ -21250,6 +21250,33 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
     .input(z.object({ symbol: z.string() }))
     .query(async ({ input }) => {
       const symbol = input.symbol.toUpperCase().trim();
+
+      // 主数据源：Stooq（响应快，无需 key，含收盘价）
+      try {
+        const stooqSymbol = `${symbol.toLowerCase()}.us`;
+        const res = await fetch(
+          `https://stooq.com/q/l/?s=${stooqSymbol}&f=sd2t2ohlcv&h&e=csv`,
+          { signal: AbortSignal.timeout(8000) }
+        );
+        if (res.ok) {
+          const text = await res.text();
+          const lines = text.trim().split('\n');
+          if (lines.length >= 2) {
+            const parts = lines[1].split(',');
+            // Symbol,Date,Time,Open,High,Low,Close,Volume
+            const close = parseFloat(parts[6]);
+            const open = parseFloat(parts[3]);
+            if (!isNaN(close) && close > 0) {
+              const change = open > 0 ? ((close - open) / open) * 100 : 0;
+              return { symbol, price: close, change, currency: 'USD' };
+            }
+          }
+        }
+      } catch (e: any) {
+        console.warn(`[getUsStockPrice] Stooq ${symbol} 失败:`, e?.message);
+      }
+
+      // 备用数据源：Yahoo Finance v8
       try {
         const res = await fetch(
           `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=2d`,
@@ -21258,25 +21285,23 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
               'Accept': 'application/json',
             },
-            signal: AbortSignal.timeout(8000),
+            signal: AbortSignal.timeout(12000),
           }
         );
         const json = await res.json() as any;
         const meta = json?.chart?.result?.[0]?.meta;
-        if (!meta) throw new Error('行情数据解析失败');
-        const price = meta.regularMarketPrice || 0;
-        const prev = meta.previousClose || meta.chartPreviousClose || 0;
-        const change = prev > 0 ? ((price - prev) / prev) * 100 : 0;
-        return {
-          symbol,
-          price: price as number,
-          change: change as number,
-          currency: (meta.currency as string) || 'USD',
-        };
+        if (meta) {
+          const price = meta.regularMarketPrice || 0;
+          const prev = meta.previousClose || meta.chartPreviousClose || 0;
+          const change = prev > 0 ? ((price - prev) / prev) * 100 : 0;
+          return { symbol, price: price as number, change: change as number, currency: (meta.currency as string) || 'USD' };
+        }
       } catch (e: any) {
-        console.error(`[getUsStockPrice] ${symbol} 行情获取失败:`, e?.message);
-        return { symbol, price: 0, change: 0, currency: 'USD' };
+        console.warn(`[getUsStockPrice] Yahoo ${symbol} 失败:`, e?.message);
       }
+
+      console.error(`[getUsStockPrice] ${symbol} 所有数据源均失败`);
+      return { symbol, price: 0, change: 0, currency: 'USD' };
     }),
 });
 
