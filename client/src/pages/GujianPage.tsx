@@ -192,7 +192,7 @@ export default function GujianPage() {
         <div className="px-4 space-y-3 mt-3">
 
           {/* 股票选择下拉框 + 实时行情 */}
-          <div className="rounded-2xl bg-white shadow-sm overflow-hidden" style={{ border: "1px solid #E0E8FF" }}>
+          <div className="rounded-2xl bg-white shadow-sm" style={{ border: "1px solid #E0E8FF" }}>
             {/* 下拉选股 */}
             <div className="relative">
               <button
@@ -453,7 +453,7 @@ export default function GujianPage() {
           </div>
 
           {/* 我的订单列表 */}
-          <div className="rounded-2xl bg-white shadow-sm overflow-hidden" style={{ border: "1px solid #E0E8FF" }}>
+          <div className="rounded-2xl bg-white shadow-sm" style={{ border: "1px solid #E0E8FF" }}>
             <div className="px-4 py-3 border-b" style={{ borderColor: "#E0E8FF" }}>
               <span className="font-semibold text-sm" style={{ color: "#1A2340" }}>我的订单</span>
               <span className="text-xs ml-2" style={{ color: "#9CA3AF" }}>{gujianOrders.length} 笔</span>
