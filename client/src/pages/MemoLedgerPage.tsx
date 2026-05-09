@@ -1036,9 +1036,9 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
   const promptCatColor = PROMPT_CATEGORIES.find(c => c.key === activePromptCat)?.color || "#1E88E5";
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
       {/* 顶部导航 */}
-      <div className="text-white sticky top-0 z-10" style={{ backgroundColor: promptMode ? promptCatColor : "#D32F2F", transition: "background-color 0.3s" }}>
+      <div className="text-white flex-shrink-0 z-10" style={{ backgroundColor: promptMode ? promptCatColor : "#D32F2F", transition: "background-color 0.3s" }}>
         {/* 标题栏 */}
         <div className="flex items-center justify-between px-4 h-12">
           <button onClick={() => setLocation("/ledger")} className="p-1 -ml-2">
@@ -1125,7 +1125,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
 
       {/* 分类标签栏 */}
       {!promptMode ? null : (
-        <div className="bg-white border-b border-gray-100 px-4 py-2 flex gap-2">
+        <div className="bg-white border-b border-gray-100 px-4 py-2 flex gap-2 flex-shrink-0">
           {PROMPT_CATEGORIES.map(cat => (
             <button
               key={cat.key}
@@ -1144,7 +1144,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
 
       {/* 多选操作栏（提示词模式） */}
       {promptMode && selectedPrompts.size > 0 && (
-        <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-between shadow-sm">
+        <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-between shadow-sm flex-shrink-0">
           <span className="text-sm text-gray-600">已选 <span className="font-bold" style={{ color: promptCatColor }}>{selectedPrompts.size}</span> 条</span>
           <div className="flex gap-2">
             <button
@@ -1165,7 +1165,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
       )}
 
       {/* 内容区 */}
-      <div className="px-4 py-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4">
         {!promptMode ? (
           // 备忘内容
           isLoading ? (
