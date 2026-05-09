@@ -70,6 +70,7 @@ const FIELD_LABEL_OPTIONS = [
   "手机号",
   "姓名",
   "地址",
+  "APP",
   "自定义",
 ];
 
@@ -252,7 +253,7 @@ function MemoCard({ item, onEdit, onDelete, showAllPasswords, editMode, onMoveUp
                         <div key={fidx} className="flex items-center gap-2">
                           <span className="text-sm text-gray-400 w-16 flex-shrink-0">{field.label}</span>
                           <div className="flex-1 flex items-center gap-1 min-w-0">
-                            {field.sensitive && !showAllPasswords ? (
+                            {(field.sensitive || field.label.includes('密码')) && !showAllPasswords ? (
                               <span className="text-base text-gray-600 tracking-widest">········</span>
                             ) : (
                               <span className="text-base text-gray-800 break-all">{field.value}</span>
@@ -284,7 +285,7 @@ function MemoCard({ item, onEdit, onDelete, showAllPasswords, editMode, onMoveUp
                     <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-400 w-20 flex-shrink-0">{field.label}</span>
                   <div className="flex-1 flex items-center gap-1 min-w-0">
-                    {field.sensitive && !showAllPasswords ? (
+                    {(field.sensitive || field.label.includes('密码')) && !showAllPasswords ? (
                       <span className="text-base text-gray-600 tracking-widest">········</span>
                     ) : (
                       <span className="text-base text-gray-800 break-all">{field.value}</span>
@@ -399,7 +400,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
     const noteIdx = acct.findIndex(f => f.label === '__NOTE__');
     // 计算已有自定义字段数量，生成不重复的默认标签名
     const customCount = acct.filter(f => f.label !== '__NOTE__' && f.label !== '账号/用户名' && f.label !== '密码' && f.label !== '备用邮箱' && f.label !== '手机号' && f.label !== '手机号' && f.label !== 'UID' && f.label !== '邮箱').length;
-    const newField: MemoField = { label: `备注${customCount + 1}`, value: '', sensitive: false };
+    const newField: MemoField = { label: '__NEW__', value: '', sensitive: false };
     if (noteIdx >= 0) {
       return [...acct.slice(0, noteIdx), newField, ...acct.slice(noteIdx)];
     }
@@ -757,9 +758,9 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                               </button>
                             </div>
                             {/* 标签下拉选择（选自定义时显示输入框） */}
-                            {FIELD_LABEL_OPTIONS.includes(field.label) && field.label !== '自定义' ? (
+                            {(FIELD_LABEL_OPTIONS.includes(field.label) && field.label !== '自定义') || field.label === '__NEW__' ? (
                               <Select
-                                value={field.label}
+                                value={field.label === '__NEW__' ? '' : field.label}
                                 onValueChange={val => {
                                   if (val === '自定义') {
                                     updateOuyiField(acctIdx, fidx, "label", '自定义');
@@ -769,7 +770,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                                 }}
                               >
                                 <SelectTrigger className="w-20 flex-shrink-0 text-xs h-9 px-2">
-                                  <SelectValue />
+                                  <SelectValue placeholder="选择" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {FIELD_LABEL_OPTIONS.map(opt => (
@@ -811,7 +812,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                               value={field.value}
                               onChange={e => updateOuyiField(acctIdx, fidx, "value", e.target.value)}
                               placeholder={`输入${field.label || '内容'}`}
-                              type={field.sensitive ? "password" : "text"}
+                              type={(field.sensitive || field.label.includes('密码')) ? "password" : "text"}
                               className="flex-1 text-sm"
                             />
 
