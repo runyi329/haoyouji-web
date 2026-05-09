@@ -119,7 +119,11 @@ export default function GujianPage() {
     { ledgerId },
     { enabled: !!ledgerId, staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: "always" }
   );
-  const financeOrders: any[] = (financeOrdersData as any)?.orders ?? [];
+  // 只保留谷底增筹订单（finance_type 为 保本分成/自负盈亏 或空），排除融资付息
+  const financeOrders: any[] = ((financeOrdersData as any)?.orders ?? []).filter((o: any) => {
+    const ft = o.finance_type || o.financeType || '';
+    return ft === '' || ft === '保本分成' || ft === '自负盈亏';
+  });
 
   // 谷底实时价格（用于担保物、当前价值等计算）
   const { data: financeAssetSummary } = trpc.ledger.financeGetAssetSummary.useQuery(
