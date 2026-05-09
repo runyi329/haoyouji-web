@@ -1626,7 +1626,7 @@ export default function BeDataPage() {
     : activeSymbol; // BTCUSDT / ETHUSDT / SOLUSDT
   const { data: metaData } = trpc.cryptoData.getMeta.useQuery(
     { symbol: metaSymbolKey },
-    { staleTime: 5 * 60 * 1000, refetchInterval: 5 * 60 * 1000 } // 5分钟自动刷新，随数据库更新同步最新日期
+    { staleTime: 60 * 60 * 1000, refetchInterval: 60 * 60 * 1000 } // 1小时自动刷新
   );
 
   // 小时 K 线数据（仅数字币且切换到小时Tab时加载）
@@ -1736,7 +1736,7 @@ export default function BeDataPage() {
   const [fundingPage, setFundingPage] = useState(1);
   const { data: fundingData, isLoading: fundingLoading } = trpc.cryptoData.getFundingRates.useQuery(
     { symbol: activeSymbol, page: fundingPage, pageSize: 100 },
-    { enabled: isCryptoMode, staleTime: 5 * 60 * 1000, refetchInterval: 5 * 60 * 1000 }
+    { enabled: isCryptoMode, staleTime: 60 * 60 * 1000, refetchInterval: 60 * 60 * 1000 }
   );
   // 资金费率折线图数据（数据分析Tab使用）
   const { data: fundingChartData } = trpc.cryptoData.getFundingRateChart.useQuery(
@@ -1762,7 +1762,7 @@ export default function BeDataPage() {
   // 币种基本信息（CoinGecko）
   const { data: coinInfoData } = trpc.cryptoData.getCoinInfo.useQuery(
     { symbol: activeSymbol },
-    { enabled: isCryptoMode, staleTime: 5 * 60 * 1000, refetchInterval: 5 * 60 * 1000 }
+    { enabled: isCryptoMode, staleTime: 60 * 60 * 1000, refetchInterval: 60 * 60 * 1000 }
   );
 
   const handleSymbolChange = (sym: string) => {
