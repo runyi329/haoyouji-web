@@ -684,21 +684,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                     )}
                     <div className="space-y-2">
                       {acct.map((field, fidx) => {
-                        const isDeletable = field.label !== '__NOTE__';
-                        if (field.label === '__NOTE__') {
-                          // 备注字段单独渲染（标签固定为"备注"）
-                          return (
-                            <div key={fidx} className="flex items-center gap-2">
-                              <span className="text-xs text-gray-400 w-14 flex-shrink-0">备注</span>
-                              <Input
-                                value={field.value}
-                                onChange={e => updateOuyiField(acctIdx, fidx, "value", e.target.value)}
-                                placeholder="此账户的备注（可选）"
-                                className="flex-1 text-sm"
-                              />
-                            </div>
-                          );
-                        }
+                        const isDeletable = true;
                         return (
                           <div key={fidx} className="flex items-center gap-1.5">
                             {/* 上移/下移按钮 */}
