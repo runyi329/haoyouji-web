@@ -339,7 +339,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
   onClose: () => void;
   editItem?: MemoItem | null;
   ledgerId: number;
-  onSuccess: () => void;
+  onSuccess: (description: string) => void;
   onDelete?: (id: number) => void;
 }) {
   const [step, setStep] = useState<"cat" | "sub" | "fields">("cat");
@@ -549,12 +549,59 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
     setStep("fields");
   };
 
+  // 生成操作描述（用于历史记录）
+  const buildDescription = (isEdit: boolean, title: string, finalFields: MemoField[]): string => {
+    if (!isEdit) return `新增了「${title}」`;
+    // 对比旧字段和新字段
+    const rawFields = editItem?.fields;
+    const oldFields: MemoField[] = rawFields && typeof rawFields === 'string' ? JSON.parse(rawFields) : Array.isArray(rawFields) ? rawFields as MemoField[] : [];
+    const filteredOld = oldFields.filter(f => f.label !== '__ACCOUNT_SEPARATOR__');
+    const oldMap: Record<string, string> = {};
+    filteredOld.forEach(f => { oldMap[f.label] = f.value || ''; });
+    const newFields = finalFields.filter(f => f.label !== '__ACCOUNT_SEPARATOR__');
+    const changes: string[] = [];
+    // 标题变化
+    if (editItem?.title !== title) changes.push(`标题「${editItem?.title}」→「${title}」`);
+    // 字段变化
+    for (const f of newFields) {
+      if (!(f.label in oldMap)) {
+        changes.push(`新增字段「${f.label}」`);
+      } else if (oldMap[f.label] !== f.value) {
+        const isPassword = f.label.includes('密码') || f.sensitive;
+        const newVal = isPassword ? '***' : (f.value?.slice(0, 20) || '（空）');
+        const oldVal = isPassword ? '***' : (oldMap[f.label]?.slice(0, 20) || '（空）');
+        changes.push(`「${f.label}」${oldVal}→${newVal}`);
+      }
+    }
+    // 删除的字段
+    Object.keys(oldMap).forEach(label => {
+      if (!newFields.find(f => f.label === label)) {
+        changes.push(`删除了字段「${label}」`);
+      }
+    });
+    if (changes.length === 0) return `保存了「${title}」（无变化）`;
+    return `修改了「${title}」：${changes.slice(0, 4).join('、')}${changes.length > 4 ? `…等${changes.length}处` : ''}`;
+  };
+
   const createMutation = trpc.ledger.createMemoItem.useMutation({
-    onSuccess: () => { toast.success("已保存"); utils.ledger.getMemoItems.invalidate({ ledgerId }); onSuccess(); onClose(); },
+    onSuccess: (_data, vars) => {
+      toast.success("已保存");
+      utils.ledger.getMemoItems.invalidate({ ledgerId });
+      const desc = `新增了「${vars.title}」`;
+      onSuccess(desc);
+      onClose();
+    },
     onError: e => toast.error(e.message),
   });
   const updateMutation = trpc.ledger.updateMemoItem.useMutation({
-    onSuccess: () => { toast.success("已更新"); utils.ledger.getMemoItems.invalidate({ ledgerId }); onSuccess(); onClose(); },
+    onSuccess: (_data, vars) => {
+      toast.success("已更新");
+      utils.ledger.getMemoItems.invalidate({ ledgerId });
+      const finalFields: MemoField[] = Array.isArray(vars.fields) ? vars.fields as MemoField[] : [];
+      const desc = buildDescription(true, vars.title || editItem?.title || '', finalFields);
+      onSuccess(desc);
+      onClose();
+    },
     onError: e => toast.error(e.message),
   });
 
@@ -1294,9 +1341,9 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
           onClose={() => { setShowForm(false); setEditItem(null); }}
           editItem={editItem}
           ledgerId={ledgerId}
-          onSuccess={() => {
-            // 每次保存后自动写入历史快照
-            saveHistoryMutation.mutate({ ledgerId });
+          onSuccess={(description: string) => {
+            // 每次保存后自动写入历史快照（带操作描述）
+            saveHistoryMutation.mutate({ ledgerId, description });
           }}
           onDelete={id => deleteMutation.mutate({ id, ledgerId })}
         />
