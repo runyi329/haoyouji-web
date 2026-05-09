@@ -10,6 +10,12 @@ import { ChevronLeft, TrendingUp, TrendingDown, Loader2, RefreshCw, ChevronDown 
 import { toast } from "sonner";
 
 // ─── 精选股票池配置 ────────────────────────────────────────────────
+const CRYPTO_ICONS: Record<string, string> = {
+  BTC: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/btc-3d-icon.webp",
+  ETH: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/eth-3d-icon.webp",
+  SOL: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/sol-3d-icon.webp",
+};
+
 const US_STOCKS = [
   { symbol: "NVDA",  name: "NVIDIA",          nameCn: "英伟达",       logo: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/nvda-3d-icon.webp" },
   { symbol: "AAPL",  name: "Apple",           nameCn: "苹果",         logo: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/aapl-3d-icon.webp" },
@@ -859,7 +865,7 @@ export default function GujianPage() {
                         className="w-full px-4 py-3 flex items-center gap-3 active:bg-gray-50 text-left"
                       >
                         <img
-                          src={US_STOCKS.find(s => s.symbol === order.coin)?.logo || ""}
+                          src={US_STOCKS.find(s => s.symbol === order.coin)?.logo || CRYPTO_ICONS[order.coin] || ""}
                           alt={order.coin}
                           className="w-8 h-8 rounded-full object-contain border border-gray-100 flex-shrink-0"
                           onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${order.coin}&background=1A56DB&color=fff&size=32`; }}
