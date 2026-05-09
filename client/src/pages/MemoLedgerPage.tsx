@@ -245,7 +245,26 @@ function MemoCard({ item, onEdit, onDelete, showAllPasswords, editMode, onMoveUp
               {ouyiAccounts.map((acct, acctIdx) => (
                 <div key={acctIdx}>
                   {acctIdx > 0 && <div className="border-t border-gray-100 my-2" />}
-                  {ouyiAccounts.length > 1 && <div className="text-sm text-gray-400 mb-1.5">第 {acctIdx + 1} 条</div>}
+                  {ouyiAccounts.length > 1 && (
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm text-gray-400">第 {acctIdx + 1} 条</span>
+                      <button
+                        onClick={() => {
+                          const lines = acct
+                            .filter(f => f.label !== '__NOTE__' && f.label !== '__ACCOUNT_SEPARATOR__' && f.value)
+                            .map(f => `${f.label}: ${f.value}`);
+                          const note = acct.find(f => f.label === '__NOTE__' && f.value);
+                          if (note) lines.push(`备注: ${note.value}`);
+                          copyText(lines.join('\n'), `第 ${acctIdx + 1} 条`);
+                        }}
+                        className="p-1 rounded hover:bg-gray-100 text-gray-400 flex items-center gap-1"
+                        title="复制此条全部内容"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span className="text-xs">复制</span>
+                      </button>
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     {acct.filter(f => f.value && f.label !== '__NOTE__').map((field, fidx) => {
                       const globalIdx = item.fields.indexOf(field);
