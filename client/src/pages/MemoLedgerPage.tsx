@@ -1131,7 +1131,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
   const promptCatColor = PROMPT_CATEGORIES.find(c => c.key === activePromptCat)?.color || "#1E88E5";
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
+    <div className="h-[100dvh] flex flex-col bg-gray-50 overflow-hidden">
       {/* 顶部导航 */}
       <div className="text-white flex-shrink-0 z-10" style={{ backgroundColor: promptMode ? promptCatColor : "#D32F2F", transition: "background-color 0.3s" }}>
         {/* 标题栏 */}
