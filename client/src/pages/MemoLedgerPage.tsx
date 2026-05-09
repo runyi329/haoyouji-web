@@ -33,6 +33,8 @@ import {
   GripVertical,
   ArrowUp,
   ArrowDown,
+  History,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -960,6 +962,7 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
   // 提示词模式
   const [showAllPasswords, setShowAllPasswords] = useState(false);
   const [editMode, setEditMode] = useState(false); // 全局编辑模式
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false); // 历史记录弹窗
   const [promptMode, setPromptMode] = useState(false);
   const [activePromptCat, setActivePromptCat] = useState("image");
   const [selectedPrompts, setSelectedPrompts] = useState<Set<number>>(new Set());
@@ -1002,6 +1005,21 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
 
   const reorderMutation = trpc.ledger.reorderMemoItems.useMutation({
     onError: e => toast.error("排序保存失败: " + e.message),
+  });
+
+  // 历史记录
+  const { data: historyList = [], refetch: refetchHistory } = trpc.ledger.getMemoHistoryList.useQuery(
+    { ledgerId },
+    { enabled: showHistoryDialog, staleTime: 0 }
+  );
+  const saveHistoryMutation = trpc.ledger.saveMemoHistory.useMutation();
+  const restoreHistoryMutation = trpc.ledger.restoreMemoFromHistory.useMutation({
+    onSuccess: () => {
+      toast.success("已恢复到所选历史记录");
+      setShowHistoryDialog(false);
+      utils.ledger.getMemoItems.invalidate({ ledgerId });
+    },
+    onError: e => toast.error("恢复失败: " + e.message),
   });
 
   // 当 items 变化时，同步到本地排序状态（搜索或分类切换时重置）
@@ -1085,6 +1103,15 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* 历史记录按钮 */}
+            <button
+              onClick={() => { setShowHistoryDialog(true); }}
+              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+              title="操作历史"
+            >
+              <History className="w-5 h-5 text-white" />
+            </button>
             {/* 全局编辑模式按钮 */}
             <button
               onClick={() => setEditMode(v => !v)}
@@ -1267,7 +1294,10 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
           onClose={() => { setShowForm(false); setEditItem(null); }}
           editItem={editItem}
           ledgerId={ledgerId}
-          onSuccess={() => {}}
+          onSuccess={() => {
+            // 每次保存后自动写入历史快照
+            saveHistoryMutation.mutate({ ledgerId });
+          }}
           onDelete={id => deleteMutation.mutate({ id, ledgerId })}
         />
       )}
@@ -1301,6 +1331,52 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
                 {createPromptsMutation.isPending ? "保存中..." : "保存"}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 历史记录弹窗 */}
+      <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
+        <DialogContent className="max-w-sm mx-auto rounded-2xl p-0 overflow-hidden">
+          <DialogTitle className="sr-only">操作历史</DialogTitle>
+          <div className="bg-[#D32F2F] text-white px-4 py-3 flex items-center gap-2">
+            <History className="w-5 h-5" />
+            <span className="font-semibold text-base">操作历史（最近 10 次保存）</span>
+          </div>
+          <div className="px-4 py-3 space-y-2 max-h-[60vh] overflow-y-auto">
+            {(historyList as any[]).length === 0 ? (
+              <p className="text-center text-gray-400 py-6 text-sm">暂无保存历史</p>
+            ) : (
+              (historyList as any[]).map((h: any, idx: number) => (
+                <div key={h.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800">
+                      {idx === 0 ? "🕒 最新" : `第 ${idx + 1} 次`}
+                      {h.description ? ` — ${h.description}` : ""}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {new Date(h.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      &nbsp;· {h.itemCount} 条账目
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (idx === 0) { toast.info("已是最新状态"); return; }
+                      restoreHistoryMutation.mutate({ ledgerId, historyId: h.id });
+                    }}
+                    disabled={idx === 0 || restoreHistoryMutation.isPending}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40"
+                    style={{ backgroundColor: idx === 0 ? '#e5e7eb' : '#FEE2E2', color: idx === 0 ? '#9ca3af' : '#D32F2F' }}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    {idx === 0 ? "当前" : "恢复"}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="px-4 pb-4">
+            <Button variant="outline" className="w-full" onClick={() => setShowHistoryDialog(false)}>关闭</Button>
           </div>
         </DialogContent>
       </Dialog>
