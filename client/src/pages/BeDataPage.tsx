@@ -1736,7 +1736,7 @@ export default function BeDataPage() {
   const [fundingPage, setFundingPage] = useState(1);
   const { data: fundingData, isLoading: fundingLoading } = trpc.cryptoData.getFundingRates.useQuery(
     { symbol: activeSymbol, page: fundingPage, pageSize: 100 },
-    { enabled: isCryptoMode, staleTime: 5 * 60 * 1000 }
+    { enabled: isCryptoMode, staleTime: 5 * 60 * 1000, refetchInterval: 5 * 60 * 1000 }
   );
   // 资金费率折线图数据（数据分析Tab使用）
   const { data: fundingChartData } = trpc.cryptoData.getFundingRateChart.useQuery(
@@ -1762,7 +1762,7 @@ export default function BeDataPage() {
   // 币种基本信息（CoinGecko）
   const { data: coinInfoData } = trpc.cryptoData.getCoinInfo.useQuery(
     { symbol: activeSymbol },
-    { enabled: isCryptoMode, staleTime: 5 * 60 * 1000 }
+    { enabled: isCryptoMode, staleTime: 5 * 60 * 1000, refetchInterval: 5 * 60 * 1000 }
   );
 
   const handleSymbolChange = (sym: string) => {
