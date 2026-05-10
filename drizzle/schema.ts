@@ -1987,3 +1987,71 @@ export const afFundingRateLogs = mysqlTable("af_funding_rate_logs", {
   index("af_fr_logs_created_idx").on(table.createdAt),
 ]);
 export type AfFundingRateLog = typeof afFundingRateLogs.$inferSelect;
+
+
+// ========== 宠物氢氧健康舱平台 ==========
+
+// 用户宠物平台角色表（管理员分配）
+export const petUserRoles = mysqlTable("pet_user_roles", {
+  id: int().autoincrement().notNull(),
+  userId: int('user_id').notNull(),
+  role: mysqlEnum('role', ['manufacturer', 'investor', 'promoter', 'petshop']).notNull(),
+  // 角色说明：manufacturer=厂家, investor=投资人, promoter=地推, petshop=宠物店
+  remark: varchar('remark', { length: 200 }),
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex("pet_user_roles_user_uniq").on(table.userId),
+  index("pet_user_roles_role_idx").on(table.role),
+]);
+export type PetUserRole = typeof petUserRoles.$inferSelect;
+
+// 宠物氢氧健康舱机器表
+export const petMachines = mysqlTable("pet_machines", {
+  id: int().autoincrement().notNull(),
+  machineNo: varchar('machine_no', { length: 50 }).notNull(),  // 机器编号
+  name: varchar('name', { length: 100 }),                       // 机器名称/备注
+  petshopUserId: int('petshop_user_id'),                        // 所在宠物店用户ID
+  petshopName: varchar('petshop_name', { length: 100 }),        // 宠物店名称（冗余）
+  investorUserId: int('investor_user_id'),                      // 关联投资人用户ID
+  promoterUserId: int('promoter_user_id'),                      // 关联地推用户ID
+  manufacturerUserId: int('manufacturer_user_id'),              // 关联厂家用户ID
+  // 分润比例（百分比，如 40 表示 40%）
+  petshopRatio: decimal('petshop_ratio', { precision: 5, scale: 2 }).default('40.00'),
+  investorRatio: decimal('investor_ratio', { precision: 5, scale: 2 }).default('35.00'),
+  promoterRatio: decimal('promoter_ratio', { precision: 5, scale: 2 }).default('10.00'),
+  manufacturerRatio: decimal('manufacturer_ratio', { precision: 5, scale: 2 }).default('15.00'),
+  status: mysqlEnum('status', ['active', 'inactive', 'maintenance']).default('active').notNull(),
+  installDate: varchar('install_date', { length: 20 }),         // 安装日期
+  address: varchar('address', { length: 200 }),                 // 地址
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex("pet_machines_no_uniq").on(table.machineNo),
+  index("pet_machines_petshop_idx").on(table.petshopUserId),
+  index("pet_machines_investor_idx").on(table.investorUserId),
+  index("pet_machines_promoter_idx").on(table.promoterUserId),
+]);
+export type PetMachine = typeof petMachines.$inferSelect;
+
+// 宠物机器每日营业记录表
+export const petDailyRecords = mysqlTable("pet_daily_records", {
+  id: int().autoincrement().notNull(),
+  machineId: int('machine_id').notNull(),
+  recordDate: varchar('record_date', { length: 10 }).notNull(),  // 日期 YYYY-MM-DD
+  revenue: decimal('revenue', { precision: 12, scale: 2 }).default('0.00').notNull(),  // 当日营业额
+  // 各方分润（根据比例自动计算，也可手动覆盖）
+  petshopProfit: decimal('petshop_profit', { precision: 12, scale: 2 }).default('0.00'),
+  investorProfit: decimal('investor_profit', { precision: 12, scale: 2 }).default('0.00'),
+  promoterProfit: decimal('promoter_profit', { precision: 12, scale: 2 }).default('0.00'),
+  manufacturerProfit: decimal('manufacturer_profit', { precision: 12, scale: 2 }).default('0.00'),
+  remark: varchar('remark', { length: 200 }),
+  createdBy: int('created_by'),  // 录入人用户ID
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex("pet_daily_records_machine_date_uniq").on(table.machineId, table.recordDate),
+  index("pet_daily_records_machine_idx").on(table.machineId),
+  index("pet_daily_records_date_idx").on(table.recordDate),
+]);
+export type PetDailyRecord = typeof petDailyRecords.$inferSelect;
