@@ -1841,6 +1841,29 @@ export default function BeDataPage() {
               </button>
             );
           })}
+          {/* 第四个按钮：其他币种 */}
+          <button
+            onClick={() => setLocation(`/ledger/${ledgerId}/other-coins`)}
+            style={{
+              width: 42, height: 42, borderRadius: '50%', padding: 0,
+              border: 'none',
+              background: 'rgba(255,255,255,0.92)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+              cursor: 'pointer', transition: 'all 0.2s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              pointerEvents: 'auto',
+              opacity: 0.6,
+              fontSize: 18,
+              color: '#1565C0',
+              fontWeight: 700,
+              letterSpacing: 1,
+            }}
+            title="其他币种"
+          >
+            ···
+          </button>
         </div>
       )}
 
