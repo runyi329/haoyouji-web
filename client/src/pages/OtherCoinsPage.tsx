@@ -268,9 +268,11 @@ export default function OtherCoinsPage() {
       </div>
 
       {/* ── 白色列表区域（可滚动） ── */}
-      <div style={{ flex: 1, background: "#fff", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+      <div style={{ flex: 1, background: "#fff", overflowY: "auto", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+        {/* 内层容器：minWidth确保表格内容不被压缩，背景和细线延伸到最右 */}
+        <div style={{ minWidth: 466 }}>
         {/* 表头 - 8列：币名 | 涨幅 | 上市时间 | 上市价 | 历史最高 | 现价 | 跌幅% | 缩水倍 */}
-        <div style={{
+          <div style={{
           display: "grid",
           gridTemplateColumns: "52px 44px 56px 68px 70px 68px 60px 48px",
           gap: 0,
@@ -280,6 +282,7 @@ export default function OtherCoinsPage() {
           position: "sticky",
           top: 0,
           zIndex: 5,
+          minWidth: 466,
         }}>
           {([
             { key: "list_date" as SortKey, label: "币名", idx: 0, sortable: false },
@@ -342,6 +345,7 @@ export default function OtherCoinsPage() {
                     borderBottom: "1px solid #f0f2f5",
                     background: "#fff",
                     alignItems: "center",
+                    minWidth: 466,
                   }}
                 >
                   {/* 币名 + 类型标签 */}
@@ -498,6 +502,7 @@ export default function OtherCoinsPage() {
 
         {/* 底部留白 */}
         <div style={{ height: 80 }} />
+        </div>{/* end minWidth container */}
       </div>
 
       {/* ── 底部返回按钮 ── */}
