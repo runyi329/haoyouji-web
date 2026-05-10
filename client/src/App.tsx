@@ -679,10 +679,11 @@ function Router() {
         {/* 个股列表 & 详情 */}
         <Route path="/ledger/:id/stock-lifecycle" component={StockLifecycle} />
         <Route path="/stock/:tsCode" component={StockDetail} />
+        {/* 宠物氢氧健康舱平台 */}
+        <Route path="/pet-platform" component={PetPlatform} />
         {/* 404 */}
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
-        <Route path="/pet-platform" component={PetPlatform} />
       </Switch>
     </Suspense>
   );
