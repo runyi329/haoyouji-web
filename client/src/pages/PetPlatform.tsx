@@ -478,107 +478,99 @@ export default function PetPlatform() {
 
   return (
     <div className="min-h-screen pb-10" style={{ background: COLORS.bg }}>
-      {/* ===== 顶部横幅区域 ===== */}
-      <div
-        style={{
-          background: `linear-gradient(135deg, #8B3A1E 0%, ${COLORS.primary} 50%, #C97A55 100%)`,
-        }}
-      >
-        {/* 顶部导航栏 */}
-        <div className="flex items-center justify-between px-4 pt-12 pb-3">
+      {/* ===== 顶部插画横幅（占屏幕约1/3） ===== */}
+      <div className="relative" style={{ height: "33vw", minHeight: 120, maxHeight: 200 }}>
+        {/* 插画铺满 */}
+        <img
+          src={BANNER_IMG}
+          alt="宠物氢氧健康舱"
+          className="absolute inset-0 w-full h-full object-cover object-center"
+        />
+        {/* 顶部导航栏悬浮在插画上 */}
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 pt-10 pb-2">
           <button
             onClick={() => navigate("/")}
             className="w-8 h-8 flex items-center justify-center rounded-full active:opacity-70"
-            style={{ background: "rgba(255,255,255,0.2)" }}
+            style={{ background: "rgba(0,0,0,0.25)" }}
           >
             <ChevronLeft className="w-5 h-5 text-white" />
           </button>
           <div className="flex items-center space-x-2">
-            <PawPrint className="w-4 h-4 text-white opacity-90" />
-            <span className="text-white font-bold text-base">宠物氢氧健康舱</span>
+            <PawPrint className="w-4 h-4 text-white drop-shadow" />
+            <span className="text-white font-bold text-base drop-shadow">宠物氢氧健康舱</span>
           </div>
           <button
             onClick={() => window.location.reload()}
             className="text-white text-xs font-medium px-3 py-1 rounded-full active:opacity-70"
-            style={{ background: "rgba(255,255,255,0.2)" }}
+            style={{ background: "rgba(0,0,0,0.25)" }}
           >
             刷新
           </button>
         </div>
+      </div>
 
-        {/* 横幅主体：左侧数据 + 右侧插画 */}
-        <div className="flex items-stretch">
-          {/* 左侧：角色标签 + 数据 */}
-          <div className="flex-1 px-4 pb-5 flex flex-col justify-between min-w-0">
-            {/* 角色标签 */}
-            {!roleLoading && (
-              <div className="flex items-center space-x-2 mb-3">
-                <span
-                  className="text-xs font-bold px-3 py-1 rounded-full"
-                  style={{ background: badge.bg, color: badge.text }}
-                >
-                  {ROLE_LABELS[userRole] ?? "访客"}
-                </span>
-                {roleData?.remark && (
-                  <span className="text-white/70 text-xs truncate">{roleData.remark}</span>
-                )}
-              </div>
+      {/* ===== 白色内容区域 ===== */}
+      <div style={{ background: COLORS.bg }}>
+        {/* 角色标签 */}
+        {!roleLoading && (
+          <div className="flex items-center space-x-2 px-4 pt-4 pb-0">
+            <span
+              className="text-xs font-bold px-3 py-1 rounded-full"
+              style={{ background: badge.bg, color: badge.text }}
+            >
+              {ROLE_LABELS[userRole] ?? "访客"}
+            </span>
+            {roleData?.remark && (
+              <span className="text-xs" style={{ color: COLORS.muted }}>{roleData.remark}</span>
             )}
-            {/* 今日数据 */}
-            <div className="space-y-2">
-              <div
-                className="rounded-2xl px-3 py-2.5"
-                style={{ background: "rgba(255,255,255,0.18)" }}
-              >
-                <p className="text-white/70 text-[10px] font-medium mb-0.5">今日总营业额</p>
-                <p className="text-white text-lg font-bold">¥{totalTodayRevenue.toFixed(2)}</p>
-              </div>
-              <div
-                className="rounded-2xl px-3 py-2.5"
-                style={{ background: "rgba(255,255,255,0.25)" }}
-              >
-                <p className="text-white/80 text-[10px] font-medium mb-0.5">
-                  今日{userRole === "admin" ? "总收入" : "我的分润"}
-                </p>
-                <p className="text-white text-lg font-bold">¥{totalTodayProfit.toFixed(2)}</p>
-              </div>
+          </div>
+        )}
+
+        {/* 汇总数据卡片 */}
+        <div className="px-4 pt-3 pb-2">
+          <div className="grid grid-cols-2 gap-2.5">
+            <div
+              className="rounded-2xl px-4 py-3.5"
+              style={{
+                background: `linear-gradient(135deg, ${COLORS.primary}, #8B3A1E)`,
+              }}
+            >
+              <p className="text-white/80 text-[10px] font-medium mb-1">今日总营业额</p>
+              <p className="text-white text-xl font-bold">¥{totalTodayRevenue.toFixed(2)}</p>
             </div>
-          </div>
-
-          {/* 右侧：插画 */}
-          <div className="flex-shrink-0 flex items-end" style={{ width: "45%" }}>
-            <img
-              src={BANNER_IMG}
-              alt="宠物氢氧健康舱"
-              className="w-full object-contain object-bottom"
-              style={{ maxHeight: 160 }}
-            />
-          </div>
-        </div>
-
-        {/* 本月数据：横向排列在底部白色区域上方 */}
-        <div className="grid grid-cols-2 gap-2 px-4 pb-4">
-          <div
-            className="rounded-xl px-3 py-2"
-            style={{ background: "rgba(255,255,255,0.12)" }}
-          >
-            <p className="text-white/60 text-[10px] mb-0.5">本月营业额</p>
-            <p className="text-white/90 text-sm font-semibold">¥{totalMonthRevenue.toFixed(2)}</p>
-          </div>
-          <div
-            className="rounded-xl px-3 py-2"
-            style={{ background: "rgba(255,255,255,0.12)" }}
-          >
-            <p className="text-white/60 text-[10px] mb-0.5">
-              本月{userRole === "admin" ? "总收入" : "我的分润"}
-            </p>
-            <p className="text-white/90 text-sm font-semibold">¥{totalMonthProfit.toFixed(2)}</p>
+            <div
+              className="rounded-2xl px-4 py-3.5"
+              style={{
+                background: `linear-gradient(135deg, #C97A55, ${COLORS.primary})`,
+              }}
+            >
+              <p className="text-white/80 text-[10px] font-medium mb-1">
+                今日{userRole === "admin" ? "总收入" : "我的分润"}
+              </p>
+              <p className="text-white text-xl font-bold">¥{totalTodayProfit.toFixed(2)}</p>
+            </div>
+            <div
+              className="rounded-2xl px-4 py-3"
+              style={{ background: COLORS.card, border: `1.5px solid ${COLORS.border}` }}
+            >
+              <p className="text-[10px] mb-0.5" style={{ color: COLORS.muted }}>本月营业额</p>
+              <p className="text-base font-semibold" style={{ color: COLORS.dark }}>¥{totalMonthRevenue.toFixed(2)}</p>
+            </div>
+            <div
+              className="rounded-2xl px-4 py-3"
+              style={{ background: COLORS.card, border: `1.5px solid ${COLORS.border}` }}
+            >
+              <p className="text-[10px] mb-0.5" style={{ color: COLORS.primary }}>
+                本月{userRole === "admin" ? "总收入" : "我的分润"}
+              </p>
+              <p className="text-base font-semibold" style={{ color: COLORS.primary }}>¥{totalMonthProfit.toFixed(2)}</p>
+            </div>
           </div>
         </div>
       </div>
 
       {/* ===== 机器列表区域 ===== */}
-      <div className="px-4 pt-5">
+      <div className="px-4 pt-3" style={{ background: COLORS.bg }}>
         {/* 列表标题 */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">
