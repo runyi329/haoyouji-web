@@ -9,6 +9,8 @@ interface CoinItem {
   ath: number | null;
   atl: number | null;
   ath_multiple: number | null;
+  current_price: number | null;
+  drawdown_from_ath: number | null;
   has_data: boolean;
   has_spot: boolean;
   has_futures: boolean;
@@ -41,7 +43,13 @@ function fmtMultiple(m: number | null): string {
   return `${m.toFixed(1)}×`;
 }
 
-type SortKey = "list_date" | "list_price" | "ath" | "atl" | "ath_multiple";
+// ─── 格式化跌幅 ───────────────────────────────────────────────────────────────
+function fmtDrawdown(d: number | null): string {
+  if (d === null || d === undefined) return "—";
+  return `${d.toFixed(0)}%`;
+}
+
+type SortKey = "list_date" | "list_price" | "ath" | "atl" | "ath_multiple" | "current_price" | "drawdown_from_ath";
 
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
 export default function OtherCoinsPage() {
@@ -53,10 +61,9 @@ export default function OtherCoinsPage() {
   const [loading, setLoading] = useState(true);
   const [searchText, setSearchText] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("list_date");
-  const [sortAsc, setSortAsc] = useState(false); // 默认降序（最新上市在前）
+  const [sortAsc, setSortAsc] = useState(false);
   const [page, setPage] = useState(1);
-  // 筛选
-  const [filterSpot, setFilterSpot] = useState<boolean | null>(null); // null=全部 true=有现货 false=无现货
+  const [filterSpot, setFilterSpot] = useState<boolean | null>(null);
   const [filterFutures, setFilterFutures] = useState<boolean | null>(null);
 
   // 加载JSON数据
@@ -80,7 +87,6 @@ export default function OtherCoinsPage() {
     });
 
     list = [...list].sort((a, b) => {
-      // 无数据的始终排最后
       if (!a.has_data && b.has_data) return 1;
       if (a.has_data && !b.has_data) return -1;
       if (!a.has_data && !b.has_data) return a.symbol.localeCompare(b.symbol);
@@ -102,7 +108,6 @@ export default function OtherCoinsPage() {
   const totalPages = Math.ceil(filteredData.length / PAGE_SIZE);
   const pageData = filteredData.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // 搜索/筛选变化时重置到第1页
   useEffect(() => { setPage(1); }, [searchText, filterSpot, filterFutures, sortKey, sortAsc]);
 
   const handleSort = (key: SortKey) => {
@@ -110,7 +115,7 @@ export default function OtherCoinsPage() {
       setSortAsc(v => !v);
     } else {
       setSortKey(key);
-      setSortAsc(key === "list_date" ? false : false);
+      setSortAsc(false);
     }
   };
 
@@ -119,11 +124,6 @@ export default function OtherCoinsPage() {
       {sortKey === k ? (sortAsc ? "▲" : "▼") : "▼"}
     </span>
   );
-
-  // 统计
-  const totalWithData = coins.filter(c => c.has_data).length;
-  const totalSpot = coins.filter(c => c.has_spot).length;
-  const totalFutures = coins.filter(c => c.has_futures).length;
 
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#F5F5F5", overflow: "hidden" }}>
@@ -134,7 +134,7 @@ export default function OtherCoinsPage() {
         flexShrink: 0,
         zIndex: 10,
       }}>
-        {/* 第一行：返回 + 标题 + 数量 */}
+        {/* 第一行：返回 + 标题 + 更新按钮 */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
           <button
             onClick={() => setLocation(`/ledger/${ledgerId}/be-data?filter=crypto`)}
@@ -163,7 +163,7 @@ export default function OtherCoinsPage() {
           </button>
         </div>
 
-        {/* 筛选按钮行（含数量统计） */}
+        {/* 筛选按钮行 */}
         <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
           {[
             {
@@ -237,16 +237,17 @@ export default function OtherCoinsPage() {
 
       {/* ── 白色列表区域（可滚动） ── */}
       <div style={{ flex: 1, background: "#fff", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
-        {/* 表头 - 6列：币名 | 涨幅 | 上市时间 | 上市价 | 历史最高 | 历史最低 */}
+        {/* 表头 - 7列：币名 | 涨幅 | 上市时间 | 上市价 | 历史最高 | 现价 | 距高点 */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "48px 44px 56px 68px 68px 68px",
+          gridTemplateColumns: "46px 40px 52px 60px 60px 60px 52px",
           gap: 0,
-          padding: "7px 10px",
+          padding: "7px 8px",
           background: "#fafafa",
           borderBottom: "1px solid #e5e7eb",
           position: "sticky",
           top: 0,
+          zIndex: 5,
         }}>
           {([
             { key: "list_date" as SortKey, label: "币名", idx: 0, sortable: false },
@@ -254,7 +255,8 @@ export default function OtherCoinsPage() {
             { key: "list_date" as SortKey, label: "上市时间", idx: 2, sortable: true },
             { key: "list_price" as SortKey, label: "上市价", idx: 3, sortable: true },
             { key: "ath" as SortKey, label: "历史最高", idx: 4, sortable: true },
-            { key: "atl" as SortKey, label: "历史最低", idx: 5, sortable: true },
+            { key: "current_price" as SortKey, label: "现价", idx: 5, sortable: true },
+            { key: "drawdown_from_ath" as SortKey, label: "距高点", idx: 6, sortable: true },
           ]).map(({ key, label, idx, sortable }) => (
             <div
               key={`${key}-${idx}`}
@@ -290,15 +292,23 @@ export default function OtherCoinsPage() {
               const isHighMultiple = m !== null && m >= 100;
               const isMidMultiple = m !== null && m >= 10;
               const hasData = coin.has_data;
+              const dd = coin.drawdown_from_ath;
+              // 跌幅颜色：跌>90%深红，跌>70%红，跌>50%橙，跌<30%绿
+              const ddColor = dd === null ? "#ccc"
+                : dd <= -90 ? "#B71C1C"
+                : dd <= -70 ? "#D32F2F"
+                : dd <= -50 ? "#E65100"
+                : dd <= -30 ? "#F57F17"
+                : "#388E3C";
 
               return (
                 <div
                   key={coin.symbol}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "48px 44px 56px 68px 68px 68px",
+                    gridTemplateColumns: "46px 40px 52px 60px 60px 60px 52px",
                     gap: 0,
-                    padding: "8px 10px",
+                    padding: "8px 8px",
                     borderBottom: "1px solid #f0f0f0",
                     background: idx % 2 === 0 ? "#fff" : "#fafafa",
                     alignItems: "center",
@@ -329,7 +339,7 @@ export default function OtherCoinsPage() {
                       <span style={{
                         fontSize: 9, fontWeight: 700, color: "#fff",
                         background: isHighMultiple ? "#D32F2F" : isMidMultiple ? "#E65100" : "#546E7A",
-                        borderRadius: 3, padding: "2px 4px",
+                        borderRadius: 3, padding: "2px 3px",
                         display: "inline-block",
                       }}>
                         {fmtMultiple(m)}
@@ -354,9 +364,14 @@ export default function OtherCoinsPage() {
                     {fmtPrice(coin.ath)}
                   </div>
 
-                  {/* 历史最低 */}
-                  <div style={{ textAlign: "right", fontSize: 10, color: hasData ? "#388E3C" : "#ccc", fontVariantNumeric: "tabular-nums", fontFamily: "monospace" }}>
-                    {fmtPrice(coin.atl)}
+                  {/* 现价 */}
+                  <div style={{ textAlign: "right", fontSize: 10, color: coin.current_price ? "#1565C0" : "#ccc", fontWeight: coin.current_price ? 600 : 400, fontVariantNumeric: "tabular-nums", fontFamily: "monospace" }}>
+                    {fmtPrice(coin.current_price)}
+                  </div>
+
+                  {/* 距高点跌幅 */}
+                  <div style={{ textAlign: "right", fontSize: 9, color: ddColor, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                    {dd !== null ? fmtDrawdown(dd) : "—"}
                   </div>
                 </div>
               );
@@ -382,7 +397,6 @@ export default function OtherCoinsPage() {
                 <PrevIcon style={{ width: 14, height: 14 }} />
               </button>
 
-              {/* 页码按钮 */}
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 let p: number;
                 if (totalPages <= 5) {
