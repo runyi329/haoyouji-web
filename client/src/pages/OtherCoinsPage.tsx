@@ -43,10 +43,40 @@ function fmtMultiple(m: number | null): string {
   return `${m.toFixed(1)}×`;
 }
 
-// ─── 格式化跌幅 ───────────────────────────────────────────────────────────────
+// ─── 格式化跌幅（两位小数%） ─────────────────────────────────────────────────
 function fmtDrawdown(d: number | null): string {
   if (d === null || d === undefined) return "—";
-  return `${d.toFixed(0)}%`;
+  return `${d.toFixed(2)}%`;
+}
+
+// ─── 计算缩水倍数（高点/现价） ────────────────────────────────────────────────
+function calcShrinkMultiple(ath: number | null, current: number | null): number | null {
+  if (!ath || !current || current <= 0) return null;
+  return ath / current;
+}
+
+// ─── 格式化缩水倍数 ───────────────────────────────────────────────────────────
+function fmtShrink(m: number | null): string {
+  if (m === null || m === undefined) return "";
+  if (m >= 10000) return `${(m / 1000).toFixed(0)}K×`;
+  if (m >= 1000) return `${(m / 1000).toFixed(1)}K×`;
+  if (m >= 100) return `${m.toFixed(0)}×`;
+  if (m >= 10) return `${m.toFixed(1)}×`;
+  return `${m.toFixed(1)}×`;
+}
+
+// ─── 缩水倍数热力绿色 ─────────────────────────────────────────────────────────
+// 倍数越大 → 越深绿（代表跌得越惨）
+function shrinkColor(m: number | null): string {
+  if (m === null) return "#ccc";
+  if (m >= 1000) return "#1B5E20"; // 极深绿
+  if (m >= 100)  return "#2E7D32";
+  if (m >= 50)   return "#388E3C";
+  if (m >= 20)   return "#43A047";
+  if (m >= 10)   return "#66BB6A";
+  if (m >= 5)    return "#81C784";
+  if (m >= 2)    return "#A5D6A7";
+  return "#C8E6C9"; // 浅绿（缩水不多）
 }
 
 type SortKey = "list_date" | "list_price" | "ath" | "atl" | "ath_multiple" | "current_price" | "drawdown_from_ath";
@@ -240,7 +270,7 @@ export default function OtherCoinsPage() {
         {/* 表头 - 7列：币名 | 涨幅 | 上市时间 | 上市价 | 历史最高 | 现价 | 距高点 */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "46px 40px 52px 60px 60px 60px 52px",
+          gridTemplateColumns: "46px 40px 52px 60px 60px 60px 68px",
           gap: 0,
           padding: "7px 8px",
           background: "#fafafa",
@@ -293,20 +323,15 @@ export default function OtherCoinsPage() {
               const isMidMultiple = m !== null && m >= 10;
               const hasData = coin.has_data;
               const dd = coin.drawdown_from_ath;
-              // 跌幅颜色：跌>90%深红，跌>70%红，跌>50%橙，跌<30%绿
-              const ddColor = dd === null ? "#ccc"
-                : dd <= -90 ? "#B71C1C"
-                : dd <= -70 ? "#D32F2F"
-                : dd <= -50 ? "#E65100"
-                : dd <= -30 ? "#F57F17"
-                : "#388E3C";
+              const shrink = calcShrinkMultiple(coin.ath, coin.current_price);
+              const shrinkBg = shrinkColor(shrink);
 
               return (
                 <div
                   key={coin.symbol}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "46px 40px 52px 60px 60px 60px 52px",
+                    gridTemplateColumns: "46px 40px 52px 60px 60px 60px 68px",
                     gap: 0,
                     padding: "8px 8px",
                     borderBottom: "1px solid #f0f0f0",
@@ -369,9 +394,25 @@ export default function OtherCoinsPage() {
                     {fmtPrice(coin.current_price)}
                   </div>
 
-                  {/* 距高点跌幅 */}
-                  <div style={{ textAlign: "right", fontSize: 9, color: ddColor, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-                    {dd !== null ? fmtDrawdown(dd) : "—"}
+                  {/* 距高点：跌幅% + 缩水倍数热力色 */}
+                  <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+                    {/* 跌幅百分比（灰色小字） */}
+                    <span style={{ fontSize: 8, color: "#999", fontVariantNumeric: "tabular-nums" }}>
+                      {dd !== null ? fmtDrawdown(dd) : "—"}
+                    </span>
+                    {/* 缩水倍数（热力绿色徽章） */}
+                    {shrink !== null && shrink > 1 ? (
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, color: "#fff",
+                        background: shrinkBg,
+                        borderRadius: 3, padding: "1px 3px",
+                        display: "inline-block",
+                      }}>
+                        {fmtShrink(shrink)}
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 9, color: "#ccc" }}>—</span>
+                    )}
                   </div>
                 </div>
               );
