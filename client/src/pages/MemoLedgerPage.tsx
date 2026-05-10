@@ -881,7 +881,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                               value={field.value}
                               onChange={e => updateOuyiField(acctIdx, fidx, "value", e.target.value)}
                               placeholder={`输入${field.label || '内容'}`}
-                              type={(field.sensitive || field.label.includes('密码')) ? "password" : "text"}
+                              type="text"
                               className="flex-1 text-sm"
                             />
 
@@ -937,7 +937,7 @@ function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete
                       value={field.value}
                       onChange={e => updateField(idx, "value", e.target.value)}
                       placeholder="内容"
-                      type={field.sensitive ? "password" : "text"}
+                      type="text"
                       className="flex-1 text-sm"
                     />
 
