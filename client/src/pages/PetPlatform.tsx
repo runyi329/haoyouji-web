@@ -499,7 +499,7 @@ export default function PetPlatform() {
             </button>
             {/* HaGeeMe 商标图片替换标题文字 */}
             <img
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/hageme_logo_v3-P7BfuiceXvsGitH4Y6YbSQ.webp"
+              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/pet-platform/hageme-logo-v3.webp"
               alt="HaGeeMe"
               className="h-9 w-auto object-contain"
               style={{ filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.35))' }}
