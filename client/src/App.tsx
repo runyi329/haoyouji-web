@@ -64,6 +64,7 @@ if (import.meta.hot) {
 
 // 登录页直接加载
 import Login from "./pages/Login";
+import PetPlatform from "@/pages/PetPlatform";
 
 // 首页Dashboard改为懒加载，避免在其他页面执行不必要的查询
 // const ContactsManagement = lazy(() => import("./pages/ContactsManagement")); - 已废弃
@@ -681,6 +682,7 @@ function Router() {
         {/* 404 */}
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
+        <Route path="/pet-platform" component={PetPlatform} />
       </Switch>
     </Suspense>
   );
