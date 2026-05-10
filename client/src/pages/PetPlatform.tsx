@@ -375,9 +375,9 @@ export default function PetPlatform() {
           </div>
           <button
             onClick={() => window.location.reload()}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 active:bg-white/30"
+            className="text-white text-sm font-medium bg-white/20 active:bg-white/30 px-3 py-1 rounded-full"
           >
-            <RefreshCw className="w-4 h-4 text-white" />
+            刷新
           </button>
         </div>
 
