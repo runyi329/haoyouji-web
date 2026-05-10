@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { Loader2, ChevronLeft, PawPrint, TrendingUp, Calendar, MapPin, Settings, Plus, RefreshCw, ChevronRight } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Loader2, ChevronLeft, PawPrint, Calendar, MapPin, Settings, RefreshCw, ChevronRight } from "lucide-react";
+import { centerToast } from "@/components/ui/center-toast";
 
 // 角色中文名映射
 const ROLE_LABELS: Record<string, string> = {
@@ -42,15 +42,13 @@ function RecordModal({
   const today = new Date().toISOString().slice(0, 10);
   const [date, setDate] = useState(today);
   const [revenue, setRevenue] = useState("");
-  const { toast } = useToast();
-
   const upsert = trpc.pet.upsertDailyRecord.useMutation({
     onSuccess: () => {
-      toast({ title: "录入成功" });
+      centerToast.success("录入成功");
       onSuccess();
       onClose();
     },
-    onError: (e) => toast({ title: "录入失败", description: e.message, variant: "destructive" }),
+    onError: (e) => centerToast.error(`录入失败：${e.message}`),
   });
 
   return (
