@@ -374,7 +374,7 @@ export default function PetPlatform() {
             <span className="text-white font-bold text-base">宠物氢氧健康舱</span>
           </div>
           <button
-            onClick={() => refetch()}
+            onClick={() => window.location.reload()}
             className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 active:bg-white/30"
           >
             <RefreshCw className="w-4 h-4 text-white" />
