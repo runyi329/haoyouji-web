@@ -94,6 +94,7 @@ export default function OtherCoinsPage() {
   const [page, setPage] = useState(1);
   const [filterSpot, setFilterSpot] = useState<boolean | null>(null);
   const [filterFutures, setFilterFutures] = useState<boolean | null>(null);
+  const [filterExchange, setFilterExchange] = useState<string | null>(null); // null=全部, '币安', 'OKX'
 
   // 加载JSON数据
   useEffect(() => {
@@ -112,6 +113,7 @@ export default function OtherCoinsPage() {
       if (searchText && !c.symbol.toLowerCase().includes(searchText.toLowerCase())) return false;
       if (filterSpot !== null && c.has_spot !== filterSpot) return false;
       if (filterFutures !== null && c.has_futures !== filterFutures) return false;
+      if (filterExchange !== null && !(c.exchanges || []).includes(filterExchange)) return false;
       return true;
     });
 
@@ -140,7 +142,7 @@ export default function OtherCoinsPage() {
   const totalPages = Math.ceil(filteredData.length / PAGE_SIZE);
   const pageData = filteredData.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  useEffect(() => { setPage(1); }, [searchText, filterSpot, filterFutures, sortKey, sortAsc]);
+  useEffect(() => { setPage(1); }, [searchText, filterSpot, filterFutures, filterExchange, sortKey, sortAsc]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -195,7 +197,36 @@ export default function OtherCoinsPage() {
           </button>
         </div>
 
-        {/* 筛选按钮行 */}
+        {/* 平台筛选行 */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+          {([
+            { label: "币安", exchange: "币安" as string },
+            { label: "欧易", exchange: "OKX" as string },
+          ]).map(({ label, exchange }) => {
+            const active = filterExchange === exchange;
+            const cnt = loading ? "..." : `${coins.filter(c => (c.exchanges || []).includes(exchange)).length}`;
+            return (
+              <button
+                key={label}
+                onClick={() => setFilterExchange(active ? null : exchange)}
+                style={{
+                  padding: "4px 12px", borderRadius: 12, fontSize: 10, fontWeight: 600,
+                  border: active ? "1px solid #FFD54F" : "1px solid rgba(255,255,255,0.3)",
+                  background: active ? "rgba(255,213,79,0.25)" : "rgba(255,255,255,0.08)",
+                  color: active ? "#FFD54F" : "rgba(255,255,255,0.65)",
+                  cursor: "pointer",
+                }}
+              >
+                {label}({cnt})
+              </button>
+            );
+          })}
+          {filterExchange !== null && (
+            <span style={{ fontSize: 9, color: "rgba(255,255,255,0.45)", alignSelf: "center" }}>再点一次取消</span>
+          )}
+        </div>
+
+        {/* 现货/合约筛选行 */}
         <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
           {[
             {
