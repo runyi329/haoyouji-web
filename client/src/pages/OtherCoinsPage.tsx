@@ -126,14 +126,12 @@ export default function OtherCoinsPage() {
   const totalFutures = coins.filter(c => c.has_futures).length;
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#F5F5F5" }}>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#F5F5F5", overflow: "hidden" }}>
       {/* ── 顶部彩色区域 ── */}
       <div style={{
         background: "linear-gradient(160deg, #1A237E 0%, #283593 40%, #1565C0 70%, #0D47A1 100%)",
         padding: "10px 14px 14px",
         flexShrink: 0,
-        position: "sticky",
-        top: 0,
         zIndex: 10,
       }}>
         {/* 第一行：返回 + 标题 + 数量 */}
@@ -157,14 +155,12 @@ export default function OtherCoinsPage() {
               OKX & 币安 · 全量 USDT 交易对
             </p>
           </div>
-          <div style={{
-            padding: "3px 8px", borderRadius: 12,
-            background: "rgba(255,255,255,0.15)",
-            border: "1px solid rgba(255,255,255,0.25)",
-            fontSize: 10, color: "rgba(255,255,255,0.85)", fontWeight: 600,
-          }}>
-            {loading ? "..." : `${filteredData.length} 个`}
-          </div>
+          <button
+            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer", flexShrink: 0 }}
+            onClick={() => window.location.reload()}
+          >
+            更新
+          </button>
         </div>
 
         {/* 筛选按钮行（含数量统计） */}
@@ -239,8 +235,8 @@ export default function OtherCoinsPage() {
         </div>
       </div>
 
-      {/* ── 白色列表区域 ── */}
-      <div style={{ flex: 1, background: "#fff" }}>
+      {/* ── 白色列表区域（可滚动） ── */}
+      <div style={{ flex: 1, background: "#fff", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
         {/* 表头 - 6列：币名 | 涨幅 | 上市时间 | 上市价 | 历史最高 | 历史最低 */}
         <div style={{
           display: "grid",
@@ -250,7 +246,7 @@ export default function OtherCoinsPage() {
           background: "#fafafa",
           borderBottom: "1px solid #e5e7eb",
           position: "sticky",
-          top: 196,
+          top: 0,
         }}>
           {([
             { key: "list_date" as SortKey, label: "币名", idx: 0, sortable: false },
