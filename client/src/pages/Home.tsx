@@ -1857,6 +1857,10 @@ export default function Home() {
                     key={cat.id}
                     className="flex flex-col items-center justify-center space-y-0.5 active:scale-90 transition-transform px-0.5"
                     onClick={() => {
+                      if (cat.name === '宠物生活') {
+                        navigate('/pet-platform');
+                        return;
+                      }
                       setSelectedCategoryId(cat.id);
                       setCategorySheetOpen(true);
                     }}
