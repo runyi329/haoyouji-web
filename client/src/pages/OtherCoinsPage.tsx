@@ -272,11 +272,11 @@ export default function OtherCoinsPage() {
         {/* 表头 - 8列：币名 | 涨幅 | 上市时间 | 上市价 | 历史最高 | 现价 | 跌幅% | 缩水倍 */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "46px 40px 52px 60px 60px 60px 58px 44px",
+          gridTemplateColumns: "52px 44px 56px 68px 70px 68px 60px 48px",
           gap: 0,
-          padding: "7px 8px",
-          background: "#fafafa",
-          borderBottom: "1px solid #e5e7eb",
+          padding: "6px 10px",
+          background: "#f7f8fa",
+          borderBottom: "2px solid #e8eaed",
           position: "sticky",
           top: 0,
           zIndex: 5,
@@ -295,12 +295,14 @@ export default function OtherCoinsPage() {
               key={`${key}-${idx}`}
               onClick={() => sortable && handleSort(key)}
               style={{
-                fontSize: 9, fontWeight: 600, color: "#888",
+                fontSize: 9, fontWeight: 700, color: "#9aa0ab",
+                letterSpacing: 0.2,
                 textAlign: idx === 0 ? "left" : "right",
                 cursor: sortable ? "pointer" : "default",
                 userSelect: "none",
                 display: "flex", alignItems: "center",
                 justifyContent: idx === 0 ? "flex-start" : "flex-end",
+                paddingBottom: 1,
               }}
             >
               {label}
@@ -334,28 +336,28 @@ export default function OtherCoinsPage() {
                   key={coin.symbol}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "46px 40px 52px 60px 60px 60px 58px 44px",
+                    gridTemplateColumns: "52px 44px 56px 68px 70px 68px 60px 48px",
                     gap: 0,
-                    padding: "8px 8px",
-                    borderBottom: "1px solid #f0f0f0",
-                    background: idx % 2 === 0 ? "#fff" : "#fafafa",
+                    padding: "7px 10px",
+                    borderBottom: "1px solid #f0f2f5",
+                    background: "#fff",
                     alignItems: "center",
                   }}
                 >
                   {/* 币名 + 类型标签 */}
-                  <div style={{ display: "flex", flexDirection: "column" }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#1a1a1a" }}>{coin.symbol}</span>
-                    <div style={{ display: "flex", gap: 2, marginTop: 1, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "#1a1a1a", lineHeight: 1 }}>{coin.symbol}</span>
+                    <div style={{ display: "flex", gap: 2 }}>
                       {coin.has_spot && (
                         <span style={{
-                          fontSize: 7, fontWeight: 600, color: "#fff",
-                          background: "#1565C0", borderRadius: 2, padding: "0px 2px",
+                          fontSize: 7, fontWeight: 600, color: "#1565C0",
+                          background: "#e8f0fe", borderRadius: 2, padding: "0px 3px", lineHeight: "14px",
                         }}>现</span>
                       )}
                       {coin.has_futures && (
                         <span style={{
-                          fontSize: 7, fontWeight: 600, color: "#fff",
-                          background: "#6A1B9A", borderRadius: 2, padding: "0px 2px",
+                          fontSize: 7, fontWeight: 600, color: "#6A1B9A",
+                          background: "#f3e8ff", borderRadius: 2, padding: "0px 3px", lineHeight: "14px",
                         }}>合</span>
                       )}
                     </div>
@@ -366,39 +368,40 @@ export default function OtherCoinsPage() {
                     {hasData && m !== null ? (
                       <span style={{
                         fontSize: 9, fontWeight: 700, color: "#fff",
-                        background: isHighMultiple ? "#D32F2F" : isMidMultiple ? "#E65100" : "#546E7A",
-                        borderRadius: 3, padding: "2px 3px",
+                        background: isHighMultiple ? "#C62828" : isMidMultiple ? "#E65100" : "#607D8B",
+                        borderRadius: 4, padding: "2px 4px",
                         display: "inline-block",
+                        letterSpacing: 0.2,
                       }}>
                         {fmtMultiple(m)}
                       </span>
                     ) : (
-                      <span style={{ fontSize: 9, color: "#ccc" }}>—</span>
+                      <span style={{ fontSize: 9, color: "#d0d5dd" }}>—</span>
                     )}
                   </div>
 
                   {/* 上市时间 */}
-                  <div style={{ textAlign: "right", fontSize: 10, color: hasData ? "#555" : "#ccc", fontVariantNumeric: "tabular-nums" }}>
-                    {coin.list_date ?? "暂无"}
+                  <div style={{ textAlign: "right", fontSize: 10, color: hasData ? "#4a5568" : "#d0d5dd", fontVariantNumeric: "tabular-nums" }}>
+                    {coin.list_date ?? "—"}
                   </div>
 
                   {/* 上市价 */}
-                  <div style={{ textAlign: "right", fontSize: 10, color: hasData ? "#333" : "#ccc", fontVariantNumeric: "tabular-nums", fontFamily: "monospace" }}>
+                  <div style={{ textAlign: "right", fontSize: 10, color: hasData ? "#374151" : "#d0d5dd", fontVariantNumeric: "tabular-nums", fontFamily: "'SF Mono', 'Fira Code', monospace" }}>
                     {fmtPrice(coin.list_price)}
                   </div>
 
                   {/* 历史最高 */}
-                  <div style={{ textAlign: "right", fontSize: 10, color: hasData ? "#D32F2F" : "#ccc", fontWeight: hasData ? 600 : 400, fontVariantNumeric: "tabular-nums", fontFamily: "monospace" }}>
+                  <div style={{ textAlign: "right", fontSize: 10, color: hasData ? "#C62828" : "#d0d5dd", fontWeight: hasData ? 600 : 400, fontVariantNumeric: "tabular-nums", fontFamily: "'SF Mono', 'Fira Code', monospace" }}>
                     {fmtPrice(coin.ath)}
                   </div>
 
                   {/* 现价 */}
-                  <div style={{ textAlign: "right", fontSize: 10, color: coin.current_price ? "#1565C0" : "#ccc", fontWeight: coin.current_price ? 600 : 400, fontVariantNumeric: "tabular-nums", fontFamily: "monospace" }}>
+                  <div style={{ textAlign: "right", fontSize: 10, color: coin.current_price ? "#1565C0" : "#d0d5dd", fontWeight: coin.current_price ? 600 : 400, fontVariantNumeric: "tabular-nums", fontFamily: "'SF Mono', 'Fira Code', monospace" }}>
                     {fmtPrice(coin.current_price)}
                   </div>
 
                   {/* 跌幅%列 */}
-                  <div style={{ textAlign: "right", fontSize: 9, color: "#888", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                  <div style={{ textAlign: "right", fontSize: 9.5, color: dd !== null && dd < -50 ? "#C62828" : dd !== null && dd < -20 ? "#E65100" : "#6b7280", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", fontWeight: 500 }}>
                     {dd !== null ? fmtDrawdown(dd) : "—"}
                   </div>
 
@@ -408,14 +411,15 @@ export default function OtherCoinsPage() {
                       <span style={{
                         fontSize: 9, fontWeight: 700, color: "#fff",
                         background: shrinkBg,
-                        borderRadius: 3, padding: "1px 3px",
+                        borderRadius: 4, padding: "2px 4px",
                         display: "inline-block",
                         whiteSpace: "nowrap",
+                        letterSpacing: 0.2,
                       }}>
                         {fmtShrink(shrink)}
                       </span>
                     ) : (
-                      <span style={{ fontSize: 9, color: "#ccc" }}>—</span>
+                      <span style={{ fontSize: 9, color: "#d0d5dd" }}>—</span>
                     )}
                   </div>
                 </div>
