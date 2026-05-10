@@ -55,12 +55,11 @@ function calcShrinkMultiple(ath: number | null, current: number | null): number 
   return ath / current;
 }
 
-// ─── 格式化缩水倍数 ───────────────────────────────────────────────────────────
+// ─── 格式化缩水倍数（直接显示全数字，不换单位） ────────────────────────────────────────────
 function fmtShrink(m: number | null): string {
   if (m === null || m === undefined) return "";
-  if (m >= 10000) return `${(m / 1000).toFixed(0)}K×`;
-  if (m >= 1000) return `${(m / 1000).toFixed(1)}K×`;
-  if (m >= 100) return `${m.toFixed(0)}×`;
+  // 直接显示全数字，不换K/M单位
+  if (m >= 100) return `${Math.round(m)}×`;
   if (m >= 10) return `${m.toFixed(1)}×`;
   return `${m.toFixed(1)}×`;
 }
@@ -270,7 +269,7 @@ export default function OtherCoinsPage() {
         {/* 表头 - 7列：币名 | 涨幅 | 上市时间 | 上市价 | 历史最高 | 现价 | 距高点 */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "46px 40px 52px 60px 60px 60px 68px",
+          gridTemplateColumns: "46px 40px 52px 60px 60px 60px 80px",
           gap: 0,
           padding: "7px 8px",
           background: "#fafafa",
@@ -331,7 +330,7 @@ export default function OtherCoinsPage() {
                   key={coin.symbol}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "46px 40px 52px 60px 60px 60px 68px",
+                    gridTemplateColumns: "46px 40px 52px 60px 60px 60px 80px",
                     gap: 0,
                     padding: "8px 8px",
                     borderBottom: "1px solid #f0f0f0",
@@ -394,10 +393,10 @@ export default function OtherCoinsPage() {
                     {fmtPrice(coin.current_price)}
                   </div>
 
-                  {/* 距高点：跌幅% + 缩水倍数热力色 */}
-                  <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+                  {/* 距高点：跌幅% + 缩水倍数热力色（同一行） */}
+                  <div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 3, flexWrap: "nowrap" }}>
                     {/* 跌幅百分比（灰色小字） */}
-                    <span style={{ fontSize: 8, color: "#999", fontVariantNumeric: "tabular-nums" }}>
+                    <span style={{ fontSize: 8, color: "#999", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
                       {dd !== null ? fmtDrawdown(dd) : "—"}
                     </span>
                     {/* 缩水倍数（热力绿色徽章） */}
@@ -407,12 +406,11 @@ export default function OtherCoinsPage() {
                         background: shrinkBg,
                         borderRadius: 3, padding: "1px 3px",
                         display: "inline-block",
+                        whiteSpace: "nowrap",
                       }}>
                         {fmtShrink(shrink)}
                       </span>
-                    ) : (
-                      <span style={{ fontSize: 9, color: "#ccc" }}>—</span>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               );
