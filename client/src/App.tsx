@@ -123,6 +123,7 @@ const AfPayoutManage = lazy(() => import("./pages/AfPayoutManage"));
 const WaveRatioManage = lazy(() => import("./pages/WaveRatioManage"));
 const InterestManagePage = lazy(() => import("./pages/InterestManagePage"));
 const BeDataPage = lazy(() => import("./pages/BeDataPage"));
+const OtherCoinsPage = lazy(() => import("./pages/OtherCoinsPage"));
 const LedgerEquityManage = lazy(() => import("./pages/LedgerEquityManage"));
 const LedgerMemberManage = lazy(() => import("./pages/LedgerMemberManage"));
 const EquityWeightManage = lazy(() => import("./pages/EquityWeightManage"));
@@ -493,6 +494,7 @@ function Router() {
         <Route path="/ledger/:id/ai-company/:companyId" component={AiCompanyWorkspace} />
         <Route path="/ledger/:id/market-eval-settings" component={MarketEvalSettings} />
         <Route path="/ledger/:id/be-data" component={BeDataPage} />
+        <Route path="/ledger/:id/other-coins" component={OtherCoinsPage} />
         <Route path="/ledger/:id/aa-initial-balance" component={LedgerAAInitialBalance} />
         <Route path="/ledger/:id/deposit-manage" component={DepositManage} />
         <Route path="/ledger/:id/aa-dividend-manage" component={LedgerAADividendManage} />
