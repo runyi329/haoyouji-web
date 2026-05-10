@@ -501,8 +501,8 @@ export default function PetPlatform() {
             <img
               src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/pet-platform/hageme-logo-v3.webp"
               alt="HaGeeMe"
-              className="h-9 w-auto object-contain"
-              style={{ filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.35))' }}
+              className="h-14 w-auto object-contain rounded-xl px-2 py-1"
+              style={{ background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(4px)', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.25))' }}
             />
           </div>
           <button
