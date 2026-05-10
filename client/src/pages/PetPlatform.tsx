@@ -5,7 +5,7 @@ import { Loader2, ChevronLeft, PawPrint, Calendar, MapPin, Settings, ChevronRigh
 import { centerToast } from "@/components/ui/center-toast";
 
 // 插画资源 CDN URL
-const BANNER_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/banner_top-6vjBPRCuvVjX7njzFSLQe3.png";
+const BANNER_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/banner_new-L5PCLtLh7j6tJAjXpqgv6n.webp";
 const EMPTY_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/empty_state-Hz3oJbgUxXxExN3fGavc6E.webp";
 const MACHINE_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/machine_icon-fj8GBGpdbCSJhZ7uRs76kF.webp";
 
@@ -506,8 +506,8 @@ export default function PetPlatform() {
           </div>
           <button
             onClick={() => window.location.reload()}
-            className="text-white text-xs font-medium px-3 py-1 rounded-full active:opacity-70"
-            style={{ background: "rgba(0,0,0,0.22)" }}
+            className="text-white text-xs font-bold px-4 py-1.5 rounded-full active:opacity-80 shadow-md"
+            style={{ background: "#2A9D8F", letterSpacing: "0.05em" }}
           >
             刷新
           </button>
