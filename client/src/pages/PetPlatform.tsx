@@ -488,7 +488,7 @@ export default function PetPlatform() {
           style={{ display: "block" }}
         />
         {/* 顶部导航栏悬浮在插画左上角 */}
-        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 pt-10 pb-2">
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 pt-3 pb-2">
           <div className="flex items-center space-x-2">
             <button
               onClick={() => navigate("/")}
