@@ -51,6 +51,7 @@ import * as dbMemo from "./db-memo";
 
 import ExcelJS from "exceljs";
 import { sendAlertEmail, sendBackupTestEmail } from "./email-service";
+import { petRouter } from "./pet-router";
 
 // // 在应用启动时初始化数据库
 // initDatabase().catch(err => {
@@ -156,6 +157,7 @@ function toBeijingTimeStr(val: any): string | null {
 }
 
 export const appRouter = router({
+  pet: petRouter,
   system: systemRouter,
   equity: equityRouter,
   equityTransfer: equityTransferRouter,
