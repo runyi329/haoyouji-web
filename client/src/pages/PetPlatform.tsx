@@ -478,31 +478,36 @@ export default function PetPlatform() {
 
   return (
     <div className="min-h-screen pb-10" style={{ background: COLORS.bg }}>
-      {/* ===== 顶部插画横幅（占屏幕约1/3） ===== */}
-      <div className="relative" style={{ height: "33vw", minHeight: 120, maxHeight: 200 }}>
-        {/* 插画铺满 */}
+      {/* ===== 顶部插画横幅（完整显示插画） ===== */}
+      <div className="relative">
+        {/* 插画完整显示，不裁剪 */}
         <img
           src={BANNER_IMG}
           alt="宠物氢氧健康舱"
-          className="absolute inset-0 w-full h-full object-cover object-center"
+          className="w-full object-contain object-top"
+          style={{ display: "block" }}
         />
-        {/* 顶部导航栏悬浮在插画上 */}
+        {/* 顶部导航栏悬浮在插画左上角 */}
         <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 pt-10 pb-2">
-          <button
-            onClick={() => navigate("/")}
-            className="w-8 h-8 flex items-center justify-center rounded-full active:opacity-70"
-            style={{ background: "rgba(0,0,0,0.25)" }}
-          >
-            <ChevronLeft className="w-5 h-5 text-white" />
-          </button>
           <div className="flex items-center space-x-2">
-            <PawPrint className="w-4 h-4 text-white drop-shadow" />
-            <span className="text-white font-bold text-base drop-shadow">宠物氢氧健康舱</span>
+            <button
+              onClick={() => navigate("/")}
+              className="w-8 h-8 flex items-center justify-center rounded-full active:opacity-70"
+              style={{ background: "rgba(0,0,0,0.22)" }}
+            >
+              <ChevronLeft className="w-5 h-5 text-white" />
+            </button>
+            <div className="flex items-center space-x-1.5">
+              <PawPrint className="w-4 h-4 text-white drop-shadow" />
+              <span className="text-white font-bold text-sm drop-shadow" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.4)" }}>
+                宠物氢氧健康舱
+              </span>
+            </div>
           </div>
           <button
             onClick={() => window.location.reload()}
             className="text-white text-xs font-medium px-3 py-1 rounded-full active:opacity-70"
-            style={{ background: "rgba(0,0,0,0.25)" }}
+            style={{ background: "rgba(0,0,0,0.22)" }}
           >
             刷新
           </button>
