@@ -167,36 +167,34 @@ export default function OtherCoinsPage() {
           </div>
         </div>
 
-        {/* 统计摘要行 */}
-        <div style={{
-          display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
-          gap: 6, marginBottom: 10,
-        }}>
-          {[
-            { label: "总计币种", value: loading ? "..." : `${coins.length}` },
-            { label: "有现货", value: loading ? "..." : `${totalSpot}` },
-            { label: "有合约", value: loading ? "..." : `${totalFutures}` },
-          ].map(({ label, value }) => (
-            <div key={label} style={{
-              borderRadius: 8, padding: "6px 8px",
-              background: "rgba(255,255,255,0.1)",
-              border: "1px solid rgba(255,255,255,0.15)",
-              textAlign: "center",
-            }}>
-              <div style={{ fontSize: 9, color: "rgba(255,255,255,0.55)", marginBottom: 2 }}>{label}</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#fff" }}>{value}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* 筛选按钮行 */}
+        {/* 筛选按钮行（含数量统计） */}
         <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
           {[
-            { label: "全部", action: () => { setFilterSpot(null); setFilterFutures(null); }, active: filterSpot === null && filterFutures === null },
-            { label: "现货+合约", action: () => { setFilterSpot(true); setFilterFutures(true); }, active: filterSpot === true && filterFutures === true },
-            { label: "仅现货", action: () => { setFilterSpot(true); setFilterFutures(false); }, active: filterSpot === true && filterFutures === false },
-            { label: "仅合约", action: () => { setFilterSpot(false); setFilterFutures(true); }, active: filterSpot === false && filterFutures === true },
-          ].map(({ label, action, active }) => (
+            {
+              label: "全部",
+              count: loading ? "..." : `${coins.length}`,
+              action: () => { setFilterSpot(null); setFilterFutures(null); },
+              active: filterSpot === null && filterFutures === null,
+            },
+            {
+              label: "现货+合约",
+              count: loading ? "..." : `${coins.filter(c => c.has_spot && c.has_futures).length}`,
+              action: () => { setFilterSpot(true); setFilterFutures(true); },
+              active: filterSpot === true && filterFutures === true,
+            },
+            {
+              label: "仅现货",
+              count: loading ? "..." : `${coins.filter(c => c.has_spot && !c.has_futures).length}`,
+              action: () => { setFilterSpot(true); setFilterFutures(false); },
+              active: filterSpot === true && filterFutures === false,
+            },
+            {
+              label: "仅合约",
+              count: loading ? "..." : `${coins.filter(c => !c.has_spot && c.has_futures).length}`,
+              action: () => { setFilterSpot(false); setFilterFutures(true); },
+              active: filterSpot === false && filterFutures === true,
+            },
+          ].map(({ label, count, action, active }) => (
             <button
               key={label}
               onClick={action}
@@ -208,7 +206,7 @@ export default function OtherCoinsPage() {
                 cursor: "pointer",
               }}
             >
-              {label}
+              {label}({count})
             </button>
           ))}
         </div>
