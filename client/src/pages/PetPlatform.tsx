@@ -499,10 +499,10 @@ export default function PetPlatform() {
             </button>
             {/* HaGeeMe 商标图片替换标题文字 */}
             <img
-              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/pet-platform/hageme-logo-v3.webp"
+              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/pet-platform/hageme-logo-transparent.png"
               alt="HaGeeMe"
               className="h-20 w-auto object-contain rounded-2xl px-3 py-1.5"
-              style={{ background: 'rgba(255,255,255,0.25)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.2))' }}
+              style={{ filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.3))' }}
             />
           </div>
           <button
