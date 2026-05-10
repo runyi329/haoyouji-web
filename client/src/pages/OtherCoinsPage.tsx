@@ -78,7 +78,7 @@ function shrinkColor(m: number | null): string {
   return "#C8E6C9"; // 浅绿（缩水不多）
 }
 
-type SortKey = "list_date" | "list_price" | "ath" | "atl" | "ath_multiple" | "current_price" | "drawdown_from_ath";
+type SortKey = "list_date" | "list_price" | "ath" | "atl" | "ath_multiple" | "current_price" | "drawdown_from_ath" | "shrink_multiple";
 
 // ─── 主组件 ───────────────────────────────────────────────────────────────────
 export default function OtherCoinsPage() {
@@ -124,9 +124,12 @@ export default function OtherCoinsPage() {
       if (sortKey === "list_date") {
         va = parseInt((a.list_date || "0").replace("-", ""));
         vb = parseInt((b.list_date || "0").replace("-", ""));
+      } else if (sortKey === "shrink_multiple") {
+        va = (a.ath && a.current_price && a.current_price > 0) ? a.ath / a.current_price : 0;
+        vb = (b.ath && b.current_price && b.current_price > 0) ? b.ath / b.current_price : 0;
       } else {
-        va = (a[sortKey] as number) ?? 0;
-        vb = (b[sortKey] as number) ?? 0;
+        va = (a[sortKey as keyof typeof a] as number) ?? 0;
+        vb = (b[sortKey as keyof typeof b] as number) ?? 0;
       }
       return sortAsc ? va - vb : vb - va;
     });
@@ -266,10 +269,10 @@ export default function OtherCoinsPage() {
 
       {/* ── 白色列表区域（可滚动） ── */}
       <div style={{ flex: 1, background: "#fff", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
-        {/* 表头 - 7列：币名 | 涨幅 | 上市时间 | 上市价 | 历史最高 | 现价 | 距高点 */}
+        {/* 表头 - 8列：币名 | 涨幅 | 上市时间 | 上市价 | 历史最高 | 现价 | 跌幅% | 缩水倍 */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "46px 40px 52px 60px 60px 60px 80px",
+          gridTemplateColumns: "46px 40px 52px 60px 60px 60px 58px 44px",
           gap: 0,
           padding: "7px 8px",
           background: "#fafafa",
@@ -285,7 +288,8 @@ export default function OtherCoinsPage() {
             { key: "list_price" as SortKey, label: "上市价", idx: 3, sortable: true },
             { key: "ath" as SortKey, label: "历史最高", idx: 4, sortable: true },
             { key: "current_price" as SortKey, label: "现价", idx: 5, sortable: true },
-            { key: "drawdown_from_ath" as SortKey, label: "距高点", idx: 6, sortable: true },
+            { key: "drawdown_from_ath" as SortKey, label: "跌幅%", idx: 6, sortable: true },
+            { key: "shrink_multiple" as SortKey, label: "缩水倍", idx: 7, sortable: true },
           ]).map(({ key, label, idx, sortable }) => (
             <div
               key={`${key}-${idx}`}
@@ -330,7 +334,7 @@ export default function OtherCoinsPage() {
                   key={coin.symbol}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "46px 40px 52px 60px 60px 60px 80px",
+                    gridTemplateColumns: "46px 40px 52px 60px 60px 60px 58px 44px",
                     gap: 0,
                     padding: "8px 8px",
                     borderBottom: "1px solid #f0f0f0",
@@ -393,13 +397,13 @@ export default function OtherCoinsPage() {
                     {fmtPrice(coin.current_price)}
                   </div>
 
-                  {/* 距高点：跌幅% + 缩水倍数热力色（同一行） */}
-                  <div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 3, flexWrap: "nowrap" }}>
-                    {/* 跌幅百分比（灰色小字） */}
-                    <span style={{ fontSize: 8, color: "#999", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-                      {dd !== null ? fmtDrawdown(dd) : "—"}
-                    </span>
-                    {/* 缩水倍数（热力绿色徽章） */}
+                  {/* 跌幅%列 */}
+                  <div style={{ textAlign: "right", fontSize: 9, color: "#888", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                    {dd !== null ? fmtDrawdown(dd) : "—"}
+                  </div>
+
+                  {/* 缩水倍列 */}
+                  <div style={{ textAlign: "right" }}>
                     {shrink !== null && shrink > 1 ? (
                       <span style={{
                         fontSize: 9, fontWeight: 700, color: "#fff",
@@ -410,7 +414,9 @@ export default function OtherCoinsPage() {
                       }}>
                         {fmtShrink(shrink)}
                       </span>
-                    ) : null}
+                    ) : (
+                      <span style={{ fontSize: 9, color: "#ccc" }}>—</span>
+                    )}
                   </div>
                 </div>
               );
