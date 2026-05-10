@@ -221,9 +221,7 @@ export default function OtherCoinsPage() {
               </button>
             );
           })}
-          {filterExchange !== null && (
-            <span style={{ fontSize: 9, color: "rgba(255,255,255,0.45)", alignSelf: "center" }}>再点一次取消</span>
-          )}
+
         </div>
 
         {/* 现货/合约筛选行 */}
