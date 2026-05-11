@@ -4221,7 +4221,7 @@ export async function approveTransaction(
   }
 
   // 普通账本审批流程（原有逻辑）
-  const { ledgerApprovalRecords, transactions } = await import("../drizzle/schema.js");
+  const { ledgerApprovalRecords } = await import("../drizzle/schema.js");
   
   // 更新审批记录
   await db
@@ -4246,18 +4246,7 @@ export async function approveTransaction(
   const allApproved = allRecords.every(r => r.status === 'approved');
   const anyRejected = allRecords.some(r => r.status === 'rejected');
   
-  // 更新交易状态
-  if (allApproved) {
-    await db
-      .update(transactions)
-      .set({ approvalStatus: 'approved' })
-      .where(eq(transactions.id, transactionId));
-  } else if (anyRejected) {
-    await db
-      .update(transactions)
-      .set({ approvalStatus: 'rejected' })
-      .where(eq(transactions.id, transactionId));
-  }
+  // transactions表已废弃，不再更新（普通账本审批状态通过ledgerApprovalRecords管理）
   
   return { success: true, allApproved, anyRejected };
 }
@@ -4338,9 +4327,9 @@ export async function getPendingApprovals(ledgerId: number, userId: number) {
   }
 
   // 普通账本审批流程（原有逻辑）
-  const { ledgerApprovalRecords, transactions } = await import("../drizzle/schema.js");
+  const { ledgerApprovalRecords } = await import("../drizzle/schema.js");
   
-  // 获取待审批的记录
+  // 获取待审批的记录（不再join已废弃的transactions表）
   const records = await db
     .select({
       id: ledgerApprovalRecords.id,
@@ -4348,10 +4337,8 @@ export async function getPendingApprovals(ledgerId: number, userId: number) {
       status: ledgerApprovalRecords.status,
       comment: ledgerApprovalRecords.comment,
       createdAt: ledgerApprovalRecords.createdAt,
-      transaction: transactions,
     })
     .from(ledgerApprovalRecords)
-    .leftJoin(transactions, eq(ledgerApprovalRecords.transactionId, transactions.id))
     .where(
       and(
         eq(ledgerApprovalRecords.ledgerId, ledgerId),
