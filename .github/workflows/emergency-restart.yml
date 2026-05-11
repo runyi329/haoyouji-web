@@ -1,0 +1,39 @@
+name: 紧急重启服务
+
+on:
+  workflow_dispatch:
+
+jobs:
+  restart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "Host ${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+          echo "  UserKnownHostsFile /dev/null" >> ~/.ssh/config
+          echo "  ServerAliveInterval 30" >> ~/.ssh/config
+          echo "  ServerAliveCountMax 3" >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: 重启服务
+        timeout-minutes: 3
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
+            cd ~/haoyouji-web
+            echo "当前目录: $(pwd)"
+            echo "Node进程状态:"
+            pm2 list 2>/dev/null || echo "pm2 list failed"
+            echo "尝试重启..."
+            if pm2 describe haoyouji-web > /dev/null 2>&1; then
+              pm2 restart haoyouji-web && echo "pm2 restart 成功"
+            else
+              pm2 start ecosystem.config.cjs 2>/dev/null && echo "pm2 start ecosystem 成功" || \
+              pm2 start dist/index.js --name haoyouji-web 2>/dev/null && echo "pm2 start dist 成功" || \
+              echo "所有启动方式失败"
+            fi
+            pm2 list
+          '
