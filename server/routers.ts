@@ -15335,25 +15335,10 @@ ${klinesSummary}
         const memberRole = (memberRows as any[])[0]?.role;
         if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
 
-        const isOwnerOrAdmin = memberRole === 'owner' || memberRole === 'admin';
-        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-
-        // 确定要查询哪个用户的权限
-        // 管理员切换视角时，查询目标用户的权限
+        // 确定要查询哪个用户的权限（切换视角时查目标用户，否则查自己）
         const targetUserId = input.viewAsUserId || ctx.user.id;
-        const isViewingAsSelf = !input.viewAsUserId;
 
-        // 只有系统级超管且是自己视角（非 viewAs 模式）时，才看全部企业（方便管理操作）
-        if (isSysAdmin && isViewingAsSelf) {
-          const [rows] = await (conn as any).execute(
-            `SELECT id, name, tax_no as taxNo, address, phone, bank_name as bankName, bank_account as bankAccount, remark
-             FROM aj_companies WHERE ledger_id=? ORDER BY created_at ASC`,
-            [input.ledgerId]
-          );
-          return rows as any[];
-        }
-
-        // 其他所有情况（包括 owner/admin 被切换视角、厂家、业务员等）：一律按权限记录过滤
+        // 所有人（包括管理员、超管）一律按权限记录过滤，没有被开启就看不到
         const [rows] = await (conn as any).execute(
           `SELECT c.id, c.name, c.tax_no as taxNo, c.address, c.phone, c.bank_name as bankName, c.bank_account as bankAccount, c.remark
            FROM aj_companies c
