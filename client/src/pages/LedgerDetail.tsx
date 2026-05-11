@@ -5299,121 +5299,219 @@ export default function LedgerDetail() {
                 {/* 当天的记录 */}
                 <div className="space-y-2">
                   {dayRecord.records.map((record: any) => (
-                    <div
-                      key={record.id}
-                      className="bg-white rounded-lg p-2 flex items-center gap-2.5 cursor-pointer hover:bg-[#FFEBEE] transition-colors"
-                      onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
-                    >
-                      {/* 成员头像 */}
-                      <div className="flex-shrink-0">
-                        <UserAvatar
-                          username={record.member?.username}
-                          avatar={record.member?.avatar}
-                          nickname={record.member?.nickname}
-                          size="sm"
-                        />
-                      </div>
+                    isCustomAJ ? (
+                      /* ===== AJ账本：方案B 纸质单据+锯齿撕边 卡片 ===== */
+                      <div
+                        key={record.id}
+                        style={{ filter: 'drop-shadow(0 2px 8px rgba(168,0,0,0.15))' }}
+                        className="cursor-pointer mb-3"
+                        onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
+                      >
+                        <div style={{
+                          background: '#FDFCF7',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                          border: '1px solid rgba(168,0,0,0.12)'
+                        }}>
+                          {/* 顶部红色标题栏 */}
+                          <div style={{
+                            background: '#A80000',
+                            padding: '8px 12px 16px 12px',
+                            position: 'relative',
+                            clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 8px), 97% 100%, 94% calc(100% - 6px), 91% 100%, 88% calc(100% - 6px), 85% 100%, 82% calc(100% - 6px), 79% 100%, 76% calc(100% - 6px), 73% 100%, 70% calc(100% - 6px), 67% 100%, 64% calc(100% - 6px), 61% 100%, 58% calc(100% - 6px), 55% 100%, 52% calc(100% - 6px), 49% 100%, 46% calc(100% - 6px), 43% 100%, 40% calc(100% - 6px), 37% 100%, 34% calc(100% - 6px), 31% 100%, 28% calc(100% - 6px), 25% 100%, 22% calc(100% - 6px), 19% 100%, 16% calc(100% - 6px), 13% 100%, 10% calc(100% - 6px), 7% 100%, 4% calc(100% - 6px), 1% 100%, 0 calc(100% - 8px))'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ color: '#FFFFFF', fontSize: '13px', fontWeight: 700, letterSpacing: '4px' }}>报 销 申 请 单</span>
+                              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '10px', fontFamily: 'monospace' }}>
+                                No.{new Date(record.createdAt).toISOString().slice(0,10).replace(/-/g,'')}-{String(record.id).padStart(3,'0')}
+                              </span>
+                            </div>
+                          </div>
 
-                      {/* 分类信息 */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1">
-                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${record.type === 'expense' ? 'bg-[#D32F2F]-light0' : 'bg-[#4CAF50]'}`}></span>
-                          <span className="text-xs text-[#222222] font-normal">
-                            {isDiet && record.description?.startsWith('[diet:') ? (() => {
-                              // 对 diet 分类名做前端清洗：去掉 emoji，并根据 description 标签补充单位
-                              const desc = record.description || '';
-                              const m = desc.match(/^\[diet:(\w+):([^\]]+)/);
-                              const type = m ? m[1] : '';
-                              const unit = m ? m[2].split(':')[0] : '';
-                              // 去掉分类名中的 emoji（Unicode 范围）
-                              const cleanName = (record.category || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\s]+/gu, '').trim();
-                              // 如果分类名已包含单位则直接显示，否则补充
-                              if (cleanName.includes('/')) return cleanName;
-                              // 根据类型补充单位
-                              const unitMap: Record<string, string> = { weight: '斤', bmi: '', calorie: 'kcal', measurement: 'cm' };
-                              const u = unit || unitMap[type] || '';
-                              return u ? `${cleanName}/${u}` : cleanName;
-                            })() : record.category}
-                          </span>
-                          {/* 图片图标 */}
-                          {record.imageUrl && (
-                            <svg className="w-3.5 h-3.5 ml-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="#1976D2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                              <circle cx="8.5" cy="8.5" r="1.5"/>
-                              <polyline points="21 15 16 10 5 21"/>
-                            </svg>
-                          )}
-                          {/* 待审批图标 */}
-                          {record.approvalStatus === 'pending' && (
-                            <span className="ml-1 text-[#D32F2F] text-xs flex items-center gap-0.5">
-                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-                                <circle cx="12" cy="12" r="10" opacity="0.2" />
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" opacity="0.3" />
-                                <text x="12" y="16" textAnchor="middle" fontSize="10" fill="currentColor" fontWeight="bold">审</text>
-                              </svg>
+                          {/* 主体内容区 */}
+                          <div style={{ padding: '10px 12px 12px 12px' }}>
+                            {/* 企业名称 + 金额 */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: '11px', color: '#999', marginBottom: '2px' }}>开票单位</div>
+                                <div style={{ fontSize: '14px', fontWeight: 600, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {record.ajCompanyName || '—'}
+                                </div>
+                              </div>
+                              <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '12px' }}>
+                                <div style={{ fontSize: '11px', color: '#999', marginBottom: '2px' }}>报销金额</div>
+                                <div style={{ fontSize: '20px', fontWeight: 700, color: '#A80000', lineHeight: 1 }}>
+                                  ¥{record.amount.toFixed(2)}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* 虚线分隔 */}
+                            <div style={{ borderTop: '1px dashed rgba(168,0,0,0.25)', margin: '8px 0' }} />
+
+                            {/* 四格信息网格 */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginBottom: '8px' }}>
+                              <div>
+                                <div style={{ fontSize: '10px', color: '#aaa' }}>报销类型</div>
+                                <div style={{ fontSize: '12px', color: '#444', fontWeight: 500 }}>{record.category || '—'}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '10px', color: '#aaa' }}>申请日期</div>
+                                <div style={{ fontSize: '12px', color: '#444', fontWeight: 500 }}>
+                                  {new Date(record.createdAt).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }).replace('/', '月').replace('/', '日')}
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '10px', color: '#aaa' }}>税号</div>
+                                <div style={{ fontSize: '12px', color: '#444', fontWeight: 500 }}>{record.ajCompanyId || '—'}</div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
+                                <div style={{ fontSize: '12px', color: '#444', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {record.description || '—'}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* 虚线分隔 */}
+                            <div style={{ borderTop: '1px dashed rgba(168,0,0,0.25)', margin: '8px 0' }} />
+
+                            {/* 底部：申请人 + 状态印章 */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <UserAvatar
+                                  username={record.member?.username}
+                                  avatar={record.member?.avatar}
+                                  nickname={record.member?.nickname}
+                                  size="sm"
+                                />
+                                <div>
+                                  <div style={{ fontSize: '12px', color: '#555', fontWeight: 500 }}>
+                                    {record.member?.nickname || record.member?.username || '未知'}
+                                  </div>
+                                  <div style={{ fontSize: '10px', color: '#aaa' }}>
+                                    {new Date(record.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                </div>
+                              </div>
+                              {/* 矩形印章状态标签 */}
+                              {record.ajStatus && (
+                                <div style={{
+                                  transform: 'rotate(5deg)',
+                                  border: `2px solid ${
+                                    record.ajStatus === 'pending' ? '#f59e0b' :
+                                    record.ajStatus === 'approved' ? '#A80000' : '#9ca3af'
+                                  }`,
+                                  color: record.ajStatus === 'pending' ? '#f59e0b' :
+                                         record.ajStatus === 'approved' ? '#A80000' : '#9ca3af',
+                                  padding: '3px 8px',
+                                  fontSize: '12px',
+                                  fontWeight: 700,
+                                  letterSpacing: '2px',
+                                  borderRadius: '2px',
+                                  opacity: 0.85,
+                                  flexShrink: 0
+                                }}>
+                                  {record.ajStatus === 'pending' ? '申请中' :
+                                   record.ajStatus === 'approved' ? '已通过' : '已拒绝'}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      /* ===== 普通账本：原有行内样式 ===== */
+                      <div
+                        key={record.id}
+                        className="bg-white rounded-lg p-2 flex items-center gap-2.5 cursor-pointer hover:bg-[#FFEBEE] transition-colors"
+                        onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
+                      >
+                        {/* 成员头像 */}
+                        <div className="flex-shrink-0">
+                          <UserAvatar
+                            username={record.member?.username}
+                            avatar={record.member?.avatar}
+                            nickname={record.member?.nickname}
+                            size="sm"
+                          />
+                        </div>
+
+                        {/* 分类信息 */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1">
+                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${record.type === 'expense' ? 'bg-[#D32F2F]-light0' : 'bg-[#4CAF50]'}`}></span>
+                            <span className="text-xs text-[#222222] font-normal">
+                              {isDiet && record.description?.startsWith('[diet:') ? (() => {
+                                // 对 diet 分类名做前端清洗：去掉 emoji，并根据 description 标签补充单位
+                                const desc = record.description || '';
+                                const m = desc.match(/^\[diet:(\w+):([^\]]+)/);
+                                const type = m ? m[1] : '';
+                                const unit = m ? m[2].split(':')[0] : '';
+                                // 去掉分类名中的 emoji（Unicode 范围）
+                                const cleanName = (record.category || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\s]+/gu, '').trim();
+                                // 如果分类名已包含单位则直接显示，否则补充
+                                if (cleanName.includes('/')) return cleanName;
+                                // 根据类型补充单位
+                                const unitMap: Record<string, string> = { weight: '斤', bmi: '', calorie: 'kcal', measurement: 'cm' };
+                                const u = unit || unitMap[type] || '';
+                                return u ? `${cleanName}/${u}` : cleanName;
+                              })() : record.category}
                             </span>
-                          )}
-                          {/* 报销状态图标 */}
-                          {record.reimbursementStatus === 'pending' && (
-                            <Receipt className="w-3.5 h-3.5 ml-0.5 text-[#1976D2] flex-shrink-0" />
-                          )}
-                          {/* 待结状态图标 */}
-                          {record.pendingType && (
-                            <Hourglass className="w-3.5 h-3.5 ml-0.5 text-[#1976D2] flex-shrink-0" title={record.pendingType === 'receivable' ? '代收' : '代付'} />
+                            {/* 图片图标 */}
+                            {record.imageUrl && (
+                              <svg className="w-3.5 h-3.5 ml-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="#1976D2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21 15 16 10 5 21"/>
+                              </svg>
+                            )}
+                            {/* 待审批图标 */}
+                            {record.approvalStatus === 'pending' && (
+                              <span className="ml-1 text-[#D32F2F] text-xs flex items-center gap-0.5">
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+                                  <circle cx="12" cy="12" r="10" opacity="0.2" />
+                                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" opacity="0.3" />
+                                  <text x="12" y="16" textAnchor="middle" fontSize="10" fill="currentColor" fontWeight="bold">审</text>
+                                </svg>
+                              </span>
+                            )}
+                            {/* 报销状态图标 */}
+                            {record.reimbursementStatus === 'pending' && (
+                              <Receipt className="w-3.5 h-3.5 ml-0.5 text-[#1976D2] flex-shrink-0" />
+                            )}
+                            {/* 待结状态图标 */}
+                            {record.pendingType && (
+                              <Hourglass className="w-3.5 h-3.5 ml-0.5 text-[#1976D2] flex-shrink-0" title={record.pendingType === 'receivable' ? '代收' : '代付'} />
+                            )}
+                          </div>
+                          {record.description && !record.description.startsWith('[diet:') && (
+                            <div className="text-xs text-gray-500 mt-0.5 ml-2.5 font-light">{record.description}</div>
                           )}
                         </div>
-                        {record.description && !record.description.startsWith('[diet:') && (
-                          <div className="text-xs text-gray-500 mt-0.5 ml-2.5 font-light">{record.description}</div>
-                        )}
-                        {/* AJ账本开票信息：开票单位、开票人、状态标签 */}
-                        {isCustomAJ && record.ajStatus && (
-                          <div className="flex flex-wrap items-center gap-1 mt-1 ml-2.5">
-                            {record.ajCompanyName && (
-                              <span className="text-xs text-gray-500 truncate max-w-[120px]" title={record.ajCompanyName}>
-                                🏢 {record.ajCompanyName}
-                              </span>
-                            )}
-                            {record.member && (
-                              <span className="text-xs text-gray-400">
-                                {record.member.nickname || record.member.username}
-                              </span>
-                            )}
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${
-                              record.ajStatus === 'pending' ? 'bg-amber-100 text-amber-700' :
-                              record.ajStatus === 'approved' ? 'bg-green-100 text-green-700' :
-                              'bg-red-100 text-red-600'
-                            }`}>
-                              {record.ajStatus === 'pending' ? '申请中' :
-                               record.ajStatus === 'approved' ? '已通过' : '已拒绝'}
-                            </span>
-                            <span className="text-[10px] text-gray-300">
-                              {new Date(record.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+
+                        {/* 金额 / 减肥数据 */}
+                        {isDiet && record.description?.startsWith('[diet:') ? (
+                          (() => {
+                            // 分类名已包含单位（如"体重/斤"、"BMI"、"胸围/cm"），右侧只显示纯数字
+                            const val = record.amount;
+                            return (
+                              <div className="text-sm font-semibold flex-shrink-0 text-[#D32F2F]">
+                                {val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)}
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          <div className={`text-sm font-normal flex-shrink-0 ${
+                            record.pendingType && record.pendingIncludeStats === 0
+                              ? 'text-gray-400'
+                              : record.type === 'expense' ? 'text-[#D32F2F]' : 'text-[#4CAF50]'
+                          }`}>
+                            {record.type === 'expense' ? '-' : '+'}{record.amount.toFixed(2)}
                           </div>
                         )}
                       </div>
-
-                      {/* 金额 / 减肥数据 */}
-                      {isDiet && record.description?.startsWith('[diet:') ? (
-                        (() => {
-                          // 分类名已包含单位（如“体重/斤”、“BMI”、“胸围/cm”），右侧只显示纯数字
-                          const val = record.amount;
-                          return (
-                            <div className="text-sm font-semibold flex-shrink-0 text-[#D32F2F]">
-                              {val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)}
-                            </div>
-                          );
-                        })()
-                      ) : (
-                        <div className={`text-sm font-normal flex-shrink-0 ${
-                          record.pendingType && record.pendingIncludeStats === 0
-                            ? 'text-gray-400'
-                            : record.type === 'expense' ? 'text-[#D32F2F]' : 'text-[#4CAF50]'
-                        }`}>
-                          {record.type === 'expense' ? '-' : '+'}{record.amount.toFixed(2)}
-                        </div>
-                      )}
-                    </div>
+                    )
                   ))}
                 </div>
               </div>
