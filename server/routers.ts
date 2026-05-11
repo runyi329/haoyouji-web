@@ -15107,6 +15107,247 @@ ${klinesSummary}
         return await dbLedger.inviteMemberByUsernameWithRole(input.ledgerId, ctx.user.id, input.username, input.role);
       }),
 
+    // ========== AJ型定制账本：企业管理接口 ==========
+
+    // 获取账本下所有企业列表（管理员/创始人可见全部，业务员只见有权限的）
+    ajGetCompanies: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 检查是否是账本成员
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+
+        const isOwnerOrAdmin = memberRole === 'owner' || memberRole === 'admin';
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+
+        if (isOwnerOrAdmin || isSysAdmin) {
+          // 管理员/创始人：返回所有企业
+          const [rows] = await (conn as any).execute(
+            `SELECT c.*, 
+              (SELECT COUNT(*) FROM aj_company_access a WHERE a.company_id=c.id AND a.is_enabled=1) as enabledCount
+             FROM aj_companies c WHERE c.ledger_id=? ORDER BY c.created_at ASC`,
+            [input.ledgerId]
+          );
+          return rows as any[];
+        } else {
+          // 业务员：只返回有权限的企业
+          const [rows] = await (conn as any).execute(
+            `SELECT c.* FROM aj_companies c
+             INNER JOIN aj_company_access a ON a.company_id=c.id AND a.user_id=? AND a.is_enabled=1
+             WHERE c.ledger_id=? ORDER BY c.created_at ASC`,
+            [ctx.user.id, input.ledgerId]
+          );
+          return rows as any[];
+        }
+      }),
+
+    // 新增企业（仅管理员/创始人）
+    ajCreateCompany: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        name: z.string().min(1).max(100),
+        taxNo: z.string().max(50).optional(),
+        address: z.string().max(200).optional(),
+        phone: z.string().max(50).optional(),
+        bankName: z.string().max(100).optional(),
+        bankAccount: z.string().max(100).optional(),
+        remark: z.string().max(300).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (!isSysAdmin && memberRole !== 'owner' && memberRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可添加企业' });
+        }
+        const [result] = await (conn as any).execute(
+          `INSERT INTO aj_companies (ledger_id, name, tax_no, address, phone, bank_name, bank_account, remark, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [input.ledgerId, input.name, input.taxNo || null, input.address || null,
+           input.phone || null, input.bankName || null, input.bankAccount || null,
+           input.remark || null, ctx.user.id]
+        );
+        return { id: (result as any).insertId, ...input };
+      }),
+
+    // 更新企业信息（仅管理员/创始人）
+    ajUpdateCompany: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        ledgerId: z.number(),
+        name: z.string().min(1).max(100).optional(),
+        taxNo: z.string().max(50).optional().nullable(),
+        address: z.string().max(200).optional().nullable(),
+        phone: z.string().max(50).optional().nullable(),
+        bankName: z.string().max(100).optional().nullable(),
+        bankAccount: z.string().max(100).optional().nullable(),
+        remark: z.string().max(300).optional().nullable(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (!isSysAdmin && memberRole !== 'owner' && memberRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可修改企业信息' });
+        }
+        const fields: string[] = [];
+        const values: any[] = [];
+        if (input.name !== undefined) { fields.push('name=?'); values.push(input.name); }
+        if (input.taxNo !== undefined) { fields.push('tax_no=?'); values.push(input.taxNo); }
+        if (input.address !== undefined) { fields.push('address=?'); values.push(input.address); }
+        if (input.phone !== undefined) { fields.push('phone=?'); values.push(input.phone); }
+        if (input.bankName !== undefined) { fields.push('bank_name=?'); values.push(input.bankName); }
+        if (input.bankAccount !== undefined) { fields.push('bank_account=?'); values.push(input.bankAccount); }
+        if (input.remark !== undefined) { fields.push('remark=?'); values.push(input.remark); }
+        if (fields.length === 0) return { success: true };
+        values.push(input.companyId, input.ledgerId);
+        await (conn as any).execute(
+          `UPDATE aj_companies SET ${fields.join(', ')} WHERE id=? AND ledger_id=?`,
+          values
+        );
+        return { success: true };
+      }),
+
+    // 删除企业（仅创始人）
+    ajDeleteCompany: protectedProcedure
+      .input(z.object({ companyId: z.number(), ledgerId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (!isSysAdmin && memberRole !== 'owner') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅创始人可删除企业' });
+        }
+        await (conn as any).execute(`DELETE FROM aj_company_access WHERE company_id=?`, [input.companyId]);
+        await (conn as any).execute(`DELETE FROM aj_companies WHERE id=? AND ledger_id=?`, [input.companyId, input.ledgerId]);
+        return { success: true };
+      }),
+
+    // 获取某企业的业务员权限列表（管理员查看）
+    ajGetCompanyAccess: protectedProcedure
+      .input(z.object({ companyId: z.number(), ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (!isSysAdmin && memberRole !== 'owner' && memberRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看权限' });
+        }
+        // 获取账本所有业务员成员
+        const [members] = await (conn as any).execute(
+          `SELECT lm.userId, lm.role, u.name, u.username, u.avatar
+           FROM ledger_members lm
+           LEFT JOIN users u ON u.id = lm.userId
+           WHERE lm.ledgerId=? AND lm.role='member'`,
+          [input.ledgerId]
+        );
+        // 获取该企业的权限记录
+        const [accessRows] = await (conn as any).execute(
+          `SELECT user_id, is_enabled FROM aj_company_access WHERE company_id=?`,
+          [input.companyId]
+        );
+        const accessMap = new Map((accessRows as any[]).map((r: any) => [r.user_id, r.is_enabled]));
+        return (members as any[]).map((m: any) => ({
+          userId: m.userId,
+          name: m.name,
+          username: m.username,
+          avatar: m.avatar,
+          role: m.role,
+          isEnabled: accessMap.has(m.userId) ? accessMap.get(m.userId) === 1 : false,
+        }));
+      }),
+
+    // 切换业务员对某企业的访问权限（管理员操作）
+    ajToggleCompanyAccess: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        ledgerId: z.number(),
+        userId: z.number(),
+        isEnabled: z.boolean(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (!isSysAdmin && memberRole !== 'owner' && memberRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可修改权限' });
+        }
+        const enabledAt = input.isEnabled ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null;
+        await (conn as any).execute(
+          `INSERT INTO aj_company_access (ledger_id, company_id, user_id, is_enabled, enabled_by, enabled_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE is_enabled=?, enabled_by=?, enabled_at=?`,
+          [input.ledgerId, input.companyId, input.userId, input.isEnabled ? 1 : 0, ctx.user.id, enabledAt,
+           input.isEnabled ? 1 : 0, ctx.user.id, enabledAt]
+        );
+        return { success: true };
+      }),
+
+    // 业务员获取自己有权限的企业（用于报销申请单选择企业）
+    ajGetMyCompanies: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+
+        const isOwnerOrAdmin = memberRole === 'owner' || memberRole === 'admin';
+        if (isOwnerOrAdmin) {
+          // 管理员看全部企业
+          const [rows] = await (conn as any).execute(
+            `SELECT id, name, tax_no as taxNo, address, phone, bank_name as bankName, bank_account as bankAccount, remark
+             FROM aj_companies WHERE ledger_id=? ORDER BY created_at ASC`,
+            [input.ledgerId]
+          );
+          return rows as any[];
+        }
+        // 业务员只看有权限的
+        const [rows] = await (conn as any).execute(
+          `SELECT c.id, c.name, c.tax_no as taxNo, c.address, c.phone, c.bank_name as bankName, c.bank_account as bankAccount, c.remark
+           FROM aj_companies c
+           INNER JOIN aj_company_access a ON a.company_id=c.id AND a.user_id=? AND a.is_enabled=1
+           WHERE c.ledger_id=? ORDER BY c.created_at ASC`,
+          [ctx.user.id, input.ledgerId]
+        );
+        return rows as any[];
+      }),
+
     // 推荐页动态消息：最近2条（新人充値 + 订单变动），仅yjh和管理员可见
     afGetRecentDynamics: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
