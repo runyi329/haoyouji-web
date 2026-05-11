@@ -743,7 +743,7 @@ const AddTransaction = () => {
                   return (
                     <button
                       key={category.id}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                         isSelected
                           ? 'bg-[#D32F2F] text-white shadow-sm'
                           : 'bg-[#FFF0F0] text-[#D32F2F] border border-[#FFCDD2]'
@@ -756,7 +756,7 @@ const AddTransaction = () => {
                 })}
                 {canManageCategories && (
                   <button
-                    className="px-4 py-2 rounded-full text-sm border border-dashed border-[#D32F2F] text-[#D32F2F] flex items-center gap-1"
+                    className="px-4 py-2 rounded-lg text-sm border border-dashed border-[#D32F2F] text-[#D32F2F] flex items-center gap-1"
                     onClick={() => setLocation(`/ledger/${id}/categories`)}
                   >
                     <Plus className="w-3.5 h-3.5" />
