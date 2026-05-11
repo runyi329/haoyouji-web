@@ -5365,6 +5365,32 @@ export default function LedgerDetail() {
                         {record.description && !record.description.startsWith('[diet:') && (
                           <div className="text-xs text-gray-500 mt-0.5 ml-2.5 font-light">{record.description}</div>
                         )}
+                        {/* AJ账本开票信息：开票单位、开票人、状态标签 */}
+                        {isCustomAJ && record.ajStatus && (
+                          <div className="flex flex-wrap items-center gap-1 mt-1 ml-2.5">
+                            {record.ajCompanyName && (
+                              <span className="text-xs text-gray-500 truncate max-w-[120px]" title={record.ajCompanyName}>
+                                🏢 {record.ajCompanyName}
+                              </span>
+                            )}
+                            {record.member && (
+                              <span className="text-xs text-gray-400">
+                                {record.member.nickname || record.member.username}
+                              </span>
+                            )}
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${
+                              record.ajStatus === 'pending' ? 'bg-amber-100 text-amber-700' :
+                              record.ajStatus === 'approved' ? 'bg-green-100 text-green-700' :
+                              'bg-red-100 text-red-600'
+                            }`}>
+                              {record.ajStatus === 'pending' ? '申请中' :
+                               record.ajStatus === 'approved' ? '已通过' : '已拒绝'}
+                            </span>
+                            <span className="text-[10px] text-gray-300">
+                              {new Date(record.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {/* 金额 / 减肥数据 */}
