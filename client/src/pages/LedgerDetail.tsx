@@ -2119,7 +2119,12 @@ export default function LedgerDetail() {
   const isCustomAH = (ledgerData as any)?.type === 'custom_ah';
   const isCustomAI = (ledgerData as any)?.type === 'custom_ai';
   const isCustomAJ = (ledgerData as any)?.type === 'custom_aj';
-
+  // AJ账本：查询当前用户（或视角用户）有权限的企业列表，用于判断是否允许进入报销申请单
+  const { data: ajAccessibleCompanies } = trpc.ledger.ajGetMyCompanies.useQuery(
+    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
+    { enabled: isCustomAJ }
+  );
+  const ajHasAccessibleCompanies = isCustomAJ && (ajAccessibleCompanies as any[])?.length > 0;
 
 
   // AI 账本日历 state
@@ -5395,6 +5400,11 @@ export default function LedgerDetail() {
       {isCustomAJ && (
         <button
           onClick={() => {
+            // 判断是否有可见企业，没有则提示
+            if (!ajHasAccessibleCompanies) {
+              alert('当前暂未开放，请稍后再试');
+              return;
+            }
             // 将viewAsUserId写入sessionStorage，确保跨页面跳转后能正确读取
             if (viewAsUserId) {
               sessionStorage.setItem('aj_view_as_user_id', String(viewAsUserId));
