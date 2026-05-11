@@ -2488,6 +2488,8 @@ export default function LedgerDetail() {
     const saved = localStorage.getItem('statsPeriod');
     return (saved as 'day' | 'week' | 'month' | 'year') || 'month';
   });
+  // AJ账本专用独立统计周期，不影响普通账本的statsPeriod
+  const [ajStatsPeriod, setAjStatsPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>('month');
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
   const [aiProductDetail, setAiProductDetail] = useState<string | null>(null);
   const [aiProductQty, setAiProductQty] = useState(1);
@@ -3798,8 +3800,8 @@ export default function LedgerDetail() {
               <span className="text-xs text-white/80">报销汇总</span>
               <div className="relative">
                 <select
-                  value={statsPeriod}
-                  onChange={e => setStatsPeriod(e.target.value as any)}
+                  value={ajStatsPeriod}
+                  onChange={e => setAjStatsPeriod(e.target.value as any)}
                   className="appearance-none text-xs text-white/90 pl-2 pr-6 py-1 rounded-full border border-white/30 cursor-pointer outline-none focus:outline-none focus:ring-0"
                   style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}
                 >
@@ -3837,12 +3839,12 @@ export default function LedgerDetail() {
                     const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
                     transactionsData.forEach((day: any) => {
                       let ok = false;
-                      if (statsPeriod === 'all') ok = true;
-                      else if (statsPeriod === 'day') ok = day.date === today;
-                      else if (statsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
-                      else if (statsPeriod === 'month') ok = day.date.startsWith(currentMonth);
-                      else if (statsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
-                      else if (statsPeriod === 'year') ok = day.date.startsWith(currentYear);
+                      if (ajStatsPeriod === 'all') ok = true;
+                      else if (ajStatsPeriod === 'day') ok = day.date === today;
+                      else if (ajStatsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
+                      else if (ajStatsPeriod === 'month') ok = day.date.startsWith(currentMonth);
+                      else if (ajStatsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
+                      else if (ajStatsPeriod === 'year') ok = day.date.startsWith(currentYear);
                       if (ok) count += (day.records || []).length;
                     });
                     return count > 0 ? `${count}张` : '--';
