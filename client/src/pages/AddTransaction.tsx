@@ -128,6 +128,13 @@ const AddTransaction = () => {
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [showCompanyPicker, setShowCompanyPicker] = useState(false);
   const selectedCompany = (ajCompanies as any[])?.find((c: any) => c.id === selectedCompanyId);
+  // 当企业列表加载完成且只有1个时，自动选中该企业
+  useEffect(() => {
+    if (isCustomAJ && ajCompanies && (ajCompanies as any[]).length === 1 && selectedCompanyId === null) {
+      setSelectedCompanyId((ajCompanies as any[])[0].id);
+    }
+  }, [isCustomAJ, ajCompanies]);
+  const hasMultipleCompanies = isCustomAJ && (ajCompanies as any[])?.length > 1;
   
   // 获取要编辑的账目详情
   const { data: editTransaction } = trpc.ledger.getTransactionDetail.useQuery(
@@ -805,16 +812,18 @@ const AddTransaction = () => {
               className="px-5 py-4"
               style={{ borderBottom: '1px solid #F5F5F5' }}
             >
-              {/* 标题行：开票信息 + 更换企业按鈕 */}
+              {/* 标题行：开票信息 + 更换企业按鈕（多企业时才显示） */}
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs text-gray-400 font-medium tracking-wider">开票信息</span>
-                <button
-                  className="flex items-center gap-1 text-xs text-[#D32F2F]"
-                  onClick={() => setShowCompanyPicker(true)}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                  <span>{selectedCompany ? '更换' : '选择企业'}</span>
-                </button>
+                {hasMultipleCompanies && (
+                  <button
+                    className="flex items-center gap-1 text-xs text-[#D32F2F]"
+                    onClick={() => setShowCompanyPicker(true)}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    <span>{selectedCompany ? '更换' : '选择企业'}</span>
+                  </button>
+                )}
               </div>
               {/* 企业名称行 */}
               {selectedCompany ? (
