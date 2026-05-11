@@ -857,23 +857,7 @@ const AddTransaction = () => {
             </div>
             {/* 报销事由 - 已隐藏 */}
 
-            {/* 发票日期 */}
-            <button
-              className="w-full px-5 py-4 flex items-center justify-between active:bg-gray-50 transition-colors"
-              style={{ borderBottom: '1px solid #F5F5F5' }}
-              onClick={() => setIsDateSheetOpen(true)}
-            >
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-[#D32F2F]" />
-                <span className="text-xs text-gray-400 font-medium tracking-wider">发票日期</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="text-sm font-semibold text-gray-700">
-                  {selectedDate.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
-                </span>
-                <ChevronRight className="w-4 h-4 text-gray-300" />
-              </div>
-            </button>
+            {/* 发票日期 - 已隐藏 */}
 
             {/* 发票附件 */}
             <div className="px-5 py-4">
