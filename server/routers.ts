@@ -8922,11 +8922,18 @@ ${klinesSummary}
         reimbursementStatus: z.enum(['none', 'pending', 'completed']).optional(),
         pendingType: z.enum(['receivable', 'payable']).nullable().optional(),
         pendingIncludeStats: z.number().min(0).max(1).optional(),
+        viewAsUserId: z.number().optional(), // 管理员以业务员视角提交时，用此ID作为createdBy
       }))
       .mutation(async ({ ctx, input }) => {
+        const { viewAsUserId, ...rest } = input;
+        // 如果是管理员以业务员视角提交，验证权限后用viewAsUserId作为createdBy
+        let effectiveUserId = ctx.user.id;
+        if (viewAsUserId && (ctx.user.role === 'admin' || ctx.user.role === 'super_admin')) {
+          effectiveUserId = viewAsUserId;
+        }
         return await dbLedger.addTransaction({
-          ...input,
-          userId: ctx.user.id,
+          ...rest,
+          userId: effectiveUserId,
         });
       }),
 

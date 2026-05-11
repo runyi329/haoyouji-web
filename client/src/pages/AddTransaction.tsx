@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useLocation, useParams } from "wouter";
+import { useLocation, useParams, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
   AlertTriangle,
@@ -86,11 +86,13 @@ const AddTransaction = () => {
   }, [ledgerId, utils]);
   
   // 编辑模式：从 URL 参数获取要编辑的账目 ID
-  const urlParams = new URLSearchParams(window.location.search);
+  // 使用 wouter 的 useSearch 确保 SPA 路由下能正确读取 URL 参数
+  const searchString = useSearch();
+  const urlParams = new URLSearchParams(searchString);
   const editId = urlParams.get('edit');
   const isEditMode = !!editId;
   const editTransactionId = editId ? parseInt(editId) : undefined;
-  // 视角切换：管理员切换为业务员视角时，从URL获取viewAs参数
+  // 视角切换：管理员切换为业务员视角时，从 URL获取 viewAs 参数
   const viewAsUserId = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
   
   // 获取账本信息（用于获取功能开关）
@@ -653,6 +655,11 @@ const AddTransaction = () => {
     // 只有当accountId是有效数字时才添加
     if (!isNaN(accountIdNum)) {
       payload.accountId = accountIdNum;
+    }
+    
+    // 管理员以业务员视角提交时，传入viewAsUserId确保记录属于该业务员
+    if (viewAsUserId) {
+      payload.viewAsUserId = viewAsUserId;
     }
     
     if (isEditMode && editTransactionId) {
