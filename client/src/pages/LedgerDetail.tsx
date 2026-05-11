@@ -2781,15 +2781,15 @@ export default function LedgerDetail() {
   ];
 
   return (
-    <div className={isCustomAI ? "flex flex-col" : "min-h-screen"} style={isCustomAI ? {
+    <div className={(isCustomAI || isCustomAJ) ? "flex flex-col" : "min-h-screen"} style={isCustomAI ? {
       height: '100dvh',
       backgroundColor: '#E8601C',
       backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"), repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(58,20,0,0.018) 2px, rgba(58,20,0,0.018) 3px), repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(58,20,0,0.012) 4px, rgba(58,20,0,0.012) 5px)`,
     } : {}}>
       {/* 顶部区域 */}
-      <div className="pb-4" style={isCustomAI ? { flexShrink: 0, background: 'linear-gradient(160deg, #3D1F0D 0%, #5C2E10 30%, #3D1F0D 100%)', color: '#1A0A00', borderBottom: '1px solid rgba(58,20,0,0.4)' } : (isCustomAF || isCustomAH) ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', color: '#FFFFFF' } : { backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
+      <div className="pb-4" style={isCustomAI ? { flexShrink: 0, background: 'linear-gradient(160deg, #3D1F0D 0%, #5C2E10 30%, #3D1F0D 100%)', color: '#1A0A00', borderBottom: '1px solid rgba(58,20,0,0.4)' } : (isCustomAF || isCustomAH) ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', color: '#FFFFFF' } : isCustomAJ ? { backgroundColor: '#D32F2F', color: '#FFFFFF' } : { backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
         {/* AF/AH 账本：顶部两行布局 */}
-        {(isCustomAF || isCustomAH || isCustomAI) ? (
+        {(isCustomAF || isCustomAH || isCustomAI || isCustomAJ) ? (
           <div className="px-4 pt-3 pb-2">
             {/* 第一行：头像 + 名字 + 设置齿轮 */}
             <div className="flex items-center justify-between">
@@ -6007,7 +6007,7 @@ export default function LedgerDetail() {
       )}
 
       {/* AF/AH/AI 视角切换横幅 */}
-      {(isCustomAF || isCustomAH || isCustomAI) && viewAsUserId && (isOwner || isAdmin) && (
+      {(isCustomAF || isCustomAH || isCustomAI || isCustomAJ) && viewAsUserId && (isOwner || isAdmin) && (
         <div className="fixed bottom-0 left-0 right-0 z-[60] flex items-center justify-between px-4 py-3 safe-area-bottom" style={{ backgroundColor: '#F59E0B', color: '#1A2340' }}>
           <div className="flex items-center gap-2 text-sm font-medium">
             <Users className="w-4 h-4" />
@@ -6273,7 +6273,7 @@ export default function LedgerDetail() {
       )}
 
       {/* AF/AH 视角切换弹窗：成员列表 + 搜索 */}
-      {showViewAsPicker && (isCustomAF || isCustomAH || isCustomAI) && (isOwner || isAdmin) && (
+      {showViewAsPicker && (isCustomAF || isCustomAH || isCustomAI || isCustomAJ) && (isOwner || isAdmin) && (
         <div className="fixed inset-0 z-[70] flex items-end justify-center" onClick={() => setShowViewAsPicker(false)}>
           <div className="absolute inset-0 bg-black/40" />
           <div
