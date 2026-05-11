@@ -101,7 +101,7 @@ const AddTransaction = () => {
   const canManageCategories = !isCustomAA || userRole === 'owner' || userRole === 'admin';
   
   // AJ账本：获取业务员有权限的企业列表
-  const { data: ajCompanies } = trpc.ajGetMyCompanies.useQuery(
+  const { data: ajCompanies } = trpc.ledger.ajGetMyCompanies.useQuery(
     { ledgerId },
     { enabled: isCustomAJ }
   );
