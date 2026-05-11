@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { Loader2, ChevronLeft, PawPrint, Calendar, MapPin, Settings, ChevronRight } from "lucide-react";
+import { Loader2, ChevronLeft, PawPrint, Calendar, MapPin, Settings, ChevronRight, Search, Plus, UserCog, Cpu, X, Check, Trash2, Edit2 } from "lucide-react";
 import { centerToast } from "@/components/ui/center-toast";
 
 // 插画资源 CDN URL
@@ -46,7 +46,675 @@ const STATUS_LABELS: Record<string, { label: string; color: string; dot: string 
   maintenance: { label: "维护中", color: "#B85C38", dot: "#B85C38" },
 };
 
-// 录入营业额弹窗
+// ========== 管理员：成员管理面板 ==========
+function AdminMemberPanel({ onClose }: { onClose: () => void }) {
+  const [keyword, setKeyword] = useState("");
+  const [searchKw, setSearchKw] = useState("");
+  const [editUser, setEditUser] = useState<any>(null);
+  const [editRole, setEditRole] = useState<string>("");
+  const [editIsAdmin, setEditIsAdmin] = useState(false);
+  const [editRemark, setEditRemark] = useState("");
+
+  // 获取已有成员列表
+  const { data: members, isLoading: membersLoading, refetch: refetchMembers } = trpc.pet.adminGetUsers.useQuery();
+  // 搜索用户
+  const { data: searchResults, isLoading: searchLoading } = trpc.pet.adminSearchUsers.useQuery(
+    { keyword: searchKw },
+    { enabled: searchKw.length >= 1 }
+  );
+
+  const setRole = trpc.pet.adminSetUserRole.useMutation({
+    onSuccess: () => {
+      centerToast.success("保存成功");
+      setEditUser(null);
+      refetchMembers();
+    },
+    onError: (e) => centerToast.error(`保存失败：${e.message}`),
+  });
+
+  const handleEdit = (user: any) => {
+    setEditUser(user);
+    setEditRole(user.petRole ?? "petshop");
+    setEditIsAdmin(user.petIsAdmin ?? false);
+    setEditRemark(user.petRemark ?? "");
+  };
+
+  const handleSave = () => {
+    if (!editUser) return;
+    setRole.mutate({
+      userId: editUser.id,
+      role: editRole as any,
+      isAdmin: editIsAdmin,
+      remark: editRemark || undefined,
+    });
+  };
+
+  const handleRemove = (user: any) => {
+    if (!confirm(`确定移除 ${user.name || user.username} 的宠物平台角色吗？`)) return;
+    setRole.mutate({ userId: user.id, role: null });
+  };
+
+  const handleAddFromSearch = (user: any) => {
+    setSearchKw("");
+    setKeyword("");
+    handleEdit(user);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: COLORS.bg }}>
+      {/* 顶部导航 */}
+      <div
+        className="px-4 pt-12 pb-4 flex items-center space-x-3 flex-shrink-0"
+        style={{ background: COLORS.card, borderBottom: `1px solid ${COLORS.border}` }}
+      >
+        <button
+          onClick={onClose}
+          className="w-9 h-9 flex items-center justify-center rounded-full active:opacity-70"
+          style={{ background: COLORS.lightBg }}
+        >
+          <ChevronLeft className="w-5 h-5" style={{ color: COLORS.dark }} />
+        </button>
+        <div className="flex items-center space-x-2">
+          <UserCog className="w-5 h-5" style={{ color: COLORS.primary }} />
+          <h1 className="text-base font-bold" style={{ color: COLORS.dark }}>成员管理</h1>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {/* 搜索添加新成员 */}
+        <div
+          className="rounded-3xl p-4"
+          style={{ background: COLORS.card, border: `1.5px solid ${COLORS.border}` }}
+        >
+          <p className="text-xs font-bold mb-3" style={{ color: COLORS.muted }}>搜索并添加成员</p>
+          <div className="flex space-x-2">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: COLORS.muted }} />
+              <input
+                type="text"
+                placeholder="输入姓名或手机号"
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                className="w-full rounded-2xl pl-9 pr-4 py-2.5 text-sm focus:outline-none"
+                style={{
+                  background: COLORS.lightBg,
+                  border: `1.5px solid ${COLORS.border}`,
+                  color: COLORS.dark,
+                }}
+              />
+            </div>
+            <button
+              className="px-4 py-2.5 rounded-2xl text-sm font-bold text-white active:opacity-80"
+              style={{ background: COLORS.primary }}
+              onClick={() => setSearchKw(keyword)}
+            >
+              搜索
+            </button>
+          </div>
+
+          {/* 搜索结果 */}
+          {searchKw && (
+            <div className="mt-3 space-y-2">
+              {searchLoading ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 className="w-4 h-4 animate-spin" style={{ color: COLORS.muted }} />
+                </div>
+              ) : !searchResults || searchResults.length === 0 ? (
+                <p className="text-xs text-center py-3" style={{ color: COLORS.muted }}>未找到用户</p>
+              ) : (
+                searchResults.map((user: any) => (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between p-3 rounded-2xl"
+                    style={{ background: COLORS.lightBg }}
+                  >
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: COLORS.dark }}>
+                        {user.name || user.username}
+                      </p>
+                      {user.phone && (
+                        <p className="text-xs" style={{ color: COLORS.muted }}>{user.phone}</p>
+                      )}
+                      {user.petRole && (
+                        <span
+                          className="text-[10px] px-2 py-0.5 rounded-full mt-1 inline-block"
+                          style={{
+                            background: ROLE_BADGE[user.petRole]?.bg ?? "#F3F4F6",
+                            color: ROLE_BADGE[user.petRole]?.text ?? "#374151",
+                          }}
+                        >
+                          {ROLE_LABELS[user.petRole] ?? user.petRole}
+                          {user.petIsAdmin && " · 管理员"}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-white active:opacity-80"
+                      style={{ background: COLORS.primary }}
+                      onClick={() => handleAddFromSearch(user)}
+                    >
+                      {user.petRole ? "编辑" : "添加"}
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 现有成员列表 */}
+        <div
+          className="rounded-3xl overflow-hidden"
+          style={{ background: COLORS.card, border: `1.5px solid ${COLORS.border}` }}
+        >
+          <div className="px-4 py-3.5" style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+            <p className="text-xs font-bold" style={{ color: COLORS.muted }}>
+              当前成员
+              {members && <span className="ml-1 font-normal">（{members.length} 人）</span>}
+            </p>
+          </div>
+          {membersLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin" style={{ color: COLORS.border }} />
+            </div>
+          ) : !members || members.length === 0 ? (
+            <div className="flex flex-col items-center py-8">
+              <p className="text-sm" style={{ color: COLORS.muted }}>暂无成员</p>
+            </div>
+          ) : (
+            members.map((user: any, idx: number) => (
+              <div
+                key={user.id}
+                className="flex items-center justify-between px-4 py-3.5"
+                style={{
+                  borderBottom: idx < members.length - 1 ? `1px solid ${COLORS.border}` : "none",
+                }}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-2">
+                    <p className="text-sm font-semibold truncate" style={{ color: COLORS.dark }}>
+                      {user.name || user.username}
+                    </p>
+                    {user.petIsAdmin && (
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0"
+                        style={{ background: "#FEE2E2", color: "#991B1B" }}
+                      >
+                        管理员
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2 mt-0.5">
+                    {user.petRole && (
+                      <span
+                        className="text-[10px] px-2 py-0.5 rounded-full"
+                        style={{
+                          background: ROLE_BADGE[user.petRole]?.bg ?? "#F3F4F6",
+                          color: ROLE_BADGE[user.petRole]?.text ?? "#374151",
+                        }}
+                      >
+                        {ROLE_LABELS[user.petRole] ?? user.petRole}
+                      </span>
+                    )}
+                    {user.phone && (
+                      <span className="text-[10px]" style={{ color: COLORS.muted }}>{user.phone}</span>
+                    )}
+                  </div>
+                  {user.petRemark && (
+                    <p className="text-[10px] mt-0.5 truncate" style={{ color: COLORS.muted }}>{user.petRemark}</p>
+                  )}
+                </div>
+                <div className="flex items-center space-x-2 ml-2 flex-shrink-0">
+                  <button
+                    className="w-8 h-8 flex items-center justify-center rounded-xl active:opacity-70"
+                    style={{ background: `${COLORS.primary}15` }}
+                    onClick={() => handleEdit(user)}
+                  >
+                    <Edit2 className="w-3.5 h-3.5" style={{ color: COLORS.primary }} />
+                  </button>
+                  <button
+                    className="w-8 h-8 flex items-center justify-center rounded-xl active:opacity-70"
+                    style={{ background: "#FEE2E215" }}
+                    onClick={() => handleRemove(user)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" style={{ color: "#DC2626" }} />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* 编辑用户角色弹窗 */}
+      {editUser && (
+        <div className="fixed inset-0 z-60 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setEditUser(null)} />
+          <div
+            className="relative w-full max-w-md rounded-t-3xl p-5 pb-10 shadow-2xl"
+            style={{ background: COLORS.bg }}
+          >
+            <div className="flex justify-center mb-4">
+              <div className="w-10 h-1 rounded-full" style={{ background: COLORS.border }} />
+            </div>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold" style={{ color: COLORS.dark }}>
+                  设置角色
+                </h3>
+                <p className="text-xs mt-0.5" style={{ color: COLORS.muted }}>
+                  {editUser.name || editUser.username}
+                  {editUser.phone && ` · ${editUser.phone}`}
+                </p>
+              </div>
+              <button onClick={() => setEditUser(null)}>
+                <X className="w-5 h-5" style={{ color: COLORS.muted }} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* 角色选择 */}
+              <div>
+                <label className="text-xs font-medium mb-2 block" style={{ color: COLORS.muted }}>角色</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["manufacturer", "investor", "promoter", "petshop"] as const).map((r) => (
+                    <button
+                      key={r}
+                      className="py-2.5 rounded-2xl text-sm font-medium transition-all active:scale-95"
+                      style={{
+                        background: editRole === r ? ROLE_BADGE[r].bg : COLORS.lightBg,
+                        color: editRole === r ? ROLE_BADGE[r].text : COLORS.muted,
+                        border: editRole === r ? `1.5px solid ${ROLE_BADGE[r].text}40` : `1.5px solid transparent`,
+                        fontWeight: editRole === r ? 700 : 500,
+                      }}
+                      onClick={() => setEditRole(r)}
+                    >
+                      {ROLE_LABELS[r]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 管理员开关 */}
+              <div
+                className="flex items-center justify-between p-3 rounded-2xl"
+                style={{ background: COLORS.lightBg }}
+              >
+                <div>
+                  <p className="text-sm font-medium" style={{ color: COLORS.dark }}>设为管理员</p>
+                  <p className="text-xs mt-0.5" style={{ color: COLORS.muted }}>管理员可管理成员和机器</p>
+                </div>
+                <button
+                  className="w-12 h-6 rounded-full transition-all relative"
+                  style={{
+                    background: editIsAdmin ? COLORS.primary : COLORS.border,
+                  }}
+                  onClick={() => setEditIsAdmin(!editIsAdmin)}
+                >
+                  <div
+                    className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all"
+                    style={{ left: editIsAdmin ? "calc(100% - 22px)" : "2px" }}
+                  />
+                </button>
+              </div>
+
+              {/* 备注 */}
+              <div>
+                <label className="text-xs font-medium mb-1.5 block" style={{ color: COLORS.muted }}>备注（可选）</label>
+                <input
+                  type="text"
+                  placeholder="如：北京区域地推"
+                  value={editRemark}
+                  onChange={(e) => setEditRemark(e.target.value)}
+                  className="w-full rounded-2xl px-4 py-2.5 text-sm focus:outline-none"
+                  style={{
+                    background: COLORS.card,
+                    border: `1.5px solid ${COLORS.border}`,
+                    color: COLORS.dark,
+                  }}
+                />
+              </div>
+            </div>
+
+            <button
+              className="w-full mt-5 rounded-2xl py-3.5 text-sm font-bold text-white transition-opacity active:opacity-80 disabled:opacity-40"
+              style={{ background: `linear-gradient(135deg, ${COLORS.primary}, #8B3A1E)` }}
+              disabled={setRole.isPending}
+              onClick={handleSave}
+            >
+              {setRole.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "保存"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========== 管理员：机器管理面板 ==========
+function AdminMachinePanel({ onClose }: { onClose: () => void }) {
+  const [editMachine, setEditMachine] = useState<any>(null);
+  const [form, setForm] = useState<any>({});
+
+  const { data: machines, isLoading, refetch } = trpc.pet.getMyMachines.useQuery();
+  const upsert = trpc.pet.adminUpsertMachine.useMutation({
+    onSuccess: () => {
+      centerToast.success("保存成功");
+      setEditMachine(null);
+      refetch();
+    },
+    onError: (e) => centerToast.error(`保存失败：${e.message}`),
+  });
+
+  const handleAdd = () => {
+    setEditMachine({ isNew: true });
+    setForm({
+      machineNo: "",
+      name: "",
+      petshopName: "",
+      address: "",
+      status: "active",
+      petshopRatio: 40,
+      investorRatio: 35,
+      promoterRatio: 10,
+      manufacturerRatio: 15,
+    });
+  };
+
+  const handleEdit = (m: any) => {
+    setEditMachine(m);
+    setForm({
+      machineNo: m.machineNo ?? "",
+      name: m.name ?? "",
+      petshopName: m.petshopName ?? "",
+      address: m.address ?? "",
+      status: m.status ?? "active",
+      installDate: m.installDate ?? "",
+      petshopRatio: m.ratios?.petshop ?? 40,
+      investorRatio: m.ratios?.investor ?? 35,
+      promoterRatio: m.ratios?.promoter ?? 10,
+      manufacturerRatio: m.ratios?.manufacturer ?? 15,
+    });
+  };
+
+  const handleSave = () => {
+    const total = (form.petshopRatio || 0) + (form.investorRatio || 0) + (form.promoterRatio || 0) + (form.manufacturerRatio || 0);
+    if (Math.abs(total - 100) > 0.01) {
+      centerToast.error(`分润比例之和必须为100%，当前为${total}%`);
+      return;
+    }
+    upsert.mutate({
+      id: editMachine?.isNew ? undefined : editMachine?.id,
+      machineNo: form.machineNo,
+      name: form.name || undefined,
+      petshopName: form.petshopName || undefined,
+      address: form.address || undefined,
+      status: form.status || "active",
+      installDate: form.installDate || undefined,
+      petshopRatio: parseFloat(form.petshopRatio) || 40,
+      investorRatio: parseFloat(form.investorRatio) || 35,
+      promoterRatio: parseFloat(form.promoterRatio) || 10,
+      manufacturerRatio: parseFloat(form.manufacturerRatio) || 15,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: COLORS.bg }}>
+      {/* 顶部导航 */}
+      <div
+        className="px-4 pt-12 pb-4 flex items-center justify-between flex-shrink-0"
+        style={{ background: COLORS.card, borderBottom: `1px solid ${COLORS.border}` }}
+      >
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={onClose}
+            className="w-9 h-9 flex items-center justify-center rounded-full active:opacity-70"
+            style={{ background: COLORS.lightBg }}
+          >
+            <ChevronLeft className="w-5 h-5" style={{ color: COLORS.dark }} />
+          </button>
+          <div className="flex items-center space-x-2">
+            <Cpu className="w-5 h-5" style={{ color: COLORS.primary }} />
+            <h1 className="text-base font-bold" style={{ color: COLORS.dark }}>机器管理</h1>
+          </div>
+        </div>
+        <button
+          className="flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs font-bold text-white active:opacity-80"
+          style={{ background: COLORS.primary }}
+          onClick={handleAdd}
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>添加机器</span>
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {isLoading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="w-6 h-6 animate-spin" style={{ color: COLORS.border }} />
+          </div>
+        ) : !machines || machines.length === 0 ? (
+          <div className="flex flex-col items-center py-16">
+            <Cpu className="w-12 h-12 mb-3 opacity-20" style={{ color: COLORS.muted }} />
+            <p className="text-sm font-medium" style={{ color: COLORS.dark }}>暂无机器</p>
+            <p className="text-xs mt-1" style={{ color: COLORS.muted }}>点击右上角添加机器</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {machines.map((m: any) => {
+              const status = STATUS_LABELS[m.status] ?? STATUS_LABELS.active;
+              return (
+                <div
+                  key={m.id}
+                  className="rounded-3xl overflow-hidden"
+                  style={{
+                    background: COLORS.card,
+                    border: `1.5px solid ${COLORS.border}`,
+                  }}
+                >
+                  <div className="flex items-center justify-between px-4 py-3.5">
+                    <div className="flex items-center space-x-3">
+                      <div
+                        className="w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden flex-shrink-0"
+                        style={{ background: COLORS.lightBg }}
+                      >
+                        <img src={MACHINE_IMG} alt="健康舱" className="w-10 h-10 object-contain" />
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-bold" style={{ color: COLORS.dark }}>{m.machineNo}</span>
+                          {m.name && (
+                            <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: COLORS.lightBg, color: COLORS.muted }}>
+                              {m.name}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-1.5 mt-0.5">
+                          <div className="w-1.5 h-1.5 rounded-full" style={{ background: status.dot }} />
+                          <span className="text-[11px]" style={{ color: status.color }}>{status.label}</span>
+                          {m.address && (
+                            <span className="text-[11px]" style={{ color: COLORS.muted }}>· {m.address}</span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {m.petshopUserName && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: ROLE_BADGE.petshop.bg, color: ROLE_BADGE.petshop.text }}>
+                              宠物店：{m.petshopUserName}
+                            </span>
+                          )}
+                          {m.investorUserName && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ background: ROLE_BADGE.investor.bg, color: ROLE_BADGE.investor.text }}>
+                              投资人：{m.investorUserName}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      className="w-9 h-9 flex items-center justify-center rounded-xl active:opacity-70 flex-shrink-0"
+                      style={{ background: `${COLORS.primary}15` }}
+                      onClick={() => handleEdit(m)}
+                    >
+                      <Edit2 className="w-4 h-4" style={{ color: COLORS.primary }} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 编辑机器弹窗 */}
+      {editMachine && (
+        <div className="fixed inset-0 z-60 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setEditMachine(null)} />
+          <div
+            className="relative w-full max-w-md rounded-t-3xl shadow-2xl overflow-hidden"
+            style={{ background: COLORS.bg, maxHeight: "85vh" }}
+          >
+            <div className="p-5 overflow-y-auto" style={{ maxHeight: "85vh" }}>
+              <div className="flex justify-center mb-4">
+                <div className="w-10 h-1 rounded-full" style={{ background: COLORS.border }} />
+              </div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold" style={{ color: COLORS.dark }}>
+                  {editMachine.isNew ? "添加机器" : "编辑机器"}
+                </h3>
+                <button onClick={() => setEditMachine(null)}>
+                  <X className="w-5 h-5" style={{ color: COLORS.muted }} />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {/* 机器编号 */}
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={{ color: COLORS.muted }}>机器编号 *</label>
+                  <input
+                    type="text"
+                    placeholder="如：HGM-001"
+                    value={form.machineNo}
+                    onChange={(e) => setForm({ ...form, machineNo: e.target.value })}
+                    className="w-full rounded-2xl px-4 py-2.5 text-sm focus:outline-none"
+                    style={{ background: COLORS.card, border: `1.5px solid ${COLORS.border}`, color: COLORS.dark }}
+                  />
+                </div>
+                {/* 机器名称 */}
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={{ color: COLORS.muted }}>机器名称</label>
+                  <input
+                    type="text"
+                    placeholder="如：朝阳店1号机"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    className="w-full rounded-2xl px-4 py-2.5 text-sm focus:outline-none"
+                    style={{ background: COLORS.card, border: `1.5px solid ${COLORS.border}`, color: COLORS.dark }}
+                  />
+                </div>
+                {/* 宠物店名称 */}
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={{ color: COLORS.muted }}>宠物店名称</label>
+                  <input
+                    type="text"
+                    placeholder="如：萌宠宠物店"
+                    value={form.petshopName}
+                    onChange={(e) => setForm({ ...form, petshopName: e.target.value })}
+                    className="w-full rounded-2xl px-4 py-2.5 text-sm focus:outline-none"
+                    style={{ background: COLORS.card, border: `1.5px solid ${COLORS.border}`, color: COLORS.dark }}
+                  />
+                </div>
+                {/* 地址 */}
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={{ color: COLORS.muted }}>地址</label>
+                  <input
+                    type="text"
+                    placeholder="如：北京市朝阳区xx路xx号"
+                    value={form.address}
+                    onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    className="w-full rounded-2xl px-4 py-2.5 text-sm focus:outline-none"
+                    style={{ background: COLORS.card, border: `1.5px solid ${COLORS.border}`, color: COLORS.dark }}
+                  />
+                </div>
+                {/* 安装日期 */}
+                <div>
+                  <label className="text-xs font-medium mb-1.5 block" style={{ color: COLORS.muted }}>安装日期</label>
+                  <input
+                    type="date"
+                    value={form.installDate}
+                    onChange={(e) => setForm({ ...form, installDate: e.target.value })}
+                    className="w-full rounded-2xl px-4 py-2.5 text-sm focus:outline-none"
+                    style={{ background: COLORS.card, border: `1.5px solid ${COLORS.border}`, color: COLORS.dark }}
+                  />
+                </div>
+                {/* 状态 */}
+                <div>
+                  <label className="text-xs font-medium mb-2 block" style={{ color: COLORS.muted }}>状态</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(["active", "inactive", "maintenance"] as const).map((s) => (
+                      <button
+                        key={s}
+                        className="py-2 rounded-2xl text-xs font-medium transition-all active:scale-95"
+                        style={{
+                          background: form.status === s ? `${STATUS_LABELS[s].color}15` : COLORS.lightBg,
+                          color: form.status === s ? STATUS_LABELS[s].color : COLORS.muted,
+                          border: form.status === s ? `1.5px solid ${STATUS_LABELS[s].color}40` : `1.5px solid transparent`,
+                          fontWeight: form.status === s ? 700 : 500,
+                        }}
+                        onClick={() => setForm({ ...form, status: s })}
+                      >
+                        {STATUS_LABELS[s].label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* 分润比例 */}
+                <div>
+                  <label className="text-xs font-medium mb-2 block" style={{ color: COLORS.muted }}>
+                    分润比例（合计 {(parseFloat(form.petshopRatio || 0) + parseFloat(form.investorRatio || 0) + parseFloat(form.promoterRatio || 0) + parseFloat(form.manufacturerRatio || 0)).toFixed(0)}%，需等于100%）
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { key: "petshopRatio", label: "宠物店" },
+                      { key: "investorRatio", label: "投资人" },
+                      { key: "promoterRatio", label: "地推" },
+                      { key: "manufacturerRatio", label: "厂家" },
+                    ].map((item) => (
+                      <div key={item.key}>
+                        <p className="text-[10px] mb-1" style={{ color: COLORS.muted }}>{item.label}（%）</p>
+                        <input
+                          type="number"
+                          value={form[item.key]}
+                          onChange={(e) => setForm({ ...form, [item.key]: e.target.value })}
+                          className="w-full rounded-xl px-3 py-2 text-sm focus:outline-none"
+                          style={{ background: COLORS.card, border: `1.5px solid ${COLORS.border}`, color: COLORS.dark }}
+                          min="0"
+                          max="100"
+                          step="1"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                className="w-full mt-5 rounded-2xl py-3.5 text-sm font-bold text-white transition-opacity active:opacity-80 disabled:opacity-40"
+                style={{ background: `linear-gradient(135deg, ${COLORS.primary}, #8B3A1E)` }}
+                disabled={!form.machineNo || upsert.isPending}
+                onClick={handleSave}
+              >
+                {upsert.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "保存机器"}
+              </button>
+              <div className="h-6" />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ========== 录入营业额弹窗 ==========
 function RecordModal({
   machine,
   onClose,
@@ -163,7 +831,7 @@ function RecordModal({
   );
 }
 
-// 机器卡片
+// ========== 机器卡片 ==========
 function MachineCard({
   machine,
   userRole,
@@ -295,7 +963,7 @@ function MachineCard({
   );
 }
 
-// 机器详情页
+// ========== 机器详情页 ==========
 function MachineDetail({ machine, userRole, onBack }: { machine: any; userRole: string; onBack: () => void }) {
   const { data: history, isLoading } = trpc.pet.getMachineHistory.useQuery({ machineId: machine.id });
 
@@ -447,16 +1115,19 @@ function MachineDetail({ machine, userRole, onBack }: { machine: any; userRole: 
   );
 }
 
-// 主页面
+// ========== 主页面 ==========
 export default function PetPlatform() {
   const [, navigate] = useLocation();
   const [recordingMachine, setRecordingMachine] = useState<any>(null);
   const [detailMachine, setDetailMachine] = useState<any>(null);
+  const [showMemberPanel, setShowMemberPanel] = useState(false);
+  const [showMachinePanel, setShowMachinePanel] = useState(false);
 
   const { data: roleData, isLoading: roleLoading } = trpc.pet.getMyRole.useQuery();
   const { data: machines, isLoading: machinesLoading, refetch } = trpc.pet.getMyMachines.useQuery();
 
   const userRole = roleData?.role ?? "petshop";
+  const isAdmin = !!(roleData?.isAdmin);
   const badge = ROLE_BADGE[userRole] ?? ROLE_BADGE.petshop;
 
   // 汇总数据
@@ -464,6 +1135,14 @@ export default function PetPlatform() {
   const totalTodayProfit = (machines ?? []).reduce((s: number, m: any) => s + m.today.myProfit, 0);
   const totalMonthRevenue = (machines ?? []).reduce((s: number, m: any) => s + m.month.revenue, 0);
   const totalMonthProfit = (machines ?? []).reduce((s: number, m: any) => s + m.month.myProfit, 0);
+
+  // 管理员面板
+  if (showMemberPanel) {
+    return <AdminMemberPanel onClose={() => setShowMemberPanel(false)} />;
+  }
+  if (showMachinePanel) {
+    return <AdminMachinePanel onClose={() => setShowMachinePanel(false)} />;
+  }
 
   // 详情页
   if (detailMachine) {
@@ -526,6 +1205,14 @@ export default function PetPlatform() {
             >
               {ROLE_LABELS[userRole] ?? "访客"}
             </span>
+            {isAdmin && (
+              <span
+                className="text-xs font-bold px-3 py-1 rounded-full"
+                style={{ background: "#FEE2E2", color: "#991B1B" }}
+              >
+                管理员
+              </span>
+            )}
             {roleData?.remark && (
               <span className="text-xs" style={{ color: COLORS.muted }}>{roleData.remark}</span>
             )}
@@ -551,7 +1238,7 @@ export default function PetPlatform() {
               }}
             >
               <p className="text-white/80 text-[10px] font-medium mb-1">
-                今日{userRole === "admin" ? "总收入" : "我的分润"}
+                今日{isAdmin ? "总收入" : "我的分润"}
               </p>
               <p className="text-white text-xl font-bold">¥{totalTodayProfit.toFixed(2)}</p>
             </div>
@@ -567,12 +1254,50 @@ export default function PetPlatform() {
               style={{ background: COLORS.card, border: `1.5px solid ${COLORS.border}` }}
             >
               <p className="text-[10px] mb-0.5" style={{ color: COLORS.primary }}>
-                本月{userRole === "admin" ? "总收入" : "我的分润"}
+                本月{isAdmin ? "总收入" : "我的分润"}
               </p>
               <p className="text-base font-semibold" style={{ color: COLORS.primary }}>¥{totalMonthProfit.toFixed(2)}</p>
             </div>
           </div>
         </div>
+
+        {/* 管理员操作区（仅管理员可见） */}
+        {isAdmin && (
+          <div className="px-4 pb-2">
+            <div
+              className="rounded-2xl p-3"
+              style={{ background: COLORS.card, border: `1.5px solid ${COLORS.border}` }}
+            >
+              <p className="text-xs font-bold mb-2.5" style={{ color: COLORS.muted }}>管理员操作</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  className="flex items-center justify-center space-x-2 py-3 rounded-2xl text-sm font-bold active:opacity-80 transition-opacity"
+                  style={{
+                    background: `linear-gradient(135deg, #2563EB15, #2563EB08)`,
+                    border: `1.5px solid #2563EB30`,
+                    color: "#2563EB",
+                  }}
+                  onClick={() => setShowMemberPanel(true)}
+                >
+                  <UserCog className="w-4 h-4" />
+                  <span>成员管理</span>
+                </button>
+                <button
+                  className="flex items-center justify-center space-x-2 py-3 rounded-2xl text-sm font-bold active:opacity-80 transition-opacity"
+                  style={{
+                    background: `linear-gradient(135deg, ${COLORS.primary}15, ${COLORS.primary}08)`,
+                    border: `1.5px solid ${COLORS.primary}30`,
+                    color: COLORS.primary,
+                  }}
+                  onClick={() => setShowMachinePanel(true)}
+                >
+                  <Cpu className="w-4 h-4" />
+                  <span>机器管理</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ===== 机器列表区域 ===== */}
@@ -585,7 +1310,7 @@ export default function PetPlatform() {
               style={{ background: COLORS.primary }}
             />
             <h2 className="text-sm font-bold" style={{ color: COLORS.dark }}>
-              我的机器
+              {isAdmin ? "所有机器" : "我的机器"}
               {machines && (
                 <span className="ml-1.5 text-xs font-normal" style={{ color: COLORS.muted }}>
                   共 {machines.length} 台
@@ -593,16 +1318,6 @@ export default function PetPlatform() {
               )}
             </h2>
           </div>
-          {userRole === "admin" && (
-            <button
-              className="flex items-center space-x-1 text-xs font-medium px-3 py-1.5 rounded-full active:opacity-70"
-              style={{ background: `${COLORS.primary}15`, color: COLORS.primary }}
-              onClick={() => navigate("/pet-admin")}
-            >
-              <Settings className="w-3.5 h-3.5" />
-              <span>管理后台</span>
-            </button>
-          )}
         </div>
 
         {/* 加载状态 */}
@@ -611,7 +1326,7 @@ export default function PetPlatform() {
             <Loader2 className="w-6 h-6 animate-spin mb-3" style={{ color: COLORS.border }} />
             <p className="text-sm" style={{ color: COLORS.muted }}>加载中...</p>
           </div>
-        ) : !roleData && userRole !== "admin" ? (
+        ) : !roleData ? (
           /* 未分配角色 */
           <div className="flex flex-col items-center py-10">
             <img src={EMPTY_IMG} alt="暂无数据" className="w-48 h-48 object-contain mb-3 opacity-80" />
@@ -632,7 +1347,7 @@ export default function PetPlatform() {
               <MachineCard
                 key={machine.id}
                 machine={machine}
-                userRole={userRole}
+                userRole={isAdmin ? "admin" : userRole}
                 onRecord={setRecordingMachine}
                 onDetail={setDetailMachine}
               />
