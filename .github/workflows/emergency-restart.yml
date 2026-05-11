@@ -15,25 +15,22 @@ jobs:
           echo "Host ${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/config
           echo "  StrictHostKeyChecking no" >> ~/.ssh/config
           echo "  UserKnownHostsFile /dev/null" >> ~/.ssh/config
-          echo "  ServerAliveInterval 30" >> ~/.ssh/config
-          echo "  ServerAliveCountMax 3" >> ~/.ssh/config
+          echo "  ConnectTimeout 10" >> ~/.ssh/config
+          echo "  ServerAliveInterval 10" >> ~/.ssh/config
+          echo "  ServerAliveCountMax 6" >> ~/.ssh/config
           chmod 600 ~/.ssh/config
 
-      - name: 重启服务
-        timeout-minutes: 3
+      - name: 杀掉占用进程
+        timeout-minutes: 2
         run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
-            cd ~/haoyouji-web
-            echo "当前目录: $(pwd)"
-            echo "Node进程状态:"
-            pm2 list 2>/dev/null || echo "pm2 list failed"
-            echo "尝试重启..."
-            if pm2 describe haoyouji-web > /dev/null 2>&1; then
-              pm2 restart haoyouji-web && echo "pm2 restart 成功"
-            else
-              pm2 start ecosystem.config.cjs 2>/dev/null && echo "pm2 start ecosystem 成功" || \
-              pm2 start dist/index.js --name haoyouji-web 2>/dev/null && echo "pm2 start dist 成功" || \
-              echo "所有启动方式失败"
-            fi
-            pm2 list
-          '
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'pkill -9 -f "pnpm" 2>/dev/null; pkill -9 -f "vite" 2>/dev/null; pkill -9 -f "esbuild" 2>/dev/null; echo "kill done"' || echo "kill step failed or no process"
+
+      - name: 等待
+        run: sleep 5
+
+      - name: 重启服务
+        timeout-minutes: 2
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'cd ~/haoyouji-web && (pm2 restart haoyouji-web 2>/dev/null && echo "restart ok") || (pm2 start ecosystem.config.cjs 2>/dev/null && echo "start ok") || (pm2 start dist/index.js --name haoyouji-web 2>/dev/null && echo "start dist ok") || echo "all failed"; pm2 list' || echo "restart step failed"
