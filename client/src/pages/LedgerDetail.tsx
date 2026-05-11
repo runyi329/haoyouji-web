@@ -6309,7 +6309,7 @@ export default function LedgerDetail() {
                         : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                     }`}
                   >
-                    {f === 'all' ? '全部' : f === 'member' ? '普通成员' : '资金方'}
+                    {f === 'all' ? '全部' : f === 'member' ? (isCustomAJ ? '业务员' : '普通成员') : (isCustomAJ ? '企业主' : '资金方')}
                   </button>
                 ))}
               </div>
