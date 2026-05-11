@@ -1,0 +1,96 @@
+name: 后台部署-绕过SSH超时
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: 后台部署
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: 🔑 配置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "Host ${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+          echo "  UserKnownHostsFile /dev/null" >> ~/.ssh/config
+          echo "  ServerAliveInterval 30" >> ~/.ssh/config
+          echo "  ServerAliveCountMax 10" >> ~/.ssh/config
+          echo "  ConnectTimeout 30" >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: 🚀 后台执行部署
+        run: |
+          # 先写入部署脚本到服务器
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "cat > /tmp/bg-deploy.sh << 'SCRIPT'
+#!/bin/bash
+export PATH=\"/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$PATH\"
+LOG=/tmp/bg-deploy.log
+echo \"[\$(date)] 开始后台部署\" > \$LOG
+
+cd /root/haoyouji-web
+echo \"[\$(date)] 拉取代码...\" >> \$LOG
+git fetch origin && git reset --hard origin/main && git clean -fd >> \$LOG 2>&1
+
+echo \"[\$(date)] 清除缓存...\" >> \$LOG
+rm -rf node_modules/.vite client/.vite
+
+echo \"[\$(date)] 安装依赖...\" >> \$LOG
+pnpm install >> \$LOG 2>&1
+
+echo \"[\$(date)] 构建项目...\" >> \$LOG
+pnpm run build >> \$LOG 2>&1
+
+echo \"[\$(date)] 同步到服务目录...\" >> \$LOG
+cp -r /root/haoyouji-web/dist/. /home/ubuntu/haoyouji-web/dist/
+cp /root/haoyouji-web/package.json /home/ubuntu/haoyouji-web/package.json
+cp /root/haoyouji-web/pnpm-lock.yaml /home/ubuntu/haoyouji-web/pnpm-lock.yaml
+chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/dist
+rsync -a --delete /root/haoyouji-web/node_modules/ /home/ubuntu/haoyouji-web/node_modules/
+chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules
+cp /root/haoyouji-web/.env /home/ubuntu/haoyouji-web/.env 2>/dev/null || true
+chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/.env 2>/dev/null || true
+sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' /root/haoyouji-web/ecosystem.config.cjs > /home/ubuntu/haoyouji-web/ecosystem.config.cjs
+chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/ecosystem.config.cjs
+
+echo \"[\$(date)] 重启服务...\" >> \$LOG
+if sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 describe haoyouji-web > /dev/null 2>&1'; then
+  sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart /home/ubuntu/haoyouji-web/ecosystem.config.cjs --update-env' >> \$LOG 2>&1
+else
+  sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' >> \$LOG 2>&1
+fi
+sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' >> \$LOG 2>&1
+
+echo \"[\$(date)] 部署完成！\" >> \$LOG
+SCRIPT
+chmod +x /tmp/bg-deploy.sh
+echo '脚本已写入'"
+
+      - name: ▶️ 触发后台执行
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "nohup bash /tmp/bg-deploy.sh > /tmp/bg-deploy-nohup.log 2>&1 &
+             echo \"后台PID: \$!\"
+             echo '部署已在后台启动，约5分钟后完成'"
+
+      - name: ⏳ 等待部署完成
+        run: |
+          echo "等待后台部署完成（最多8分钟）..."
+          for i in $(seq 1 16); do
+            sleep 30
+            RESULT=$(ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+              "tail -3 /tmp/bg-deploy.log 2>/dev/null || echo '日志未就绪'" 2>/dev/null || echo "SSH连接失败")
+            echo "[$i/16] 状态: $RESULT"
+            if echo "$RESULT" | grep -q "部署完成"; then
+              echo "✅ 部署成功！"
+              break
+            fi
+          done
+          
+          echo "=== 最终部署日志 ==="
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "cat /tmp/bg-deploy.log" 2>/dev/null || echo "无法获取日志"
