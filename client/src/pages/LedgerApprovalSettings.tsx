@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -44,28 +44,25 @@ export default function LedgerApprovalSettings() {
     },
   });
 
-  // 审批规则状态
-  const [rules, setRules] = useState<ApprovalRule[]>([]);
+  // 审批规则状态（默认一条全员审批规则）
+  const [rules, setRules] = useState<ApprovalRule[]>([
+    { recorderId: null, approverType: 'all', approverIds: [] },
+  ]);
   const [showMoreInfo, setShowMoreInfo] = useState(false);
+  // 用 ref 标记是否已从服务端数据初始化，防止 existingRules 引用变化导致无限循环
+  const rulesInitialized = useRef(false);
 
-  // 初始化规则
+  // 初始化规则（只在服务端数据首次到来时执行一次）
   useEffect(() => {
+    if (rulesInitialized.current) return;
     if (existingRules.length > 0) {
+      rulesInitialized.current = true;
       const formattedRules = existingRules.map((rule: any) => ({
         recorderId: rule.recorderId,
         approverType: rule.approverType,
         approverIds: rule.approverIds ? JSON.parse(rule.approverIds) : [],
       }));
       setRules(formattedRules);
-    } else {
-      // 默认规则：全体成员需要全部成员审批
-      setRules([
-        {
-          recorderId: null,
-          approverType: 'all',
-          approverIds: [],
-        },
-      ]);
     }
   }, [existingRules]);
 
