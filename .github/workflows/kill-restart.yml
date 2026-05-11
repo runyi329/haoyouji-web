@@ -1,0 +1,37 @@
+name: 强制杀进程并重启
+
+on:
+  workflow_dispatch:
+
+jobs:
+  kill-and-restart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 配置SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "Host ${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+          echo "  UserKnownHostsFile /dev/null" >> ~/.ssh/config
+          echo "  ConnectTimeout 10" >> ~/.ssh/config
+          echo "  ServerAliveInterval 10" >> ~/.ssh/config
+          echo "  ServerAliveCountMax 6" >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: 杀进程
+        timeout-minutes: 2
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'pkill -9 -f "pnpm" 2>/dev/null; pkill -9 -f "vite" 2>/dev/null; pkill -9 -f "esbuild" 2>/dev/null; echo "kill done"'
+
+      - name: 等待进程结束
+        run: sleep 5
+
+      - name: 重启服务
+        timeout-minutes: 2
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'cd ~/haoyouji-web && (pm2 restart haoyouji-web 2>/dev/null || pm2 start ecosystem.config.cjs 2>/dev/null || pm2 start dist/index.js --name haoyouji-web 2>/dev/null) && pm2 list && echo "restart done"'
