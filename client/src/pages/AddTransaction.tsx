@@ -93,6 +93,7 @@ const AddTransaction = () => {
   // 获取账本信息（用于获取功能开关）
   const { data: ledger } = trpc.ledger.getLedger.useQuery({ id: ledgerId });
   const isCustomAA = (ledger as any)?.type === 'custom_aa';
+  const isCustomAJ = (ledger as any)?.type === 'custom_aj';
   const userRole = (ledger as any)?.userRole;
   const canManageCategories = !isCustomAA || userRole === 'owner' || userRole === 'admin';
   
@@ -658,12 +659,12 @@ const AddTransaction = () => {
         <button onClick={() => setLocation(`/ledger/${id}`)}>
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-base font-semibold">{isEditMode ? "修改账目" : "添加账目"}</h1>
+        <h1 className="text-base font-semibold">{isCustomAJ ? (isEditMode ? "修改报销申请" : "报销申请单") : (isEditMode ? "修改账目" : "添加账目")}</h1>
         <div className="w-5" /> {/* 占位 */}
       </div>
 
-      {/* 类型标签页 - 独立白色容器，custom_aa 账本不显示 */}
-      {!isCustomAA && <div className="px-4 py-3 flex-shrink-0">
+      {/* 类型标签页 - 独立白色容器，custom_aa/custom_aj 账本不显示 */}
+      {!isCustomAA && !isCustomAJ && <div className="px-4 py-3 flex-shrink-0">
         <div className="bg-white rounded-lg flex overflow-hidden shadow-sm">
           <button
             className={`flex-1 py-2 text-sm text-center transition-colors ${
@@ -688,8 +689,202 @@ const AddTransaction = () => {
         </div>
       </div>}
 
-      {/* custom_aa 账本：一体化紧凑布局（金额+分类+日期合并为单卡片） */}
-      {isCustomAA ? (
+      {/* custom_aj 账本：报销申请单风格 */}
+      {isCustomAJ ? (
+        <div className="flex-1 overflow-y-auto bg-[#F5F5F5]">
+          {/* 单据头 */}
+          <div className="bg-[#D32F2F] px-4 pt-2 pb-5 flex items-center justify-between">
+            <div>
+              <div className="text-white text-xs opacity-80">申请人</div>
+              <div className="text-white text-sm font-semibold mt-0.5">{(ledger as any)?.userName || '—'}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-white text-xs opacity-80">申请日期</div>
+              <div className="text-white text-sm font-semibold mt-0.5">
+                {selectedDate.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+              </div>
+            </div>
+          </div>
+
+          {/* 表单卡片 */}
+          <div className="mx-3 -mt-3 rounded-2xl bg-white overflow-hidden shadow-md" style={{ border: '1px solid #F0E0E0' }}>
+            {/* 报销金额 */}
+            <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
+              <div className="text-xs text-gray-400 mb-1 font-medium tracking-wider">报销金额（元）</div>
+              <div className="flex items-end gap-1">
+                <span className="text-2xl font-light text-gray-400">¥</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={amount || ""}
+                  placeholder="0.00"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (/^\d*\.?\d{0,2}$/.test(val) || val === "") {
+                      setAmount(val);
+                    }
+                  }}
+                  className="text-4xl font-light text-[#D32F2F] bg-transparent border-none outline-none flex-1 placeholder-gray-200"
+                  style={{ caretColor: '#D32F2F' }}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+
+            {/* 报销类型（分类） */}
+            <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
+              <div className="text-xs text-gray-400 mb-3 font-medium tracking-wider">报销类型</div>
+              <div className="flex flex-wrap gap-2">
+                {topCategories.map((category: any, index: number) => {
+                  const isSelected = selectedCategoryPath[0] === category.id;
+                  return (
+                    <button
+                      key={category.id}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                        isSelected
+                          ? 'bg-[#D32F2F] text-white shadow-sm'
+                          : 'bg-[#FFF0F0] text-[#D32F2F] border border-[#FFCDD2]'
+                      }`}
+                      onClick={() => handleCategorySelect(category.id, 0)}
+                    >
+                      {category.name}
+                    </button>
+                  );
+                })}
+                {canManageCategories && (
+                  <button
+                    className="px-4 py-2 rounded-full text-sm border border-dashed border-[#D32F2F] text-[#D32F2F] flex items-center gap-1"
+                    onClick={() => setLocation(`/ledger/${id}/categories`)}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>新增</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 报销事由 */}
+            <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
+              <div className="text-xs text-gray-400 mb-2 font-medium tracking-wider">报销事由</div>
+              <input
+                type="text"
+                placeholder="请填写报销原因或说明..."
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                className="w-full text-sm text-gray-700 bg-transparent border-none outline-none placeholder-gray-300"
+              />
+            </div>
+
+            {/* 发票日期 */}
+            <button
+              className="w-full px-5 py-4 flex items-center justify-between active:bg-gray-50 transition-colors"
+              style={{ borderBottom: '1px solid #F5F5F5' }}
+              onClick={() => setIsDateSheetOpen(true)}
+            >
+              <div className="flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-[#D32F2F]" />
+                <span className="text-xs text-gray-400 font-medium tracking-wider">发票日期</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-sm font-semibold text-gray-700">
+                  {selectedDate.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
+                </span>
+                <ChevronRight className="w-4 h-4 text-gray-300" />
+              </div>
+            </button>
+
+            {/* 发票附件 */}
+            <div className="px-5 py-4">
+              <div className="text-xs text-gray-400 mb-3 font-medium tracking-wider">发票附件</div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={async (e) => {
+                  const files = e.target.files;
+                  if (!files || files.length === 0) return;
+                  const MAX_IMAGES = 5;
+                  const remaining = MAX_IMAGES - uploadedImages.length;
+                  if (remaining <= 0) {
+                    toast.error('最多只能上传5张图片');
+                    e.target.value = '';
+                    return;
+                  }
+                  const filesToProcess = Array.from(files).slice(0, remaining);
+                  toast.loading('上传中...', { id: 'upload' });
+                  try {
+                    const uploadPromises = filesToProcess.map(async (file) => {
+                      const compressed = await autoCompressImage(file);
+                      const formData = new FormData();
+                      formData.append('file', compressed);
+                      const response = await fetch('/api/upload', { method: 'POST', body: formData, credentials: 'include' });
+                      if (!response.ok) throw new Error('上传失败');
+                      const data = await response.json();
+                      return data.url;
+                    });
+                    const urls = await Promise.all(uploadPromises);
+                    setUploadedImages(prev => [...prev, ...urls]);
+                    toast.success('上传成功', { id: 'upload' });
+                  } catch (error) {
+                    console.error('图片上传失败:', error);
+                    toast.error('图片上传失败，请重试', { id: 'upload' });
+                  }
+                  e.target.value = '';
+                }}
+              />
+              {uploadedImages.length > 0 ? (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {uploadedImages.map((image, index) => (
+                    <div key={index} className="relative w-20 h-20">
+                      <img src={image} alt={`发票${index + 1}`} className="w-full h-full object-cover rounded-lg" />
+                      <button
+                        className="absolute -top-2 -right-2 w-5 h-5 bg-[#D32F2F] text-white rounded-full flex items-center justify-center"
+                        onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== index))}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {uploadedImages.length < 5 && (
+                <button
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-[#FFCDD2] text-[#D32F2F] text-sm"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  <span>上传发票图片 {uploadedImages.length > 0 ? `(${uploadedImages.length}/5)` : ''}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 重复账目警告 */}
+          {duplicateWarnings.length > 0 && (
+            <div className="mx-3 mt-3">
+              {duplicateWarnings.map((w, idx) => (
+                <div
+                  key={idx}
+                  className="animate-warn-flash flex items-center gap-3 px-4 py-3 border-2 border-[#FFCDD2] rounded-2xl cursor-pointer bg-white"
+                  onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${w.id}`)}
+                >
+                  <div className="flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-full bg-[#FFEBEE]">
+                    <AlertTriangle className="animate-icon-pulse w-5 h-5 text-[#D32F2F]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-[#D32F2F] leading-snug">{w.text}</p>
+                    <p className="text-[11px] text-[#E57373] mt-0.5">点此查看，仍可继续提交</p>
+                  </div>
+                  <div className="flex-shrink-0 text-[#E57373] text-lg font-light">›</div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="h-6" />
+        </div>
+      ) : isCustomAA ? (
         <div className="flex-1 overflow-y-auto flex flex-col bg-[#FAF3ED]">
           <div className="bg-white mx-3 mt-3 rounded-2xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #F0E8E0' }}>
 
@@ -808,7 +1003,7 @@ const AddTransaction = () => {
         </div>
       ) : (
       <>
-      {/* 非custom_aa：原有金额输入 */}
+      {/* 非custom_aa/custom_aj：原有金额输入 */}
       <div className="bg-white py-3 px-4 flex-shrink-0">
         <div className="inline-flex items-end w-full">
           <input
@@ -1186,6 +1381,16 @@ const AddTransaction = () => {
             onClick={handleSave}
           >
             保存
+          </button>
+        </div>
+      )}
+      {isCustomAJ && (
+        <div className="flex-shrink-0 px-4 py-4 bg-white" style={{ borderTop: '1px solid #F0E0E0' }}>
+          <button
+            className="w-full bg-[#D32F2F] text-white py-4 rounded-2xl text-base font-bold active:bg-[#B71C1C] shadow-md tracking-wider"
+            onClick={handleSave}
+          >
+            提交申请
           </button>
         </div>
       )}
