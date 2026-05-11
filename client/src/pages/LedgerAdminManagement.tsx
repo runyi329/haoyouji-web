@@ -125,7 +125,7 @@ export default function LedgerAdminManagement() {
       {/* 说明文字 */}
       <div className="bg-[#F5F5F5] border-l-4 border-blue-400 p-4 mt-3 mx-4 rounded-r-lg">
         <p className="text-sm text-blue-700">
-          {isDiet ? '减肥教练可以管理学员档案、设置减肥目标等，但不能删除账本或封存账本。' : isCustomAJ ? '企业主可以审批报销、管理业务员等，但不能删除账本或封存账本。' : '管理员可以管理报销、审批账目等，但不能删除账本或封存账本。'}
+          {isDiet ? '减肥教练可以管理学员档案、设置减肥目标等，但不能删除账本或封存账本。' : isCustomAJ ? '企业主可以查看和审批业务员的报销记录，但不能删除账本或封存账本。' : '管理员可以管理报销、审批账目等，但不能删除账本或封存账本。'}
         </p>
       </div>
 
@@ -166,7 +166,7 @@ export default function LedgerAdminManagement() {
                   className="px-3 py-1.5 rounded-full text-sm font-medium text-white" 
                   style={{ backgroundColor: '#D32F2F' }}
                 >
-                  {isCustomAJ ? '企业主' : '创始人'}
+                  创始人
                 </div>
               ) : (
                 <>
@@ -211,12 +211,12 @@ export default function LedgerAdminManagement() {
         </div>
         <div className="px-4 py-4 space-y-3 text-sm">
           <div>
-            <div className="font-medium text-gray-900 mb-1">{isCustomAJ ? '企业主（创始人）' : '创始人'}</div>
+            <div className="font-medium text-gray-900 mb-1">创始人</div>
             <div className="text-gray-600">拥有所有权限，包括删除账本、封存账本、设置管理员等</div>
           </div>
           <div>
-            <div className="font-medium text-gray-900 mb-1">{isDiet ? '减肥教练' : isCustomAJ ? '企业主（管理员）' : '管理员'}</div>
-            <div className="text-gray-600">{isDiet ? '可以管理学员档案、设置减肥目标等，但不能删除账本或封存账本' : isCustomAJ ? '可以审批报销申请、管理分类等，但不能删除账本或封存账本' : '可以管理报销、审批账目、管理分类等，但不能删除账本或封存账本'}</div>
+            <div className="font-medium text-gray-900 mb-1">{isDiet ? '减肥教练' : isCustomAJ ? '企业主' : '管理员'}</div>
+            <div className="text-gray-600">{isDiet ? '可以管理学员档案、设置减肥目标等，但不能删除账本或封存账本' : isCustomAJ ? '企业主可以查看业务员提交的报销记录、审批账目等，但不能删除账本或封存账本' : '可以管理报销、审批账目、管理分类等，但不能删除账本或封存账本'}</div>
           </div>
           {!isDiet && !isCustomAJ && (
             <div>
