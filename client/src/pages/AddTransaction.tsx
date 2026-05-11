@@ -90,6 +90,8 @@ const AddTransaction = () => {
   const editId = urlParams.get('edit');
   const isEditMode = !!editId;
   const editTransactionId = editId ? parseInt(editId) : undefined;
+  // 视角切换：管理员切换为业务员视角时，从URL获取viewAs参数
+  const viewAsUserId = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
   
   // 获取账本信息（用于获取功能开关）
   const { data: ledger } = trpc.ledger.getLedger.useQuery({ id: ledgerId });
@@ -97,12 +99,20 @@ const AddTransaction = () => {
   const isCustomAJ = (ledger as any)?.type === 'custom_aj';
   const userRole = (ledger as any)?.userRole;
   const { user: currentUser } = useAuth();
-  const applicantName = (currentUser as any)?.name || (currentUser as any)?.username || '—';
+  // 获取视角用户信息（切换视角时显示业务员姓名）
+  const { data: viewAsUserData } = trpc.ledger.getMembers.useQuery(
+    { ledgerId },
+    { enabled: isCustomAJ && !!viewAsUserId }
+  );
+  const viewAsUser = viewAsUserId ? (viewAsUserData as any[])?.find((m: any) => m.userId === viewAsUserId) : null;
+  const applicantName = viewAsUser
+    ? (viewAsUser.nickname || viewAsUser.username || '—')
+    : ((currentUser as any)?.name || (currentUser as any)?.username || '—');
   const canManageCategories = !isCustomAA || userRole === 'owner' || userRole === 'admin';
   
-  // AJ账本：获取业务员有权限的企业列表
+  // AJ账本：获取业务员有权限的企业列表（切换视角时传入viewAsUserId）
   const { data: ajCompanies } = trpc.ledger.ajGetMyCompanies.useQuery(
-    { ledgerId },
+    { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAJ }
   );
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
@@ -1439,18 +1449,80 @@ const AddTransaction = () => {
                     不指定企业
                   </button>
                   {(ajCompanies as any[]).map((company: any) => (
-                    <button
+                    <div
                       key={company.id}
-                      className={`w-full text-left px-4 py-3 rounded-xl transition-colors ${
-                        selectedCompanyId === company.id ? 'bg-[#D32F2F] text-white' : 'bg-gray-50 hover:bg-gray-100'
+                      className={`w-full rounded-xl transition-colors ${
+                        selectedCompanyId === company.id ? 'bg-[#D32F2F]' : 'bg-gray-50'
                       }`}
-                      onClick={() => { setSelectedCompanyId(company.id); setShowCompanyPicker(false); }}
                     >
-                      <div className={`font-medium text-sm ${selectedCompanyId === company.id ? 'text-white' : 'text-gray-800'}`}>{company.name}</div>
-                      {company.taxNo && (
-                        <div className={`text-xs mt-0.5 ${selectedCompanyId === company.id ? 'text-white/70' : 'text-gray-400'}`}>税号：{company.taxNo}</div>
+                      <button
+                        className="w-full text-left px-4 py-3"
+                        onClick={() => { setSelectedCompanyId(company.id); setShowCompanyPicker(false); }}
+                      >
+                        <div className={`font-medium text-sm ${selectedCompanyId === company.id ? 'text-white' : 'text-gray-800'}`}>{company.name}</div>
+                        {company.taxNo && (
+                          <div className={`text-xs mt-0.5 ${selectedCompanyId === company.id ? 'text-white/70' : 'text-gray-400'}`}>税号：{company.taxNo}</div>
+                        )}
+                      </button>
+                      {/* 开票信息展示与复制 */}
+                      {(company.address || company.phone || company.bankName || company.bankAccount) && (
+                        <div className={`px-4 pb-3 space-y-1 border-t ${selectedCompanyId === company.id ? 'border-white/20' : 'border-gray-200'}`}>
+                          <div className={`text-xs font-medium mt-2 mb-1 ${selectedCompanyId === company.id ? 'text-white/80' : 'text-gray-500'}`}>开票信息</div>
+                          {company.address && (
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`text-xs flex-1 ${selectedCompanyId === company.id ? 'text-white/70' : 'text-gray-500'}`}>地址：{company.address}</span>
+                              <button
+                                className={`text-xs px-2 py-0.5 rounded flex-shrink-0 ${selectedCompanyId === company.id ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'}`}
+                                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(company.address); }}
+                              >复制</button>
+                            </div>
+                          )}
+                          {company.phone && (
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`text-xs flex-1 ${selectedCompanyId === company.id ? 'text-white/70' : 'text-gray-500'}`}>电话：{company.phone}</span>
+                              <button
+                                className={`text-xs px-2 py-0.5 rounded flex-shrink-0 ${selectedCompanyId === company.id ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'}`}
+                                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(company.phone); }}
+                              >复制</button>
+                            </div>
+                          )}
+                          {company.bankName && (
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`text-xs flex-1 ${selectedCompanyId === company.id ? 'text-white/70' : 'text-gray-500'}`}>开户行：{company.bankName}</span>
+                              <button
+                                className={`text-xs px-2 py-0.5 rounded flex-shrink-0 ${selectedCompanyId === company.id ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'}`}
+                                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(company.bankName); }}
+                              >复制</button>
+                            </div>
+                          )}
+                          {company.bankAccount && (
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`text-xs flex-1 ${selectedCompanyId === company.id ? 'text-white/70' : 'text-gray-500'}`}>账号：{company.bankAccount}</span>
+                              <button
+                                className={`text-xs px-2 py-0.5 rounded flex-shrink-0 ${selectedCompanyId === company.id ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-600'}`}
+                                onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(company.bankAccount); }}
+                              >复制</button>
+                            </div>
+                          )}
+                          {/* 一键复制全部开票信息 */}
+                          <button
+                            className={`w-full mt-2 text-xs py-1.5 rounded ${selectedCompanyId === company.id ? 'bg-white/20 text-white' : 'bg-[#D32F2F]/10 text-[#D32F2F]'}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const info = [
+                                company.name,
+                                company.taxNo ? `税号：${company.taxNo}` : '',
+                                company.address ? `地址：${company.address}` : '',
+                                company.phone ? `电话：${company.phone}` : '',
+                                company.bankName ? `开户行：${company.bankName}` : '',
+                                company.bankAccount ? `账号：${company.bankAccount}` : '',
+                              ].filter(Boolean).join('\n');
+                              navigator.clipboard.writeText(info);
+                            }}
+                          >一键复制全部开票信息</button>
+                        </div>
                       )}
-                    </button>
+                    </div>
                   ))}
                 </div>
               )}
