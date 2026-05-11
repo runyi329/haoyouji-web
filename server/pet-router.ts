@@ -5,6 +5,18 @@ import { getDbConnection } from "./db";
 
 // ========== 宠物氢氧健康舱平台路由 ==========
 
+// 辅助函数：检查当前用户是否为宠物平台管理员
+async function checkPetAdmin(userId: number): Promise<boolean> {
+  const dbConn = await getDbConnection();
+  if (!dbConn) return false;
+  const [rows] = await dbConn.execute(
+    `SELECT is_admin FROM pet_user_roles WHERE user_id = ? LIMIT 1`,
+    [userId]
+  ) as any[];
+  const row = (rows as any[])[0];
+  return !!(row && row.is_admin);
+}
+
 export const petRouter = router({
 
   // 获取当前用户的宠物平台角色
@@ -16,12 +28,12 @@ export const petRouter = router({
       [ctx.user.id]
     ) as any[];
     const roleRow = (rows as any[])[0];
-    // 超级管理员也可以查看所有数据
-    if (!roleRow && ctx.user.role !== 'super_admin') return null;
-    return roleRow ? {
+    if (!roleRow) return null;
+    return {
       role: roleRow.role as 'manufacturer' | 'investor' | 'promoter' | 'petshop',
+      isAdmin: !!(roleRow.is_admin),
       remark: roleRow.remark,
-    } : { role: 'admin' as const, remark: '超级管理员' };
+    };
   }),
 
   // 获取我关联的机器列表（含今日营业额和我的分润）
@@ -31,17 +43,17 @@ export const petRouter = router({
 
     // 先查角色
     const [roleRows] = await dbConn.execute(
-      `SELECT role FROM pet_user_roles WHERE user_id = ? LIMIT 1`,
+      `SELECT role, is_admin FROM pet_user_roles WHERE user_id = ? LIMIT 1`,
       [ctx.user.id]
     ) as any[];
     const roleRow = (roleRows as any[])[0];
-    const isSuperAdmin = ctx.user.role === 'super_admin';
+    const isPetAdmin = !!(roleRow && roleRow.is_admin);
 
     let machineQuery = '';
     let machineParams: any[] = [];
 
-    if (isSuperAdmin) {
-      // 超级管理员看所有机器
+    if (isPetAdmin) {
+      // 宠物平台管理员看所有机器
       machineQuery = `SELECT m.*,
         u_petshop.name as petshop_user_name,
         u_investor.name as investor_user_name,
@@ -113,7 +125,7 @@ export const petRouter = router({
     const monthData = monthRows as any[];
     const monthMap = new Map(monthData.map((r: any) => [r.machine_id, r]));
 
-    const userRole = isSuperAdmin ? 'admin' : roleRow?.role;
+    const userRole = isPetAdmin ? 'admin' : roleRow?.role;
 
     return machines.map((m: any) => {
       const todayRec = recordMap.get(m.id);
@@ -183,7 +195,7 @@ export const petRouter = router({
       const dbConn = await getDbConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
 
-      // 权限检查：超级管理员或该机器的宠物店
+      // 权限检查：宠物平台管理员或该机器的宠物店
       const [machineRows] = await dbConn.execute(
         `SELECT * FROM pet_machines WHERE id = ? LIMIT 1`,
         [input.machineId]
@@ -191,9 +203,9 @@ export const petRouter = router({
       const machine = (machineRows as any[])[0];
       if (!machine) throw new TRPCError({ code: 'NOT_FOUND', message: '机器不存在' });
 
-      const isSuperAdmin = ctx.user.role === 'super_admin';
+      const isPetAdmin = await checkPetAdmin(ctx.user.id);
       const isPetshop = machine.petshop_user_id === ctx.user.id;
-      if (!isSuperAdmin && !isPetshop) {
+      if (!isPetAdmin && !isPetshop) {
         throw new TRPCError({ code: 'FORBIDDEN', message: '无权录入此机器数据' });
       }
 
@@ -223,40 +235,83 @@ export const petRouter = router({
       return { success: true };
     }),
 
+  // 管理员：搜索用户（按名字或手机号）
+  adminSearchUsers: protectedProcedure
+    .input(z.object({ keyword: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const isPetAdmin = await checkPetAdmin(ctx.user.id);
+      if (!isPetAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '需要宠物平台管理员权限' });
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const kw = `%${input.keyword}%`;
+      const [rows] = await dbConn.execute(
+        `SELECT u.id, u.name, u.username, u.phone,
+          pr.role as pet_role, pr.is_admin as pet_is_admin, pr.remark as pet_remark
+         FROM users u
+         LEFT JOIN pet_user_roles pr ON u.id = pr.user_id
+         WHERE u.name LIKE ? OR u.phone LIKE ? OR u.username LIKE ?
+         ORDER BY u.id DESC
+         LIMIT 20`,
+        [kw, kw, kw]
+      ) as any[];
+      return (rows as any[]).map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        username: r.username,
+        phone: r.phone,
+        petRole: r.pet_role ?? null,
+        petIsAdmin: !!(r.pet_is_admin),
+        petRemark: r.pet_remark ?? null,
+      }));
+    }),
+
   // 管理员：获取所有用户列表（用于分配角色）
   adminGetUsers: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
+    const isPetAdmin = await checkPetAdmin(ctx.user.id);
+    if (!isPetAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '需要宠物平台管理员权限' });
     const dbConn = await getDbConnection();
     if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
     const [rows] = await dbConn.execute(
       `SELECT u.id, u.name, u.username, u.phone,
-        pr.role as pet_role, pr.remark as pet_remark
+        pr.role as pet_role, pr.is_admin as pet_is_admin, pr.remark as pet_remark
        FROM users u
        LEFT JOIN pet_user_roles pr ON u.id = pr.user_id
-       ORDER BY u.id DESC
+       WHERE pr.user_id IS NOT NULL
+       ORDER BY pr.is_admin DESC, u.id DESC
        LIMIT 200`
     ) as any[];
-    return rows as any[];
+    return (rows as any[]).map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      username: r.username,
+      phone: r.phone,
+      petRole: r.pet_role ?? null,
+      petIsAdmin: !!(r.pet_is_admin),
+      petRemark: r.pet_remark ?? null,
+    }));
   }),
 
-  // 管理员：设置用户角色
+  // 管理员：设置用户角色（支持设置is_admin）
   adminSetUserRole: protectedProcedure
     .input(z.object({
       userId: z.number(),
       role: z.enum(['manufacturer', 'investor', 'promoter', 'petshop']).nullable(),
+      isAdmin: z.boolean().optional(),
       remark: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
+      const isPetAdmin = await checkPetAdmin(ctx.user.id);
+      if (!isPetAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '需要宠物平台管理员权限' });
       const dbConn = await getDbConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
       if (input.role === null) {
         await dbConn.execute(`DELETE FROM pet_user_roles WHERE user_id = ?`, [input.userId]);
       } else {
+        const isAdminVal = input.isAdmin ? 1 : 0;
         await dbConn.execute(
-          `INSERT INTO pet_user_roles (user_id, role, remark) VALUES (?, ?, ?)
-           ON DUPLICATE KEY UPDATE role = VALUES(role), remark = VALUES(remark), updated_at = NOW()`,
-          [input.userId, input.role, input.remark ?? null]
+          `INSERT INTO pet_user_roles (user_id, role, is_admin, remark) VALUES (?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE role = VALUES(role), is_admin = VALUES(is_admin), remark = VALUES(remark), updated_at = NOW()`,
+          [input.userId, input.role, isAdminVal, input.remark ?? null]
         );
       }
       return { success: true };
@@ -282,7 +337,8 @@ export const petRouter = router({
       address: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      if (ctx.user.role !== 'super_admin') throw new TRPCError({ code: 'FORBIDDEN' });
+      const isPetAdmin = await checkPetAdmin(ctx.user.id);
+      if (!isPetAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '需要宠物平台管理员权限' });
       const dbConn = await getDbConnection();
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
       if (input.id) {
