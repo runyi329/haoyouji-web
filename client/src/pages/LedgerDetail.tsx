@@ -5391,10 +5391,18 @@ export default function LedgerDetail() {
         )}
       </div>}
 
-      {/* 底部添加按钮：AJ账本专用（添加发票） */}
+      {/* 底部添加按鈕：AJ账本专用（添加发票） */}
       {isCustomAJ && (
         <button
-          onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
+          onClick={() => {
+            // 将viewAsUserId写入sessionStorage，确保跨页面跳转后能正确读取
+            if (viewAsUserId) {
+              sessionStorage.setItem('aj_view_as_user_id', String(viewAsUserId));
+            } else {
+              sessionStorage.removeItem('aj_view_as_user_id');
+            }
+            setLocation(`/ledger/${ledgerId}/add${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`);
+          }}
           className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
           style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
         >
