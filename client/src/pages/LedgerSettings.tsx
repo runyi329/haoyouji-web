@@ -641,6 +641,14 @@ export default function LedgerSettings() {
  />
  )}
 
+ {/* AJ型定制账本：企业管理入口（管理员/创始人可见） */}
+ {ledgerData?.type === 'custom_aj' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ <SettingItem
+ label="企业管理"
+ showIcon
+ onClick={() => setLocation(`/ledger/${ledgerId}/aj-companies`)}
+ />
+ )}
  {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
  <SettingItem
  label="账目明细"

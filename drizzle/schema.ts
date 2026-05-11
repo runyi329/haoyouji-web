@@ -2055,3 +2055,40 @@ export const petDailyRecords = mysqlTable("pet_daily_records", {
   index("pet_daily_records_date_idx").on(table.recordDate),
 ]);
 export type PetDailyRecord = typeof petDailyRecords.$inferSelect;
+
+// ========== AJ型定制账本：企业信息表 ==========
+export const ajCompanies = mysqlTable("aj_companies", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),
+  name: varchar('name', { length: 100 }).notNull(),
+  taxNo: varchar('tax_no', { length: 50 }),
+  address: varchar('address', { length: 200 }),
+  phone: varchar('phone', { length: 50 }),
+  bankName: varchar('bank_name', { length: 100 }),
+  bankAccount: varchar('bank_account', { length: 100 }),
+  remark: varchar('remark', { length: 300 }),
+  createdBy: int('created_by').notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  index("aj_companies_ledger_idx").on(table.ledgerId),
+]);
+export type AjCompany = typeof ajCompanies.$inferSelect;
+
+// ========== AJ型定制账本：业务员-企业访问权限表 ==========
+export const ajCompanyAccess = mysqlTable("aj_company_access", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),
+  companyId: int('company_id').notNull(),
+  userId: int('user_id').notNull(),
+  isEnabled: tinyint('is_enabled').default(0).notNull(),
+  enabledBy: int('enabled_by'),
+  enabledAt: timestamp('enabled_at', { mode: 'string' }),
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+}, (table) => [
+  uniqueIndex("aj_company_access_uniq").on(table.companyId, table.userId),
+  index("aj_company_access_ledger_idx").on(table.ledgerId),
+  index("aj_company_access_user_idx").on(table.userId),
+]);
+export type AjCompanyAccess = typeof ajCompanyAccess.$inferSelect;

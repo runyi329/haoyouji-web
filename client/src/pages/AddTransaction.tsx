@@ -100,6 +100,15 @@ const AddTransaction = () => {
   const applicantName = (currentUser as any)?.name || (currentUser as any)?.username || '—';
   const canManageCategories = !isCustomAA || userRole === 'owner' || userRole === 'admin';
   
+  // AJ账本：获取业务员有权限的企业列表
+  const { data: ajCompanies } = trpc.ajGetMyCompanies.useQuery(
+    { ledgerId },
+    { enabled: isCustomAJ }
+  );
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
+  const [showCompanyPicker, setShowCompanyPicker] = useState(false);
+  const selectedCompany = (ajCompanies as any[])?.find((c: any) => c.id === selectedCompanyId);
+  
   // 获取要编辑的账目详情
   const { data: editTransaction } = trpc.ledger.getTransactionDetail.useQuery(
     { ledgerId, transactionId: editTransactionId! },
@@ -766,6 +775,24 @@ const AddTransaction = () => {
               </div>
             </div>
 
+            {/* 服务企业选择 */}
+            <button
+              className="w-full px-5 py-4 flex items-center justify-between active:bg-gray-50 transition-colors"
+              style={{ borderBottom: '1px solid #F5F5F5' }}
+              onClick={() => setShowCompanyPicker(true)}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 font-medium tracking-wider">服务企业</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {selectedCompany ? (
+                  <span className="text-sm font-semibold text-gray-700">{selectedCompany.name}</span>
+                ) : (
+                  <span className="text-sm text-gray-300">请选择企业（选填）</span>
+                )}
+                <ChevronRight className="w-4 h-4 text-gray-300" />
+              </div>
+            </button>
             {/* 报销事由 */}
             <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
               <div className="text-xs text-gray-400 mb-2 font-medium tracking-wider">报销事由</div>
@@ -1383,6 +1410,52 @@ const AddTransaction = () => {
           >
             保存
           </button>
+        </div>
+      )}
+      {/* AJ企业选择弹窗 */}
+      {isCustomAJ && showCompanyPicker && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end" onClick={() => setShowCompanyPicker(false)}>
+          <div className="bg-white w-full rounded-t-2xl max-h-[60vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <div className="font-semibold text-gray-800">选择服务企业</div>
+              <button onClick={() => setShowCompanyPicker(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100">
+                <span className="text-gray-500 text-lg leading-none">×</span>
+              </button>
+            </div>
+            <div className="p-4">
+              {!ajCompanies || (ajCompanies as any[]).length === 0 ? (
+                <div className="text-center py-8 text-gray-400 text-sm">
+                  暂无可用企业
+                  <div className="text-xs mt-1">请联系管理员为您开通企业访问权限</div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <button
+                    className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-colors ${
+                      selectedCompanyId === null ? 'bg-[#D32F2F] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                    }`}
+                    onClick={() => { setSelectedCompanyId(null); setShowCompanyPicker(false); }}
+                  >
+                    不指定企业
+                  </button>
+                  {(ajCompanies as any[]).map((company: any) => (
+                    <button
+                      key={company.id}
+                      className={`w-full text-left px-4 py-3 rounded-xl transition-colors ${
+                        selectedCompanyId === company.id ? 'bg-[#D32F2F] text-white' : 'bg-gray-50 hover:bg-gray-100'
+                      }`}
+                      onClick={() => { setSelectedCompanyId(company.id); setShowCompanyPicker(false); }}
+                    >
+                      <div className={`font-medium text-sm ${selectedCompanyId === company.id ? 'text-white' : 'text-gray-800'}`}>{company.name}</div>
+                      {company.taxNo && (
+                        <div className={`text-xs mt-0.5 ${selectedCompanyId === company.id ? 'text-white/70' : 'text-gray-400'}`}>税号：{company.taxNo}</div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
       {isCustomAJ && (
