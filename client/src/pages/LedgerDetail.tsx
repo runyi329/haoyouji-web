@@ -2677,8 +2677,9 @@ export default function LedgerDetail() {
         // 有日期筛选时，统计所有返回的数据（后端已经按筛选范围过滤）
         shouldInclude = true;
       } else {
-        // 没有日期筛选时，按statsPeriod统计
-        switch (statsPeriod) {
+        // 没有日期筛选时，按statsPeriod统计（AJ账本使用ajStatsPeriod）
+        const effectivePeriod = isCustomAJ ? ajStatsPeriod : statsPeriod;
+        switch (effectivePeriod) {
           case 'day':
             shouldInclude = day.date === today;
             break;
@@ -3867,12 +3868,12 @@ export default function LedgerDetail() {
                     const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
                     transactionsData.forEach((day: any) => {
                       let ok = false;
-                      if (statsPeriod === 'all') ok = true;
-                      else if (statsPeriod === 'day') ok = day.date === today;
-                      else if (statsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
-                      else if (statsPeriod === 'month') ok = day.date.startsWith(currentMonth);
-                      else if (statsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
-                      else if (statsPeriod === 'year') ok = day.date.startsWith(currentYear);
+                      if (ajStatsPeriod === 'all') ok = true;
+                      else if (ajStatsPeriod === 'day') ok = day.date === today;
+                      else if (ajStatsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
+                      else if (ajStatsPeriod === 'month') ok = day.date.startsWith(currentMonth);
+                      else if (ajStatsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
+                      else if (ajStatsPeriod === 'year') ok = day.date.startsWith(currentYear);
                       if (ok) (day.records || []).forEach((r: any) => { if (r.category && r.category !== '未分类') companies.add(r.category.split('-')[0]); });
                     });
                     return companies.size > 0 ? `${companies.size}家` : '--';
@@ -3893,12 +3894,12 @@ export default function LedgerDetail() {
               const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
               transactionsData.forEach((day: any) => {
                 let ok = false;
-                if (statsPeriod === 'all') ok = true;
-                else if (statsPeriod === 'day') ok = day.date === today;
-                else if (statsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
-                else if (statsPeriod === 'month') ok = day.date.startsWith(currentMonth);
-                else if (statsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
-                else if (statsPeriod === 'year') ok = day.date.startsWith(currentYear);
+                if (ajStatsPeriod === 'all') ok = true;
+                else if (ajStatsPeriod === 'day') ok = day.date === today;
+                else if (ajStatsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
+                else if (ajStatsPeriod === 'month') ok = day.date.startsWith(currentMonth);
+                else if (ajStatsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
+                else if (ajStatsPeriod === 'year') ok = day.date.startsWith(currentYear);
                 if (ok) (day.records || []).forEach((r: any) => {
                   const co = (r.category || '未分类').split('-')[0];
                   companyMap[co] = (companyMap[co] || 0) + r.amount;
