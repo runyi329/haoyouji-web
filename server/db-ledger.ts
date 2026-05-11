@@ -2869,6 +2869,8 @@ export async function addTransaction(data: {
   reimbursementStatus?: 'none' | 'pending' | 'completed'; // 报销状态
   pendingType?: 'receivable' | 'payable'; // 待结类型（代收/代付）
   pendingIncludeStats?: number; // 待结账目是否计入统计（0=仅显示不计入，1=显示并计入）
+  ajCompanyId?: number; // AJ账本开票企业ID
+  ajCompanyName?: string; // AJ账本开票企业名称
 }) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
@@ -2935,6 +2937,8 @@ export async function addTransaction(data: {
     .limit(1) : [];
 
   // 插入记账记录（加密敏感字段）
+  // 判断是否是AJ账本（通过传入ajCompanyId判断）
+  const isAJRecord = !!data.ajCompanyId;
   const recordData = {
     ledgerId: data.ledgerId,
     type: data.type,
@@ -2948,6 +2952,12 @@ export async function addTransaction(data: {
     reimbursementStatus: data.reimbursementStatus || 'none',
     pendingType: data.pendingType || null,
     pendingIncludeStats: data.pendingType ? (data.pendingIncludeStats ?? 1) : null,
+    // AJ账本开票申请字段
+    ...(isAJRecord ? {
+      ajStatus: 'pending' as const,  // 提交后自动设为「申请中」
+      ajCompanyId: data.ajCompanyId || null,
+      ajCompanyName: data.ajCompanyName || null,
+    } : {}),
   };
   const encryptedRecordData = await encryptFields(db, 'ledger_records', recordData, LEDGER_RECORD_ENCRYPT_FIELDS);
 
@@ -3086,6 +3096,11 @@ export async function getTransactionsList(
       reimbursementStatus: ledgerRecords.reimbursementStatus,
       pendingType: ledgerRecords.pendingType,
       pendingIncludeStats: ledgerRecords.pendingIncludeStats,
+      ajStatus: ledgerRecords.ajStatus,
+      ajCompanyId: ledgerRecords.ajCompanyId,
+      ajCompanyName: ledgerRecords.ajCompanyName,
+      ajApprovedBy: ledgerRecords.ajApprovedBy,
+      ajApprovedAt: ledgerRecords.ajApprovedAt,
     })
     .from(ledgerRecords)
     .where(and(...conditions, isNull(ledgerRecords.deletedAt)))
@@ -3190,6 +3205,7 @@ export async function getTransactionsList(
         id: users.id,
         username: users.username,
         avatar: users.avatar,
+        nickname: users.nickname,
       })
       .from(users)
       .where(sql`${users.id} IN (${sql.join(Array.from(creatorIds).map(id => sql`${id}`), sql`, `)})`);
@@ -3232,9 +3248,16 @@ export async function getTransactionsList(
       reimbursementStatus: record.reimbursementStatus,
       pendingType: record.pendingType,
       pendingIncludeStats: record.pendingIncludeStats,
+      ajStatus: record.ajStatus || null,
+      ajCompanyId: record.ajCompanyId || null,
+      ajCompanyName: record.ajCompanyName || null,
+      ajApprovedBy: record.ajApprovedBy || null,
+      ajApprovedAt: record.ajApprovedAt || null,
       member: creator ? {
+        id: creator.id,
         username: creator.username,
         avatar: creator.avatar,
+        nickname: creator.nickname,
       } : null,
     });
     
@@ -4164,6 +4187,40 @@ export async function approveTransaction(
   comment?: string
 ) {
   const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 先查询这条记录是否是AJ账本的发票申请（ajStatus不为null）
+  const recordInfo = await db
+    .select({ ledgerId: ledgerRecords.ledgerId, ajStatus: ledgerRecords.ajStatus })
+    .from(ledgerRecords)
+    .where(eq(ledgerRecords.id, transactionId))
+    .limit(1);
+
+  if (recordInfo.length > 0 && recordInfo[0].ajStatus !== null) {
+    // AJ账本发票申请审批：直接更新 ledger_records 表的 aj_status 字段
+    const ledgerId = recordInfo[0].ledgerId;
+    // 验证审批人是账本的管理员或owner
+    const membership = await db
+      .select({ role: ledgerMembers.role })
+      .from(ledgerMembers)
+      .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
+      .limit(1);
+    if (membership.length === 0 || !['owner', 'admin'].includes(membership[0].role)) {
+      throw new Error('只有账本管理员或创始人可以审批发票申请');
+    }
+    await db
+      .update(ledgerRecords)
+      .set({
+        ajStatus: action,
+        ajApprovedBy: userId,
+        ajApprovedAt: sql`NOW()`,
+        ajApproveComment: comment || null,
+      } as any)
+      .where(eq(ledgerRecords.id, transactionId));
+    return { success: true, allApproved: action === 'approved', anyRejected: action === 'rejected' };
+  }
+
+  // 普通账本审批流程（原有逻辑）
   const { ledgerApprovalRecords, transactions } = await import("../drizzle/schema.js");
   
   // 更新审批记录
@@ -4210,6 +4267,77 @@ export async function approveTransaction(
  */
 export async function getPendingApprovals(ledgerId: number, userId: number) {
   const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 先判断是否是AJ账本
+  const ledgerInfo = await db
+    .select({ type: ledgers.type })
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+  const isAJLedger = ledgerInfo.length > 0 && ledgerInfo[0].type === 'custom_aj';
+
+  if (isAJLedger) {
+    // AJ账本：查询 ledger_records 表中 aj_status = 'pending' 的记录
+    // 只有账本管理员和owner可以看到待审批列表
+    const membership = await db
+      .select({ role: ledgerMembers.role })
+      .from(ledgerMembers)
+      .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
+      .limit(1);
+    if (membership.length === 0 || !['owner', 'admin'].includes(membership[0].role)) {
+      return []; // 普通成员看不到待审批列表
+    }
+    const pendingRecords = await db
+      .select({
+        id: ledgerRecords.id,
+        transactionId: ledgerRecords.id,
+        status: ledgerRecords.ajStatus,
+        comment: ledgerRecords.ajApproveComment,
+        createdAt: ledgerRecords.createdAt,
+        transaction: {
+          id: ledgerRecords.id,
+          type: ledgerRecords.type,
+          amount: ledgerRecords.amount,
+          description: ledgerRecords.description,
+          date: ledgerRecords.recordDate,
+          ajStatus: ledgerRecords.ajStatus,
+          ajCompanyId: ledgerRecords.ajCompanyId,
+          ajCompanyName: ledgerRecords.ajCompanyName,
+          createdBy: ledgerRecords.createdBy,
+          createdAt: ledgerRecords.createdAt,
+        },
+      })
+      .from(ledgerRecords)
+      .where(
+        and(
+          eq(ledgerRecords.ledgerId, ledgerId),
+          sql`${ledgerRecords.ajStatus} = 'pending'`,
+          isNull(ledgerRecords.deletedAt)
+        )
+      )
+      .orderBy(desc(ledgerRecords.createdAt));
+    // 获取创建者信息
+    const creatorIds = [...new Set(pendingRecords.map((r: any) => r.transaction.createdBy).filter(Boolean))];
+    let creatorMap: Record<number, any> = {};
+    if (creatorIds.length > 0) {
+      const creators = await db
+        .select({ id: users.id, username: users.username, avatar: users.avatar, nickname: users.nickname })
+        .from(users)
+        .where(sql`${users.id} IN (${sql.join(creatorIds.map((id: any) => sql`${id}`), sql`, `)})`);
+      creatorMap = Object.fromEntries(creators.map((c: any) => [c.id, c]));
+    }
+    return pendingRecords.map((r: any) => ({
+      ...r,
+      transaction: {
+        ...r.transaction,
+        amount: Number(r.transaction.amount),
+        member: creatorMap[r.transaction.createdBy] || null,
+      },
+    }));
+  }
+
+  // 普通账本审批流程（原有逻辑）
   const { ledgerApprovalRecords, transactions } = await import("../drizzle/schema.js");
   
   // 获取待审批的记录

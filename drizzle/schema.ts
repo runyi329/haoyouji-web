@@ -551,6 +551,13 @@ export const ledgerRecords = mysqlTable("ledger_records", {
 	guestIp: varchar('guest_ip', { length: 45 }),                 // 访客IP（防刷）
 	isRead: tinyint('is_read').default(0),                        // 是否已读
 	images: json(),                                                // 多图JSON数组
+	// AJ账本专用字段（其他账本类型为null）
+	ajStatus: mysqlEnum('aj_status', ['pending', 'approved', 'rejected']),  // 发票申请状态（申请中/通过/拒绝）
+	ajCompanyId: int('aj_company_id'),                             // 开票企业ID
+	ajCompanyName: varchar('aj_company_name', { length: 100 }),   // 开票企业名称（冗余存储，防止企业被删除后丢失）
+	ajApprovedBy: int('aj_approved_by'),                          // 审批人ID
+	ajApprovedAt: timestamp('aj_approved_at', { mode: 'string' }), // 审批时间
+	ajApproveComment: text('aj_approve_comment'),                 // 审批备注
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp('deleted_at', { mode: 'string' }),

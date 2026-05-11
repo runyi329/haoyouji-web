@@ -676,6 +676,11 @@ const AddTransaction = () => {
     if (viewAsUserId) {
       payload.viewAsUserId = viewAsUserId;
     }
+    // AJ账本：传递开票企业信息，提交后自动设为「申请中」状态
+    if (isCustomAJ && selectedCompanyId) {
+      payload.ajCompanyId = selectedCompanyId;
+      payload.ajCompanyName = selectedCompany?.name || undefined;
+    }
     
     if (isEditMode && editTransactionId) {
       // 编辑模式：调用更新API

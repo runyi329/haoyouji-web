@@ -8922,7 +8922,9 @@ ${klinesSummary}
         reimbursementStatus: z.enum(['none', 'pending', 'completed']).optional(),
         pendingType: z.enum(['receivable', 'payable']).nullable().optional(),
         pendingIncludeStats: z.number().min(0).max(1).optional(),
-        viewAsUserId: z.number().optional(), // 管理员以业务员视角提交时，用此ID作为createdBy
+        viewAsUserId: z.number().optional(), // 管理员以业务员视角提交时，用此ID作createdBy
+        ajCompanyId: z.number().optional(), // AJ账本开票企业ID
+        ajCompanyName: z.string().optional(), // AJ账本开票企业名称
       }))
       .mutation(async ({ ctx, input }) => {
         const { viewAsUserId, ...rest } = input;
