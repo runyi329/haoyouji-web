@@ -800,95 +800,52 @@ const AddTransaction = () => {
               </div>
             </div>
 
-            {/* 服务企业选择 */}
-            <button
-              className="w-full px-5 py-4 flex items-center justify-between active:bg-gray-50 transition-colors"
+            {/* 开票信息区域 */}
+            <div
+              className="px-5 py-4"
               style={{ borderBottom: '1px solid #F5F5F5' }}
-              onClick={() => setShowCompanyPicker(true)}
             >
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400 font-medium tracking-wider">服务企业</span>
+              {/* 标题行：开票信息 + 更换企业按鈕 */}
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs text-gray-400 font-medium tracking-wider">开票信息</span>
+                <button
+                  className="flex items-center gap-1 text-xs text-[#D32F2F]"
+                  onClick={() => setShowCompanyPicker(true)}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  <span>{selectedCompany ? '更换' : '选择企业'}</span>
+                </button>
               </div>
-              <div className="flex items-center gap-2">
-                {selectedCompany ? (
-                  <div className="flex flex-col items-end gap-0.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-semibold text-gray-700">{selectedCompany.name}</span>
-                      <button
-                        className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0"
-                        onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(selectedCompany.name); }}
-                      >复制</button>
-                    </div>
-                    {selectedCompany.taxNo && (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs text-gray-400">税号：{selectedCompany.taxNo}</span>
-                        <button
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0"
-                          onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(selectedCompany.taxNo); }}
-                        >复制</button>
-                      </div>
-                    )}
+              {/* 企业名称行 */}
+              {selectedCompany ? (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-base font-bold text-gray-800 flex-1 leading-snug">{selectedCompany.name}</span>
+                    <button
+                      className="flex-shrink-0 p-1.5 rounded-full bg-gray-100 text-gray-500 active:bg-gray-200"
+                      onClick={() => navigator.clipboard.writeText(selectedCompany.name)}
+                      title="复制企业名称"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
                   </div>
-                ) : (
-                  <span className="text-sm text-gray-300">请选择企业（选填）</span>
-                )}
-                <ChevronRight className="w-4 h-4 text-gray-300" />
-              </div>
-            </button>
-            {/* 选中企业后展示开票信息 */}
-            {selectedCompany && (selectedCompany.taxNo || selectedCompany.address || selectedCompany.phone || selectedCompany.bankName || selectedCompany.bankAccount) && (
-              <div className="px-5 py-3 bg-gray-50" style={{ borderBottom: '1px solid #F5F5F5' }}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-gray-400 font-medium tracking-wider">开票信息</span>
-                  <button
-                    className="text-xs px-3 py-1 rounded-full bg-[#D32F2F]/10 text-[#D32F2F] font-medium"
-                    onClick={() => {
-                      const info = [
-                        selectedCompany.name,
-                        selectedCompany.taxNo ? `税号：${selectedCompany.taxNo}` : '',
-                        selectedCompany.address ? `地址：${selectedCompany.address}` : '',
-                        selectedCompany.phone ? `电话：${selectedCompany.phone}` : '',
-                        selectedCompany.bankName ? `开户行：${selectedCompany.bankName}` : '',
-                        selectedCompany.bankAccount ? `账号：${selectedCompany.bankAccount}` : '',
-                      ].filter(Boolean).join('\n');
-                      navigator.clipboard.writeText(info);
-                    }}
-                  >一键复制</button>
-                </div>
-                <div className="space-y-1.5">
                   {selectedCompany.taxNo && (
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-1">税号：{selectedCompany.taxNo}</span>
-                      <button className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 flex-shrink-0" onClick={() => navigator.clipboard.writeText(selectedCompany.taxNo)}>复制</button>
-                    </div>
-                  )}
-                  {selectedCompany.address && (
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-1">地址：{selectedCompany.address}</span>
-                      <button className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 flex-shrink-0" onClick={() => navigator.clipboard.writeText(selectedCompany.address)}>复制</button>
-                    </div>
-                  )}
-                  {selectedCompany.phone && (
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-1">电话：{selectedCompany.phone}</span>
-                      <button className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 flex-shrink-0" onClick={() => navigator.clipboard.writeText(selectedCompany.phone)}>复制</button>
-                    </div>
-                  )}
-                  {selectedCompany.bankName && (
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-1">开户行：{selectedCompany.bankName}</span>
-                      <button className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 flex-shrink-0" onClick={() => navigator.clipboard.writeText(selectedCompany.bankName)}>复制</button>
-                    </div>
-                  )}
-                  {selectedCompany.bankAccount && (
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-1">账号：{selectedCompany.bankAccount}</span>
-                      <button className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 flex-shrink-0" onClick={() => navigator.clipboard.writeText(selectedCompany.bankAccount)}>复制</button>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-base text-gray-600 flex-1">税号：{selectedCompany.taxNo}</span>
+                      <button
+                        className="flex-shrink-0 p-1.5 rounded-full bg-gray-100 text-gray-500 active:bg-gray-200"
+                        onClick={() => navigator.clipboard.writeText(selectedCompany.taxNo)}
+                        title="复制税号"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      </button>
                     </div>
                   )}
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="text-sm text-gray-300">请选择企业（选填）</div>
+              )}
+            </div>
             {/* 报销事由 */}
             <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
               <div className="text-xs text-gray-400 mb-2 font-medium tracking-wider">报销事由</div>
