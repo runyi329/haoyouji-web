@@ -808,10 +808,10 @@ const AddTransaction = () => {
                 onChange={async (e) => {
                   const files = e.target.files;
                   if (!files || files.length === 0) return;
-                  const MAX_IMAGES = 5;
+                  const MAX_IMAGES = 10;
                   const remaining = MAX_IMAGES - uploadedImages.length;
                   if (remaining <= 0) {
-                    toast.error('最多只能上传5张图片');
+                    toast.error('最多只能上传10张图片');
                     e.target.value = '';
                     return;
                   }
@@ -837,30 +837,28 @@ const AddTransaction = () => {
                   e.target.value = '';
                 }}
               />
-              {uploadedImages.length > 0 ? (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {uploadedImages.map((image, index) => (
-                    <div key={index} className="relative w-20 h-20">
-                      <img src={image} alt={`发票${index + 1}`} className="w-full h-full object-cover rounded-lg" />
-                      <button
-                        className="absolute -top-2 -right-2 w-5 h-5 bg-[#D32F2F] text-white rounded-full flex items-center justify-center"
-                        onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== index))}
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-              {uploadedImages.length < 5 && (
-                <button
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-[#FFCDD2] text-[#D32F2F] text-sm"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <ImageIcon className="w-4 h-4" />
-                  <span>上传发票图片 {uploadedImages.length > 0 ? `(${uploadedImages.length}/5)` : ''}</span>
-                </button>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {uploadedImages.map((image, index) => (
+                  <div key={index} className="relative w-20 h-20 flex-shrink-0">
+                    <img src={image} alt={`发票${index + 1}`} className="w-full h-full object-cover rounded" />
+                    <button
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#D32F2F] text-white rounded-full flex items-center justify-center shadow"
+                      onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== index))}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                {uploadedImages.length < 10 && (
+                  <button
+                    className="w-20 h-20 flex-shrink-0 flex flex-col items-center justify-center gap-1 bg-[#FFF5F5] border border-[#FFCDD2] rounded text-[#D32F2F]"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <ImageIcon className="w-6 h-6" />
+                    <span className="text-xs">{uploadedImages.length > 0 ? `${uploadedImages.length}/10` : '上传'}</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
