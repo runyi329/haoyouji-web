@@ -1,0 +1,36 @@
+name: pm2-restart
+on:
+  workflow_dispatch:
+jobs:
+  restart:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: setup ssh
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          cat > ~/.ssh/config << 'SSHEOF'
+Host *
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  ServerAliveInterval 15
+  ServerAliveCountMax 10
+SSHEOF
+          chmod 600 ~/.ssh/config
+
+      - name: restart pm2
+        run: |
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+          echo "=== PM2 Status Before ==="
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1 || true
+          echo "=== Starting/Restarting haoyouji-web ==="
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 delete haoyouji-web' 2>&1 || true
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' 2>&1
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' 2>&1
+          echo "=== PM2 Status After ==="
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
+          echo "=== Recent logs ==="
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 logs haoyouji-web --nostream --lines 20' 2>&1 || true
+          ENDSSH
