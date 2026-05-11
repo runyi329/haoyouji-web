@@ -93,16 +93,15 @@ const AddTransaction = () => {
   const isEditMode = !!editId;
   const editTransactionId = editId ? parseInt(editId) : undefined;
   // 视角切换：管理员切换为业务员视角时，从 URL参数或sessionStorage获取 viewAs 参数
-  // 同时支持两种来源，确保 SPA 跳转后不丢失
-  const viewAsUserIdFromUrl = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
-  const viewAsUserIdFromSession = sessionStorage.getItem('aj_view_as_user_id') ? Number(sessionStorage.getItem('aj_view_as_user_id')) : null;
-  const viewAsUserId = viewAsUserIdFromUrl || viewAsUserIdFromSession;
-  // 读取后清除sessionStorage，避免干扰其他页面
-  useEffect(() => {
-    if (viewAsUserIdFromSession) {
-      sessionStorage.removeItem('aj_view_as_user_id');
-    }
-  }, []);
+  // 使用useState初始化一次，避免sessionStorage清除后重新渲染时丢失
+  const [viewAsUserId] = useState<number | null>(() => {
+    const fromUrl = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
+    const fromSession = sessionStorage.getItem('aj_view_as_user_id') ? Number(sessionStorage.getItem('aj_view_as_user_id')) : null;
+    const result = fromUrl || fromSession;
+    // 读取后立即清除sessionStorage，避免干扰其他页面
+    if (fromSession) sessionStorage.removeItem('aj_view_as_user_id');
+    return result;
+  });
   
   // 获取账本信息（用于获取功能开关）
   const { data: ledger } = trpc.ledger.getLedger.useQuery({ id: ledgerId });
