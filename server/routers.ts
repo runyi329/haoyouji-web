@@ -15358,8 +15358,36 @@ ${klinesSummary}
         );
         return rows as any[];
       }),
-
-    // 推荐页动态消息：最近2条（新人充値 + 订单变动），仅yjh和管理员可见
+    // AJ账本：获取视角切换用户的姓名（用于申请单申请人显示）
+    ajGetViewAsUserInfo: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (!memberRole && !isSysAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        const isOwnerOrAdmin = memberRole === 'owner' || memberRole === 'admin' || isSysAdmin;
+        if (!isOwnerOrAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可以切换视角' });
+        const [userRows] = await (conn as any).execute(
+          `SELECT u.id, u.name, u.username, lm.nickname
+           FROM users u
+           LEFT JOIN ledger_members lm ON lm.userId=u.id AND lm.ledgerId=?
+           WHERE u.id=?`,
+          [input.ledgerId, input.viewAsUserId]
+        );
+        const userInfo = (userRows as any[])[0];
+        if (!userInfo) return { userId: input.viewAsUserId, name: '未知用户' };
+        return {
+          userId: userInfo.id,
+          name: userInfo.nickname || userInfo.name || userInfo.username || '未知用户',
+        };
+      }),
+    // 推荐页动态消息：最近2条（新人chong値 + 订单变动），仅yjh和管理员可见
     afGetRecentDynamics: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
