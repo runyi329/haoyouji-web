@@ -18,48 +18,22 @@ jobs:
           echo "  ServerAliveCountMax 20" >> ~/.ssh/config
           chmod 600 ~/.ssh/config
 
-      - name: write deploy script
+      - name: run deploy in background
         run: |
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'cat > /tmp/run-deploy.sh' << 'EOF'
-          #!/bin/bash
-          export PATH="/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
-          LOG=/tmp/run-deploy.log
-          echo "[$(date)] START" > $LOG
-          cd /root/haoyouji-web
-          git fetch origin >> $LOG 2>&1
-          git reset --hard origin/main >> $LOG 2>&1
-          git clean -fd >> $LOG 2>&1
-          rm -rf node_modules/.vite client/.vite
-          pnpm install >> $LOG 2>&1
-          pnpm run build >> $LOG 2>&1
-          cp -r /root/haoyouji-web/dist/. /home/ubuntu/haoyouji-web/dist/
-          cp /root/haoyouji-web/package.json /home/ubuntu/haoyouji-web/package.json
-          chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/dist
-          rsync -a --delete /root/haoyouji-web/node_modules/ /home/ubuntu/haoyouji-web/node_modules/
-          chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules
-          cp /root/haoyouji-web/.env /home/ubuntu/haoyouji-web/.env 2>/dev/null || true
-          chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/.env 2>/dev/null || true
-          sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' /root/haoyouji-web/ecosystem.config.cjs > /home/ubuntu/haoyouji-web/ecosystem.config.cjs
-          chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/ecosystem.config.cjs
-          if sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 describe haoyouji-web > /dev/null 2>&1'; then
-            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart /home/ubuntu/haoyouji-web/ecosystem.config.cjs --update-env' >> $LOG 2>&1
-          else
-            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' >> $LOG 2>&1
-          fi
-          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' >> $LOG 2>&1
-          echo "[$(date)] DONE" >> $LOG
-          EOF
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'chmod +x /tmp/run-deploy.sh && nohup bash /tmp/run-deploy.sh > /tmp/run-deploy-nohup.log 2>&1 & echo "PID=$!"'
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'export PATH="/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"; nohup bash -c "cd /root/haoyouji-web && git fetch origin && git reset --hard origin/main && git clean -fd && rm -rf node_modules/.vite client/.vite && pnpm install && pnpm run build && cp -r dist/. /home/ubuntu/haoyouji-web/dist/ && cp package.json /home/ubuntu/haoyouji-web/ && chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/dist && rsync -a --delete node_modules/ /home/ubuntu/haoyouji-web/node_modules/ && chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules && cp .env /home/ubuntu/haoyouji-web/.env 2>/dev/null; chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/.env 2>/dev/null; sed s|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g ecosystem.config.cjs > /home/ubuntu/haoyouji-web/ecosystem.config.cjs && chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/ecosystem.config.cjs && sudo -u ubuntu bash -c '"'"'HOME=/home/ubuntu pm2 restart /home/ubuntu/haoyouji-web/ecosystem.config.cjs --update-env || HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs'"'"' && sudo -u ubuntu bash -c '"'"'HOME=/home/ubuntu pm2 save'"'"' && echo DEPLOY_DONE" > /tmp/deploy-bg.log 2>&1 &'
+          echo "Background deploy started, PID logged"
 
-      - name: wait and check
+      - name: wait for deploy
         run: |
           for i in $(seq 1 16); do
             sleep 30
-            RESULT=$(ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'tail -2 /tmp/run-deploy.log 2>/dev/null || echo waiting' 2>/dev/null || echo "ssh-fail")
-            echo "[$i] $RESULT"
-            if echo "$RESULT" | grep -q "DONE"; then
-              echo "Deploy done!"
-              break
+            RESULT=$(ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'tail -1 /tmp/deploy-bg.log 2>/dev/null || echo waiting' 2>/dev/null || echo "ssh-fail")
+            echo "[$i/16] $RESULT"
+            if echo "$RESULT" | grep -q "DEPLOY_DONE"; then
+              echo "Deploy completed successfully!"
+              exit 0
             fi
           done
-          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'cat /tmp/run-deploy.log' 2>/dev/null || true
+          echo "=== Final log ==="
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'cat /tmp/deploy-bg.log' 2>/dev/null || true
