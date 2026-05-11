@@ -803,6 +803,54 @@ const AddTransaction = () => {
                 <ChevronRight className="w-4 h-4 text-gray-300" />
               </div>
             </button>
+            {/* 选中企业后展示开票信息 */}
+            {selectedCompany && (selectedCompany.address || selectedCompany.phone || selectedCompany.bankName || selectedCompany.bankAccount) && (
+              <div className="px-5 py-3 bg-gray-50" style={{ borderBottom: '1px solid #F5F5F5' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-gray-400 font-medium tracking-wider">开票信息</span>
+                  <button
+                    className="text-xs px-3 py-1 rounded-full bg-[#D32F2F]/10 text-[#D32F2F] font-medium"
+                    onClick={() => {
+                      const info = [
+                        selectedCompany.name,
+                        selectedCompany.taxNo ? `税号：${selectedCompany.taxNo}` : '',
+                        selectedCompany.address ? `地址：${selectedCompany.address}` : '',
+                        selectedCompany.phone ? `电话：${selectedCompany.phone}` : '',
+                        selectedCompany.bankName ? `开户行：${selectedCompany.bankName}` : '',
+                        selectedCompany.bankAccount ? `账号：${selectedCompany.bankAccount}` : '',
+                      ].filter(Boolean).join('\n');
+                      navigator.clipboard.writeText(info);
+                    }}
+                  >一键复制</button>
+                </div>
+                <div className="space-y-1.5">
+                  {selectedCompany.address && (
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs text-gray-500 flex-1">地址：{selectedCompany.address}</span>
+                      <button className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 flex-shrink-0" onClick={() => navigator.clipboard.writeText(selectedCompany.address)}>复制</button>
+                    </div>
+                  )}
+                  {selectedCompany.phone && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-gray-500 flex-1">电话：{selectedCompany.phone}</span>
+                      <button className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 flex-shrink-0" onClick={() => navigator.clipboard.writeText(selectedCompany.phone)}>复制</button>
+                    </div>
+                  )}
+                  {selectedCompany.bankName && (
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-xs text-gray-500 flex-1">开户行：{selectedCompany.bankName}</span>
+                      <button className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 flex-shrink-0" onClick={() => navigator.clipboard.writeText(selectedCompany.bankName)}>复制</button>
+                    </div>
+                  )}
+                  {selectedCompany.bankAccount && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-gray-500 flex-1">账号：{selectedCompany.bankAccount}</span>
+                      <button className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 flex-shrink-0" onClick={() => navigator.clipboard.writeText(selectedCompany.bankAccount)}>复制</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             {/* 报销事由 */}
             <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
               <div className="text-xs text-gray-400 mb-2 font-medium tracking-wider">报销事由</div>
