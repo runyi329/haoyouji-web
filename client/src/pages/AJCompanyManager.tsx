@@ -112,15 +112,15 @@ function AccessPanel({
 }) {
   const toast = useCenterToast();
   const utils = trpc.useUtils();
-  const { data: members, isLoading } = trpc.ajGetCompanyAccess.useQuery({
+  const { data: members, isLoading } = trpc.ledger.ajGetCompanyAccess.useQuery({
     companyId: company.id,
     ledgerId,
   });
 
-  const toggleMutation = trpc.ajToggleCompanyAccess.useMutation({
+  const toggleMutation = trpc.ledger.ajToggleCompanyAccess.useMutation({
     onSuccess: () => {
-      utils.ajGetCompanyAccess.invalidate({ companyId: company.id, ledgerId });
-      utils.ajGetCompanies.invalidate({ ledgerId });
+      utils.ledger.ajGetCompanyAccess.invalidate({ companyId: company.id, ledgerId });
+      utils.ledger.ajGetCompanies.invalidate({ ledgerId });
     },
     onError: (e) => toast.error(e.message),
   });
@@ -202,29 +202,29 @@ export default function AJCompanyManager() {
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [accessCompany, setAccessCompany] = useState<Company | null>(null);
 
-  const { data: companies, isLoading } = trpc.ajGetCompanies.useQuery({ ledgerId });
+  const { data: companies, isLoading } = trpc.ledger.ajGetCompanies.useQuery({ ledgerId });
 
-  const createMutation = trpc.ajCreateCompany.useMutation({
+  const createMutation = trpc.ledger.ajCreateCompany.useMutation({
     onSuccess: () => {
-      utils.ajGetCompanies.invalidate({ ledgerId });
+      utils.ledger.ajGetCompanies.invalidate({ ledgerId });
       setShowAdd(false);
       toast.success("企业添加成功");
     },
     onError: (e) => toast.error(e.message),
   });
 
-  const updateMutation = trpc.ajUpdateCompany.useMutation({
+  const updateMutation = trpc.ledger.ajUpdateCompany.useMutation({
     onSuccess: () => {
-      utils.ajGetCompanies.invalidate({ ledgerId });
+      utils.ledger.ajGetCompanies.invalidate({ ledgerId });
       setEditingCompany(null);
       toast.success("企业信息已更新");
     },
     onError: (e) => toast.error(e.message),
   });
 
-  const deleteMutation = trpc.ajDeleteCompany.useMutation({
+  const deleteMutation = trpc.ledger.ajDeleteCompany.useMutation({
     onSuccess: () => {
-      utils.ajGetCompanies.invalidate({ ledgerId });
+      utils.ledger.ajGetCompanies.invalidate({ ledgerId });
       toast.success("企业已删除");
     },
     onError: (e) => toast.error(e.message),
