@@ -15336,19 +15336,15 @@ ${klinesSummary}
         if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
 
         const isOwnerOrAdmin = memberRole === 'owner' || memberRole === 'admin';
-        // 管理员切换视角：以业务员身份查询其有权限的企业
-        if (isOwnerOrAdmin && input.viewAsUserId) {
-          const [rows] = await (conn as any).execute(
-            `SELECT c.id, c.name, c.tax_no as taxNo, c.address, c.phone, c.bank_name as bankName, c.bank_account as bankAccount, c.remark
-             FROM aj_companies c
-             INNER JOIN aj_company_access a ON a.company_id=c.id AND a.user_id=? AND a.is_enabled=1
-             WHERE c.ledger_id=? ORDER BY c.created_at ASC`,
-            [input.viewAsUserId, input.ledgerId]
-          );
-          return rows as any[];
-        }
-        if (isOwnerOrAdmin) {
-          // 管理员看全部企业
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+
+        // 确定要查询哪个用户的权限
+        // 管理员切换视角时，查询目标用户的权限
+        const targetUserId = input.viewAsUserId || ctx.user.id;
+        const isViewingAsSelf = !input.viewAsUserId;
+
+        // 只有系统级超管且是自己视角（非 viewAs 模式）时，才看全部企业（方便管理操作）
+        if (isSysAdmin && isViewingAsSelf) {
           const [rows] = await (conn as any).execute(
             `SELECT id, name, tax_no as taxNo, address, phone, bank_name as bankName, bank_account as bankAccount, remark
              FROM aj_companies WHERE ledger_id=? ORDER BY created_at ASC`,
@@ -15356,13 +15352,14 @@ ${klinesSummary}
           );
           return rows as any[];
         }
-        // 其他角色（厂家/普通成员等）只看管理员已开放权限的企业
+
+        // 其他所有情况（包括 owner/admin 被切换视角、厂家、业务员等）：一律按权限记录过滤
         const [rows] = await (conn as any).execute(
           `SELECT c.id, c.name, c.tax_no as taxNo, c.address, c.phone, c.bank_name as bankName, c.bank_account as bankAccount, c.remark
            FROM aj_companies c
            INNER JOIN aj_company_access a ON a.company_id=c.id AND a.user_id=? AND a.is_enabled=1
            WHERE c.ledger_id=? ORDER BY c.created_at ASC`,
-          [ctx.user.id, input.ledgerId]
+          [targetUserId, input.ledgerId]
         );
         return rows as any[];
       }),
