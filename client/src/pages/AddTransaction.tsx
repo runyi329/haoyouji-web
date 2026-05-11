@@ -811,7 +811,24 @@ const AddTransaction = () => {
               </div>
               <div className="flex items-center gap-2">
                 {selectedCompany ? (
-                  <span className="text-sm font-semibold text-gray-700">{selectedCompany.name}</span>
+                  <div className="flex flex-col items-end gap-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-semibold text-gray-700">{selectedCompany.name}</span>
+                      <button
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0"
+                        onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(selectedCompany.name); }}
+                      >复制</button>
+                    </div>
+                    {selectedCompany.taxNo && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs text-gray-400">税号：{selectedCompany.taxNo}</span>
+                        <button
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0"
+                          onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(selectedCompany.taxNo); }}
+                        >复制</button>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <span className="text-sm text-gray-300">请选择企业（选填）</span>
                 )}
@@ -819,7 +836,7 @@ const AddTransaction = () => {
               </div>
             </button>
             {/* 选中企业后展示开票信息 */}
-            {selectedCompany && (selectedCompany.address || selectedCompany.phone || selectedCompany.bankName || selectedCompany.bankAccount) && (
+            {selectedCompany && (selectedCompany.taxNo || selectedCompany.address || selectedCompany.phone || selectedCompany.bankName || selectedCompany.bankAccount) && (
               <div className="px-5 py-3 bg-gray-50" style={{ borderBottom: '1px solid #F5F5F5' }}>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-gray-400 font-medium tracking-wider">开票信息</span>
@@ -839,6 +856,12 @@ const AddTransaction = () => {
                   >一键复制</button>
                 </div>
                 <div className="space-y-1.5">
+                  {selectedCompany.taxNo && (
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-gray-500 flex-1">税号：{selectedCompany.taxNo}</span>
+                      <button className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600 flex-shrink-0" onClick={() => navigator.clipboard.writeText(selectedCompany.taxNo)}>复制</button>
+                    </div>
+                  )}
                   {selectedCompany.address && (
                     <div className="flex items-start justify-between gap-2">
                       <span className="text-xs text-gray-500 flex-1">地址：{selectedCompany.address}</span>
