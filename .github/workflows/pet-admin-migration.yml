@@ -1,14 +1,14 @@
-name: 宠物平台-添加管理员字段和初始化jiang管理员
+name: 宠物平台-建表并初始化jiang管理员
 on:
   workflow_dispatch:
     inputs:
       reason:
         description: '执行原因'
         required: false
-        default: '初始化宠物平台管理员'
+        default: '建表并初始化宠物平台管理员'
 jobs:
   migrate:
-    name: 执行宠物平台管理员迁移
+    name: 建表并初始化宠物平台管理员
     runs-on: ubuntu-latest
     steps:
       - name: 配置SSH密钥
@@ -20,62 +20,111 @@ jobs:
           echo "Host ${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/config
           echo "  StrictHostKeyChecking no" >> ~/.ssh/config
           chmod 600 ~/.ssh/config
-      - name: 执行数据库迁移
+      - name: 建表并初始化数据
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
             set -e
-            DB_CMD="mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db"
+            DB="mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db"
             
-            echo "=== 步骤1: 检查并添加 is_admin 字段 ==="
-            $DB_CMD -e "
-              SELECT COUNT(*) as col_exists 
-              FROM information_schema.COLUMNS 
-              WHERE TABLE_SCHEMA='crm_db' 
-              AND TABLE_NAME='pet_user_roles' 
-              AND COLUMN_NAME='is_admin';
+            echo "=== 步骤1: 创建 pet_user_roles 表 ==="
+            $DB -e "
+              CREATE TABLE IF NOT EXISTS pet_user_roles (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id INT NOT NULL,
+                role ENUM('manufacturer','investor','promoter','petshop') NOT NULL,
+                is_admin TINYINT(1) NOT NULL DEFAULT 0,
+                remark VARCHAR(200),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY pet_user_roles_user_uniq (user_id),
+                KEY pet_user_roles_role_idx (role)
+              ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             "
+            echo "✅ pet_user_roles 表已创建（或已存在）"
             
-            $DB_CMD -e "
-              ALTER TABLE pet_user_roles 
-              ADD COLUMN IF NOT EXISTS is_admin TINYINT(1) NOT NULL DEFAULT 0;
-            " 2>/dev/null || \
-            $DB_CMD -e "
-              SELECT IF(
-                COUNT(*) = 0,
-                'NEED_ADD',
-                'ALREADY_EXISTS'
-              ) as status
-              FROM information_schema.COLUMNS 
-              WHERE TABLE_SCHEMA='crm_db' 
-              AND TABLE_NAME='pet_user_roles' 
-              AND COLUMN_NAME='is_admin';
+            echo "=== 步骤2: 检查并添加 is_admin 字段（兼容已存在表）==="
+            COL_EXISTS=$($DB -sN -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='pet_user_roles' AND COLUMN_NAME='is_admin';")
+            if [ "$COL_EXISTS" = "0" ]; then
+              $DB -e "ALTER TABLE pet_user_roles ADD COLUMN is_admin TINYINT(1) NOT NULL DEFAULT 0 AFTER role;"
+              echo "✅ is_admin 字段已添加"
+            else
+              echo "ℹ️ is_admin 字段已存在，跳过"
+            fi
+            
+            echo "=== 步骤3: 创建 pet_machines 表 ==="
+            $DB -e "
+              CREATE TABLE IF NOT EXISTS pet_machines (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                machine_no VARCHAR(50) NOT NULL,
+                name VARCHAR(100),
+                petshop_user_id INT,
+                petshop_name VARCHAR(100),
+                investor_user_id INT,
+                promoter_user_id INT,
+                manufacturer_user_id INT,
+                petshop_ratio DECIMAL(5,2) DEFAULT 40.00,
+                investor_ratio DECIMAL(5,2) DEFAULT 35.00,
+                promoter_ratio DECIMAL(5,2) DEFAULT 10.00,
+                manufacturer_ratio DECIMAL(5,2) DEFAULT 15.00,
+                status ENUM('active','inactive','maintenance') NOT NULL DEFAULT 'active',
+                install_date VARCHAR(20),
+                address VARCHAR(200),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY pet_machines_no_uniq (machine_no),
+                KEY pet_machines_petshop_idx (petshop_user_id),
+                KEY pet_machines_investor_idx (investor_user_id),
+                KEY pet_machines_promoter_idx (promoter_user_id)
+              ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             "
+            echo "✅ pet_machines 表已创建（或已存在）"
             
-            echo "=== 步骤2: 查找 jiang 的用户ID ==="
-            $DB_CMD -e "SELECT id, name, username, phone FROM users WHERE name LIKE '%jiang%' OR username LIKE '%jiang%' LIMIT 10;"
+            echo "=== 步骤4: 创建 pet_daily_records 表 ==="
+            $DB -e "
+              CREATE TABLE IF NOT EXISTS pet_daily_records (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                machine_id INT NOT NULL,
+                record_date VARCHAR(10) NOT NULL,
+                revenue DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+                petshop_profit DECIMAL(12,2) DEFAULT 0.00,
+                investor_profit DECIMAL(12,2) DEFAULT 0.00,
+                promoter_profit DECIMAL(12,2) DEFAULT 0.00,
+                manufacturer_profit DECIMAL(12,2) DEFAULT 0.00,
+                remark VARCHAR(200),
+                created_by INT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY pet_daily_records_machine_date_uniq (machine_id, record_date),
+                KEY pet_daily_records_machine_idx (machine_id),
+                KEY pet_daily_records_date_idx (record_date)
+              ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            "
+            echo "✅ pet_daily_records 表已创建（或已存在）"
             
-            echo "=== 步骤3: 给 jiang 设置厂家+管理员角色 ==="
-            JIANG_ID=$($DB_CMD -sN -e "SELECT id FROM users WHERE name='jiang' OR username='jiang' LIMIT 1;")
+            echo "=== 步骤5: 查找 jiang 的用户ID ==="
+            $DB -e "SELECT id, name, username, phone FROM users WHERE name='jiang' OR username='jiang' LIMIT 5;"
+            JIANG_ID=$($DB -sN -e "SELECT id FROM users WHERE name='jiang' OR username='jiang' LIMIT 1;")
             echo "jiang 的用户ID: $JIANG_ID"
             
+            echo "=== 步骤6: 给 jiang 设置厂家+管理员角色 ==="
             if [ -n "$JIANG_ID" ]; then
-              $DB_CMD -e "
-                INSERT INTO pet_user_roles (user_id, role, is_admin, remark) 
+              $DB -e "
+                INSERT INTO pet_user_roles (user_id, role, is_admin, remark)
                 VALUES ($JIANG_ID, 'manufacturer', 1, '厂家兼管理员')
-                ON DUPLICATE KEY UPDATE 
-                  role='manufacturer', 
-                  is_admin=1, 
+                ON DUPLICATE KEY UPDATE
+                  role='manufacturer',
+                  is_admin=1,
                   remark='厂家兼管理员',
                   updated_at=NOW();
               "
               echo "✅ jiang (ID=$JIANG_ID) 已设置为厂家+管理员"
             else
-              echo "⚠️ 未找到名为 jiang 的用户，请手动检查"
-              $DB_CMD -e "SELECT id, name, username FROM users ORDER BY id DESC LIMIT 20;"
+              echo "⚠️ 未找到名为 jiang 的用户"
+              $DB -e "SELECT id, name, username FROM users ORDER BY id DESC LIMIT 20;"
             fi
             
-            echo "=== 步骤4: 验证结果 ==="
-            $DB_CMD -e "
+            echo "=== 步骤7: 验证结果 ==="
+            $DB -e "
               SELECT u.id, u.name, u.username, pr.role, pr.is_admin, pr.remark
               FROM users u
               JOIN pet_user_roles pr ON u.id = pr.user_id
@@ -83,5 +132,5 @@ jobs:
               LIMIT 10;
             "
             
-            echo "=== 迁移完成 ==="
+            echo "=== 所有步骤完成 ==="
           ENDSSH
