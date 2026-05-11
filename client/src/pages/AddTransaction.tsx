@@ -32,6 +32,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { autoCompressImage } from "@/utils/imageUtils";
 
 type TransactionType = "expense" | "income";
@@ -95,6 +96,8 @@ const AddTransaction = () => {
   const isCustomAA = (ledger as any)?.type === 'custom_aa';
   const isCustomAJ = (ledger as any)?.type === 'custom_aj';
   const userRole = (ledger as any)?.userRole;
+  const { user: currentUser } = useAuth();
+  const applicantName = (currentUser as any)?.name || (currentUser as any)?.username || '—';
   const canManageCategories = !isCustomAA || userRole === 'owner' || userRole === 'admin';
   
   // 获取要编辑的账目详情
@@ -696,7 +699,7 @@ const AddTransaction = () => {
           <div className="bg-[#D32F2F] px-4 pt-2 pb-5 flex items-center justify-between">
             <div>
               <div className="text-white text-xs opacity-80">申请人</div>
-              <div className="text-white text-sm font-semibold mt-0.5">{(ledger as any)?.userName || '—'}</div>
+              <div className="text-white text-sm font-semibold mt-0.5">{applicantName}</div>
             </div>
             <div className="text-right">
               <div className="text-white text-xs opacity-80">申请日期</div>
