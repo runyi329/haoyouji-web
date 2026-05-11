@@ -2118,6 +2118,7 @@ export default function LedgerDetail() {
   const isCustomAF = (ledgerData as any)?.type === 'custom_af';
   const isCustomAH = (ledgerData as any)?.type === 'custom_ah';
   const isCustomAI = (ledgerData as any)?.type === 'custom_ai';
+  const isCustomAJ = (ledgerData as any)?.type === 'custom_aj';
 
 
 
@@ -2483,7 +2484,7 @@ export default function LedgerDetail() {
   const dietTotalCalories = Number((dietStats as any)?.totalCaloriesBurned ?? 0);
   
   // 统计周期状态（从 localStorage 读取上次的选择，默认为 'month'）
-  const [statsPeriod, setStatsPeriod] = useState<'day' | 'week' | 'month' | 'year'>(() => {
+  const [statsPeriod, setStatsPeriod] = useState<'day' | 'week' | 'month' | 'quarter' | 'year'>(() => {
     const saved = localStorage.getItem('statsPeriod');
     return (saved as 'day' | 'week' | 'month' | 'year') || 'month';
   });
@@ -2685,6 +2686,12 @@ export default function LedgerDetail() {
           case 'month':
             shouldInclude = day.date.startsWith(currentMonth);
             break;
+          case 'quarter': {
+            const qtr = Math.floor(now.getMonth() / 3);
+            const qStart = new Date(now.getFullYear(), qtr * 3, 1).toISOString().split('T')[0];
+            shouldInclude = day.date >= qStart && day.date <= today;
+            break;
+          }
           case 'year':
             shouldInclude = day.date.startsWith(currentYear);
             break;
@@ -3196,7 +3203,7 @@ export default function LedgerDetail() {
                   </div>
                 )}
                 {/* 普通账本：查找按鈕 */}
-                {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && (
+                {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && !isCustomAJ && (
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
                     style={{ backgroundColor: '#FFFFFF' }}
@@ -3778,6 +3785,129 @@ export default function LedgerDetail() {
                 <div className="text-[10px] text-white/50 mt-1">待配置</div>
               </div>
             </div>
+          </div>
+        )}
+        {/* AJ 账本：业务报销汇总面板 */}
+        {isCustomAJ && (
+          <div className="px-4 pt-2 pb-4">
+            {/* 时间维度下拉 */}
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs text-white/80">报销汇总</span>
+              <div className="relative">
+                <select
+                  value={statsPeriod}
+                  onChange={e => setStatsPeriod(e.target.value as any)}
+                  className="appearance-none text-xs text-white/90 pl-2 pr-6 py-1 rounded-full border border-white/30 cursor-pointer"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}
+                >
+                  <option value="day" style={{ color: '#222' }}>今日</option>
+                  <option value="week" style={{ color: '#222' }}>本周</option>
+                  <option value="month" style={{ color: '#222' }}>本月</option>
+                  <option value="quarter" style={{ color: '#222' }}>本季度</option>
+                  <option value="year" style={{ color: '#222' }}>本年</option>
+                </select>
+                <svg className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 fill-white/70" viewBox="0 0 12 12"><path d="M6 8L2 4h8z"/></svg>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {/* 开票总金额 */}
+              <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                <div className="text-[10px] text-white/70 mb-1">开票总额</div>
+                <div className="text-base font-bold text-white">
+                  {monthlyStats.expense > 0 ? `¥${monthlyStats.expense.toFixed(2)}` : '--'}
+                </div>
+              </div>
+              {/* 发票张数 */}
+              <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                <div className="text-[10px] text-white/70 mb-1">发票张数</div>
+                <div className="text-base font-bold text-white">
+                  {(() => {
+                    if (!transactionsData) return '--';
+                    let count = 0;
+                    const now = new Date();
+                    const today = now.toISOString().split('T')[0];
+                    const weekStart = (() => { const d = new Date(now); d.setDate(d.getDate() - d.getDay() + 1); return d.toISOString().split('T')[0]; })();
+                    const currentMonth = today.slice(0, 7);
+                    const currentYear = today.slice(0, 4);
+                    const currentQuarter = Math.floor(now.getMonth() / 3);
+                    const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
+                    transactionsData.forEach((day: any) => {
+                      let ok = false;
+                      if (statsPeriod === 'day') ok = day.date === today;
+                      else if (statsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
+                      else if (statsPeriod === 'month') ok = day.date.startsWith(currentMonth);
+                      else if (statsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
+                      else if (statsPeriod === 'year') ok = day.date.startsWith(currentYear);
+                      if (ok) count += (day.records || []).length;
+                    });
+                    return count > 0 ? `${count}张` : '--';
+                  })()}
+                </div>
+              </div>
+              {/* 按企业分组 */}
+              <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                <div className="text-[10px] text-white/70 mb-1">企业数</div>
+                <div className="text-base font-bold text-white">
+                  {(() => {
+                    if (!transactionsData) return '--';
+                    const companies = new Set<string>();
+                    const now = new Date();
+                    const today = now.toISOString().split('T')[0];
+                    const weekStart = (() => { const d = new Date(now); d.setDate(d.getDate() - d.getDay() + 1); return d.toISOString().split('T')[0]; })();
+                    const currentMonth = today.slice(0, 7);
+                    const currentYear = today.slice(0, 4);
+                    const currentQuarter = Math.floor(now.getMonth() / 3);
+                    const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
+                    transactionsData.forEach((day: any) => {
+                      let ok = false;
+                      if (statsPeriod === 'day') ok = day.date === today;
+                      else if (statsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
+                      else if (statsPeriod === 'month') ok = day.date.startsWith(currentMonth);
+                      else if (statsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
+                      else if (statsPeriod === 'year') ok = day.date.startsWith(currentYear);
+                      if (ok) (day.records || []).forEach((r: any) => { if (r.category && r.category !== '未分类') companies.add(r.category.split('-')[0]); });
+                    });
+                    return companies.size > 0 ? `${companies.size}家` : '--';
+                  })()}
+                </div>
+              </div>
+            </div>
+            {/* 按企业分组金额明细 */}
+            {(() => {
+              if (!transactionsData) return null;
+              const companyMap: Record<string, number> = {};
+              const now = new Date();
+              const today = now.toISOString().split('T')[0];
+              const weekStart = (() => { const d = new Date(now); d.setDate(d.getDate() - d.getDay() + 1); return d.toISOString().split('T')[0]; })();
+              const currentMonth = today.slice(0, 7);
+              const currentYear = today.slice(0, 4);
+              const currentQuarter = Math.floor(now.getMonth() / 3);
+              const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
+              transactionsData.forEach((day: any) => {
+                let ok = false;
+                if (statsPeriod === 'day') ok = day.date === today;
+                else if (statsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
+                else if (statsPeriod === 'month') ok = day.date.startsWith(currentMonth);
+                else if (statsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
+                else if (statsPeriod === 'year') ok = day.date.startsWith(currentYear);
+                if (ok) (day.records || []).forEach((r: any) => {
+                  const co = (r.category || '未分类').split('-')[0];
+                  companyMap[co] = (companyMap[co] || 0) + r.amount;
+                });
+              });
+              const entries = Object.entries(companyMap).filter(([k]) => k !== '未分类');
+              if (entries.length === 0) return null;
+              return (
+                <div className="mt-2 space-y-1.5">
+                  {entries.map(([company, amount]) => (
+                    <div key={company} className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}>
+                      <span className="text-xs text-white/80 truncate max-w-[60%]">{company}</span>
+                      <span className="text-xs font-semibold text-white">¥{(amount as number).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         )}
         {/* 普通账本：统计面板（总收入/总结余/总支出）*/}
