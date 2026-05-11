@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Plus, Building2, Pencil, Trash2, Users, ChevronRight, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useToast } from "@/hooks/use-toast";
+import { useCenterToast } from "@/components/ui/center-toast";
 
 type Company = {
   id: number;
@@ -110,7 +110,7 @@ function AccessPanel({
   company: Company;
   onClose: () => void;
 }) {
-  const { toast } = useToast();
+  const toast = useCenterToast();
   const utils = trpc.useUtils();
   const { data: members, isLoading } = trpc.ajGetCompanyAccess.useQuery({
     companyId: company.id,
@@ -122,7 +122,7 @@ function AccessPanel({
       utils.ajGetCompanyAccess.invalidate({ companyId: company.id, ledgerId });
       utils.ajGetCompanies.invalidate({ ledgerId });
     },
-    onError: (e) => toast({ title: "操作失败", description: e.message, variant: "destructive" }),
+    onError: (e) => toast.error(e.message),
   });
 
   return (
@@ -195,7 +195,7 @@ export default function AJCompanyManager() {
   const params = useParams<{ ledgerId: string }>();
   const ledgerId = parseInt(params.ledgerId || "0");
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const toast = useCenterToast();
   const utils = trpc.useUtils();
 
   const [showAdd, setShowAdd] = useState(false);
@@ -208,26 +208,26 @@ export default function AJCompanyManager() {
     onSuccess: () => {
       utils.ajGetCompanies.invalidate({ ledgerId });
       setShowAdd(false);
-      toast({ title: "企业添加成功" });
+      toast.success("企业添加成功");
     },
-    onError: (e) => toast({ title: "添加失败", description: e.message, variant: "destructive" }),
+    onError: (e) => toast.error(e.message),
   });
 
   const updateMutation = trpc.ajUpdateCompany.useMutation({
     onSuccess: () => {
       utils.ajGetCompanies.invalidate({ ledgerId });
       setEditingCompany(null);
-      toast({ title: "企业信息已更新" });
+      toast.success("企业信息已更新");
     },
-    onError: (e) => toast({ title: "更新失败", description: e.message, variant: "destructive" }),
+    onError: (e) => toast.error(e.message),
   });
 
   const deleteMutation = trpc.ajDeleteCompany.useMutation({
     onSuccess: () => {
       utils.ajGetCompanies.invalidate({ ledgerId });
-      toast({ title: "企业已删除" });
+      toast.success("企业已删除");
     },
-    onError: (e) => toast({ title: "删除失败", description: e.message, variant: "destructive" }),
+    onError: (e) => toast.error(e.message),
   });
 
   const handleDelete = (company: Company) => {
