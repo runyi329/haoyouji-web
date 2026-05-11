@@ -71,6 +71,7 @@ import CustomAFManager from "./admin/CustomAFManager";
 import CustomAGManager from "./admin/CustomAGManager";
 import CustomAHManager from "./admin/CustomAHManager";
 import CustomAIManager from "./admin/CustomAIManager";
+import CustomAJManager from "./admin/CustomAJManager";
 import ProductLibraryManager from "./admin/ProductLibraryManager";
 import AdminRedeemOrders from "./admin/AdminRedeemOrders";
 
@@ -138,6 +139,13 @@ const CUSTOM_LEDGER_TYPES = [
     name: "共享公司股权管理",
     desc: "AI 型定制账本，用于共享公司股权管理，支持4层角色（创建者/管理员/股东/观察者）",
     component: CustomAIManager,
+  },
+  {
+    key: "AJ",
+    label: "AJ 型",
+    name: "业务报销系统",
+    desc: "AJ 型定制账本，用于企业业务报销管理，支持员工提交报销申请、管理员审批，仅管理员可创建，普通用户需被邀请才能进入",
+    component: CustomAJManager,
   },
 ];
 
