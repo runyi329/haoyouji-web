@@ -15266,12 +15266,13 @@ ${klinesSummary}
         if (!isSysAdmin && memberRole !== 'owner' && memberRole !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看权限' });
         }
-        // 获取账本所有业务员成员
+        // 获取账本所有成员（不限角色，管理员/创建者/厂家等均可设置权限）
         const [members] = await (conn as any).execute(
           `SELECT lm.userId, lm.role, u.name, u.username, u.avatar
            FROM ledger_members lm
            LEFT JOIN users u ON u.id = lm.userId
-           WHERE lm.ledgerId=? AND lm.role='member'`,
+           WHERE lm.ledgerId=?
+           ORDER BY FIELD(lm.role,'owner','admin','funder','member')`,
           [input.ledgerId]
         );
         // 获取该企业的权限记录
@@ -15355,7 +15356,7 @@ ${klinesSummary}
           );
           return rows as any[];
         }
-        // 业务员只看有权限的
+        // 其他角色（厂家/普通成员等）只看管理员已开放权限的企业
         const [rows] = await (conn as any).execute(
           `SELECT c.id, c.name, c.tax_no as taxNo, c.address, c.phone, c.bank_name as bankName, c.bank_account as bankAccount, c.remark
            FROM aj_companies c
