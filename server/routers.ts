@@ -15316,7 +15316,7 @@ ${klinesSummary}
 
     // 业务员获取自己有权限的企业（用于报销申请单选择企业）
     ajGetMyCompanies: protectedProcedure
-      .input(z.object({ ledgerId: z.number() }))
+      .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
@@ -15328,6 +15328,17 @@ ${klinesSummary}
         if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
 
         const isOwnerOrAdmin = memberRole === 'owner' || memberRole === 'admin';
+        // 管理员切换视角：以业务员身份查询其有权限的企业
+        if (isOwnerOrAdmin && input.viewAsUserId) {
+          const [rows] = await (conn as any).execute(
+            `SELECT c.id, c.name, c.tax_no as taxNo, c.address, c.phone, c.bank_name as bankName, c.bank_account as bankAccount, c.remark
+             FROM aj_companies c
+             INNER JOIN aj_company_access a ON a.company_id=c.id AND a.user_id=? AND a.is_enabled=1
+             WHERE c.ledger_id=? ORDER BY c.created_at ASC`,
+            [input.viewAsUserId, input.ledgerId]
+          );
+          return rows as any[];
+        }
         if (isOwnerOrAdmin) {
           // 管理员看全部企业
           const [rows] = await (conn as any).execute(
