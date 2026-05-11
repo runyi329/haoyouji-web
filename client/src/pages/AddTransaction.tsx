@@ -100,13 +100,12 @@ const AddTransaction = () => {
   const userRole = (ledger as any)?.userRole;
   const { user: currentUser } = useAuth();
   // 获取视角用户信息（切换视角时显示业务员姓名）
-  const { data: viewAsUserData } = trpc.ledger.getMembers.useQuery(
-    { ledgerId },
+  const { data: viewAsUserInfo } = trpc.ledger.ajGetViewAsUserInfo.useQuery(
+    { ledgerId, viewAsUserId: viewAsUserId! },
     { enabled: isCustomAJ && !!viewAsUserId }
   );
-  const viewAsUser = viewAsUserId ? (viewAsUserData as any[])?.find((m: any) => m.userId === viewAsUserId) : null;
-  const applicantName = viewAsUser
-    ? (viewAsUser.nickname || viewAsUser.username || '—')
+  const applicantName = viewAsUserId && viewAsUserInfo
+    ? viewAsUserInfo.name
     : ((currentUser as any)?.name || (currentUser as any)?.username || '—');
   const canManageCategories = !isCustomAA || userRole === 'owner' || userRole === 'admin';
   
