@@ -84,12 +84,12 @@ function CompanyForm({
           onClick={() =>
             onSubmit({
               name,
-              tax_no: taxNo || null,
-              address: address || null,
-              phone: phone || null,
-              bank_name: bankName || null,
-              bank_account: bankAccount || null,
-              remark: remark || null,
+              tax_no: taxNo || undefined,
+              address: address || undefined,
+              phone: phone || undefined,
+              bank_name: bankName || undefined,
+              bank_account: bankAccount || undefined,
+              remark: remark || undefined,
             })
           }
           disabled={loading || !name.trim()}
@@ -259,7 +259,16 @@ export default function AJCompanyManager() {
           <div>
             <div className="text-sm font-medium text-gray-600 mb-2">新增企业</div>
             <CompanyForm
-              onSubmit={(data) => createMutation.mutate({ ledgerId, name: data.name, ...data })}
+              onSubmit={(data) => createMutation.mutate({
+                ledgerId,
+                name: data.name,
+                taxNo: data.tax_no || undefined,
+                address: data.address || undefined,
+                phone: data.phone || undefined,
+                bankName: data.bank_name || undefined,
+                bankAccount: data.bank_account || undefined,
+                remark: data.remark || undefined,
+              })}
               onCancel={() => setShowAdd(false)}
               loading={createMutation.isPending}
             />
@@ -285,7 +294,17 @@ export default function AJCompanyManager() {
                     <CompanyForm
                       initial={company}
                       onSubmit={(data) =>
-                        updateMutation.mutate({ companyId: company.id, ledgerId, name: data.name, ...data })
+                        updateMutation.mutate({
+                          companyId: company.id,
+                          ledgerId,
+                          name: data.name,
+                          taxNo: data.tax_no || undefined,
+                          address: data.address || undefined,
+                          phone: data.phone || undefined,
+                          bankName: data.bank_name || undefined,
+                          bankAccount: data.bank_account || undefined,
+                          remark: data.remark || undefined,
+                        })
                       }
                       onCancel={() => setEditingCompany(null)}
                       loading={updateMutation.isPending}
