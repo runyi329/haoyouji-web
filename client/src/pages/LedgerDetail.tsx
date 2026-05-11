@@ -2484,7 +2484,7 @@ export default function LedgerDetail() {
   const dietTotalCalories = Number((dietStats as any)?.totalCaloriesBurned ?? 0);
   
   // 统计周期状态（从 localStorage 读取上次的选择，默认为 'month'）
-  const [statsPeriod, setStatsPeriod] = useState<'day' | 'week' | 'month' | 'quarter' | 'year'>(() => {
+  const [statsPeriod, setStatsPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>(() => {
     const saved = localStorage.getItem('statsPeriod');
     return (saved as 'day' | 'week' | 'month' | 'year') || 'month';
   });
@@ -2694,6 +2694,9 @@ export default function LedgerDetail() {
           }
           case 'year':
             shouldInclude = day.date.startsWith(currentYear);
+            break;
+          case 'all':
+            shouldInclude = true;
             break;
         }
       }
@@ -3797,9 +3800,10 @@ export default function LedgerDetail() {
                 <select
                   value={statsPeriod}
                   onChange={e => setStatsPeriod(e.target.value as any)}
-                  className="appearance-none text-xs text-white/90 pl-2 pr-6 py-1 rounded-full border border-white/30 cursor-pointer"
+                  className="appearance-none text-xs text-white/90 pl-2 pr-6 py-1 rounded-full border border-white/30 cursor-pointer outline-none focus:outline-none focus:ring-0"
                   style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}
                 >
+                  <option value="all" style={{ color: '#222' }}>全部</option>
                   <option value="day" style={{ color: '#222' }}>今日</option>
                   <option value="week" style={{ color: '#222' }}>本周</option>
                   <option value="month" style={{ color: '#222' }}>本月</option>
@@ -3833,7 +3837,8 @@ export default function LedgerDetail() {
                     const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
                     transactionsData.forEach((day: any) => {
                       let ok = false;
-                      if (statsPeriod === 'day') ok = day.date === today;
+                      if (statsPeriod === 'all') ok = true;
+                      else if (statsPeriod === 'day') ok = day.date === today;
                       else if (statsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
                       else if (statsPeriod === 'month') ok = day.date.startsWith(currentMonth);
                       else if (statsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
@@ -3860,7 +3865,8 @@ export default function LedgerDetail() {
                     const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
                     transactionsData.forEach((day: any) => {
                       let ok = false;
-                      if (statsPeriod === 'day') ok = day.date === today;
+                      if (statsPeriod === 'all') ok = true;
+                      else if (statsPeriod === 'day') ok = day.date === today;
                       else if (statsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
                       else if (statsPeriod === 'month') ok = day.date.startsWith(currentMonth);
                       else if (statsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
@@ -3885,7 +3891,8 @@ export default function LedgerDetail() {
               const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
               transactionsData.forEach((day: any) => {
                 let ok = false;
-                if (statsPeriod === 'day') ok = day.date === today;
+                if (statsPeriod === 'all') ok = true;
+                else if (statsPeriod === 'day') ok = day.date === today;
                 else if (statsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
                 else if (statsPeriod === 'month') ok = day.date.startsWith(currentMonth);
                 else if (statsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
