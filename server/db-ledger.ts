@@ -3205,7 +3205,6 @@ export async function getTransactionsList(
         id: users.id,
         username: users.username,
         avatar: users.avatar,
-        nickname: users.nickname,
       })
       .from(users)
       .where(sql`${users.id} IN (${sql.join(Array.from(creatorIds).map(id => sql`${id}`), sql`, `)})`);
@@ -3257,7 +3256,6 @@ export async function getTransactionsList(
         id: creator.id,
         username: creator.username,
         avatar: creator.avatar,
-        nickname: creator.nickname,
       } : null,
     });
     
@@ -4311,7 +4309,7 @@ export async function getPendingApprovals(ledgerId: number, userId: number) {
     let creatorMap: Record<number, any> = {};
     if (creatorIds.length > 0) {
       const creators = await db
-        .select({ id: users.id, username: users.username, avatar: users.avatar, nickname: users.nickname })
+        .select({ id: users.id, username: users.username, avatar: users.avatar })
         .from(users)
         .where(sql`${users.id} IN (${sql.join(creatorIds.map((id: any) => sql`${id}`), sql`, `)})`);
       creatorMap = Object.fromEntries(creators.map((c: any) => [c.id, c]));
