@@ -903,18 +903,20 @@ const AddTransaction = () => {
                   const filesToProcess = Array.from(files).slice(0, remaining);
                   toast.loading('上传中...', { id: 'upload' });
                   try {
-                    const uploadPromises = filesToProcess.map(async (file) => {
-                      const compressed = await autoCompressImage(file);
-                      const formData = new FormData();
-                      formData.append('file', compressed);
-                      const response = await fetch('/api/upload', { method: 'POST', body: formData, credentials: 'include' });
-                      if (!response.ok) throw new Error('上传失败');
-                      const data = await response.json();
-                      return data.url;
-                    });
-                    const urls = await Promise.all(uploadPromises);
-                    setUploadedImages(prev => [...prev, ...urls]);
-                    toast.success('上传成功', { id: 'upload' });
+                    const uploadedUrls: string[] = [];
+                    for (const file of filesToProcess) {
+                      const { base64 } = await autoCompressImage(file, 'normal');
+                      const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
+                      if (result.success && result.imageUrl) {
+                        uploadedUrls.push(result.imageUrl);
+                      }
+                    }
+                    if (uploadedUrls.length > 0) {
+                      setUploadedImages(prev => [...prev, ...uploadedUrls]);
+                      toast.success(`成功上传 ${uploadedUrls.length} 张图片`, { id: 'upload' });
+                    } else {
+                      toast.dismiss('upload');
+                    }
                   } catch (error) {
                     console.error('图片上传失败:', error);
                     toast.error('图片上传失败，请重试', { id: 'upload' });
