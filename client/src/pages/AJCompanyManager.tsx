@@ -131,7 +131,7 @@ function AccessPanel({
         <div className="flex items-center justify-between p-4 border-b border-gray-100">
           <div>
             <div className="font-semibold text-gray-800">{company.name}</div>
-            <div className="text-xs text-gray-400 mt-0.5">业务员访问权限</div>
+            <div className="text-xs text-gray-400 mt-0.5">成员访问权限</div>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100">
             <X className="w-4 h-4 text-gray-500" />
@@ -142,8 +142,8 @@ function AccessPanel({
             <div className="text-center py-8 text-gray-400 text-sm">加载中...</div>
           ) : !members || members.length === 0 ? (
             <div className="text-center py-8 text-gray-400 text-sm">
-              暂无业务员成员
-              <div className="text-xs mt-1">请先在账本中邀请业务员加入</div>
+              暂无成员
+              <div className="text-xs mt-1">请先在账本中邀请成员加入</div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -159,7 +159,10 @@ function AccessPanel({
                     )}
                     <div>
                       <div className="text-sm font-medium text-gray-800">{m.name || m.username}</div>
-                      <div className="text-xs text-gray-400">@{m.username}</div>
+                      <div className="text-xs text-gray-400">
+                        {m.role === 'owner' ? '创始人' : m.role === 'admin' ? '企业主' : m.role === 'funder' ? '厂家' : '业务员'}
+                        {m.username ? ` · @${m.username}` : ''}
+                      </div>
                     </div>
                   </div>
                   <button
