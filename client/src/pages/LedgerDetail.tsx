@@ -3216,7 +3216,7 @@ export default function LedgerDetail() {
                   </div>
                 )}
                 {/* 普通账本：数据统计按鈕 */}
-                {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && (
+                {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && !isCustomAJ && (
                   <div
                     className="w-10 h-10 rounded-full flex items-center justify-center cursor-pointer shadow-sm"
                     style={{ backgroundColor: '#FFFFFF' }}
@@ -3918,7 +3918,7 @@ export default function LedgerDetail() {
           </div>
         )}
         {/* 普通账本：统计面板（总收入/总结余/总支出）*/}
-        {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && (
+        {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && !isCustomAJ && (
           <div className="px-4 pt-2 pb-1 relative">
             <div className="grid grid-cols-3 gap-4 text-center">
               <div className="relative">
@@ -5449,7 +5449,7 @@ export default function LedgerDetail() {
       </div>}
 
       {/* 底部添加按鈕：非定制账本显示 */}
-      {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && (
+      {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && !isCustomAJ && (
         <button
           onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
           className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
