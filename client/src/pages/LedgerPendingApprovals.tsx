@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
+import { UserAvatar } from "@/components/UserAvatar";
 
 export default function LedgerPendingApprovals() {
   const [, params] = useRoute("/ledger/:id/pending-approvals");
@@ -161,7 +162,12 @@ export default function LedgerPendingApprovals() {
                     {/* 开票人 */}
                     {transaction.member && (
                       <div className="flex items-center gap-2 text-sm">
-                        <User className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                        <UserAvatar
+                          username={transaction.member.username}
+                          avatar={transaction.member.avatar}
+                          nickname={transaction.member.nickname}
+                          size="sm"
+                        />
                         <span className="text-gray-500 flex-shrink-0">开票人</span>
                         <span className="text-gray-800">
                           {transaction.member.nickname || transaction.member.username}
