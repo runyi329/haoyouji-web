@@ -775,8 +775,8 @@ const AddTransaction = () => {
               </div>
             </div>
 
-            {/* 报销类型（分类） */}
-            <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
+            {/* 报销类型（分类） - 已隐藏 */}
+            {false && <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
               <div className="text-xs text-gray-400 mb-3 font-medium tracking-wider">报销类型</div>
               <div className="flex flex-wrap gap-2">
                 {topCategories.map((category: any, index: number) => {
@@ -805,7 +805,7 @@ const AddTransaction = () => {
                   </button>
                 )}
               </div>
-            </div>
+            </div>}
 
             {/* 开票信息区域 */}
             <div
@@ -855,17 +855,7 @@ const AddTransaction = () => {
                 <div className="text-sm text-gray-300">请选择企业（选填）</div>
               )}
             </div>
-            {/* 报销事由 */}
-            <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
-              <div className="text-xs text-gray-400 mb-2 font-medium tracking-wider">报销事由</div>
-              <input
-                type="text"
-                placeholder="请填写报销原因或说明..."
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className="w-full text-sm text-gray-700 bg-transparent border-none outline-none placeholder-gray-300"
-              />
-            </div>
+            {/* 报销事由 - 已隐藏 */}
 
             {/* 发票日期 */}
             <button
