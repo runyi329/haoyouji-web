@@ -6359,7 +6359,7 @@ export default function LedgerDetail() {
                       <div className="text-sm font-medium text-gray-900">{m.username || '未知用户'}</div>
                     )}
                     <div className="text-xs text-gray-500 space-y-0.5">
-                      <div>{isCustomAJ ? (m.role === 'owner' || m.role === 'admin' ? '企业主' : '业务员') : (m.role === 'owner' ? '创始人' : m.role === 'admin' ? '管理员' : m.role === 'funder' ? '资金方' : '普通成员')}</div>
+                      <div>{isCustomAJ ? (m.role === 'owner' ? '创始人' : m.role === 'admin' ? '企业主' : '业务员') : (m.role === 'owner' ? '创始人' : m.role === 'admin' ? '管理员' : m.role === 'funder' ? '资金方' : '普通成员')}</div>
                       <div className="text-gray-400">ID: {m.userId}</div>
                     </div>
                   </div>
