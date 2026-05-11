@@ -92,8 +92,17 @@ const AddTransaction = () => {
   const editId = urlParams.get('edit');
   const isEditMode = !!editId;
   const editTransactionId = editId ? parseInt(editId) : undefined;
-  // 视角切换：管理员切换为业务员视角时，从 URL获取 viewAs 参数
-  const viewAsUserId = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
+  // 视角切换：管理员切换为业务员视角时，从 URL参数或sessionStorage获取 viewAs 参数
+  // 同时支持两种来源，确保 SPA 跳转后不丢失
+  const viewAsUserIdFromUrl = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
+  const viewAsUserIdFromSession = sessionStorage.getItem('aj_view_as_user_id') ? Number(sessionStorage.getItem('aj_view_as_user_id')) : null;
+  const viewAsUserId = viewAsUserIdFromUrl || viewAsUserIdFromSession;
+  // 读取后清除sessionStorage，避免干扰其他页面
+  useEffect(() => {
+    if (viewAsUserIdFromSession) {
+      sessionStorage.removeItem('aj_view_as_user_id');
+    }
+  }, []);
   
   // 获取账本信息（用于获取功能开关）
   const { data: ledger } = trpc.ledger.getLedger.useQuery({ id: ledgerId });
@@ -1583,6 +1592,14 @@ const AddTransaction = () => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+      {isCustomAJ && viewAsUserId && viewAsUserInfo && (
+        <div className="flex-shrink-0 px-4 py-2" style={{ backgroundColor: '#F59E0B' }}>
+          <div className="flex items-center justify-center gap-1.5 text-sm font-medium" style={{ color: '#1A2340' }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span>正在以 <strong>{viewAsUserInfo.name}</strong> 的视角提交申请</span>
           </div>
         </div>
       )}
