@@ -1997,7 +1997,6 @@ export const petUserRoles = mysqlTable("pet_user_roles", {
   userId: int('user_id').notNull(),
   role: mysqlEnum('role', ['manufacturer', 'investor', 'promoter', 'petshop']).notNull(),
   // 角色说明：manufacturer=厂家, investor=投资人, promoter=地推, petshop=宠物店
-  isAdmin: boolean('is_admin').default(false).notNull(),
   remark: varchar('remark', { length: 200 }),
   createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
