@@ -5391,6 +5391,19 @@ export default function LedgerDetail() {
         )}
       </div>}
 
+      {/* 底部添加按钮：AJ账本专用（添加发票） */}
+      {isCustomAJ && (
+        <button
+          onClick={() => setLocation(`/ledger/${ledgerId}/add`)}
+          className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
+          style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      )}
       {/* 底部添加按鈕：非定制账本显示 */}
       {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && !isCustomAJ && (
         <button
