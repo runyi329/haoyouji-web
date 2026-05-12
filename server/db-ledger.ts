@@ -4272,7 +4272,8 @@ export async function approveTransaction(
               usdtRewarded,
               'reward',
               transactionId,
-              `AJ账本发票审批通过奖励：报销¥${reimbursementAmount.toFixed(2)} × 1% ÷ ${usdCnyRate.toFixed(4)} = ${usdtRewarded} USDT`
+              `AJ账本发票审批通过奖励：报销¥${reimbursementAmount.toFixed(2)} × 1% ÷ ${usdCnyRate.toFixed(4)} = ${usdtRewarded} USDT`,
+              ledgerId
             );
           }
         }
