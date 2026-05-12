@@ -5,6 +5,7 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "./db";
+import { getDbConnection, getLedgerDb } from "./db";
 import * as dbEthPosition from "./db-eth-position";
 import { storagePut } from "./storage";
 import { nanoid } from "nanoid";
@@ -850,25 +851,21 @@ ${klinesSummary}
     getMyManualBalances: protectedProcedure
       .input(z.object({ limit: z.number().optional() }))
       .query(async ({ ctx, input }) => {
-        const db = await getLedgerDb();
+        const conn = await getDbConnection();
         const limit = input.limit ?? 50;
-        const rows = await db.execute(
-          sql`SELECT id, ledger_id, user_id, amount, note, created_at, updated_at
-              FROM af_manual_balances
-              WHERE user_id = ${ctx.user.id}
-                AND amount != 0
-                AND (note NOT LIKE '%\\[ERROR\\]%')
-              ORDER BY created_at DESC
-              LIMIT ${limit}`
+        if (!conn) return [];
+        const [rows] = await (conn as any).execute(
+          `SELECT id, ledger_id, user_id, amount, note, created_at, updated_at
+           FROM af_manual_balances
+           WHERE user_id = ?
+             AND amount != 0
+             AND INSTR(COALESCE(note,''), '[ERROR]') = 0
+           ORDER BY created_at DESC
+           LIMIT ?`,
+          [ctx.user.id, limit]
         );
-        // Drizzle MySQL execute 返回 [RowDataPacket[], FieldPacket[]] 二元组
-        // (rows as any)[0] 是行数组，(rows as any)[1] 是字段描述
-        const result = (rows as any)[0];
-        console.log('[getMyManualBalances] userId:', ctx.user.id, 'type:', typeof ctx.user.id, 'rowCount:', Array.isArray(result) ? result.length : 'NOT_ARRAY', 'rawType:', typeof result);
-        if (Array.isArray(result)) return result;
-        // 如果不是数组，说明返回格式不同，直接返回 rows
-        if (Array.isArray(rows)) return rows;
-        return [];
+        console.log('[getMyManualBalances] userId:', ctx.user.id, 'rowCount:', Array.isArray(rows) ? rows.length : 'NOT_ARRAY');
+        return Array.isArray(rows) ? rows : [];
       }),
 
     // 用户申请提现
