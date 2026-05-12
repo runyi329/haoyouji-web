@@ -4266,17 +4266,13 @@ export async function approveTransaction(
           usdtRewarded = parseFloat((rewardCny / usdCnyRate).toFixed(6));
 
           if (usdtRewarded > 0) {
-            // 直接内联写入 af_manual_balances，不依赖动态 import
+            // 用 Drizzle db.execute 写入 af_manual_balances（与审批用同一个连接，最可靠）
             const rewardNote = `AJ账本发票审批通过奖励：报销¥${reimbursementAmount.toFixed(2)} × 1% ÷ ${usdCnyRate.toFixed(4)} = ${usdtRewarded} USDT`;
-            const conn = await getDbConnection();
-            if (conn) {
-              const now = new Date();
-              await conn.execute(
-                'INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-                [ledgerId, submitterId, usdtRewarded, rewardNote, now, now]
-              );
-              console.log(`[AJ审批奖励] 已发放 ${usdtRewarded} USDT 给用户 ${submitterId}，账本 ${ledgerId}`);
-            }
+            const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+            await db.execute(
+              sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${ledgerId}, ${submitterId}, ${usdtRewarded}, ${rewardNote}, ${nowStr}, ${nowStr})`
+            );
+            console.log(`[AJ审批奖励] 已发放 ${usdtRewarded} USDT 给用户 ${submitterId}，账本 ${ledgerId}`);
           }
         }
       } catch (rewardErr) {
