@@ -3891,6 +3891,19 @@ export default function LedgerDetail() {
                 </div>
               </div>
             </div>
+            {/* 企业主专属入口：isAdmin角色（企业主）才显示 */}
+            {isAdmin && !viewAsUserId && (
+              <div className="mt-3">
+                <button
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-medium text-white/90 border border-white/30 hover:bg-white/10 transition-colors"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(8px)' }}
+                  onClick={() => setLocation(`/ledger/${ledgerId}/aj-owner-companies`)}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                  我的企业
+                </button>
+              </div>
+            )}
 
           </div>
         )}
@@ -5344,12 +5357,15 @@ export default function LedgerDetail() {
                             {/* 底部：申请人 + 状态印章 */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <UserAvatar
-                                  username={record.member?.username}
-                                  avatar={record.member?.avatar}
-                                  nickname={record.member?.nickname}
-                                  size="sm"
-                                />
+                                {/* 企业主视角：隐藏开票人头像，只显示用户名 */}
+                                {!isAdmin && (
+                                  <UserAvatar
+                                    username={record.member?.username}
+                                    avatar={record.member?.avatar}
+                                    nickname={record.member?.nickname}
+                                    size="sm"
+                                  />
+                                )}
                                 <div>
                                   <div style={{ fontSize: '12px', color: '#555', fontWeight: 500 }}>
                                     {record.member?.nickname || record.member?.username || '未知'}
