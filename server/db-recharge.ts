@@ -681,34 +681,30 @@ export async function addUserBalance(
   relatedId?: number,
   description?: string
 ) {
-  const db = await getDb();
-  
+  // 使用原生 SQL 避免 Drizzle ORM schema 与生产库表结构不匹配的问题
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+
   // 更新用户余额
-  await db.execute(sql`
-    UPDATE users 
-    SET balance = COALESCE(balance, 0) + ${amount}
-    WHERE id = ${userId}
-  `);
-  
+  await (conn as any).execute(
+    `UPDATE users SET balance = COALESCE(balance, 0) + ? WHERE id = ?`,
+    [amount, userId]
+  );
+
   // 获取更新后的余额
-  const userResult = await db
-    .select({ balance: users.balance })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-  
-  const newBalance = userResult[0]?.balance || 0;
-  
-  // 记录余额变动
-  await db.insert(balanceHistory).values({
-    userId,
-    amount: amount.toString(),
-    type,
-    relatedId,
-    balance: newBalance.toString(),
-    description
-  });
-  
+  const [balRows] = await (conn as any).execute(
+    `SELECT balance FROM users WHERE id = ? LIMIT 1`,
+    [userId]
+  ) as any[];
+  const newBalance = parseFloat((balRows as any[])[0]?.balance ?? '0') || 0;
+
+  // 记录余额变动到 balance_history 表
+  await (conn as any).execute(
+    `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, ?, ?, ?, ?)`,
+    [userId, amount.toString(), type, relatedId ?? null, newBalance.toString(), description ?? null]
+  );
+
+  console.log(`[addUserBalance] userId=${userId}, amount=${amount}, type=${type}, newBalance=${newBalance}`);
   return newBalance;
 }
 

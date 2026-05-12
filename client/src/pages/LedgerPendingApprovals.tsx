@@ -256,6 +256,15 @@ export default function LedgerPendingApprovals() {
                   ¥{formatAmount(selectedApproval.transaction.amount)}
                 </span>
               </div>
+              {approvalAction === 'approved' && (
+                <div className="flex justify-between items-center pt-1 border-t border-gray-200 mt-1">
+                  <span className="text-gray-500">预计发放奖励</span>
+                  <span className="font-semibold text-amber-600">
+                    ≈ {(parseFloat(String(selectedApproval.transaction.reimbursementAmount || selectedApproval.transaction.amount || 0)) * 0.01 / 7.2).toFixed(6)} USDT
+                    <span className="text-gray-400 font-normal ml-1">(金额×1%)</span>
+                  </span>
+                </div>
+              )}
               {selectedApproval.transaction.ajCompanyName && (
                 <div className="flex justify-between">
                   <span className="text-gray-500">开票单位</span>
