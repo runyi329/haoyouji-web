@@ -15408,6 +15408,82 @@ ${klinesSummary}
           name: userInfo.nickname || userInfo.name || userInfo.username || '未知用户',
         };
       }),
+
+    // ========== AJ账本：企业报销类型配置 ==========
+    // 获取企业允许的报销类型配置（管理员或员工均可查询）
+    ajGetCompanyExpenseTypes: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), companyId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 建表（如果不存在）
+        await (conn as any).execute(`
+          CREATE TABLE IF NOT EXISTS aj_company_expense_types (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL,
+            company_id INT NOT NULL,
+            config JSON NOT NULL COMMENT '报销类型配置，格式：{categoryKey: {enabled: bool, items: {itemKey: bool}}}',
+            updated_by INT,
+            updated_at BIGINT,
+            UNIQUE KEY uk_company (company_id)
+          )
+        `);
+        const [rows] = await (conn as any).execute(
+          `SELECT config FROM aj_company_expense_types WHERE company_id=?`,
+          [input.companyId]
+        );
+        if ((rows as any[]).length > 0) {
+          const config = typeof (rows as any[])[0].config === 'string'
+            ? JSON.parse((rows as any[])[0].config)
+            : (rows as any[])[0].config;
+          return config;
+        }
+        // 没有配置时返回默认全部启用
+        return null;
+      }),
+
+    // 更新企业报销类型配置（仅管理员/创始人）
+    ajSetCompanyExpenseTypes: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        companyId: z.number(),
+        config: z.record(z.object({
+          enabled: z.boolean(),
+          items: z.record(z.boolean()),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (!isSysAdmin && memberRole !== 'owner' && memberRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可修改报销类型配置' });
+        }
+        await (conn as any).execute(`
+          CREATE TABLE IF NOT EXISTS aj_company_expense_types (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL,
+            company_id INT NOT NULL,
+            config JSON NOT NULL,
+            updated_by INT,
+            updated_at BIGINT,
+            UNIQUE KEY uk_company (company_id)
+          )
+        `);
+        await (conn as any).execute(
+          `INSERT INTO aj_company_expense_types (ledger_id, company_id, config, updated_by, updated_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE config=VALUES(config), updated_by=VALUES(updated_by), updated_at=VALUES(updated_at)`,
+          [input.ledgerId, input.companyId, JSON.stringify(input.config), ctx.user.id, Date.now()]
+        );
+        return { success: true };
+      }),
+
     // 推荐页动态消息：最近2条（新人chong値 + 订单变动），仅yjh和管理员可见
     afGetRecentDynamics: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))

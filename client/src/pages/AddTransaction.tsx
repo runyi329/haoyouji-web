@@ -32,6 +32,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
+import { EXPENSE_CATEGORIES, getDefaultExpenseConfig } from "@/pages/AJCompanyManager";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { autoCompressImage } from "@/utils/imageUtils";
 
@@ -126,6 +127,35 @@ const AddTransaction = () => {
   );
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [showCompanyPicker, setShowCompanyPicker] = useState(false);
+  const [ajExpenseCategory, setAjExpenseCategory] = useState<string>("");  // 报销大类key
+  const [ajExpenseItem, setAjExpenseItem] = useState<string>("");          // 报销子项key
+  const [showExpensePicker, setShowExpensePicker] = useState(false);
+
+  // AJ账本：获取当前选中企业的报销类型配置
+  const { data: companyExpenseConfig } = trpc.ledger.ajGetCompanyExpenseTypes.useQuery(
+    { ledgerId, companyId: selectedCompanyId! },
+    { enabled: isCustomAJ && !!selectedCompanyId }
+  );
+  const effectiveExpenseConfig = (companyExpenseConfig as any) ?? getDefaultExpenseConfig();
+  // 获取启用的大类列表
+  const enabledCategories = EXPENSE_CATEGORIES.filter(
+    (cat) => effectiveExpenseConfig[cat.key]?.enabled !== false
+  );
+  // 当前选中大类的启用子项
+  const enabledItems = ajExpenseCategory
+    ? (EXPENSE_CATEGORIES.find((c) => c.key === ajExpenseCategory)?.items ?? []).filter(
+        (item) => effectiveExpenseConfig[ajExpenseCategory]?.items?.[item.key] !== false
+      )
+    : [];
+  // 报销事由显示文本
+  const expenseReasonLabel = (() => {
+    if (!ajExpenseCategory) return "";
+    const cat = EXPENSE_CATEGORIES.find((c) => c.key === ajExpenseCategory);
+    const item = cat?.items.find((i) => i.key === ajExpenseItem);
+    if (cat && item) return `${cat.label} · ${item.label}`;
+    if (cat) return cat.label;
+    return "";
+  })();
   const selectedCompany = (ajCompanies as any[])?.find((c: any) => c.id === selectedCompanyId);
   // 当企业列表加载完成且只有1个时，自动选中该企业
   useEffect(() => {
@@ -677,6 +707,10 @@ const AddTransaction = () => {
       payload.viewAsUserId = viewAsUserId;
     }
     // AJ账本：传递开票企业信息，提交后自动设为「申请中」状态
+    // AJ账本：报销事由写入description
+    if (isCustomAJ && expenseReasonLabel) {
+      payload.description = expenseReasonLabel;
+    }
     if (isCustomAJ && selectedCompanyId) {
       payload.ajCompanyId = selectedCompanyId;
       payload.ajCompanyName = selectedCompany?.name || undefined;
@@ -859,7 +893,58 @@ const AddTransaction = () => {
                 <div className="text-sm text-gray-300">请选择企业（选填）</div>
               )}
             </div>
-            {/* 报销事由 - 已隐藏 */}
+            {/* 报销事由 - 点选式 */}
+            <div className="border-t border-gray-100 px-5 py-4">
+              <div className="text-xs text-gray-400 mb-3 font-medium tracking-wider">报销事由</div>
+              {!selectedCompanyId ? (
+                <div className="text-sm text-gray-300">请先选择企业</div>
+              ) : (
+                <div className="space-y-3">
+                  {/* 大类选择 */}
+                  <div className="flex flex-wrap gap-2">
+                    {enabledCategories.map((cat) => (
+                      <button
+                        key={cat.key}
+                        onClick={() => {
+                          setAjExpenseCategory(cat.key);
+                          setAjExpenseItem("");
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                          ajExpenseCategory === cat.key
+                            ? "bg-[#C0392B] text-white"
+                            : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* 子项选择 */}
+                  {ajExpenseCategory && enabledItems.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {enabledItems.map((item) => (
+                        <button
+                          key={item.key}
+                          onClick={() => setAjExpenseItem(item.key)}
+                          className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
+                            ajExpenseItem === item.key
+                              ? "bg-red-50 text-[#C0392B] border border-red-200"
+                              : "bg-gray-50 text-gray-500 border border-gray-200"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {expenseReasonLabel && (
+                    <div className="text-xs text-[#C0392B] font-medium pt-1">
+                      ✓ 已选：{expenseReasonLabel}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* 发票日期 - 已隐藏 */}
 
