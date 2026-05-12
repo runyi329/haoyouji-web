@@ -685,58 +685,71 @@ export async function addUserBalance(
   const conn = await getDbConnection();
   if (!conn) throw new Error('数据库连接失败');
 
-  // 确保 users.balance 字段存在（自动修复，不依赖迁移脚本）
+  // 从连接池获取一个真实连接，用于执行 DDL 操作
+  // Pool.execute() 支持 DML，但 DDL 建议用 query() 方式
+  const pool = conn as any;
+
+  // 检查 users.balance 字段是否存在（兼容 MySQL 5.7，不用 IF NOT EXISTS）
   try {
-    await (conn as any).execute(
-      `ALTER TABLE users ADD COLUMN IF NOT EXISTS balance DECIMAL(20,8) NOT NULL DEFAULT 0`
-    );
-  } catch (e: any) {
-    // 字段已存在时会报错，忽略即可
-    if (!e?.message?.includes('Duplicate column')) {
-      console.warn('[addUserBalance] ALTER TABLE balance:', e?.message);
+    const [cols] = await pool.execute(
+      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'balance'`
+    ) as any[];
+    if (!cols || (cols as any[]).length === 0) {
+      // 字段不存在，添加它
+      await pool.execute(`ALTER TABLE users ADD COLUMN balance DECIMAL(20,8) NOT NULL DEFAULT 0`);
+      console.log('[addUserBalance] 已自动添加 users.balance 字段');
     }
+  } catch (e: any) {
+    console.error('[addUserBalance] 检查/添加 users.balance 字段失败:', e?.message);
   }
 
-  // 确保 balance_history 表存在（自动修复）
+  // 检查 balance_history 表是否存在（兼容 MySQL 5.7）
   try {
-    await (conn as any).execute(`
-      CREATE TABLE IF NOT EXISTS balance_history (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        amount DECIMAL(20,8) NOT NULL,
-        type ENUM('recharge','consume','refund','reward','withdraw') NOT NULL,
-        related_id INT DEFAULT NULL,
-        balance DECIMAL(20,8) NOT NULL DEFAULT 0,
-        description TEXT DEFAULT NULL,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_bh_user (user_id),
-        INDEX idx_bh_type (type)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    `);
+    const [tables] = await pool.execute(
+      `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'balance_history'`
+    ) as any[];
+    if (!tables || (tables as any[]).length === 0) {
+      // 表不存在，创建它
+      await pool.execute(`
+        CREATE TABLE balance_history (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          amount DECIMAL(20,8) NOT NULL,
+          type ENUM('recharge','consume','refund','reward','withdraw') NOT NULL,
+          related_id INT DEFAULT NULL,
+          balance DECIMAL(20,8) NOT NULL DEFAULT 0,
+          description TEXT DEFAULT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_bh_user (user_id),
+          INDEX idx_bh_type (type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      console.log('[addUserBalance] 已自动创建 balance_history 表');
+    }
   } catch (e: any) {
-    console.warn('[addUserBalance] CREATE TABLE balance_history:', e?.message);
+    console.error('[addUserBalance] 检查/创建 balance_history 表失败:', e?.message);
   }
 
   // 更新用户余额
-  await (conn as any).execute(
+  await pool.execute(
     `UPDATE users SET balance = COALESCE(balance, 0) + ? WHERE id = ?`,
     [amount, userId]
   );
 
   // 获取更新后的余额
-  const [balRows] = await (conn as any).execute(
+  const [balRows] = await pool.execute(
     `SELECT balance FROM users WHERE id = ? LIMIT 1`,
     [userId]
   ) as any[];
   const newBalance = parseFloat((balRows as any[])[0]?.balance ?? '0') || 0;
 
   // 记录余额变动到 balance_history 表
-  await (conn as any).execute(
+  await pool.execute(
     `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, ?, ?, ?, ?)`,
     [userId, amount.toString(), type, relatedId ?? null, newBalance.toString(), description ?? null]
   );
 
-  console.log(`[addUserBalance] userId=${userId}, amount=${amount}, type=${type}, newBalance=${newBalance}`);
+  console.log(`[addUserBalance] 成功 userId=${userId}, amount=${amount}, type=${type}, newBalance=${newBalance}`);
   return newBalance;
 }
 
