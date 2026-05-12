@@ -15858,6 +15858,81 @@ ${klinesSummary}
         return rows as any[];
       }),
 
+    // AJ账本市场管理：获取当前用户的推荐下线中同时是该账本成员的人员及其开票业绩
+    ajGetMarketTeam: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
+      }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 验证当前用户是该账本成员
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        if (!(memberRows as any[])[0]) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        // 日期过滤
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        let dateFilter = '';
+        const dateParams: any[] = [];
+        if (input.period === 'day') { dateFilter = 'AND lr.record_date = ?'; dateParams.push(today); }
+        else if (input.period === 'week') {
+          const ws = new Date(now); ws.setDate(ws.getDate() - ws.getDay() + 1);
+          dateFilter = 'AND lr.record_date >= ? AND lr.record_date <= ?';
+          dateParams.push(ws.toISOString().split('T')[0], today);
+        } else if (input.period === 'month') { dateFilter = 'AND lr.record_date >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
+        else if (input.period === 'quarter') {
+          const q = Math.floor(now.getMonth()/3);
+          dateFilter = 'AND lr.record_date >= ?';
+          dateParams.push(new Date(now.getFullYear(), q*3, 1).toISOString().split('T')[0]);
+        } else if (input.period === 'year') { dateFilter = 'AND lr.record_date >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
+        // 查询：推荐下线 AND 是该账本成员，统计开票业绩
+        const [rows] = await (conn as any).execute(
+          `SELECT
+             u.id as userId,
+             u.username,
+             u.name,
+             u.avatar,
+             lm.nickname,
+             lm.role,
+             COALESCE(stats.invoiceCount, 0) as invoiceCount,
+             COALESCE(stats.totalAmount, 0) as totalAmount,
+             COALESCE(stats.approvedCount, 0) as approvedCount,
+             COALESCE(stats.approvedAmount, 0) as approvedAmount
+           FROM users u
+           INNER JOIN ledger_members lm ON lm.userId = u.id AND lm.ledgerId = ?
+           LEFT JOIN (
+             SELECT
+               lr.created_by,
+               COUNT(lr.id) as invoiceCount,
+               COALESCE(SUM(lr.amount), 0) as totalAmount,
+               COUNT(CASE WHEN lr.aj_status = 'approved' THEN 1 END) as approvedCount,
+               COALESCE(SUM(CASE WHEN lr.aj_status = 'approved' THEN lr.amount ELSE 0 END), 0) as approvedAmount
+             FROM ledger_records lr
+             WHERE lr.ledger_id = ? AND lr.deleted_at IS NULL ${dateFilter}
+             GROUP BY lr.created_by
+           ) stats ON stats.created_by = u.id
+           WHERE u.invited_by_user_id = ?
+           ORDER BY COALESCE(stats.totalAmount, 0) DESC, u.id ASC`,
+          [input.ledgerId, input.ledgerId, ...dateParams, ctx.user.id]
+        );
+        return (rows as any[]).map((r: any) => ({
+          userId: Number(r.userId),
+          username: r.username as string,
+          name: r.name as string | null,
+          avatar: r.avatar as string | null,
+          nickname: r.nickname as string | null,
+          role: r.role as string,
+          invoiceCount: Number(r.invoiceCount),
+          totalAmount: Number(r.totalAmount),
+          approvedCount: Number(r.approvedCount),
+          approvedAmount: Number(r.approvedAmount),
+        }));
+      }),
+
     // 推荐页动态消息：最近2条（新人chong値 + 订单变动），仅yjh和管理员可见
     afGetRecentDynamics: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))

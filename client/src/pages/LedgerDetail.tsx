@@ -1570,6 +1570,7 @@ import {
   LayoutGrid,
   LayoutList,
   Calculator,
+  TrendingUp,
 } from "lucide-react";
 import { AJOwnerPanel } from "@/components/AJOwnerPanel";
 
@@ -2833,17 +2834,24 @@ export default function LedgerDetail() {
                   const viewTarget = viewAsUserId ? (membersData as any[])?.find((m: any) => m.userId === viewAsUserId) : null;
                   return (
                     <div
-                      className={(!viewAsUserId && (isCustomAJ ? isOwner : (isOwner || isAdmin))) ? 'cursor-pointer relative' : 'relative'}
-                      onClick={() => { if (!viewAsUserId && (isCustomAJ ? isOwner : (isOwner || isAdmin))) { setViewAsSearch(''); setShowViewAsPicker(true); } }}
+                      className={(!viewAsUserId && (isCustomAJ ? (isOwner || (!isOwner && !viewAsUserId)) : (isOwner || isAdmin))) ? 'cursor-pointer relative' : 'relative'}
+                      onClick={() => {
+                        if (isCustomAJ && !viewAsUserId) {
+                          if (isOwner) { setViewAsSearch(''); setShowViewAsPicker(true); }
+                          else { window.location.href = `/ledger/${ledgerId}/aj-market-team`; }
+                        } else if (!viewAsUserId && (isOwner || isAdmin)) { setViewAsSearch(''); setShowViewAsPicker(true); }
+                      }}
                     >
                       {viewTarget ? (
                         <UserAvatar username={viewTarget.username} avatar={viewTarget.avatar} nickname={viewTarget.nickname} size="md" />
                       ) : user ? (
                         <UserAvatar username={user.username} avatar={user.avatar} nickname={user.nickname} size="md" />
                       ) : null}
-                      {!viewAsUserId && (isCustomAJ ? isOwner : (isOwner || isAdmin)) && (
+                      {!viewAsUserId && (isCustomAJ ? true : (isOwner || isAdmin)) && (
                         <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-white/90 flex items-center justify-center">
-                          <Users className="w-2.5 h-2.5 text-blue-600" />
+                          {isCustomAJ && !isOwner
+                            ? <TrendingUp className="w-2.5 h-2.5 text-red-600" />
+                            : <Users className="w-2.5 h-2.5 text-blue-600" />}
                         </div>
                       )}
                     </div>
