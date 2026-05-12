@@ -15484,6 +15484,379 @@ ${klinesSummary}
         return { success: true };
       }),
 
+    // ========== AJ账本：企业主（admin角色）专用接口 ==========
+    // 企业主获取自己名下的企业列表（已审核通过的）
+    ajOwnerGetMyCompanies: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await (conn as any).execute(`
+          CREATE TABLE IF NOT EXISTS aj_company_requests (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL,
+            request_type ENUM('add','update','delete') NOT NULL DEFAULT 'add',
+            status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+            company_id INT NULL COMMENT '修改/删除时关联的企业ID',
+            requested_by INT NOT NULL COMMENT '申请人（企业主）userId',
+            name VARCHAR(100) NOT NULL,
+            tax_no VARCHAR(50) NULL,
+            address VARCHAR(200) NULL,
+            phone VARCHAR(50) NULL,
+            bank_name VARCHAR(100) NULL,
+            bank_account VARCHAR(100) NULL,
+            remark VARCHAR(300) NULL,
+            reviewed_by INT NULL COMMENT '审核人userId',
+            reviewed_at BIGINT NULL,
+            review_comment VARCHAR(300) NULL,
+            created_at BIGINT NOT NULL,
+            updated_at BIGINT NOT NULL,
+            INDEX idx_ledger_requester (ledger_id, requested_by),
+            INDEX idx_status (status)
+          )
+        `);
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        const [rows] = await (conn as any).execute(
+          `SELECT c.id, c.name, c.tax_no as taxNo, c.address, c.phone, c.bank_name as bankName, c.bank_account as bankAccount, c.remark, c.created_by as createdBy
+           FROM aj_companies c
+           WHERE c.ledger_id=? AND c.created_by=?
+           ORDER BY c.created_at ASC`,
+          [input.ledgerId, ctx.user.id]
+        );
+        return rows as any[];
+      }),
+    // 企业主获取自己的申请记录
+    ajOwnerGetMyRequests: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await (conn as any).execute(`
+          CREATE TABLE IF NOT EXISTS aj_company_requests (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL,
+            request_type ENUM('add','update','delete') NOT NULL DEFAULT 'add',
+            status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+            company_id INT NULL,
+            requested_by INT NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            tax_no VARCHAR(50) NULL,
+            address VARCHAR(200) NULL,
+            phone VARCHAR(50) NULL,
+            bank_name VARCHAR(100) NULL,
+            bank_account VARCHAR(100) NULL,
+            remark VARCHAR(300) NULL,
+            reviewed_by INT NULL,
+            reviewed_at BIGINT NULL,
+            review_comment VARCHAR(300) NULL,
+            created_at BIGINT NOT NULL,
+            updated_at BIGINT NOT NULL,
+            INDEX idx_ledger_requester (ledger_id, requested_by),
+            INDEX idx_status (status)
+          )
+        `);
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        const [rows] = await (conn as any).execute(
+          `SELECT r.*, u.username as reviewerUsername, u.name as reviewerName
+           FROM aj_company_requests r
+           LEFT JOIN users u ON u.id = r.reviewed_by
+           WHERE r.ledger_id=? AND r.requested_by=?
+           ORDER BY r.created_at DESC
+           LIMIT 50`,
+          [input.ledgerId, ctx.user.id]
+        );
+        return rows as any[];
+      }),
+    // 企业主提交申请（添加/修改/删除企业）
+    ajOwnerSubmitRequest: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        requestType: z.enum(['add', 'update', 'delete']),
+        companyId: z.number().optional(),
+        name: z.string().min(1).max(100),
+        taxNo: z.string().max(50).optional().nullable(),
+        address: z.string().max(200).optional().nullable(),
+        phone: z.string().max(50).optional().nullable(),
+        bankName: z.string().max(100).optional().nullable(),
+        bankAccount: z.string().max(100).optional().nullable(),
+        remark: z.string().max(300).optional().nullable(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await (conn as any).execute(`
+          CREATE TABLE IF NOT EXISTS aj_company_requests (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL,
+            request_type ENUM('add','update','delete') NOT NULL DEFAULT 'add',
+            status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+            company_id INT NULL,
+            requested_by INT NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            tax_no VARCHAR(50) NULL,
+            address VARCHAR(200) NULL,
+            phone VARCHAR(50) NULL,
+            bank_name VARCHAR(100) NULL,
+            bank_account VARCHAR(100) NULL,
+            remark VARCHAR(300) NULL,
+            reviewed_by INT NULL,
+            reviewed_at BIGINT NULL,
+            review_comment VARCHAR(300) NULL,
+            created_at BIGINT NOT NULL,
+            updated_at BIGINT NOT NULL,
+            INDEX idx_ledger_requester (ledger_id, requested_by),
+            INDEX idx_status (status)
+          )
+        `);
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        if (memberRole !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅企业主可提交企业申请' });
+        if (input.requestType !== 'add' && input.companyId) {
+          const [companyRows] = await (conn as any).execute(
+            `SELECT id FROM aj_companies WHERE id=? AND ledger_id=? AND created_by=?`,
+            [input.companyId, input.ledgerId, ctx.user.id]
+          );
+          if ((companyRows as any[]).length === 0) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '您只能修改/删除自己添加的企业' });
+          }
+        }
+        const now = Date.now();
+        const [result] = await (conn as any).execute(
+          `INSERT INTO aj_company_requests (ledger_id, request_type, status, company_id, requested_by, name, tax_no, address, phone, bank_name, bank_account, remark, created_at, updated_at)
+           VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [input.ledgerId, input.requestType, input.companyId || null, ctx.user.id,
+           input.name, input.taxNo || null, input.address || null, input.phone || null,
+           input.bankName || null, input.bankAccount || null, input.remark || null, now, now]
+        );
+        return { id: (result as any).insertId, success: true };
+      }),
+    // 管理员获取待审核的企业申请列表
+    ajAdminGetPendingRequests: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await (conn as any).execute(`
+          CREATE TABLE IF NOT EXISTS aj_company_requests (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL,
+            request_type ENUM('add','update','delete') NOT NULL DEFAULT 'add',
+            status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+            company_id INT NULL,
+            requested_by INT NOT NULL,
+            name VARCHAR(100) NOT NULL,
+            tax_no VARCHAR(50) NULL,
+            address VARCHAR(200) NULL,
+            phone VARCHAR(50) NULL,
+            bank_name VARCHAR(100) NULL,
+            bank_account VARCHAR(100) NULL,
+            remark VARCHAR(300) NULL,
+            reviewed_by INT NULL,
+            reviewed_at BIGINT NULL,
+            review_comment VARCHAR(300) NULL,
+            created_at BIGINT NOT NULL,
+            updated_at BIGINT NOT NULL,
+            INDEX idx_ledger_requester (ledger_id, requested_by),
+            INDEX idx_status (status)
+          )
+        `);
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (!isSysAdmin && memberRole !== 'owner' && memberRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看申请列表' });
+        }
+        const [rows] = await (conn as any).execute(
+          `SELECT r.*, u.username as requesterUsername, u.name as requesterName, u.avatar as requesterAvatar,
+                  lm.nickname as requesterNickname
+           FROM aj_company_requests r
+           LEFT JOIN users u ON u.id = r.requested_by
+           LEFT JOIN ledger_members lm ON lm.userId = r.requested_by AND lm.ledgerId = r.ledger_id
+           WHERE r.ledger_id=?
+           ORDER BY r.status ASC, r.created_at DESC
+           LIMIT 100`,
+          [input.ledgerId]
+        );
+        return rows as any[];
+      }),
+    // 管理员审核企业申请（通过/拒绝）
+    ajAdminReviewRequest: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        requestId: z.number(),
+        action: z.enum(['approve', 'reject']),
+        reviewComment: z.string().max(300).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (!isSysAdmin && memberRole !== 'owner' && memberRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可审核申请' });
+        }
+        const [reqRows] = await (conn as any).execute(
+          `SELECT * FROM aj_company_requests WHERE id=? AND ledger_id=?`,
+          [input.requestId, input.ledgerId]
+        );
+        const req = (reqRows as any[])[0];
+        if (!req) throw new TRPCError({ code: 'NOT_FOUND', message: '申请不存在' });
+        if (req.status !== 'pending') throw new TRPCError({ code: 'BAD_REQUEST', message: '该申请已处理' });
+        const now = Date.now();
+        if (input.action === 'approve') {
+          if (req.request_type === 'add') {
+            const [insertResult] = await (conn as any).execute(
+              `INSERT INTO aj_companies (ledger_id, name, tax_no, address, phone, bank_name, bank_account, remark, created_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [input.ledgerId, req.name, req.tax_no, req.address, req.phone, req.bank_name, req.bank_account, req.remark, req.requested_by]
+            );
+            await (conn as any).execute(
+              `UPDATE aj_company_requests SET status='approved', company_id=?, reviewed_by=?, reviewed_at=?, review_comment=?, updated_at=? WHERE id=?`,
+              [(insertResult as any).insertId, ctx.user.id, now, input.reviewComment || null, now, input.requestId]
+            );
+          } else if (req.request_type === 'update' && req.company_id) {
+            await (conn as any).execute(
+              `UPDATE aj_companies SET name=?, tax_no=?, address=?, phone=?, bank_name=?, bank_account=?, remark=? WHERE id=? AND ledger_id=?`,
+              [req.name, req.tax_no, req.address, req.phone, req.bank_name, req.bank_account, req.remark, req.company_id, input.ledgerId]
+            );
+            await (conn as any).execute(
+              `UPDATE aj_company_requests SET status='approved', reviewed_by=?, reviewed_at=?, review_comment=?, updated_at=? WHERE id=?`,
+              [ctx.user.id, now, input.reviewComment || null, now, input.requestId]
+            );
+          } else if (req.request_type === 'delete' && req.company_id) {
+            await (conn as any).execute(`DELETE FROM aj_company_access WHERE company_id=?`, [req.company_id]);
+            await (conn as any).execute(`DELETE FROM aj_companies WHERE id=? AND ledger_id=?`, [req.company_id, input.ledgerId]);
+            await (conn as any).execute(
+              `UPDATE aj_company_requests SET status='approved', reviewed_by=?, reviewed_at=?, review_comment=?, updated_at=? WHERE id=?`,
+              [ctx.user.id, now, input.reviewComment || null, now, input.requestId]
+            );
+          }
+        } else {
+          await (conn as any).execute(
+            `UPDATE aj_company_requests SET status='rejected', reviewed_by=?, reviewed_at=?, review_comment=?, updated_at=? WHERE id=?`,
+            [ctx.user.id, now, input.reviewComment || null, now, input.requestId]
+          );
+        }
+        return { success: true };
+      }),
+    // 企业主获取自己名下企业的开票统计
+    ajOwnerGetCompanyStats: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
+      }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        let dateFilter = '';
+        const dateParams: string[] = [];
+        if (input.period === 'day') { dateFilter = 'AND lr.record_date = ?'; dateParams.push(today); }
+        else if (input.period === 'week') {
+          const ws = new Date(now); ws.setDate(ws.getDate() - ws.getDay() + 1);
+          dateFilter = 'AND lr.record_date >= ? AND lr.record_date <= ?';
+          dateParams.push(ws.toISOString().split('T')[0], today);
+        } else if (input.period === 'month') { dateFilter = 'AND lr.record_date >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
+        else if (input.period === 'quarter') {
+          const q = Math.floor(now.getMonth()/3);
+          dateFilter = 'AND lr.record_date >= ?';
+          dateParams.push(new Date(now.getFullYear(), q*3, 1).toISOString().split('T')[0]);
+        } else if (input.period === 'year') { dateFilter = 'AND lr.record_date >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
+        const [rows] = await (conn as any).execute(
+          `SELECT c.id as companyId, c.name as companyName, c.tax_no as taxNo,
+                  COUNT(lr.id) as invoiceCount,
+                  COALESCE(SUM(lr.amount), 0) as totalAmount
+           FROM aj_companies c
+           LEFT JOIN ledger_records lr ON lr.aj_company_id = c.id AND lr.ledger_id = ? ${dateFilter} AND lr.deleted_at IS NULL
+           WHERE c.ledger_id = ? AND c.created_by = ?
+           GROUP BY c.id, c.name, c.tax_no
+           ORDER BY c.created_at ASC`,
+          [input.ledgerId, ...dateParams, input.ledgerId, ctx.user.id]
+        );
+        return rows as any[];
+      }),
+    // 企业主获取某企业的开票详情列表（简化版：含开票人username但不含头像）
+    ajOwnerGetCompanyInvoices: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        companyId: z.number(),
+        period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
+      }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        const [companyRows] = await (conn as any).execute(
+          `SELECT id, name FROM aj_companies WHERE id=? AND ledger_id=? AND created_by=?`,
+          [input.companyId, input.ledgerId, ctx.user.id]
+        );
+        if ((companyRows as any[]).length === 0) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '您只能查看自己名下企业的开票记录' });
+        }
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        let dateFilter = '';
+        const dateParams: string[] = [];
+        if (input.period === 'day') { dateFilter = 'AND lr.record_date = ?'; dateParams.push(today); }
+        else if (input.period === 'week') {
+          const ws = new Date(now); ws.setDate(ws.getDate() - ws.getDay() + 1);
+          dateFilter = 'AND lr.record_date >= ? AND lr.record_date <= ?';
+          dateParams.push(ws.toISOString().split('T')[0], today);
+        } else if (input.period === 'month') { dateFilter = 'AND lr.record_date >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
+        else if (input.period === 'quarter') {
+          const q = Math.floor(now.getMonth()/3);
+          dateFilter = 'AND lr.record_date >= ?';
+          dateParams.push(new Date(now.getFullYear(), q*3, 1).toISOString().split('T')[0]);
+        } else if (input.period === 'year') { dateFilter = 'AND lr.record_date >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
+        const [rows] = await (conn as any).execute(
+          `SELECT lr.id, lr.amount, lr.record_date as recordDate, lr.description, lr.category,
+                  lr.aj_status as ajStatus, lr.created_at as createdAt,
+                  u.username as creatorUsername, u.name as creatorName,
+                  lm.nickname as creatorNickname
+           FROM ledger_records lr
+           LEFT JOIN users u ON u.id = lr.created_by
+           LEFT JOIN ledger_members lm ON lm.userId = lr.created_by AND lm.ledgerId = lr.ledger_id
+           WHERE lr.ledger_id=? AND lr.aj_company_id=? AND lr.deleted_at IS NULL ${dateFilter}
+           ORDER BY lr.record_date DESC, lr.created_at DESC
+           LIMIT 200`,
+          [input.ledgerId, input.companyId, ...dateParams]
+        );
+        return rows as any[];
+      }),
+
     // 推荐页动态消息：最近2条（新人chong値 + 订单变动），仅yjh和管理员可见
     afGetRecentDynamics: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
