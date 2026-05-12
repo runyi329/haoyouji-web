@@ -3272,7 +3272,7 @@ export default function LedgerDetail() {
                 <ChevronLeft className="w-6 h-6" />
               </button>
               <div className="flex items-center flex-1">
-                <h1 className="text-lg font-medium">{ledgerData.name}</h1>
+                <h1 className="text-lg font-medium">{ledgerData.name}★测</h1>
               </div>
             </div>
 
