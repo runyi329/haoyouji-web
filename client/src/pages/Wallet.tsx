@@ -194,13 +194,23 @@ export default function Wallet() {
                   USDT 账户
                 </span>
               </div>
-              <button
-                onClick={() => balanceQuery.refetch()}
-                className="flex items-center justify-center w-7 h-7 rounded-full"
-                style={{ background: "rgba(255,255,255,0.06)" }}
-              >
-                <RefreshCw className="w-3.5 h-3.5" style={{ color: "#C9A84C" }} />
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setLocation("/wallet/transactions"); }}
+                  className="flex items-center space-x-1 px-2 h-7 rounded-full text-xs font-medium"
+                  style={{ background: "rgba(255,255,255,0.06)", color: "rgba(201,168,76,0.8)" }}
+                >
+                  <span>明细</span>
+                  <ChevronRight className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={() => balanceQuery.refetch()}
+                  className="flex items-center justify-center w-7 h-7 rounded-full"
+                  style={{ background: "rgba(255,255,255,0.06)" }}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" style={{ color: "#C9A84C" }} />
+                </button>
+              </div>
             </div>
 
             {/* 余额 */}
