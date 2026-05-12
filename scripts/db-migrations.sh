@@ -122,3 +122,11 @@ echo "✅ AF 赚费表新字段确认完成"
 echo "📊 确保 merchant_products 表有 thumbnailUrl 字段..."
 $DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='merchant_products' AND COLUMN_NAME='thumbnailUrl'; SET @s = IF(@c=0, 'ALTER TABLE merchant_products ADD COLUMN thumbnailUrl text NULL COMMENT \\'列表预览图URL\\'', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
 echo "✅ merchant_products.thumbnailUrl 字段确认完成"
+
+echo "💰 确保 users.balance 字段存在（智能钱包 USDT 余额）..."
+$DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='users' AND COLUMN_NAME='balance'; SET @s = IF(@c=0, 'ALTER TABLE users ADD COLUMN balance DECIMAL(20,8) NOT NULL DEFAULT 0 COMMENT \'USDT余额\'', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
+echo "✅ users.balance 字段确认完成"
+
+echo "💰 确保 balance_history 表存在（钱包明细/报销奖励记录）..."
+$DB_CMD -e "CREATE TABLE IF NOT EXISTS balance_history (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, amount DECIMAL(20,8) NOT NULL COMMENT '变动金额（正数增加，负数减少）', type ENUM('recharge','consume','refund','reward','withdraw') NOT NULL, related_id INT DEFAULT NULL COMMENT '关联订单/账目ID', balance DECIMAL(20,8) NOT NULL COMMENT '变动后余额', description TEXT DEFAULT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX balance_history_user_id_idx (user_id), INDEX balance_history_type_idx (type))" || true
+echo "✅ balance_history 表确认完成"
