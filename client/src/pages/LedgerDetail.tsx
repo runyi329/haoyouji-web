@@ -3008,14 +3008,14 @@ export default function LedgerDetail() {
                     <button
                       onClick={() => window.location.reload()}
                       className="flex items-center justify-center text-xs font-medium text-white flex-shrink-0"
-                      style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)' }}
+                      style={{ height: 32, padding: '0 12px', borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)' }}
                     >
                       刷新
                     </button>
                     <button
                       onClick={() => { sessionStorage.removeItem('ledger_back_from'); setLocation(backTarget); }}
                       className="flex items-center justify-center text-xs font-medium text-white flex-shrink-0"
-                      style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)' }}
+                      style={{ height: 32, padding: '0 12px', borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)' }}
                     >
                       返回
                     </button>
@@ -3028,9 +3028,9 @@ export default function LedgerDetail() {
                     onClick={() => setAjViewMode(ajViewMode === 'salesman' ? 'owner' : 'salesman')}
                     className="relative flex items-center transition-all flex-shrink-0"
                     style={{
-                      width: 52,
-                      height: 26,
-                      borderRadius: 13,
+                      width: 64,
+                      height: 32,
+                      borderRadius: 16,
                       backgroundColor: 'rgba(255,255,255,0.22)',
                       border: '1px solid rgba(255,255,255,0.35)',
                       padding: 0,
@@ -3041,13 +3041,13 @@ export default function LedgerDetail() {
                     <span
                       className="absolute flex items-center justify-center text-xs font-bold transition-all duration-200"
                       style={{
-                        width: 22,
-                        height: 22,
+                        width: 28,
+                        height: 28,
                         borderRadius: '50%',
                         backgroundColor: 'rgba(255,255,255,0.92)',
                         color: '#8B0000',
-                        top: 1,
-                        left: ajViewMode === 'salesman' ? 2 : 27,
+                        top: 2,
+                        left: ajViewMode === 'salesman' ? 2 : 34,
                         boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                       }}
                     >
@@ -3058,8 +3058,8 @@ export default function LedgerDetail() {
                       className="absolute text-xs font-medium"
                       style={{
                         color: 'rgba(255,255,255,0.7)',
-                        right: ajViewMode === 'salesman' ? 6 : undefined,
-                        left: ajViewMode === 'owner' ? 6 : undefined,
+                        right: ajViewMode === 'salesman' ? 7 : undefined,
+                        left: ajViewMode === 'owner' ? 7 : undefined,
                       }}
                     >
                       {ajViewMode === 'salesman' ? '资' : '劳'}
