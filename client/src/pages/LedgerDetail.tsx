@@ -5331,10 +5331,6 @@ export default function LedgerDetail() {
                                 </div>
                               </div>
                               <div>
-                                <div style={{ fontSize: '10px', color: '#aaa' }}>税号</div>
-                                <div style={{ fontSize: '12px', color: '#444', fontWeight: 500 }}>{record.ajCompanyId || '—'}</div>
-                              </div>
-                              <div>
                                 <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
                                 <div style={{ fontSize: '12px', color: '#444', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {record.description || '—'}
