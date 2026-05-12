@@ -2040,11 +2040,6 @@ export default function LedgerDetail() {
     refetchOnMount: true,
     refetchOnWindowFocus: true,
   });
-
-  // 获取待审批记账数量（传入viewAsUserId，模拟被切换用户的视角权限）
-  const { data: pendingApprovals = [] } = trpc.ledger.getPendingApprovals.useQuery({
-    ledgerId: Number(ledgerId),
-    ...(viewAsUserId ? { viewAsUserId } : {}),
   });
 
   // 成员弹窗状态
@@ -2064,6 +2059,11 @@ export default function LedgerDetail() {
   const viewAsUserIdFromUrl = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
   const [viewAsUserId, setViewAsUserIdState] = useState<number | null>(viewAsUserIdFromUrl);
   const [showViewAsPicker, setShowViewAsPicker] = useState(false);
+  // 获取待审批记账数量（传入viewAsUserId，模拟被切换用户的视角权限）
+  const { data: pendingApprovals = [] } = trpc.ledger.getPendingApprovals.useQuery({
+    ledgerId: Number(ledgerId),
+    ...(viewAsUserId ? { viewAsUserId } : {}),
+  });
   const [viewAsSearch, setViewAsSearch] = useState('');
   const [viewAsRoleFilter, setViewAsRoleFilter] = useState<'all' | 'member' | 'funder'>('all');
   const trpcUtils = trpc.useUtils();
