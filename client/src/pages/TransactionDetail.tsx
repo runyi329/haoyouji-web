@@ -214,8 +214,17 @@ export default function TransactionDetail() {
   
   // 审批mutation
   const approveMutation = trpc.ledger.approveTransaction.useMutation({
-    onSuccess: () => {
-      toast.success(approvalAction === 'approved' ? "审批已通过" : "审批已拒绝");
+    onSuccess: (data: any) => {
+      if (approvalAction === 'approved') {
+        const usdt = data?.usdtRewarded;
+        if (usdt && usdt > 0) {
+          toast.success(`审批已通过，已向提交人发放 ${usdt} USDT 奖励`);
+        } else {
+          toast.success('审批已通过');
+        }
+      } else {
+        toast.success('审批已拒绝');
+      }
       setShowApprovalDialog(false);
       setComment('');
       refetch();
