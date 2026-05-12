@@ -2040,7 +2040,6 @@ export default function LedgerDetail() {
     refetchOnMount: true,
     refetchOnWindowFocus: true,
   });
-  });
 
   // 成员弹窗状态
   const [showMembersDialog, setShowMembersDialog] = useState(false);
