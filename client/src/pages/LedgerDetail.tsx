@@ -3002,6 +3002,26 @@ export default function LedgerDetail() {
                   </>);
                 })()}
 
+                {/* AJ账本：刷新/返回按钮（与劳/资开关同行，仅AJ账本显示） */}
+                {isCustomAJ && (
+                  <>
+                    <button
+                      onClick={() => window.location.reload()}
+                      className="flex items-center justify-center text-xs font-medium text-white flex-shrink-0"
+                      style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)' }}
+                    >
+                      刷新
+                    </button>
+                    <button
+                      onClick={() => { sessionStorage.removeItem('ledger_back_from'); setLocation(backTarget); }}
+                      className="flex items-center justify-center text-xs font-medium text-white flex-shrink-0"
+                      style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)' }}
+                    >
+                      返回
+                    </button>
+                  </>
+                )}
+
                 {/* AJ账本：劳/资视角切换（圆形滑动开关，仅企业主admin可见） */}
                 {isCustomAJ && isAdmin && !viewAsUserId && (
                   <button
@@ -3210,7 +3230,7 @@ export default function LedgerDetail() {
                   新建
                 </button>
               )}
-              {!isCustomAI && !isCustomAF && (
+              {!isCustomAI && !isCustomAF && !isCustomAJ && (
                 <button
                   onClick={() => window.location.reload()}
                   className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
@@ -3219,7 +3239,7 @@ export default function LedgerDetail() {
                   刷新
                 </button>
               )}
-              {!isCustomAI && !isCustomAF && (
+              {!isCustomAI && !isCustomAF && !isCustomAJ && (
                 <button
                   onClick={() => { sessionStorage.removeItem('ledger_back_from'); setLocation(backTarget); }}
                   className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
