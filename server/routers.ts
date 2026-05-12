@@ -1560,15 +1560,32 @@ ${klinesSummary}
       console.log('[auth.me] 返回用户信息:', opts.ctx.user ? `用户ID: ${opts.ctx.user.id}, 用户名: ${opts.ctx.user.username}` : 'null');
       return opts.ctx.user;
     }),
-    // viewAs 身份代入状态查询：返回当前是否处于身份代入模式
-    viewAsStatus: publicProcedure.query(opts => {
-      const { isViewingAs, realUser, user } = opts.ctx;
-      return {
-        isViewingAs: isViewingAs ?? false,
-        realUser: (isViewingAs && realUser) ? { id: realUser.id, username: realUser.username, name: realUser.name, avatar: realUser.avatar } : null,
-        viewAsUser: (isViewingAs && user) ? { id: user.id, username: user.username, name: user.name, avatar: user.avatar } : null,
-      };
-    }),
+    // viewAs 身份代入状态查询：返回当前是否处于身份代入模式，以及真实用户在指定账本中的角色
+    viewAsStatus: publicProcedure
+      .input(z.object({ ledgerId: z.number().optional() }))
+      .query(async (opts) => {
+        const { isViewingAs, realUser, user } = opts.ctx;
+        let realUserLedgerRole: string | null = null;
+        // 查询真实用户在账本中的角色（用于黄色返回条的权限判断）
+        if (isViewingAs && realUser && opts.input.ledgerId) {
+          try {
+            const dbConn = await getDbConnection();
+            if (dbConn) {
+              const [rows] = await dbConn.execute(
+                'SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+                [opts.input.ledgerId, realUser.id]
+              ) as any;
+              realUserLedgerRole = (rows as any[])[0]?.role ?? null;
+            }
+          } catch (e) {}
+        }
+        return {
+          isViewingAs: isViewingAs ?? false,
+          realUser: (isViewingAs && realUser) ? { id: realUser.id, username: realUser.username, name: realUser.name, avatar: realUser.avatar } : null,
+          viewAsUser: (isViewingAs && user) ? { id: user.id, username: user.username, name: user.name, avatar: user.avatar } : null,
+          realUserLedgerRole,
+        };
+      }),
     
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
