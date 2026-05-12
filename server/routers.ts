@@ -861,7 +861,14 @@ ${klinesSummary}
               ORDER BY created_at DESC
               LIMIT ${limit}`
         );
-        return (rows as any)[0] as any[];
+        // Drizzle MySQL execute 返回 [RowDataPacket[], FieldPacket[]] 二元组
+        // (rows as any)[0] 是行数组，(rows as any)[1] 是字段描述
+        const result = (rows as any)[0];
+        console.log('[getMyManualBalances] userId:', ctx.user.id, 'type:', typeof ctx.user.id, 'rowCount:', Array.isArray(result) ? result.length : 'NOT_ARRAY', 'rawType:', typeof result);
+        if (Array.isArray(result)) return result;
+        // 如果不是数组，说明返回格式不同，直接返回 rows
+        if (Array.isArray(rows)) return rows;
+        return [];
       }),
 
     // 用户申请提现
