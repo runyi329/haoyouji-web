@@ -857,7 +857,7 @@ ${klinesSummary}
               FROM af_manual_balances
               WHERE user_id = ${ctx.user.id}
                 AND amount != 0
-                AND (note NOT LIKE '%[ERROR]%')
+                AND (note NOT LIKE '%\\[ERROR\\]%')
               ORDER BY created_at DESC
               LIMIT ${limit}`
         );
