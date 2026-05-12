@@ -3046,7 +3046,8 @@ export default function LedgerDetail() {
                         borderRadius: '50%',
                         backgroundColor: 'rgba(255,255,255,0.92)',
                         color: '#8B0000',
-                        top: 2,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
                         left: ajViewMode === 'salesman' ? 2 : 34,
                         boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
                       }}
@@ -3058,6 +3059,8 @@ export default function LedgerDetail() {
                       className="absolute text-xs font-medium"
                       style={{
                         color: 'rgba(255,255,255,0.7)',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
                         right: ajViewMode === 'salesman' ? 7 : undefined,
                         left: ajViewMode === 'owner' ? 7 : undefined,
                       }}
