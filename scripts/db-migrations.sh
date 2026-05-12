@@ -124,7 +124,7 @@ $DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_
 echo "✅ merchant_products.thumbnailUrl 字段确认完成"
 
 echo "💰 确保 users.balance 字段存在（智能钱包 USDT 余额）..."
-$DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='users' AND COLUMN_NAME='balance'; SET @s = IF(@c=0, 'ALTER TABLE users ADD COLUMN balance DECIMAL(20,8) NOT NULL DEFAULT 0 COMMENT \'USDT余额\'', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
+$DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='users' AND COLUMN_NAME='balance'; SET @s = IF(@c=0, 'ALTER TABLE users ADD COLUMN balance DECIMAL(20,8) NOT NULL DEFAULT 0', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
 echo "✅ users.balance 字段确认完成"
 
 echo "💰 确保 balance_history 表存在（钱包明细/报销奖励记录）..."
