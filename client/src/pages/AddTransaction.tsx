@@ -985,18 +985,7 @@ const AddTransaction = () => {
                 )}
               </div>
             </div>
-            {/* 报销事由 - 自动匹配（只读） */}
-            <div className="px-5 py-4">
-              <div className="text-xs text-gray-400 mb-2 font-medium tracking-wider">报销事由</div>
-              {autoExpenseReason ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-700">{autoExpenseReason}</span>
-                  <span className="text-xs text-gray-400">(自动匹配)</span>
-                </div>
-              ) : (
-                <div className="text-sm text-gray-300">请先输入报销金额</div>
-              )}
-            </div>
+
           </div>
 
           {/* 重复账目警告 */}
