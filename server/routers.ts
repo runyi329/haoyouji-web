@@ -9100,9 +9100,12 @@ ${klinesSummary}
     getPendingApprovals: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
+        viewAsUserId: z.number().optional(),
       }))
       .query(async ({ ctx, input }) => {
-        return await dbLedger.getPendingApprovals(input.ledgerId, ctx.user.id);
+        // 如果传入了viewAsUserId（管理员切换视角），用被切换用户的userId来判断权限
+        const effectiveUserId = input.viewAsUserId ?? ctx.user.id;
+        return await dbLedger.getPendingApprovals(input.ledgerId, effectiveUserId);
       }),
 
     // 导出账目为Excel

@@ -2041,9 +2041,10 @@ export default function LedgerDetail() {
     refetchOnWindowFocus: true,
   });
 
-  // 获取待审批记账数量
+  // 获取待审批记账数量（传入viewAsUserId，模拟被切换用户的视角权限）
   const { data: pendingApprovals = [] } = trpc.ledger.getPendingApprovals.useQuery({
     ledgerId: Number(ledgerId),
+    ...(viewAsUserId ? { viewAsUserId } : {}),
   });
 
   // 成员弹窗状态
@@ -3929,8 +3930,8 @@ export default function LedgerDetail() {
 
 
 
-      {/* 待审批提示 */}
-      {pendingApprovals.length > 0 && (
+      {/* 待审批提示：只有管理员/owner才能看到（viewAs视角下也遵循被切换用户的角色） */}
+      {pendingApprovals.length > 0 && (effectiveIsOwner || effectiveIsAdmin) && (
         <div 
           className="mx-4 mt-3 mb-2 bg-[#FFEBEE] border border-orange-200 rounded-lg p-3 flex items-center gap-2 cursor-pointer hover:bg-[#FFEBEE] transition-colors"
           onClick={() => setLocation(`/ledger/${ledgerId}/pending-approvals`)}
