@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, Plus, Building2, Pencil, Trash2, Users, ChevronRight, Check, X } from "lucide-react";
+import { ChevronLeft, Plus, Building2, Pencil, Trash2, Users, ChevronRight, Check, X, ClipboardList } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCenterToast } from "@/components/ui/center-toast";
@@ -27,6 +27,286 @@ type AccessMember = {
   role: string;
   isEnabled: boolean;
 };
+
+// ========== 报销类型标准目录 ==========
+export const EXPENSE_CATEGORIES = [
+  {
+    key: "travel",
+    label: "差旅费",
+    items: [
+      { key: "flight", label: "机票" },
+      { key: "train", label: "高铁/动车" },
+      { key: "train_regular", label: "普通火车" },
+      { key: "bus", label: "长途汽车" },
+      { key: "hotel", label: "住宿费" },
+      { key: "local_transport", label: "市内交通（出租/滴滴）" },
+      { key: "allowance", label: "出差补贴" },
+      { key: "toll", label: "过路过桥费" },
+    ],
+  },
+  {
+    key: "entertainment",
+    label: "业务招待费",
+    items: [
+      { key: "dining", label: "餐饮宴请" },
+      { key: "gift", label: "礼品礼金" },
+      { key: "tea", label: "茶水饮品" },
+      { key: "reception", label: "商务活动接待" },
+    ],
+  },
+  {
+    key: "meeting",
+    label: "会议费",
+    items: [
+      { key: "venue", label: "会议场地租金" },
+      { key: "materials", label: "会议资料印刷" },
+      { key: "meeting_hotel", label: "会议住宿" },
+      { key: "meeting_dining", label: "会议餐饮" },
+      { key: "registration", label: "培训注册费" },
+    ],
+  },
+  {
+    key: "office",
+    label: "办公费",
+    items: [
+      { key: "supplies", label: "办公用品" },
+      { key: "print", label: "文件打印复印" },
+      { key: "express", label: "快递邮寄" },
+      { key: "utilities", label: "水电杂费" },
+      { key: "consumables", label: "设备耗材" },
+    ],
+  },
+  {
+    key: "communication",
+    label: "通讯费",
+    items: [
+      { key: "phone", label: "手机话费" },
+      { key: "internet", label: "网络宽带" },
+      { key: "video_conf", label: "视频会议工具" },
+    ],
+  },
+  {
+    key: "transport",
+    label: "交通费",
+    items: [
+      { key: "taxi", label: "市内打车/公交/地铁" },
+      { key: "parking", label: "停车费" },
+      { key: "fuel", label: "加油费" },
+      { key: "car_repair", label: "车辆维修保养" },
+    ],
+  },
+  {
+    key: "maintenance",
+    label: "维修维护费",
+    items: [
+      { key: "equipment", label: "办公设备维修" },
+      { key: "vehicle", label: "车辆维修" },
+      { key: "building", label: "房屋维修" },
+    ],
+  },
+  {
+    key: "rental",
+    label: "租赁费",
+    items: [
+      { key: "office_rent", label: "办公场地租金" },
+      { key: "equipment_rent", label: "设备租赁" },
+      { key: "car_rent", label: "车辆租赁" },
+    ],
+  },
+  {
+    key: "marketing",
+    label: "广告宣传费",
+    items: [
+      { key: "ad", label: "广告投放" },
+      { key: "promo_material", label: "宣传物料" },
+      { key: "market_promo", label: "市场推广" },
+      { key: "exhibition", label: "展会费用" },
+    ],
+  },
+  {
+    key: "welfare",
+    label: "员工福利费",
+    items: [
+      { key: "holiday", label: "节日福利" },
+      { key: "medical", label: "员工体检" },
+      { key: "team_building", label: "团建活动" },
+      { key: "labor_protection", label: "劳保用品" },
+    ],
+  },
+  {
+    key: "training",
+    label: "培训教育费",
+    items: [
+      { key: "external_training", label: "外部培训" },
+      { key: "certification", label: "考证费用" },
+      { key: "books", label: "书籍资料" },
+      { key: "online_course", label: "在线课程" },
+    ],
+  },
+  {
+    key: "other",
+    label: "其他专项",
+    items: [
+      { key: "project_advance", label: "项目垫付" },
+      { key: "misc_purchase", label: "零星采购" },
+      { key: "unclassified", label: "不可归类支出" },
+    ],
+  },
+];
+
+// 生成默认全部启用的配置
+export function getDefaultExpenseConfig() {
+  const config: Record<string, { enabled: boolean; items: Record<string, boolean> }> = {};
+  for (const cat of EXPENSE_CATEGORIES) {
+    config[cat.key] = {
+      enabled: true,
+      items: Object.fromEntries(cat.items.map((item) => [item.key, true])),
+    };
+  }
+  return config;
+}
+
+// ========== 报销类型配置面板 ==========
+function ExpenseTypePanel({
+  ledgerId,
+  company,
+  onClose,
+}: {
+  ledgerId: number;
+  company: Company;
+  onClose: () => void;
+}) {
+  const toast = useCenterToast();
+  const utils = trpc.useUtils();
+
+  const { data: savedConfig, isLoading } = trpc.ledger.ajGetCompanyExpenseTypes.useQuery({
+    ledgerId,
+    companyId: company.id,
+  });
+
+  const [config, setConfig] = useState<Record<string, { enabled: boolean; items: Record<string, boolean> }> | null>(null);
+
+  // 当数据加载完成后初始化config
+  const effectiveConfig = config ?? (savedConfig ? savedConfig as any : getDefaultExpenseConfig());
+
+  const saveMutation = trpc.ledger.ajSetCompanyExpenseTypes.useMutation({
+    onSuccess: () => {
+      utils.ledger.ajGetCompanyExpenseTypes.invalidate({ ledgerId, companyId: company.id });
+      toast.success("报销类型配置已保存");
+      onClose();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const toggleCategory = (catKey: string) => {
+    const current = effectiveConfig;
+    const newConfig = {
+      ...current,
+      [catKey]: {
+        ...current[catKey],
+        enabled: !current[catKey].enabled,
+      },
+    };
+    setConfig(newConfig);
+  };
+
+  const toggleItem = (catKey: string, itemKey: string) => {
+    const current = effectiveConfig;
+    const newConfig = {
+      ...current,
+      [catKey]: {
+        ...current[catKey],
+        items: {
+          ...current[catKey].items,
+          [itemKey]: !current[catKey].items[itemKey],
+        },
+      },
+    };
+    setConfig(newConfig);
+  };
+
+  const handleSave = () => {
+    saveMutation.mutate({
+      ledgerId,
+      companyId: company.id,
+      config: effectiveConfig,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
+      <div className="bg-white w-full rounded-t-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <div className="font-semibold text-gray-800">{company.name}</div>
+            <div className="text-xs text-gray-400 mt-0.5">报销类型配置（默认全部启用）</div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100">
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {isLoading ? (
+            <div className="text-center py-8 text-gray-400 text-sm">加载中...</div>
+          ) : (
+            EXPENSE_CATEGORIES.map((cat) => {
+              const catConfig = effectiveConfig[cat.key] ?? { enabled: true, items: {} };
+              return (
+                <div key={cat.key} className="bg-gray-50 rounded-xl overflow-hidden">
+                  {/* 大类标题行 */}
+                  <button
+                    onClick={() => toggleCategory(cat.key)}
+                    className="w-full flex items-center justify-between px-4 py-3"
+                  >
+                    <span className="font-medium text-sm text-gray-800">{cat.label}</span>
+                    <div className={`w-10 h-5 rounded-full transition-colors relative ${catConfig.enabled ? "bg-[#C0392B]" : "bg-gray-300"}`}>
+                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${catConfig.enabled ? "translate-x-5" : "translate-x-0.5"}`} />
+                    </div>
+                  </button>
+                  {/* 子项列表（大类启用时才显示） */}
+                  {catConfig.enabled && (
+                    <div className="px-4 pb-3 grid grid-cols-2 gap-2">
+                      {cat.items.map((item) => {
+                        const itemEnabled = catConfig.items[item.key] !== false;
+                        return (
+                          <button
+                            key={item.key}
+                            onClick={() => toggleItem(cat.key, item.key)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                              itemEnabled
+                                ? "bg-red-50 text-[#C0392B] border border-red-100"
+                                : "bg-white text-gray-400 border border-gray-200"
+                            }`}
+                          >
+                            <div className={`w-3.5 h-3.5 rounded flex items-center justify-center flex-shrink-0 ${itemEnabled ? "bg-[#C0392B]" : "border border-gray-300"}`}>
+                              {itemEnabled && <Check className="w-2.5 h-2.5 text-white" />}
+                            </div>
+                            <span className="truncate">{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="p-4 border-t border-gray-100 flex-shrink-0">
+          <Button
+            className="w-full rounded-xl bg-[#C0392B] hover:bg-[#a93226] text-white"
+            onClick={handleSave}
+            disabled={saveMutation.isPending}
+          >
+            {saveMutation.isPending ? "保存中..." : "保存配置"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function CompanyForm({
   initial,
@@ -204,6 +484,7 @@ export default function AJCompanyManager() {
   const [showAdd, setShowAdd] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [accessCompany, setAccessCompany] = useState<Company | null>(null);
+  const [expenseTypeCompany, setExpenseTypeCompany] = useState<Company | null>(null);
 
   const { data: companies, isLoading } = trpc.ledger.ajGetCompanies.useQuery({ ledgerId });
 
@@ -367,6 +648,19 @@ export default function AJCompanyManager() {
                       )}
                     </div>
 
+                    {/* 报销类型设置入口 */}
+                    <button
+                      onClick={() => setExpenseTypeCompany(company)}
+                      className="w-full flex items-center justify-between px-4 py-3 border-t border-gray-50 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <ClipboardList className="w-4 h-4 text-gray-400" />
+                        <span>报销类型设置</span>
+                        <span className="text-xs text-gray-400">（默认全部启用）</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-300" />
+                    </button>
+
                     {/* 业务员权限管理入口 */}
                     <button
                       onClick={() => setAccessCompany(company)}
@@ -404,6 +698,15 @@ export default function AJCompanyManager() {
           ledgerId={ledgerId}
           company={accessCompany}
           onClose={() => setAccessCompany(null)}
+        />
+      )}
+
+      {/* 报销类型配置面板 */}
+      {expenseTypeCompany && (
+        <ExpenseTypePanel
+          ledgerId={ledgerId}
+          company={expenseTypeCompany}
+          onClose={() => setExpenseTypeCompany(null)}
         />
       )}
     </div>
