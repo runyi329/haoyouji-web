@@ -685,6 +685,38 @@ export async function addUserBalance(
   const conn = await getDbConnection();
   if (!conn) throw new Error('数据库连接失败');
 
+  // 确保 users.balance 字段存在（自动修复，不依赖迁移脚本）
+  try {
+    await (conn as any).execute(
+      `ALTER TABLE users ADD COLUMN IF NOT EXISTS balance DECIMAL(20,8) NOT NULL DEFAULT 0`
+    );
+  } catch (e: any) {
+    // 字段已存在时会报错，忽略即可
+    if (!e?.message?.includes('Duplicate column')) {
+      console.warn('[addUserBalance] ALTER TABLE balance:', e?.message);
+    }
+  }
+
+  // 确保 balance_history 表存在（自动修复）
+  try {
+    await (conn as any).execute(`
+      CREATE TABLE IF NOT EXISTS balance_history (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        amount DECIMAL(20,8) NOT NULL,
+        type ENUM('recharge','consume','refund','reward','withdraw') NOT NULL,
+        related_id INT DEFAULT NULL,
+        balance DECIMAL(20,8) NOT NULL DEFAULT 0,
+        description TEXT DEFAULT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_bh_user (user_id),
+        INDEX idx_bh_type (type)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+  } catch (e: any) {
+    console.warn('[addUserBalance] CREATE TABLE balance_history:', e?.message);
+  }
+
   // 更新用户余额
   await (conn as any).execute(
     `UPDATE users SET balance = COALESCE(balance, 0) + ? WHERE id = ?`,
