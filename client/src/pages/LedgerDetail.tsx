@@ -1571,6 +1571,7 @@ import {
   LayoutList,
   Calculator,
 } from "lucide-react";
+import { AJOwnerPanel } from "@/components/AJOwnerPanel";
 
 
 // ========== 中国法定节假日数据（2025-2026年） ==========
@@ -3001,6 +3002,35 @@ export default function LedgerDetail() {
                   </>);
                 })()}
 
+                {/* AJ账本：劳/资视角切换按钮（仅企业主admin可见） */}
+                {isCustomAJ && isAdmin && !viewAsUserId && (
+                  <div
+                    className="flex rounded-full overflow-hidden border border-white/30"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
+                  >
+                    <button
+                      onClick={() => setAjViewMode('salesman')}
+                      className="w-8 h-8 flex items-center justify-center text-sm font-bold transition-all"
+                      style={ajViewMode === 'salesman'
+                        ? { backgroundColor: 'rgba(255,255,255,0.9)', color: '#8B0000' }
+                        : { color: 'rgba(255,255,255,0.8)' }
+                      }
+                    >
+                      劳
+                    </button>
+                    <button
+                      onClick={() => setAjViewMode('owner')}
+                      className="w-8 h-8 flex items-center justify-center text-sm font-bold transition-all"
+                      style={ajViewMode === 'owner'
+                        ? { backgroundColor: 'rgba(255,255,255,0.9)', color: '#8B0000' }
+                        : { color: 'rgba(255,255,255,0.8)' }
+                      }
+                    >
+                      资
+                    </button>
+                  </div>
+                )}
+
                 {/* AI账本：按鈕移到第二行，此处不再渲染；AJ账本设置只有owner可见 */}
                 {(isCustomAJ ? effectiveIsOwner : effectiveIsManager) && (
                   <div
@@ -3826,56 +3856,13 @@ export default function LedgerDetail() {
         )}
         {/* AJ 账本：业务报销汇总面板 */}
         {isCustomAJ && (
-          <div className="px-4 pt-2 pb-4">
-            {/* 企业主：视角切换按钮（企业负责人 / 业务负责人） */}
-            {isAdmin && !viewAsUserId && (
-              <div className="flex items-center gap-2 mb-3">
-                <button
-                  onClick={() => setAjViewMode('owner')}
-                  className="flex-1 py-1.5 rounded-full text-xs font-medium transition-all"
-                  style={ajViewMode === 'owner'
-                    ? { backgroundColor: 'rgba(255,255,255,0.9)', color: '#8B0000', fontWeight: 700 }
-                    : { backgroundColor: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.3)' }
-                  }
-                >
-                  企业负责人
-                </button>
-                <button
-                  onClick={() => setAjViewMode('salesman')}
-                  className="flex-1 py-1.5 rounded-full text-xs font-medium transition-all"
-                  style={ajViewMode === 'salesman'
-                    ? { backgroundColor: 'rgba(255,255,255,0.9)', color: '#8B0000', fontWeight: 700 }
-                    : { backgroundColor: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.3)' }
-                  }
-                >
-                  业务负责人
-                </button>
-              </div>
-            )}
-
-            {/* 企业负责人视角：跳转到我的企业页面 */}
+          <div className={isAdmin && !viewAsUserId && ajViewMode === 'owner' ? '' : 'px-4 pt-2 pb-4'}>
+            {/* 资方视角：直接内嵌 AJOwnerPanel */}
             {isAdmin && !viewAsUserId && ajViewMode === 'owner' ? (
-              <div
-                className="rounded-2xl p-4 cursor-pointer active:opacity-80 transition-opacity"
-                style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}
-                onClick={() => setLocation(`/ledger/${ledgerId}/aj-owner-companies`)}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-xs text-white/70 mb-1">我的企业</div>
-                    <div className="text-base font-bold text-white">
-                      {ajAccessibleCompanies != null
-                        ? ((ajAccessibleCompanies as any[]).length > 0 ? `${(ajAccessibleCompanies as any[]).length}家` : '暂无企业')
-                        : '--'}
-                    </div>
-                    <div className="text-[10px] text-white/60 mt-1">点击进入企业管理</div>
-                  </div>
-                  <svg className="w-6 h-6 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" /></svg>
-                </div>
-              </div>
+              <AJOwnerPanel ledgerId={Number(ledgerId)} />
             ) : (
               <>
-                {/* 业务负责人视角（或纯业务员）：报销汇总统计 */}
+                {/* 劳方视角（或纯业务员）：报销汇总统计 */}
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs text-white/80">报销汇总</span>
                   <div className="relative">
