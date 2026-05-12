@@ -2839,7 +2839,7 @@ export default function LedgerDetail() {
                         if (isCustomAJ && !viewAsUserId) {
                           if (isOwner) { setViewAsSearch(''); setShowViewAsPicker(true); }
                           else { window.location.href = `/ledger/${ledgerId}/aj-market-team`; }
-                        } else if (!viewAsUserId && (isOwner || isAdmin)) { setViewAsSearch(''); setShowViewAsPicker(true); }
+                        } else if (!isCustomAJ && !viewAsUserId && (isOwner || isAdmin)) { setViewAsSearch(''); setShowViewAsPicker(true); }
                       }}
                     >
                       {viewTarget ? (
