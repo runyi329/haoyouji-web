@@ -679,23 +679,47 @@ export async function addUserBalance(
   amount: number,
   type: 'recharge' | 'consume' | 'refund' | 'reward' | 'withdraw',
   relatedId?: number,
-  description?: string
+  description?: string,
+  ledgerId?: number
 ) {
-  // 使用原生 SQL 避免 Drizzle ORM schema 与生产库表结构不匹配的问题
   const conn = await getDbConnection();
   if (!conn) throw new Error('数据库连接失败');
-
-  // 从连接池获取一个真实连接，用于执行 DDL 操作
-  // Pool.execute() 支持 DML，但 DDL 建议用 query() 方式
   const pool = conn as any;
 
+  // reward 类型：写入 af_manual_balances（与竞猜扣款同源，余额计算自动生效）
+  if (type === 'reward') {
+    // ledgerId 优先使用传入值，否则查询该用户最近使用的账本
+    let targetLedgerId = ledgerId;
+    if (!targetLedgerId) {
+      const [rows] = await pool.execute(
+        `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
+        [userId]
+      ) as any[];
+      targetLedgerId = (rows as any[])[0]?.ledger_id ?? 52; // fallback 到默认账本 52（谷底增筹）
+    }
+    const note = description ?? `AJ账本报销奖励 +${amount} USDT`;
+    await pool.execute(
+      `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
+      [targetLedgerId, userId, amount, note]
+    );
+    // 同时记录到 balance_history 便于日志追踪
+    try {
+      await pool.execute(
+        `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, 'reward', ?, 0, ?)`,
+        [userId, amount.toString(), relatedId ?? null, note]
+      );
+    } catch (_) { /* balance_history 写失败不影响主流程 */ }
+    console.log(`[addUserBalance] reward 写入 af_manual_balances 成功 userId=${userId}, amount=${amount}, ledgerId=${targetLedgerId}`);
+    return amount;
+  }
+
+  // 其他类型（recharge/consume/refund/withdraw）：保持原有逻辑写 users.balance
   // 检查 users.balance 字段是否存在（兼容 MySQL 5.7，不用 IF NOT EXISTS）
   try {
     const [cols] = await pool.execute(
       `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'balance'`
     ) as any[];
     if (!cols || (cols as any[]).length === 0) {
-      // 字段不存在，添加它
       await pool.execute(`ALTER TABLE users ADD COLUMN balance DECIMAL(20,8) NOT NULL DEFAULT 0`);
       console.log('[addUserBalance] 已自动添加 users.balance 字段');
     }
@@ -709,7 +733,6 @@ export async function addUserBalance(
       `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'balance_history'`
     ) as any[];
     if (!tables || (tables as any[]).length === 0) {
-      // 表不存在，创建它
       await pool.execute(`
         CREATE TABLE balance_history (
           id INT AUTO_INCREMENT PRIMARY KEY,
