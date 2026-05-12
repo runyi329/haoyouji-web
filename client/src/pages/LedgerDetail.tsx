@@ -5479,7 +5479,7 @@ export default function LedgerDetail() {
                                     flexShrink: 0,
                                     display: 'inline-block'
                                   }} />
-                                  {record.ajStatus === 'pending' ? '申请中' :
+                                  {record.ajStatus === 'pending' ? '申请中测' :
                                    record.ajStatus === 'approved' ? '已通过' : '已拒绝'}
                                 </div>
                               )}
