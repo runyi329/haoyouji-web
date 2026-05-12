@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Users, TrendingUp, FileCheck, FileText } from "lucide-react";
-import UserAvatar from "@/components/UserAvatar";
+import { UserAvatar } from "@/components/UserAvatar";
 
 type Period = 'all' | 'day' | 'week' | 'month' | 'quarter' | 'year';
 
