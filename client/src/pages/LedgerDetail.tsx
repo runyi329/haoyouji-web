@@ -3881,32 +3881,13 @@ export default function LedgerDetail() {
                   })()}
                 </div>
               </div>
-              {/* 按企业分组 */}
+              {/* 按企业分组 - 显示用户被授权的企业总数 */}
               <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                 <div className="text-[10px] text-white/70 mb-1">企业数</div>
                 <div className="text-base font-bold text-white">
-                  {(() => {
-                    if (!transactionsData) return '--';
-                    const companies = new Set<string>();
-                    const now = new Date();
-                    const today = now.toISOString().split('T')[0];
-                    const weekStart = (() => { const d = new Date(now); d.setDate(d.getDate() - d.getDay() + 1); return d.toISOString().split('T')[0]; })();
-                    const currentMonth = today.slice(0, 7);
-                    const currentYear = today.slice(0, 4);
-                    const currentQuarter = Math.floor(now.getMonth() / 3);
-                    const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
-                    transactionsData.forEach((day: any) => {
-                      let ok = false;
-                      if (ajStatsPeriod === 'all') ok = true;
-                      else if (ajStatsPeriod === 'day') ok = day.date === today;
-                      else if (ajStatsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
-                      else if (ajStatsPeriod === 'month') ok = day.date.startsWith(currentMonth);
-                      else if (ajStatsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
-                      else if (ajStatsPeriod === 'year') ok = day.date.startsWith(currentYear);
-                      if (ok) (day.records || []).forEach((r: any) => { if (r.category && r.category !== '未分类') companies.add(r.category.split('-')[0]); });
-                    });
-                    return companies.size > 0 ? `${companies.size}家` : '--';
-                  })()}
+                  {ajAccessibleCompanies != null
+                    ? ((ajAccessibleCompanies as any[]).length > 0 ? `${(ajAccessibleCompanies as any[]).length}家` : '--')
+                    : '--'}
                 </div>
               </div>
             </div>
