@@ -2999,8 +2999,8 @@ export default function LedgerDetail() {
                   </>);
                 })()}
 
-                {/* AI账本：按鈕移到第二行，此处不再渲染 */}
-                {effectiveIsManager && (
+                {/* AI账本：按鈕移到第二行，此处不再渲染；AJ账本设置只有owner可见 */}
+                {(isCustomAJ ? effectiveIsOwner : effectiveIsManager) && (
                   <div
                     className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
                     style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
@@ -3911,8 +3911,8 @@ export default function LedgerDetail() {
 
 
 
-      {/* 待审批提示：只有管理员/owner才能看到（viewAs视角下也遵循被切换用户的角色） */}
-      {pendingApprovals.length > 0 && (effectiveIsOwner || effectiveIsAdmin) && (
+      {/* 待审批提示：AJ账本只有owner能看，其他账本owner/admin都能看 */}
+      {pendingApprovals.length > 0 && (isCustomAJ ? effectiveIsOwner : (effectiveIsOwner || effectiveIsAdmin)) && (
         <div 
           className="mx-4 mt-3 mb-2 bg-[#FFEBEE] border border-orange-200 rounded-lg p-3 flex items-center gap-2 cursor-pointer hover:bg-[#FFEBEE] transition-colors"
           onClick={() => setLocation(`/ledger/${ledgerId}/pending-approvals`)}
