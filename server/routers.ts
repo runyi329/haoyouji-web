@@ -846,6 +846,24 @@ ${klinesSummary}
         return await dbRecharge.getUserBalanceHistory(ctx.user.id, input.limit);
       }),
 
+    // 获取用户 af_manual_balances 记录（奖励、手动调账等），用于钱包明细展示
+    getMyManualBalances: protectedProcedure
+      .input(z.object({ limit: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const limit = input.limit ?? 50;
+        const rows = await db.execute(
+          sql`SELECT id, ledger_id, user_id, amount, note, created_at, updated_at
+              FROM af_manual_balances
+              WHERE user_id = ${ctx.user.id}
+                AND amount != 0
+                AND (note NOT LIKE '%[ERROR]%')
+              ORDER BY created_at DESC
+              LIMIT ${limit}`
+        );
+        return (rows as any)[0] as any[];
+      }),
+
     // 用户申请提现
     requestWithdraw: protectedProcedure
       .input(z.object({
