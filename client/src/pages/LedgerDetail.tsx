@@ -3912,7 +3912,7 @@ export default function LedgerDetail() {
                       <option value="day" style={{ color: '#222' }}>今日</option>
                       <option value="week" style={{ color: '#222' }}>本周</option>
                       <option value="month" style={{ color: '#222' }}>本月</option>
-                      <option value="quarter" style={{ color: '#222' }}>本季度</option>
+                      <option value="quarter" style={{ color: '#222' }}>本季</option>
                       <option value="year" style={{ color: '#222' }}>本年</option>
                     </select>
                     <svg className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 fill-white/70" viewBox="0 0 12 12"><path d="M6 8L2 4h8z"/></svg>
