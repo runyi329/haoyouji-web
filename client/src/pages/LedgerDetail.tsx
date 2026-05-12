@@ -5447,24 +5447,38 @@ export default function LedgerDetail() {
                                   </div>
                                 </div>
                               </div>
-                              {/* 矩形印章状态标签 */}
+                              {/* 状态文字标签 */}
                               {record.ajStatus && (
                                 <div style={{
-                                  transform: 'rotate(5deg)',
-                                  border: `2px solid ${
-                                    record.ajStatus === 'pending' ? '#f59e0b' :
-                                    record.ajStatus === 'approved' ? '#A80000' : '#9ca3af'
-                                  }`,
-                                  color: record.ajStatus === 'pending' ? '#f59e0b' :
-                                         record.ajStatus === 'approved' ? '#A80000' : '#9ca3af',
-                                  padding: '3px 8px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '3px 10px',
+                                  borderRadius: '20px',
                                   fontSize: '12px',
-                                  fontWeight: 700,
-                                  letterSpacing: '2px',
-                                  borderRadius: '2px',
-                                  opacity: 0.85,
-                                  flexShrink: 0
+                                  fontWeight: 600,
+                                  flexShrink: 0,
+                                  backgroundColor:
+                                    record.ajStatus === 'pending' ? '#FFF8E1' :
+                                    record.ajStatus === 'approved' ? '#E8F5E9' : '#F5F5F5',
+                                  color:
+                                    record.ajStatus === 'pending' ? '#B45309' :
+                                    record.ajStatus === 'approved' ? '#2E7D32' : '#757575',
+                                  border: `1px solid ${
+                                    record.ajStatus === 'pending' ? '#FDE68A' :
+                                    record.ajStatus === 'approved' ? '#A5D6A7' : '#E0E0E0'
+                                  }`
                                 }}>
+                                  <span style={{
+                                    width: '6px',
+                                    height: '6px',
+                                    borderRadius: '50%',
+                                    backgroundColor:
+                                      record.ajStatus === 'pending' ? '#F59E0B' :
+                                      record.ajStatus === 'approved' ? '#4CAF50' : '#BDBDBD',
+                                    flexShrink: 0,
+                                    display: 'inline-block'
+                                  }} />
                                   {record.ajStatus === 'pending' ? '申请中' :
                                    record.ajStatus === 'approved' ? '已通过' : '已拒绝'}
                                 </div>
