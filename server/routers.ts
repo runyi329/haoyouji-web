@@ -22912,6 +22912,44 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
       };
     }),
 
+  // 诊断接口：检查 users.balance 字段和 balance_history 表是否存在
+  diagWalletDb: protectedProcedure
+    .query(async ({ ctx }) => {
+      const conn = await getDbConnection();
+      if (!conn) return { error: 'no_db_conn' };
+      try {
+        // 检查 users.balance 字段
+        const [balCol] = await (conn as any).execute(
+          `SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='users' AND COLUMN_NAME='balance'`
+        );
+        // 检查 balance_history 表
+        const [bhTable] = await (conn as any).execute(
+          `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='balance_history'`
+        );
+        // 查当前用户余额
+        const [userBal] = await (conn as any).execute(
+          `SELECT id, name, balance FROM users WHERE id = ? LIMIT 1`, [ctx.user.id]
+        );
+        // 查最近 5 条 balance_history
+        let recentHistory: any[] = [];
+        if ((bhTable as any[]).length > 0) {
+          const [hist] = await (conn as any).execute(
+            `SELECT * FROM balance_history ORDER BY created_at DESC LIMIT 5`
+          );
+          recentHistory = hist as any[];
+        }
+        return {
+          balanceColumnExists: (balCol as any[]).length > 0,
+          balanceColumnInfo: (balCol as any[])[0] || null,
+          balanceHistoryTableExists: (bhTable as any[]).length > 0,
+          currentUser: (userBal as any[])[0] || null,
+          recentHistory,
+        };
+      } catch (e: any) {
+        return { error: e?.message || String(e) };
+      }
+    }),
+
 });
 export type AppRouter = typeof appRouter;
 
