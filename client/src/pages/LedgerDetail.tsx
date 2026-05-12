@@ -2057,19 +2057,28 @@ export default function LedgerDetail() {
   // viewAsUserId 从 URL 参数读取，确保刷新和子页面跳转后保持视角
   const viewAsUserIdFromUrl = urlParams.get('viewAs') ? Number(urlParams.get('viewAs')) : null;
   const [viewAsUserId, setViewAsUserIdState] = useState<number | null>(viewAsUserIdFromUrl);
+  // 页面初始化时，如果 URL 有 viewAs 参数，同步写入 sessionStorage 实现身份代入
+  if (viewAsUserIdFromUrl) {
+    sessionStorage.setItem('view-as-user-id', String(viewAsUserIdFromUrl));
+  }
   const [showViewAsPicker, setShowViewAsPicker] = useState(false);
-  // 获取待审批记账数量（传入viewAsUserId，模拟被切换用户的视角权限）
+  // 获取待审批记账数量（后端通过身份代入自动判断权限）
   const { data: pendingApprovals = [] } = trpc.ledger.getPendingApprovals.useQuery({
     ledgerId: Number(ledgerId),
-    ...(viewAsUserId ? { viewAsUserId } : {}),
   });
   const [viewAsSearch, setViewAsSearch] = useState('');
   const [viewAsRoleFilter, setViewAsRoleFilter] = useState<'all' | 'member' | 'funder'>('all');
   const trpcUtils = trpc.useUtils();
-  // 视角切换时同步写入 URL，确保刷新后保持视角
+  // 视角切换时同步写入 URL 和 sessionStorage，实现完全身份代入
   const handleSwitchView = (userId: number | null) => {
     setViewAsUserIdState(userId);
     setShowViewAsPicker(false);
+    // 写入/清除 sessionStorage（tRPC 请求头会自动带上，实现后端身份代入）
+    if (userId) {
+      sessionStorage.setItem('view-as-user-id', String(userId));
+    } else {
+      sessionStorage.removeItem('view-as-user-id');
+    }
     // 更新 URL 参数
     const newParams = new URLSearchParams(window.location.search);
     if (userId) {
@@ -2079,8 +2088,8 @@ export default function LedgerDetail() {
     }
     const newUrl = `${window.location.pathname}?${newParams.toString()}`;
     window.history.replaceState(null, '', newUrl);
-    trpcUtils.ledger.afGetMyTotalAsset.invalidate();
-    trpcUtils.ledger.afGetMyRechargeHistory.invalidate();
+    // 刷新所有查询，使身份代入立即生效
+    trpcUtils.invalidate();
   };
   // 抽奖子 Tab：正在进行中 / 往期回顾
   const [lotteryTab, setLotteryTab] = useState<'active' | 'past'>('active');
@@ -2089,6 +2098,12 @@ export default function LedgerDetail() {
   useEffect(() => {
     const timer = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(timer);
+  }, []);
+  // 离开账本页面时清除 viewAs 身份代入状态
+  useEffect(() => {
+    return () => {
+      sessionStorage.removeItem('view-as-user-id');
+    };
   }, []);
 
   // 抽奖活动列表（全量，前端按子Tab过滤）
@@ -2121,7 +2136,7 @@ export default function LedgerDetail() {
   const isCustomAJ = (ledgerData as any)?.type === 'custom_aj';
   // AJ账本：查询当前用户（或视角用户）有权限的企业列表，用于判断是否允许进入报销申请单
   const { data: ajAccessibleCompanies } = trpc.ledger.ajGetMyCompanies.useQuery(
-    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
+    { ledgerId: Number(ledgerId) },
     { enabled: isCustomAJ }
   );
   const ajHasAccessibleCompanies = isCustomAJ && (ajAccessibleCompanies as any[])?.length > 0;
@@ -2153,7 +2168,7 @@ export default function LedgerDetail() {
   // 快捷按钮配置：从数据库读取当前用户的快捷按钮开关状态
   const isShortcutLedger = ledgerId === 52 || ledgerId === 37 || ledgerId === 59;
   const { data: myShortcuts } = (trpc as any).ledger.getMyShortcutButtons.useQuery(
-    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
+    { ledgerId: Number(ledgerId) },
     { enabled: isShortcutLedger }
   );
   const { data: dietStats } = trpc.diet.getStats.useQuery(
@@ -2162,7 +2177,7 @@ export default function LedgerDetail() {
   );
   // AF 账本：总资产估值（充值到账 + 手动调账）
   const { data: afTotalAsset } = trpc.ledger.afGetMyTotalAsset.useQuery(
-    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
+    { ledgerId: Number(ledgerId) },
     { enabled: isCustomAF }
   );
   // AF 账本：管理员统计（订单数 + 管理费）——后端控制权限，无权限返回null
@@ -2172,7 +2187,7 @@ export default function LedgerDetail() {
   );
   // AF 账本：实时盈亏汇总（每60秒自动刷新）
   const { data: pnlData } = trpc.ledger.afGetPnlSummary.useQuery(
-    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
+    { ledgerId: Number(ledgerId) },
     { enabled: isCustomAF, refetchInterval: 60000 }
   );
   // AF 账本：资金费率日志弹窗状态（必须在 trpc 查询之前声明，避免 TDZ）
@@ -2180,7 +2195,7 @@ export default function LedgerDetail() {
   const [fundingRateLogsPage2, setFundingRateLogsPage2] = useState(1);
   // AF 账本：资金费率开关状态 + 累计金额
   const { data: fundingRateStatus } = trpc.ledger.afGetFundingRateStatus.useQuery(
-    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
+    { ledgerId: Number(ledgerId) },
     { enabled: isCustomAF && !effectiveIsFunder, refetchInterval: 30000 }
   );
   // 独立本地 state，初始值为 undefined（未初始化），useEffect 在服务器数据到达后初始化一次
@@ -2283,16 +2298,16 @@ export default function LedgerDetail() {
   const [fundingRateLoadingMore, setFundingRateLoadingMore] = useState(false);
   const [fundingRateQueryVersion, setFundingRateQueryVersion] = useState(0);
   const { data: fundingRateLogsData, isLoading: fundingRateLogsLoading } = trpc.ledger.afGetFundingRateLogs.useQuery(
-    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}), page: fundingRateLogsPage2, pageSize: 50 },
+    { ledgerId: Number(ledgerId), page: fundingRateLogsPage2, pageSize: 50 },
     { enabled: isCustomAF && !effectiveIsFunder && showFundingRateLogs2 && fundingRateQueryVersion > 0, staleTime: 0 }
   );
   // ETH 持仓计算预览数据（仅 isCustomAF 时加载）
   const { data: ethPositionSettings } = trpc.ethPositionGetSettings.useQuery(
-    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
+    { ledgerId: Number(ledgerId) },
     { enabled: isCustomAF }
   );
   const { data: ethPositionLevels } = trpc.ethPositionGetLevels.useQuery(
-    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
+    { ledgerId: Number(ledgerId) },
     { enabled: isCustomAF }
   );
   // 计算实际持仓总量
@@ -2302,13 +2317,13 @@ export default function LedgerDetail() {
 
   // 资方专属：资产汇总（仅 funder 角色查询，管理员视角切换时传目标用户ID）
   const { data: funderAssetSummary } = trpc.ledger.funderGetAssetSummary.useQuery(
-    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { userId: viewAsUserId } : {}) },
+    { ledgerId: Number(ledgerId) },
     { enabled: isCustomAF && effectiveIsFunder }
   );
   // 资方专属：资产订单列表（funder 角色查询，管理员视角切换时传目标用户ID）
   const PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
   const { data: funderAssetData } = trpc.ledger.funderGetAssetOrders.useQuery(
-    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { userId: viewAsUserId } : {}) },
+    { ledgerId: Number(ledgerId) },
     { enabled: isCustomAF && effectiveIsFunder, refetchOnWindowFocus: true, staleTime: 0 }
   );
   const funderAssetOrders = (funderAssetData as any)?.orders ?? funderAssetData ?? [];

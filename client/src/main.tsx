@@ -74,6 +74,11 @@ const trpcClient = trpc.createClient({
             document.cookie = `app_session_id=${token}; path=/; max-age=${365 * 24 * 60 * 60}`;
           } catch (e) {}
         }
+        // viewAs 身份代入：如果 sessionStorage 中有目标用户ID，加入请求头
+        const viewAsUserId = sessionStorage.getItem('view-as-user-id');
+        if (viewAsUserId) {
+          headers.set('x-view-as-user-id', viewAsUserId);
+        }
 
         return globalThis.fetch(input, {
           ...(init ?? {}),

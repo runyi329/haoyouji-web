@@ -1,12 +1,15 @@
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
+import * as db from "../db";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
   res: CreateExpressContextOptions["res"];
   user: User | null;
-  isGuest: boolean; // 是否是游客用户
+  realUser: User | null; // 管理员真实身份（viewAs模式下与user不同）
+  isViewingAs: boolean;  // 是否处于身份代入模式
+  isGuest: boolean;
 };
 
 export async function createContext(
@@ -48,10 +51,40 @@ export async function createContext(
   const GUEST_USER_ID = 5070293;
   const isGuest = user?.id === GUEST_USER_ID;
 
+  // ===== viewAs 身份代入逻辑 =====
+  // 只有 super_admin / admin / parent 才允许身份代入
+  // 前端切换视角时，通过请求头 x-view-as-user-id 传入目标用户ID
+  let realUser: User | null = user;
+  let isViewingAs = false;
+
+  const viewAsHeader = opts.req.headers['x-view-as-user-id'];
+  const viewAsUserIdRaw = Array.isArray(viewAsHeader) ? viewAsHeader[0] : viewAsHeader;
+  const viewAsUserId = viewAsUserIdRaw ? parseInt(viewAsUserIdRaw, 10) : null;
+
+  if (
+    user &&
+    viewAsUserId &&
+    !isNaN(viewAsUserId) &&
+    viewAsUserId !== user.id &&
+    (user.role === 'super_admin' || user.role === 'admin' || user.role === 'parent')
+  ) {
+    try {
+      const targetUser = await db.getUserById(viewAsUserId);
+      if (targetUser) {
+        user = targetUser as User;
+        isViewingAs = true;
+      }
+    } catch (e) {
+      // 获取目标用户失败，保持原用户
+    }
+  }
+
   return {
     req: opts.req,
     res: opts.res,
     user,
+    realUser,
+    isViewingAs,
     isGuest,
   };
 }
