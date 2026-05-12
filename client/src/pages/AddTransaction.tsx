@@ -127,35 +127,12 @@ const AddTransaction = () => {
   );
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [showCompanyPicker, setShowCompanyPicker] = useState(false);
-  const [ajExpenseCategory, setAjExpenseCategory] = useState<string>("");  // 报销大类key
-  const [ajExpenseItem, setAjExpenseItem] = useState<string>("");          // 报销子项key
-  const [showExpensePicker, setShowExpensePicker] = useState(false);
-
   // AJ账本：获取当前选中企业的报销类型配置
   const { data: companyExpenseConfig } = trpc.ledger.ajGetCompanyExpenseTypes.useQuery(
     { ledgerId, companyId: selectedCompanyId! },
     { enabled: isCustomAJ && !!selectedCompanyId }
   );
   const effectiveExpenseConfig = (companyExpenseConfig as any) ?? getDefaultExpenseConfig();
-  // 获取启用的大类列表
-  const enabledCategories = EXPENSE_CATEGORIES.filter(
-    (cat) => effectiveExpenseConfig[cat.key]?.enabled !== false
-  );
-  // 当前选中大类的启用子项
-  const enabledItems = ajExpenseCategory
-    ? (EXPENSE_CATEGORIES.find((c) => c.key === ajExpenseCategory)?.items ?? []).filter(
-        (item) => effectiveExpenseConfig[ajExpenseCategory]?.items?.[item.key] !== false
-      )
-    : [];
-  // 报销事由显示文本
-  const expenseReasonLabel = (() => {
-    if (!ajExpenseCategory) return "";
-    const cat = EXPENSE_CATEGORIES.find((c) => c.key === ajExpenseCategory);
-    const item = cat?.items.find((i) => i.key === ajExpenseItem);
-    if (cat && item) return `${cat.label} · ${item.label}`;
-    if (cat) return cat.label;
-    return "";
-  })();
   const selectedCompany = (ajCompanies as any[])?.find((c: any) => c.id === selectedCompanyId);
   // 当企业列表加载完成且只有1个时，自动选中该企业
   useEffect(() => {
@@ -173,8 +150,55 @@ const AddTransaction = () => {
 
   const [transactionType, setTransactionType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("");
-  
-  
+
+  // 根据金额自动匹配报销事由（只读，无需用户选择）
+  const autoExpenseReason = (() => {
+    const num = parseFloat(amount) || 0;
+    const pool: [string, string][] = num <= 50
+      ? [
+          ['交通费', '市内打车/公交/地铁'],
+          ['办公费', '办公用品'],
+          ['交通费', '停车费'],
+          ['办公费', '快递邮寄'],
+        ]
+      : num <= 200
+      ? [
+          ['业务招待费', '餐饮宴请'],
+          ['交通费', '加油费'],
+          ['办公费', '文件打印复印'],
+          ['通讯费', '手机话费'],
+          ['业务招待费', '茶水饮品'],
+        ]
+      : num <= 500
+      ? [
+          ['差旅费', '住宿费'],
+          ['业务招待费', '商务活动接待'],
+          ['通讯费', '网络宽带'],
+          ['办公费', '设备耗材'],
+          ['员工福利费', '团建活动'],
+        ]
+      : num <= 2000
+      ? [
+          ['差旅费', '高铁/动车'],
+          ['差旅费', '机票'],
+          ['会议费', '会议场地租金'],
+          ['广告宣传费', '宣传物料'],
+          ['培训教育费', '外部培训'],
+        ]
+      : [
+          ['差旅费', '机票'],
+          ['租赁费', '办公场地租金'],
+          ['维修维护费', '办公设备维修'],
+          ['培训教育费', '外部培训'],
+          ['广告宣传费', '广告投放'],
+        ];
+    if (num <= 0) return '';
+    const idx = Math.floor(num) % pool.length;
+    const [cat, item] = pool[idx];
+    return `${cat} · ${item}`;
+  })();
+  const expenseReasonLabel = autoExpenseReason;
+
   // 分类选择状态：存储选中的分类路径 [一级分类ID, 二级分类ID, 三级分类ID, ...]
   // 默认选中第一个预设分类（ID为2）
   const [selectedCategoryPath, setSelectedCategoryPath] = useState<number[]>([2]);
@@ -893,64 +917,11 @@ const AddTransaction = () => {
                 <div className="text-sm text-gray-300">请选择企业（选填）</div>
               )}
             </div>
-            {/* 报销事由 - 点选式 */}
-            <div className="border-t border-gray-100 px-5 py-4">
-              <div className="text-xs text-gray-400 mb-3 font-medium tracking-wider">报销事由</div>
-              {!selectedCompanyId ? (
-                <div className="text-sm text-gray-300">请先选择企业</div>
-              ) : (
-                <div className="space-y-3">
-                  {/* 大类选择 */}
-                  <div className="flex flex-wrap gap-2">
-                    {enabledCategories.map((cat) => (
-                      <button
-                        key={cat.key}
-                        onClick={() => {
-                          setAjExpenseCategory(cat.key);
-                          setAjExpenseItem("");
-                        }}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                          ajExpenseCategory === cat.key
-                            ? "bg-[#C0392B] text-white"
-                            : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {cat.label}
-                      </button>
-                    ))}
-                  </div>
-                  {/* 子项选择 */}
-                  {ajExpenseCategory && enabledItems.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {enabledItems.map((item) => (
-                        <button
-                          key={item.key}
-                          onClick={() => setAjExpenseItem(item.key)}
-                          className={`px-3 py-1.5 rounded-full text-xs transition-colors ${
-                            ajExpenseItem === item.key
-                              ? "bg-red-50 text-[#C0392B] border border-red-200"
-                              : "bg-gray-50 text-gray-500 border border-gray-200"
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {expenseReasonLabel && (
-                    <div className="text-xs text-[#C0392B] font-medium pt-1">
-                      ✓ 已选：{expenseReasonLabel}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
             {/* 发票日期 - 已隐藏 */}
 
             {/* 发票附件 */}
-            <div className="px-5 py-4">
-              <div className="text-xs text-gray-400 mb-3 font-medium tracking-wider">发票附件</div>
+            <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
+              <div className="text-xs text-gray-400 mb-3 font-medium tracking-wider">发票附件 <span className="text-gray-300 font-normal">(选填)</span></div>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1013,6 +984,18 @@ const AddTransaction = () => {
                   </button>
                 )}
               </div>
+            </div>
+            {/* 报销事由 - 自动匹配（只读） */}
+            <div className="px-5 py-4">
+              <div className="text-xs text-gray-400 mb-2 font-medium tracking-wider">报销事由</div>
+              {autoExpenseReason ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-700">{autoExpenseReason}</span>
+                  <span className="text-xs text-gray-400">(自动匹配)</span>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-300">请先输入报销金额</div>
+              )}
             </div>
           </div>
 
