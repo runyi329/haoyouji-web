@@ -4206,6 +4206,13 @@ export async function approveTransaction(
     if (membership.length === 0 || !['owner', 'admin'].includes(membership[0].role)) {
       throw new Error('只有账本管理员或创始人可以审批发票申请');
     }
+    // 先查出提交人 ID 和报销金额（审批通过时需要发放 USDT 奖励）
+    const recordDetail = await db
+      .select({ createdBy: ledgerRecords.createdBy, amount: ledgerRecords.amount })
+      .from(ledgerRecords)
+      .where(eq(ledgerRecords.id, transactionId))
+      .limit(1);
+
     await db
       .update(ledgerRecords)
       .set({
@@ -4215,7 +4222,65 @@ export async function approveTransaction(
         ajApproveComment: comment || null,
       } as any)
       .where(eq(ledgerRecords.id, transactionId));
-    return { success: true, allApproved: action === 'approved', anyRejected: action === 'rejected' };
+
+    // 审批通过时：按报销金额 1% 换算成等值 USDT 发放到提交人钱包
+    let usdtRewarded = 0;
+    if (action === 'approved' && recordDetail.length > 0) {
+      try {
+        const submitterId = recordDetail[0].createdBy;
+        const reimbursementAmount = parseFloat(recordDetail[0].amount || '0');
+        if (reimbursementAmount > 0) {
+          // 获取实时 USD/CNY 汇率（多源备用，与以太坊计算器右上角同源）
+          let usdCnyRate = 7.2; // 默认兜底汇率
+          try {
+            const fetchers = [
+              async () => {
+                const key = '3878a89bed4728b65cc7d8dc0a644c07';
+                const p = new URLSearchParams({ key, fromcoin: 'USD', tocoin: 'CNY', money: '1' });
+                const res = await fetch(`https://apis.tianapi.com/fxrate/index?${p}`, { signal: AbortSignal.timeout(5000) });
+                const d = await res.json() as { code: number; result?: { money: string } };
+                return (d.code === 200 && d.result?.money) ? parseFloat(d.result.money) : null;
+              },
+              async () => {
+                const res = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(5000) });
+                const d = await res.json() as { result: string; rates?: Record<string, number> };
+                return (d.result === 'success' && d.rates?.['CNY']) ? d.rates['CNY'] : null;
+              },
+              async () => {
+                const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=CNY', { signal: AbortSignal.timeout(5000) });
+                const d = await res.json() as { rates?: Record<string, number> };
+                return d.rates?.['CNY'] ?? null;
+              },
+            ];
+            for (const fetcher of fetchers) {
+              const rate = await fetcher().catch(() => null);
+              if (rate && rate > 0) { usdCnyRate = rate; break; }
+            }
+          } catch (_) { /* 全部失败，使用兜底汇率 */ }
+
+          // 计算 USDT 数量：报销金额 × 1% ÷ USD/CNY 汇率
+          // USDT ≈ 1 USD，所以 CNY 换 USDT = CNY金额 / USD/CNY汇率
+          const rewardCny = reimbursementAmount * 0.01;
+          usdtRewarded = parseFloat((rewardCny / usdCnyRate).toFixed(6));
+
+          if (usdtRewarded > 0) {
+            const { addUserBalance } = await import('./db-recharge.js');
+            await addUserBalance(
+              submitterId,
+              usdtRewarded,
+              'reward',
+              transactionId,
+              `AJ账本发票审批通过奖励：报销¥${reimbursementAmount.toFixed(2)} × 1% ÷ ${usdCnyRate.toFixed(4)} = ${usdtRewarded} USDT`
+            );
+          }
+        }
+      } catch (rewardErr) {
+        // 奖励发放失败不影响审批结果，仅记录日志
+        console.error('[AJ审批奖励] 发放 USDT 失败:', rewardErr);
+      }
+    }
+
+    return { success: true, allApproved: action === 'approved', anyRejected: action === 'rejected', usdtRewarded };
   }
 
   // 普通账本审批流程（原有逻辑）
