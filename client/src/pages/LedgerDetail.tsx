@@ -2833,15 +2833,15 @@ export default function LedgerDetail() {
                   const viewTarget = viewAsUserId ? (membersData as any[])?.find((m: any) => m.userId === viewAsUserId) : null;
                   return (
                     <div
-                      className={(!viewAsUserId && (isOwner || isAdmin)) ? 'cursor-pointer relative' : 'relative'}
-                      onClick={() => { if (!viewAsUserId && (isOwner || isAdmin)) { setViewAsSearch(''); setShowViewAsPicker(true); } }}
+                      className={(!viewAsUserId && (isCustomAJ ? isOwner : (isOwner || isAdmin))) ? 'cursor-pointer relative' : 'relative'}
+                      onClick={() => { if (!viewAsUserId && (isCustomAJ ? isOwner : (isOwner || isAdmin))) { setViewAsSearch(''); setShowViewAsPicker(true); } }}
                     >
                       {viewTarget ? (
                         <UserAvatar username={viewTarget.username} avatar={viewTarget.avatar} nickname={viewTarget.nickname} size="md" />
                       ) : user ? (
                         <UserAvatar username={user.username} avatar={user.avatar} nickname={user.nickname} size="md" />
                       ) : null}
-                      {!viewAsUserId && (isOwner || isAdmin) && (
+                      {!viewAsUserId && (isCustomAJ ? isOwner : (isOwner || isAdmin)) && (
                         <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-white/90 flex items-center justify-center">
                           <Users className="w-2.5 h-2.5 text-blue-600" />
                         </div>
@@ -6421,7 +6421,7 @@ export default function LedgerDetail() {
       )}
 
       {/* AF/AH 视角切换弹窗：成员列表 + 搜索 */}
-      {showViewAsPicker && (isCustomAF || isCustomAH || isCustomAI || isCustomAJ) && (isOwner || isAdmin) && (
+      {showViewAsPicker && (isCustomAF || isCustomAH || isCustomAI || isCustomAJ) && (isCustomAJ ? isOwner : (isOwner || isAdmin)) && (
         <div className="fixed inset-0 z-[70] flex items-end justify-center" onClick={() => setShowViewAsPicker(false)}>
           <div className="absolute inset-0 bg-black/40" />
           <div
