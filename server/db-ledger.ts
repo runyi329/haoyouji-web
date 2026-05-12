@@ -4416,6 +4416,84 @@ export async function getPendingApprovals(ledgerId: number, userId: number) {
 }
 
 /**
+ * 获取AJ账本已审批历史（approved/rejected），含发放USDT金额
+ */
+export async function getApprovalHistory(ledgerId: number, userId: number, page = 1, pageSize = 20) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 权限检查：只有owner/admin可以看
+  const membership = await db
+    .select({ role: ledgerMembers.role })
+    .from(ledgerMembers)
+    .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
+    .limit(1);
+  if (membership.length === 0 || !['owner', 'admin'].includes(membership[0].role)) {
+    return { list: [], total: 0 };
+  }
+
+  const offset = (page - 1) * pageSize;
+
+  // 查询已审批记录
+  const records = await db
+    .select({
+      id: ledgerRecords.id,
+      amount: ledgerRecords.amount,
+      reimbursementAmount: ledgerRecords.reimbursementAmount,
+      ajStatus: ledgerRecords.ajStatus,
+      ajCompanyName: ledgerRecords.ajCompanyName,
+      ajApprovedAt: ledgerRecords.ajApprovedAt,
+      ajApprovedBy: ledgerRecords.ajApprovedBy,
+      ajApproveComment: ledgerRecords.ajApproveComment,
+      description: ledgerRecords.description,
+      createdBy: ledgerRecords.createdBy,
+      createdAt: ledgerRecords.createdAt,
+      recordDate: ledgerRecords.recordDate,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.ajStatus} IN ('approved', 'rejected')`,
+        isNull(ledgerRecords.deletedAt)
+      )
+    )
+    .orderBy(desc(ledgerRecords.ajApprovedAt))
+    .limit(pageSize)
+    .offset(offset);
+
+  // 获取提交人和审批人信息
+  const allUserIds = [...new Set([
+    ...records.map((r: any) => r.createdBy),
+    ...records.map((r: any) => r.ajApprovedBy),
+  ].filter(Boolean))];
+  let userMap: Record<number, any> = {};
+  if (allUserIds.length > 0) {
+    const userList = await db
+      .select({ id: users.id, username: users.username, avatar: users.avatar })
+      .from(users)
+      .where(sql`${users.id} IN (${sql.join(allUserIds.map((id: any) => sql`${id}`), sql`, `)})`);
+    userMap = Object.fromEntries(userList.map((u: any) => [u.id, u]));
+  }
+
+  // 计算每条记录发放的USDT（按7.2兜底汇率，仅approved才有）
+  const list = records.map((r: any) => {
+    const baseAmount = parseFloat(String(r.reimbursementAmount || r.amount || 0));
+    const usdtRewarded = r.ajStatus === 'approved' ? parseFloat((baseAmount * 0.01 / 7.2).toFixed(6)) : 0;
+    return {
+      ...r,
+      amount: Number(r.amount),
+      reimbursementAmount: r.reimbursementAmount ? Number(r.reimbursementAmount) : null,
+      usdtRewarded,
+      submitter: userMap[r.createdBy] || null,
+      approver: userMap[r.ajApprovedBy] || null,
+    };
+  });
+
+  return { list, total: list.length };
+}
+
+/**
  * 设置成员角色（仅owner可操作）
  * 重写版本：使用targetUserId而不是memberId来标识目标成员
  */

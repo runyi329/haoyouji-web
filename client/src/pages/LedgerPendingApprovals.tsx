@@ -2,7 +2,7 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ChevronLeft, Check, X, Building2, User, Clock, FileText } from "lucide-react";
+import { ChevronLeft, Check, X, Building2, User, Clock, FileText, History, Coins } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -21,6 +21,7 @@ export default function LedgerPendingApprovals() {
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 0;
 
+  const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
   const [selectedApproval, setSelectedApproval] = useState<any>(null);
   const [approvalAction, setApprovalAction] = useState<'approved' | 'rejected'>('approved');
@@ -31,6 +32,13 @@ export default function LedgerPendingApprovals() {
     { ledgerId },
     { enabled: !!ledgerId }
   );
+
+  // 获取已审批历史
+  const { data: historyData, isLoading: historyLoading, refetch: refetchHistory } = trpc.ledger.getApprovalHistory.useQuery(
+    { ledgerId, page: 1, pageSize: 50 },
+    { enabled: !!ledgerId && activeTab === 'history' }
+  );
+  const historyList = historyData?.list ?? [];
 
   // 审批mutation
   const approveMutation = trpc.ledger.approveTransaction.useMutation({
@@ -49,6 +57,7 @@ export default function LedgerPendingApprovals() {
       setSelectedApproval(null);
       setComment('');
       refetch();
+      refetchHistory();
     },
     onError: (err) => {
       toast.error(err.message || '操作失败');
@@ -113,124 +122,278 @@ export default function LedgerPendingApprovals() {
           <ChevronLeft className="h-6 w-6" />
         </button>
         <h1 className="text-lg font-medium">发票申请审批</h1>
-        {!isLoading && (pendingApprovals as any[]).length > 0 && (
+        {!isLoading && (pendingApprovals as any[]).length > 0 && activeTab === 'pending' && (
           <span className="ml-2 bg-white text-[#D32F2F] text-xs font-bold px-2 py-0.5 rounded-full">
             {(pendingApprovals as any[]).length}
           </span>
         )}
       </div>
 
+      {/* Tab 切换 */}
+      <div className="bg-white border-b border-gray-200 flex sticky top-[60px] z-10">
+        <button
+          onClick={() => setActiveTab('pending')}
+          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+            activeTab === 'pending'
+              ? 'border-[#D32F2F] text-[#D32F2F]'
+              : 'border-transparent text-gray-500'
+          }`}
+        >
+          <Clock className="h-4 w-4" />
+          待审批
+          {(pendingApprovals as any[]).length > 0 && (
+            <span className="bg-[#D32F2F] text-white text-xs px-1.5 py-0.5 rounded-full leading-none">
+              {(pendingApprovals as any[]).length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+            activeTab === 'history'
+              ? 'border-[#D32F2F] text-[#D32F2F]'
+              : 'border-transparent text-gray-500'
+          }`}
+        >
+          <History className="h-4 w-4" />
+          已审批历史
+        </button>
+      </div>
+
       {/* 内容区域 */}
       <div className="p-4 max-w-lg mx-auto">
-        {isLoading ? (
-          <div className="text-center py-12 text-gray-400">加载中...</div>
-        ) : error ? (
-          <Card className="bg-white p-6 text-center">
-            <p className="text-red-500 text-sm">{(error as any).message || '加载失败，请重试'}</p>
-            <Button variant="outline" className="mt-3" onClick={() => refetch()}>重试</Button>
-          </Card>
-        ) : (pendingApprovals as any[]).length === 0 ? (
-          <Card className="bg-white p-10 text-center shadow-sm">
-            <FileText className="h-10 w-10 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm">暂无待审批的发票申请</p>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {(pendingApprovals as any[]).map((approval: any) => {
-              const transaction = approval.transaction;
-              if (!transaction) return null;
 
-              return (
-                <Card key={approval.id} className="bg-white shadow-sm overflow-hidden">
-                  {/* 卡片头部：金额 + 类型 */}
-                  <div className="bg-[#FFEBEE] px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl font-bold text-[#D32F2F]">
-                        {transaction.type === 'income' ? '+' : '-'}¥{formatAmount(transaction.amount)}
-                      </span>
-                      <span className="text-xs bg-white text-[#D32F2F] border border-[#D32F2F]/30 px-2 py-0.5 rounded-full">
-                        {transaction.type === 'income' ? '收入' : '支出'}
-                      </span>
-                    </div>
-                    <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
-                      申请中
-                    </span>
-                  </div>
+        {/* ===== 待审批 Tab ===== */}
+        {activeTab === 'pending' && (
+          <>
+            {isLoading ? (
+              <div className="text-center py-12 text-gray-400">加载中...</div>
+            ) : error ? (
+              <Card className="bg-white p-6 text-center">
+                <p className="text-red-500 text-sm">{(error as any).message || '加载失败，请重试'}</p>
+                <Button variant="outline" className="mt-3" onClick={() => refetch()}>重试</Button>
+              </Card>
+            ) : (pendingApprovals as any[]).length === 0 ? (
+              <Card className="bg-white p-10 text-center shadow-sm">
+                <FileText className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-400 text-sm">暂无待审批的发票申请</p>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {(pendingApprovals as any[]).map((approval: any) => {
+                  const transaction = approval.transaction;
+                  if (!transaction) return null;
 
-                  {/* 卡片主体：详细信息 */}
-                  <div className="px-4 py-3 space-y-2">
-                    {/* 开票单位 */}
-                    {transaction.ajCompanyName && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Building2 className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                        <span className="text-gray-500 flex-shrink-0">开票单位</span>
-                        <span className="text-gray-800 font-medium truncate">{transaction.ajCompanyName}</span>
-                      </div>
-                    )}
-
-                    {/* 开票人 */}
-                    {transaction.member && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <UserAvatar
-                          username={transaction.member.username}
-                          avatar={transaction.member.avatar}
-                          nickname={transaction.member.nickname}
-                          size="sm"
-                        />
-                        <span className="text-gray-500 flex-shrink-0">开票人</span>
-                        <span className="text-gray-800">
-                          {transaction.member.nickname || transaction.member.username}
+                  return (
+                    <Card key={approval.id} className="bg-white shadow-sm overflow-hidden">
+                      {/* 卡片头部：金额 + 类型 */}
+                      <div className="bg-[#FFEBEE] px-4 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl font-bold text-[#D32F2F]">
+                            {transaction.type === 'income' ? '+' : '-'}¥{formatAmount(transaction.amount)}
+                          </span>
+                          <span className="text-xs bg-white text-[#D32F2F] border border-[#D32F2F]/30 px-2 py-0.5 rounded-full">
+                            {transaction.type === 'income' ? '收入' : '支出'}
+                          </span>
+                        </div>
+                        <span className="flex items-center gap-1 text-xs text-amber-600">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block"></span>
+                          申请中
                         </span>
                       </div>
-                    )}
 
-                    {/* 开票时间 */}
-                    <div className="flex items-center gap-2 text-sm">
-                      <Clock className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                      <span className="text-gray-500 flex-shrink-0">开票时间</span>
-                      <span className="text-gray-800">
-                        {transaction.date ? formatDate(transaction.date) : ''}
-                        {transaction.createdAt && (
-                          <span className="text-gray-400 ml-1 text-xs">
-                            {new Date(transaction.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                      {/* 卡片主体：详细信息 */}
+                      <div className="px-4 py-3 space-y-2">
+                        {/* 开票单位 */}
+                        {transaction.ajCompanyName && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Building2 className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            <span className="text-gray-500 flex-shrink-0">开票单位</span>
+                            <span className="text-gray-800 font-medium truncate">{transaction.ajCompanyName}</span>
+                          </div>
                         )}
-                      </span>
-                    </div>
 
-                    {/* 备注 */}
-                    {transaction.description && (
-                      <div className="flex items-start gap-2 text-sm">
-                        <FileText className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                        <span className="text-gray-500 flex-shrink-0">备注</span>
-                        <span className="text-gray-600">{transaction.description}</span>
+                        {/* 开票人 */}
+                        {transaction.member && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <UserAvatar
+                              username={transaction.member.username}
+                              avatar={transaction.member.avatar}
+                              nickname={transaction.member.nickname}
+                              size="sm"
+                            />
+                            <span className="text-gray-500 flex-shrink-0">开票人</span>
+                            <span className="text-gray-800">
+                              {transaction.member.nickname || transaction.member.username}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* 开票时间 */}
+                        <div className="flex items-center gap-2 text-sm">
+                          <Clock className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                          <span className="text-gray-500 flex-shrink-0">开票时间</span>
+                          <span className="text-gray-800">
+                            {transaction.date ? formatDate(transaction.date) : ''}
+                            {transaction.createdAt && (
+                              <span className="text-gray-400 ml-1 text-xs">
+                                {new Date(transaction.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+
+                        {/* 备注 */}
+                        {transaction.description && (
+                          <div className="flex items-start gap-2 text-sm">
+                            <FileText className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                            <span className="text-gray-500 flex-shrink-0">备注</span>
+                            <span className="text-gray-600">{transaction.description}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
 
-                  {/* 审批按钮 */}
-                  <div className="flex gap-2 px-4 py-3 border-t border-gray-100">
-                    <Button
-                      onClick={() => handleApprove(approval, 'approved')}
-                      className="flex-1 bg-[#4CAF50] hover:bg-[#43A047] text-white"
-                      disabled={approveMutation.isPending}
-                    >
-                      <Check className="h-4 w-4 mr-1" />
-                      通过
-                    </Button>
-                    <Button
-                      onClick={() => handleApprove(approval, 'rejected')}
-                      className="flex-1 bg-[#D32F2F] hover:bg-[#C62828] text-white"
-                      disabled={approveMutation.isPending}
-                    >
-                      <X className="h-4 w-4 mr-1" />
-                      拒绝
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
+                      {/* 审批按钮 */}
+                      <div className="flex gap-2 px-4 py-3 border-t border-gray-100">
+                        <Button
+                          onClick={() => handleApprove(approval, 'approved')}
+                          className="flex-1 bg-[#4CAF50] hover:bg-[#43A047] text-white"
+                          disabled={approveMutation.isPending}
+                        >
+                          <Check className="h-4 w-4 mr-1" />
+                          通过
+                        </Button>
+                        <Button
+                          onClick={() => handleApprove(approval, 'rejected')}
+                          className="flex-1 bg-[#D32F2F] hover:bg-[#C62828] text-white"
+                          disabled={approveMutation.isPending}
+                        >
+                          <X className="h-4 w-4 mr-1" />
+                          拒绝
+                        </Button>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ===== 已审批历史 Tab ===== */}
+        {activeTab === 'history' && (
+          <>
+            {historyLoading ? (
+              <div className="text-center py-12 text-gray-400">加载中...</div>
+            ) : historyList.length === 0 ? (
+              <Card className="bg-white p-10 text-center shadow-sm">
+                <History className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-400 text-sm">暂无已审批记录</p>
+              </Card>
+            ) : (
+              <>
+                {/* 汇总：已通过总额 + 已发放USDT */}
+                {(() => {
+                  const approved = historyList.filter((r: any) => r.ajStatus === 'approved');
+                  const totalCny = approved.reduce((s: number, r: any) => s + (r.reimbursementAmount ?? r.amount ?? 0), 0);
+                  const totalUsdt = approved.reduce((s: number, r: any) => s + (r.usdtRewarded ?? 0), 0);
+                  return approved.length > 0 ? (
+                    <div className="bg-gradient-to-r from-[#D32F2F] to-[#E53935] rounded-xl p-4 mb-4 text-white">
+                      <div className="text-xs opacity-80 mb-1">已通过审批汇总</div>
+                      <div className="flex items-end justify-between">
+                        <div>
+                          <div className="text-2xl font-bold">¥{totalCny.toFixed(2)}</div>
+                          <div className="text-xs opacity-70 mt-0.5">报销总额（{approved.length} 笔）</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-semibold text-amber-200">{totalUsdt.toFixed(6)} USDT</div>
+                          <div className="text-xs opacity-70 mt-0.5">累计发放奖励</div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
+                <div className="space-y-3">
+                  {historyList.map((record: any) => (
+                    <Card key={record.id} className="bg-white shadow-sm overflow-hidden">
+                      {/* 卡片头部 */}
+                      <div className={`px-4 py-3 flex items-center justify-between ${
+                        record.ajStatus === 'approved' ? 'bg-green-50' : 'bg-gray-50'
+                      }`}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-bold text-gray-800">
+                            ¥{formatAmount(record.reimbursementAmount ?? record.amount)}
+                          </span>
+                        </div>
+                        <span className={`flex items-center gap-1 text-xs font-medium ${
+                          record.ajStatus === 'approved' ? 'text-green-600' : 'text-gray-500'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full inline-block ${
+                            record.ajStatus === 'approved' ? 'bg-green-500' : 'bg-gray-400'
+                          }`}></span>
+                          {record.ajStatus === 'approved' ? '已通过' : '已拒绝'}
+                        </span>
+                      </div>
+
+                      {/* 卡片主体 */}
+                      <div className="px-4 py-3 space-y-2">
+                        {/* 开票单位 */}
+                        {record.ajCompanyName && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Building2 className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            <span className="text-gray-500 flex-shrink-0">开票单位</span>
+                            <span className="text-gray-800 font-medium truncate">{record.ajCompanyName}</span>
+                          </div>
+                        )}
+
+                        {/* 提交人 */}
+                        {record.submitter && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <User className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            <span className="text-gray-500 flex-shrink-0">提交人</span>
+                            <span className="text-gray-800">{record.submitter.username}</span>
+                          </div>
+                        )}
+
+                        {/* 审批时间 */}
+                        {record.ajApprovedAt && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Clock className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            <span className="text-gray-500 flex-shrink-0">审批时间</span>
+                            <span className="text-gray-800">{formatDateTime(record.ajApprovedAt)}</span>
+                          </div>
+                        )}
+
+                        {/* 审批备注 */}
+                        {record.ajApproveComment && (
+                          <div className="flex items-start gap-2 text-sm">
+                            <FileText className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                            <span className="text-gray-500 flex-shrink-0">审批备注</span>
+                            <span className="text-gray-600">{record.ajApproveComment}</span>
+                          </div>
+                        )}
+
+                        {/* USDT 奖励（仅已通过） */}
+                        {record.ajStatus === 'approved' && record.usdtRewarded > 0 && (
+                          <div className="flex items-center gap-2 text-sm pt-1 border-t border-gray-100 mt-1">
+                            <Coins className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                            <span className="text-gray-500 flex-shrink-0">发放奖励</span>
+                            <span className="font-semibold text-amber-600">
+                              {record.usdtRewarded.toFixed(6)} USDT
+                            </span>
+                            <span className="text-gray-400 text-xs">
+                              （¥{formatAmount(record.reimbursementAmount ?? record.amount)} × 1%）
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
         )}
       </div>
 

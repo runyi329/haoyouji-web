@@ -9134,6 +9134,19 @@ ${klinesSummary}
         return await dbLedger.getPendingApprovals(input.ledgerId, effectiveUserId);
       }),
 
+    // 获取已审批历史（AJ账本）
+    getApprovalHistory: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        page: z.number().optional().default(1),
+        pageSize: z.number().optional().default(20),
+        viewAsUserId: z.number().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const effectiveUserId = input.viewAsUserId ?? ctx.user.id;
+        return await dbLedger.getApprovalHistory(input.ledgerId, effectiveUserId, input.page, input.pageSize);
+      }),
+
     // 导出账目为Excel
     exportToExcel: protectedProcedure
       .input(z.object({
