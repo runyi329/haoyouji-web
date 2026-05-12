@@ -260,8 +260,8 @@ function ExpenseTypePanel({
                     className="w-full flex items-center justify-between px-4 py-3"
                   >
                     <span className="font-medium text-sm text-gray-800">{cat.label}</span>
-                    <div className={`w-10 h-5 rounded-full transition-colors relative ${catConfig.enabled ? "bg-[#C0392B]" : "bg-gray-300"}`}>
-                      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${catConfig.enabled ? "translate-x-5" : "translate-x-0.5"}`} />
+                    <div className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${catConfig.enabled ? "bg-[#C0392B]" : "bg-gray-300"}`}>
+                      <span className={`absolute top-[3px] left-[3px] w-[18px] h-[18px] rounded-full bg-white shadow-md transition-transform duration-200 ${catConfig.enabled ? "translate-x-[20px]" : "translate-x-0"}`} />
                     </div>
                   </button>
                   {/* 子项列表（大类启用时才显示） */}
@@ -275,7 +275,7 @@ function ExpenseTypePanel({
                             onClick={() => toggleItem(cat.key, item.key)}
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${
                               itemEnabled
-                                ? "bg-red-50 text-[#C0392B] border border-red-100"
+                                ? "bg-white text-[#C0392B] border-2 border-[#C0392B]"
                                 : "bg-white text-gray-400 border border-gray-200"
                             }`}
                           >
@@ -454,13 +454,13 @@ function AccessPanel({
                         isEnabled: !m.isEnabled,
                       })
                     }
-                    className={`w-12 h-6 rounded-full transition-colors relative ${
+                    className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${
                       m.isEnabled ? "bg-[#C0392B]" : "bg-gray-200"
                     }`}
                   >
                     <span
-                      className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                        m.isEnabled ? "translate-x-6" : "translate-x-0.5"
+                      className={`absolute top-[3px] left-[3px] w-[18px] h-[18px] rounded-full bg-white shadow-md transition-transform duration-200 ${
+                        m.isEnabled ? "translate-x-[20px]" : "translate-x-0"
                       }`}
                     />
                   </button>
