@@ -56,7 +56,7 @@ jobs:
             echo "📊 执行数据库结构更新..."
             bash scripts/db-migrations.sh || true
             echo "💳 注入支付宝环境变量..."
-            node /root/haoyouji-web/scripts/inject-alipay-env.cjs
+            node /root/haoyouji-web/scripts/inject-alipay-env.cjs || echo "⚠️ inject-alipay-env 失败（非致命，继续部署）"
             echo "🔄 删除root PM2进程（释放3000端口）..."
             pm2 delete haoyouji-web 2>/dev/null || true
             pm2 save 2>/dev/null || true
