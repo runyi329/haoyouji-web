@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   Plus, Building2, Pencil, Trash2, Clock, CheckCircle, XCircle,
@@ -261,6 +261,17 @@ export function AJOwnerPanel({ ledgerId }: { ledgerId: number }) {
 
   const [activeTab, setActiveTab] = useState<'companies' | 'requests'>('companies');
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // 监听底部+按鈕触发的添加企业事件
+  useEffect(() => {
+    const handler = () => {
+      setShowAddForm(true);
+      setEditingCompany(null);
+      setActiveTab('companies');
+    };
+    window.addEventListener('aj-owner-add-company', handler);
+    return () => window.removeEventListener('aj-owner-add-company', handler);
+  }, []);
   const [editingCompany, setEditingCompany] = useState<any | null>(null);
   const [deletingCompany, setDeletingCompany] = useState<any | null>(null);
   const [deleteRemark, setDeleteRemark] = useState('');

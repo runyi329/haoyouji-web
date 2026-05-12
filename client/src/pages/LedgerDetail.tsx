@@ -3002,33 +3002,49 @@ export default function LedgerDetail() {
                   </>);
                 })()}
 
-                {/* AJ账本：劳/资视角切换按钮（仅企业主admin可见） */}
+                {/* AJ账本：劳/资视角切换（圆形滑动开关，仅企业主admin可见） */}
                 {isCustomAJ && isAdmin && !viewAsUserId && (
-                  <div
-                    className="flex rounded-full overflow-hidden border border-white/30"
-                    style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
+                  <button
+                    onClick={() => setAjViewMode(ajViewMode === 'salesman' ? 'owner' : 'salesman')}
+                    className="relative flex items-center transition-all flex-shrink-0"
+                    style={{
+                      width: 52,
+                      height: 26,
+                      borderRadius: 13,
+                      backgroundColor: 'rgba(255,255,255,0.22)',
+                      border: '1px solid rgba(255,255,255,0.35)',
+                      padding: 0,
+                    }}
+                    aria-label={ajViewMode === 'salesman' ? '切换到资方' : '切换到劳方'}
                   >
-                    <button
-                      onClick={() => setAjViewMode('salesman')}
-                      className="w-8 h-8 flex items-center justify-center text-sm font-bold transition-all"
-                      style={ajViewMode === 'salesman'
-                        ? { backgroundColor: 'rgba(255,255,255,0.9)', color: '#8B0000' }
-                        : { color: 'rgba(255,255,255,0.8)' }
-                      }
+                    {/* 滑块 */}
+                    <span
+                      className="absolute flex items-center justify-center text-xs font-bold transition-all duration-200"
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(255,255,255,0.92)',
+                        color: '#8B0000',
+                        top: 1,
+                        left: ajViewMode === 'salesman' ? 2 : 27,
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                      }}
                     >
-                      劳
-                    </button>
-                    <button
-                      onClick={() => setAjViewMode('owner')}
-                      className="w-8 h-8 flex items-center justify-center text-sm font-bold transition-all"
-                      style={ajViewMode === 'owner'
-                        ? { backgroundColor: 'rgba(255,255,255,0.9)', color: '#8B0000' }
-                        : { color: 'rgba(255,255,255,0.8)' }
-                      }
+                      {ajViewMode === 'salesman' ? '劳' : '资'}
+                    </span>
+                    {/* 背景文字（另一侧） */}
+                    <span
+                      className="absolute text-xs font-medium"
+                      style={{
+                        color: 'rgba(255,255,255,0.7)',
+                        right: ajViewMode === 'salesman' ? 6 : undefined,
+                        left: ajViewMode === 'owner' ? 6 : undefined,
+                      }}
                     >
-                      资
-                    </button>
-                  </div>
+                      {ajViewMode === 'salesman' ? '资' : '劳'}
+                    </span>
+                  </button>
                 )}
 
                 {/* AI账本：按鈕移到第二行，此处不再渲染；AJ账本设置只有owner可见 */}
@@ -5275,8 +5291,8 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示 */}
-      {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && <div className={`flex-1 px-4 pb-20 space-y-3`}>
+      {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示；AJ账本切换到资方视角时也隐藏 */}
+      {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && !(isCustomAJ && isAdmin && !viewAsUserId && ajViewMode === 'owner') && <div className={`flex-1 px-4 pb-20 space-y-3`}>
         {!hasRecords ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-base mb-1">{ledgerData?.type === 'diet' ? '还没有减肥记录' : '还没有记账记录'}</div>
@@ -5526,22 +5542,27 @@ export default function LedgerDetail() {
         )}
       </div>}
 
-      {/* 底部添加按鈕：AJ账本专用（添加发票） */}
+      {/* 底部添加按鈕：AJ账本专用（劳方添加发票，资方添加企业） */}
       {isCustomAJ && (
         <button
           onClick={() => {
-            // 判断是否有可见企业，没有则提示
-            if (!ajHasAccessibleCompanies) {
-              alert('当前暂未开放，请稍后再试');
-              return;
-            }
-            // 将viewAsUserId写入sessionStorage，确保跨页面跳转后能正确读取
-            if (viewAsUserId) {
-              sessionStorage.setItem('aj_view_as_user_id', String(viewAsUserId));
+            if (isAdmin && !viewAsUserId && ajViewMode === 'owner') {
+              // 资方视角：添加企业申请（触发AJOwnerPanel内的添加企业弹窗）
+              // 通过自定义事件通知AJOwnerPanel打开添加弹窗
+              window.dispatchEvent(new CustomEvent('aj-owner-add-company'));
             } else {
-              sessionStorage.removeItem('aj_view_as_user_id');
+              // 劳方视角：添加报销申请单
+              if (!ajHasAccessibleCompanies) {
+                alert('当前暂未开放，请稍后再试');
+                return;
+              }
+              if (viewAsUserId) {
+                sessionStorage.setItem('aj_view_as_user_id', String(viewAsUserId));
+              } else {
+                sessionStorage.removeItem('aj_view_as_user_id');
+              }
+              setLocation(`/ledger/${ledgerId}/add${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`);
             }
-            setLocation(`/ledger/${ledgerId}/add${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`);
           }}
           className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
           style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
