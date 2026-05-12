@@ -42,6 +42,9 @@ jobs:
             cd /root/haoyouji-web
             echo "📥 拉取最新代码..."
             git fetch origin && git reset --hard origin/main && git clean -fd
+            echo "✅ 当前 git HEAD: $(git log --oneline -1)"
+            echo "✅ 验证 LedgerDetail.tsx 关键内容:"
+            grep -c '★测\|申请中测\|FFF8E1\|rotate(5deg)' client/src/pages/LedgerDetail.tsx || echo '未找到关键字'
             echo "🧹 清除 Vite 缓存（保留旧 dist 继续服务）..."
             rm -rf node_modules/.vite client/.vite
             echo "📦 安装依赖..."
