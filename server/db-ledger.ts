@@ -4266,15 +4266,17 @@ export async function approveTransaction(
           usdtRewarded = parseFloat((rewardCny / usdCnyRate).toFixed(6));
 
           if (usdtRewarded > 0) {
-            const { addUserBalance } = await import('./db-recharge.js');
-            await addUserBalance(
-              submitterId,
-              usdtRewarded,
-              'reward',
-              transactionId,
-              `AJ账本发票审批通过奖励：报销¥${reimbursementAmount.toFixed(2)} × 1% ÷ ${usdCnyRate.toFixed(4)} = ${usdtRewarded} USDT`,
-              ledgerId
-            );
+            // 直接内联写入 af_manual_balances，不依赖动态 import
+            const rewardNote = `AJ账本发票审批通过奖励：报销¥${reimbursementAmount.toFixed(2)} × 1% ÷ ${usdCnyRate.toFixed(4)} = ${usdtRewarded} USDT`;
+            const conn = await getDbConnection();
+            if (conn) {
+              const now = new Date();
+              await conn.execute(
+                'INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+                [ledgerId, submitterId, usdtRewarded, rewardNote, now, now]
+              );
+              console.log(`[AJ审批奖励] 已发放 ${usdtRewarded} USDT 给用户 ${submitterId}，账本 ${ledgerId}`);
+            }
           }
         }
       } catch (rewardErr) {
