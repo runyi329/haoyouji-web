@@ -4275,12 +4275,20 @@ export async function approveTransaction(
             console.log(`[AJ审批奖励] 已发放 ${usdtRewarded} USDT 给用户 ${submitterId}，账本 ${ledgerId}`);
           }
         }
-      } catch (rewardErr) {
-        // 奖励发放失败不影响审批结果，仅记录日志
-        console.error('[AJ审批奖励] 发放 USDT 失败:', rewardErr);
+       } catch (rewardErr) {
+        // 奖励发放失败不影响审批结果，但把错误写入数据库方便排查
+        const errMsg = (rewardErr instanceof Error) ? rewardErr.message : String(rewardErr);
+        console.error('[AJ审批奖励] 发放 USDT 失败:', errMsg);
+        try {
+          // 把错误信息写入 af_manual_balances 的 note 字段（amount=0），方便从数据库直接看到报错
+          const nowStr2 = new Date().toISOString().slice(0, 19).replace('T', ' ');
+          await db.execute(
+            sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${ledgerId}, ${recordDetail[0]?.createdBy ?? 0}, 0, ${`[ERROR] transactionId=${transactionId}: ${errMsg}`}, ${nowStr2}, ${nowStr2})`
+          );
+        } catch (_) { /* 写错误日志也失败，放弃 */ }
+        usdtRewarded = -1; // 标记奖励失败
       }
     }
-
     return { success: true, allApproved: action === 'approved', anyRejected: action === 'rejected', usdtRewarded };
   }
 
