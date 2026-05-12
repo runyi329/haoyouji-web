@@ -69,12 +69,13 @@ export default function Wallet() {
   const pointsQuery = trpc.rewards.getPoints.useQuery();
   const recentRechargeQuery = trpc.recharge.getMyOrders.useQuery({ limit: 5 });
   const recentWithdrawQuery = trpc.recharge.getMyWithdrawHistory.useQuery({ limit: 5 });
+  const recentManualQuery = trpc.recharge.getMyManualBalances.useQuery({ limit: 5 });
 
   const balance =
     typeof balanceQuery.data === "number" ? balanceQuery.data : 0;
   const points = pointsQuery.data?.points ?? 0;
 
-  // 合并最近交易（充值 + 提现，取最新5条）
+  // 合并最近交易（充値 + 提现 + 手动调账/奖励，取最新5条）
   const recentTransactions = (() => {
     const recharges = (recentRechargeQuery.data ?? []).map((r: any) => ({
       id: `r-${r.id}`,
@@ -92,7 +93,15 @@ export default function Wallet() {
       createdAt: w.createdAt,
       remark: w.remark || "",
     }));
-    return [...recharges, ...withdraws]
+    const manuals = (recentManualQuery.data ?? []).map((m: any) => ({
+      id: `m-${m.id}`,
+      type: (Number(m.amount) > 0 ? "reward" : "deduct") as "reward" | "deduct",
+      amount: Math.abs(Number(m.amount)),
+      status: "completed" as const,
+      createdAt: m.created_at,
+      remark: m.note || "",
+    }));
+    return [...recharges, ...withdraws, ...manuals]
       .sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -372,20 +381,25 @@ export default function Wallet() {
                     <div className="flex items-center space-x-3">
                       <div>
                         <div className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.85)" }}>
-                          {tx.type === "recharge" ? "充值" : "提现"}
+                          {tx.type === "recharge" ? "充値" : tx.type === "withdraw" ? "提现" : tx.type === "reward" ? "奖励" : "扫费"}
                         </div>
                         <div className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
                           {formatTime(tx.createdAt)}
                         </div>
+                        {(tx.type === "reward" || tx.type === "deduct") && tx.remark && (
+                          <div className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)", maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {tx.remark}
+                          </div>
+                        )}
                       </div>
                     </div>
                     {/* 右侧金额 + 状态 */}
                     <div className="text-right">
                       <div
                         className="text-sm font-bold tabular-nums"
-                        style={{ color: tx.type === "recharge" ? "#4ade80" : "#f87171" }}
+                        style={{ color: (tx.type === "recharge" || tx.type === "reward") ? "#4ade80" : "#f87171" }}
                       >
-                        {tx.type === "recharge" ? "+" : "-"}
+                        {(tx.type === "recharge" || tx.type === "reward") ? "+" : "-"}
                         {hideBalance ? "••••" : tx.amount.toFixed(2)}
                         <span className="text-xs font-normal ml-1" style={{ color: "rgba(255,255,255,0.3)" }}>
                           USDT
