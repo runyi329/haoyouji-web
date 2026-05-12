@@ -2884,7 +2884,7 @@ export default function LedgerDetail() {
                     </div>
                   ) : (
                     <>
-                      <span className="text-base font-semibold">{ledgerData.name}</span>
+                      <span className="text-base font-semibold">{ledgerData.name}★测</span>
                       {viewAsUserId && (() => {
                         const viewTarget = (membersData as any[])?.find((m: any) => m.userId === viewAsUserId);
                         return viewTarget ? <span className="text-xs text-white/70">查看: {viewTarget.nickname || viewTarget.username}</span> : null;
