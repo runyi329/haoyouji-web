@@ -2062,6 +2062,15 @@ export default function LedgerDetail() {
     sessionStorage.setItem('view-as-user-id', String(viewAsUserIdFromUrl));
   }
   const [showViewAsPicker, setShowViewAsPicker] = useState(false);
+  // 查询当前是否处于身份代入模式（用于黄色返回条，用真实用户的账本角色判断）
+  const { data: viewAsStatusData } = trpc.auth.viewAsStatus.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: !!viewAsUserId }
+  );
+  const isReallyViewingAs = viewAsStatusData?.isViewingAs ?? false;
+  const realUserIsManagerInLedger = isReallyViewingAs && (
+    viewAsStatusData?.realUserLedgerRole === 'owner' || viewAsStatusData?.realUserLedgerRole === 'admin'
+  );
   // 获取待审批记账数量（后端通过身份代入自动判断权限）
   const { data: pendingApprovals = [] } = trpc.ledger.getPendingApprovals.useQuery({
     ledgerId: Number(ledgerId),
@@ -6084,7 +6093,7 @@ export default function LedgerDetail() {
       )}
 
       {/* AF/AH/AI 视角切换横幅 */}
-      {(isCustomAF || isCustomAH || isCustomAI || isCustomAJ) && viewAsUserId && (isOwner || isAdmin) && (
+      {(isCustomAF || isCustomAH || isCustomAI || isCustomAJ) && viewAsUserId && (isReallyViewingAs || realUserIsManagerInLedger) && (
         <div className="fixed bottom-0 left-0 right-0 z-[60] flex items-center justify-between px-4 py-3 safe-area-bottom" style={{ backgroundColor: '#F59E0B', color: '#1A2340' }}>
           <div className="flex items-center gap-2 text-sm font-medium">
             <Users className="w-4 h-4" />
