@@ -651,29 +651,47 @@ function getUnmatchedTransactions() {
     });
 }
 // 给用户添加余额
-function addUserBalance(userId, amount, type, relatedId, description) {
+function addUserBalance(userId, amount, type, relatedId, description, ledgerId) {
     return __awaiter(this, void 0, void 0, function () {
-        var db, userResult, newBalance;
+        var pool, targetLedgerId, rows, note, db, userResult, newBalance;
         var _a;
         return __generator(this, function (_b) {
             switch (_b.label) {
-                case 0: return [4 /*yield*/, (0, db_1.getDb)()];
+                case 0:
+                    if (type !== 'reward') return [3 /*break*/, 5];
+                    return [4 /*yield*/, (0, db_1.getDbConnection)()];
                 case 1:
-                    db = _b.sent();
-                    // 更新用户余额
-                    return [4 /*yield*/, db.execute((0, drizzle_orm_1.sql)(templateObject_15 || (templateObject_15 = __makeTemplateObject(["\n    UPDATE users \n    SET balance = COALESCE(balance, 0) + ", "\n    WHERE id = ", "\n  "], ["\n    UPDATE users \n    SET balance = COALESCE(balance, 0) + ", "\n    WHERE id = ", "\n  "])), amount, userId))];
+                    pool = _b.sent();
+                    if (!pool) throw new Error('\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25');
+                    targetLedgerId = ledgerId;
+                    if (!!targetLedgerId) return [3 /*break*/, 3];
+                    return [4 /*yield*/, pool.execute('SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1', [userId])];
                 case 2:
-                    // 更新用户余额
+                    rows = (_b.sent())[0];
+                    targetLedgerId = (rows[0] && rows[0].ledger_id) ? rows[0].ledger_id : 52;
+                    _b.label = 3;
+                case 3:
+                    note = description || ('AJ\u8d26\u672c\u62a5\u9500\u5956\u52b1 +' + amount + ' USDT');
+                    return [4 /*yield*/, pool.execute('INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())', [targetLedgerId, userId, amount, note])];
+                case 4:
+                    _b.sent();
+                    console.log('[addUserBalance] reward \u5199\u5165 af_manual_balances \u6210\u529f userId=' + userId + ', amount=' + amount + ', ledgerId=' + targetLedgerId);
+                    return [2 /*return*/, amount];
+                case 5:
+                    return [4 /*yield*/, (0, db_1.getDb)()];
+                case 6:
+                    db = _b.sent();
+                    return [4 /*yield*/, db.execute((0, drizzle_orm_1.sql)(templateObject_15 || (templateObject_15 = __makeTemplateObject(["\n    UPDATE users \n    SET balance = COALESCE(balance, 0) + ", "\n    WHERE id = ", "\n  "], ["\n    UPDATE users \n    SET balance = COALESCE(balance, 0) + ", "\n    WHERE id = ", "\n  "])), amount, userId))];
+                case 7:
                     _b.sent();
                     return [4 /*yield*/, db
                             .select({ balance: schema_1.users.balance })
                             .from(schema_1.users)
                             .where((0, drizzle_orm_1.eq)(schema_1.users.id, userId))
                             .limit(1)];
-                case 3:
+                case 8:
                     userResult = _b.sent();
                     newBalance = ((_a = userResult[0]) === null || _a === void 0 ? void 0 : _a.balance) || 0;
-                    // 记录余额变动
                     return [4 /*yield*/, db.insert(schema_1.balanceHistory).values({
                             userId: userId,
                             amount: amount.toString(),
@@ -682,8 +700,7 @@ function addUserBalance(userId, amount, type, relatedId, description) {
                             balance: newBalance.toString(),
                             description: description
                         })];
-                case 4:
-                    // 记录余额变动
+                case 9:
                     _b.sent();
                     return [2 /*return*/, newBalance];
             }
