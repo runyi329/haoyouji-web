@@ -2884,7 +2884,7 @@ export default function LedgerDetail() {
                     </div>
                   ) : (
                     <>
-                      <span className="text-base font-semibold">{ledgerData.name}★测</span>
+                      <span className="text-base font-semibold">{ledgerData.name}</span>
                       {viewAsUserId && (() => {
                         const viewTarget = (membersData as any[])?.find((m: any) => m.userId === viewAsUserId);
                         return viewTarget ? <span className="text-xs text-white/70">查看: {viewTarget.nickname || viewTarget.username}</span> : null;
@@ -3272,7 +3272,7 @@ export default function LedgerDetail() {
                 <ChevronLeft className="w-6 h-6" />
               </button>
               <div className="flex items-center flex-1">
-                <h1 className="text-lg font-medium">{ledgerData.name}★测</h1>
+                <h1 className="text-lg font-medium">{ledgerData.name}</h1>
               </div>
             </div>
 
@@ -5479,7 +5479,7 @@ export default function LedgerDetail() {
                                     flexShrink: 0,
                                     display: 'inline-block'
                                   }} />
-                                  {record.ajStatus === 'pending' ? '申请中测' :
+                                  {record.ajStatus === 'pending' ? '申请中' :
                                    record.ajStatus === 'approved' ? '已通过' : '已拒绝'}
                                 </div>
                               )}
