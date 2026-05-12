@@ -1,0 +1,28 @@
+name: 检查服务器部署状态
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 设置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 124.223.54.69 >> ~/.ssh/known_hosts 2>/dev/null || true
+      - name: 检查服务器上的代码版本
+        run: |
+          ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa root@124.223.54.69 'bash -s' << 'ENDSSH'
+            echo "=== /root/haoyouji-web 最新 git commit ==="
+            cd /root/haoyouji-web && git log --oneline -3
+            echo ""
+            echo "=== /home/ubuntu/haoyouji-web/dist 目录最新文件 ==="
+            ls -lt /home/ubuntu/haoyouji-web/dist/public/assets/ 2>/dev/null | head -10 || echo "dist/public/assets 不存在"
+            echo ""
+            echo "=== 检查 dist 中是否包含新代码（FFF8E1=新版标签，rotate=旧版图章）==="
+            grep -r "FFF8E1\|rotate(5deg)" /home/ubuntu/haoyouji-web/dist/public/assets/*.js 2>/dev/null | head -3 | cut -c1-200 || echo "未找到匹配"
+            echo ""
+            echo "=== PM2 进程状态 ==="
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
+          ENDSSH
