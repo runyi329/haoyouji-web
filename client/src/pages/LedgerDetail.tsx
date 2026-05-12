@@ -2519,6 +2519,8 @@ export default function LedgerDetail() {
   });
   // AJ账本专用独立统计周期，不影响普通账本的statsPeriod
   const [ajStatsPeriod, setAjStatsPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>('month');
+  // AJ账本视角切换：企业负责人 / 业务负责人（仅isAdmin角色有此切换）
+  const [ajViewMode, setAjViewMode] = useState<'owner' | 'salesman'>('salesman');
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
   const [aiProductDetail, setAiProductDetail] = useState<string | null>(null);
   const [aiProductQty, setAiProductQty] = useState(1);
@@ -3825,86 +3827,122 @@ export default function LedgerDetail() {
         {/* AJ 账本：业务报销汇总面板 */}
         {isCustomAJ && (
           <div className="px-4 pt-2 pb-4">
-            {/* 时间维度下拉 */}
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs text-white/80">报销汇总</span>
-              <div className="relative">
-                <select
-                  value={ajStatsPeriod}
-                  onChange={e => setAjStatsPeriod(e.target.value as any)}
-                  className="appearance-none text-xs text-white/90 pl-2 pr-6 py-1 rounded-full border border-white/30 cursor-pointer outline-none focus:outline-none focus:ring-0"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}
-                >
-                  <option value="all" style={{ color: '#222' }}>全部</option>
-                  <option value="day" style={{ color: '#222' }}>今日</option>
-                  <option value="week" style={{ color: '#222' }}>本周</option>
-                  <option value="month" style={{ color: '#222' }}>本月</option>
-                  <option value="quarter" style={{ color: '#222' }}>本季度</option>
-                  <option value="year" style={{ color: '#222' }}>本年</option>
-                </select>
-                <svg className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 fill-white/70" viewBox="0 0 12 12"><path d="M6 8L2 4h8z"/></svg>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              {/* 开票总金额 */}
-              <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                <div className="text-[10px] text-white/70 mb-1">开票总额</div>
-                <div className="text-base font-bold text-white">
-                  {monthlyStats.expense > 0 ? `¥${monthlyStats.expense.toFixed(2)}` : '--'}
-                </div>
-              </div>
-              {/* 发票张数 */}
-              <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                <div className="text-[10px] text-white/70 mb-1">发票张数</div>
-                <div className="text-base font-bold text-white">
-                  {(() => {
-                    if (!transactionsData) return '--';
-                    let count = 0;
-                    const now = new Date();
-                    const today = now.toISOString().split('T')[0];
-                    const weekStart = (() => { const d = new Date(now); d.setDate(d.getDate() - d.getDay() + 1); return d.toISOString().split('T')[0]; })();
-                    const currentMonth = today.slice(0, 7);
-                    const currentYear = today.slice(0, 4);
-                    const currentQuarter = Math.floor(now.getMonth() / 3);
-                    const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
-                    transactionsData.forEach((day: any) => {
-                      let ok = false;
-                      if (ajStatsPeriod === 'all') ok = true;
-                      else if (ajStatsPeriod === 'day') ok = day.date === today;
-                      else if (ajStatsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
-                      else if (ajStatsPeriod === 'month') ok = day.date.startsWith(currentMonth);
-                      else if (ajStatsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
-                      else if (ajStatsPeriod === 'year') ok = day.date.startsWith(currentYear);
-                      if (ok) count += (day.records || []).length;
-                    });
-                    return count > 0 ? `${count}张` : '--';
-                  })()}
-                </div>
-              </div>
-              {/* 按企业分组 - 显示用户被授权的企业总数 */}
-              <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                <div className="text-[10px] text-white/70 mb-1">企业数</div>
-                <div className="text-base font-bold text-white">
-                  {ajAccessibleCompanies != null
-                    ? ((ajAccessibleCompanies as any[]).length > 0 ? `${(ajAccessibleCompanies as any[]).length}家` : '--')
-                    : '--'}
-                </div>
-              </div>
-            </div>
-            {/* 企业主专属入口：isAdmin角色（企业主）才显示 */}
+            {/* 企业主：视角切换按钮（企业负责人 / 业务负责人） */}
             {isAdmin && !viewAsUserId && (
-              <div className="mt-3">
+              <div className="flex items-center gap-2 mb-3">
                 <button
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-medium text-white/90 border border-white/30 hover:bg-white/10 transition-colors"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(8px)' }}
-                  onClick={() => setLocation(`/ledger/${ledgerId}/aj-owner-companies`)}
+                  onClick={() => setAjViewMode('owner')}
+                  className="flex-1 py-1.5 rounded-full text-xs font-medium transition-all"
+                  style={ajViewMode === 'owner'
+                    ? { backgroundColor: 'rgba(255,255,255,0.9)', color: '#8B0000', fontWeight: 700 }
+                    : { backgroundColor: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.3)' }
+                  }
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                  我的企业
+                  企业负责人
+                </button>
+                <button
+                  onClick={() => setAjViewMode('salesman')}
+                  className="flex-1 py-1.5 rounded-full text-xs font-medium transition-all"
+                  style={ajViewMode === 'salesman'
+                    ? { backgroundColor: 'rgba(255,255,255,0.9)', color: '#8B0000', fontWeight: 700 }
+                    : { backgroundColor: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.8)', border: '1px solid rgba(255,255,255,0.3)' }
+                  }
+                >
+                  业务负责人
                 </button>
               </div>
             )}
 
+            {/* 企业负责人视角：跳转到我的企业页面 */}
+            {isAdmin && !viewAsUserId && ajViewMode === 'owner' ? (
+              <div
+                className="rounded-2xl p-4 cursor-pointer active:opacity-80 transition-opacity"
+                style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}
+                onClick={() => setLocation(`/ledger/${ledgerId}/aj-owner-companies`)}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs text-white/70 mb-1">我的企业</div>
+                    <div className="text-base font-bold text-white">
+                      {ajAccessibleCompanies != null
+                        ? ((ajAccessibleCompanies as any[]).length > 0 ? `${(ajAccessibleCompanies as any[]).length}家` : '暂无企业')
+                        : '--'}
+                    </div>
+                    <div className="text-[10px] text-white/60 mt-1">点击进入企业管理</div>
+                  </div>
+                  <svg className="w-6 h-6 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" /></svg>
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* 业务负责人视角（或纯业务员）：报销汇总统计 */}
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs text-white/80">报销汇总</span>
+                  <div className="relative">
+                    <select
+                      value={ajStatsPeriod}
+                      onChange={e => setAjStatsPeriod(e.target.value as any)}
+                      className="appearance-none text-xs text-white/90 pl-2 pr-6 py-1 rounded-full border border-white/30 cursor-pointer outline-none focus:outline-none focus:ring-0"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}
+                    >
+                      <option value="all" style={{ color: '#222' }}>全部</option>
+                      <option value="day" style={{ color: '#222' }}>今日</option>
+                      <option value="week" style={{ color: '#222' }}>本周</option>
+                      <option value="month" style={{ color: '#222' }}>本月</option>
+                      <option value="quarter" style={{ color: '#222' }}>本季度</option>
+                      <option value="year" style={{ color: '#222' }}>本年</option>
+                    </select>
+                    <svg className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 fill-white/70" viewBox="0 0 12 12"><path d="M6 8L2 4h8z"/></svg>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {/* 开票总金额 */}
+                  <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                    <div className="text-[10px] text-white/70 mb-1">开票总额</div>
+                    <div className="text-base font-bold text-white">
+                      {monthlyStats.expense > 0 ? `¥${monthlyStats.expense.toFixed(2)}` : '--'}
+                    </div>
+                  </div>
+                  {/* 发票张数 */}
+                  <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                    <div className="text-[10px] text-white/70 mb-1">发票张数</div>
+                    <div className="text-base font-bold text-white">
+                      {(() => {
+                        if (!transactionsData) return '--';
+                        let count = 0;
+                        const now = new Date();
+                        const today = now.toISOString().split('T')[0];
+                        const weekStart = (() => { const d = new Date(now); d.setDate(d.getDate() - d.getDay() + 1); return d.toISOString().split('T')[0]; })();
+                        const currentMonth = today.slice(0, 7);
+                        const currentYear = today.slice(0, 4);
+                        const currentQuarter = Math.floor(now.getMonth() / 3);
+                        const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
+                        transactionsData.forEach((day: any) => {
+                          let ok = false;
+                          if (ajStatsPeriod === 'all') ok = true;
+                          else if (ajStatsPeriod === 'day') ok = day.date === today;
+                          else if (ajStatsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
+                          else if (ajStatsPeriod === 'month') ok = day.date.startsWith(currentMonth);
+                          else if (ajStatsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
+                          else if (ajStatsPeriod === 'year') ok = day.date.startsWith(currentYear);
+                          if (ok) count += (day.records || []).length;
+                        });
+                        return count > 0 ? `${count}张` : '--';
+                      })()}
+                    </div>
+                  </div>
+                  {/* 企业数 */}
+                  <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                    <div className="text-[10px] text-white/70 mb-1">企业数</div>
+                    <div className="text-base font-bold text-white">
+                      {ajAccessibleCompanies != null
+                        ? ((ajAccessibleCompanies as any[]).length > 0 ? `${(ajAccessibleCompanies as any[]).length}家` : '--')
+                        : '--'}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

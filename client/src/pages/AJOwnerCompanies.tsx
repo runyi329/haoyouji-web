@@ -314,6 +314,17 @@ export default function AJOwnerCompanies() {
 
   const { data: myCompanies, isLoading: companiesLoading } = (trpc as any).ledger.ajOwnerGetMyCompanies.useQuery({ ledgerId });
   const { data: myRequests, isLoading: requestsLoading } = (trpc as any).ledger.ajOwnerGetMyRequests.useQuery({ ledgerId });
+  const { data: companyStats } = (trpc as any).ledger.ajOwnerGetCompanyStats.useQuery({ ledgerId, period: 'month' });
+  const statsMap: Record<number, { invoiceCount: number; totalAmount: number; salesmanCount: number }> = {};
+  if (companyStats) {
+    (companyStats as any[]).forEach((s: any) => {
+      statsMap[s.companyId] = {
+        invoiceCount: Number(s.invoiceCount || 0),
+        totalAmount: Number(s.totalAmount || 0),
+        salesmanCount: Number(s.salesmanCount || 0),
+      };
+    });
+  }
   const pendingCount = (myRequests as any[] | undefined)?.filter((r: any) => r.status === 'pending').length || 0;
 
   const submitMutation = (trpc as any).ledger.ajOwnerSubmitRequest.useMutation({
@@ -511,6 +522,27 @@ export default function AJOwnerCompanies() {
                             </div>
                           )}
                         </div>
+                        {/* 本月统计数据 */}
+                        {(() => {
+                          const s = statsMap[company.id];
+                          if (!s) return null;
+                          return (
+                            <div className="mx-4 mb-3 grid grid-cols-3 gap-2">
+                              <div className="bg-red-50 rounded-xl px-2 py-2 text-center">
+                                <div className="text-[10px] text-gray-400 mb-0.5">本月发票</div>
+                                <div className="text-sm font-bold text-[#C0392B]">{s.invoiceCount > 0 ? `${s.invoiceCount}张` : '--'}</div>
+                              </div>
+                              <div className="bg-red-50 rounded-xl px-2 py-2 text-center">
+                                <div className="text-[10px] text-gray-400 mb-0.5">本月金额</div>
+                                <div className="text-sm font-bold text-[#C0392B]">{s.totalAmount > 0 ? `¥${s.totalAmount.toFixed(0)}` : '--'}</div>
+                              </div>
+                              <div className="bg-red-50 rounded-xl px-2 py-2 text-center">
+                                <div className="text-[10px] text-gray-400 mb-0.5">业务员</div>
+                                <div className="text-sm font-bold text-[#C0392B]">{s.salesmanCount > 0 ? `${s.salesmanCount}人` : '--'}</div>
+                              </div>
+                            </div>
+                          );
+                        })()}
                         {/* 开票分类入口 */}
                         <button
                           onClick={() => setExpenseTypeCompany({ id: company.id, name: company.name })}
