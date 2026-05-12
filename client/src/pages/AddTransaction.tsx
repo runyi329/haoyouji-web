@@ -837,38 +837,6 @@ const AddTransaction = () => {
               </div>
             </div>
 
-            {/* 报销类型（分类） - 已隐藏 */}
-            {false && <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
-              <div className="text-xs text-gray-400 mb-3 font-medium tracking-wider">报销类型</div>
-              <div className="flex flex-wrap gap-2">
-                {topCategories.map((category: any, index: number) => {
-                  const isSelected = selectedCategoryPath[0] === category.id;
-                  return (
-                    <button
-                      key={category.id}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                        isSelected
-                          ? 'bg-[#D32F2F] text-white shadow-sm'
-                          : 'bg-[#FFF0F0] text-[#D32F2F] border border-[#FFCDD2]'
-                      }`}
-                      onClick={() => handleCategorySelect(category.id, 0)}
-                    >
-                      {category.name}
-                    </button>
-                  );
-                })}
-                {canManageCategories && (
-                  <button
-                    className="px-4 py-2 rounded-lg text-sm border border-dashed border-[#D32F2F] text-[#D32F2F] flex items-center gap-1"
-                    onClick={() => setLocation(`/ledger/${id}/categories`)}
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>新增</span>
-                  </button>
-                )}
-              </div>
-            </div>}
-
             {/* 开票信息区域 */}
             <div
               className="px-5 py-4"
