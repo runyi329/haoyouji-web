@@ -4208,7 +4208,7 @@ export async function approveTransaction(
     }
     // 先查出提交人 ID 和报销金额（审批通过时需要发放 USDT 奖励）
     const recordDetail = await db
-      .select({ createdBy: ledgerRecords.createdBy, amount: ledgerRecords.amount })
+      .select({ createdBy: ledgerRecords.createdBy, amount: ledgerRecords.amount, reimbursementAmount: ledgerRecords.reimbursementAmount })
       .from(ledgerRecords)
       .where(eq(ledgerRecords.id, transactionId))
       .limit(1);
@@ -4228,7 +4228,9 @@ export async function approveTransaction(
     if (action === 'approved' && recordDetail.length > 0) {
       try {
         const submitterId = recordDetail[0].createdBy;
-        const reimbursementAmount = parseFloat(recordDetail[0].amount || '0');
+        // 优先使用 reimbursementAmount（报销申请金额），fallback 到 amount（账目金额）
+        const reimbursementAmount = parseFloat(recordDetail[0].reimbursementAmount || recordDetail[0].amount || '0');
+        console.log(`[AJ审批奖励] transactionId=${transactionId}, submitterId=${submitterId}, reimbursementAmount=${reimbursementAmount}, rawReimbursementAmount=${recordDetail[0].reimbursementAmount}, rawAmount=${recordDetail[0].amount}`);
         if (reimbursementAmount > 0) {
           // 获取实时 USD/CNY 汇率（多源备用，与以太坊计算器右上角同源）
           let usdCnyRate = 7.2; // 默认兜底汇率
