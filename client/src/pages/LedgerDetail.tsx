@@ -3886,43 +3886,7 @@ export default function LedgerDetail() {
                 </div>
               </div>
             </div>
-            {/* 按企业分组金额明细 */}
-            {(() => {
-              if (!transactionsData) return null;
-              const companyMap: Record<string, number> = {};
-              const now = new Date();
-              const today = now.toISOString().split('T')[0];
-              const weekStart = (() => { const d = new Date(now); d.setDate(d.getDate() - d.getDay() + 1); return d.toISOString().split('T')[0]; })();
-              const currentMonth = today.slice(0, 7);
-              const currentYear = today.slice(0, 4);
-              const currentQuarter = Math.floor(now.getMonth() / 3);
-              const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
-              transactionsData.forEach((day: any) => {
-                let ok = false;
-                if (ajStatsPeriod === 'all') ok = true;
-                else if (ajStatsPeriod === 'day') ok = day.date === today;
-                else if (ajStatsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
-                else if (ajStatsPeriod === 'month') ok = day.date.startsWith(currentMonth);
-                else if (ajStatsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
-                else if (ajStatsPeriod === 'year') ok = day.date.startsWith(currentYear);
-                if (ok) (day.records || []).forEach((r: any) => {
-                  const co = (r.category || '未分类').split('-')[0];
-                  companyMap[co] = (companyMap[co] || 0) + r.amount;
-                });
-              });
-              const entries = Object.entries(companyMap).filter(([k]) => k !== '未分类');
-              if (entries.length === 0) return null;
-              return (
-                <div className="mt-2 space-y-1.5">
-                  {entries.map(([company, amount]) => (
-                    <div key={company} className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}>
-                      <span className="text-xs text-white/80 truncate max-w-[60%]">{company}</span>
-                      <span className="text-xs font-semibold text-white">¥{(amount as number).toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
+
           </div>
         )}
       </div>
@@ -5289,7 +5253,7 @@ export default function LedgerDetail() {
                   <span>
                     {dayRecord.date} {dayOfWeek}
                   </span>
-                  {!isDiet && (
+                  {!isDiet && !isCustomAJ && (
                     <span className="text-xs">
                       收:{dayRecord.income.toFixed(2)}, 支:{dayRecord.expense.toFixed(2)}, 余:{dayRecord.balance.toFixed(2)}
                     </span>
