@@ -803,9 +803,9 @@ const AddTransaction = () => {
 
       {/* custom_aj 账本：报销申请单风格 */}
       {isCustomAJ ? (
-        <div className="flex-1 overflow-y-auto bg-[#F5F5F5]">
+        <div className="flex-1 overflow-hidden bg-[#F5F5F5] flex flex-col">
           {/* 单据头 */}
-          <div className="bg-[#1A2B4A] px-4 pt-2 pb-5 flex items-center justify-between">
+          <div className="bg-[#1A2B4A] px-4 pt-1.5 pb-3 flex items-center justify-between flex-shrink-0">
             <div>
               <div className="text-white text-xs opacity-80">申请人</div>
               <div className="text-white text-sm font-semibold mt-0.5">{applicantName}</div>
@@ -818,10 +818,10 @@ const AddTransaction = () => {
             </div>
           </div>
           {/* 表单卡片 */}
-          <div className="mx-3 -mt-3 rounded-2xl bg-white overflow-hidden shadow-md" style={{ border: '1px solid #E2E8F0' }}>
+          <div className="mx-3 -mt-3 rounded-2xl bg-white overflow-hidden shadow-md flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
             {/* 开票信息区域 */}
-            <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
-              <div className="flex items-center justify-between mb-3">
+            <div className="px-4 py-2" style={{ borderBottom: '1px solid #F5F5F5' }}>
+              <div className="flex items-center justify-between mb-1.5">
                 <span className="text-xs text-gray-400 font-medium tracking-wider">开票信息</span>
                 {hasMultipleCompanies && (
                   <button className="flex items-center gap-1 text-xs text-[#1A2B4A]" onClick={() => setShowCompanyPicker(true)}>
@@ -831,7 +831,7 @@ const AddTransaction = () => {
                 )}
               </div>
               {selectedCompany ? (
-                <div className="space-y-2.5">
+                <div className="space-y-1">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-base font-bold text-gray-800 flex-1 leading-snug">{selectedCompany.name}</span>
                     <button className="flex-shrink-0 p-1.5 rounded-full bg-gray-100 text-gray-500 active:bg-gray-200" onClick={() => { navigator.clipboard.writeText(selectedCompany.name); toast.success('已复制企业名称'); }} title="复制企业名称">
@@ -852,8 +852,8 @@ const AddTransaction = () => {
               )}
             </div>
             {/* 报销金额 - 手动填写区 */}
-            <div className="px-4 pt-3 pb-2" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
-              <div className="flex items-center gap-2 mb-1.5">
+            <div className="px-4 pt-2 pb-1" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+              <div className="flex items-center gap-2 mb-1">
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
                 <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#C9A84C', color: '#fff', fontSize: '10px' }}>必填</span>
               </div>
@@ -870,15 +870,15 @@ const AddTransaction = () => {
                       setAmount(val);
                     }
                   }}
-                  className="text-4xl font-light text-[#1A2B4A] bg-transparent border-none outline-none flex-1 placeholder-gray-200"
+                  className="text-3xl font-light text-[#1A2B4A] bg-transparent border-none outline-none flex-1 placeholder-gray-200"
                   style={{ caretColor: '#1A2B4A' }}
                   autoComplete="off"
                 />
               </div>
             </div>
             {/* 发票附件 - 手动操作区 */}
-            <div className="px-4 py-2.5" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
-              <div className="flex items-center gap-2 mb-2">
+            <div className="px-4 py-1.5" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+              <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>发票凭证</span>
                 <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#C9A84C', color: '#fff', fontSize: '10px' }}>必传</span>
               </div>
@@ -904,7 +904,7 @@ const AddTransaction = () => {
               }} />
               <div className="flex flex-wrap gap-2">
                 {uploadedImages.map((image, index) => (
-                  <div key={index} className="relative w-20 h-20 flex-shrink-0">
+                  <div key={index} className="relative w-16 h-16 flex-shrink-0">
                     <img src={image} alt={`发票${index + 1}`} className="w-full h-full object-cover rounded" />
                     <button className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#1A2B4A] text-white rounded-full flex items-center justify-center shadow" onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== index))}>
                       <X className="w-3 h-3" />
@@ -912,7 +912,7 @@ const AddTransaction = () => {
                   </div>
                 ))}
                 {uploadedImages.length < 10 && (
-                  <button className="w-20 h-20 flex-shrink-0 flex flex-col items-center justify-center gap-1 bg-[#F4F6F9] border border-[#C9A84C40] rounded text-[#1A2B4A]" onClick={() => fileInputRef.current?.click()}>
+                  <button className="w-16 h-16 flex-shrink-0 flex flex-col items-center justify-center gap-1 bg-[#F4F6F9] border border-[#C9A84C40] rounded text-[#1A2B4A]" onClick={() => fileInputRef.current?.click()}>
                     <ImageIcon className="w-6 h-6" />
                     <span className="text-xs">{uploadedImages.length > 0 ? `${uploadedImages.length}/10` : '上传'}</span>
                   </button>
@@ -925,18 +925,18 @@ const AddTransaction = () => {
           </div>
 
           {/* ===== 下方：费用报销明细单预览（紧凑小样） ===== */}
-          <div className="mx-3 mt-3 mb-3 bg-white rounded-xl overflow-hidden" style={{ boxShadow: '0 1px 8px rgba(26,43,74,0.08)', border: '1px solid #E2E8F0' }}>
+          <div className="mx-3 mt-2 mb-2 bg-white rounded-xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 1px 8px rgba(26,43,74,0.08)', border: '1px solid #E2E8F0' }}>
 
             {/* 顶部色条 */}
             <div style={{ height: 4, background: 'linear-gradient(90deg, #1A2B4A 0%, #C9A84C 100%)' }} />
 
             {/* 标题 */}
-            <div className="py-2 text-center" style={{ background: '#1A3A5C', borderBottom: '1.5px solid #C9A84C' }}>
+            <div className="py-1.5 text-center" style={{ background: '#1A3A5C', borderBottom: '1.5px solid #C9A84C' }}>
               <div className="text-[12px] font-bold text-white tracking-[0.15em]">费 用 报 销 明 细 单</div>
             </div>
 
             {/* 编制单位 + 填报日期 + 单位 */}
-            <div className="px-2 py-1 flex items-center justify-between text-[9px] text-gray-500" style={{ borderBottom: '1px solid #E0E0E0', background: '#FAFAFA' }}>
+            <div className="px-2 py-0.5 flex items-center justify-between text-[9px] text-gray-500" style={{ borderBottom: '1px solid #E0E0E0', background: '#FAFAFA' }}>
               <span>编制单位：<span className="text-gray-700">{selectedCompany?.name || '—'}</span></span>
               <span>填报日期：{selectedDate.getFullYear()}年 {String(selectedDate.getMonth()+1).padStart(2,'0')}月 {String(selectedDate.getDate()).padStart(2,'0')}日</span>
               <span>单位：元</span>
@@ -954,27 +954,27 @@ const AddTransaction = () => {
               </colgroup>
               <thead>
                 <tr style={{ background: '#1A3A5C', borderBottom: '1px solid #C9A84C' }}>
-                  <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20 whitespace-nowrap">序号</th>
-                  <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20">日期</th>
-                  <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20 whitespace-nowrap">费用名称</th>
-                  <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20">事项</th>
-                  <th className="px-1 py-1 text-center font-bold text-white border-r border-white/20 whitespace-nowrap">金额</th>
-                  <th className="px-1 py-1 text-center font-bold text-white whitespace-nowrap">附件</th>
+                  <th className="px-0.5 py-0.5 text-center font-bold text-white border-r border-white/20 whitespace-nowrap">序号</th>
+                  <th className="px-0.5 py-0.5 text-center font-bold text-white border-r border-white/20">日期</th>
+                  <th className="px-0.5 py-0.5 text-center font-bold text-white border-r border-white/20 whitespace-nowrap">费用名称</th>
+                  <th className="px-0.5 py-0.5 text-center font-bold text-white border-r border-white/20">事项</th>
+                  <th className="px-1 py-0.5 text-center font-bold text-white border-r border-white/20 whitespace-nowrap">金额</th>
+                  <th className="px-1 py-0.5 text-center font-bold text-white whitespace-nowrap">附件</th>
                 </tr>
               </thead>
               <tbody>
                 <tr style={{ background: '#fff' }}>
-                  <td className="px-0.5 py-2 text-center border-r border-gray-200 whitespace-nowrap">1</td>
-                  <td className="px-0.5 py-2 text-center border-r border-gray-200">{String(selectedDate.getMonth()+1).padStart(2,'0')}/{String(selectedDate.getDate()).padStart(2,'0')}</td>
-                  <td className="px-0.5 py-2 text-center border-r border-gray-200 font-semibold text-[#1A3A5C] whitespace-nowrap">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[0] : '其他'}</td>
-                  <td className="px-1 py-2 border-r border-gray-200 text-gray-500 text-[9px]">{expenseReasonLabel ? (expenseReasonLabel.split(' · ')[1] || '—') : '—'}</td>
-                  <td className="px-1 py-2 text-right border-r border-gray-200 font-bold text-[#1A3A5C] whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td className="px-1 py-2 text-center whitespace-nowrap">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</td>
+                  <td className="px-0.5 py-1 text-center border-r border-gray-200 whitespace-nowrap">1</td>
+                  <td className="px-0.5 py-1 text-center border-r border-gray-200">{String(selectedDate.getMonth()+1).padStart(2,'0')}/{String(selectedDate.getDate()).padStart(2,'0')}</td>
+                  <td className="px-0.5 py-1 text-center border-r border-gray-200 font-semibold text-[#1A3A5C] whitespace-nowrap">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[0] : '其他'}</td>
+                  <td className="px-1 py-1 border-r border-gray-200 text-gray-500 text-[9px]">{expenseReasonLabel ? (expenseReasonLabel.split(' · ')[1] || '—') : '—'}</td>
+                  <td className="px-1 py-1 text-right border-r border-gray-200 font-bold text-[#1A3A5C] whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-1 py-1 text-center whitespace-nowrap">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</td>
                 </tr>
               </tbody>
               <tfoot>
                 <tr style={{ background: '#EEF2F7' }}>
-                  <td colSpan={3} className="px-1.5 py-1.5 font-bold border-r border-gray-300 whitespace-nowrap">合计金额（大写）</td>
+                  <td colSpan={3} className="px-1.5 py-1 font-bold border-r border-gray-300 whitespace-nowrap">合计金额（大写）</td>
                   <td className="px-1.5 py-1.5 font-bold text-[#1A3A5C] border-r border-gray-300">
                     {(() => {
                       const num = parseFloat(amount) || 0;
@@ -998,15 +998,15 @@ const AddTransaction = () => {
                       return result;
                     })()}
                   </td>
-                  <td className="px-1 py-1.5 text-right font-bold text-[#1A3A5C] border-r border-gray-300 whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td className="px-1 py-1.5 text-center whitespace-nowrap">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</td>
+                  <td className="px-1 py-1 text-right font-bold text-[#1A3A5C] border-r border-gray-300 whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-1 py-1 text-center whitespace-nowrap">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</td>
                 </tr>
               </tfoot>
             </table>
 
             {/* 审批栏：仅报销人 + 经手人（手写签字样式） */}
             <div className="grid text-[10px]" style={{ gridTemplateColumns: '1fr 1fr' }}>
-              <div className="px-2 py-2 border-r border-gray-200">
+              <div className="px-2 py-1.5 border-r border-gray-200">
                 <span className="text-gray-400">报销人：</span>
                 <span
                   className="ml-1"
@@ -1020,7 +1020,7 @@ const AddTransaction = () => {
                   }}
                 >{applicantName}</span>
               </div>
-              <div className="px-2 py-2">
+              <div className="px-2 py-1.5">
                 <span className="text-gray-400">经手人：</span>
                 <span
                   className="ml-1"
@@ -1048,7 +1048,7 @@ const AddTransaction = () => {
           </div>
 
           {/* AI 提示语 */}
-          <div className="mx-3 mt-3 px-3 py-2.5 rounded-xl" style={{ background: '#F0F4FF', border: '1px solid #D0DAF5' }}>
+          <div className="mx-3 mt-1.5 px-3 py-2 rounded-xl flex-shrink-0" style={{ background: '#F0F4FF', border: '1px solid #D0DAF5' }}>
             <div className="text-xs leading-relaxed" style={{ color: '#4A5A8A' }}>
               <span className="font-semibold" style={{ color: '#1A2B4A' }}>AI 财会助理提示：</span>
               报销事项明细单（费用名称/事项）由 AI 智能生成，如有必要，AI 财会将自动检验内容合规性，直接提交即可。
@@ -1076,7 +1076,7 @@ const AddTransaction = () => {
               ))}
             </div>
           )}
-          <div className="h-6" />
+          <div className="h-2" />
         </div>
       ) : isCustomAA ? (
         <div className="flex-1 overflow-y-auto flex flex-col bg-[#F4F6F9]">
