@@ -666,7 +666,7 @@ export default function TransactionDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* 撤回报销申请确认对话框 */
+      {/* 撤回报销申请确认对话框 */}
       <Dialog open={showWithdrawReimbursementDialog} onOpenChange={setShowWithdrawReimbursementDialog}>
         <DialogContent>
           <DialogHeader>
