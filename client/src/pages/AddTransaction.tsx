@@ -731,6 +731,11 @@ const AddTransaction = () => {
     if (viewAsUserId) {
       payload.viewAsUserId = viewAsUserId;
     }
+    // AJ账本：必须至少上传一张图片
+    if (isCustomAJ && uploadedImages.length === 0) {
+      toast.error("请至少上传一张开票凭证图片");
+      return;
+    }
     // AJ账本：传递开票企业信息，提交后自动设为「申请中」状态
     // AJ账本：报销事由写入description
     if (isCustomAJ && expenseReasonLabel) {
@@ -883,14 +888,14 @@ const AddTransaction = () => {
                   )}
                 </div>
               ) : (
-                <div className="text-sm text-gray-300">请选择企业（选填）</div>
+                <div className="text-sm text-gray-300">请选择企业</div>
               )}
             </div>
             {/* 发票日期 - 已隐藏 */}
 
             {/* 发票附件 */}
             <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
-              <div className="text-xs text-gray-400 mb-3 font-medium tracking-wider">发票附件 <span className="text-gray-300 font-normal">(选填)</span></div>
+              <div className="text-xs text-gray-400 mb-3 font-medium tracking-wider">开票信息</div>
               <input
                 ref={fileInputRef}
                 type="file"
