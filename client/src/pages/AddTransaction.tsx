@@ -803,62 +803,175 @@ const AddTransaction = () => {
 
       {/* custom_aj 账本：报销申请单风格 */}
       {isCustomAJ ? (
-        <div className="flex-1 overflow-y-auto" style={{ background: '#F0F2F5' }}>
+        <div className="flex-1 overflow-y-auto bg-[#F5F5F5]">
+          {/* 单据头 */}
+          <div className="bg-[#1A2B4A] px-4 pt-2 pb-5 flex items-center justify-between">
+            <div>
+              <div className="text-white text-xs opacity-80">申请人</div>
+              <div className="text-white text-sm font-semibold mt-0.5">{applicantName}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-white text-xs opacity-80">申请日期</div>
+              <div className="text-white text-sm font-semibold mt-0.5">
+                {selectedDate.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+              </div>
+            </div>
+          </div>
+          {/* 表单卡片 */}
+          <div className="mx-3 -mt-3 rounded-2xl bg-white overflow-hidden shadow-md" style={{ border: '1px solid #E2E8F0' }}>
+            {/* 报销金额 */}
+            <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
+              <div className="text-xs text-gray-400 mb-1 font-medium tracking-wider">报销金额（元）</div>
+              <div className="flex items-end gap-1">
+                <span className="text-2xl font-light text-gray-400">¥</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={amount || ""}
+                  placeholder="0.00"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (/^\d*\.?\d{0,2}$/.test(val) || val === "") {
+                      setAmount(val);
+                    }
+                  }}
+                  className="text-4xl font-light text-[#1A2B4A] bg-transparent border-none outline-none flex-1 placeholder-gray-200"
+                  style={{ caretColor: '#1A2B4A' }}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+            {/* 开票信息区域 */}
+            <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs text-gray-400 font-medium tracking-wider">开票信息</span>
+                {hasMultipleCompanies && (
+                  <button className="flex items-center gap-1 text-xs text-[#1A2B4A]" onClick={() => setShowCompanyPicker(true)}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    <span>{selectedCompany ? '更换' : '选择企业'}</span>
+                  </button>
+                )}
+              </div>
+              {selectedCompany ? (
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-base font-bold text-gray-800 flex-1 leading-snug">{selectedCompany.name}</span>
+                    <button className="flex-shrink-0 p-1.5 rounded-full bg-gray-100 text-gray-500 active:bg-gray-200" onClick={() => { navigator.clipboard.writeText(selectedCompany.name); toast.success('已复制企业名称'); }} title="复制企业名称">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
+                  </div>
+                  {selectedCompany.taxNo && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-base text-gray-600 flex-1">{selectedCompany.taxNo}</span>
+                      <button className="flex-shrink-0 p-1.5 rounded-full bg-gray-100 text-gray-500 active:bg-gray-200" onClick={() => { navigator.clipboard.writeText(selectedCompany.taxNo); toast.success('已复制税号'); }} title="复制税号">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-300">请选择企业</div>
+              )}
+            </div>
+            {/* 发票附件 */}
+            <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
+              <div className="text-xs text-gray-400 mb-3 font-medium tracking-wider">发票凭证</div>
+              <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
+                const files = e.target.files;
+                if (!files || files.length === 0) return;
+                const MAX_IMAGES = 10;
+                const remaining = MAX_IMAGES - uploadedImages.length;
+                if (remaining <= 0) { toast.error('最多只能上传10张图片'); e.target.value = ''; return; }
+                const filesToProcess = Array.from(files).slice(0, remaining);
+                toast.loading('上传中...', { id: 'upload' });
+                try {
+                  const uploadedUrls: string[] = [];
+                  for (const file of filesToProcess) {
+                    const { base64 } = await autoCompressImage(file, 'normal');
+                    const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
+                    if (result.success && result.imageUrl) uploadedUrls.push(result.imageUrl);
+                  }
+                  if (uploadedUrls.length > 0) { setUploadedImages(prev => [...prev, ...uploadedUrls]); toast.success(`成功上传 ${uploadedUrls.length} 张图片`, { id: 'upload' }); }
+                  else toast.dismiss('upload');
+                } catch (error) { console.error('图片上传失败:', error); toast.error('图片上传失败，请重试', { id: 'upload' }); }
+                e.target.value = '';
+              }} />
+              <div className="flex flex-wrap gap-2">
+                {uploadedImages.map((image, index) => (
+                  <div key={index} className="relative w-20 h-20 flex-shrink-0">
+                    <img src={image} alt={`发票${index + 1}`} className="w-full h-full object-cover rounded" />
+                    <button className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#1A2B4A] text-white rounded-full flex items-center justify-center shadow" onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== index))}>
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                {uploadedImages.length < 10 && (
+                  <button className="w-20 h-20 flex-shrink-0 flex flex-col items-center justify-center gap-1 bg-[#F4F6F9] border border-[#C9A84C40] rounded text-[#1A2B4A]" onClick={() => fileInputRef.current?.click()}>
+                    <ImageIcon className="w-6 h-6" />
+                    <span className="text-xs">{uploadedImages.length > 0 ? `${uploadedImages.length}/10` : '上传'}</span>
+                  </button>
+                )}
+                {uploadedImages.length === 0 && (
+                  <div className="flex items-center text-xs text-red-400 gap-1"><span>未上传（必填）</span></div>
+                )}
+              </div>
+            </div>
+          </div>
 
-          {/* ===== 单据纸张 ===== */}
-          <div className="mx-3 mt-3 mb-3 bg-white rounded-2xl overflow-hidden" style={{ boxShadow: '0 2px 16px rgba(26,43,74,0.10)', border: '1px solid #E2E8F0' }}>
+          {/* ===== 下方：费用报销明细单预览（紧凑小样） ===== */}
+          <div className="mx-3 mt-3 mb-3 bg-white rounded-xl overflow-hidden" style={{ boxShadow: '0 1px 8px rgba(26,43,74,0.08)', border: '1px solid #E2E8F0' }}>
 
             {/* 顶部色条 */}
-            <div style={{ height: 6, background: 'linear-gradient(90deg, #1A2B4A 0%, #C9A84C 100%)' }} />
+            <div style={{ height: 4, background: 'linear-gradient(90deg, #1A2B4A 0%, #C9A84C 100%)' }} />
 
-            {/* 标题区 - 深色表头样式 */}
-            <div className="px-4 py-3 text-center" style={{ background: '#1A3A5C', borderBottom: '2px solid #C9A84C' }}>
-              <div className="text-[16px] font-bold text-white tracking-[0.2em]">费用报销明细单</div>
+            {/* 标题 */}
+            <div className="py-2 text-center" style={{ background: '#1A3A5C', borderBottom: '1.5px solid #C9A84C' }}>
+              <div className="text-[12px] font-bold text-white tracking-[0.15em]">费 用 报 销 明 细 单</div>
             </div>
 
-            {/* 编制单位 + 填报日期 + 单位行 */}
-            <div className="px-3 py-1.5 flex items-center justify-between text-[10px] text-gray-500" style={{ borderBottom: '1px solid #D0D0D0', background: '#FAFAFA' }}>
-              <span>编制单位：<span className="text-gray-700 font-medium">{selectedCompany?.name || '—'}</span></span>
-              <span>填报日期：<span className="text-gray-700 font-medium">{selectedDate.getFullYear()}年 {String(selectedDate.getMonth()+1).padStart(2,'0')}月 {String(selectedDate.getDate()).padStart(2,'0')}日</span></span>
+            {/* 编制单位 + 填报日期 + 单位 */}
+            <div className="px-2 py-1 flex items-center justify-between text-[9px] text-gray-500" style={{ borderBottom: '1px solid #E0E0E0', background: '#FAFAFA' }}>
+              <span>编制单位：<span className="text-gray-700">{selectedCompany?.name || '—'}</span></span>
+              <span>填报日期：{selectedDate.getFullYear()}年 {String(selectedDate.getMonth()+1).padStart(2,'0')}月 {String(selectedDate.getDate()).padStart(2,'0')}日</span>
               <span>单位：元</span>
             </div>
 
-            {/* 明细表头 */}
-            <div className="grid text-[10px] font-bold text-white" style={{ gridTemplateColumns: '2em 4.5em 3.5em 1fr 4em 3em', background: '#1A3A5C', borderBottom: '1px solid #C9A84C' }}>
-              <div className="px-1 py-1.5 text-center border-r border-white/20">序号</div>
-              <div className="px-1 py-1.5 text-center border-r border-white/20">业务发生日期</div>
-              <div className="px-1 py-1.5 text-center border-r border-white/20">费用名称</div>
-              <div className="px-1 py-1.5 text-center border-r border-white/20">事项</div>
-              <div className="px-1 py-1.5 text-center border-r border-white/20">金额</div>
-              <div className="px-1 py-1.5 text-center">附件张数</div>
+            {/* 表头 */}
+            <div className="grid text-[9px] font-bold text-white" style={{ gridTemplateColumns: '1.6em 3.8em 3em 1fr 3.8em 2.8em', background: '#1A3A5C', borderBottom: '1px solid #C9A84C' }}>
+              <div className="px-0.5 py-1 text-center border-r border-white/20">序号</div>
+              <div className="px-0.5 py-1 text-center border-r border-white/20">业务发生日期</div>
+              <div className="px-0.5 py-1 text-center border-r border-white/20">费用名称</div>
+              <div className="px-0.5 py-1 text-center border-r border-white/20">事项</div>
+              <div className="px-0.5 py-1 text-center border-r border-white/20">金额</div>
+              <div className="px-0.5 py-1 text-center">附件张数</div>
             </div>
 
-            {/* 明细行 - 自动填充 */}
-            <div className="grid text-[10px] text-gray-700" style={{ gridTemplateColumns: '2em 4.5em 3.5em 1fr 4em 3em', borderBottom: '1px solid #E0E0E0', background: '#fff' }}>
-              <div className="px-1 py-2 text-center border-r border-gray-200">1</div>
-              <div className="px-1 py-2 text-center border-r border-gray-200">{selectedDate.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}</div>
-              <div className="px-1 py-2 text-center border-r border-gray-200 font-medium">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[0] : '其他'}</div>
-              <div className="px-1 py-2 border-r border-gray-200">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[1] || expenseReasonLabel.split(' · ')[0] : '—'}</div>
-              <div className="px-1 py-2 text-right border-r border-gray-200 font-medium text-[#1A3A5C]">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <div className="px-1 py-2 text-center">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</div>
+            {/* 数据行 */}
+            <div className="grid text-[9px] text-gray-700" style={{ gridTemplateColumns: '1.6em 3.8em 3em 1fr 3.8em 2.8em', borderBottom: '1px solid #E8E8E8', background: '#fff' }}>
+              <div className="px-0.5 py-1.5 text-center border-r border-gray-200">1</div>
+              <div className="px-0.5 py-1.5 text-center border-r border-gray-200">{selectedDate.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}</div>
+              <div className="px-0.5 py-1.5 text-center border-r border-gray-200 font-medium">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[0] : '其他'}</div>
+              <div className="px-1 py-1.5 border-r border-gray-200 text-gray-600">{expenseReasonLabel ? (expenseReasonLabel.split(' · ')[1] || expenseReasonLabel.split(' · ')[0]) : '—'}</div>
+              <div className="px-0.5 py-1.5 text-right border-r border-gray-200 font-semibold text-[#1A3A5C]">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div className="px-0.5 py-1.5 text-center">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</div>
             </div>
 
-            {/* 空行占位 */}
+            {/* 空行 */}
             {[2,3].map(n => (
-              <div key={n} className="grid text-[10px] text-gray-300" style={{ gridTemplateColumns: '2em 4.5em 3.5em 1fr 4em 3em', borderBottom: '1px solid #EEEEEE', background: n%2===0?'#FAFAFA':'#fff' }}>
-                <div className="px-1 py-2 text-center border-r border-gray-100">{n}</div>
-                <div className="px-1 py-2 border-r border-gray-100" />
-                <div className="px-1 py-2 border-r border-gray-100" />
-                <div className="px-1 py-2 border-r border-gray-100" />
-                <div className="px-1 py-2 border-r border-gray-100" />
-                <div className="px-1 py-2" />
+              <div key={n} className="grid text-[9px]" style={{ gridTemplateColumns: '1.6em 3.8em 3em 1fr 3.8em 2.8em', borderBottom: '1px solid #F0F0F0', background: n%2===0?'#FAFAFA':'#fff' }}>
+                <div className="px-0.5 py-1.5 text-center border-r border-gray-100 text-gray-300">{n}</div>
+                <div className="px-0.5 py-1.5 border-r border-gray-100" />
+                <div className="px-0.5 py-1.5 border-r border-gray-100" />
+                <div className="px-0.5 py-1.5 border-r border-gray-100" />
+                <div className="px-0.5 py-1.5 border-r border-gray-100" />
+                <div className="px-0.5 py-1.5" />
               </div>
             ))}
 
             {/* 合计行 */}
-            <div className="grid text-[10px] font-bold" style={{ gridTemplateColumns: '7em 1fr 4em 3em', borderBottom: '2px solid #1A3A5C', background: '#EEF2F7' }}>
-              <div className="px-2 py-2 border-r border-gray-300">合计金额（大写）</div>
-              <div className="px-2 py-2 text-[#1A3A5C] border-r border-gray-300">
+            <div className="grid text-[9px] font-bold" style={{ gridTemplateColumns: '5.5em 1fr 3.8em 2.8em', borderBottom: '2px solid #1A3A5C', background: '#EEF2F7' }}>
+              <div className="px-1.5 py-1.5 border-r border-gray-300">合计金额（大写）</div>
+              <div className="px-1.5 py-1.5 text-[#1A3A5C] border-r border-gray-300">
                 {(() => {
                   const num = parseFloat(amount) || 0;
                   if (num <= 0) return '—';
@@ -881,107 +994,38 @@ const AddTransaction = () => {
                   return result;
                 })()}
               </div>
-              <div className="px-1 py-2 text-right font-bold text-[#1A3A5C] border-r border-gray-300">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <div className="px-1 py-2 text-center">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</div>
+              <div className="px-0.5 py-1.5 text-right font-bold text-[#1A3A5C] border-r border-gray-300">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div className="px-0.5 py-1.5 text-center">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</div>
             </div>
 
-            {/* 报销金额输入区（隐藏在表格中，点合计行可弹出修改） */}
-            <div className="px-3 py-2 flex items-center gap-2" style={{ borderBottom: '1px solid #E8E8E8', background: '#F7F9FC' }}>
-              <span className="text-[10px] text-gray-400 flex-shrink-0">报销金额：</span>
-              <span className="text-[10px] text-gray-400">¥</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={amount || ""}
-                placeholder="请输入金额"
-                onChange={(e) => {
-                  const val = e.target.value;
-                  if (/^\d*\.?\d{0,2}$/.test(val) || val === "") {
-                    setAmount(val);
-                  }
-                }}
-                className="text-sm font-bold text-[#1A2B4A] bg-transparent border-none outline-none flex-1 placeholder-gray-300"
-                style={{ caretColor: '#1A2B4A' }}
-                autoComplete="off"
-              />
-              {hasMultipleCompanies && (
-                <button className="flex items-center gap-1 text-[10px] text-[#1A3A5C] border border-[#1A3A5C]/30 rounded px-2 py-0.5 flex-shrink-0" onClick={() => setShowCompanyPicker(true)}>
-                  {selectedCompany ? '更换公司' : '选择公司'}
-                </button>
-              )}
-            </div>
-
-            {/* 发票凭证上传区 */}
-            <div className="px-3 py-2" style={{ borderBottom: '1px solid #E8E8E8', background: '#F7F9FC' }}>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-gray-400 flex-shrink-0">发票凭证：</span>
-                {uploadedImages.length === 0 && <span className="text-[10px] text-red-400">未上传（必填）</span>}
-                {uploadedImages.length > 0 && <span className="text-[10px] text-green-600">已上传 {uploadedImages.length} 张</span>}
-                <div className="flex gap-1.5 ml-auto flex-wrap">
-                  {uploadedImages.map((image, index) => (
-                    <div key={index} className="relative w-10 h-10 flex-shrink-0">
-                      <img src={image} alt={`发票${index + 1}`} className="w-full h-full object-cover rounded border border-gray-200" />
-                      <button className="absolute -top-1 -right-1 w-4 h-4 bg-[#1A2B4A] text-white rounded-full flex items-center justify-center" onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== index))}>
-                        <X className="w-2.5 h-2.5" />
-                      </button>
-                    </div>
-                  ))}
-                  {uploadedImages.length < 10 && (
-                    <button className="w-10 h-10 flex-shrink-0 flex flex-col items-center justify-center bg-white border border-dashed border-[#C9A84C] rounded text-[#1A3A5C]" onClick={() => fileInputRef.current?.click()}>
-                      <ImageIcon className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-              <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
-                const files = e.target.files;
-                if (!files || files.length === 0) return;
-                const remaining = 10 - uploadedImages.length;
-                if (remaining <= 0) { toast.error('最多只能上伐10张图片'); e.target.value = ''; return; }
-                const filesToProcess = Array.from(files).slice(0, remaining);
-                toast.loading('上传中...', { id: 'upload' });
-                try {
-                  const uploadedUrls: string[] = [];
-                  for (const file of filesToProcess) {
-                    const { base64 } = await autoCompressImage(file, 'normal');
-                    const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
-                    if (result.success && result.imageUrl) uploadedUrls.push(result.imageUrl);
-                  }
-                  if (uploadedUrls.length > 0) { setUploadedImages(prev => [...prev, ...uploadedUrls]); toast.success(`成功上传 ${uploadedUrls.length} 张图片`, { id: 'upload' }); }
-                  else toast.dismiss('upload');
-                } catch (error) { console.error('图片上传失败:', error); toast.error('图片上传失败，请重试', { id: 'upload' }); }
-                e.target.value = '';
-              }} />
-            </div>
-
-            {/* 审批栏 - 深色背景小字表格 */}
-            <div style={{ borderBottom: '1px solid #D0D0D0' }}>
-              <div className="grid text-[10px]" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                <div className="px-3 py-2 border-r border-gray-200" style={{ borderBottom: '1px solid #E8E8E8' }}>
+            {/* 审批栏 */}
+            <div>
+              <div className="grid text-[9px]" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                <div className="px-2 py-1.5 border-r border-gray-200" style={{ borderBottom: '1px solid #EEEEEE' }}>
                   <span className="text-gray-400">报销人：</span>
-                  <span className="font-semibold text-[#1A2B4A] ml-1">{applicantName}</span>
+                  <span className="font-semibold text-[#1A2B4A] ml-0.5">{applicantName}</span>
                 </div>
-                <div className="px-3 py-2" style={{ borderBottom: '1px solid #E8E8E8' }}>
+                <div className="px-2 py-1.5" style={{ borderBottom: '1px solid #EEEEEE' }}>
                   <span className="text-gray-400">分管领导（审核）：</span>
                 </div>
-                <div className="px-3 py-2 border-r border-gray-200" style={{ borderBottom: '1px solid #E8E8E8' }}>
+                <div className="px-2 py-1.5 border-r border-gray-200" style={{ borderBottom: '1px solid #EEEEEE' }}>
                   <span className="text-gray-400">财务会计（审核账据）：</span>
                 </div>
-                <div className="px-3 py-2" style={{ borderBottom: '1px solid #E8E8E8' }}>
+                <div className="px-2 py-1.5" style={{ borderBottom: '1px solid #EEEEEE' }}>
                   <span className="text-gray-400">财务经理（审核）：</span>
                 </div>
-                <div className="px-3 py-2 border-r border-gray-200">
+                <div className="px-2 py-1.5 border-r border-gray-200">
                   <span className="text-gray-400">财务总监（审核）：</span>
-                  {selectedCompany && <span className="text-[9px] text-gray-400 ml-1">{selectedCompany.name.slice(0,4)}财务部</span>}
+                  {selectedCompany && <span className="text-[8px] text-[#1A2B4A] ml-0.5">{selectedCompany.name.length > 6 ? selectedCompany.name.slice(0,4) + '…' : selectedCompany.name}财务部</span>}
                 </div>
-                <div className="px-3 py-2">
+                <div className="px-2 py-1.5">
                   <span className="text-gray-400">总经理（审批）：</span>
                 </div>
               </div>
             </div>
 
             {/* 底部色条 */}
-            <div style={{ height: 6, background: 'linear-gradient(90deg, #C9A84C 0%, #1A2B4A 100%)' }} />
+            <div style={{ height: 4, background: 'linear-gradient(90deg, #C9A84C 0%, #1A2B4A 100%)' }} />
 
           </div>
 
