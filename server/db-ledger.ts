@@ -704,31 +704,32 @@ export async function getLedgerById(ledgerId: number, userId: number) {
     const userRole = userRows[0]?.role;
     console.log('[getLedgerById] 用户角色:', userRole);
     
-    // super_admin 和 admin 跳过成员检查
+    // 无论是否系统管理员，都先查该用户在该账本中的实际成员角色
+    // super_admin/admin 只是跳过「必须是成员」的限制，但仍使用实际成员角色（含权限设置）
     let memberRole = 'viewer';
-    if (userRole === 'super_admin' || userRole === 'admin') {
-      console.log('[getLedgerById] 管理员角色，跳过成员检查');
-      memberRole = 'owner'; // 管理员视为 owner 权限
-    } else {
-      // 检查用户是否是账本成员
-      console.log('[getLedgerById] 开始检查成员权限...');
-      const member = await db
-        .select()
-        .from(ledgerMembers)
-        .where(
-          and(
-            eq(ledgerMembers.ledgerId, ledgerId),
-            eq(ledgerMembers.userId, userId)
-          )
+    const member = await db
+      .select()
+      .from(ledgerMembers)
+      .where(
+        and(
+          eq(ledgerMembers.ledgerId, ledgerId),
+          eq(ledgerMembers.userId, userId)
         )
-        .limit(1);
+      )
+      .limit(1);
 
-      console.log('[getLedgerById] 成员检查结果:', member);
-      if (member.length === 0) {
-        console.log('[getLedgerById] 用户不是账本成员');
-        throw new Error("您不是该账本的成员");
-      }
+    console.log('[getLedgerById] 成员检查结果:', member);
+    if (member.length > 0) {
+      // 用户是账本成员，使用实际角色
       memberRole = member[0].role;
+      console.log('[getLedgerById] 用户是账本成员，角色:', memberRole);
+    } else if (userRole === 'super_admin' || userRole === 'admin') {
+      // 系统管理员但不是账本成员，给予 admin 角色（可查看但无 owner 豁免）
+      console.log('[getLedgerById] 系统管理员但非账本成员，赋予 admin 角色');
+      memberRole = 'admin';
+    } else {
+      console.log('[getLedgerById] 用户不是账本成员');
+      throw new Error("您不是该账本的成员");
     }
 
     // 获取账本信息
