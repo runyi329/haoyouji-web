@@ -1830,38 +1830,23 @@ export async function updateMemberPermission(
     throw new Error("不能修改创建者的权限");
   }
   
-  // 根据权限类型更新对应字段
-  console.log('[updateMemberPermission] Input:', { ledgerId, memberId, permissionType, permissionValue });
+  // 根据权限类型更新对应字段（使用原生 SQL 参数绑定，避免 Drizzle 枚举字段处理问题）
+  const columnMap: Record<string, string> = {
+    view: 'permission_view',
+    add: 'permission_add',
+    edit: 'permission_edit',
+    delete: 'permission_delete',
+    backup: 'permission_backup',
+  };
+  const columnName = columnMap[permissionType];
+  if (!columnName) throw new Error(`无效的权限类型: ${permissionType}`);
   
-  // 确保 permissionValue 是字符串
-  const valueStr = String(permissionValue);
-  console.log('[updateMemberPermission] Value as string:', valueStr);
-  
-  const updateData: any = {};
-  switch (permissionType) {
-    case "view":
-      updateData.permissionView = valueStr;
-      break;
-    case "add":
-      updateData.permissionAdd = valueStr;
-      break;
-    case "edit":
-      updateData.permissionEdit = valueStr;
-      break;
-    case "delete":
-      updateData.permissionDelete = valueStr;
-      break;
-    case "backup":
-      updateData.permissionBackup = valueStr;
-      break;
-  }
-  
-  console.log('[updateMemberPermission] Update data:', updateData);
-  
-  await db
-    .update(ledgerMembers)
-    .set(updateData)
-    .where(eq(ledgerMembers.id, memberId));
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('Database connection failed');
+  await conn.execute(
+    `UPDATE ledger_members SET \`${columnName}\` = ? WHERE \`id\` = ?`,
+    [String(permissionValue), memberId]
+  );
   
   return { success: true };
 }
@@ -1892,45 +1877,23 @@ export async function updateDefaultPermission(
   if (ledger[0].createdBy !== requestUserId) {
     throw new Error("只有账本创建者可以修改默认权限设置");
   }
-  // 根据权限类型更新对应字段
-  console.log('[updateDefaultPermission] Input:', { ledgerId, permissionType, permissionValue });
+  // 根据权限类型更新对应字段（使用原生 SQL 参数绑定，避免 Drizzle 枚举字段处理问题）
+  const defaultColumnMap: Record<string, string> = {
+    view: 'default_permission_view',
+    add: 'default_permission_add',
+    edit: 'default_permission_edit',
+    delete: 'default_permission_delete',
+    backup: 'default_permission_backup',
+  };
+  const defaultColumnName = defaultColumnMap[permissionType];
+  if (!defaultColumnName) throw new Error(`无效的权限类型: ${permissionType}`);
   
-  // 确保 permissionValue 是字符串
-  const valueStr = String(permissionValue);
-  console.log('[updateDefaultPermission] Value as string:', valueStr);
-  
-  const updateData: any = {};
-  switch (permissionType) {
-    case "view":
-      updateData.defaultPermissionView = valueStr;
-      break;
-    case "add":
-      updateData.defaultPermissionAdd = valueStr;
-      break;
-    case "edit":
-      updateData.defaultPermissionEdit = valueStr;
-      break;
-    case "delete":
-      updateData.defaultPermissionDelete = valueStr;
-      break;
-    case "backup":
-      updateData.defaultPermissionBackup = valueStr;
-      break;
-    default:
-      throw new Error(`无效的权限类型: ${permissionType}`);
-  }
-  
-  console.log('[updateDefaultPermission] Update data:', updateData);
-  
-  // 防御性检查：确保 updateData 不为空
-  if (Object.keys(updateData).length === 0) {
-    throw new Error(`未能生成更新数据，permissionType: ${permissionType}, permissionValue: ${permissionValue}`);
-  }
-  
-  await db
-    .update(ledgers)
-    .set(updateData)
-    .where(eq(ledgers.id, ledgerId));
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('Database connection failed');
+  await conn.execute(
+    `UPDATE ledgers SET \`${defaultColumnName}\` = ? WHERE \`id\` = ?`,
+    [String(permissionValue), ledgerId]
+  );
   
   return { success: true };
 }
