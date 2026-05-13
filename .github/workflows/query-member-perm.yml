@@ -1,0 +1,42 @@
+name: 查询成员权限
+on:
+  workflow_dispatch:
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 设置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 124.223.54.69 >> ~/.ssh/known_hosts 2>/dev/null || true
+      - name: 查询成员权限
+        run: |
+          ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no root@124.223.54.69 << 'ENDSSH'
+            DATABASE_URL=$(grep "^DATABASE_URL=" /root/haoyouji-web/.env 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"' || echo "")
+            if [ -z "$DATABASE_URL" ]; then echo "未找到 DATABASE_URL"; exit 1; fi
+            pip3 install pymysql -q 2>/dev/null || true
+            python3 << PYEOF
+import re, pymysql, os
+url = "$DATABASE_URL"
+m = re.match(r'mysql://([^:]+):([^@]+)@([^:/]+):?(\d+)?/([^?]+)', url)
+if not m: exit("parse error: " + url[:50])
+user, pwd, host, port, db = m.groups()
+conn = pymysql.connect(host=host, port=int(port or 3306), user=user, password=pwd, database=db, charset='utf8mb4', connect_timeout=30)
+cur = conn.cursor()
+cur.execute("""
+  SELECT u.username, u.id, lm.ledgerId, lm.role, lm.permission_delete, lm.permission_view, lm.permission_add, lm.permission_edit
+  FROM ledger_members lm
+  JOIN users u ON u.id = lm.userId
+  WHERE u.username LIKE '%zhang%' OR u.username LIKE '%hui%'
+  ORDER BY u.username, lm.ledgerId
+""")
+rows = cur.fetchall()
+print(f"{'用户名':<15} {'ID':>6} {'账本ID':>8} {'角色':<10} {'删除':>6} {'查看':>6} {'添加':>6} {'修改':>6}")
+print("-" * 70)
+for r in rows:
+    print(f"{str(r[0]):<15} {r[1]:>6} {r[2]:>8} {str(r[3]):<10} {str(r[4]):>6} {str(r[5]):>6} {str(r[6]):>6} {str(r[7]):>6}")
+conn.close()
+PYEOF
+ENDSSH
