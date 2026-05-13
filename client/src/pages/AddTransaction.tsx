@@ -1006,17 +1006,20 @@ const AddTransaction = () => {
             <div className="px-5 py-3" style={{ borderBottom: '1px solid #F0F0F0' }}>
               <div className="flex items-center gap-1.5 mb-2">
                 <span className="text-[10px] text-gray-400 tracking-wider">报销事项</span>
-                <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(201,168,76,0.15)', color: '#C9A84C', fontWeight: 600 }}>AI 自动生成</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(201,168,76,0.15)', color: '#C9A84C', fontWeight: 600 }}>AI 会计证生成</span>
               </div>
               {parseFloat(amount) > 0 ? (
                 <p className="text-sm text-gray-700 leading-relaxed">
-                  兹因<span className="font-semibold text-[#1A2B4A]">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[1] || expenseReasonLabel : '业务活动'}</span>，
+                  本人<span className="font-semibold text-[#1A2B4A]">{applicantName}</span>，
+                  因{expenseReasonLabel ? (
+                    <span className="font-semibold text-[#1A2B4A]">{expenseReasonLabel.split(' · ')[0] === '差旅费' || expenseReasonLabel.split(' · ')[0] === '会议费' ? '出差公务需要' : expenseReasonLabel.split(' · ')[0] === '业务招待费' ? '业务招待需要' : expenseReasonLabel.split(' · ')[0] === '广告宣传费' || expenseReasonLabel.split(' · ')[0] === '培训教育费' ? '业务发展需要' : '日常运营需要'}</span>
+                  ) : <span className="font-semibold text-[#1A2B4A]">日常运营需要</span>}，
                   于<span className="font-semibold text-[#1A2B4A]">{selectedDate.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                  发生{expenseReasonLabel ? <span className="font-semibold text-[#1A2B4A]">&#8203;{expenseReasonLabel.split(' · ')[1] || expenseReasonLabel.split(' · ')[0]}</span> : ''}相关费用，
                   {selectedCompany ? (
-                    <>向<span className="font-semibold text-[#1A2B4A]">{selectedCompany.name}</span>申请报销</>
-                  ) : '申请报销'}
-                  人民币<span className="font-semibold text-[#1A2B4A]">（{expenseReasonLabel ? expenseReasonLabel.split(' · ')[0] : '其他'}）</span>
-                  <span className="font-bold text-[#C9A84C]">{parseFloat(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}元</span>整，请予审批。
+                    <>向<span className="font-semibold text-[#1A2B4A]">{selectedCompany.name}</span>申请报销人民币</>
+                  ) : '申请报销人民币'}
+                  <span className="font-bold text-[#C9A84C]">{parseFloat(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}元</span>整（大写：{(() => { const n = Math.round(parseFloat(amount)); const units = ['万','千','百','十','']; const chars = ['零','壹','贰','叁','肆','伍','陆','柒','捌','玖']; let r = ''; const s = String(n); for(let i=0;i<s.length;i++){r+=chars[parseInt(s[i])];if(s.length-i-1<units.length)r+=units[units.length-(s.length-i)];} return (r||零)+'元整'; })()}），请予审批。
                 </p>
               ) : (
                 <p className="text-sm text-gray-300">请先填写报销金额，系统自动生成报销申请正文</p>
@@ -1026,16 +1029,26 @@ const AddTransaction = () => {
             {/* 签名栏 */}
             <div className="grid grid-cols-3" style={{ borderBottom: '1px solid #F0F0F0' }}>
               <div className="px-3 py-4 text-center" style={{ borderRight: '1px solid #F0F0F0' }}>
-                <div className="text-[9px] text-gray-400 mb-3">申请人签字</div>
-                <div style={{ height: 1, background: '#E0E0E0', margin: '0 8px' }} />
+                <div className="text-[9px] text-gray-400 mb-2">申请人签字</div>
+                {applicantName && applicantName !== '—' ? (
+                  <div className="text-xs font-semibold text-[#1A2B4A] mt-1">{applicantName}</div>
+                ) : (
+                  <div style={{ height: 1, background: '#E0E0E0', margin: '8px 8px 0' }} />
+                )}
               </div>
               <div className="px-3 py-4 text-center" style={{ borderRight: '1px solid #F0F0F0' }}>
-                <div className="text-[9px] text-gray-400 mb-3">部门审核</div>
-                <div style={{ height: 1, background: '#E0E0E0', margin: '0 8px' }} />
+                <div className="text-[9px] text-gray-400 mb-2">部门审核</div>
+                {selectedCompany ? (
+                  <div className="text-[10px] font-semibold text-[#1A2B4A] mt-1 leading-tight">
+                    {selectedCompany.name.length > 6 ? selectedCompany.name.slice(0, 6) + '…' : selectedCompany.name}财务部
+                  </div>
+                ) : (
+                  <div style={{ height: 1, background: '#E0E0E0', margin: '8px 8px 0' }} />
+                )}
               </div>
               <div className="px-3 py-4 text-center">
-                <div className="text-[9px] text-gray-400 mb-3">财务审批</div>
-                <div style={{ height: 1, background: '#E0E0E0', margin: '0 8px' }} />
+                <div className="text-[9px] text-gray-400 mb-2">财务审批</div>
+                <div style={{ height: 1, background: '#E0E0E0', margin: '8px 8px 0' }} />
               </div>
             </div>
 
