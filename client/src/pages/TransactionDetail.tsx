@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { ChevronLeft, ChevronRight, Edit, Image, PenTool, Check, X, Hourglass } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -286,6 +286,19 @@ export default function TransactionDetail() {
       toast.success('申请已撤回');
       setShowWithdrawDialog(false);
       refetchChangeRequest();
+    },
+    onError: (error) => {
+      toast.error(error.message || '撤回失败');
+    },
+  });
+
+  // 撤回报销申请 mutation
+  const [showWithdrawReimbursementDialog, setShowWithdrawReimbursementDialog] = React.useState(false);
+  const withdrawReimbursementMutation = trpc.ledger.withdrawReimbursement.useMutation({
+    onSuccess: () => {
+      toast.success('报销申请已撤回');
+      setShowWithdrawReimbursementDialog(false);
+      refetch();
     },
     onError: (error) => {
       toast.error(error.message || '撤回失败');
@@ -598,6 +611,22 @@ export default function TransactionDetail() {
         </div>
       )}
 
+      {/* 待审批且是自己提交的：显示撤回报销申请按鈕 */}
+      {transaction.approvalStatus === 'pending' && transaction.createdBy === user?.id && (
+        <div className="bg-white px-4 py-3">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
+            <div className="text-sm text-yellow-800 font-medium mb-1">报销申请待审批</div>
+            <div className="text-xs text-yellow-600 mb-2">已提交报销申请，等待审批中...</div>
+            <button
+              onClick={() => setShowWithdrawReimbursementDialog(true)}
+              className="w-full py-2 bg-white border border-yellow-300 text-yellow-700 rounded-lg text-sm font-medium"
+            >
+              撤回申请
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 已审批账目且有待审批申请：单独渲染，不受外层审批员条件限制 */}
       {isApproved && pendingChangeRequest && (
         <div className="bg-white px-4 py-3">
@@ -736,6 +765,30 @@ export default function TransactionDetail() {
               className="bg-amber-600 hover:bg-amber-700 text-white"
             >
               {withdrawChangeRequestMutation.isPending ? '撤回中...' : '确认撤回'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 撤回报销申请确认对话框 */}
+      <Dialog open={showWithdrawReimbursementDialog} onOpenChange={setShowWithdrawReimbursementDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>撤回报销申请</DialogTitle>
+            <DialogDescription>
+              确定要撤回这条报销申请吗？撤回后账目将恢复为未提交状态，可重新提交。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowWithdrawReimbursementDialog(false)}>
+              取消
+            </Button>
+            <Button
+              onClick={() => withdrawReimbursementMutation.mutate({ ledgerId, recordId: transactionId })}
+              disabled={withdrawReimbursementMutation.isPending}
+              className="bg-yellow-600 hover:bg-yellow-700 text-white"
+            >
+              {withdrawReimbursementMutation.isPending ? '撤回中...' : '确认撤回'}
             </Button>
           </DialogFooter>
         </DialogContent>

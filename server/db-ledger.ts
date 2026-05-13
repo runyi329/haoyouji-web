@@ -3342,6 +3342,8 @@ export async function getTransactionDetail(
       reimbursedBy: ledgerRecords.reimbursedBy,
       pendingType: ledgerRecords.pendingType,
       pendingIncludeStats: ledgerRecords.pendingIncludeStats,
+      ajStatus: ledgerRecords.ajStatus,
+      ajCreatedBy: ledgerRecords.createdBy,
     })
     .from(ledgerRecords)
     .where(
@@ -3450,7 +3452,14 @@ export async function getTransactionDetail(
     updatedAt: transaction.updatedAt,
     member: memberWithAvatar,
     recordDate: transaction.date,
-    approvalStatus: 'not_required' as const, // 默认不需要审批
+    approvalStatus: (() => {
+      // AJ账本发票审批状态映射
+      const aj = transaction.ajStatus;
+      if (aj === 'pending') return 'pending' as const;
+      if (aj === 'approved') return 'approved' as const;
+      if (aj === 'rejected') return 'rejected' as const;
+      return 'not_required' as const;
+    })(),
     images: (() => {
       // 优先使用 images JSON 字段（多图），降级到 imageUrl（单图兼容旧数据）
       if (transaction.images) {
