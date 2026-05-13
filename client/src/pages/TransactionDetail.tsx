@@ -269,9 +269,10 @@ export default function TransactionDetail() {
   const [showWithdrawReimbursementDialog, setShowWithdrawReimbursementDialog] = React.useState(false);
   const withdrawReimbursementMutation = trpc.ledger.withdrawReimbursement.useMutation({
     onSuccess: () => {
-      toast.success('报销申请已撤回');
+      toast.success('申请已撤回，账目已取消');
       setShowWithdrawReimbursementDialog(false);
-      refetch();
+      // 撤回即删除，跳转回账本列表
+      setLocation(`/ledger/${ledgerId}`);
     },
     onError: (error) => {
       toast.error(error.message || '撤回失败');

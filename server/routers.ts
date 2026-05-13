@@ -9042,12 +9042,12 @@ ${klinesSummary}
         if (!record) throw new TRPCError({ code: 'NOT_FOUND', message: '账目不存在' });
         if (record.aj_status !== 'pending') throw new TRPCError({ code: 'BAD_REQUEST', message: '只能撤回待审批状态的申请' });
         if (record.createdBy !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '只能撤回自己提交的申请' });
-        // 将 aj_status 重置为 null（未提交状态）
+        // 撤回即删除：软删除账目（视同取消申请，账目不再显示）
         await db.execute(
-          'UPDATE ledger_records SET aj_status = NULL, updatedAt = NOW() WHERE id = ?',
+          'UPDATE ledger_records SET deleted_at = NOW(), aj_status = NULL, updatedAt = NOW() WHERE id = ?',
           [input.recordId]
         );
-        return { success: true };
+        return { success: true, deleted: true };
       }),
 
     // ==================== 账目变更申请 ====================
