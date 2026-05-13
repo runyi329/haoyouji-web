@@ -1057,7 +1057,7 @@ const AddTransaction = () => {
 
           {/* 重复账目警告 */}
           {duplicateWarnings.length > 0 && (
-            <div className="mx-3 mt-3">
+            <div className="mx-3 mt-1.5">
               {duplicateWarnings.map((w, idx) => (
                 <div
                   key={idx}
@@ -1076,7 +1076,17 @@ const AddTransaction = () => {
               ))}
             </div>
           )}
-          <div className="h-2" />
+          {/* 弹性空白：吸收剩余空间，使提交按鈕自然贴底 */}
+          <div className="flex-1" />
+          {/* 提交按鈕（移入内容区内部，贴底显示） */}
+          <div className="flex-shrink-0 px-4 py-4 bg-white" style={{ borderTop: '1px solid #E2E8F0' }}>
+            <button
+              className="w-full bg-[#1A2B4A] text-white py-4 rounded-2xl text-base font-bold active:bg-[#152238] shadow-md tracking-wider"
+              onClick={handleSave}
+            >
+              提交申请
+            </button>
+          </div>
         </div>
       ) : isCustomAA ? (
         <div className="flex-1 overflow-y-auto flex flex-col bg-[#F4F6F9]">
@@ -1694,16 +1704,7 @@ const AddTransaction = () => {
           </div>
         </div>
       )}
-      {isCustomAJ && (
-        <div className="flex-shrink-0 px-4 py-4 bg-white" style={{ borderTop: '1px solid #E2E8F0' }}>
-          <button
-            className="w-full bg-[#1A2B4A] text-white py-4 rounded-2xl text-base font-bold active:bg-[#152238] shadow-md tracking-wider"
-            onClick={handleSave}
-          >
-            提交申请
-          </button>
-        </div>
-      )}
+      {/* isCustomAJ 提交按鈕已移入内容区内部 */}
 
       {/* 日期选择抽屉 */}
       <Sheet open={isDateSheetOpen} onOpenChange={setIsDateSheetOpen}>
