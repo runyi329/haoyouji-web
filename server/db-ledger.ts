@@ -3537,11 +3537,12 @@ export async function deleteTransaction(
   }
 
   const memberRole = memberRows[0].role as string;
-  const permDelete = (memberRows[0].permission_delete as string) || 'own';
-  const isAdminOrOwner = memberRole === 'admin' || memberRole === 'owner';
+  const permDelete = (memberRows[0].permission_delete as string) || 'none';
+  const isOwner = memberRole === 'owner';
 
-  // 权限校验：none = 不允许删除
-  if (!isAdminOrOwner) {
+  // 权限校验：只有 owner（账本创建者）始终可删除，不受 permission_delete 限制
+  // 其他所有人（包括 admin）都必须遵守 permission_delete 设置
+  if (!isOwner) {
     if (permDelete === 'none') {
       throw new Error("您没有删除账目的权限");
     }
