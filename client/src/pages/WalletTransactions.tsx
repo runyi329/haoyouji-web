@@ -9,9 +9,10 @@ export default function WalletTransactions() {
   const [, setLocation] = useLocation();
   const [activeType, setActiveType] = useState<TransactionType>("all");
 
+  // 只用两个接口：充值订单 + balance_history（含 withdraw/reward）
+  // 去掉了 getMyManualBalances，避免重复请求和重复数据
   const rechargeQuery = trpc.recharge.getMyOrders.useQuery({ limit: 100 });
-  const balanceHistoryQuery = trpc.recharge.getBalanceHistory.useQuery({ limit: 100 });
-  const manualBalancesQuery = trpc.recharge.getMyManualBalances.useQuery({ limit: 100 });
+  const balanceHistoryQuery = trpc.recharge.getBalanceHistory.useQuery({ limit: 200 });
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -46,6 +47,8 @@ export default function WalletTransactions() {
 
   const getAllTransactions = () => {
     const transactions: any[] = [];
+
+    // 来源1：充值订单（recharge_orders 表）
     if (rechargeQuery.data) {
       (rechargeQuery.data as any[]).forEach((order: any) => {
         transactions.push({
@@ -56,36 +59,34 @@ export default function WalletTransactions() {
         });
       });
     }
+
+    // 来源2：balance_history（提现 + 奖励 + 其他流水）
     if (balanceHistoryQuery.data) {
       (balanceHistoryQuery.data as any[]).forEach((history: any) => {
+        const amt = Number(history.amount);
         if (history.type === 'withdraw') {
           transactions.push({
-            id: `balance-${history.id}`, type: 'withdraw',
-            amount: Math.abs(history.amount), status: 'completed',
+            id: `bh-${history.id}`, type: 'withdraw',
+            amount: Math.abs(amt), status: 'completed',
             description: history.description, createdAt: history.createdAt,
           });
         } else if (history.type === 'reward') {
           transactions.push({
-            id: `balance-${history.id}`, type: 'reward',
-            amount: Math.abs(Number(history.amount)), status: 'completed',
+            id: `bh-${history.id}`, type: 'reward',
+            amount: Math.abs(amt), status: 'completed',
+            description: history.description, createdAt: history.createdAt,
+          });
+        } else if (history.type === 'consume' || history.type === 'refund') {
+          transactions.push({
+            id: `bh-${history.id}`,
+            type: amt < 0 ? 'deduct' : 'reward',
+            amount: Math.abs(amt), status: 'completed',
             description: history.description, createdAt: history.createdAt,
           });
         }
       });
     }
-    if (manualBalancesQuery.data) {
-      (manualBalancesQuery.data as any[]).forEach((m: any) => {
-        const amt = Number(m.amount);
-        transactions.push({
-          id: `manual-${m.id}`,
-          type: amt > 0 ? 'reward' : 'deduct',
-          amount: Math.abs(amt),
-          status: 'completed',
-          description: m.note || '',
-          createdAt: m.created_at,
-        });
-      });
-    }
+
     return transactions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   };
 
@@ -95,7 +96,8 @@ export default function WalletTransactions() {
     if (activeType === "reward") return all.filter(t => t.type === 'reward' || t.type === 'deduct');
     return all.filter(t => t.type === activeType);
   })();
-  const isLoading = rechargeQuery.isLoading || balanceHistoryQuery.isLoading || manualBalancesQuery.isLoading;
+
+  const isLoading = rechargeQuery.isLoading || balanceHistoryQuery.isLoading;
 
   return (
     <div className="min-h-screen pb-20" style={{ background: 'linear-gradient(160deg,#111111 0%,#1a1a1a 100%)' }}>
@@ -146,6 +148,7 @@ export default function WalletTransactions() {
               const statusConfig = getStatusConfig(transaction.status);
               const StatusIcon = statusConfig.icon;
               const isRecharge = transaction.type === 'recharge';
+              const isPositive = isRecharge || transaction.type === 'reward';
               return (
                 <div
                   key={transaction.id}
@@ -154,13 +157,13 @@ export default function WalletTransactions() {
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center">
-                      {(isRecharge || transaction.type === 'reward')
+                      {isPositive
                         ? <ArrowDownCircle className="w-5 h-5 text-green-400 mr-2" />
                         : <ArrowUpCircle className="w-5 h-5 text-red-400 mr-2" />
                       }
                       <div>
                         <div className="font-medium text-white text-sm">
-                          {isRecharge ? '充値' : transaction.type === 'withdraw' ? '提现' : transaction.type === 'reward' ? '奖励' : '扫费'}
+                          {isRecharge ? '充値' : transaction.type === 'withdraw' ? '提现' : transaction.type === 'reward' ? '奖励' : '扣费'}
                           {transaction.network && (
                             <span className="text-xs text-gray-500 ml-2">{transaction.network}</span>
                           )}
@@ -169,8 +172,8 @@ export default function WalletTransactions() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className={`text-lg font-bold ${(isRecharge || transaction.type === 'reward') ? 'text-green-400' : 'text-red-400'}`}>
-                        {(isRecharge || transaction.type === 'reward') ? '+' : '-'}{transaction.amount} USDT
+                      <div className={`text-lg font-bold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                        {isPositive ? '+' : '-'}{transaction.amount} USDT
                       </div>
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border mt-1 ${statusConfig.bgColor} ${statusConfig.color} ${statusConfig.borderColor}`}>
                         <StatusIcon className="w-3 h-3 mr-1" />
