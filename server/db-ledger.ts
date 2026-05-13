@@ -4272,6 +4272,14 @@ export async function approveTransaction(
             await db.execute(
               sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${ledgerId}, ${submitterId}, ${usdtRewarded}, ${rewardNote}, ${nowStr}, ${nowStr})`
             );
+            // 同时写入 balance_history，使奖励记录天然出现在钱包明细中
+            try {
+              await db.execute(
+                sql`INSERT INTO balance_history (user_id, amount, type, related_id, balance, description, created_at) VALUES (${submitterId}, ${usdtRewarded}, 'reward', ${transactionId}, 0, ${rewardNote}, ${nowStr})`
+              );
+            } catch (bhErr: any) {
+              console.warn('[AJ审批奖励] balance_history 写入失败（不影响主流程）:', bhErr?.message);
+            }
             console.log(`[AJ审批奖励] 已发放 ${usdtRewarded} USDT 给用户 ${submitterId}，账本 ${ledgerId}`);
           }
         }
