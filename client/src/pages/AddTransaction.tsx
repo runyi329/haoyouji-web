@@ -91,6 +91,7 @@ const AddTransaction = () => {
   const searchString = useSearch();
   const urlParams = new URLSearchParams(searchString);
   const editId = urlParams.get('edit');
+  const fromPage = urlParams.get('from'); // 来源页面：home=首页智能会计
   const isEditMode = !!editId;
   const editTransactionId = editId ? parseInt(editId) : undefined;
   // 视角切换：管理员切换为业务员视角时，从 URL参数或sessionStorage获取 viewAs 参数
@@ -762,7 +763,7 @@ const AddTransaction = () => {
     <div className={`h-screen flex flex-col ${isCustomAJ ? 'bg-[#F4F6F9]' : 'bg-[#FAF3ED]'}`}>
       {/* 顶部导航 */}
       <div className={`${isCustomAJ ? 'bg-[#1A2B4A]' : 'bg-[#D32F2F]'} text-white p-3 flex items-center justify-between flex-shrink-0`}>
-        <button onClick={() => setLocation(`/ledger/${id}`)}>
+        <button onClick={() => setLocation(fromPage === 'home' ? '/' : `/ledger/${id}`)}>
           <ChevronLeft className="w-5 h-5" />
         </button>
         <h1 className="text-base font-semibold">{isCustomAJ ? (isEditMode ? "修改报销申请" : "报销申请单") : (isEditMode ? "修改账目" : "添加账目")}</h1>
