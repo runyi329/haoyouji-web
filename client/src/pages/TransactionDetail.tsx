@@ -24,7 +24,7 @@ export default function TransactionDetail() {
 
   // 获取全局主题色
   const { currentTheme, customColors } = useColorTheme();
-  const themeColors = customColors || currentTheme.colors;
+  const baseThemeColors = customColors || currentTheme.colors;
 
   const ledgerId = params?.ledgerId ? parseInt(params.ledgerId) : 1;
   const transactionId = params?.transactionId ? parseInt(params.transactionId) : 1;
@@ -37,6 +37,12 @@ export default function TransactionDetail() {
   
   // 获取账本详情（用于判断角色）
   const { data: ledgerData } = trpc.ledger.getById.useQuery({ ledgerId });
+
+  // AJ 报销账本使用深蓝金色系，覆盖全局主题色
+  const isAJLedger = ledgerData?.type === 'custom_aj';
+  const themeColors = isAJLedger
+    ? { ...baseThemeColors, primary: '#1A2B4A', accent1: '#FFFFFF', background: '#F4F6F9', text: '#1A2B4A' }
+    : baseThemeColors;
 
   // 获取审批规则（判断当前用户是否是审批人）
   const { data: approvalRules } = trpc.ledger.getApprovalRules.useQuery({
@@ -658,7 +664,7 @@ export default function TransactionDetail() {
                 deleteMutation.mutate({ recordId: transactionId });
               }}
               disabled={deleteMutation.isPending}
-              className="bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+              className={`${isAJLedger ? 'bg-[#1A2B4A] hover:bg-[#152238]' : 'bg-[#D32F2F] hover:bg-[#B71C1C]'} text-white`}
             >
               {deleteMutation.isPending ? '删除中...' : '确认删除'}
             </Button>
@@ -734,7 +740,7 @@ export default function TransactionDetail() {
             <Button 
               onClick={confirmApproval}
               disabled={approveMutation.isPending}
-              className={approvalAction === 'approved' ? 'bg-[#4CAF50] hover:bg-green-700' : 'bg-[#D32F2F] hover:bg-[#D32F2F]'}
+              className={approvalAction === 'approved' ? 'bg-[#4CAF50] hover:bg-green-700' : (isAJLedger ? 'bg-[#1A2B4A] hover:bg-[#152238]' : 'bg-[#D32F2F] hover:bg-[#D32F2F]')}
             >
               {approveMutation.isPending ? '处理中...' : '确认'}
             </Button>
