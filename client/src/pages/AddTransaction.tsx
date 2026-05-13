@@ -937,7 +937,7 @@ const AddTransaction = () => {
             </div>
 
             {/* 表头 */}
-            <div className="grid text-[10px] font-bold text-white" style={{ gridTemplateColumns: '1.6em 3.6em 3.5em 1fr 5em 2.6em', background: '#1A3A5C', borderBottom: '1px solid #C9A84C' }}>
+            <div className="grid text-[10px] font-bold text-white" style={{ gridTemplateColumns: '1.6em 3.6em 3.5em 1fr auto auto', background: '#1A3A5C', borderBottom: '1px solid #C9A84C' }}>
               <div className="px-0.5 py-1 text-center border-r border-white/20">序号</div>
               <div className="px-0.5 py-1 text-center border-r border-white/20">日期</div>
               <div className="px-0.5 py-1 text-center border-r border-white/20">费用名称</div>
@@ -947,7 +947,7 @@ const AddTransaction = () => {
             </div>
 
             {/* 数据行 */}
-            <div className="grid text-[10px] text-gray-700" style={{ gridTemplateColumns: '1.6em 3.6em 3.5em 1fr 5em 2.6em', borderBottom: '2px solid #1A3A5C', background: '#fff' }}>
+            <div className="grid text-[10px] text-gray-700" style={{ gridTemplateColumns: '1.6em 3.6em 3.5em 1fr auto auto', borderBottom: '2px solid #1A3A5C', background: '#fff' }}>
               <div className="px-0.5 py-2 text-center border-r border-gray-200">1</div>
               <div className="px-0.5 py-2 text-center border-r border-gray-200">{String(selectedDate.getMonth()+1).padStart(2,'0')}/{String(selectedDate.getDate()).padStart(2,'0')}</div>
               <div className="px-0.5 py-2 text-center border-r border-gray-200 font-semibold text-[#1A3A5C]">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[0] : '其他'}</div>
@@ -957,7 +957,7 @@ const AddTransaction = () => {
             </div>
 
             {/* 合计行 */}
-            <div className="grid text-[10px] font-bold" style={{ gridTemplateColumns: '5.5em 1fr 5em 2.6em', borderBottom: '2px solid #1A3A5C', background: '#EEF2F7' }}>
+            <div className="grid text-[10px] font-bold" style={{ gridTemplateColumns: '5.5em 1fr auto auto', borderBottom: '2px solid #1A3A5C', background: '#EEF2F7' }}>
               <div className="px-1.5 py-1.5 border-r border-gray-300">合计金额（大写）</div>
               <div className="px-1.5 py-1.5 text-[#1A3A5C] border-r border-gray-300">
                 {(() => {
