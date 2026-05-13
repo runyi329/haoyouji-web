@@ -936,55 +936,67 @@ const AddTransaction = () => {
               <span>单位：元</span>
             </div>
 
-            {/* 表头 */}
-            <div className="grid text-[10px] font-bold text-white" style={{ gridTemplateColumns: '2em 4em 4em 1fr auto minmax(2em,auto)', background: '#1A3A5C', borderBottom: '1px solid #C9A84C' }}>
-              <div className="px-0.5 py-1 text-center border-r border-white/20">序号</div>
-              <div className="px-0.5 py-1 text-center border-r border-white/20">日期</div>
-              <div className="px-0.5 py-1 text-center border-r border-white/20">费用名称</div>
-              <div className="px-0.5 py-1 text-center border-r border-white/20">事项</div>
-              <div className="px-1 py-1 text-center border-r border-white/20 whitespace-nowrap">金额</div>
-              <div className="px-1 py-1 text-center whitespace-nowrap">附件</div>
-            </div>
-
-            {/* 数据行 */}
-            <div className="grid text-[10px] text-gray-700" style={{ gridTemplateColumns: '2em 4em 4em 1fr auto minmax(2em,auto)', borderBottom: '2px solid #1A3A5C', background: '#fff' }}>
-              <div className="px-0.5 py-2 text-center border-r border-gray-200">1</div>
-              <div className="px-0.5 py-2 text-center border-r border-gray-200">{String(selectedDate.getMonth()+1).padStart(2,'0')}/{String(selectedDate.getDate()).padStart(2,'0')}</div>
-              <div className="px-0.5 py-2 text-center border-r border-gray-200 font-semibold text-[#1A3A5C]">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[0] : '其他'}</div>
-              <div className="px-1 py-2 border-r border-gray-200 text-gray-500 text-[9px]">{expenseReasonLabel ? (expenseReasonLabel.split(' · ')[1] || '—') : '—'}</div>
-              <div className="px-1 py-2 text-right border-r border-gray-200 font-bold text-[#1A3A5C] whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <div className="px-1 py-2 text-center whitespace-nowrap">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</div>
-            </div>
-
-            {/* 合计行 */}
-            <div className="grid text-[10px] font-bold" style={{ gridTemplateColumns: '5.5em 1fr auto minmax(2em,auto)', borderBottom: '2px solid #1A3A5C', background: '#EEF2F7' }}>
-              <div className="px-1.5 py-1.5 border-r border-gray-300">合计金额（大写）</div>
-              <div className="px-1.5 py-1.5 text-[#1A3A5C] border-r border-gray-300">
-                {(() => {
-                  const num = parseFloat(amount) || 0;
-                  if (num <= 0) return '—';
-                  const units = ['', '拾', '佰', '仟', '万', '拾万', '佰万', '仟万', '亿'];
-                  const digits = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
-                  const intPart = Math.floor(num);
-                  const decPart = Math.round((num - intPart) * 100);
-                  let result = '';
-                  const intStr = intPart.toString();
-                  for (let i = 0; i < intStr.length; i++) {
-                    const d = parseInt(intStr[i]);
-                    const u = units[intStr.length - 1 - i];
-                    if (d === 0) { if (result && result[result.length-1] !== '零') result += '零'; }
-                    else result += digits[d] + u;
-                  }
-                  result = result.replace(/零+$/, '');
-                  if (decPart === 0) result += '元整';
-                  else if (decPart % 10 === 0) result += '元' + digits[Math.floor(decPart/10)] + '角';
-                  else result += '元' + digits[Math.floor(decPart/10)] + '角' + digits[decPart%10] + '分';
-                  return result;
-                })()}
-              </div>
-              <div className="px-1 py-1.5 text-right font-bold text-[#1A3A5C] border-r border-gray-300">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <div className="px-0.5 py-1.5 text-center">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</div>
-            </div>
+            {/* 明细表格 - 用 table 确保列宽完全对齐 */}
+            <table className="w-full text-[10px] border-collapse" style={{ borderBottom: '2px solid #1A3A5C' }}>
+              <colgroup>
+                <col style={{ width: '2em' }} />
+                <col style={{ width: '4em' }} />
+                <col style={{ width: '4em' }} />
+                <col />
+                <col style={{ width: '1%', whiteSpace: 'nowrap' }} />
+                <col style={{ width: '1%', whiteSpace: 'nowrap' }} />
+              </colgroup>
+              <thead>
+                <tr style={{ background: '#1A3A5C', borderBottom: '1px solid #C9A84C' }}>
+                  <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20">序号</th>
+                  <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20">日期</th>
+                  <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20">费用名称</th>
+                  <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20">事项</th>
+                  <th className="px-1 py-1 text-center font-bold text-white border-r border-white/20 whitespace-nowrap">金额</th>
+                  <th className="px-1 py-1 text-center font-bold text-white whitespace-nowrap">附件</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ background: '#fff' }}>
+                  <td className="px-0.5 py-2 text-center border-r border-gray-200">1</td>
+                  <td className="px-0.5 py-2 text-center border-r border-gray-200">{String(selectedDate.getMonth()+1).padStart(2,'0')}/{String(selectedDate.getDate()).padStart(2,'0')}</td>
+                  <td className="px-0.5 py-2 text-center border-r border-gray-200 font-semibold text-[#1A3A5C]">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[0] : '其他'}</td>
+                  <td className="px-1 py-2 border-r border-gray-200 text-gray-500 text-[9px]">{expenseReasonLabel ? (expenseReasonLabel.split(' · ')[1] || '—') : '—'}</td>
+                  <td className="px-1 py-2 text-right border-r border-gray-200 font-bold text-[#1A3A5C] whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-1 py-2 text-center whitespace-nowrap">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr style={{ background: '#EEF2F7' }}>
+                  <td colSpan={2} className="px-1.5 py-1.5 font-bold border-r border-gray-300">合计金额（大写）</td>
+                  <td colSpan={2} className="px-1.5 py-1.5 font-bold text-[#1A3A5C] border-r border-gray-300">
+                    {(() => {
+                      const num = parseFloat(amount) || 0;
+                      if (num <= 0) return '—';
+                      const units = ['', '拾', '佰', '仟', '万', '拾万', '佰万', '仟万', '亿'];
+                      const digits = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
+                      const intPart = Math.floor(num);
+                      const decPart = Math.round((num - intPart) * 100);
+                      let result = '';
+                      const intStr = intPart.toString();
+                      for (let i = 0; i < intStr.length; i++) {
+                        const d = parseInt(intStr[i]);
+                        const u = units[intStr.length - 1 - i];
+                        if (d === 0) { if (result && result[result.length-1] !== '零') result += '零'; }
+                        else result += digits[d] + u;
+                      }
+                      result = result.replace(/零+$/, '');
+                      if (decPart === 0) result += '元整';
+                      else if (decPart % 10 === 0) result += '元' + digits[Math.floor(decPart/10)] + '角';
+                      else result += '元' + digits[Math.floor(decPart/10)] + '角' + digits[decPart%10] + '分';
+                      return result;
+                    })()}
+                  </td>
+                  <td className="px-1 py-1.5 text-right font-bold text-[#1A3A5C] border-r border-gray-300 whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-1 py-1.5 text-center whitespace-nowrap">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</td>
+                </tr>
+              </tfoot>
+            </table>
 
             {/* 审批栏：仅报销人 + 经手人 */}
             <div className="grid text-[10px]" style={{ gridTemplateColumns: '1fr 1fr' }}>
