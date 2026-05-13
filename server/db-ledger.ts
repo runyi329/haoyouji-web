@@ -3526,16 +3526,31 @@ export async function deleteTransaction(
   const ledgerId = record.ledgerId;
   console.log('[deleteTransaction] 找到记录:', { recordId, ledgerId, createdBy: record.createdBy });
   
-  // 验证用户是否是账本成员
+  // 验证用户是否是账本成员，并获取权限
   const [memberRows] = await conn.execute(
-    'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+    'SELECT id, role, permission_delete FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
     [ledgerId, userId]
   ) as any;
   
   if (!memberRows || memberRows.length === 0) {
     throw new Error("您不是该账本的成员");
   }
-  
+
+  const memberRole = memberRows[0].role as string;
+  const permDelete = (memberRows[0].permission_delete as string) || 'own';
+  const isAdminOrOwner = memberRole === 'admin' || memberRole === 'owner';
+
+  // 权限校验：none = 不允许删除
+  if (!isAdminOrOwner) {
+    if (permDelete === 'none') {
+      throw new Error("您没有删除账目的权限");
+    }
+    // own = 只能删自己添加的
+    if (permDelete === 'own' && record.createdBy !== userId) {
+      throw new Error("您只能删除自己添加的账目");
+    }
+  }
+
   // 软删除：使用原始SQL直接更新 deleted_at 和 deleted_by
   console.log('[deleteTransaction] 执行软删除:', { recordId, userId });
   await conn.execute(

@@ -606,7 +606,7 @@ export default function TransactionDetail() {
           </button>
           {/* 删除按钮：根据权限设置判断显示，all=可删全部，own=只能删自己的，none=不显示 */}
           {(() => {
-            const perm = transaction.userPermissionDelete || 'own';
+            const perm = transaction.userPermissionDelete || 'none';
             const isOwnerOrAdmin = isAdminOrOwner;
             // owner/admin 始终可删除
             if (isOwnerOrAdmin) {
