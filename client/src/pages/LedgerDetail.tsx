@@ -2823,7 +2823,7 @@ export default function LedgerDetail() {
       backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"), repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(58,20,0,0.018) 2px, rgba(58,20,0,0.018) 3px), repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(58,20,0,0.012) 4px, rgba(58,20,0,0.012) 5px)`,
     } : {}}>
       {/* 顶部区域 */}
-      <div className="pb-4" style={isCustomAI ? { flexShrink: 0, background: 'linear-gradient(160deg, #3D1F0D 0%, #5C2E10 30%, #3D1F0D 100%)', color: '#1A0A00', borderBottom: '1px solid rgba(58,20,0,0.4)' } : (isCustomAF || isCustomAH) ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', color: '#FFFFFF' } : isCustomAJ ? { backgroundColor: '#D32F2F', color: '#FFFFFF' } : { backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
+      <div className="pb-4" style={isCustomAI ? { flexShrink: 0, background: 'linear-gradient(160deg, #3D1F0D 0%, #5C2E10 30%, #3D1F0D 100%)', color: '#1A0A00', borderBottom: '1px solid rgba(58,20,0,0.4)' } : (isCustomAF || isCustomAH) ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', color: '#FFFFFF' } : isCustomAJ ? { backgroundColor: '#1A2B4A', color: '#FFFFFF' } : { backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
         {/* AF/AH 账本：顶部两行布局 */}
         {(isCustomAF || isCustomAH || isCustomAI || isCustomAJ) ? (
           <div className="px-4 pt-3 pb-2">
@@ -3313,7 +3313,7 @@ export default function LedgerDetail() {
                     style={{ backgroundColor: '#FFFFFF' }}
                     onClick={() => setLocation(`/ledger/${ledgerId}/diet-members`)}
                   >
-                    <Users className="w-5 h-5" style={{ color: '#D32F2F' }} />
+                    <Users className="w-5 h-5" style={{ color: '#1A2B4A' }} />
                   </div>
                 )}
                 {/* 普通账本：查找按鈕 */}
@@ -3323,7 +3323,7 @@ export default function LedgerDetail() {
                     style={{ backgroundColor: '#FFFFFF' }}
                     onClick={() => setLocation(`/ledger/${ledgerId}/filter`)}
                   >
-                    <Search className="w-5 h-5" style={{ color: '#D32F2F' }} />
+                    <Search className="w-5 h-5" style={{ color: '#1A2B4A' }} />
                   </div>
                 )}
                 {/* 普通账本：数据统计按鈕 */}
@@ -3333,7 +3333,7 @@ export default function LedgerDetail() {
                     style={{ backgroundColor: '#FFFFFF' }}
                     onClick={() => setLocation(`/ledger/${ledgerId}/report`)}
                   >
-                    <BarChart3 className="w-5 h-5" style={{ color: '#D32F2F' }} />
+                    <BarChart3 className="w-5 h-5" style={{ color: '#1A2B4A' }} />
                   </div>
                 )}
                 {/* 资金方：ETH持仓计算器快捷按钮 */}
@@ -3361,7 +3361,7 @@ export default function LedgerDetail() {
                     style={{ backgroundColor: '#FFFFFF' }}
                     onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
                   >
-                    <Settings className="w-5 h-5" style={{ color: '#D32F2F' }} />
+                    <Settings className="w-5 h-5" style={{ color: '#1A2B4A' }} />
                   </div>
                 )}
               </div>
@@ -5480,7 +5480,7 @@ export default function LedgerDetail() {
                       /* ===== 普通账本：原有行内样式 ===== */
                       <div
                         key={record.id}
-                        className="bg-white rounded-lg p-2 flex items-center gap-2.5 cursor-pointer hover:bg-[#FFEBEE] transition-colors"
+                        className="bg-white rounded-lg p-2 flex items-center gap-2.5 cursor-pointer hover:bg-[#EEF2F8] transition-colors"
                         onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
                       >
                         {/* 成员头像 */}
@@ -5524,7 +5524,7 @@ export default function LedgerDetail() {
                             )}
                             {/* 待审批图标 */}
                             {record.approvalStatus === 'pending' && (
-                              <span className="ml-1 text-[#D32F2F] text-xs flex items-center gap-0.5">
+                              <span className="ml-1 text-[#1A2B4A] text-xs flex items-center gap-0.5">
                                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
                                   <circle cx="12" cy="12" r="10" opacity="0.2" />
                                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" opacity="0.3" />
@@ -5552,7 +5552,7 @@ export default function LedgerDetail() {
                             // 分类名已包含单位（如"体重/斤"、"BMI"、"胸围/cm"），右侧只显示纯数字
                             const val = record.amount;
                             return (
-                              <div className="text-sm font-semibold flex-shrink-0 text-[#D32F2F]">
+                              <div className="text-sm font-semibold flex-shrink-0 text-[#1A2B4A]">
                                 {val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)}
                               </div>
                             );
