@@ -1004,11 +1004,23 @@ const AddTransaction = () => {
 
             {/* 报销事项 */}
             <div className="px-5 py-3" style={{ borderBottom: '1px solid #F0F0F0' }}>
-              <div className="text-[10px] text-gray-400 mb-2 tracking-wider">报销事项</div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(201,168,76,0.15)', color: '#C9A84C', fontWeight: 600 }}>AI</span>
-                <span className="text-sm text-gray-700">{expenseReasonLabel || '请填写报销金额后自动生成'}</span>
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="text-[10px] text-gray-400 tracking-wider">报销事项</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(201,168,76,0.15)', color: '#C9A84C', fontWeight: 600 }}>AI 自动生成</span>
               </div>
+              {parseFloat(amount) > 0 ? (
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  兹因<span className="font-semibold text-[#1A2B4A]">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[1] || expenseReasonLabel : '业务活动'}</span>，
+                  于<span className="font-semibold text-[#1A2B4A]">{selectedDate.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                  {selectedCompany ? (
+                    <>向<span className="font-semibold text-[#1A2B4A]">{selectedCompany.name}</span>申请报销</>
+                  ) : '申请报销'}
+                  人民币<span className="font-semibold text-[#1A2B4A]">（{expenseReasonLabel ? expenseReasonLabel.split(' · ')[0] : '其他'}）</span>
+                  <span className="font-bold text-[#C9A84C]">{parseFloat(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}元</span>整，请予审批。
+                </p>
+              ) : (
+                <p className="text-sm text-gray-300">请先填写报销金额，系统自动生成报销申请正文</p>
+              )}
             </div>
 
             {/* 签名栏 */}
