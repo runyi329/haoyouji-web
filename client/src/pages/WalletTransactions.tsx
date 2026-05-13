@@ -64,6 +64,12 @@ export default function WalletTransactions() {
             amount: Math.abs(history.amount), status: 'completed',
             description: history.description, createdAt: history.createdAt,
           });
+        } else if (history.type === 'reward') {
+          transactions.push({
+            id: `balance-${history.id}`, type: 'reward',
+            amount: Math.abs(Number(history.amount)), status: 'completed',
+            description: history.description, createdAt: history.createdAt,
+          });
         }
       });
     }
