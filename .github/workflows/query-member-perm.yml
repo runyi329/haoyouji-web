@@ -1,6 +1,6 @@
 name: 查询成员权限
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
 jobs:
   query:
     runs-on: ubuntu-latest
