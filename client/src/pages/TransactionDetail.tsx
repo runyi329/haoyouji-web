@@ -257,40 +257,7 @@ export default function TransactionDetail() {
     },
   });
 
-  // ========== 变更申请相关 ==========
-  const [showChangeRequestDialog, setShowChangeRequestDialog] = useState(false);
-  const [changeRequestType, setChangeRequestType] = useState<'modify' | 'delete'>('delete');
-  const [showWithdrawDialog, setShowWithdrawDialog] = useState(false);
-
-  // 查询该账目是否有待审批的变更申请
-  const { data: pendingChangeRequest, refetch: refetchChangeRequest } = trpc.ledger.getRecordChangeRequest.useQuery(
-    { recordId: transactionId },
-    { enabled: transactionId > 0 }
-  );
-
-  // 提交变更申请
-  const submitChangeRequestMutation = trpc.ledger.submitChangeRequest.useMutation({
-    onSuccess: () => {
-      toast.success(changeRequestType === 'delete' ? '删除申请已提交，等待管理员审批' : '修改申请已提交，等待管理员审批');
-      setShowChangeRequestDialog(false);
-      refetchChangeRequest();
-    },
-    onError: (error) => {
-      toast.error(error.message || '提交申请失败');
-    },
-  });
-
-  // 撤回变更申请
-  const withdrawChangeRequestMutation = trpc.ledger.withdrawChangeRequest.useMutation({
-    onSuccess: () => {
-      toast.success('申请已撤回');
-      setShowWithdrawDialog(false);
-      refetchChangeRequest();
-    },
-    onError: (error) => {
-      toast.error(error.message || '撤回失败');
-    },
-  });
+  // ========== 变更申请相关（已简化，仅保留报销申请撤回）==========
 
   // 撤回报销申请 mutation
   const [showWithdrawReimbursementDialog, setShowWithdrawReimbursementDialog] = React.useState(false);
@@ -628,56 +595,37 @@ export default function TransactionDetail() {
         </div>
       )}
 
-      {/* 已审批账目且有待审批申请：单独渲染，不受外层审批员条件限制 */}
-      {isApproved && pendingChangeRequest && (
-        <div className="bg-white px-4 py-3">
-          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-            <div className="text-sm text-amber-800 font-medium mb-1">
-              {pendingChangeRequest.requestType === 'delete' ? '删除申请待审批' : '修改申请待审批'}
-            </div>
-            <div className="text-xs text-amber-600 mb-2">已提交申请，等待管理员审批中...</div>
-            {pendingChangeRequest.isMyRequest && (
-              <button
-                onClick={() => setShowWithdrawDialog(true)}
-                className="w-full py-2 bg-white border border-amber-300 text-amber-700 rounded-lg text-sm font-medium"
-              >
-                撤回申请
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
       {(transaction.approvalStatus !== 'pending' || !isApprover()) && (
         <div className="bg-white px-4 py-3 space-y-3">
-          {/* 已审批账目：所有人都必须走申请流程 */}
-          {isApproved && !pendingChangeRequest && (
-            <>
-              <button 
-                onClick={() => setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}`)}
-                className="w-full py-3 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium text-base"
-              >
-                修改数据
-              </button>
-              <button 
-                onClick={() => { setChangeRequestType('delete'); setShowChangeRequestDialog(true); }}
-                className="w-full py-3 text-white hover:opacity-90 rounded-lg font-medium text-base"
-                style={{ backgroundColor: themeColors.primary }}
-              >
-                申请删除
-              </button>
-            </>
-          )}
-
-          {/* 未审批账目：直接操作 */}
-          {!isApproved && (
-            <>
-              <button 
-                onClick={() => setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}`)}
-                className="w-full py-3 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium text-base"
-              >
-                修改数据
-              </button>
+          {/* 修改按钮：有修改权限才显示 */}
+          <button 
+            onClick={() => setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}`)}
+            className="w-full py-3 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium text-base"
+          >
+            修改数据
+          </button>
+          {/* 删除按钮：根据权限设置判断显示，all=可删全部，own=只能删自己的，none=不显示 */}
+          {(() => {
+            const perm = transaction.userPermissionDelete || 'own';
+            const isOwnerOrAdmin = isAdminOrOwner;
+            // owner/admin 始终可删除
+            if (isOwnerOrAdmin) {
+              return (
+                <button 
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="w-full py-3 text-white hover:opacity-90 rounded-lg font-medium text-base"
+                  style={{ backgroundColor: themeColors.primary }}
+                >
+                  删除数据
+                </button>
+              );
+            }
+            // none = 不显示删除按钮
+            if (perm === 'none') return null;
+            // own = 只能删除自己的
+            if (perm === 'own' && transaction.createdBy !== user?.id) return null;
+            // all 或 own（自己的）：显示删除按钮
+            return (
               <button 
                 onClick={() => setShowDeleteDialog(true)}
                 className="w-full py-3 text-white hover:opacity-90 rounded-lg font-medium text-base"
@@ -685,8 +633,8 @@ export default function TransactionDetail() {
               >
                 删除数据
               </button>
-            </>
-          )}
+            );
+          })()}
         </div>
       )}
 
@@ -717,61 +665,7 @@ export default function TransactionDetail() {
         </DialogContent>
       </Dialog>
 
-      {/* 变更申请确认对话框 */}
-      <Dialog open={showChangeRequestDialog} onOpenChange={setShowChangeRequestDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>申请删除账目</DialogTitle>
-            <DialogDescription>
-              该账目已审批通过，删除需管理员审批。提交申请后等待管理员确认。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => setShowChangeRequestDialog(false)}>
-              取消
-            </Button>
-            <Button 
-              onClick={() => {
-                submitChangeRequestMutation.mutate({ recordId: transactionId, requestType: 'delete' });
-              }}
-              disabled={submitChangeRequestMutation.isPending}
-              className="bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
-            >
-              {submitChangeRequestMutation.isPending ? '提交中...' : '确认申请删除'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 撤回申请确认对话框 */}
-      <Dialog open={showWithdrawDialog} onOpenChange={setShowWithdrawDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>撤回变更申请</DialogTitle>
-            <DialogDescription>
-              确定要撤回这个{pendingChangeRequest?.requestType === 'delete' ? '删除' : '修改'}申请吗？撤回后可重新提交。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => setShowWithdrawDialog(false)}>
-              取消
-            </Button>
-            <Button 
-              onClick={() => {
-                if (pendingChangeRequest?.id) {
-                  withdrawChangeRequestMutation.mutate({ requestId: pendingChangeRequest.id });
-                }
-              }}
-              disabled={withdrawChangeRequestMutation.isPending}
-              className="bg-amber-600 hover:bg-amber-700 text-white"
-            >
-              {withdrawChangeRequestMutation.isPending ? '撤回中...' : '确认撤回'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* 撤回报销申请确认对话框 */}
+      {/* 撤回报销申请确认对话框 */
       <Dialog open={showWithdrawReimbursementDialog} onOpenChange={setShowWithdrawReimbursementDialog}>
         <DialogContent>
           <DialogHeader>

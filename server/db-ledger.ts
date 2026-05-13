@@ -3029,6 +3029,7 @@ export async function getTransactionsList(
   const membership = await db
     .select({
       permissionView: ledgerMembers.permissionView,
+      permissionDelete: ledgerMembers.permissionDelete,
       role: ledgerMembers.role,
     })
     .from(ledgerMembers)
@@ -3045,6 +3046,7 @@ export async function getTransactionsList(
   }
   
   const userPermission = membership[0].permissionView;
+  const userPermissionDelete = membership[0].permissionDelete || 'own';
   
   // 检查查看权限
   if (userPermission === 'none') {
@@ -3311,6 +3313,7 @@ export async function getTransactionDetail(
   const membership = await db
     .select({
       permissionView: ledgerMembers.permissionView,
+      permissionDelete: ledgerMembers.permissionDelete,
       role: ledgerMembers.role,
     })
     .from(ledgerMembers)
@@ -3327,6 +3330,7 @@ export async function getTransactionDetail(
   }
   
   const userPermission = membership[0].permissionView;
+  const userPermissionDelete = membership[0].permissionDelete || 'own';
   
   // 检查查看权限
   if (userPermission === 'none') {
@@ -3488,6 +3492,7 @@ export async function getTransactionDetail(
     reimbursedBy: transaction.reimbursedBy || null,
     pendingType: transaction.pendingType || null,
     pendingIncludeStats: transaction.pendingIncludeStats ?? null,
+    userPermissionDelete: userPermissionDelete as 'all' | 'own' | 'none',
   };
   
   console.log('[getTransactionDetail] 返回结果:', result);
