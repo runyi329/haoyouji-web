@@ -998,20 +998,39 @@ const AddTransaction = () => {
               </tfoot>
             </table>
 
-            {/* 审批栏：仅报销人 + 经手人 */}
+            {/* 审批栏：仅报销人 + 经手人（手写签字样式） */}
             <div className="grid text-[10px]" style={{ gridTemplateColumns: '1fr 1fr' }}>
               <div className="px-2 py-2 border-r border-gray-200">
                 <span className="text-gray-400">报销人：</span>
-                <span className="font-semibold text-[#1A2B4A] ml-0.5">{applicantName}</span>
+                <span
+                  className="ml-1"
+                  style={{
+                    fontFamily: "'Ma Shan Zheng', 'STKaiti', 'KaiTi', cursive",
+                    fontSize: '14px',
+                    color: '#1a237e',
+                    letterSpacing: '2px',
+                    transform: 'rotate(-2deg)',
+                    display: 'inline-block',
+                  }}
+                >{applicantName}</span>
               </div>
               <div className="px-2 py-2">
                 <span className="text-gray-400">经手人：</span>
-                <span className="font-semibold text-[#1A2B4A] ml-0.5">
+                <span
+                  className="ml-1"
+                  style={{
+                    fontFamily: "'Ma Shan Zheng', 'STKaiti', 'KaiTi', cursive",
+                    fontSize: '14px',
+                    color: '#1a237e',
+                    letterSpacing: '2px',
+                    transform: 'rotate(-1.5deg)',
+                    display: 'inline-block',
+                  }}
+                >
                   {selectedCompany ? (() => {
                     const surnames = ['王','李','张','刘','陈','杨','赵','黄','周','吴'];
-                    const names = ['建国','志远','明华','秀英','桂芳','国强','文静','晓燕','海涛','俊杰'];
                     const seed = (selectedCompany.name.charCodeAt(0) + selectedCompany.name.charCodeAt(selectedCompany.name.length-1)) % 10;
-                    return surnames[seed] + names[(seed * 3 + 1) % 10];
+                    return surnames[seed];
                   })() : '—'}
                 </span>
               </div>
