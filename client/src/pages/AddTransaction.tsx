@@ -819,28 +819,6 @@ const AddTransaction = () => {
           </div>
           {/* 表单卡片 */}
           <div className="mx-3 -mt-3 rounded-2xl bg-white overflow-hidden shadow-md" style={{ border: '1px solid #E2E8F0' }}>
-            {/* 报销金额 */}
-            <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
-              <div className="text-xs text-gray-400 mb-1 font-medium tracking-wider">报销金额（元）</div>
-              <div className="flex items-end gap-1">
-                <span className="text-2xl font-light text-gray-400">¥</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={amount || ""}
-                  placeholder="0.00"
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (/^\d*\.?\d{0,2}$/.test(val) || val === "") {
-                      setAmount(val);
-                    }
-                  }}
-                  className="text-4xl font-light text-[#1A2B4A] bg-transparent border-none outline-none flex-1 placeholder-gray-200"
-                  style={{ caretColor: '#1A2B4A' }}
-                  autoComplete="off"
-                />
-              </div>
-            </div>
             {/* 开票信息区域 */}
             <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
               <div className="flex items-center justify-between mb-3">
@@ -872,6 +850,28 @@ const AddTransaction = () => {
               ) : (
                 <div className="text-sm text-gray-300">请选择企业</div>
               )}
+            </div>
+            {/* 报销金额 */}
+            <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
+              <div className="text-xs text-gray-400 mb-1 font-medium tracking-wider">报销金额（元）</div>
+              <div className="flex items-end gap-1">
+                <span className="text-2xl font-light text-gray-400">¥</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={amount || ""}
+                  placeholder="0.00"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (/^\d*\.?\d{0,2}$/.test(val) || val === "") {
+                      setAmount(val);
+                    }
+                  }}
+                  className="text-4xl font-light text-[#1A2B4A] bg-transparent border-none outline-none flex-1 placeholder-gray-200"
+                  style={{ caretColor: '#1A2B4A' }}
+                  autoComplete="off"
+                />
+              </div>
             </div>
             {/* 发票附件 */}
             <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
