@@ -859,7 +859,7 @@ ${klinesSummary}
            FROM af_manual_balances
            WHERE user_id = ?
              AND amount != 0
-             AND INSTR(COALESCE(note,''), '[ERROR]') = 0
+             AND (note IS NULL OR note NOT LIKE '%[ERROR]%')
            ORDER BY created_at DESC
            LIMIT ?`,
           [ctx.user.id, limit]
