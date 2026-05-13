@@ -9006,13 +9006,247 @@ ${klinesSummary}
         return await dbLedger.getTransactionsList(ledgerId, ctx.user.id, options);
       }),
 
-    // 删除记账记录
+    // 删除记账记录（管理员直接删除；非管理员对已审批账目提交删除申请）
     deleteTransaction: protectedProcedure
       .input(z.object({
         recordId: z.number(),
       }))
       .mutation(async ({ ctx, input }) => {
         return await dbLedger.deleteTransaction(input.recordId, ctx.user.id);
+      }),
+
+    // ==================== 账目变更申请 ====================
+
+    // 提交变更申请（修改或删除已审批账目）
+    submitChangeRequest: protectedProcedure
+      .input(z.object({
+        recordId: z.number(),
+        requestType: z.enum(['modify', 'delete']),
+        newData: z.record(z.any()).optional(), // 修改申请时传入新字段值
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        // 获取账目信息
+        const [recRows] = await conn.execute(
+          'SELECT id, ledgerId, createdBy, aj_status, reimbursement_status FROM ledger_records WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+          [input.recordId]
+        ) as any;
+        if (!recRows || recRows.length === 0) throw new TRPCError({ code: 'NOT_FOUND', message: '账目不存在' });
+        const rec = recRows[0];
+        const ledgerId = rec.ledgerId;
+        // 检查是否是账本成员
+        const [memberRows] = await conn.execute(
+          'SELECT id, role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+          [ledgerId, ctx.user.id]
+        ) as any;
+        if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本的成员' });
+        const memberRole = memberRows[0].role;
+        // 管理员和owner可以直接操作，不需要提交申请
+        if (memberRole === 'owner' || memberRole === 'admin') {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '管理员可直接操作，无需提交申请' });
+        }
+        // 检查是否已有 pending 申请
+        const [existRows] = await conn.execute(
+          "SELECT id FROM ledger_change_requests WHERE record_id = ? AND status = 'pending' LIMIT 1",
+          [input.recordId]
+        ) as any;
+        if (existRows && existRows.length > 0) {
+          throw new TRPCError({ code: 'CONFLICT', message: '该账目已有待审批的变更申请，请等待审批或先撤回' });
+        }
+        // 插入申请记录
+        const newDataJson = input.newData ? JSON.stringify(input.newData) : null;
+        const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        await conn.execute(
+          'INSERT INTO ledger_change_requests (ledger_id, record_id, request_type, status, requested_by, requested_at, new_data) VALUES (?, ?, ?, \'pending\', ?, ?, ?)',
+          [ledgerId, input.recordId, input.requestType, ctx.user.id, nowStr, newDataJson]
+        );
+        return { success: true };
+      }),
+
+    // 撤回变更申请（申请人自己撤回）
+    withdrawChangeRequest: protectedProcedure
+      .input(z.object({
+        requestId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const [rows] = await conn.execute(
+          "SELECT id, requested_by, status FROM ledger_change_requests WHERE id = ? LIMIT 1",
+          [input.requestId]
+        ) as any;
+        if (!rows || rows.length === 0) throw new TRPCError({ code: 'NOT_FOUND', message: '申请不存在' });
+        const req = rows[0];
+        if (req.requested_by !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '只能撤回自己的申请' });
+        if (req.status !== 'pending') throw new TRPCError({ code: 'BAD_REQUEST', message: '只能撤回待审批的申请' });
+        const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        await conn.execute(
+          "UPDATE ledger_change_requests SET status = 'withdrawn', reviewed_at = ? WHERE id = ?",
+          [nowStr, input.requestId]
+        );
+        return { success: true };
+      }),
+
+    // 审批变更申请（管理员/owner）
+    reviewChangeRequest: protectedProcedure
+      .input(z.object({
+        requestId: z.number(),
+        action: z.enum(['approved', 'rejected']),
+        comment: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        // 获取申请详情
+        const [reqRows] = await conn.execute(
+          'SELECT * FROM ledger_change_requests WHERE id = ? LIMIT 1',
+          [input.requestId]
+        ) as any;
+        if (!reqRows || reqRows.length === 0) throw new TRPCError({ code: 'NOT_FOUND', message: '申请不存在' });
+        const req = reqRows[0];
+        if (req.status !== 'pending') throw new TRPCError({ code: 'BAD_REQUEST', message: '该申请已处理' });
+        // 验证审批人是账本 owner 或 admin
+        const [memberRows] = await conn.execute(
+          "SELECT id, role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1",
+          [req.ledger_id, ctx.user.id]
+        ) as any;
+        if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本的成员' });
+        const memberRole = memberRows[0].role;
+        if (memberRole !== 'owner' && memberRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只有账本管理员才能审批变更申请' });
+        }
+        const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        let rewardClawbackAmount: number | null = null;
+        let rewardClawbackNote: string | null = null;
+        if (input.action === 'approved') {
+          if (req.request_type === 'delete') {
+            // ====== 审批通过删除：执行软删除 + 扣回奖励 ======
+            // 1. 软删除账目
+            await conn.execute(
+              'UPDATE ledger_records SET deleted_at = ?, deleted_by = ? WHERE id = ?',
+              [nowStr, ctx.user.id, req.record_id]
+            );
+            // 2. 查找该账目对应的奖励记录（af_manual_balances 中 note 包含 #recordId）
+            const [rewardRows] = await conn.execute(
+              "SELECT id, user_id, amount FROM af_manual_balances WHERE note LIKE ? AND amount > 0 LIMIT 1",
+              [`成本津贴 #${req.record_id}`]
+            ) as any;
+            if (rewardRows && rewardRows.length > 0) {
+              const reward = rewardRows[0];
+              rewardClawbackAmount = parseFloat(reward.amount);
+              rewardClawbackNote = `成本津贴撤回 #${req.record_id}`;
+              // 3. 写入负数扣回记录到 af_manual_balances
+              await conn.execute(
+                'INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+                [req.ledger_id, reward.user_id, -rewardClawbackAmount, rewardClawbackNote, nowStr, nowStr]
+              );
+              // 4. 写入 balance_history（reward_clawback 类型）
+              try {
+                await conn.execute(
+                  "INSERT INTO balance_history (user_id, amount, type, related_id, balance, description, created_at) VALUES (?, ?, 'reward_clawback', ?, 0, ?, ?)",
+                  [reward.user_id, -rewardClawbackAmount, req.record_id, rewardClawbackNote, nowStr]
+                );
+              } catch (bhErr: any) {
+                console.warn('[变更申请审批] balance_history 写入失败:', bhErr?.message);
+              }
+              console.log(`[变更申请审批] 已扣回 ${rewardClawbackAmount} USDT 奖励，账目 #${req.record_id}`);
+            }
+          } else if (req.request_type === 'modify' && req.new_data) {
+            // ====== 审批通过修改：执行字段更新 ======
+            const newData = typeof req.new_data === 'string' ? JSON.parse(req.new_data) : req.new_data;
+            const allowedFields = ['type', 'amount', 'categoryId', 'description', 'recordDate', 'images', 'imageUrl', 'reimbursement_status', 'pending_type', 'pending_include_stats'];
+            const setClauses: string[] = [];
+            const setValues: any[] = [];
+            for (const [key, val] of Object.entries(newData)) {
+              if (allowedFields.includes(key)) {
+                setClauses.push(`${key} = ?`);
+                setValues.push(val);
+              }
+            }
+            if (setClauses.length > 0) {
+              setValues.push(nowStr, req.record_id);
+              await conn.execute(
+                `UPDATE ledger_records SET ${setClauses.join(', ')}, updated_at = ? WHERE id = ?`,
+                setValues
+              );
+            }
+          }
+        }
+        // 更新申请状态
+        await conn.execute(
+          'UPDATE ledger_change_requests SET status = ?, reviewed_by = ?, reviewed_at = ?, review_comment = ?, reward_clawback_amount = ?, reward_clawback_note = ? WHERE id = ?',
+          [input.action, ctx.user.id, nowStr, input.comment || null, rewardClawbackAmount, rewardClawbackNote, input.requestId]
+        );
+        return { success: true, rewardClawbackAmount };
+      }),
+
+    // 获取账本的待审批变更申请列表（管理员用）
+    getChangeRequests: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        status: z.enum(['pending', 'approved', 'rejected', 'withdrawn', 'all']).default('pending'),
+      }))
+      .query(async ({ ctx, input }) => {
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        // 验证是账本成员
+        const [memberRows] = await conn.execute(
+          'SELECT id, role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+          [input.ledgerId, ctx.user.id]
+        ) as any;
+        if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本的成员' });
+        const statusFilter = input.status === 'all' ? '' : "AND cr.status = '" + input.status + "'";
+        const [rows] = await conn.execute(
+          `SELECT cr.*, 
+            u.username as requester_name, u.avatar as requester_avatar,
+            lr.amount as record_amount, lr.type as record_type, lr.description as record_desc, lr.recordDate as record_date
+           FROM ledger_change_requests cr
+           LEFT JOIN users u ON u.id = cr.requested_by
+           LEFT JOIN ledger_records lr ON lr.id = cr.record_id
+           WHERE cr.ledger_id = ? ${statusFilter}
+           ORDER BY cr.requested_at DESC
+           LIMIT 100`,
+          [input.ledgerId]
+        ) as any;
+        return (rows || []).map((r: any) => ({
+          id: r.id,
+          ledgerId: r.ledger_id,
+          recordId: r.record_id,
+          requestType: r.request_type,
+          status: r.status,
+          requestedBy: r.requested_by,
+          requesterName: r.requester_name || '未知',
+          requesterAvatar: r.requester_avatar || null,
+          requestedAt: r.requested_at,
+          newData: r.new_data ? (typeof r.new_data === 'string' ? JSON.parse(r.new_data) : r.new_data) : null,
+          reviewedBy: r.reviewed_by,
+          reviewedAt: r.reviewed_at,
+          reviewComment: r.review_comment,
+          rewardClawbackAmount: r.reward_clawback_amount ? parseFloat(r.reward_clawback_amount) : null,
+          rewardClawbackNote: r.reward_clawback_note,
+          recordAmount: r.record_amount ? parseFloat(r.record_amount) : null,
+          recordType: r.record_type,
+          recordDesc: r.record_desc,
+          recordDate: r.record_date,
+        }));
+      }),
+
+    // 获取某账目的待审批申请（用于前端判断按钮状态）
+    getRecordChangeRequest: protectedProcedure
+      .input(z.object({
+        recordId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const conn = await getDbConnection();
+        if (!conn) return null;
+        const [rows] = await conn.execute(
+          "SELECT id, request_type, status, requested_by FROM ledger_change_requests WHERE record_id = ? AND status = 'pending' LIMIT 1",
+          [input.recordId]
+        ) as any;
+        if (!rows || rows.length === 0) return null;
+        const r = rows[0];
+        return { id: r.id, requestType: r.request_type, status: r.status, requestedBy: r.requested_by, isMyRequest: r.requested_by === ctx.user.id };
       }),
 
     // 获取已删除的账目记录（30天内）
