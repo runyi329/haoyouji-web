@@ -852,8 +852,11 @@ const AddTransaction = () => {
               )}
             </div>
             {/* 报销金额 - 手动填写区 */}
-            <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid #F5F5F5', background: '#FFFDF5', borderLeft: '3px solid #C9A84C' }}>
-              <div className="text-xs text-gray-400 mb-1 font-medium tracking-wider">报销金额（元）</div>
+            <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
+                <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#C9A84C', color: '#fff', fontSize: '10px' }}>必填</span>
+              </div>
               <div className="flex items-end gap-1">
                 <span className="text-2xl font-light text-gray-400">¥</span>
                 <input
@@ -874,8 +877,11 @@ const AddTransaction = () => {
               </div>
             </div>
             {/* 发票附件 - 手动操作区 */}
-            <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5', background: '#FFFDF5', borderLeft: '3px solid #C9A84C' }}>
-              <div className="text-xs text-gray-400 mb-3 font-medium tracking-wider">发票凭证</div>
+            <div className="px-5 py-4" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>发票凭证</span>
+                <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#C9A84C', color: '#fff', fontSize: '10px' }}>必传</span>
+              </div>
               <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
                 const files = e.target.files;
                 if (!files || files.length === 0) return;
