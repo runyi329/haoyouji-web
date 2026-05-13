@@ -5365,11 +5365,11 @@ export default function LedgerDetail() {
                           background: '#FDFCF7',
                           borderRadius: '8px',
                           overflow: 'hidden',
-                          border: '1px solid rgba(168,0,0,0.12)'
+                          border: '1px solid rgba(26,43,74,0.15)'
                         }}>
                           {/* 顶部红色标题栏 */}
                           <div style={{
-                            background: '#A80000',
+                            background: '#1A2B4A',
                             padding: '8px 12px 16px 12px',
                             position: 'relative',
                             clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 8px), 97% 100%, 94% calc(100% - 6px), 91% 100%, 88% calc(100% - 6px), 85% 100%, 82% calc(100% - 6px), 79% 100%, 76% calc(100% - 6px), 73% 100%, 70% calc(100% - 6px), 67% 100%, 64% calc(100% - 6px), 61% 100%, 58% calc(100% - 6px), 55% 100%, 52% calc(100% - 6px), 49% 100%, 46% calc(100% - 6px), 43% 100%, 40% calc(100% - 6px), 37% 100%, 34% calc(100% - 6px), 31% 100%, 28% calc(100% - 6px), 25% 100%, 22% calc(100% - 6px), 19% 100%, 16% calc(100% - 6px), 13% 100%, 10% calc(100% - 6px), 7% 100%, 4% calc(100% - 6px), 1% 100%, 0 calc(100% - 8px))'
@@ -5394,14 +5394,14 @@ export default function LedgerDetail() {
                               </div>
                               <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '12px' }}>
                                 <div style={{ fontSize: '11px', color: '#999', marginBottom: '2px' }}>报销金额</div>
-                                <div style={{ fontSize: '20px', fontWeight: 700, color: '#A80000', lineHeight: 1 }}>
+                                <div style={{ fontSize: '20px', fontWeight: 700, color: '#1A2B4A', lineHeight: 1 }}>
                                   ¥{record.amount.toFixed(2)}
                                 </div>
                               </div>
                             </div>
 
                             {/* 虚线分隔 */}
-                            <div style={{ borderTop: '1px dashed rgba(168,0,0,0.25)', margin: '8px 0' }} />
+                            <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
 
                             {/* 四格信息网格 */}
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginBottom: '8px' }}>
@@ -5424,7 +5424,7 @@ export default function LedgerDetail() {
                             </div>
 
                             {/* 虚线分隔 */}
-                            <div style={{ borderTop: '1px dashed rgba(168,0,0,0.25)', margin: '8px 0' }} />
+                            <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
 
                             {/* 底部：申请人 + 状态印章 */}
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -5599,7 +5599,7 @@ export default function LedgerDetail() {
             }
           }}
           className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
-          style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
+          style={{ backgroundColor: '#1A2B4A', color: '#FFFFFF' }}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
             <line x1="12" y1="5" x2="12" y2="19"></line>
