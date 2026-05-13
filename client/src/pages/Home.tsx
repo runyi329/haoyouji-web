@@ -2478,7 +2478,7 @@ export default function Home() {
             <div className="grid grid-cols-2 gap-2 flex-1">
               {/* 智能财务 - 黑白金立体风格 */}
               <div
-                className="flex flex-col rounded-xl cursor-pointer active:scale-[0.98] relative overflow-hidden"
+                className="flex items-center justify-center rounded-xl cursor-pointer active:scale-[0.98] relative overflow-hidden"
                 onClick={() => navigate('/smart-finance')}
                 style={{
                   background: 'linear-gradient(135deg, #111111 0%, #2a2a2a 45%, #1a1a1a 100%)',
@@ -2492,15 +2492,14 @@ export default function Home() {
                 <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
                 {/* 底部暗影线 */}
                 <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
-                <div className="flex items-center space-x-1 mb-1">
+                <div className="flex items-center space-x-1 relative z-10">
                   <BarChart2 className="w-3.5 h-3.5" style={{ color: '#C9A84C', filter: 'drop-shadow(0 1px 2px rgba(201,168,76,0.5))' }} />
                   <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.05em' }}>智能财务</span>
                 </div>
-                <div className="flex-1" />
               </div>
               {/* 智能会计 - 黑白金立体风格，点击跳转76号账本报销申请单 */}
               <div
-                className="flex flex-col rounded-xl cursor-pointer active:scale-[0.98] relative overflow-hidden"
+                className="flex items-center justify-center rounded-xl cursor-pointer active:scale-[0.98] relative overflow-hidden"
                 onClick={() => requireLogin(() => navigate('/ledger/76/add'))}
                 style={{
                   background: 'linear-gradient(135deg, #111111 0%, #2a2a2a 45%, #1a1a1a 100%)',
@@ -2514,11 +2513,10 @@ export default function Home() {
                 <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
                 {/* 底部暗影线 */}
                 <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
-                <div className="flex items-center space-x-1 mb-1">
+                <div className="flex items-center space-x-1 relative z-10">
                   <FileText className="w-3.5 h-3.5" style={{ color: '#C9A84C', filter: 'drop-shadow(0 1px 2px rgba(201,168,76,0.5))' }} />
                   <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.05em' }}>智能会计</span>
                 </div>
-                <div className="flex-1" />
               </div>
             </div>
             {/* 第二行：智能钱包（横向宽条）- 黑白金立体风格，点击跳转全局钱包 */}
