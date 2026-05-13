@@ -21,7 +21,11 @@ export default function LedgerPendingApprovals() {
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 0;
 
-  const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'history' | 'changes'>('pending');
+  const [showChangeReviewDialog, setShowChangeReviewDialog] = useState(false);
+  const [selectedChangeRequest, setSelectedChangeRequest] = useState<any>(null);
+  const [changeReviewAction, setChangeReviewAction] = useState<'approved' | 'rejected'>('approved');
+  const [changeReviewComment, setChangeReviewComment] = useState('');
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
   const [selectedApproval, setSelectedApproval] = useState<any>(null);
   const [approvalAction, setApprovalAction] = useState<'approved' | 'rejected'>('approved');
@@ -39,6 +43,34 @@ export default function LedgerPendingApprovals() {
     { enabled: !!ledgerId && activeTab === 'history' }
   );
   const historyList = historyData?.list ?? [];
+
+  // 获取变更申请列表
+  const { data: changeRequests = [], refetch: refetchChangeRequests, isLoading: changeRequestsLoading } = trpc.ledger.getChangeRequests.useQuery(
+    { ledgerId, status: 'pending' },
+    { enabled: !!ledgerId }
+  );
+
+  // 审批变更申请
+  const reviewChangeRequestMutation = trpc.ledger.reviewChangeRequest.useMutation({
+    onSuccess: (data: any) => {
+      if (changeReviewAction === 'approved') {
+        if (selectedChangeRequest?.requestType === 'delete' && data?.rewardClawbackAmount) {
+          toast.success(`变更申请已通过，已扣回 ${data.rewardClawbackAmount} USDT 奖励`);
+        } else {
+          toast.success('变更申请已通过');
+        }
+      } else {
+        toast.success('变更申请已拒绝');
+      }
+      setShowChangeReviewDialog(false);
+      setSelectedChangeRequest(null);
+      setChangeReviewComment('');
+      refetchChangeRequests();
+    },
+    onError: (error) => {
+      toast.error(error.message || '操作失败');
+    },
+  });
 
   // 审批mutation
   const approveMutation = trpc.ledger.approveTransaction.useMutation({
@@ -157,6 +189,22 @@ export default function LedgerPendingApprovals() {
         >
           <History className="h-4 w-4" />
           已审批历史
+        </button>
+        <button
+          onClick={() => setActiveTab('changes')}
+          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+            activeTab === 'changes'
+              ? 'border-[#D32F2F] text-[#D32F2F]'
+              : 'border-transparent text-gray-500'
+          }`}
+        >
+          <FileText className="h-4 w-4" />
+          变更申请
+          {(changeRequests as any[]).length > 0 && (
+            <span className="bg-amber-500 text-white text-xs px-1.5 py-0.5 rounded-full leading-none">
+              {(changeRequests as any[]).length}
+            </span>
+          )}
         </button>
       </div>
 
@@ -280,6 +328,81 @@ export default function LedgerPendingApprovals() {
           </>
         )}
 
+        {/* ===== 变更申请 Tab ===== */}
+        {activeTab === 'changes' && (
+          <>
+            {changeRequestsLoading ? (
+              <div className="text-center py-12 text-gray-400">加载中...</div>
+            ) : (changeRequests as any[]).length === 0 ? (
+              <Card className="bg-white p-10 text-center shadow-sm">
+                <FileText className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-400 text-sm">暂无待审批的变更申请</p>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {(changeRequests as any[]).map((req: any) => (
+                  <Card key={req.id} className="bg-white shadow-sm overflow-hidden">
+                    <div className="bg-amber-50 px-4 py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          req.requestType === 'delete' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {req.requestType === 'delete' ? '删除申请' : '修改申请'}
+                        </span>
+                        {req.recordAmount && (
+                          <span className="text-sm font-bold text-gray-800">¥{parseFloat(req.recordAmount).toFixed(2)}</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-amber-600">待审批</span>
+                    </div>
+                    <div className="px-4 py-3 space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <User className="h-4 w-4 text-gray-400" />
+                        <span className="text-gray-500">申请人</span>
+                        <span className="text-gray-800">{req.requesterName}</span>
+                      </div>
+                      {req.recordDesc && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <FileText className="h-4 w-4 text-gray-400" />
+                          <span className="text-gray-500">账目备注</span>
+                          <span className="text-gray-600 truncate">{req.recordDesc}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 text-sm">
+                        <Clock className="h-4 w-4 text-gray-400" />
+                        <span className="text-gray-500">申请时间</span>
+                        <span className="text-gray-600">{req.requestedAt ? new Date(req.requestedAt).toLocaleString('zh-CN') : '-'}</span>
+                      </div>
+                      {req.requestType === 'delete' && (
+                        <div className="bg-red-50 rounded-lg p-2 text-xs text-red-700">
+                          ⚠️ 审批通过删除后，将自动扣回该账目对应的 USDT 奖励
+                        </div>
+                      )}
+                    </div>
+                    <div className="px-4 pb-3 flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
+                        onClick={() => { setSelectedChangeRequest(req); setChangeReviewAction('rejected'); setShowChangeReviewDialog(true); }}
+                      >
+                        <X className="h-3.5 w-3.5 mr-1" />拒绝
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1 bg-[#4CAF50] hover:bg-[#43A047] text-white"
+                        onClick={() => { setSelectedChangeRequest(req); setChangeReviewAction('approved'); setShowChangeReviewDialog(true); }}
+                      >
+                        <Check className="h-3.5 w-3.5 mr-1" />通过
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
         {/* ===== 已审批历史 Tab ===== */}
         {activeTab === 'history' && (
           <>
@@ -398,6 +521,73 @@ export default function LedgerPendingApprovals() {
       </div>
 
       {/* 审批确认对话框 */}
+      {/* 变更申请审批对话框 */}
+      <Dialog open={showChangeReviewDialog} onOpenChange={setShowChangeReviewDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {changeReviewAction === 'approved'
+                ? (selectedChangeRequest?.requestType === 'delete' ? '确认删除账目' : '确认修改账目')
+                : '拒绝变更申请'}
+            </DialogTitle>
+            <DialogDescription>
+              {changeReviewAction === 'approved' && selectedChangeRequest?.requestType === 'delete'
+                ? '审批通过后将删除账目并自动扣回对应的 USDT 奖励。'
+                : changeReviewAction === 'approved'
+                ? '审批通过后将按申请内容修改账目。'
+                : '拒绝后账目保持不变。'}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedChangeRequest && (
+            <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
+              <div className="flex justify-between">
+                <span className="text-gray-500">申请类型</span>
+                <span className={selectedChangeRequest.requestType === 'delete' ? 'text-red-600 font-medium' : 'text-blue-600 font-medium'}>
+                  {selectedChangeRequest.requestType === 'delete' ? '删除账目' : '修改账目'}
+                </span>
+              </div>
+              {selectedChangeRequest.recordAmount && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">账目金额</span>
+                  <span className="font-semibold text-[#D32F2F]">¥{parseFloat(selectedChangeRequest.recordAmount).toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-gray-500">申请人</span>
+                <span className="text-gray-700">{selectedChangeRequest.requesterName}</span>
+              </div>
+            </div>
+          )}
+          <div className="py-2">
+            <label className="text-sm font-medium text-gray-700 mb-2 block">审批备注（可选）</label>
+            <Textarea
+              value={changeReviewComment}
+              onChange={(e) => setChangeReviewComment(e.target.value)}
+              placeholder={changeReviewAction === 'approved' ? '添加审批意见...' : '请说明拒绝原因...'}
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowChangeReviewDialog(false)}>取消</Button>
+            <Button
+              onClick={() => {
+                if (selectedChangeRequest) {
+                  reviewChangeRequestMutation.mutate({
+                    requestId: selectedChangeRequest.id,
+                    action: changeReviewAction,
+                    comment: changeReviewComment || undefined,
+                  });
+                }
+              }}
+              disabled={reviewChangeRequestMutation.isPending}
+              className={changeReviewAction === 'approved' ? 'bg-[#4CAF50] hover:bg-[#43A047] text-white' : 'bg-[#D32F2F] hover:bg-[#C62828] text-white'}
+            >
+              {reviewChangeRequestMutation.isPending ? '处理中...' : '确认'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={showApprovalDialog} onOpenChange={setShowApprovalDialog}>
         <DialogContent>
           <DialogHeader>
