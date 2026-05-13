@@ -817,8 +817,8 @@ const AddTransaction = () => {
               </div>
             </div>
           </div>
-          {/* 表单卡片 */}
-          <div className="mx-3 -mt-3 rounded-2xl bg-white overflow-hidden shadow-md flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
+          {/* 表单卡片 - flex-1 自动擑满剩余空间 */}
+          <div className="mx-3 -mt-3 rounded-2xl bg-white overflow-hidden shadow-md flex-1 flex flex-col" style={{ border: '1px solid #E2E8F0' }}>
             {/* 开票信息区域 */}
             <div className="px-4 py-2" style={{ borderBottom: '1px solid #F5F5F5' }}>
               <div className="flex items-center justify-between mb-1.5">
@@ -851,8 +851,8 @@ const AddTransaction = () => {
                 <div className="text-sm text-gray-300">请选择企业</div>
               )}
             </div>
-            {/* 报销金额 - 手动填写区 */}
-            <div className="px-4 pt-2 pb-1" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+            {/* 报销金额 - 手动填写区 - flex-1 自动擑满剩余空间 */}
+            <div className="px-4 pt-2 pb-1 flex-1 flex flex-col justify-center" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
                 <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#C9A84C', color: '#fff', fontSize: '10px' }}>必填</span>
@@ -1076,8 +1076,7 @@ const AddTransaction = () => {
               ))}
             </div>
           )}
-          {/* 弹性空白：吸收剩余空间，使提交按鈕自然贴底 */}
-          <div className="flex-1" />
+
           {/* 提交按鈕（移入内容区内部，贴底显示） */}
           <div className="flex-shrink-0 px-4 py-4 bg-white" style={{ borderTop: '1px solid #E2E8F0' }}>
             <button
