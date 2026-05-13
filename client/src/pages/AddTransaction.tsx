@@ -927,15 +927,6 @@ const AddTransaction = () => {
               )}
             </div>
 
-            {/* 报销事项 */}
-            <div className="px-5 py-3" style={{ borderBottom: '1px solid #F0F0F0' }}>
-              <div className="text-[10px] text-gray-400 mb-2 tracking-wider">报销事项</div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(201,168,76,0.15)', color: '#C9A84C', fontWeight: 600 }}>AI</span>
-                <span className="text-sm text-gray-700">{expenseReasonLabel || '请填写报销金额后自动生成'}</span>
-              </div>
-            </div>
-
             {/* 发票凭证 */}
             <div className="px-5 py-3" style={{ borderBottom: '1px solid #F0F0F0' }}>
               <div className="flex items-center justify-between mb-2">
@@ -1008,6 +999,15 @@ const AddTransaction = () => {
                     <span className="text-xs">{uploadedImages.length > 0 ? `${uploadedImages.length}/10` : '上传'}</span>
                   </button>
                 )}
+              </div>
+            </div>
+
+            {/* 报销事项 */}
+            <div className="px-5 py-3" style={{ borderBottom: '1px solid #F0F0F0' }}>
+              <div className="text-[10px] text-gray-400 mb-2 tracking-wider">报销事项</div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'rgba(201,168,76,0.15)', color: '#C9A84C', fontWeight: 600 }}>AI</span>
+                <span className="text-sm text-gray-700">{expenseReasonLabel || '请填写报销金额后自动生成'}</span>
               </div>
             </div>
 
