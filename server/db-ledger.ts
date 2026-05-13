@@ -3309,28 +3309,21 @@ export async function getTransactionDetail(
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
-  // 验证用户是否是账本成员并获取权限
-  const membership = await db
-    .select({
-      permissionView: ledgerMembers.permissionView,
-      permissionDelete: ledgerMembers.permissionDelete,
-      role: ledgerMembers.role,
-    })
-    .from(ledgerMembers)
-    .where(
-      and(
-        eq(ledgerMembers.ledgerId, ledgerId),
-        eq(ledgerMembers.userId, userId)
-      )
-    )
-    .limit(1);
+  // 验证用户是否是账本成员并获取权限（使用原生 SQL 确保读取真实字段値）
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
+  const [membershipRows] = await conn.execute(
+    'SELECT permission_view, permission_delete, role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+    [ledgerId, userId]
+  ) as any;
   
-  if (membership.length === 0) {
+  if (!membershipRows || membershipRows.length === 0) {
     throw new Error("您不是该账本的成员");
   }
   
-  const userPermission = membership[0].permissionView;
-  const userPermissionDelete = membership[0].permissionDelete || 'own';
+  const userPermission = membershipRows[0].permission_view as string;
+  const userPermissionDelete = (membershipRows[0].permission_delete as string) || 'none';
+  const userRole = membershipRows[0].role as string;
   
   // 检查查看权限
   if (userPermission === 'none') {
