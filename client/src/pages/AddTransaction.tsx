@@ -941,7 +941,7 @@ const AddTransaction = () => {
               <colgroup>
                 <col style={{ width: '2.5em' }} />
                 <col style={{ width: '4em' }} />
-                <col style={{ width: '4em' }} />
+                <col style={{ width: '5em' }} />
                 <col />
                 <col style={{ width: '1%', whiteSpace: 'nowrap' }} />
                 <col style={{ width: '1%', whiteSpace: 'nowrap' }} />
@@ -950,7 +950,7 @@ const AddTransaction = () => {
                 <tr style={{ background: '#1A3A5C', borderBottom: '1px solid #C9A84C' }}>
                   <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20 whitespace-nowrap">序号</th>
                   <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20">日期</th>
-                  <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20">费用名称</th>
+                  <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20 whitespace-nowrap">费用名称</th>
                   <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20">事项</th>
                   <th className="px-1 py-1 text-center font-bold text-white border-r border-white/20 whitespace-nowrap">金额</th>
                   <th className="px-1 py-1 text-center font-bold text-white whitespace-nowrap">附件</th>
@@ -960,7 +960,7 @@ const AddTransaction = () => {
                 <tr style={{ background: '#fff' }}>
                   <td className="px-0.5 py-2 text-center border-r border-gray-200 whitespace-nowrap">1</td>
                   <td className="px-0.5 py-2 text-center border-r border-gray-200">{String(selectedDate.getMonth()+1).padStart(2,'0')}/{String(selectedDate.getDate()).padStart(2,'0')}</td>
-                  <td className="px-0.5 py-2 text-center border-r border-gray-200 font-semibold text-[#1A3A5C]">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[0] : '其他'}</td>
+                  <td className="px-0.5 py-2 text-center border-r border-gray-200 font-semibold text-[#1A3A5C] whitespace-nowrap">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[0] : '其他'}</td>
                   <td className="px-1 py-2 border-r border-gray-200 text-gray-500 text-[9px]">{expenseReasonLabel ? (expenseReasonLabel.split(' · ')[1] || '—') : '—'}</td>
                   <td className="px-1 py-2 text-right border-r border-gray-200 font-bold text-[#1A3A5C] whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-1 py-2 text-center whitespace-nowrap">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</td>
@@ -968,8 +968,8 @@ const AddTransaction = () => {
               </tbody>
               <tfoot>
                 <tr style={{ background: '#EEF2F7' }}>
-                  <td colSpan={2} className="px-1.5 py-1.5 font-bold border-r border-gray-300">合计金额（大写）</td>
-                  <td colSpan={2} className="px-1.5 py-1.5 font-bold text-[#1A3A5C] border-r border-gray-300">
+                  <td colSpan={3} className="px-1.5 py-1.5 font-bold border-r border-gray-300 whitespace-nowrap">合计金额（大写）</td>
+                  <td className="px-1.5 py-1.5 font-bold text-[#1A3A5C] border-r border-gray-300">
                     {(() => {
                       const num = parseFloat(amount) || 0;
                       if (num <= 0) return '—';
