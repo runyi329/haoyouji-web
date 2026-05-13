@@ -306,7 +306,8 @@ export default function TransactionDetail() {
   });
 
   // 判断账目是否已被审批（aj_status = 'approved'）
-  const isApproved = (transaction as any)?.ajStatus === 'approved';
+  // 使用服务端映射后的 approvalStatus 字段（'approved' 表示已审批）
+  const isApproved = transaction.approvalStatus === 'approved';
 
   // 处理审批
   const handleApprove = (action: 'approved' | 'rejected') => {
