@@ -2937,8 +2937,13 @@ export async function addTransaction(data: {
     .limit(1) : [];
 
   // 插入记账记录（加密敏感字段）
-  // 判断是否是AJ账本（通过传入ajCompanyId判断）
-  const isAJRecord = !!data.ajCompanyId;
+  // 判断是否是AJ账本：账本类型为 custom_aj 或传入了 ajCompanyId
+  const ledgerInfo = await db
+    .select({ type: ledgers.type })
+    .from(ledgers)
+    .where(eq(ledgers.id, data.ledgerId))
+    .limit(1);
+  const isAJRecord = ledgerInfo[0]?.type === 'custom_aj' || !!data.ajCompanyId;
   const recordData = {
     ledgerId: data.ledgerId,
     type: data.type,

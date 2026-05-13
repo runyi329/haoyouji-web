@@ -611,11 +611,7 @@ export default function TransactionDetail() {
         </div>
       )}
 
-      {/* DEBUG 调试信息 */}
-      <div style={{fontSize:'10px',color:'#999',padding:'2px 16px',background:'#f0f0f0',wordBreak:'break-all'}}>
-        type:{String(ledgerData?.type)} | status:{String(transaction.approvalStatus)} | createdBy:{String(transaction.createdBy)} | userId:{String(user?.id)}
-      </div>
-      {/* 待审批且是自己提交的：显示撤回报销申请按鈕（仅 AJ 账本） */}
+      {/* 待审批且是自己提交的：显示撤回报销申请按鈕（仅 AJ 账本） */
       {ledgerData?.type === 'custom_aj' && transaction.approvalStatus === 'pending' && transaction.createdBy === user?.id && (
         <div className="bg-white px-4 py-3">
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
