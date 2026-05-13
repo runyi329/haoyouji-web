@@ -939,7 +939,7 @@ const AddTransaction = () => {
             {/* 明细表格 - 用 table 确保列宽完全对齐 */}
             <table className="w-full text-[10px] border-collapse" style={{ borderBottom: '2px solid #1A3A5C' }}>
               <colgroup>
-                <col style={{ width: '2em' }} />
+                <col style={{ width: '2.5em' }} />
                 <col style={{ width: '4em' }} />
                 <col style={{ width: '4em' }} />
                 <col />
@@ -948,7 +948,7 @@ const AddTransaction = () => {
               </colgroup>
               <thead>
                 <tr style={{ background: '#1A3A5C', borderBottom: '1px solid #C9A84C' }}>
-                  <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20">序号</th>
+                  <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20 whitespace-nowrap">序号</th>
                   <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20">日期</th>
                   <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20">费用名称</th>
                   <th className="px-0.5 py-1 text-center font-bold text-white border-r border-white/20">事项</th>
@@ -958,7 +958,7 @@ const AddTransaction = () => {
               </thead>
               <tbody>
                 <tr style={{ background: '#fff' }}>
-                  <td className="px-0.5 py-2 text-center border-r border-gray-200">1</td>
+                  <td className="px-0.5 py-2 text-center border-r border-gray-200 whitespace-nowrap">1</td>
                   <td className="px-0.5 py-2 text-center border-r border-gray-200">{String(selectedDate.getMonth()+1).padStart(2,'0')}/{String(selectedDate.getDate()).padStart(2,'0')}</td>
                   <td className="px-0.5 py-2 text-center border-r border-gray-200 font-semibold text-[#1A3A5C]">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[0] : '其他'}</td>
                   <td className="px-1 py-2 border-r border-gray-200 text-gray-500 text-[9px]">{expenseReasonLabel ? (expenseReasonLabel.split(' · ')[1] || '—') : '—'}</td>
