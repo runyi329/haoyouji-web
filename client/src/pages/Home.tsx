@@ -2500,7 +2500,7 @@ export default function Home() {
               {/* 智能会计 - 黑白金立体风格，点击跳转76号账本报销申请单 */}
               <div
                 className="flex items-center justify-center rounded-xl cursor-pointer active:scale-[0.98] relative overflow-hidden"
-                onClick={() => requireLogin(() => navigate('/ledger/76/add'))}
+                onClick={() => requireLogin(() => navigate('/ledger/76/add?from=home'))}
                 style={{
                   background: 'linear-gradient(135deg, #111111 0%, #2a2a2a 45%, #1a1a1a 100%)',
                   boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
