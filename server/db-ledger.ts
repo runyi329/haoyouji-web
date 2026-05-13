@@ -37,6 +37,51 @@ async function ensureSoftDeleteColumns() {
 // 在模块加载时执行迁移
 ensureSoftDeleteColumns().catch(console.error);
 
+// ========== 修复 permission 字段类型（确保是 ENUM 而非短 VARCHAR）==========
+let _permissionFieldsMigrated = false;
+async function ensurePermissionFieldTypes() {
+  if (_permissionFieldsMigrated) return;
+  const conn = await getDbConnection();
+  if (!conn) { _permissionFieldsMigrated = true; return; }
+  // 修复 ledger_members 的权限字段类型
+  const memberFields = [
+    { col: 'permission_view', def: `ENUM('all','own','none') NOT NULL DEFAULT 'all'` },
+    { col: 'permission_add', def: `ENUM('all','own','none') NOT NULL DEFAULT 'all'` },
+    { col: 'permission_edit', def: `ENUM('all','own','none') NOT NULL DEFAULT 'own'` },
+    { col: 'permission_delete', def: `ENUM('all','own','none') NOT NULL DEFAULT 'own'` },
+  ];
+  for (const f of memberFields) {
+    try {
+      await conn.execute(`ALTER TABLE ledger_members MODIFY COLUMN \`${f.col}\` ${f.def}`);
+      console.log(`[ensurePermissionFieldTypes] ${f.col} 类型已修复`);
+    } catch (e: any) {
+      // 如果已经是正确类型则忽略
+      if (!e.message?.includes('already') && !e.message?.includes('Duplicate')) {
+        console.error(`[ensurePermissionFieldTypes] ${f.col} error:`, e.message);
+      }
+    }
+  }
+  // 修复 ledgers 的默认权限字段类型
+  const ledgerFields = [
+    { col: 'default_permission_view', def: `ENUM('all','own','none') NOT NULL DEFAULT 'all'` },
+    { col: 'default_permission_add', def: `ENUM('all','own','none') NOT NULL DEFAULT 'all'` },
+    { col: 'default_permission_edit', def: `ENUM('all','own','none') NOT NULL DEFAULT 'own'` },
+    { col: 'default_permission_delete', def: `ENUM('all','own','none') NOT NULL DEFAULT 'own'` },
+  ];
+  for (const f of ledgerFields) {
+    try {
+      await conn.execute(`ALTER TABLE ledgers MODIFY COLUMN \`${f.col}\` ${f.def}`);
+      console.log(`[ensurePermissionFieldTypes] ledgers.${f.col} 类型已修复`);
+    } catch (e: any) {
+      if (!e.message?.includes('already') && !e.message?.includes('Duplicate')) {
+        console.error(`[ensurePermissionFieldTypes] ledgers.${f.col} error:`, e.message);
+      }
+    }
+  }
+  _permissionFieldsMigrated = true;
+}
+ensurePermissionFieldTypes().catch(console.error);
+
 // ========== 备份权限字段迁移 ==========
 let _backupPermissionMigrated = false;
 async function ensureBackupPermissionColumn() {
