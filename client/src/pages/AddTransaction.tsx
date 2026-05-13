@@ -1114,7 +1114,7 @@ const AddTransaction = () => {
               }
             }}
             className="text-5xl font-light text-[#222222] bg-transparent border-none outline-none w-0 flex-1 placeholder-gray-300"
-            style={{ caretColor: '#1A2B4A' }}
+            style={{ caretColor: '#D32F2F' }}
             autoComplete="off"
           />
           <div className="text-sm font-medium text-gray-400 mb-1 ml-1 flex-shrink-0">
@@ -1140,7 +1140,7 @@ const AddTransaction = () => {
         {/* 多级分类选择 */}
         <div className="bg-white mt-1">
           {/* 一级分类标题 */}
-          <div className="bg-[#F4F6F9] px-3 py-2 text-xs text-gray-500">选择分类</div>
+          <div className="bg-[#FFF5F5] px-3 py-2 text-xs text-gray-500">选择分类</div>
           
           {/* 渲染每一级分类 - 每级单独一行 */}
           {categoryLevels.map((cats, level) => {
@@ -1175,7 +1175,7 @@ const AddTransaction = () => {
                     
                     {level === 0 && canManageCategories && (
                       <button
-                        className="px-3 py-1.5 rounded text-xs bg-white border border-dashed border-[#1A2B4A] text-[#1A2B4A] flex items-center gap-1 hover:bg-[#1A2B4A]-light"
+                        className="px-3 py-1.5 rounded text-xs bg-white border border-dashed border-[#D32F2F] text-[#D32F2F] flex items-center gap-1 hover:bg-red-50"
                         onClick={() => setLocation(`/ledger/${id}/categories`)}
                       >
                         <Plus className="w-4 h-4" />
@@ -1197,7 +1197,7 @@ const AddTransaction = () => {
 
         {/* 账户选择 - custom_aa 不显示 */}
         {!isCustomAA && <div className="bg-white mt-1">
-          <div className="bg-[#F4F6F9] px-3 py-2 text-xs text-gray-500">
+          <div className="bg-[#FFF5F5] px-3 py-2 text-xs text-gray-500">
             {transactionType === "expense" ? "付款方式" : "收款方式"}
           </div>
           <div className="p-3">
@@ -1207,7 +1207,7 @@ const AddTransaction = () => {
                 key={account}
                 className={`px-3 py-1.5 rounded text-xs ${
                   selectedAccounts.includes(account)
-                    ? "bg-[#1A2B4A] text-white"
+                    ? "bg-[#D32F2F] text-white"
                     : "bg-gray-100 text-gray-700"
                 }`}
                 onClick={() => {
@@ -1230,7 +1230,7 @@ const AddTransaction = () => {
         {/* 报销状态选择 - 根据功能开关显示 */}
         {ledger?.enableReimbursement === 1 && (
           <div className="bg-white mt-1">
-            <div className="bg-[#F4F6F9] px-3 py-2 text-xs text-gray-500">
+            <div className="bg-[#FFF5F5] px-3 py-2 text-xs text-gray-500">
               报销状态
             </div>
             <div className="p-3">
@@ -1251,7 +1251,7 @@ const AddTransaction = () => {
         {/* 待结功能 - 根据功能开关显示 */}
         {ledger?.enablePending === 1 && (
           <div className="bg-white mt-1">
-            <div className="bg-[#F4F6F9] px-3 py-2 text-xs text-gray-500">
+            <div className="bg-[#FFF5F5] px-3 py-2 text-xs text-gray-500">
               待结状态
             </div>
             <div className="p-3 flex flex-col gap-3">
@@ -1367,7 +1367,7 @@ const AddTransaction = () => {
             }}
           />
           {!isCustomAA && <button 
-            className="px-6 bg-[#1A2B4A] text-white flex items-center gap-2"
+            className="px-6 bg-[#D32F2F] text-white flex items-center gap-2"
             onClick={() => {
               if (uploadedImages.length >= 5) {
                 toast.error('最多只能上传5张图片');
@@ -1393,7 +1393,7 @@ const AddTransaction = () => {
                     className="w-full h-full object-cover rounded"
                   />
                   <button
-                    className="absolute -top-2 -right-2 w-5 h-5 bg-[#1A2B4A] text-white rounded-full flex items-center justify-center text-xs"
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-[#D32F2F] text-white rounded-full flex items-center justify-center text-xs"
                     onClick={() => {
                       setUploadedImages(prev => prev.filter((_, i) => i !== index));
                     }}
@@ -1437,16 +1437,16 @@ const AddTransaction = () => {
           {duplicateWarnings.map((w, idx) => (
             <div
               key={idx}
-              className="animate-warn-flash flex items-center gap-3 px-4 py-3.5 border-2 border-[#C9A84C40] rounded-2xl cursor-pointer"
+              className="animate-warn-flash flex items-center gap-3 px-4 py-3.5 border-2 border-[#FFCDD2] rounded-2xl cursor-pointer"
               onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${w.id}`)}
             >
               {/* 闪动图标 */}
-              <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-[#EEF2F8]">
-                <AlertTriangle className="animate-icon-pulse w-6 h-6 text-[#1A2B4A]" />
+              <div className="flex-shrink-0 flex items-center justify-center w-10 h-10 rounded-full bg-[#FFEBEE]">
+                <AlertTriangle className="animate-icon-pulse w-6 h-6 text-[#D32F2F]" />
               </div>
               {/* 文字区 */}
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-[#1A2B4A] leading-snug">{w.text}</p>
+                <p className="text-sm font-bold text-[#D32F2F] leading-snug">{w.text}</p>
                 <p className="text-[11px] text-[#E57373] mt-1">点此查看该账目，仍可继续保存</p>
               </div>
               {/* 右箭头 */}
@@ -1459,7 +1459,7 @@ const AddTransaction = () => {
       {/* 底部保存按鈕 */}
       <div className="flex-shrink-0 p-3 bg-white border-t">
         <button
-          className="w-full bg-[#1A2B4A] text-white py-3 rounded-lg text-base font-semibold active:bg-[#152238]"
+          className="w-full bg-[#D32F2F] text-white py-3 rounded-lg text-base font-semibold active:bg-[#B71C1C]"
           onClick={handleSave}
         >
           保存
@@ -1472,7 +1472,7 @@ const AddTransaction = () => {
       {isCustomAA && (
         <div className="flex-shrink-0 p-4 bg-white" style={{ borderTop: '1px solid #F0E8E0' }}>
           <button
-            className="w-full bg-[#1A2B4A] text-white py-4 rounded-2xl text-base font-semibold active:bg-[#152238] shadow-sm"
+            className="w-full bg-[#D32F2F] text-white py-4 rounded-2xl text-base font-semibold active:bg-[#B71C1C] shadow-sm"
             onClick={handleSave}
           >
             保存
@@ -1619,7 +1619,7 @@ const AddTransaction = () => {
               
               {/* 内层箭头 - 控制月份 */}
               <button onClick={prevMonth} className="p-1.5">
-                <ChevronLeft className="w-5 h-5 text-[#1A2B4A]" />
+                <ChevronLeft className="w-5 h-5 text-[#D32F2F]" />
               </button>
               
               {/* 年月显示 */}
@@ -1629,7 +1629,7 @@ const AddTransaction = () => {
               
               {/* 内层箭头 - 控制月份 */}
               <button onClick={nextMonth} className="p-1.5">
-                <ChevronRight className="w-5 h-5 text-[#1A2B4A]" />
+                <ChevronRight className="w-5 h-5 text-[#D32F2F]" />
               </button>
               
               {/* 外层箭头 - 控制年份 */}
@@ -1640,7 +1640,7 @@ const AddTransaction = () => {
               {/* 今天按钮 */}
               <button
                 onClick={goToToday}
-                className="ml-auto px-3 py-1 text-sm text-[#1A2B4A] border-2 border-[#1A2B4A] rounded-full"
+                className="ml-auto px-3 py-1 text-sm text-[#D32F2F] border-2 border-[#D32F2F] rounded-full"
               >
                 今天
               </button>
@@ -1649,7 +1649,7 @@ const AddTransaction = () => {
             {/* 星期标题 */}
             <div className="grid grid-cols-7 gap-1 mb-1">
               {weekDays.map((day) => (
-                <div key={day} className="text-center text-xs text-[#1A2B4A] py-0.5">
+                <div key={day} className="text-center text-xs text-[#D32F2F] py-0.5">
                   {day}
                 </div>
               ))}
@@ -1672,8 +1672,8 @@ const AddTransaction = () => {
                       h-9 sm:h-10 flex flex-col items-center justify-center text-sm rounded
                       ${!isCurrentMonth ? "text-gray-300" : ""}
                       ${nonTradingLabel ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""}
-                      ${isSelected && !nonTradingLabel ? "bg-[#1A2B4A] text-white font-semibold" : ""}
-                      ${isTodayDate && !isSelected && !nonTradingLabel ? "border border-[#1A2B4A]" : ""}
+                      ${isSelected && !nonTradingLabel ? "bg-[#D32F2F] text-white font-semibold" : ""}
+                      ${isTodayDate && !isSelected && !nonTradingLabel ? "border border-[#D32F2F]" : ""}
                       ${isCurrentMonth && !isSelected && !nonTradingLabel ? "hover:bg-gray-100 text-[#222222]" : ""}
                     `}
                   >
@@ -1723,7 +1723,7 @@ const AddTransaction = () => {
               <span className="text-sm">请选择支出人：</span>
               <button
                 onClick={() => setIsPayerSheetOpen(false)}
-                className="text-[#1A2B4A] text-sm"
+                className="text-[#D32F2F] text-sm"
               >
                 完成
               </button>
