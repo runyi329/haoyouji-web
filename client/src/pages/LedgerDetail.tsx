@@ -3933,7 +3933,7 @@ export default function LedgerDetail() {
                   {/* 开票总金额 */}
                   <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                     <div className="text-[10px] text-white/70 mb-1">开票总额</div>
-                    <div className="text-base font-bold text-white">
+                    <div className="font-bold text-white overflow-hidden" style={{ fontSize: 'clamp(10px, 3.5vw, 16px)', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                       {monthlyStats.expense > 0 ? `¥${monthlyStats.expense.toFixed(2)}` : '--'}
                     </div>
                   </div>
