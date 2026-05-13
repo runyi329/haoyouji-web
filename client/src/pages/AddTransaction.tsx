@@ -937,39 +937,27 @@ const AddTransaction = () => {
             </div>
 
             {/* 表头 */}
-            <div className="grid text-[9px] font-bold text-white" style={{ gridTemplateColumns: '1.6em 3.8em 3em 1fr 3.8em 2.8em', background: '#1A3A5C', borderBottom: '1px solid #C9A84C' }}>
+            <div className="grid text-[10px] font-bold text-white" style={{ gridTemplateColumns: '1.6em 3.6em 3.5em 1fr 5em 2.6em', background: '#1A3A5C', borderBottom: '1px solid #C9A84C' }}>
               <div className="px-0.5 py-1 text-center border-r border-white/20">序号</div>
-              <div className="px-0.5 py-1 text-center border-r border-white/20">业务发生日期</div>
+              <div className="px-0.5 py-1 text-center border-r border-white/20">日期</div>
               <div className="px-0.5 py-1 text-center border-r border-white/20">费用名称</div>
               <div className="px-0.5 py-1 text-center border-r border-white/20">事项</div>
               <div className="px-0.5 py-1 text-center border-r border-white/20">金额</div>
-              <div className="px-0.5 py-1 text-center">附件张数</div>
+              <div className="px-0.5 py-1 text-center">附件</div>
             </div>
 
             {/* 数据行 */}
-            <div className="grid text-[9px] text-gray-700" style={{ gridTemplateColumns: '1.6em 3.8em 3em 1fr 3.8em 2.8em', borderBottom: '1px solid #E8E8E8', background: '#fff' }}>
-              <div className="px-0.5 py-1.5 text-center border-r border-gray-200">1</div>
-              <div className="px-0.5 py-1.5 text-center border-r border-gray-200">{selectedDate.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}</div>
-              <div className="px-0.5 py-1.5 text-center border-r border-gray-200 font-medium">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[0] : '其他'}</div>
-              <div className="px-1 py-1.5 border-r border-gray-200 text-gray-600">{expenseReasonLabel ? (expenseReasonLabel.split(' · ')[1] || expenseReasonLabel.split(' · ')[0]) : '—'}</div>
-              <div className="px-0.5 py-1.5 text-right border-r border-gray-200 font-semibold text-[#1A3A5C]">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <div className="px-0.5 py-1.5 text-center">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</div>
+            <div className="grid text-[10px] text-gray-700" style={{ gridTemplateColumns: '1.6em 3.6em 3.5em 1fr 5em 2.6em', borderBottom: '2px solid #1A3A5C', background: '#fff' }}>
+              <div className="px-0.5 py-2 text-center border-r border-gray-200">1</div>
+              <div className="px-0.5 py-2 text-center border-r border-gray-200">{String(selectedDate.getMonth()+1).padStart(2,'0')}/{String(selectedDate.getDate()).padStart(2,'0')}</div>
+              <div className="px-0.5 py-2 text-center border-r border-gray-200 font-semibold text-[#1A3A5C]">{expenseReasonLabel ? expenseReasonLabel.split(' · ')[0] : '其他'}</div>
+              <div className="px-1 py-2 border-r border-gray-200 text-gray-500 text-[9px]">{expenseReasonLabel ? (expenseReasonLabel.split(' · ')[1] || '—') : '—'}</div>
+              <div className="px-1 py-2 text-right border-r border-gray-200 font-bold text-[#1A3A5C]">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div className="px-0.5 py-2 text-center">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</div>
             </div>
 
-            {/* 空行 */}
-            {[2,3].map(n => (
-              <div key={n} className="grid text-[9px]" style={{ gridTemplateColumns: '1.6em 3.8em 3em 1fr 3.8em 2.8em', borderBottom: '1px solid #F0F0F0', background: n%2===0?'#FAFAFA':'#fff' }}>
-                <div className="px-0.5 py-1.5 text-center border-r border-gray-100 text-gray-300">{n}</div>
-                <div className="px-0.5 py-1.5 border-r border-gray-100" />
-                <div className="px-0.5 py-1.5 border-r border-gray-100" />
-                <div className="px-0.5 py-1.5 border-r border-gray-100" />
-                <div className="px-0.5 py-1.5 border-r border-gray-100" />
-                <div className="px-0.5 py-1.5" />
-              </div>
-            ))}
-
             {/* 合计行 */}
-            <div className="grid text-[9px] font-bold" style={{ gridTemplateColumns: '5.5em 1fr 3.8em 2.8em', borderBottom: '2px solid #1A3A5C', background: '#EEF2F7' }}>
+            <div className="grid text-[10px] font-bold" style={{ gridTemplateColumns: '5.5em 1fr 5em 2.6em', borderBottom: '2px solid #1A3A5C', background: '#EEF2F7' }}>
               <div className="px-1.5 py-1.5 border-r border-gray-300">合计金额（大写）</div>
               <div className="px-1.5 py-1.5 text-[#1A3A5C] border-r border-gray-300">
                 {(() => {
@@ -994,33 +982,26 @@ const AddTransaction = () => {
                   return result;
                 })()}
               </div>
-              <div className="px-0.5 py-1.5 text-right font-bold text-[#1A3A5C] border-r border-gray-300">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div className="px-1 py-1.5 text-right font-bold text-[#1A3A5C] border-r border-gray-300">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               <div className="px-0.5 py-1.5 text-center">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</div>
             </div>
 
-            {/* 审批栏 */}
-            <div>
-              <div className="grid text-[9px]" style={{ gridTemplateColumns: '1fr 1fr' }}>
-                <div className="px-2 py-1.5 border-r border-gray-200" style={{ borderBottom: '1px solid #EEEEEE' }}>
-                  <span className="text-gray-400">报销人：</span>
-                  <span className="font-semibold text-[#1A2B4A] ml-0.5">{applicantName}</span>
-                </div>
-                <div className="px-2 py-1.5" style={{ borderBottom: '1px solid #EEEEEE' }}>
-                  <span className="text-gray-400">分管领导（审核）：</span>
-                </div>
-                <div className="px-2 py-1.5 border-r border-gray-200" style={{ borderBottom: '1px solid #EEEEEE' }}>
-                  <span className="text-gray-400">财务会计（审核账据）：</span>
-                </div>
-                <div className="px-2 py-1.5" style={{ borderBottom: '1px solid #EEEEEE' }}>
-                  <span className="text-gray-400">财务经理（审核）：</span>
-                </div>
-                <div className="px-2 py-1.5 border-r border-gray-200">
-                  <span className="text-gray-400">财务总监（审核）：</span>
-                  {selectedCompany && <span className="text-[8px] text-[#1A2B4A] ml-0.5">{selectedCompany.name.length > 6 ? selectedCompany.name.slice(0,4) + '…' : selectedCompany.name}财务部</span>}
-                </div>
-                <div className="px-2 py-1.5">
-                  <span className="text-gray-400">总经理（审批）：</span>
-                </div>
+            {/* 审批栏：仅报销人 + 经手人 */}
+            <div className="grid text-[10px]" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <div className="px-2 py-2 border-r border-gray-200">
+                <span className="text-gray-400">报销人：</span>
+                <span className="font-semibold text-[#1A2B4A] ml-0.5">{applicantName}</span>
+              </div>
+              <div className="px-2 py-2">
+                <span className="text-gray-400">经手人：</span>
+                <span className="font-semibold text-[#1A2B4A] ml-0.5">
+                  {selectedCompany ? (() => {
+                    const surnames = ['王','李','张','刘','陈','杨','赵','黄','周','吴'];
+                    const names = ['建国','志远','明华','秀英','桂芳','国强','文静','晓燕','海涛','俊杰'];
+                    const seed = (selectedCompany.name.charCodeAt(0) + selectedCompany.name.charCodeAt(selectedCompany.name.length-1)) % 10;
+                    return surnames[seed] + names[(seed * 3 + 1) % 10];
+                  })() : '—'}
+                </span>
               </div>
             </div>
 
