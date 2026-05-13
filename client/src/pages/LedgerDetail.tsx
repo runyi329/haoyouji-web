@@ -5359,7 +5359,13 @@ export default function LedgerDetail() {
                         key={record.id}
                         style={{ filter: 'drop-shadow(0 2px 8px rgba(168,0,0,0.15))' }}
                         className="cursor-pointer mb-3"
-                        onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${record.id}`)}
+                        onClick={() => {
+                          if (isOwner || isAdmin) {
+                            setLocation(`/ledger/${ledgerId}/transaction/${record.id}`);
+                          } else {
+                            toast.error('无权限查看详情');
+                          }
+                        }}
                       >
                         <div style={{
                           background: '#FDFCF7',
