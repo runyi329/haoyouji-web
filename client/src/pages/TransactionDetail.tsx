@@ -607,9 +607,9 @@ export default function TransactionDetail() {
           {/* 删除按钮：根据权限设置判断显示，all=可删全部，own=只能删自己的，none=不显示 */}
           {(() => {
             const perm = transaction.userPermissionDelete || 'none';
-            const isOwnerOrAdmin = isAdminOrOwner;
-            // owner/admin 始终可删除
-            if (isOwnerOrAdmin) {
+            const isOwner = ledgerData?.userRole === 'owner';
+            // 只有 owner（账本创建者）始终可删除，不受权限设置限制
+            if (isOwner) {
               return (
                 <button 
                   onClick={() => setShowDeleteDialog(true)}
@@ -620,6 +620,7 @@ export default function TransactionDetail() {
                 </button>
               );
             }
+            // 其他所有人（包括 admin）都走 permission_delete 判断
             // none = 不显示删除按钮
             if (perm === 'none') return null;
             // own = 只能删除自己的
