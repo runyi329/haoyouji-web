@@ -598,26 +598,28 @@ export default function TransactionDetail() {
         </div>
       )}
 
+      {/* 已审批账目且有待审批申请：单独渲染，不受外层审批员条件限制 */}
+      {isApproved && pendingChangeRequest && (
+        <div className="bg-white px-4 py-3">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+            <div className="text-sm text-amber-800 font-medium mb-1">
+              {pendingChangeRequest.requestType === 'delete' ? '删除申请待审批' : '修改申请待审批'}
+            </div>
+            <div className="text-xs text-amber-600 mb-2">已提交申请，等待管理员审批中...</div>
+            {pendingChangeRequest.isMyRequest && (
+              <button
+                onClick={() => setShowWithdrawDialog(true)}
+                className="w-full py-2 bg-white border border-amber-300 text-amber-700 rounded-lg text-sm font-medium"
+              >
+                撤回申请
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {(transaction.approvalStatus !== 'pending' || !isApprover()) && (
         <div className="bg-white px-4 py-3 space-y-3">
-          {/* 已审批账目且有待审批申请时，显示申请状态和撤回按钮 */}
-          {isApproved && pendingChangeRequest && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-              <div className="text-sm text-amber-800 font-medium mb-1">
-                {pendingChangeRequest.requestType === 'delete' ? '删除申请待审批' : '修改申请待审批'}
-              </div>
-              <div className="text-xs text-amber-600 mb-2">已提交申请，等待管理员审批中...</div>
-              {pendingChangeRequest.isMyRequest && (
-                <button
-                  onClick={() => setShowWithdrawDialog(true)}
-                  className="w-full py-2 bg-white border border-amber-300 text-amber-700 rounded-lg text-sm font-medium"
-                >
-                  撤回申请
-                </button>
-              )}
-            </div>
-          )}
-
           {/* 已审批账目：所有人都必须走申请流程 */}
           {isApproved && !pendingChangeRequest && (
             <>
