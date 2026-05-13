@@ -162,7 +162,7 @@ export default function ReimbursementForm({
       <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-0 gap-0">
         <div className="bg-white rounded-lg overflow-hidden">
           {/* 报销单标题 */}
-          <div className="bg-gradient-to-r from-[#A80000] to-[#d44] px-4 py-3 text-center">
+          <div className="bg-gradient-to-r from-[#1A2B4A] to-[#2D4A7A] px-4 py-3 text-center">
             <h2 className="text-white text-lg font-bold tracking-[0.3em]">报 销 单</h2>
             <p className="text-white/70 text-xs mt-0.5">电子报销申请表</p>
           </div>
@@ -204,7 +204,7 @@ export default function ReimbursementForm({
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0.00"
-                  className="text-lg font-bold text-[#A80000] border-gray-300 bg-gray-50 focus:bg-white"
+                  className="text-lg font-bold text-[#1A2B4A] border-gray-300 bg-gray-50 focus:bg-white"
                   step="0.01"
                 />
               </div>
@@ -224,7 +224,7 @@ export default function ReimbursementForm({
             <div className="bg-[#FFF8F0] rounded-md px-3 py-2 mt-2">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-500 flex-shrink-0">合计人民币（大写）：</span>
-                <span className="text-sm font-medium text-[#A80000]">{amountToChinese(amountNum)}</span>
+                <span className="text-sm font-medium text-[#1A2B4A]">{amountToChinese(amountNum)}</span>
               </div>
             </div>
           </div>
@@ -266,7 +266,7 @@ export default function ReimbursementForm({
                   </button>
                   <button
                     onClick={() => setVoucherImage(null)}
-                    className="text-xs text-[#D32F2F] underline"
+                    className="text-xs text-[#1A2B4A] underline"
                   >
                     删除
                   </button>
@@ -309,7 +309,7 @@ export default function ReimbursementForm({
               onClick={handleSubmit}
               disabled={isPending || !content.trim() || amountNum <= 0}
               className="flex-1 text-white"
-              style={{ backgroundColor: '#A80000' }}
+              style={{ backgroundColor: '#1A2B4A' }}
             >
               {isPending ? '提交中...' : '提交报销申请'}
             </Button>
