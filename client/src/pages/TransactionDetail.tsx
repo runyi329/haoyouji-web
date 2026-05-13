@@ -618,14 +618,14 @@ export default function TransactionDetail() {
             </div>
           )}
 
-          {/* 已审批账目且非管理员：显示申请修改/申请删除 */}
-          {isApproved && !isAdminOrOwner && !pendingChangeRequest && (
+          {/* 已审批账目：所有人都必须走申请流程 */}
+          {isApproved && !pendingChangeRequest && (
             <>
               <button 
-                onClick={() => { setChangeRequestType('modify'); setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}&requestMode=true`); }}
+                onClick={() => setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}`)}
                 className="w-full py-3 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium text-base"
               >
-                申请修改
+                修改数据
               </button>
               <button 
                 onClick={() => { setChangeRequestType('delete'); setShowChangeRequestDialog(true); }}
@@ -637,8 +637,8 @@ export default function TransactionDetail() {
             </>
           )}
 
-          {/* 管理员或未审批账目：直接操作 */}
-          {(!isApproved || isAdminOrOwner) && (
+          {/* 未审批账目：直接操作 */}
+          {!isApproved && (
             <>
               <button 
                 onClick={() => setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}`)}
