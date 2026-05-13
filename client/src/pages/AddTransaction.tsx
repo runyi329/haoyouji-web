@@ -852,8 +852,8 @@ const AddTransaction = () => {
               )}
             </div>
             {/* 报销金额 - 手动填写区 */}
-            <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
-              <div className="flex items-center gap-2 mb-2">
+            <div className="px-4 pt-3 pb-2" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+              <div className="flex items-center gap-2 mb-1.5">
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
                 <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#C9A84C', color: '#fff', fontSize: '10px' }}>必填</span>
               </div>
@@ -877,8 +877,8 @@ const AddTransaction = () => {
               </div>
             </div>
             {/* 发票附件 - 手动操作区 */}
-            <div className="px-5 py-4" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
-              <div className="flex items-center gap-2 mb-3">
+            <div className="px-4 py-2.5" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+              <div className="flex items-center gap-2 mb-2">
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>发票凭证</span>
                 <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#C9A84C', color: '#fff', fontSize: '10px' }}>必传</span>
               </div>
@@ -1048,11 +1048,10 @@ const AddTransaction = () => {
           </div>
 
           {/* AI 提示语 */}
-          <div className="mx-3 mt-3 px-4 py-3 rounded-xl flex items-start gap-2" style={{ background: '#F0F4FF', border: '1px solid #D0DAF5' }}>
-            <span className="text-base mt-0.5" style={{ lineHeight: 1 }}>🤖</span>
+          <div className="mx-3 mt-3 px-3 py-2.5 rounded-xl" style={{ background: '#F0F4FF', border: '1px solid #D0DAF5' }}>
             <div className="text-xs leading-relaxed" style={{ color: '#4A5A8A' }}>
               <span className="font-semibold" style={{ color: '#1A2B4A' }}>AI 财会助理提示：</span>
-              报销事项已由 AI 智能生成，如有必要，AI 财会将自动检验内容合规性，直接提交即可。
+              报销事项明细单（费用名称/事项）由 AI 智能生成，如有必要，AI 财会将自动检验内容合规性，直接提交即可。
             </div>
           </div>
 
