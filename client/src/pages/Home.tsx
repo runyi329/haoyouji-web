@@ -1207,6 +1207,17 @@ export default function Home() {
     { enabled: categorySheetOpen && selectedCategoryId !== null, staleTime: 60000 }
   );
 
+  // 76号账本（AJ报销账本）成员检查：用于智能会计快捷入口
+  const { data: ledger76Data } = trpc.ledger.getById.useQuery(
+    { ledgerId: 76 },
+    {
+      enabled: !!user, // 仅登录后查询
+      retry: false,    // 不是成员时不重试
+      // 忽略错误（非成员时接口会报错，正常情况）
+    }
+  );
+  const isLedger76Member = !!ledger76Data; // 能查到数据说明是成员
+
   // 积分商城：兑换操作
   const redeemRewardMutation = trpc.rewards.redeemReward.useMutation({
     onSuccess: () => {
@@ -2497,15 +2508,26 @@ export default function Home() {
                 </div>
                 <div className="flex-1" />
               </div>
-              {/* 智能会计 - 黑白金立体风格 */}
+              {/* 智能会计 - 黑白金立体风格，点击跳转76号账本报销申请单 */}
               <div
                 className="flex flex-col rounded-xl cursor-pointer active:scale-[0.98] relative overflow-hidden"
+                onClick={() => {
+                  if (!user) {
+                    requireLogin();
+                    return;
+                  }
+                  if (isLedger76Member) {
+                    navigate('/ledger/76/add');
+                  }
+                  // 非成员：静默不响应
+                }}
                 style={{
                   background: 'linear-gradient(135deg, #111111 0%, #2a2a2a 45%, #1a1a1a 100%)',
                   boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
                   border: '1px solid rgba(201,168,76,0.6)',
                   transition: 'transform 0.15s ease, box-shadow 0.15s ease',
                   padding: '6px 10px',
+                  opacity: user && !isLedger76Member ? 0.5 : 1,
                 }}
               >
                 {/* 顶部金色高光线 */}
