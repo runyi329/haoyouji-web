@@ -9025,18 +9025,26 @@ ${klinesSummary}
       }))
       .mutation(async ({ input, ctx }) => {
         const db = await getDbConnection();
+        // 验证账本类型必须是 custom_aj
+        const [ledgerRows] = await db.execute(
+          'SELECT id, type FROM ledgers WHERE id = ? LIMIT 1',
+          [input.ledgerId]
+        ) as any;
+        if (!ledgerRows[0] || ledgerRows[0].type !== 'custom_aj') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '此操作仅限 AJ 账本' });
+        }
         // 查询账目，验证归属和状态
         const [rows] = await db.execute(
-          'SELECT id, created_by, aj_status FROM ledger_records WHERE id = ? AND ledger_id = ? AND deleted_at IS NULL LIMIT 1',
+          'SELECT id, createdBy, aj_status FROM ledger_records WHERE id = ? AND ledgerId = ? AND deleted_at IS NULL LIMIT 1',
           [input.recordId, input.ledgerId]
         ) as any;
         const record = rows[0];
         if (!record) throw new TRPCError({ code: 'NOT_FOUND', message: '账目不存在' });
         if (record.aj_status !== 'pending') throw new TRPCError({ code: 'BAD_REQUEST', message: '只能撤回待审批状态的申请' });
-        if (record.created_by !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '只能撤回自己提交的申请' });
+        if (record.createdBy !== ctx.user.id) throw new TRPCError({ code: 'FORBIDDEN', message: '只能撤回自己提交的申请' });
         // 将 aj_status 重置为 null（未提交状态）
         await db.execute(
-          'UPDATE ledger_records SET aj_status = NULL, updated_at = NOW() WHERE id = ?',
+          'UPDATE ledger_records SET aj_status = NULL, updatedAt = NOW() WHERE id = ?',
           [input.recordId]
         );
         return { success: true };
