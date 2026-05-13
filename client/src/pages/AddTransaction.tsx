@@ -1047,6 +1047,15 @@ const AddTransaction = () => {
 
           </div>
 
+          {/* AI 提示语 */}
+          <div className="mx-3 mt-3 px-4 py-3 rounded-xl flex items-start gap-2" style={{ background: '#F0F4FF', border: '1px solid #D0DAF5' }}>
+            <span className="text-base mt-0.5" style={{ lineHeight: 1 }}>🤖</span>
+            <div className="text-xs leading-relaxed" style={{ color: '#4A5A8A' }}>
+              <span className="font-semibold" style={{ color: '#1A2B4A' }}>AI 财会助理提示：</span>
+              报销事项已由 AI 智能生成，如有必要，AI 财会将自动检验内容合规性，直接提交即可。
+            </div>
+          </div>
+
           {/* 重复账目警告 */}
           {duplicateWarnings.length > 0 && (
             <div className="mx-3 mt-3">
