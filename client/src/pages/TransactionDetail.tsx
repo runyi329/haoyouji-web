@@ -612,8 +612,10 @@ export default function TransactionDetail() {
       )}
 
       {/* 待审批且是自己提交的：显示撤回报销申请按鈕 */}
-      {/* DEBUG: 临时调试输出 */}
-      {(() => { console.log('[DEBUG] approvalStatus:', transaction.approvalStatus, 'createdBy:', transaction.createdBy, 'user.id:', user?.id, 'ajStatus:', (transaction as any).ajStatus); return null; })()}
+      {/* DEBUG: 临时调试显示在页面上 */}
+      <div style={{fontSize:'10px',color:'#999',padding:'4px 16px',background:'#f5f5f5',wordBreak:'break-all'}}>
+        approvalStatus: {String(transaction.approvalStatus)} | createdBy: {String(transaction.createdBy)} | userId: {String(user?.id)} | ajStatus: {String((transaction as any).ajStatus)}
+      </div>
       {transaction.approvalStatus === 'pending' && transaction.createdBy === user?.id && (
         <div className="bg-white px-4 py-3">
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
