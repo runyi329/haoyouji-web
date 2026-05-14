@@ -5606,6 +5606,35 @@ export default function LedgerDetail() {
                                 <div style={{ fontSize: '12px', color: '#444', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {record.description || '—'}
                                 </div>
+                                {/* 缩略图行：紧贴事由文字下方，高度固定18px不撑大卡片 */}
+                                {(() => {
+                                  const imgs: string[] = Array.isArray(record.images) && record.images.length > 0
+                                    ? record.images
+                                    : record.imageUrl ? [record.imageUrl] : [];
+                                  return imgs.length > 0 ? (
+                                    <div style={{ display: 'flex', gap: '3px', marginTop: '3px' }}>
+                                      {imgs.slice(0, 4).map((url: string, i: number) => (
+                                        <div key={i} style={{
+                                          width: '18px', height: '18px', borderRadius: '3px',
+                                          overflow: 'hidden', flexShrink: 0,
+                                          border: '1px solid rgba(26,43,74,0.15)',
+                                          position: 'relative'
+                                        }}>
+                                          <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                          {/* 第4张且还有更多时显示+N */}
+                                          {i === 3 && imgs.length > 4 && (
+                                            <div style={{
+                                              position: 'absolute', inset: 0,
+                                              background: 'rgba(0,0,0,0.5)',
+                                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                              color: '#fff', fontSize: '8px', fontWeight: 700
+                                            }}>+{imgs.length - 3}</div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : null;
+                                })()}
                               </div>
                             </div>
 
