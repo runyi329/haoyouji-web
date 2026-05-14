@@ -230,6 +230,17 @@ jobs:
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
                 ALTER TABLE merchant_products ADD COLUMN inPointsShop TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否上架到积分商城（0=否，1=是）' AFTER isShareable;
               " 2>&1 && echo "✅ inPointsShop 字段已添加" || echo "⚠️ inPointsShop 字段可能已存在（正常）"
+              echo "确保 aj_company_access 表有 access_type 字段（资方/劳方独立权限）..."
+              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+                ALTER TABLE aj_company_access ADD COLUMN IF NOT EXISTS access_type VARCHAR(20) NOT NULL DEFAULT 'worker' COMMENT '权限类型: funder=资方, worker=劳方' AFTER user_id;
+              " 2>&1 && echo "✅ access_type 字段已添加" || echo "⚠️ access_type 字段可能已存在（正常）"
+              echo "确保 aj_company_access 表的唯一索引包含 access_type..."
+              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+                ALTER TABLE aj_company_access DROP INDEX IF EXISTS aj_company_access_uniq;
+              " 2>&1 || true
+              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
+                ALTER TABLE aj_company_access ADD UNIQUE INDEX aj_company_access_uniq (company_id, user_id, access_type);
+              " 2>&1 && echo "✅ 唯一索引已更新" || echo "⚠️ 唯一索引可能已存在（正常）"
             else
               echo "DATABASE_URL not found, 跳过建表"
             fi
