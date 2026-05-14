@@ -31,7 +31,6 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useLocation } from "wouter";
 import "@/styles/level-text.css";
 import BottomNav from "@/components/BottomNav";
-const WaterAnimation3D = React.lazy(() => import('@/components/WaterAnimation3D'));
 
 // 翻牌卡片单个数字组件
 // 原理：数字元素高度固定为 h，用 overflow:hidden 裁切上半 / 下半
@@ -1854,12 +1853,13 @@ export default function Home() {
                 <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>刷新</span>
               </div>
             </div>
-            <div className="flex-1 relative overflow-hidden rounded-xl">
-              <React.Suspense fallback={<div className="w-full h-full bg-gray-900 rounded-xl" />}>
-                <WaterAnimation3D />
-              </React.Suspense>
-              <div className="absolute bottom-2 left-0 right-0 flex flex-col items-center pointer-events-none">
-                <span className="text-xs text-white/60">装修升级中</span>
+            <div className="flex-1 relative overflow-hidden rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 flex flex-col items-center justify-center">
+              <div className="flex flex-col items-center space-y-3">
+                <div className="w-12 h-12 rounded-full bg-white/60 flex items-center justify-center">
+                  <span className="text-2xl">🔧</span>
+                </div>
+                <span className="text-sm text-gray-500 font-medium">装修升级中</span>
+                <span className="text-xs text-gray-400">敬请期待</span>
               </div>
             </div>
           </div>,
