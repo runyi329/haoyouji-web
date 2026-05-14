@@ -4063,8 +4063,7 @@ export default function LedgerDetail() {
             )}
           </div>
         )}
-      </div>
-        {/* 普通账本：统计面板（总收入/总结余/总支出）*/}
+        {/* 普通账本：统计面板（总收入/总结余/总支出）融入红色头部 */}
         {!isCustomAE && !isDiet && !isCustomAF && !isCustomAH && !isCustomAI && !isCustomAJ && (
           <div className="px-4 pt-2 pb-1 relative">
             <div className="grid grid-cols-3 gap-4 text-center">
@@ -4124,6 +4123,7 @@ export default function LedgerDetail() {
             </div>
           </div>
         )}
+      </div>
       {/* 待审批提示：AJ账本只有owner能看，其他账本owner/admin都能看 */}
       {pendingApprovals.length > 0 && (isCustomAJ ? effectiveIsOwner : (effectiveIsOwner || effectiveIsAdmin)) && (
         <div 
