@@ -3298,20 +3298,53 @@ export default function LedgerDetail() {
             {/* 成员头像和功能按鈕 */}
             <div className="px-4 py-2 flex items-center justify-between">
               {/* 左侧：普通账本显示所有共享成员头像；定制账本只显示当前用户 */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center">
                 {!isCustomAE ? (
-                  // 普通账本 / 减肥账本：显示所有成员头像
-                  (membersData && membersData.length > 0 ? membersData : (user ? [{ username: user.username, avatar: user.avatar, nickname: user.nickname }] : [])).slice(0, 6).map((m: any, i: number) => (
-                    <UserAvatar
-                      key={i}
-                      username={m.username || m.user?.username}
-                      avatar={m.avatar || m.user?.avatar}
-                      nickname={m.nickname || m.user?.nickname}
-                      size="md"
-                    />
-                  ))
+                  // 普通账本 / 减肥账本：叠加头像，最多3个，超出部分用+N气泡
+                  (() => {
+                    const allMembers = membersData && membersData.length > 0 ? membersData : (user ? [{ username: user.username, avatar: user.avatar, nickname: user.nickname }] : []);
+                    const maxShow = 3;
+                    const shown = allMembers.slice(0, maxShow);
+                    const extra = allMembers.length - maxShow;
+                    return (
+                      <div className="flex items-center" style={{ position: 'relative' }}>
+                        {shown.map((m: any, i: number) => (
+                          <div key={i} style={{ marginLeft: i === 0 ? 0 : -10, zIndex: maxShow - i, position: 'relative' }}>
+                            <UserAvatar
+                              username={m.username || m.user?.username}
+                              avatar={m.avatar || m.user?.avatar}
+                              nickname={m.nickname || m.user?.nickname}
+                              size="md"
+                            />
+                          </div>
+                        ))}
+                        {extra > 0 && (
+                          <div
+                            style={{
+                              marginLeft: -10,
+                              zIndex: 0,
+                              width: 32,
+                              height: 32,
+                              borderRadius: '50%',
+                              backgroundColor: 'rgba(255,255,255,0.3)',
+                              border: '2px solid rgba(255,255,255,0.7)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: '#fff',
+                              flexShrink: 0,
+                            }}
+                          >
+                            +{extra}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
                 ) : (
-                  // AE 抽奖箱：只显示当前用户
+                  // AE 抽奖筱：只显示当前用户
                   user && (
                     <UserAvatar
                       username={user.username}
