@@ -407,6 +407,24 @@ function AccessPanel({
     onError: (e) => toast.error(e.message),
   });
 
+  const batchDisableMutation = (trpc as any).ledger.ajBatchDisableWorkers.useMutation({
+    onSuccess: () => {
+      utils.ledger.ajGetCompanyAccess.invalidate({ companyId: company.id, ledgerId });
+      utils.ledger.ajGetCompanies.invalidate({ ledgerId });
+      toast.success('已关闭该公司所有劳方权限');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const batchEnableMutation = (trpc as any).ledger.ajBatchEnableAllWorkers.useMutation({
+    onSuccess: (data: any) => {
+      utils.ledger.ajGetCompanyAccess.invalidate({ companyId: company.id, ledgerId });
+      utils.ledger.ajGetCompanies.invalidate({ ledgerId });
+      toast.success(`已将全部 ${data?.count ?? ''} 名劳方成员添加到该公司`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const [showAddFunder, setShowAddFunder] = useState(false);
   const [showAddWorker, setShowAddWorker] = useState(false);
 
@@ -564,13 +582,37 @@ function AccessPanel({
                 <div className="border-t border-gray-100 mb-3" />
                 <div className="flex items-center justify-between mb-2 px-1">
                   <div className="text-xs text-gray-400 font-medium">业务员（劳方）— 可向该企业提交报销</div>
-                  <button
-                    onClick={() => setShowAddWorker(true)}
-                    className="flex items-center gap-1 text-xs text-[#C0392B] font-medium"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    添加
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        if (!window.confirm('确认将所有劳方成员一键添加到该公司？')) return;
+                        batchEnableMutation.mutate({ companyId: company.id, ledgerId });
+                      }}
+                      disabled={batchEnableMutation.isPending}
+                      className="flex items-center gap-0.5 text-xs text-blue-500 border border-blue-200 px-2 py-0.5 rounded-full hover:bg-blue-50 transition-colors disabled:opacity-50"
+                    >
+                      <Plus className="w-3 h-3" />
+                      全部添加
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (enabledWorkers.length === 0) { toast.error('该公司暂无劳方成员'); return; }
+                        if (!window.confirm(`确认一键关闭该公司所有 ${enabledWorkers.length} 名劳方的权限？`)) return;
+                        batchDisableMutation.mutate({ companyId: company.id, ledgerId });
+                      }}
+                      disabled={batchDisableMutation.isPending || enabledWorkers.length === 0}
+                      className="flex items-center gap-0.5 text-xs text-red-400 border border-red-200 px-2 py-0.5 rounded-full hover:bg-red-50 transition-colors disabled:opacity-50"
+                    >
+                      一键关闭
+                    </button>
+                    <button
+                      onClick={() => setShowAddWorker(true)}
+                      className="flex items-center gap-1 text-xs text-[#C0392B] font-medium"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      添加
+                    </button>
+                  </div>
                 </div>
                 {enabledWorkers.length === 0 ? (
                   <div className="text-xs text-gray-300 px-1 py-2">暂未添加劳方成员</div>
