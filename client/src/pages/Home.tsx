@@ -1813,8 +1813,14 @@ export default function Home() {
       {(() => {
         const realDotIndex = ((socialPageIndex - 1 + SOCIAL_PAGES) % SOCIAL_PAGES);
         const socialPages = [
-          // 页1：功能入口
-          <div key="p1" className="w-full h-full flex flex-col px-3 py-2">
+          // 页1：蓄水池动画（水滴）
+          <div key="p1" className="w-full h-full flex items-center justify-center">
+            <div style={{ width: '100%', aspectRatio: '4/3' }}>
+              <XushuchiLottie />
+            </div>
+          </div>,
+          // 页2：装修升级中
+          <div key="p2" className="w-full h-full flex flex-col px-3 py-2">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 社交</span>
               <div onClick={handleRefresh} className="flex flex-col items-center cursor-pointer">
@@ -1829,12 +1835,6 @@ export default function Home() {
                 <UnderConstructionLottie />
               </div>
               <span className="text-xs text-gray-300 mt-1">装修升级中</span>
-            </div>
-          </div>,
-          // 页2：蓄水池动画（原版全屏）
-          <div key="p2" className="w-full h-full flex items-center justify-center">
-            <div style={{ width: '100%', aspectRatio: '4/3' }}>
-              <XushuchiLottie />
             </div>
           </div>,
           // 页3：积分商城（商品分类入口）
