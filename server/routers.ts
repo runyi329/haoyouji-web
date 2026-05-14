@@ -15806,7 +15806,20 @@ ${klinesSummary}
         // 确定要查询哪个用户的权限（切换视角时查目标用户，否则查自己）
         const targetUserId = input.viewAsUserId || ctx.user.id;
 
-        // 所有人（包括管理员、超管）一律按权限记录过滤，没有被开启就看不到
+        // owner/admin（创始人/企业主）可看到账本下所有公司，不受 access 权限限制
+        // 切换视角时（viewAsUserId）按目标用户权限过滤
+        const isOwnerOrAdmin = memberRole === 'owner' || memberRole === 'admin';
+        if (isOwnerOrAdmin && !input.viewAsUserId) {
+          // 创始人/企业主直接返回账本下所有公司
+          const [rows] = await (conn as any).execute(
+            `SELECT id, name, tax_no as taxNo, address, phone, bank_name as bankName, bank_account as bankAccount, remark
+             FROM aj_companies WHERE ledger_id=? ORDER BY created_at ASC`,
+            [input.ledgerId]
+          );
+          return rows as any[];
+        }
+
+        // 普通成员（业务员）或切换视角时：按 access 权限过滤
         // 劳方视角只返回 access_type='worker' 的企业（旧数据 NULL 也视为 worker）
         const [rows] = await (conn as any).execute(
           `SELECT c.id, c.name, c.tax_no as taxNo, c.address, c.phone, c.bank_name as bankName, c.bank_account as bankAccount, c.remark
