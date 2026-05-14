@@ -327,6 +327,14 @@ export default function AJOwnerCompanies() {
   }
   const pendingCount = (myRequests as any[] | undefined)?.filter((r: any) => r.status === 'pending').length || 0;
 
+  const cancelRequestMutation = (trpc as any).ledger.ajOwnerCancelRequest.useMutation({
+    onSuccess: () => {
+      utils.invalidate();
+      toast.success('申请已撤销');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const submitMutation = (trpc as any).ledger.ajOwnerSubmitRequest.useMutation({
     onSuccess: () => {
       utils.invalidate();
@@ -616,6 +624,21 @@ export default function AJOwnerCompanies() {
                       <div className="mt-2 text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
                         审核意见：{req.review_comment}
                         {req.reviewerName && <span className="ml-1 text-gray-400">（{req.reviewerName}）</span>}
+                      </div>
+                    )}
+                    {req.status === 'pending' && (
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          onClick={() => {
+                            if (window.confirm('确定要撤销这条申请吗？撤销后将无法恢复。')) {
+                              cancelRequestMutation.mutate({ ledgerId, requestId: req.id });
+                            }
+                          }}
+                          disabled={cancelRequestMutation.isPending}
+                          className="text-xs text-red-500 border border-red-200 rounded-lg px-3 py-1 hover:bg-red-50 transition-colors disabled:opacity-50"
+                        >
+                          {cancelRequestMutation.isPending ? '撤销中...' : '撤销申请'}
+                        </button>
                       </div>
                     )}
                   </div>
