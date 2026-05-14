@@ -15697,6 +15697,64 @@ ${klinesSummary}
         }
         return { success: true };
       }),
+    // 一键关闭该公司所有劳方权限（管理员操作）
+    ajBatchDisableWorkers: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        ledgerId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (!isSysAdmin && memberRole !== 'owner' && memberRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        await (conn as any).execute(
+          `UPDATE aj_company_access SET is_enabled=0, enabled_at=NULL WHERE company_id=? AND ledger_id=? AND access_type='worker'`,
+          [input.companyId, input.ledgerId]
+        );
+        return { success: true };
+      }),
+    // 一键将所有劳方成员（非owner）添加到该公司（管理员操作）
+    ajBatchEnableAllWorkers: protectedProcedure
+      .input(z.object({
+        companyId: z.number(),
+        ledgerId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (!isSysAdmin && memberRole !== 'owner' && memberRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        // 获取所有非 owner 成员
+        const [allMembers] = await (conn as any).execute(
+          `SELECT userId FROM ledger_members WHERE ledgerId=? AND role NOT IN ('owner')`,
+          [input.ledgerId]
+        );
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        for (const m of (allMembers as any[])) {
+          await (conn as any).execute(
+            `INSERT INTO aj_company_access (ledger_id, company_id, user_id, access_type, is_enabled, enabled_by, enabled_at)
+             VALUES (?, ?, ?, 'worker', 1, ?, ?)
+             ON DUPLICATE KEY UPDATE is_enabled=1, enabled_by=?, enabled_at=?`,
+            [input.ledgerId, input.companyId, m.userId, ctx.user.id, now, ctx.user.id, now]
+          );
+        }
+        return { success: true, count: (allMembers as any[]).length };
+      }),
     // 修改账本成员角色（管理员操作，用于企业管理页面切换资方/劳方）
     ajUpdateMemberRole: protectedProcedure
       .input(z.object({
