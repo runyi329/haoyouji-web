@@ -755,7 +755,7 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
                         <img src="https://static.okx.com/cdn/assets/imgs/247/58E63FEA47A2B7D7.png" alt="OKX" className="w-5 h-5 rounded" />
                       )}
                       <h3 className="font-semibold text-gray-900">
-                        {wallet.walletType === "binance" ? (币安账户) : wallet.walletType === "okx" ? (欧易账户) : (区块链钱包)}
+                        {wallet.walletType === "binance" ? "币安账户" : wallet.walletType === "okx" ? "欧易账户" : "区块链钱包"}
                       </h3>
                       {wallet.isDefault === 1 && (
                         <span className="flex items-center gap-1 text-xs bg-[#D32F2F] text-white px-2 py-0.5 rounded">
