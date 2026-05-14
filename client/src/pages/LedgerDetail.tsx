@@ -2532,7 +2532,10 @@ export default function LedgerDetail() {
   // AJ账本专用独立统计周期，不影响普通账本的statsPeriod
   const [ajStatsPeriod, setAjStatsPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>('month');
   // AJ账本视角切换：企业负责人 / 业务负责人（仅isAdmin角色有此切换）
-  const [ajViewMode, setAjViewMode] = useState<'owner' | 'salesman'>('salesman');
+  // funder（企业主）角色默认停在「资」（owner）视角
+  const [ajViewMode, setAjViewMode] = useState<'owner' | 'salesman'>(
+    (ledgerData as any)?.userRole === 'funder' ? 'owner' : 'salesman'
+  );
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
   const [aiProductDetail, setAiProductDetail] = useState<string | null>(null);
   const [aiProductQty, setAiProductQty] = useState(1);
@@ -2618,6 +2621,13 @@ export default function LedgerDetail() {
       localStorage.setItem('lastVisitedLedgerId', String(ledgerId));
     }
   }, [ledgerId]);
+
+  // AJ账本：funder（企业主）角色加载完成后，自动切换到「资」（owner）视角
+  useEffect(() => {
+    if (isFunder && isCustomAJ) {
+      setAjViewMode('owner');
+    }
+  }, [isFunder, isCustomAJ]);
 
   // 定制账本(AD)：永忆
   const isCustomAD = (ledgerData as any)?.type === 'custom_ad';
