@@ -2816,6 +2816,15 @@ export default function LedgerDetail() {
     'from-[#0277BD] to-[#00695C]',
   ];
 
+  // 资方视角：直接返回独立页面，完全绕过原有复杂容器结构，避免蓝色横线
+  if (isCustomAJ && isFunder && !viewAsUserId) {
+    return (
+      <div className="flex flex-col min-h-screen bg-white">
+        <AJOwnerPanel ledgerId={Number(ledgerId)} isFunder={true} />
+      </div>
+    );
+  }
+
   return (
     <div className={(isCustomAI || isCustomAJ) ? "flex flex-col" : "min-h-screen"} style={isCustomAI ? {
       height: '100dvh',
