@@ -872,6 +872,11 @@ const AddTransaction = () => {
                   className="text-3xl font-bold text-[#1A2B4A] bg-transparent border-none outline-none flex-1 placeholder-gray-200"
                   style={{ caretColor: '#1A2B4A' }}
                   autoComplete="off"
+                  onBlur={() => {
+                    if (amount && parseFloat(amount) > 0) {
+                      setAmount(parseFloat(amount).toFixed(2));
+                    }
+                  }}
                 />
               </div>
               {amount && parseFloat(amount) > 0 && (
