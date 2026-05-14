@@ -5323,7 +5323,7 @@ export default function LedgerDetail() {
       )}
 
       {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示；AJ账本切换到资方视角时也隐藏 */}
-      {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && !(isCustomAJ && isAdmin && !viewAsUserId && ajViewMode === 'owner') && <div className={`flex-1 pb-20 space-y-3`}>
+      {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && !(isCustomAJ && (isAdmin || isFunder) && !viewAsUserId && ajViewMode === 'owner') && <div className={`flex-1 pb-20 space-y-3`}>
         {!hasRecords ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-base mb-1">{ledgerData?.type === 'diet' ? '还没有减肥记录' : '还没有记账记录'}</div>
@@ -5583,7 +5583,7 @@ export default function LedgerDetail() {
       </div>}
 
       {/* 底部添加按鈕：AJ账本专用（劳方添加发票，资方仅 owner/创始人可添加企业） */}
-      {isCustomAJ && !(isAdmin && !viewAsUserId && ajViewMode === 'owner') && (
+      {isCustomAJ && !((isAdmin || isFunder) && !viewAsUserId && ajViewMode === 'owner') && (
         <button
           onClick={() => {
             if (isAdmin && !viewAsUserId && ajViewMode === 'owner') {
