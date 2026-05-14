@@ -647,36 +647,33 @@ const UnderConstructionLottie = React.memo(function UnderConstructionLottie() {
 });
 
 // ── 蓄水池 Lottie 动画组件（懒加载）──────────────────────────────────
+const RAINBOW_HUES = [0, 30, 60, 120, 200, 240, 280]; // 红橙黄绿蓝靛紫
 const XushuchiLottie = React.memo(function XushuchiLottie() {
   const [animData, setAnimData] = React.useState<object | null>(null);
-  const [hue, setHue] = React.useState(0);
+  const [colorIdx, setColorIdx] = React.useState(0);
+  const hue = RAINBOW_HUES[colorIdx];
   React.useEffect(() => {
     fetch('/xushuchi.json')
       .then(r => r.json())
       .then(setAnimData)
       .catch(() => {});
   }, []);
-  // 七彩循环：每 1.2 秒切换到下一个色相（7色 × 1.2s = 8.4s 一轮）
-  React.useEffect(() => {
-    const COLORS = [0, 30, 60, 120, 200, 240, 280]; // 红橙黄绿蓝靛紫
-    let idx = 0;
-    const timer = setInterval(() => {
-      idx = (idx + 1) % COLORS.length;
-      setHue(COLORS[idx]);
-    }, 1200);
-    return () => clearInterval(timer);
+  // 每次动画循环完成（水满重新开始）时切换下一个颜色
+  const handleLoopComplete = React.useCallback(() => {
+    setColorIdx(prev => (prev + 1) % RAINBOW_HUES.length);
   }, []);
   // 原始尺寸 1024×768，比例 4:3
   if (!animData) return <div style={{ width: '100%', height: '100%' }} />;
   return (
     <div style={{
       width: '100%', height: '100%',
-      filter: `hue-rotate(${hue}deg) saturate(1.4)`,
-      transition: 'filter 0.8s ease-in-out',
+      filter: `hue-rotate(${hue}deg) saturate(1.3)`,
+      transition: 'filter 1.2s ease-in-out',
     }}>
       <Lottie
         animationData={animData}
         loop={true}
+        onLoopComplete={handleLoopComplete}
         style={{ width: '100%', height: '100%' }}
       />
     </div>
