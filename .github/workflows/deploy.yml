@@ -234,13 +234,17 @@ jobs:
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
                 ALTER TABLE aj_company_access ADD COLUMN IF NOT EXISTS access_type VARCHAR(20) NOT NULL DEFAULT 'worker' COMMENT '权限类型: funder=资方, worker=劳方' AFTER user_id;
               " 2>&1 && echo "✅ access_type 字段已添加" || echo "⚠️ access_type 字段可能已存在（正常）"
-              echo "确保 aj_company_access 表的唯一索引包含 access_type..."
+              echo "确保 aj_company_access 表的唯一索引包含 access_type（兼容 MySQL 5.7/8.0）..."
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-                ALTER TABLE aj_company_access DROP INDEX IF EXISTS aj_company_access_uniq;
-              " 2>&1 || true
+                SET @idx_exists = (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='aj_company_access' AND index_name='aj_company_access_uniq');
+                SET @sql = IF(@idx_exists > 0, 'ALTER TABLE aj_company_access DROP INDEX aj_company_access_uniq', 'SELECT 1');
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+              " 2>&1 && echo "✅ 旧索引已删除（或不存在）" || echo "⚠️ 删除旧索引失败"
               mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-                ALTER TABLE aj_company_access ADD UNIQUE INDEX aj_company_access_uniq (company_id, user_id, access_type);
-              " 2>&1 && echo "✅ 唯一索引已更新" || echo "⚠️ 唯一索引可能已存在（正常）"
+                SET @new_idx = (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='aj_company_access' AND index_name='aj_company_access_uniq' AND column_name='access_type');
+                SET @sql2 = IF(@new_idx = 0, 'ALTER TABLE aj_company_access ADD UNIQUE INDEX aj_company_access_uniq (company_id, user_id, access_type)', 'SELECT 1');
+                PREPARE stmt2 FROM @sql2; EXECUTE stmt2; DEALLOCATE PREPARE stmt2;
+              " 2>&1 && echo "✅ 新唯一索引已就绪" || echo "⚠️ 添加新索引失败"
             else
               echo "DATABASE_URL not found, 跳过建表"
             fi
