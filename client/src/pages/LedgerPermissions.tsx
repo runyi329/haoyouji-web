@@ -25,7 +25,7 @@ interface PermissionMenuState {
   show: boolean;
   memberId: number | 'default' | null;
   permissionType: "view" | "add" | "edit" | "delete" | "backup" | null;
-  position: { top: number; left: number };
+  position: { top: number; left: number; showAbove: boolean };
 }
 
 const LedgerPermissions = () => {
@@ -38,7 +38,7 @@ const LedgerPermissions = () => {
     show: false,
     memberId: null,
     permissionType: null,
-    position: { top: 0, left: 0 },
+    position: { top: 0, left: 0, showAbove: false },
   });
 
   // 获取账本成员权限列表
@@ -89,17 +89,16 @@ const LedgerPermissions = () => {
     const menuHeight = permissionType === 'backup' ? 96 : 144;
     const viewportHeight = window.innerHeight;
     const spaceBelow = viewportHeight - rect.bottom;
-    // 如果下方空间不足，则向上弹出
-    const showAbove = spaceBelow < menuHeight + 8;
+    // 如果下方空间不足，则向上弹出（全部使用 viewport 坐标，配合 fixed 定位）
+    const showAbove = spaceBelow < menuHeight + 16;
     setPermissionMenu({
       show: true,
       memberId,
       permissionType,
       position: {
-        top: showAbove
-          ? rect.top + window.scrollY - menuHeight - 4
-          : rect.bottom + window.scrollY + 4,
+        top: showAbove ? rect.top - menuHeight - 4 : rect.bottom + 4,
         left: rect.left + rect.width / 2,
+        showAbove,
       },
     });
   };
@@ -398,7 +397,7 @@ const LedgerPermissions = () => {
           {/* 遮罩层 */}
           <div
             className="fixed inset-0 z-40"
-            onClick={() => setPermissionMenu({ show: false, memberId: null, permissionType: null, position: { top: 0, left: 0 } })}
+            onClick={() => setPermissionMenu({ show: false, memberId: null, permissionType: null, position: { top: 0, left: 0, showAbove: false } })}
           />
           
           {/* 菜单 */}
@@ -406,7 +405,7 @@ const LedgerPermissions = () => {
             className="fixed z-50 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden"
             style={{
               top: `${permissionMenu.position.top}px`,
-              left: `${permissionMenu.position.left}px`,
+              left: `${Math.min(Math.max(permissionMenu.position.left, 60), window.innerWidth - 60)}px`,
               transform: "translateX(-50%)",
               minWidth: "100px",
             }}
