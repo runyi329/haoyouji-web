@@ -2472,11 +2472,11 @@ export default function LedgerDetail() {
   // AJ 账本：劳方撤回自己提交的「申请中」账目
   const withdrawReimbursementMutation = trpc.ledger.withdrawReimbursement.useMutation({
     onSuccess: () => {
-      toast.success('申请已撤销');
+      alert('申请已撤销');
       refetchTransactions();
     },
     onError: (err: any) => {
-      toast.error(err.message || '撤销失败');
+      alert('撤销失败：' + (err.message || '未知错误'));
     },
   });
   // AF 账本：资金费率日志弹窗状态（已在上方 trpc 查询前声明）
