@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import {
   Building2, Pencil, Trash2, Clock, CheckCircle, XCircle,
-  ChevronRight, List, X, Receipt, ChevronDown
+  ChevronRight, List, X, Receipt, ChevronDown, Search
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -147,15 +147,32 @@ function InvoiceListInline({
   ledgerId,
   companyId,
   period: externalPeriod,
+  searchText = '',
 }: {
   ledgerId: number;
   companyId: number;
   period?: 'all' | 'day' | 'week' | 'month' | 'year';
+  searchText?: string;
 }) {
   const [internalPeriod, setInternalPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'year'>('month');
   const period = externalPeriod ?? internalPeriod;
   const { data: invoices, isLoading } = (trpc as any).ledger.ajOwnerGetCompanyInvoices.useQuery({ ledgerId, companyId, period });
   const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', year: '本年' };
+
+  // 搜索过滤
+  const filteredInvoices = useMemo(() => {
+    const list: any[] = Array.isArray(invoices) ? invoices : [];
+    if (!searchText.trim()) return list;
+    const kw = searchText.trim().toLowerCase();
+    return list.filter((inv: any) => {
+      const amount = String(Number(inv.amount || 0).toFixed(2));
+      const desc = safeStr(inv.description).toLowerCase();
+      const category = safeStr(inv.category).toLowerCase();
+      const creator = safeStr(inv.creatorNickname || inv.creatorName).toLowerCase();
+      const date = safeStr(inv.recordDate || inv.date).toLowerCase();
+      return amount.includes(kw) || desc.includes(kw) || category.includes(kw) || creator.includes(kw) || date.includes(kw);
+    });
+  }, [invoices, searchText]);
 
   return (
     <div>
@@ -180,14 +197,16 @@ function InvoiceListInline({
       )}
       {isLoading ? (
         <div className="text-center py-8 text-gray-400 text-sm">加载中...</div>
-      ) : !invoices || (invoices as any[]).length === 0 ? (
+      ) : filteredInvoices.length === 0 ? (
         <div className="text-center py-8">
           <Receipt className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-          <div className="text-gray-400 text-xs">{periodLabels[period]}暂无开票记录</div>
+          <div className="text-gray-400 text-xs">
+            {searchText.trim() ? `未找到匹配“${searchText}”的记录` : `${periodLabels[period]}暂无开票记录`}
+          </div>
         </div>
       ) : (
         <div className="divide-y divide-gray-50">
-          {(invoices as any[]).map((inv: any, idx: number) => (
+          {filteredInvoices.map((inv: any, idx: number) => (
             <div key={inv.id ?? idx} className="px-4 py-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
@@ -285,6 +304,7 @@ function CompanyForm({
 function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   const [period, setPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'year'>('all');
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
+  const [searchText, setSearchText] = useState('');
 
   // 获取资方可见的企业列表
   const { data: myCompanies, isLoading: companiesLoading } = (trpc as any).ledger.ajOwnerGetMyCompanies.useQuery({ ledgerId });
@@ -296,6 +316,11 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
       setSelectedCompanyId(companies[0].id);
     }
   }, [companiesLoading, companies.length]);
+
+  // 切换企业时清空搜索
+  useEffect(() => {
+    setSearchText('');
+  }, [selectedCompanyId]);
 
   // 统计数据
   const { data: stats, isLoading: statsLoading } = (trpc as any).ledger.ajOwnerGetCompanyStats.useQuery(
@@ -386,7 +411,28 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
       {/* 白色发票列表区域 */}
       {selectedCompanyId != null && (
         <div className="bg-white">
-          <InvoiceListInline ledgerId={ledgerId} companyId={selectedCompanyId} period={period} />
+          {/* 搜索框 */}
+          <div className="px-4 pt-3 pb-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchText}
+                onChange={e => setSearchText(e.target.value)}
+                placeholder="搜索金额、分类、业务员..."
+                className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-blue-300 focus:bg-white transition-colors"
+              />
+              {searchText && (
+                <button
+                  onClick={() => setSearchText('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+          <InvoiceListInline ledgerId={ledgerId} companyId={selectedCompanyId} period={period} searchText={searchText} />
         </div>
       )}
     </div>
