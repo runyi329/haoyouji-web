@@ -1,0 +1,119 @@
+name: 批量上传所有图片到 COS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 通过 SSH 批量上传图片到 COS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          script: |
+            cd /root/haoyouji-web
+            git pull origin main
+            
+            node --input-type=module << 'EOF'
+            import { createRequire } from 'module';
+            import { readFileSync, existsSync } from 'fs';
+            import dotenv from 'dotenv';
+            
+            dotenv.config({ path: '/root/haoyouji-web/.env' });
+            
+            const COS_SECRET_ID = process.env.COS_SECRET_ID;
+            const COS_SECRET_KEY = process.env.COS_SECRET_KEY;
+            const BUCKET = process.env.COS_BUCKET || 'haoyouji-images-1396946788';
+            const REGION = process.env.COS_REGION || 'ap-shanghai';
+            
+            if (!COS_SECRET_ID || !COS_SECRET_KEY) {
+              console.error('❌ 未找到COS密钥');
+              process.exit(1);
+            }
+            
+            const require = createRequire(import.meta.url);
+            const COS = require('cos-nodejs-sdk-v5');
+            const cos = new COS({ SecretId: COS_SECRET_ID, SecretKey: COS_SECRET_KEY });
+            
+            const BASE = '/root/haoyouji-web/client/public';
+            
+            const images = [
+              // 加密货币图标
+              { file: 'btc-circle-icon.webp', key: 'assets/icons/btc-circle-icon.webp', mime: 'image/webp' },
+              { file: 'eth-circle-icon.webp', key: 'assets/icons/eth-circle-icon.webp', mime: 'image/webp' },
+              { file: 'sol-circle-icon.webp', key: 'assets/icons/sol-circle-icon.webp', mime: 'image/webp' },
+              { file: 'btc-3d-icon.webp', key: 'assets/icons/btc-3d-icon.webp', mime: 'image/webp' },
+              { file: 'eth-3d-icon.webp', key: 'assets/icons/eth-3d-icon.webp', mime: 'image/webp' },
+              { file: 'sol-3d-icon.webp', key: 'assets/icons/sol-3d-icon.webp', mime: 'image/webp' },
+              { file: 'btc-icon-trimmed.png', key: 'assets/icons/btc-icon-trimmed.png', mime: 'image/png' },
+              // 交易所 Logo（已上传的保持原路径）
+              { file: 'okx-circle-icon.png', key: 'assets/logos/okx-circle-icon.png', mime: 'image/png' },
+              { file: 'binance-circle-icon.png', key: 'assets/logos/binance-circle-icon.png', mime: 'image/png' },
+              // 品牌 Logo
+              { file: 'logo.png', key: 'assets/brand/logo.png', mime: 'image/png' },
+              { file: 'logo-header.png', key: 'assets/brand/logo-header.png', mime: 'image/png' },
+              { file: 'logo-header-transparent.png', key: 'assets/brand/logo-header-transparent.png', mime: 'image/png' },
+              { file: 'logo-horizontal.png', key: 'assets/brand/logo-horizontal.png', mime: 'image/png' },
+              { file: 'maidong-icon-final.png', key: 'assets/brand/maidong-icon-final.png', mime: 'image/png' },
+              { file: 'maidong-hyy.webp', key: 'assets/brand/maidong-hyy.webp', mime: 'image/webp' },
+              // 功能图标
+              { file: 'kfc-logo.png', key: 'assets/icons/kfc-logo.png', mime: 'image/png' },
+              { file: 'star-icon.png', key: 'assets/icons/star-icon.png', mime: 'image/png' },
+              { file: 'icon-59-circle.png', key: 'assets/icons/icon-59-circle.png', mime: 'image/png' },
+              // 游戏资源
+              { file: 'button-green.png', key: 'assets/games/button-green.png', mime: 'image/png' },
+              { file: 'tooth-dirty.webp', key: 'assets/games/tooth-dirty.webp', mime: 'image/webp' },
+              { file: 'tooth-brushing.webp', key: 'assets/games/tooth-brushing.webp', mime: 'image/webp' },
+              { file: 'tooth-clean.webp', key: 'assets/games/tooth-clean.webp', mime: 'image/webp' },
+              { file: 'memory-game-bg-final.png', key: 'assets/games/memory-game-bg-final.png', mime: 'image/png' },
+              { file: 'memory-game-setup-bg.png', key: 'assets/games/memory-game-setup-bg.png', mime: 'image/png' },
+              { file: 'pastoral-bg.png', key: 'assets/games/pastoral-bg.png', mime: 'image/png' },
+              // 宠物平台
+              { file: 'pet-empty-state.webp', key: 'assets/pet/empty-state.webp', mime: 'image/webp' },
+              { file: 'pet-machine-icon.webp', key: 'assets/pet/machine-icon.webp', mime: 'image/webp' },
+              { file: 'pet-banner-new.webp', key: 'assets/pet/banner-new.webp', mime: 'image/webp' },
+              // 底部导航
+              { file: 'bottomnav-avatar-r1.jpg', key: 'assets/avatars/bottomnav-r1.jpg', mime: 'image/jpeg' },
+              { file: 'idealight-icon-white.png', key: 'assets/icons/idealight-icon-white.png', mime: 'image/png' },
+              // 其他
+              { file: 'shared-ledger-banner.webp', key: 'assets/banners/shared-ledger-banner.webp', mime: 'image/webp' },
+              { file: 'carousel-friend-share.webp', key: 'assets/banners/carousel-friend-share.webp', mime: 'image/webp' },
+              { file: 'maluji-coupon-banner.png', key: 'assets/banners/maluji-coupon-banner.png', mime: 'image/png' },
+              { file: 'data_profit_poster.png', key: 'assets/banners/data-profit-poster.png', mime: 'image/png' },
+              // 徽章
+              { file: 'badge-1star.webp', key: 'assets/badges/badge-1star.webp', mime: 'image/webp' },
+              { file: 'badge-2star.webp', key: 'assets/badges/badge-2star.webp', mime: 'image/webp' },
+              { file: 'badge-3star.webp', key: 'assets/badges/badge-3star.webp', mime: 'image/webp' },
+              { file: 'badge-4star.webp', key: 'assets/badges/badge-4star.webp', mime: 'image/webp' },
+              { file: 'badge-5star.webp', key: 'assets/badges/badge-5star.webp', mime: 'image/webp' },
+            ];
+            
+            const BASE_URL = `https://${BUCKET}.cos.${REGION}.myqcloud.com`;
+            
+            for (const img of images) {
+              const localPath = `${BASE}/${img.file}`;
+              if (!existsSync(localPath)) {
+                console.warn(`⚠️  文件不存在: ${img.file}`);
+                continue;
+              }
+              try {
+                const buffer = readFileSync(localPath);
+                await new Promise((resolve, reject) => {
+                  cos.putObject({ Bucket: BUCKET, Region: REGION, Key: img.key, Body: buffer, ContentType: img.mime }, (err, data) => {
+                    if (err) reject(err); else resolve(data);
+                  });
+                });
+                console.log(`✅ ${img.file} → ${BASE_URL}/${img.key}`);
+              } catch (err) {
+                console.error(`❌ ${img.file} 上传失败:`, err.message);
+              }
+            }
+            
+            console.log('\n=== 上传完成 ===');
+            EOF
