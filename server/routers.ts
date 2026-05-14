@@ -16183,7 +16183,7 @@ ${klinesSummary}
           `SELECT c.id as companyId, c.name as companyName, c.tax_no as taxNo,
                   COUNT(lr.id) as invoiceCount,
                   COALESCE(SUM(lr.amount), 0) as totalAmount,
-                  COUNT(DISTINCT lr.userId) as salesmanCount
+                  COUNT(DISTINCT lr.created_by) as salesmanCount
            FROM aj_companies c
            LEFT JOIN ledger_records lr ON lr.aj_company_id = c.id AND lr.ledger_id = ? ${dateFilter} AND lr.deleted_at IS NULL
            WHERE c.ledger_id = ? AND (
