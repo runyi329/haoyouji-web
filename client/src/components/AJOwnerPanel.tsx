@@ -272,7 +272,7 @@ function CompanyForm({
 
 // ========== 资方视角面板（独立组件） ==========
 function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
-  const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'year'>('month');
+  const [period, setPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'year'>('all');
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
 
   const { data: myCompanies, isLoading: companiesLoading } = (trpc as any).ledger.ajOwnerGetMyCompanies.useQuery({ ledgerId });
@@ -292,7 +292,7 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   );
   const stats = (statsRows as any[] | undefined)?.find((r: any) => r.companyId === selectedCompanyId);
 
-  const periodLabels: Record<string, string> = { day: '今日', week: '本周', month: '本月', year: '本年' };
+  const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', year: '本年' };
 
   return (
     <div>
@@ -332,6 +332,7 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
               className="appearance-none text-xs text-white/90 pl-2 pr-6 py-1 rounded-full border border-white/30 cursor-pointer outline-none focus:outline-none focus:ring-0"
               style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}
             >
+              <option value="all" style={{ color: '#222' }}>全部</option>
               <option value="day" style={{ color: '#222' }}>今日</option>
               <option value="week" style={{ color: '#222' }}>本周</option>
               <option value="month" style={{ color: '#222' }}>本月</option>
