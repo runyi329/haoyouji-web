@@ -4000,7 +4000,7 @@ export default function LedgerDetail() {
                   <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                     <div className="text-[10px] text-white/70 mb-1">审核中</div>
                     {(() => {
-                      if (!transactionsData) return <div className="text-base font-bold text-white">--</div>;
+                      if (!transactionsData) return <><div className="text-base font-bold text-white leading-tight">0张</div><div className="text-[11px] text-white/80 mt-0.5">¥0.00</div></>;
                       let count = 0; let amount = 0;
                       const now = new Date();
                       const today = now.toISOString().split('T')[0];
@@ -4019,19 +4019,19 @@ export default function LedgerDetail() {
                         else if (ajStatsPeriod === 'year') ok = day.date.startsWith(currentYear);
                         if (ok) (day.records || []).filter((r: any) => r.ajStatus === 'pending').forEach((r: any) => { count++; amount += Number(r.amount) || 0; });
                       });
-                      return count > 0 ? (
+                      return (
                         <>
                           <div className="text-base font-bold text-white leading-tight">{count}张</div>
                           <div className="text-[11px] text-white/80 mt-0.5 overflow-hidden" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>¥{amount.toFixed(2)}</div>
                         </>
-                      ) : <div className="text-base font-bold text-white">--</div>;
+                      );
                     })()}
                   </div>
                   {/* 已通过：张数 + 金额 */}
                   <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                     <div className="text-[10px] text-white/70 mb-1">已通过</div>
                     {(() => {
-                      if (!transactionsData) return <div className="text-base font-bold text-white">--</div>;
+                      if (!transactionsData) return <><div className="text-base font-bold text-white leading-tight">0张</div><div className="text-[11px] text-white/80 mt-0.5">¥0.00</div></>;
                       let count = 0; let amount = 0;
                       const now = new Date();
                       const today = now.toISOString().split('T')[0];
@@ -4050,12 +4050,12 @@ export default function LedgerDetail() {
                         else if (ajStatsPeriod === 'year') ok = day.date.startsWith(currentYear);
                         if (ok) (day.records || []).filter((r: any) => r.ajStatus === 'approved').forEach((r: any) => { count++; amount += Number(r.amount) || 0; });
                       });
-                      return count > 0 ? (
+                      return (
                         <>
                           <div className="text-base font-bold text-white leading-tight">{count}张</div>
                           <div className="text-[11px] text-white/80 mt-0.5 overflow-hidden" style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>¥{amount.toFixed(2)}</div>
                         </>
-                      ) : <div className="text-base font-bold text-white">--</div>;
+                      );
                     })()}
                   </div>
                 </div>
