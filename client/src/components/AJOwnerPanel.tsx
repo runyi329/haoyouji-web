@@ -23,6 +23,13 @@ type CompanyFormData = {
   remark: string;
 };
 
+/** 安全地把任意值转成可渲染的字符串，防止 Date 对象直接进入 JSX */
+function safeStr(v: unknown): string {
+  if (v == null) return '';
+  if (v instanceof Date) return v.toLocaleDateString('zh-CN');
+  return String(v);
+}
+
 // ========== 开票分类配置面板 ==========
 function ExpenseTypePanel({
   ledgerId,
@@ -72,7 +79,7 @@ function ExpenseTypePanel({
       <div className="bg-white w-full rounded-t-2xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-gray-100 flex-shrink-0">
           <div>
-            <div className="font-semibold text-gray-800">{company.name}</div>
+            <div className="font-semibold text-gray-800">{safeStr(company.name)}</div>
             <div className="text-xs text-gray-400 mt-0.5">开票分类配置</div>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100">
@@ -109,7 +116,7 @@ function ExpenseTypePanel({
                             <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center flex-shrink-0 ${itemEnabled ? 'bg-[#1A2B4A] border-[#1A2B4A]' : 'border-gray-300'}`}>
                               {itemEnabled && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                             </div>
-                            {item.label}
+                            {cat.label === cat.label && item.label}
                           </button>
                         );
                       })}
@@ -145,15 +152,13 @@ function InvoiceListInline({
   companyId: number;
   period?: 'all' | 'day' | 'week' | 'month' | 'year';
 }) {
-  // 如果外部传入 period，则不内部管理时间筛选
   const [internalPeriod, setInternalPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'year'>('month');
   const period = externalPeriod ?? internalPeriod;
-  const { data: invoices, isLoading, error } = (trpc as any).ledger.ajOwnerGetCompanyInvoices.useQuery({ ledgerId, companyId, period });
+  const { data: invoices, isLoading } = (trpc as any).ledger.ajOwnerGetCompanyInvoices.useQuery({ ledgerId, companyId, period });
   const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', year: '本年' };
 
   return (
     <div>
-      {/* 只有内部管理时才显示筛选栏 */}
       {!externalPeriod && (
         <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-t border-gray-100">
           <div className="relative">
@@ -182,19 +187,25 @@ function InvoiceListInline({
         </div>
       ) : (
         <div className="divide-y divide-gray-50">
-          {(invoices as any[]).map((inv: any) => (
-            <div key={inv.id} className="px-4 py-3">
+          {(invoices as any[]).map((inv: any, idx: number) => (
+            <div key={inv.id ?? idx} className="px-4 py-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-gray-800">¥{Number(inv.amount || 0).toFixed(2)}</div>
-                  {inv.description && <div className="text-xs text-gray-500 mt-0.5 truncate">{inv.description}</div>}
+                  <div className="text-sm font-bold text-gray-800">
+                    ¥{Number(inv.amount || 0).toFixed(2)}
+                  </div>
+                  {inv.description && (
+                    <div className="text-xs text-gray-500 mt-0.5 truncate">{safeStr(inv.description)}</div>
+                  )}
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="text-xs text-gray-400">{inv.recordDate || inv.date}</span>
+                    <span className="text-xs text-gray-400">{safeStr(inv.recordDate || inv.date)}</span>
                     {(inv.creatorNickname || inv.creatorName) && (
-                      <span className="text-xs text-gray-400">· {inv.creatorNickname || inv.creatorName}</span>
+                      <span className="text-xs text-gray-400">· {safeStr(inv.creatorNickname || inv.creatorName)}</span>
                     )}
                     {inv.category && (
-                      <span className="text-xs bg-blue-50 px-1.5 py-0.5 rounded" style={{ color: AJ_COLOR }}>{inv.category}</span>
+                      <span className="text-xs bg-blue-50 px-1.5 py-0.5 rounded" style={{ color: AJ_COLOR }}>
+                        {safeStr(inv.category)}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -270,13 +281,14 @@ function CompanyForm({
   );
 }
 
-// ========== 资方视角面板（独立组件） ==========
+// ========== 资方视角面板（重写） ==========
 function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   const [period, setPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'year'>('all');
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
 
+  // 获取资方可见的企业列表
   const { data: myCompanies, isLoading: companiesLoading } = (trpc as any).ledger.ajOwnerGetMyCompanies.useQuery({ ledgerId });
-  const companies = (myCompanies as any[] | undefined) ?? [];
+  const companies: any[] = Array.isArray(myCompanies) ? myCompanies : [];
 
   // 企业加载完成后自动选中第一个
   useEffect(() => {
@@ -285,10 +297,10 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
     }
   }, [companiesLoading, companies.length]);
 
-  // 统计数据（传 companyId 时后端直接返回单个对象）
+  // 统计数据
   const { data: stats, isLoading: statsLoading } = (trpc as any).ledger.ajOwnerGetCompanyStats.useQuery(
     { ledgerId, companyId: selectedCompanyId!, period },
-    { enabled: !!selectedCompanyId }
+    { enabled: selectedCompanyId != null }
   );
 
   const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', year: '本年' };
@@ -299,14 +311,13 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
       <div style={{ backgroundColor: AJ_COLOR }} className="px-4 pt-3 pb-4">
         {/* 第一行：企业选择 + 时间筛选 */}
         <div className="flex items-center gap-2 mb-3">
-          {/* 企业选择：1家不显示容器，超过1家显示与时间筛选一样的下拉框 */}
           {companiesLoading ? (
             <div className="text-white/60 text-xs flex-1">加载中...</div>
           ) : companies.length === 0 ? (
             <div className="text-white/60 text-xs flex-1">暂无授权企业</div>
           ) : companies.length === 1 ? (
             <div className="flex-1 min-w-0">
-              <span className="text-white text-sm font-semibold truncate">{companies[0].name}</span>
+              <span className="text-white text-sm font-semibold truncate">{safeStr(companies[0].name)}</span>
             </div>
           ) : (
             <div className="relative flex-1 min-w-0">
@@ -317,13 +328,13 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                 style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}
               >
                 {companies.map((c: any) => (
-                  <option key={c.id} value={c.id} style={{ color: '#222', background: '#fff' }}>{c.name}</option>
+                  <option key={c.id} value={c.id} style={{ color: '#222', background: '#fff' }}>{safeStr(c.name)}</option>
                 ))}
               </select>
               <svg className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 fill-white/70" viewBox="0 0 12 12"><path d="M6 8L2 4h8z"/></svg>
             </div>
           )}
-          {/* 时间筛选（与劳方首页一致） */}
+          {/* 时间筛选 */}
           <div className="relative flex-shrink-0">
             <select
               value={period}
@@ -340,8 +351,8 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
             <svg className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 fill-white/70" viewBox="0 0 12 12"><path d="M6 8L2 4h8z"/></svg>
           </div>
         </div>
-        {/* 统计数据行：均匀分配 */}
-        {selectedCompanyId && (
+        {/* 统计数据行 */}
+        {selectedCompanyId != null && (
           <div className="flex items-center justify-around w-full">
             <div className="text-center">
               <div className="text-white/60 text-[10px] mb-0.5">{periodLabels[period]}累计金额</div>
@@ -353,17 +364,17 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
             <div className="text-center">
               <div className="text-white/60 text-[10px] mb-0.5">{periodLabels[period]}开票条数</div>
               <div className="text-white text-xl font-bold leading-none">
-                {statsLoading ? '--' : `${stats?.invoiceCount || 0}`}
+                {statsLoading ? '--' : `${Number(stats?.invoiceCount || 0)}`}
                 <span className="text-white/60 text-xs font-normal ml-1">笔</span>
               </div>
             </div>
-            {stats?.salesmanCount > 0 && (
+            {Number(stats?.salesmanCount || 0) > 0 && (
               <>
                 <div className="w-px h-8 bg-white/20 flex-shrink-0" />
                 <div className="text-center">
                   <div className="text-white/60 text-[10px] mb-0.5">业务员</div>
                   <div className="text-white text-xl font-bold leading-none">
-                    {stats.salesmanCount}
+                    {Number(stats.salesmanCount)}
                     <span className="text-white/60 text-xs font-normal ml-1">人</span>
                   </div>
                 </div>
@@ -373,7 +384,7 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
         )}
       </div>
       {/* 白色发票列表区域 */}
-      {selectedCompanyId && (
+      {selectedCompanyId != null && (
         <div className="bg-white">
           <InvoiceListInline ledgerId={ledgerId} companyId={selectedCompanyId} period={period} />
         </div>
@@ -459,7 +470,7 @@ export function AJOwnerPanel({ ledgerId, isFunder = false }: { ledgerId: number;
           <div className="text-white/60 text-xs py-2">加载中...</div>
         ) : companies.length === 0 ? (
           <div className="text-white/60 text-xs py-2">
-            {isFunder ? '暂无授权企业' : '暂无企业，点击下方「+」添加'}
+            暂无企业，点击下方「+」添加
           </div>
         ) : (
           <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
@@ -482,7 +493,7 @@ export function AJOwnerPanel({ ledgerId, isFunder = false }: { ledgerId: number;
                     <Building2 className="w-4 h-4 text-white" />
                   </div>
                   <span className="text-white text-xs font-medium max-w-[100px] truncate">
-                    {company.name}
+                    {safeStr(company.name)}
                   </span>
                   {isSelected && <ChevronDown className="w-3 h-3 text-white/70 flex-shrink-0" />}
                 </button>
@@ -504,26 +515,24 @@ export function AJOwnerPanel({ ledgerId, isFunder = false }: { ledgerId: number;
                     <Building2 className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <div className="text-sm font-semibold text-gray-800 truncate max-w-[180px]">{company.name}</div>
-                    {company.taxNo && <div className="text-xs text-gray-400">税号：{company.taxNo}</div>}
+                    <div className="text-sm font-semibold text-gray-800 truncate max-w-[180px]">{safeStr(company.name)}</div>
+                    {company.taxNo && <div className="text-xs text-gray-400">税号：{safeStr(company.taxNo)}</div>}
                   </div>
                 </div>
-                {!isFunder && (
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => { setEditingCompany(company); setSelectedCompanyId(null); }}
-                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
-                    >
-                      <Pencil className="w-4 h-4 text-gray-400" />
-                    </button>
-                    <button
-                      onClick={() => { setDeletingCompany(company); setDeleteRemark(''); setSelectedCompanyId(null); }}
-                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-400" />
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => { setEditingCompany(company); setSelectedCompanyId(null); }}
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"
+                  >
+                    <Pencil className="w-4 h-4 text-gray-400" />
+                  </button>
+                  <button
+                    onClick={() => { setDeletingCompany(company); setDeleteRemark(''); setSelectedCompanyId(null); }}
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4 text-red-400" />
+                  </button>
+                </div>
               </div>
             ) : null;
           })()}
@@ -544,185 +553,183 @@ export function AJOwnerPanel({ ledgerId, isFunder = false }: { ledgerId: number;
         </div>
       )}
 
-      {/* Tab 切换（仅 admin 显示） */}
-      {!isFunder && (
-        <div className="flex border-b border-gray-200 bg-white mx-4 mt-3 rounded-t-2xl shadow-sm overflow-hidden">
-          <button
-            className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'companies' ? 'border-b-2' : 'text-gray-400'}`}
-            style={activeTab === 'companies' ? { color: AJ_COLOR, borderColor: AJ_COLOR } : {}}
-            onClick={() => setActiveTab('companies')}
-          >
-            我的企业
-          </button>
-          <button
-            className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'requests' ? 'border-b-2' : 'text-gray-400'}`}
-            style={activeTab === 'requests' ? { color: AJ_COLOR, borderColor: AJ_COLOR } : {}}
-            onClick={() => setActiveTab('requests')}
-          >
-            <span className="inline-flex items-center justify-center gap-1.5">
-              申请记录
-              {pendingCount > 0 && (
-                <span className="inline-flex items-center justify-center w-4 h-4 bg-amber-400 text-white text-[10px] rounded-full leading-none flex-shrink-0">
-                  {pendingCount}
-                </span>
-              )}
-            </span>
-          </button>
-        </div>
-      )}
+      {/* Tab 切换 */}
+      <div className="flex border-b border-gray-200 bg-white mx-4 mt-3 rounded-t-2xl shadow-sm overflow-hidden">
+        <button
+          className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'companies' ? 'border-b-2' : 'text-gray-400'}`}
+          style={activeTab === 'companies' ? { color: AJ_COLOR, borderColor: AJ_COLOR } : {}}
+          onClick={() => setActiveTab('companies')}
+        >
+          我的企业
+        </button>
+        <button
+          className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'requests' ? 'border-b-2' : 'text-gray-400'}`}
+          style={activeTab === 'requests' ? { color: AJ_COLOR, borderColor: AJ_COLOR } : {}}
+          onClick={() => setActiveTab('requests')}
+        >
+          <span className="inline-flex items-center justify-center gap-1.5">
+            申请记录
+            {pendingCount > 0 && (
+              <span className="inline-flex items-center justify-center w-4 h-4 bg-amber-400 text-white text-[10px] rounded-full leading-none flex-shrink-0">
+                {pendingCount}
+              </span>
+            )}
+          </span>
+        </button>
+      </div>
 
-      {!isFunder && (
-        <div className="mx-4 bg-white rounded-b-2xl shadow-sm p-4 pb-24 space-y-3">
-          {activeTab === 'companies' && (
-            <>
-              <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
-                您名下的企业需经管理员审核后生效。添加、修改、删除均需提交申请。
+      <div className="mx-4 bg-white rounded-b-2xl shadow-sm p-4 pb-24 space-y-3">
+        {activeTab === 'companies' && (
+          <>
+            <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
+              您名下的企业需经管理员审核后生效。添加、修改、删除均需提交申请。
+            </div>
+            {showAddForm && (
+              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                <div className="text-sm font-medium text-gray-700 mb-3">申请新增企业</div>
+                <CompanyForm
+                  showTip={true}
+                  onSubmit={handleAddSubmit}
+                  onCancel={() => setShowAddForm(false)}
+                  loading={submitMutation.isPending}
+                  submitLabel="提交新增申请"
+                />
               </div>
-              {showAddForm && (
-                <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                  <div className="text-sm font-medium text-gray-700 mb-3">申请新增企业</div>
-                  <CompanyForm
-                    showTip={true}
-                    onSubmit={handleAddSubmit}
-                    onCancel={() => setShowAddForm(false)}
-                    loading={submitMutation.isPending}
-                    submitLabel="提交新增申请"
-                  />
-                </div>
-              )}
-              {companiesLoading ? (
-                <div className="text-center py-12 text-gray-400 text-sm">加载中...</div>
-              ) : companies.length === 0 ? (
-                <div className="text-center py-16">
-                  <Building2 className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-                  <div className="text-gray-400 text-sm">暂无企业</div>
-                  <div className="text-gray-300 text-xs mt-1">点击下方「+」申请添加企业</div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {companies.map((company: any) => (
-                    <div key={company.id} className="bg-gray-50 rounded-2xl overflow-hidden">
-                      {editingCompany?.id === company.id ? (
-                        <div className="p-4">
-                          <div className="text-sm font-medium text-gray-600 mb-3">申请修改企业信息</div>
-                          <CompanyForm
-                            initial={{
-                              name: company.name, tax_no: company.taxNo || '',
-                              address: company.address || '', phone: company.phone || '',
-                              bank_name: company.bankName || '', bank_account: company.bankAccount || '',
-                              remark: company.remark || '',
-                            }}
-                            onSubmit={handleEditSubmit}
-                            onCancel={() => setEditingCompany(null)}
-                            loading={submitMutation.isPending}
-                            submitLabel="提交修改申请"
-                          />
-                        </div>
-                      ) : deletingCompany?.id === company.id ? (
-                        <div className="p-4">
-                          <div className="text-sm font-medium text-gray-700 mb-2">申请删除「{company.name}」</div>
-                          <div className="text-xs text-gray-400 mb-3">删除申请需经管理员确认后生效</div>
-                          <Input
-                            value={deleteRemark}
-                            onChange={(e) => setDeleteRemark(e.target.value)}
-                            placeholder="删除原因（选填）"
-                            className="h-9 text-sm border-gray-200 rounded-xl mb-3"
-                          />
-                          <div className="flex gap-2">
-                            <Button variant="outline" className="flex-1 rounded-xl border-gray-200 text-sm h-10" onClick={() => setDeletingCompany(null)}>取消</Button>
-                            <Button
-                              className="flex-1 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm h-10"
-                              onClick={handleDeleteSubmit}
-                              disabled={submitMutation.isPending}
-                            >
-                              {submitMutation.isPending ? '提交中...' : '提交删除申请'}
-                            </Button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="p-4 flex items-center justify-between">
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: AJ_COLOR }}>
-                              <Building2 className="w-4 h-4 text-white" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm font-semibold text-gray-800 truncate">{company.name}</div>
-                              {company.taxNo && <div className="text-xs text-gray-400 truncate">税号：{company.taxNo}</div>}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <button
-                              onClick={() => setEditingCompany(company)}
-                              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200"
-                            >
-                              <Pencil className="w-4 h-4 text-gray-400" />
-                            </button>
-                            <button
-                              onClick={() => { setDeletingCompany(company); setDeleteRemark(''); }}
-                              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4 text-red-400" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-          {activeTab === 'requests' && (
-            <>
-              {requestsLoading ? (
-                <div className="text-center py-12 text-gray-400 text-sm">加载中...</div>
-              ) : !myRequests || (myRequests as any[]).length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="text-gray-400 text-sm">暂无申请记录</div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {(myRequests as any[]).map((req: any) => (
-                    <div key={req.id} className="bg-gray-50 rounded-2xl p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {req.status === 'pending' ? (
-                            <Clock className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                          ) : req.status === 'approved' ? (
-                            <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          )}
-                          <span className={`text-sm font-medium ${req.status === 'pending' ? 'text-amber-600' : req.status === 'approved' ? 'text-green-600' : 'text-gray-400'}`}>
-                            {req.status === 'pending' ? '待审核' : req.status === 'approved' ? '已通过' : '已拒绝'}
-                          </span>
-                          <span className="text-xs text-gray-400 bg-gray-200 px-2 py-0.5 rounded-full">
-                            {req.request_type === 'add' ? '新增企业' : req.request_type === 'update' ? '修改企业' : '删除企业'}
-                          </span>
-                        </div>
-                        <span className="text-xs text-gray-400 flex-shrink-0">{new Date(req.created_at).toLocaleDateString('zh-CN')}</span>
+            )}
+            {companiesLoading ? (
+              <div className="text-center py-12 text-gray-400 text-sm">加载中...</div>
+            ) : companies.length === 0 ? (
+              <div className="text-center py-16">
+                <Building2 className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+                <div className="text-gray-400 text-sm">暂无企业</div>
+                <div className="text-gray-300 text-xs mt-1">点击下方「+」申请添加企业</div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {companies.map((company: any) => (
+                  <div key={company.id} className="bg-gray-50 rounded-2xl overflow-hidden">
+                    {editingCompany?.id === company.id ? (
+                      <div className="p-4">
+                        <div className="text-sm font-medium text-gray-600 mb-3">申请修改企业信息</div>
+                        <CompanyForm
+                          initial={{
+                            name: company.name, tax_no: company.taxNo || '',
+                            address: company.address || '', phone: company.phone || '',
+                            bank_name: company.bankName || '', bank_account: company.bankAccount || '',
+                            remark: company.remark || '',
+                          }}
+                          onSubmit={handleEditSubmit}
+                          onCancel={() => setEditingCompany(null)}
+                          loading={submitMutation.isPending}
+                          submitLabel="提交修改申请"
+                        />
                       </div>
-                      <div className="text-sm font-semibold text-gray-800 mb-1">{req.name}</div>
-                      {req.tax_no && <div className="text-xs text-gray-400">税号：{req.tax_no}</div>}
-                      {req.address && <div className="text-xs text-gray-400">地址：{req.address}</div>}
-                      {req.phone && <div className="text-xs text-gray-400">电话：{req.phone}</div>}
-                      {req.bank_name && <div className="text-xs text-gray-400">开户行：{req.bank_name}</div>}
-                      {req.bank_account && <div className="text-xs text-gray-400">账号：{req.bank_account}</div>}
-                      {req.remark && <div className="text-xs text-gray-400">备注：{req.remark}</div>}
-                      {req.review_comment && (
-                        <div className="mt-2 text-xs text-gray-500 bg-gray-100 rounded-lg px-3 py-2">
-                          审核意见：{req.review_comment}
-                          {req.reviewerName && <span className="ml-1 text-gray-400">（{req.reviewerName}）</span>}
+                    ) : deletingCompany?.id === company.id ? (
+                      <div className="p-4">
+                        <div className="text-sm font-medium text-gray-700 mb-2">申请删除「{safeStr(company.name)}」</div>
+                        <div className="text-xs text-gray-400 mb-3">删除申请需经管理员确认后生效</div>
+                        <Input
+                          value={deleteRemark}
+                          onChange={(e) => setDeleteRemark(e.target.value)}
+                          placeholder="删除原因（选填）"
+                          className="h-9 text-sm border-gray-200 rounded-xl mb-3"
+                        />
+                        <div className="flex gap-2">
+                          <Button variant="outline" className="flex-1 rounded-xl border-gray-200 text-sm h-10" onClick={() => setDeletingCompany(null)}>取消</Button>
+                          <Button
+                            className="flex-1 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm h-10"
+                            onClick={handleDeleteSubmit}
+                            disabled={submitMutation.isPending}
+                          >
+                            {submitMutation.isPending ? '提交中...' : '提交删除申请'}
+                          </Button>
                         </div>
-                      )}
+                      </div>
+                    ) : (
+                      <div className="p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ backgroundColor: AJ_COLOR }}>
+                            <Building2 className="w-4 h-4 text-white" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-semibold text-gray-800 truncate">{safeStr(company.name)}</div>
+                            {company.taxNo && <div className="text-xs text-gray-400 truncate">税号：{safeStr(company.taxNo)}</div>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => setEditingCompany(company)}
+                            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200"
+                          >
+                            <Pencil className="w-4 h-4 text-gray-400" />
+                          </button>
+                          <button
+                            onClick={() => { setDeletingCompany(company); setDeleteRemark(''); }}
+                            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-400" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+        {activeTab === 'requests' && (
+          <>
+            {requestsLoading ? (
+              <div className="text-center py-12 text-gray-400 text-sm">加载中...</div>
+            ) : !myRequests || (myRequests as any[]).length === 0 ? (
+              <div className="text-center py-12">
+                <div className="text-gray-400 text-sm">暂无申请记录</div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(myRequests as any[]).map((req: any) => (
+                  <div key={req.id} className="bg-gray-50 rounded-2xl p-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {req.status === 'pending' ? (
+                          <Clock className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                        ) : req.status === 'approved' ? (
+                          <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                        ) : (
+                          <XCircle className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        )}
+                        <span className={`text-sm font-medium ${req.status === 'pending' ? 'text-amber-600' : req.status === 'approved' ? 'text-green-600' : 'text-gray-400'}`}>
+                          {req.status === 'pending' ? '待审核' : req.status === 'approved' ? '已通过' : '已拒绝'}
+                        </span>
+                        <span className="text-xs text-gray-400 bg-gray-200 px-2 py-0.5 rounded-full">
+                          {req.request_type === 'add' ? '新增企业' : req.request_type === 'update' ? '修改企业' : '删除企业'}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-400 flex-shrink-0">
+                        {safeStr(req.created_at ? new Date(String(req.created_at)).toLocaleDateString('zh-CN') : '')}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
+                    <div className="text-sm font-semibold text-gray-800 mb-1">{safeStr(req.name)}</div>
+                    {req.tax_no && <div className="text-xs text-gray-400">税号：{safeStr(req.tax_no)}</div>}
+                    {req.address && <div className="text-xs text-gray-400">地址：{safeStr(req.address)}</div>}
+                    {req.phone && <div className="text-xs text-gray-400">电话：{safeStr(req.phone)}</div>}
+                    {req.bank_name && <div className="text-xs text-gray-400">开户行：{safeStr(req.bank_name)}</div>}
+                    {req.bank_account && <div className="text-xs text-gray-400">账号：{safeStr(req.bank_account)}</div>}
+                    {req.remark && <div className="text-xs text-gray-400">备注：{safeStr(req.remark)}</div>}
+                    {req.review_comment && (
+                      <div className="mt-2 text-xs text-gray-500 bg-gray-100 rounded-lg px-3 py-2">
+                        审核意见：{safeStr(req.review_comment)}
+                        {req.reviewerName && <span className="ml-1 text-gray-400">（{safeStr(req.reviewerName)}）</span>}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       {expenseTypeCompany && (
         <ExpenseTypePanel
