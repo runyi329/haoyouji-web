@@ -805,7 +805,7 @@ const AddTransaction = () => {
       {isCustomAJ ? (
         <div className="flex-1 overflow-hidden bg-[#F5F5F5] flex flex-col">
           {/* 单据头 */}
-          <div className="bg-[#1A2B4A] px-4 pt-1.5 pb-4 flex items-center justify-between flex-shrink-0">
+          <div className="bg-[#1A2B4A] px-4 pt-1.5 pb-3 flex items-center justify-between flex-shrink-0">
             <div>
               <div className="text-white text-xs opacity-80">申请人</div>
               <div className="text-white text-sm font-semibold mt-0.5">{applicantName}</div>
@@ -817,10 +817,8 @@ const AddTransaction = () => {
               </div>
             </div>
           </div>
-          {/* 可滚动内容区 */}
-          <div className="flex-1 overflow-y-auto" style={{ paddingBottom: '80px' }}>
           {/* 容器一：开票信息（紧凑两行） */}
-          <div className="mx-3 mt-2 rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
+          <div className="mx-3 -mt-3 rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
             <div className="px-3 py-3">
               {selectedCompany ? (
                 <div className="flex flex-col gap-2">
@@ -850,11 +848,10 @@ const AddTransaction = () => {
             </div>
           </div>
 
-          {/* 容器二：报销金额 + 发票凭证（左右两列等高） */}
+          {/* 容器二：报销金额 + 发票凭证 */}
           <div className="mx-3 mt-2 rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
-            <div className="flex items-stretch" style={{ minHeight: 140 }}>
-            {/* 左列：报销金额 */}
-            <div className="flex-1 px-3 pt-3 pb-2 flex flex-col" style={{ background: '#FEF9EC', borderLeft: '4px solid #C9A84C', borderRight: '1px solid #E8D5A3' }}>
+            {/* 报销金额 */}
+            <div className="px-4 pt-3 pb-2" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-6 h-6 rounded-full bg-[#C9A84C] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
@@ -875,11 +872,6 @@ const AddTransaction = () => {
                   className="text-3xl font-bold text-[#1A2B4A] bg-transparent border-none outline-none flex-1 placeholder-gray-200"
                   style={{ caretColor: '#1A2B4A' }}
                   autoComplete="off"
-                  onBlur={() => {
-                    if (amount && parseFloat(amount) > 0) {
-                      setAmount(parseFloat(amount).toFixed(2));
-                    }
-                  }}
                 />
               </div>
               {amount && parseFloat(amount) > 0 && (
@@ -917,9 +909,8 @@ const AddTransaction = () => {
                 </div>
               )}
             </div>
-            </div>{/* 关闭左列 */}
-            {/* 右列：发票凭证 */}
-            <div className="flex flex-col px-3 py-2.5" style={{ background: '#FEF9EC', width: 110, flexShrink: 0 }}>
+            {/* 发票凭证 */}
+            <div className="px-4 py-2.5" style={{ background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="w-6 h-6 rounded-full bg-[#C9A84C] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>发票 / 凭证</span>
@@ -973,16 +964,11 @@ const AddTransaction = () => {
                   </button>
                 ) : null}
               </div>
-            </div>{/* 关闭右列 */}
-            </div>{/* 关闭左右两列容器 */}
+            </div>
           </div>
 
           {/* 容器三：费用报销明细单预览 */}
-          {/* AI提示语 */}
-          <div className="mx-3 mt-2 px-3 py-1.5 rounded-xl flex-shrink-0" style={{ background: '#F0F4FF', border: '1px solid #D0DAF5' }}>
-            <span className="text-[11px]" style={{ color: '#4A5A8A' }}>以下为 <strong>AI财会助理</strong> 自动生成预览，提交后管理员可见</span>
-          </div>
-          <div className="mx-3 mt-1.5 mb-2 bg-white rounded-xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 1px 8px rgba(26,43,74,0.08)', border: '1px solid #E2E8F0' }}>
+          <div className="mx-3 mt-2 mb-2 bg-white rounded-xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 1px 8px rgba(26,43,74,0.08)', border: '1px solid #E2E8F0' }}>
 
             {/* 顶部色条 */}
             <div style={{ height: 4, background: 'linear-gradient(90deg, #1A2B4A 0%, #C9A84C 100%)' }} />
@@ -1089,9 +1075,22 @@ const AddTransaction = () => {
               </div>
             </div>
 
+            {/* 底部说明文字 */}
+            <div className="px-3 py-1.5 text-center" style={{ background: '#FAFAFA', borderTop: '1px solid #E0E0E0' }}>
+              <span className="text-[9px] text-gray-400">以下为系统自动生成的预览，提交后管理员可见</span>
+            </div>
+
             {/* 底部色条 */}
             <div style={{ height: 4, background: 'linear-gradient(90deg, #C9A84C 0%, #1A2B4A 100%)' }} />
 
+          </div>
+
+          {/* AI 提示语 */}
+          <div className="mx-3 mt-1.5 px-3 py-2 rounded-xl flex-shrink-0" style={{ background: '#F0F4FF', border: '1px solid #D0DAF5' }}>
+            <div className="text-xs leading-relaxed" style={{ color: '#4A5A8A' }}>
+              <span className="font-semibold" style={{ color: '#1A2B4A' }}>AI 财会助理提示：</span>
+              报销事项明细单（费用名称/事项）由 AI 智能生成，如有必要，AI 财会将自动检验内容合规性，直接提交即可。
+            </div>
           </div>
 
           {/* 重复账目警告 */}
@@ -1115,8 +1114,9 @@ const AddTransaction = () => {
               ))}
             </div>
           )}
-          {/* 提交按鈕（固定在底部） */}
-          <div className="fixed bottom-0 left-0 right-0 px-4 pt-3 pb-4 bg-white z-50" style={{ borderTop: '1px solid #E2E8F0', maxWidth: '480px', margin: '0 auto' }}>
+
+          {/* 提交按鈕（移入内容区内部，贴底显示） */}
+          <div className="flex-shrink-0 px-4 pt-3 pb-4 bg-white" style={{ borderTop: '1px solid #E2E8F0' }}>
             {(() => {
               const isReady = !!(amount && parseFloat(amount) > 0 && uploadedImages.length > 0);
               return (
@@ -1126,23 +1126,8 @@ const AddTransaction = () => {
                   </div>
                   <button
                     className="w-full text-white py-4 rounded-2xl text-base font-bold shadow-md tracking-wider transition-all duration-300"
-                    style={{
-                      background: isReady ? 'linear-gradient(135deg, #1A6B4A 0%, #2E9E6B 100%)' : '#B0B8C4',
-                      opacity: 1,
-                      cursor: isReady ? 'pointer' : 'not-allowed'
-                    }}
-                    disabled={!isReady}
-                    onClick={() => {
-                      if (!isReady) {
-                        if (!amount || parseFloat(amount) <= 0) {
-                          alert('请先填写报销金额');
-                        } else if (uploadedImages.length === 0) {
-                          alert('请至少上传一张发票或凭证');
-                        }
-                        return;
-                      }
-                      handleSave();
-                    }}
+                    style={{ background: isReady ? 'linear-gradient(135deg, #1A6B4A 0%, #2E9E6B 100%)' : '#1A2B4A', opacity: isReady ? 1 : 0.85 }}
+                    onClick={handleSave}
                   >
                     {isReady ? '✓ 提交申请' : '提交申请'}
                   </button>
