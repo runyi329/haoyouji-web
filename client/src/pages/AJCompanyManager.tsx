@@ -405,21 +405,19 @@ function AccessPanel({
     onError: (e) => toast.error(e.message),
   });
 
-  const updateRoleMutation = (trpc as any).ledger.ajUpdateMemberRole.useMutation({
-    onSuccess: () => {
-      utils.ledger.ajGetCompanyAccess.invalidate({ companyId: company.id, ledgerId });
-      toast.success('角色已更新');
-    },
-    onError: (e: any) => toast.error(e.message),
-  });
+  const [showAddFunder, setShowAddFunder] = useState(false);
+  const [showAddWorker, setShowAddWorker] = useState(false);
 
-  // 以企业为视角：创始人(owner)固定 / 资方(admin) / 劳方(非owner非admin)
+  // 以企业为视角：创始人(owner)固定 / 资方(admin，已开通) / 劳方(非owner非admin，已开通)
   const ownerMembers = (members as AccessMember[] | undefined)?.filter(m => m.role === 'owner') ?? [];
-  const funderMembers = (members as AccessMember[] | undefined)?.filter(m => m.role === 'admin') ?? [];
-  const workerMembers = (members as AccessMember[] | undefined)?.filter(m => m.role !== 'owner' && m.role !== 'admin') ?? [];
+  const enabledFunders = (members as AccessMember[] | undefined)?.filter(m => m.role === 'admin' && m.isEnabled) ?? [];
+  const enabledWorkers = (members as AccessMember[] | undefined)?.filter(m => m.role !== 'owner' && m.role !== 'admin' && m.isEnabled) ?? [];
+  // 未开通的（可供添加）
+  const availableFunders = (members as AccessMember[] | undefined)?.filter(m => m.role === 'admin' && !m.isEnabled) ?? [];
+  const availableWorkers = (members as AccessMember[] | undefined)?.filter(m => m.role !== 'owner' && m.role !== 'admin' && !m.isEnabled) ?? [];
 
-  // 成员行渲染（带开关）
-  const renderMemberRow = (m: AccessMember) => (
+  // 已开通成员行（带移除按钮）
+  const renderEnabledRow = (m: AccessMember) => (
     <div key={m.userId} className="flex items-center justify-between py-2 px-1">
       <div className="flex items-center gap-3">
         {m.avatar ? (
@@ -435,11 +433,55 @@ function AccessPanel({
         </div>
       </div>
       <button
-        onClick={() => toggleMutation.mutate({ companyId: company.id, ledgerId, userId: m.userId, isEnabled: !m.isEnabled })}
-        className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${m.isEnabled ? 'bg-[#C0392B]' : 'bg-gray-200'}`}
+        onClick={() => toggleMutation.mutate({ companyId: company.id, ledgerId, userId: m.userId, isEnabled: false })}
+        className="text-xs text-red-400 border border-red-200 px-2 py-1 rounded-full hover:bg-red-50 transition-colors"
       >
-        <span className={`absolute top-[3px] left-[3px] w-[18px] h-[18px] rounded-full bg-white shadow-md transition-transform duration-200 ${m.isEnabled ? 'translate-x-[20px]' : 'translate-x-0'}`} />
+        移除
       </button>
+    </div>
+  );
+
+  // 添加选人弹窗
+  const AddMemberPicker = ({ available, onAdd, onClose: onCloseInner, title }: {
+    available: AccessMember[];
+    onAdd: (userId: number) => void;
+    onClose: () => void;
+    title: string;
+  }) => (
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-end">
+      <div className="bg-white w-full rounded-t-2xl max-h-[60vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+          <div className="text-sm font-semibold text-gray-800">{title}</div>
+          <button onClick={onCloseInner} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100">
+            <X className="w-4 h-4 text-gray-500" />
+          </button>
+        </div>
+        <div className="p-3">
+          {available.length === 0 ? (
+            <div className="text-center py-8 text-gray-400 text-sm">暂无可添加的成员</div>
+          ) : (
+            available.map(m => (
+              <button
+                key={m.userId}
+                onClick={() => { onAdd(m.userId); onCloseInner(); }}
+                className="w-full flex items-center gap-3 py-3 px-2 hover:bg-gray-50 rounded-xl transition-colors text-left"
+              >
+                {m.avatar ? (
+                  <img src={m.avatar} className="w-9 h-9 rounded-full object-cover" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-sm font-medium">
+                    {(m.name || m.username || '?')[0].toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <div className="text-sm font-medium text-gray-800">{m.name || m.username}</div>
+                  {m.username && <div className="text-xs text-gray-400">@{m.username}</div>}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 
@@ -458,16 +500,11 @@ function AccessPanel({
         <div className="p-4">
           {isLoading ? (
             <div className="text-center py-8 text-gray-400 text-sm">加载中...</div>
-          ) : !members || members.length === 0 ? (
-            <div className="text-center py-8 text-gray-400 text-sm">
-              暂无成员
-              <div className="text-xs mt-1">请先在账本中邀请成员加入</div>
-            </div>
           ) : (
             <div className="space-y-1">
               {/* 创始人区块（固定，不可修改） */}
               {ownerMembers.length > 0 && (
-                <div className="mb-3">
+                <div className="mb-4">
                   <div className="text-xs text-gray-400 font-medium mb-2 px-1">创始人（默认可见所有企业）</div>
                   {ownerMembers.map((m) => (
                     <div key={m.userId} className="flex items-center justify-between py-2 px-1">
@@ -489,28 +526,72 @@ function AccessPanel({
                   ))}
                 </div>
               )}
-              {/* 资方区块（admin角色，开关控制是否加入该企业资方） */}
-              {funderMembers.length > 0 && (
-                <div className="mb-3">
-                  {ownerMembers.length > 0 && <div className="border-t border-gray-100 mb-3" />}
-                  <div className="text-xs text-gray-400 font-medium mb-2 px-1">企业主（资方）— 开启后可查看该企业报销汇总</div>
-                  {funderMembers.map(renderMemberRow)}
+
+              {/* 资方区块（admin角色，仅显示已开通，可添加/移除） */}
+              <div className="mb-4">
+                <div className="border-t border-gray-100 mb-3" />
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <div className="text-xs text-gray-400 font-medium">企业主（资方）— 可查看该企业报销汇总</div>
+                  <button
+                    onClick={() => setShowAddFunder(true)}
+                    className="flex items-center gap-1 text-xs text-[#C0392B] font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    添加
+                  </button>
                 </div>
-              )}
-              {/* 劳方区块（非owner非admin，开关控制是否可提交该企业报销） */}
-              {workerMembers.length > 0 && (
-                <div>
-                  {(ownerMembers.length > 0 || funderMembers.length > 0) && <div className="border-t border-gray-100 mb-3" />}
-                  <div className="text-xs text-gray-400 font-medium mb-2 px-1">业务员（劳方）— 开启后可向该企业提交报销</div>
-                  {workerMembers.map(renderMemberRow)}
+                {enabledFunders.length === 0 ? (
+                  <div className="text-xs text-gray-300 px-1 py-2">暂未添加资方成员</div>
+                ) : (
+                  enabledFunders.map(renderEnabledRow)
+                )}
+              </div>
+
+              {/* 劳方区块（非owner非admin，仅显示已开通，可添加/移除） */}
+              <div>
+                <div className="border-t border-gray-100 mb-3" />
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <div className="text-xs text-gray-400 font-medium">业务员（劳方）— 可向该企业提交报销</div>
+                  <button
+                    onClick={() => setShowAddWorker(true)}
+                    className="flex items-center gap-1 text-xs text-[#C0392B] font-medium"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    添加
+                  </button>
                 </div>
-              )}
-              {/* 占位 */}
-              <div className="h-2" />
+                {enabledWorkers.length === 0 ? (
+                  <div className="text-xs text-gray-300 px-1 py-2">暂未添加劳方成员</div>
+                ) : (
+                  enabledWorkers.map(renderEnabledRow)
+                )}
+              </div>
+
+              <div className="h-4" />
             </div>
           )}
         </div>
       </div>
+
+      {/* 添加资方选人弹窗 */}
+      {showAddFunder && (
+        <AddMemberPicker
+          available={availableFunders}
+          title="选择要添加的企业主（资方）"
+          onAdd={(userId) => toggleMutation.mutate({ companyId: company.id, ledgerId, userId, isEnabled: true })}
+          onClose={() => setShowAddFunder(false)}
+        />
+      )}
+
+      {/* 添加劳方选人弹窗 */}
+      {showAddWorker && (
+        <AddMemberPicker
+          available={availableWorkers}
+          title="选择要添加的业务员（劳方）"
+          onAdd={(userId) => toggleMutation.mutate({ companyId: company.id, ledgerId, userId, isEnabled: true })}
+          onClose={() => setShowAddWorker(false)}
+        />
+      )}
     </div>
   );
 }
