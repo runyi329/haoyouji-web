@@ -968,7 +968,11 @@ const AddTransaction = () => {
           </div>
 
           {/* 容器三：费用报销明细单预览 */}
-          <div className="mx-3 mt-2 mb-2 bg-white rounded-xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 1px 8px rgba(26,43,74,0.08)', border: '1px solid #E2E8F0' }}>
+          {/* AI提示语 */}
+          <div className="mx-3 mt-2 px-3 py-1.5 rounded-xl flex-shrink-0" style={{ background: '#F0F4FF', border: '1px solid #D0DAF5' }}>
+            <span className="text-[11px]" style={{ color: '#4A5A8A' }}>以下为 <strong>AI财会助理</strong> 自动生成预览，提交后管理员可见</span>
+          </div>
+          <div className="mx-3 mt-1.5 mb-2 bg-white rounded-xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 1px 8px rgba(26,43,74,0.08)', border: '1px solid #E2E8F0' }}>
 
             {/* 顶部色条 */}
             <div style={{ height: 4, background: 'linear-gradient(90deg, #1A2B4A 0%, #C9A84C 100%)' }} />
@@ -1075,25 +1079,12 @@ const AddTransaction = () => {
               </div>
             </div>
 
-            {/* 底部说明文字 */}
-            <div className="px-3 py-1.5 text-center" style={{ background: '#FAFAFA', borderTop: '1px solid #E0E0E0' }}>
-              <span className="text-[9px] text-gray-400">以下为系统自动生成的预览，提交后管理员可见</span>
-            </div>
-
-            {/* 底部色条 */}
+            {/* 底部色条 */
             <div style={{ height: 4, background: 'linear-gradient(90deg, #C9A84C 0%, #1A2B4A 100%)' }} />
 
           </div>
 
-          {/* AI 提示语 */}
-          <div className="mx-3 mt-1.5 px-3 py-2 rounded-xl flex-shrink-0" style={{ background: '#F0F4FF', border: '1px solid #D0DAF5' }}>
-            <div className="text-xs leading-relaxed" style={{ color: '#4A5A8A' }}>
-              <span className="font-semibold" style={{ color: '#1A2B4A' }}>AI 财会助理提示：</span>
-              报销事项明细单（费用名称/事项）由 AI 智能生成，如有必要，AI 财会将自动检验内容合规性，直接提交即可。
-            </div>
-          </div>
-
-          {/* 重复账目警告 */}
+          {/* 重复账目警告 */
           {duplicateWarnings.length > 0 && (
             <div className="mx-3 mt-1.5">
               {duplicateWarnings.map((w, idx) => (
