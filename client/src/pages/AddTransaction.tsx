@@ -853,7 +853,7 @@ const AddTransaction = () => {
             {/* 报销金额 */}
             <div className="px-4 pt-3 pb-2" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
               <div className="flex items-center gap-2 mb-1">
-                <span className="w-7 h-7 rounded-full bg-[#C9A84C] text-white text-sm font-bold flex items-center justify-center flex-shrink-0">1</span>
+                <span className="w-6 h-6 rounded-full bg-[#C9A84C] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
               </div>
               <div className="flex items-end gap-1">
@@ -869,7 +869,7 @@ const AddTransaction = () => {
                       setAmount(val);
                     }
                   }}
-                  className="text-3xl font-light text-[#1A2B4A] bg-transparent border-none outline-none flex-1 placeholder-gray-200"
+                  className="text-3xl font-bold text-[#1A2B4A] bg-transparent border-none outline-none flex-1 placeholder-gray-200"
                   style={{ caretColor: '#1A2B4A' }}
                   autoComplete="off"
                 />
@@ -912,7 +912,7 @@ const AddTransaction = () => {
             {/* 发票凭证 */}
             <div className="px-4 py-2.5" style={{ background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
               <div className="flex items-center gap-2 mb-2">
-                <span className="w-7 h-7 rounded-full bg-[#C9A84C] text-white text-sm font-bold flex items-center justify-center flex-shrink-0">2</span>
+                <span className="w-6 h-6 rounded-full bg-[#C9A84C] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>发票 / 凭证</span>
               </div>
               <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
@@ -937,23 +937,34 @@ const AddTransaction = () => {
               }} />
               <div className="flex flex-wrap gap-2">
                 {uploadedImages.map((image, index) => (
-                  <div key={index} className="relative w-16 h-16 flex-shrink-0">
-                    <img src={image} alt={`发票${index + 1}`} className="w-full h-full object-cover rounded" />
+                  <div key={index} className="relative flex-shrink-0" style={{ width: 72, height: 72 }}>
+                    <img src={image} alt={`发票${index + 1}`} className="w-full h-full object-cover rounded-lg" />
                     <button className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#1A2B4A] text-white rounded-full flex items-center justify-center shadow" onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== index))}>
                       <X className="w-3 h-3" />
                     </button>
                   </div>
                 ))}
-                {uploadedImages.length < 10 && (
+                {uploadedImages.length === 0 ? (
+                  /* 未上传时：正方形相机图标+文字 */
                   <button
                     className="flex-shrink-0 flex flex-col items-center justify-center gap-1.5 rounded-xl text-[#1A2B4A] active:opacity-70"
-                    style={{ width: uploadedImages.length === 0 ? '100%' : '72px', height: uploadedImages.length === 0 ? '72px' : '72px', background: '#F4F6F9', border: '2px dashed #C9A84C80' }}
+                    style={{ width: 72, height: 72, background: '#F4F6F9', border: '2px dashed #C9A84C80' }}
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width={uploadedImages.length === 0 ? '32' : '24'} height={uploadedImages.length === 0 ? '32' : '24'} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                    <span className="text-xs font-medium">{uploadedImages.length > 0 ? `${uploadedImages.length}/10` : '拍照上传发票/凭证'}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    <span className="text-[10px] font-medium text-center leading-tight">拍照上传
+发票/凭证</span>
                   </button>
-                )}
+                ) : uploadedImages.length < 10 ? (
+                  /* 已有图片：显示带加号的新增按钮 */
+                  <button
+                    className="flex-shrink-0 flex flex-col items-center justify-center rounded-xl text-[#C9A84C] active:opacity-70"
+                    style={{ width: 72, height: 72, background: '#FFFBF0', border: '2px dashed #C9A84C80' }}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  </button>
+                ) : null}
               </div>
             </div>
           </div>
