@@ -857,7 +857,7 @@ const AddTransaction = () => {
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
               </div>
               <div className="flex items-end gap-1">
-                <span className="text-2xl font-light text-gray-400">¥</span>
+                <span className="text-2xl font-bold text-gray-400">¥</span>
                 <input
                   type="text"
                   inputMode="decimal"
@@ -947,13 +947,11 @@ const AddTransaction = () => {
                 {uploadedImages.length === 0 ? (
                   /* 未上传时：正方形相机图标+文字 */
                   <button
-                    className="flex-shrink-0 flex flex-col items-center justify-center gap-1.5 rounded-xl text-[#1A2B4A] active:opacity-70"
+                    className="flex-shrink-0 flex items-center justify-center rounded-xl text-[#1A2B4A] active:opacity-70"
                     style={{ width: 72, height: 72, background: '#F4F6F9', border: '2px dashed #C9A84C80' }}
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                    <span className="text-[10px] font-medium text-center leading-tight">拍照上传
-发票/凭证</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                   </button>
                 ) : uploadedImages.length < 10 ? (
                   /* 已有图片：显示带加号的新增按钮 */
