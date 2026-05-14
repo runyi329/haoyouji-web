@@ -85,12 +85,20 @@ const LedgerPermissions = () => {
     permissionType: "view" | "add" | "edit" | "delete" | "backup"
   ) => {
     const rect = event.currentTarget.getBoundingClientRect();
+    // 菜单高度估算：备份权限2项约96px，其他权限3项约144px
+    const menuHeight = permissionType === 'backup' ? 96 : 144;
+    const viewportHeight = window.innerHeight;
+    const spaceBelow = viewportHeight - rect.bottom;
+    // 如果下方空间不足，则向上弹出
+    const showAbove = spaceBelow < menuHeight + 8;
     setPermissionMenu({
       show: true,
       memberId,
       permissionType,
       position: {
-        top: rect.bottom + window.scrollY,
+        top: showAbove
+          ? rect.top + window.scrollY - menuHeight - 4
+          : rect.bottom + window.scrollY + 4,
         left: rect.left + rect.width / 2,
       },
     });
