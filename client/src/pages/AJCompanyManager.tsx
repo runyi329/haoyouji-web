@@ -410,23 +410,25 @@ function AccessPanel({
 
   // 以企业为视角（仅限 AJ 账本）：
   // - 创始人：owner（固定）
-  // - 资方：admin（企业主）
-  // - 劳方：member / funder / employee 均归并为劳方（业务员）
-  const AJ_WORKER_ROLES = ['member', 'funder', 'employee'];
+  // - 资方权限（funder）：可查看该企业报销汇总，限 admin 角色成员
+  // - 劳方权限（worker）：可向该企业提交报销，所有非 owner 成员均可
+  // 同一人可同时拥有两种权限（两条独立记录）
   const ownerMembers = (members as AccessMember[] | undefined)?.filter(m => m.role === 'owner') ?? [];
-  const enabledFunders = (members as AccessMember[] | undefined)?.filter(m => m.role === 'admin' && m.isEnabled) ?? [];
-  const enabledWorkers = (members as AccessMember[] | undefined)?.filter(m => AJ_WORKER_ROLES.includes(m.role) && m.isEnabled) ?? [];
-  // 未开通的（可供添加）
-  // 资方：只有 admin 角色可被添加为资方
-  const availableFunders = (members as AccessMember[] | undefined)?.filter(m => m.role === 'admin' && !m.isEnabled) ?? [];
-  // 劳方：所有非 owner 成员都可被添加为劳方（包括 admin，资方也可以以劳方身份开票）
-  // 排除已在劳方列表中的人
+  // 已开通资方权限的成员（isFunderEnabled=true）
+  const enabledFunders = (members as AccessMember[] | undefined)?.filter(m => (m as any).isFunderEnabled) ?? [];
+  // 已开通劳方权限的成员（isWorkerEnabled=true）
+  const enabledWorkers = (members as AccessMember[] | undefined)?.filter(m => (m as any).isWorkerEnabled) ?? [];
+  // 可添加为资方：只有 admin 角色，且资方权限未开通
+  const enabledFunderIds = new Set(enabledFunders.map(m => m.userId));
+  const availableFunders = (members as AccessMember[] | undefined)?.filter(m => m.role === 'admin' && !enabledFunderIds.has(m.userId)) ?? [];
+  // 可添加为劳方：所有非 owner 成员，且劳方权限未开通（已开通资方权限的人也可被添加为劳方）
   const enabledWorkerIds = new Set(enabledWorkers.map(m => m.userId));
   const availableWorkers = (members as AccessMember[] | undefined)?.filter(m => m.role !== 'owner' && !enabledWorkerIds.has(m.userId)) ?? [];
 
   // 已开通成员行（带移除按钮）
-  const renderEnabledRow = (m: AccessMember) => (
-    <div key={m.userId} className="flex items-center justify-between py-2 px-1">
+  // accessType: 'funder' | 'worker' — 移除时传入对应的权限类型
+  const renderEnabledRow = (m: AccessMember, accessType: 'funder' | 'worker') => (
+    <div key={`${m.userId}-${accessType}`} className="flex items-center justify-between py-2 px-1">
       <div className="flex items-center gap-3">
         {m.avatar ? (
           <img src={m.avatar} className="w-9 h-9 rounded-full object-cover" />
@@ -441,7 +443,7 @@ function AccessPanel({
         </div>
       </div>
       <button
-        onClick={() => toggleMutation.mutate({ companyId: company.id, ledgerId, userId: m.userId, isEnabled: false })}
+        onClick={() => toggleMutation.mutate({ companyId: company.id, ledgerId, userId: m.userId, isEnabled: false, accessType })}
         className="text-xs text-red-400 border border-red-200 px-2 py-1 rounded-full hover:bg-red-50 transition-colors"
       >
         移除
@@ -551,7 +553,7 @@ function AccessPanel({
                 {enabledFunders.length === 0 ? (
                   <div className="text-xs text-gray-300 px-1 py-2">暂未添加资方成员</div>
                 ) : (
-                  enabledFunders.map(renderEnabledRow)
+                  enabledFunders.map(m => renderEnabledRow(m, 'funder'))
                 )}
               </div>
 
@@ -571,7 +573,7 @@ function AccessPanel({
                 {enabledWorkers.length === 0 ? (
                   <div className="text-xs text-gray-300 px-1 py-2">暂未添加劳方成员</div>
                 ) : (
-                  enabledWorkers.map(renderEnabledRow)
+                  enabledWorkers.map(m => renderEnabledRow(m, 'worker'))
                 )}
               </div>
 
@@ -586,7 +588,7 @@ function AccessPanel({
         <AddMemberPicker
           available={availableFunders}
           title="选择要添加的企业主（资方）"
-          onAdd={(userId) => toggleMutation.mutate({ companyId: company.id, ledgerId, userId, isEnabled: true })}
+          onAdd={(userId) => toggleMutation.mutate({ companyId: company.id, ledgerId, userId, isEnabled: true, accessType: 'funder' })}
           onClose={() => setShowAddFunder(false)}
         />
       )}
@@ -596,7 +598,7 @@ function AccessPanel({
         <AddMemberPicker
           available={availableWorkers}
           title="选择要添加的业务员（劳方）"
-          onAdd={(userId) => toggleMutation.mutate({ companyId: company.id, ledgerId, userId, isEnabled: true })}
+          onAdd={(userId) => toggleMutation.mutate({ companyId: company.id, ledgerId, userId, isEnabled: true, accessType: 'worker' })}
           onClose={() => setShowAddWorker(false)}
         />
       )}

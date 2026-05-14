@@ -2088,13 +2088,17 @@ export const ajCompanyAccess = mysqlTable("aj_company_access", {
   ledgerId: int('ledger_id').notNull(),
   companyId: int('company_id').notNull(),
   userId: int('user_id').notNull(),
+  // accessType: 'funder'=资方（可查看企业报销汇总），'worker'=劳方（可提交报销）
+  // 同一人可同时拥有两种权限（两条记录）
+  accessType: varchar('access_type', { length: 20 }).default('worker').notNull(),
   isEnabled: tinyint('is_enabled').default(0).notNull(),
   enabledBy: int('enabled_by'),
   enabledAt: timestamp('enabled_at', { mode: 'string' }),
   createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
   updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 }, (table) => [
-  uniqueIndex("aj_company_access_uniq").on(table.companyId, table.userId),
+  // 唯一索引包含 accessType，同一人可同时有资方和劳方两条记录
+  uniqueIndex("aj_company_access_uniq").on(table.companyId, table.userId, table.accessType),
   index("aj_company_access_ledger_idx").on(table.ledgerId),
   index("aj_company_access_user_idx").on(table.userId),
 ]);
