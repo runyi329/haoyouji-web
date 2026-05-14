@@ -749,10 +749,10 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       {wallet.walletType === "binance" && (
-                        <img src="https://bin.bnbstatic.com/static/images/common/favicon.ico" alt="Binance" className="w-5 h-5 rounded" />
+                        <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logos/binance-circle-icon.png" alt="Binance" className="w-5 h-5 rounded" />
                       )}
                       {wallet.walletType === "okx" && (
-                        <img src="https://static.okx.com/cdn/assets/imgs/247/58E63FEA47A2B7D7.png" alt="OKX" className="w-5 h-5 rounded" />
+                        <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/logos/okx-circle-icon.png" alt="OKX" className="w-5 h-5 rounded" />
                       )}
                       <h3 className="font-semibold text-gray-900">
                         {wallet.walletType === "binance" ? "币安账户" : wallet.walletType === "okx" ? "欧易账户" : "区块链钱包"}
