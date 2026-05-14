@@ -821,26 +821,26 @@ const AddTransaction = () => {
           <div className="mx-3 -mt-3 rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
             <div className="px-3 py-3">
               {selectedCompany ? (
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-base font-bold text-[#1A2B4A] leading-tight" style={{ wordBreak: 'break-all' }}>{selectedCompany.name}</div>
-                    {selectedCompany.taxNo && (
-                      <div className="text-base font-bold text-[#1A2B4A] mt-1 leading-tight" style={{ wordBreak: 'break-all' }}>{selectedCompany.taxNo}</div>
-                    )}
-                    {hasMultipleCompanies && (
-                      <button className="text-[10px] text-[#1A2B4A] underline mt-1" onClick={() => setShowCompanyPicker(true)}>更换企业</button>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-2 flex-shrink-0">
-                    <button className="w-8 h-8 rounded-md border border-gray-300 text-gray-500 flex items-center justify-center active:bg-gray-100" onClick={() => { navigator.clipboard.writeText(selectedCompany.name); toast.success('已复制企业名称'); }} title="复制企业名称">
+                <div className="flex flex-col gap-2">
+                  {/* 第一行：公司名称 + 复制按钮 */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 min-w-0 text-base font-bold text-[#1A2B4A] leading-tight" style={{ wordBreak: 'break-all' }}>{selectedCompany.name}</div>
+                    <button className="w-8 h-8 flex-shrink-0 rounded-md border border-gray-300 text-gray-500 flex items-center justify-center active:bg-gray-100" onClick={() => { navigator.clipboard.writeText(selectedCompany.name); toast.success('已复制企业名称'); }} title="复制企业名称">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>
-                    {selectedCompany.taxNo && (
-                      <button className="w-8 h-8 rounded-md border border-gray-300 text-gray-500 flex items-center justify-center active:bg-gray-100" onClick={() => { navigator.clipboard.writeText(selectedCompany.taxNo); toast.success('已复制税号'); }} title="复制税号">
+                  </div>
+                  {/* 第二行：税号 + 复制按钮 */}
+                  {selectedCompany.taxNo && (
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0 text-base font-bold text-[#1A2B4A] leading-tight" style={{ wordBreak: 'break-all' }}>{selectedCompany.taxNo}</div>
+                      <button className="w-8 h-8 flex-shrink-0 rounded-md border border-gray-300 text-gray-500 flex items-center justify-center active:bg-gray-100" onClick={() => { navigator.clipboard.writeText(selectedCompany.taxNo); toast.success('已复制税号'); }} title="复制税号">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                  {hasMultipleCompanies && (
+                    <button className="text-[10px] text-[#1A2B4A] underline self-start" onClick={() => setShowCompanyPicker(true)}>更换企业</button>
+                  )}
                 </div>
               ) : (
                 <div className="text-sm text-gray-300">请选择企业</div>
