@@ -148,11 +148,21 @@ function InvoiceListInline({
   // 如果外部传入 period，则不内部管理时间筛选
   const [internalPeriod, setInternalPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'year'>('month');
   const period = externalPeriod ?? internalPeriod;
-  const { data: invoices, isLoading } = (trpc as any).ledger.ajOwnerGetCompanyInvoices.useQuery({ ledgerId, companyId, period });
+  const { data: invoices, isLoading, error } = (trpc as any).ledger.ajOwnerGetCompanyInvoices.useQuery({ ledgerId, companyId, period });
   const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', year: '本年' };
 
   return (
     <div>
+      {/* 临时调试信息 */}
+      <div className="mx-4 my-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-gray-700 break-all">
+        <div><b>companyId:</b> {companyId} ({typeof companyId})</div>
+        <div><b>ledgerId:</b> {ledgerId} ({typeof ledgerId})</div>
+        <div><b>period:</b> {period}</div>
+        <div><b>isLoading:</b> {String(isLoading)}</div>
+        <div><b>error:</b> {error ? String((error as any).message) : 'none'}</div>
+        <div><b>invoices count:</b> {invoices ? (invoices as any[]).length : 'null'}</div>
+        <div><b>raw:</b> {JSON.stringify(invoices)?.slice(0, 200)}</div>
+      </div>
       {/* 只有内部管理时才显示筛选栏 */}
       {!externalPeriod && (
         <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-t border-gray-100">
