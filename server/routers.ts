@@ -16153,6 +16153,7 @@ ${klinesSummary}
     ajOwnerGetCompanyStats: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
+        companyId: z.number().optional(),
         period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
       }))
       .query(async ({ ctx, input }) => {
@@ -16179,6 +16180,8 @@ ${klinesSummary}
           dateFilter = 'AND lr.record_date >= ?';
           dateParams.push(new Date(now.getFullYear(), q*3, 1).toISOString().split('T')[0]);
         } else if (input.period === 'year') { dateFilter = 'AND lr.record_date >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
+        const companyFilter = input.companyId ? 'AND c.id = ?' : '';
+        const companyParams = input.companyId ? [input.companyId] : [];
         const [rows] = await (conn as any).execute(
           `SELECT c.id as companyId, c.name as companyName, c.tax_no as taxNo,
                   COUNT(lr.id) as invoiceCount,
@@ -16186,7 +16189,7 @@ ${klinesSummary}
                   COUNT(DISTINCT lr.created_by) as salesmanCount
            FROM aj_companies c
            LEFT JOIN ledger_records lr ON lr.aj_company_id = c.id AND lr.ledger_id = ? ${dateFilter} AND lr.deleted_at IS NULL
-           WHERE c.ledger_id = ? AND (
+           WHERE c.ledger_id = ? ${companyFilter} AND (
              c.created_by = ?
              OR EXISTS (
                SELECT 1 FROM aj_company_access a
@@ -16196,8 +16199,13 @@ ${klinesSummary}
            )
            GROUP BY c.id, c.name, c.tax_no
            ORDER BY c.created_at ASC`,
-          [input.ledgerId, ...dateParams, input.ledgerId, ctx.user.id, ctx.user.id]
+          [input.ledgerId, ...dateParams, input.ledgerId, ...companyParams, ctx.user.id, ctx.user.id]
         );
+        // 如果传了 companyId，直接返回第一条（单企业统计）
+        if (input.companyId) {
+          const row = (rows as any[])[0];
+          return row ? { invoiceCount: Number(row.invoiceCount), totalAmount: Number(row.totalAmount), salesmanCount: Number(row.salesmanCount) } : { invoiceCount: 0, totalAmount: 0, salesmanCount: 0 };
+        }
         return rows as any[];
       }),
     // 企业主获取某企业的开票详情列表（简化版：含开票人username但不含头像）
