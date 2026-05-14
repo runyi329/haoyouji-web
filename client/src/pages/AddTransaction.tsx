@@ -152,53 +152,8 @@ const AddTransaction = () => {
   const [transactionType, setTransactionType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("");
 
-  // 根据金额自动匹配报销事由（只读，无需用户选择）
-  const autoExpenseReason = (() => {
-    const num = parseFloat(amount) || 0;
-    const pool: [string, string][] = num <= 50
-      ? [
-          ['交通费', '市内打车/公交/地铁'],
-          ['办公费', '办公用品'],
-          ['交通费', '停车费'],
-          ['办公费', '快递邮寄'],
-        ]
-      : num <= 200
-      ? [
-          ['业务招待费', '餐饮宴请'],
-          ['交通费', '加油费'],
-          ['办公费', '文件打印复印'],
-          ['通讯费', '手机话费'],
-          ['业务招待费', '茶水饮品'],
-        ]
-      : num <= 500
-      ? [
-          ['差旅费', '住宿费'],
-          ['业务招待费', '商务活动接待'],
-          ['通讯费', '网络宽带'],
-          ['办公费', '设备耗材'],
-          ['员工福利费', '团建活动'],
-        ]
-      : num <= 2000
-      ? [
-          ['差旅费', '高铁/动车'],
-          ['差旅费', '机票'],
-          ['会议费', '会议场地租金'],
-          ['广告宣传费', '宣传物料'],
-          ['培训教育费', '外部培训'],
-        ]
-      : [
-          ['差旅费', '机票'],
-          ['租赁费', '办公场地租金'],
-          ['维修维护费', '办公设备维修'],
-          ['培训教育费', '外部培训'],
-          ['广告宣传费', '广告投放'],
-        ];
-    if (num <= 0) return '';
-    const idx = Math.floor(num) % pool.length;
-    const [cat, item] = pool[idx];
-    return `${cat} · ${item}`;
-  })();
-  const expenseReasonLabel = autoExpenseReason;
+  // 报销事由：固定为「待确认」
+  const expenseReasonLabel = '待确认';
 
   // 分类选择状态：存储选中的分类路径 [一级分类ID, 二级分类ID, 三级分类ID, ...]
   // 默认选中第一个预设分类（ID为2）
