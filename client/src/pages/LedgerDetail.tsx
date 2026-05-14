@@ -2469,6 +2469,16 @@ export default function LedgerDetail() {
   const ahCreateCompanyMutation = trpc.ledger.ahCreateCompany.useMutation({
     onSuccess: () => { refetchAhCompanies(); refetchAhTaxAuths(); },
   });
+  // AJ 账本：劳方撤回自己提交的「申请中」账目
+  const withdrawReimbursementMutation = trpc.ledger.withdrawReimbursement.useMutation({
+    onSuccess: () => {
+      toast.success('申请已撤销');
+      refetchTransactions();
+    },
+    onError: (err: any) => {
+      toast.error(err.message || '撤销失败');
+    },
+  });
   // AF 账本：资金费率日志弹窗状态（已在上方 trpc 查询前声明）
   const showFundingRateLogs = showFundingRateLogs2;
   const setShowFundingRateLogs = setShowFundingRateLogs2;
@@ -5462,31 +5472,54 @@ export default function LedgerDetail() {
                                   </div>
                                 </div>
                               </div>
-                              {/* 状态文字标签 */}
-                              {record.ajStatus && (
-                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-                                  <span style={{
-                                    width: '6px',
-                                    height: '6px',
-                                    borderRadius: '50%',
-                                    flexShrink: 0,
-                                    display: 'inline-block',
-                                    backgroundColor:
-                                      record.ajStatus === 'pending' ? '#F59E0B' :
-                                      record.ajStatus === 'approved' ? '#4CAF50' : '#BDBDBD'
-                                  }} />
-                                  <span style={{
-                                    fontSize: '12px',
-                                    fontWeight: 500,
-                                    color:
-                                      record.ajStatus === 'pending' ? '#B45309' :
-                                      record.ajStatus === 'approved' ? '#2E7D32' : '#757575'
-                                  }}>
-                                    {record.ajStatus === 'pending' ? '申请中' :
-                                     record.ajStatus === 'approved' ? '已通过' : '已拒绝'}
-                                  </span>
-                                </div>
-                              )}
+                              {/* 状态文字标签 + 撤销按钮 */}
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                {record.ajStatus && (
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                    <span style={{
+                                      width: '6px',
+                                      height: '6px',
+                                      borderRadius: '50%',
+                                      flexShrink: 0,
+                                      display: 'inline-block',
+                                      backgroundColor:
+                                        record.ajStatus === 'pending' ? '#F59E0B' :
+                                        record.ajStatus === 'approved' ? '#4CAF50' : '#BDBDBD'
+                                    }} />
+                                    <span style={{
+                                      fontSize: '12px',
+                                      fontWeight: 500,
+                                      color:
+                                        record.ajStatus === 'pending' ? '#B45309' :
+                                        record.ajStatus === 'approved' ? '#2E7D32' : '#757575'
+                                    }}>
+                                      {record.ajStatus === 'pending' ? '申请中' :
+                                       record.ajStatus === 'approved' ? '已通过' : '已拒绝'}
+                                    </span>
+                                  </div>
+                                )}
+                                {record.ajStatus === 'pending' && record.createdBy === user?.id && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      withdrawReimbursementMutation.mutate({ ledgerId: Number(ledgerId), recordId: record.id });
+                                    }}
+                                    disabled={withdrawReimbursementMutation.isPending}
+                                    style={{
+                                      fontSize: '11px',
+                                      color: withdrawReimbursementMutation.isPending ? '#aaa' : '#DC2626',
+                                      background: 'none',
+                                      border: '1px solid currentColor',
+                                      borderRadius: '4px',
+                                      padding: '1px 6px',
+                                      cursor: withdrawReimbursementMutation.isPending ? 'not-allowed' : 'pointer',
+                                      lineHeight: '1.5',
+                                    }}
+                                  >
+                                    {withdrawReimbursementMutation.isPending ? '撤销中...' : '撤销'}
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
