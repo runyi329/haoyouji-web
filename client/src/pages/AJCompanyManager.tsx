@@ -413,8 +413,12 @@ function AccessPanel({
   const enabledFunders = (members as AccessMember[] | undefined)?.filter(m => m.role === 'admin' && m.isEnabled) ?? [];
   const enabledWorkers = (members as AccessMember[] | undefined)?.filter(m => m.role !== 'owner' && m.role !== 'admin' && m.isEnabled) ?? [];
   // 未开通的（可供添加）
+  // 资方：只有 admin 角色可被添加为资方
   const availableFunders = (members as AccessMember[] | undefined)?.filter(m => m.role === 'admin' && !m.isEnabled) ?? [];
-  const availableWorkers = (members as AccessMember[] | undefined)?.filter(m => m.role !== 'owner' && m.role !== 'admin' && !m.isEnabled) ?? [];
+  // 劳方：所有非 owner 成员都可被添加为劳方（包括 admin，资方也可以以劳方身份开票）
+  // 但排除已在劳方列表中的人（isEnabled 且非 admin 角色已处理），以及已在劳方的 admin
+  const enabledWorkerIds = new Set(enabledWorkers.map(m => m.userId));
+  const availableWorkers = (members as AccessMember[] | undefined)?.filter(m => m.role !== 'owner' && !enabledWorkerIds.has(m.userId)) ?? [];
 
   // 已开通成员行（带移除按钮）
   const renderEnabledRow = (m: AccessMember) => (
