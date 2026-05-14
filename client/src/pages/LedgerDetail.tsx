@@ -5498,7 +5498,7 @@ export default function LedgerDetail() {
                                     </span>
                                   </div>
                                 )}
-                                {record.ajStatus === 'pending' && record.createdBy === user?.id && (
+                                {record.ajStatus === 'pending' && record.member?.id === user?.id && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
