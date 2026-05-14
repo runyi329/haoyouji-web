@@ -1011,11 +1011,7 @@ const AddTransaction = () => {
                 <span
                   className="ml-1"
                   style={{
-                    fontSize: '14px',
                     color: '#1a237e',
-                    letterSpacing: '1px',
-                    transform: 'rotate(-2deg)',
-                    display: 'inline-block',
                   }}
                 >{applicantName}</span>
               </div>
@@ -1024,11 +1020,7 @@ const AddTransaction = () => {
                 <span
                   className="ml-1"
                   style={{
-                    fontSize: '14px',
                     color: '#1a237e',
-                    letterSpacing: '1px',
-                    transform: 'rotate(-1.5deg)',
-                    display: 'inline-block',
                   }}
                 >
                   {selectedCompany ? (() => {
