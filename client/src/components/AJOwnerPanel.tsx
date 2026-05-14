@@ -420,7 +420,7 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                 value={searchText}
                 onChange={e => setSearchText(e.target.value)}
                 placeholder="搜索金额、分类、业务员..."
-                className="w-full pl-9 pr-4 py-2 text-sm bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-blue-300 focus:bg-white transition-colors"
+                className="w-full pl-9 pr-4 py-2 text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-blue-300 focus:bg-white transition-colors"
               />
               {searchText && (
                 <button
