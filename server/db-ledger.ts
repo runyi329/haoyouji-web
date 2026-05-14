@@ -5285,7 +5285,7 @@ export async function joinLedgerBySecretKey(secretKey: string, userId: number) {
     }
   } catch (e) {
     console.error('[joinLedgerBySecretKey] 初始化默认拨比失败:', e);
-  }}
+  }
 
   console.log('[joinLedgerBySecretKey] 用户通过密鑰加入账本:', { userId, ledgerId });
   return { ledgerId, ledgerName: ledgerRow.name };
