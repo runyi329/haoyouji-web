@@ -135,9 +135,9 @@ const AddTransaction = () => {
   );
   const effectiveExpenseConfig = (companyExpenseConfig as any) ?? getDefaultExpenseConfig();
   const selectedCompany = (ajCompanies as any[])?.find((c: any) => c.id === selectedCompanyId);
-  // 当企业列表加载完成且只有1个时，自动选中该企业
+  // 当企业列表加载完成时，自动选中第1个企业（必须选中一个企业才能提交）
   useEffect(() => {
-    if (isCustomAJ && ajCompanies && (ajCompanies as any[]).length === 1 && selectedCompanyId === null) {
+    if (isCustomAJ && ajCompanies && (ajCompanies as any[]).length > 0 && selectedCompanyId === null) {
       setSelectedCompanyId((ajCompanies as any[])[0].id);
     }
   }, [isCustomAJ, ajCompanies]);
@@ -1675,14 +1675,6 @@ const AddTransaction = () => {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <button
-                    className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-colors ${
-                      selectedCompanyId === null ? 'bg-[#1A2B4A] text-white' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                    }`}
-                    onClick={() => { setSelectedCompanyId(null); setShowCompanyPicker(false); }}
-                  >
-                    不指定企业
-                  </button>
                   {(ajCompanies as any[]).map((company: any) => (
                     <div
                       key={company.id}
