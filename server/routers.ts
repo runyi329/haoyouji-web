@@ -22745,6 +22745,25 @@ export const adminFeatureRouter = router({
     }),
 
 
+  // 临时迁移：修复 digital_wallets wallet_type ENUM 加入 binance 和 okx
+  migrateWalletTypeEnum: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可访问' });
+      }
+      const db = await import('./db').then(m => m.getDb());
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      try {
+        await db.execute(sql`ALTER TABLE digital_wallets MODIFY COLUMN wallet_type ENUM('blockchain', 'binance', 'okx', 'alipay', 'wechat', 'other') NOT NULL`);
+        return { success: true, message: 'wallet_type ENUM 已更新' };
+      } catch (e: any) {
+        if (e?.message?.includes('Duplicate column') || e?.message?.includes('already exists')) {
+          return { success: true, message: '已是最新状态' };
+        }
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `迁移失败: ${e?.message}` });
+      }
+    }),
+
   // 获取脱动共享商盟完整架构文档（建站规则页使用）
   getMerchantArchitectureDoc: publicProcedure
     .query(async () => {
