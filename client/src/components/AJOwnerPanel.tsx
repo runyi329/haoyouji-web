@@ -300,34 +300,30 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
       <div style={{ backgroundColor: AJ_COLOR }} className="px-4 pt-3 pb-4">
         {/* 第一行：企业选择 + 时间筛选 */}
         <div className="flex items-center gap-2 mb-3">
-          {/* 企业下拉 */}
-          <div className="flex-1 relative">
-            {companiesLoading ? (
-              <div className="text-white/60 text-xs">加载中...</div>
-            ) : companies.length === 0 ? (
-              <div className="text-white/60 text-xs">暂无授权企业</div>
-            ) : companies.length === 1 ? (
-              <div className="flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-white/70 flex-shrink-0" />
-                <span className="text-white text-sm font-semibold truncate">{companies[0].name}</span>
-              </div>
-            ) : (
-              <div className="relative">
-                <select
-                  value={selectedCompanyId ?? ''}
-                  onChange={e => setSelectedCompanyId(Number(e.target.value))}
-                  className="appearance-none w-full text-sm font-semibold pl-6 pr-6 py-0 bg-transparent text-white border-none outline-none cursor-pointer"
-                  style={{ WebkitAppearance: 'none' }}
-                >
-                  {companies.map((c: any) => (
-                    <option key={c.id} value={c.id} style={{ color: '#1A2B4A', background: '#fff' }}>{c.name}</option>
-                  ))}
-                </select>
-                <Building2 className="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/70" />
-                <ChevronDown className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/70" />
-              </div>
-            )}
-          </div>
+          {/* 企业选择：1家不显示容器，超过1家显示与时间筛选一样的下拉框 */}
+          {companiesLoading ? (
+            <div className="text-white/60 text-xs flex-1">加载中...</div>
+          ) : companies.length === 0 ? (
+            <div className="text-white/60 text-xs flex-1">暂无授权企业</div>
+          ) : companies.length === 1 ? (
+            <div className="flex-1 min-w-0">
+              <span className="text-white text-sm font-semibold truncate">{companies[0].name}</span>
+            </div>
+          ) : (
+            <div className="relative flex-1 min-w-0">
+              <select
+                value={selectedCompanyId ?? ''}
+                onChange={e => setSelectedCompanyId(Number(e.target.value))}
+                className="appearance-none w-full text-xs text-white/90 pl-2 pr-6 py-1 rounded-full border border-white/30 cursor-pointer outline-none focus:outline-none focus:ring-0 truncate"
+                style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}
+              >
+                {companies.map((c: any) => (
+                  <option key={c.id} value={c.id} style={{ color: '#222', background: '#fff' }}>{c.name}</option>
+                ))}
+              </select>
+              <svg className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 fill-white/70" viewBox="0 0 12 12"><path d="M6 8L2 4h8z"/></svg>
+            </div>
+          )}
           {/* 时间筛选（与劳方首页一致） */}
           <div className="relative flex-shrink-0">
             <select
@@ -344,17 +340,17 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
             <svg className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 fill-white/70" viewBox="0 0 12 12"><path d="M6 8L2 4h8z"/></svg>
           </div>
         </div>
-        {/* 统计数据行 */}
+        {/* 统计数据行：均匀分配 */}
         {selectedCompanyId && (
-          <div className="flex items-center gap-4">
-            <div>
+          <div className="flex items-center justify-around w-full">
+            <div className="text-center">
               <div className="text-white/60 text-[10px] mb-0.5">{periodLabels[period]}累计金额</div>
               <div className="text-white text-xl font-bold leading-none">
                 {statsLoading ? '--' : `¥${Number(stats?.totalAmount || 0).toFixed(2)}`}
               </div>
             </div>
-            <div className="w-px h-8 bg-white/20" />
-            <div>
+            <div className="w-px h-8 bg-white/20 flex-shrink-0" />
+            <div className="text-center">
               <div className="text-white/60 text-[10px] mb-0.5">{periodLabels[period]}开票条数</div>
               <div className="text-white text-xl font-bold leading-none">
                 {statsLoading ? '--' : `${stats?.invoiceCount || 0}`}
@@ -363,8 +359,8 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
             </div>
             {stats?.salesmanCount > 0 && (
               <>
-                <div className="w-px h-8 bg-white/20" />
-                <div>
+                <div className="w-px h-8 bg-white/20 flex-shrink-0" />
+                <div className="text-center">
                   <div className="text-white/60 text-[10px] mb-0.5">业务员</div>
                   <div className="text-white text-xl font-bold leading-none">
                     {stats.salesmanCount}
