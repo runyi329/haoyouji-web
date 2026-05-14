@@ -5485,7 +5485,7 @@ export default function LedgerDetail() {
                     {dayRecord.date} {dayOfWeek}
                   </span>
                   {!isDiet && !isCustomAJ && (
-                    <span className="text-xs">
+                    <span className="text-xs pr-2">
                       收:{dayRecord.income.toFixed(2)}, 支:{dayRecord.expense.toFixed(2)}, 余:{dayRecord.balance.toFixed(2)}
                     </span>
                   )}
