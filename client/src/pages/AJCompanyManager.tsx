@@ -26,6 +26,8 @@ type AccessMember = {
   avatar?: string | null;
   role: string;
   isEnabled: boolean;
+  isFunderEnabled: boolean;
+  isWorkerEnabled: boolean;
 };
 
 // ========== 报销类型标准目录 ==========
@@ -415,9 +417,9 @@ function AccessPanel({
   // 同一人可同时拥有两种权限（两条独立记录）
   const ownerMembers = (members as AccessMember[] | undefined)?.filter(m => m.role === 'owner') ?? [];
   // 已开通资方权限的成员（isFunderEnabled=true）
-  const enabledFunders = (members as AccessMember[] | undefined)?.filter(m => (m as any).isFunderEnabled) ?? [];
+  const enabledFunders = (members as AccessMember[] | undefined)?.filter(m => m.isFunderEnabled === true) ?? [];
   // 已开通劳方权限的成员（isWorkerEnabled=true）
-  const enabledWorkers = (members as AccessMember[] | undefined)?.filter(m => (m as any).isWorkerEnabled) ?? [];
+  const enabledWorkers = (members as AccessMember[] | undefined)?.filter(m => m.isWorkerEnabled === true) ?? [];
   // 可添加为资方：只有 admin 角色，且资方权限未开通
   const enabledFunderIds = new Set(enabledFunders.map(m => m.userId));
   const availableFunders = (members as AccessMember[] | undefined)?.filter(m => m.role === 'admin' && !enabledFunderIds.has(m.userId)) ?? [];
