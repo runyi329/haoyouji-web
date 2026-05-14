@@ -285,12 +285,11 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
     }
   }, [companiesLoading, companies.length]);
 
-  // 统计数据
-  const { data: statsRows, isLoading: statsLoading } = (trpc as any).ledger.ajOwnerGetCompanyStats.useQuery(
-    { ledgerId, period },
+  // 统计数据（传 companyId 时后端直接返回单个对象）
+  const { data: stats, isLoading: statsLoading } = (trpc as any).ledger.ajOwnerGetCompanyStats.useQuery(
+    { ledgerId, companyId: selectedCompanyId!, period },
     { enabled: !!selectedCompanyId }
   );
-  const stats = (statsRows as any[] | undefined)?.find((r: any) => r.companyId === selectedCompanyId);
 
   const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', year: '本年' };
 
