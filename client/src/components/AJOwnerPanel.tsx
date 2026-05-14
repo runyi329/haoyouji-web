@@ -302,7 +302,7 @@ function CompanyForm({
 
 // ========== 资方视角面板（重写） ==========
 function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
-  const [period, setPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'year'>('all');
+  const [period, setPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>('all');
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [searchText, setSearchText] = useState('');
 
@@ -328,11 +328,11 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
     { enabled: selectedCompanyId != null }
   );
 
-  const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', year: '本年' };
+  const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', quarter: '本季', year: '本年' };
 
   return (
     <div className="flex flex-col flex-1 bg-white">
-      {/* 顶部深蓝色区域 */}
+      {/* 顶部深蓝色区域 */
       <div style={{ backgroundColor: AJ_COLOR }} className="px-4 pt-3 pb-4">
         {/* 第一行：企业选择 + 时间筛选 */}
         <div className="flex items-center gap-2 mb-3">
@@ -371,6 +371,7 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
               <option value="day" style={{ color: '#222' }}>今日</option>
               <option value="week" style={{ color: '#222' }}>本周</option>
               <option value="month" style={{ color: '#222' }}>本月</option>
+              <option value="quarter" style={{ color: '#222' }}>本季</option>
               <option value="year" style={{ color: '#222' }}>本年</option>
             </select>
             <svg className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 fill-white/70" viewBox="0 0 12 12"><path d="M6 8L2 4h8z"/></svg>
