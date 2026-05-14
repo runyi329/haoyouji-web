@@ -3328,7 +3328,7 @@ export default function LedgerDetail() {
                               flexShrink: 0,
                             }}
                           >
-                            +{extra}
+                            +{allMembers.length}
                           </span>
                         )}
                       </div>
