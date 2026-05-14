@@ -161,7 +161,7 @@ export async function getUserDigitalWallets(userId: string) {
  */
 export async function addDigitalWallet(data: {
   userId: string;
-  walletType: 'blockchain' | 'alipay' | 'wechat' | 'other';
+  walletType: 'blockchain' | 'binance' | 'okx' | 'alipay' | 'wechat' | 'other';
   // 区块链钱包字段
   network?: string;
   walletAddress?: string;
