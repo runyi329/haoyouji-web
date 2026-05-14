@@ -3903,9 +3903,9 @@ export default function LedgerDetail() {
         )}
         {/* AJ 账本：业务报销汇总面板 */}
         {isCustomAJ && (
-          <div className={(isAdmin || isFunder) && !viewAsUserId && ajViewMode === 'owner' ? '' : 'px-4 pt-2 pb-4'}>
+          <div className={((isAdmin && ajViewMode === 'owner') || isFunder) && !viewAsUserId ? '' : 'px-4 pt-2 pb-4'}>
             {/* 资方视角：直接内嵌 AJOwnerPanel */}
-            {(isAdmin || isFunder) && !viewAsUserId && ajViewMode === 'owner' ? (
+            {((isAdmin && ajViewMode === 'owner') || isFunder) && !viewAsUserId ? (
               <AJOwnerPanel ledgerId={Number(ledgerId)} isFunder={!isOwner} />
             ) : (
               <>
@@ -5323,7 +5323,7 @@ export default function LedgerDetail() {
       )}
 
       {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示；AJ账本切换到资方视角时也隐藏 */}
-      {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && !(isCustomAJ && (isAdmin || isFunder) && !viewAsUserId && ajViewMode === 'owner') && <div className={`flex-1 pb-20 space-y-3`}>
+      {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && !(isCustomAJ && ((isAdmin && ajViewMode === 'owner') || isFunder) && !viewAsUserId) && <div className={`flex-1 pb-20 space-y-3`}>
         {!hasRecords ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-base mb-1">{ledgerData?.type === 'diet' ? '还没有减肥记录' : '还没有记账记录'}</div>
@@ -5583,7 +5583,7 @@ export default function LedgerDetail() {
       </div>}
 
       {/* 底部添加按鈕：AJ账本专用（劳方添加发票，资方仅 owner/创始人可添加企业） */}
-      {isCustomAJ && !((isAdmin || isFunder) && !viewAsUserId && ajViewMode === 'owner') && (
+      {isCustomAJ && !((isAdmin && ajViewMode === 'owner' || isFunder) && !viewAsUserId) && (
         <button
           onClick={() => {
             if (isAdmin && !viewAsUserId && ajViewMode === 'owner') {
