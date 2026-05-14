@@ -15611,14 +15611,16 @@ ${klinesSummary}
           [input.ledgerId]
         );
         // 获取该企业的权限记录（按 access_type 分别记录资方/劳方权限）
+        // 用 COALESCE 把 NULL 的 access_type 处理为 'worker'（兼容旧数据）
         const [accessRows] = await (conn as any).execute(
-          `SELECT user_id, access_type, is_enabled FROM aj_company_access WHERE company_id=?`,
+          `SELECT user_id, COALESCE(access_type, 'worker') as access_type, is_enabled FROM aj_company_access WHERE company_id=?`,
           [input.companyId]
         );
-        // 以 userId_accessType 为 key 建立 map
+        // 以 userId_accessType 为 key 建立 map，同一人可同时有资方和劳方两条记录
         const accessMap = new Map<string, boolean>();
         (accessRows as any[]).forEach((r: any) => {
-          accessMap.set(`${r.user_id}_${r.access_type}`, r.is_enabled === 1);
+          const at = r.access_type || 'worker'; // 安全兼容
+          accessMap.set(`${r.user_id}_${at}`, r.is_enabled === 1);
         });
         return (members as any[]).map((m: any) => ({
           userId: m.userId,
