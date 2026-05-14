@@ -139,40 +139,40 @@ function ExpenseTypePanel({
 function InvoiceListInline({
   ledgerId,
   companyId,
+  period: externalPeriod,
 }: {
   ledgerId: number;
   companyId: number;
+  period?: 'all' | 'day' | 'week' | 'month' | 'year';
 }) {
-  const [period, setPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'year'>('month');
+  // 如果外部传入 period，则不内部管理时间筛选
+  const [internalPeriod, setInternalPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'year'>('month');
+  const period = externalPeriod ?? internalPeriod;
   const { data: invoices, isLoading } = (trpc as any).ledger.ajOwnerGetCompanyInvoices.useQuery({ ledgerId, companyId, period });
-  const totalAmount = (invoices as any[] | undefined)?.reduce((sum: number, inv: any) => sum + Number(inv.amount || 0), 0) || 0;
   const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', year: '本年' };
 
   return (
-    <div className="border-t border-gray-100">
-      <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50">
-        <div className="relative">
-          <select
-            value={period}
-            onChange={e => setPeriod(e.target.value as any)}
-            className="appearance-none text-xs font-medium pl-3 pr-7 py-1.5 rounded-full border border-gray-200 bg-white cursor-pointer outline-none focus:outline-none focus:ring-0"
-            style={{ color: AJ_COLOR }}
-          >
-            <option value="day">今日</option>
-            <option value="week">本周</option>
-            <option value="month">本月</option>
-            <option value="year">本年</option>
-            <option value="all">全部</option>
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3" style={{ color: AJ_COLOR }} />
-        </div>
-        {!isLoading && invoices && (invoices as any[]).length > 0 && (
-          <div className="flex items-center gap-3 text-xs text-gray-500">
-            <span>{(invoices as any[]).length} 笔</span>
-            <span className="font-semibold" style={{ color: AJ_COLOR }}>¥{totalAmount.toFixed(2)}</span>
+    <div>
+      {/* 只有内部管理时才显示筛选栏 */}
+      {!externalPeriod && (
+        <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-t border-gray-100">
+          <div className="relative">
+            <select
+              value={internalPeriod}
+              onChange={e => setInternalPeriod(e.target.value as any)}
+              className="appearance-none text-xs font-medium pl-3 pr-7 py-1.5 rounded-full border border-gray-200 bg-white cursor-pointer outline-none focus:outline-none focus:ring-0"
+              style={{ color: AJ_COLOR }}
+            >
+              <option value="day">今日</option>
+              <option value="week">本周</option>
+              <option value="month">本月</option>
+              <option value="year">本年</option>
+              <option value="all">全部</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3" style={{ color: AJ_COLOR }} />
           </div>
-        )}
-      </div>
+        </div>
+      )}
       {isLoading ? (
         <div className="text-center py-8 text-gray-400 text-sm">加载中...</div>
       ) : !invoices || (invoices as any[]).length === 0 ? (
@@ -270,6 +270,122 @@ function CompanyForm({
   );
 }
 
+// ========== 资方视角面板（独立组件） ==========
+function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
+  const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'year'>('month');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
+
+  const { data: myCompanies, isLoading: companiesLoading } = (trpc as any).ledger.ajOwnerGetMyCompanies.useQuery({ ledgerId });
+  const companies = (myCompanies as any[] | undefined) ?? [];
+
+  // 企业加载完成后自动选中第一个
+  useEffect(() => {
+    if (!companiesLoading && companies.length > 0 && selectedCompanyId === null) {
+      setSelectedCompanyId(companies[0].id);
+    }
+  }, [companiesLoading, companies.length]);
+
+  // 统计数据
+  const { data: statsRows, isLoading: statsLoading } = (trpc as any).ledger.ajOwnerGetCompanyStats.useQuery(
+    { ledgerId, period },
+    { enabled: !!selectedCompanyId }
+  );
+  const stats = (statsRows as any[] | undefined)?.find((r: any) => r.companyId === selectedCompanyId);
+
+  const periodLabels: Record<string, string> = { day: '今日', week: '本周', month: '本月', year: '本年' };
+
+  return (
+    <div>
+      {/* 顶部深蓝色区域 */}
+      <div style={{ backgroundColor: AJ_COLOR }} className="px-4 pt-3 pb-4">
+        {/* 第一行：企业选择 + 时间筛选 */}
+        <div className="flex items-center gap-2 mb-3">
+          {/* 企业下拉 */}
+          <div className="flex-1 relative">
+            {companiesLoading ? (
+              <div className="text-white/60 text-xs">加载中...</div>
+            ) : companies.length === 0 ? (
+              <div className="text-white/60 text-xs">暂无授权企业</div>
+            ) : companies.length === 1 ? (
+              <div className="flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-white/70 flex-shrink-0" />
+                <span className="text-white text-sm font-semibold truncate">{companies[0].name}</span>
+              </div>
+            ) : (
+              <div className="relative">
+                <select
+                  value={selectedCompanyId ?? ''}
+                  onChange={e => setSelectedCompanyId(Number(e.target.value))}
+                  className="appearance-none w-full text-sm font-semibold pl-6 pr-6 py-0 bg-transparent text-white border-none outline-none cursor-pointer"
+                  style={{ WebkitAppearance: 'none' }}
+                >
+                  {companies.map((c: any) => (
+                    <option key={c.id} value={c.id} style={{ color: '#1A2B4A', background: '#fff' }}>{c.name}</option>
+                  ))}
+                </select>
+                <Building2 className="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/70" />
+                <ChevronDown className="pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/70" />
+              </div>
+            )}
+          </div>
+          {/* 时间筛选 */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {(['day', 'week', 'month', 'year'] as const).map(p => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className="text-xs px-2.5 py-1 rounded-full transition-all"
+                style={period === p
+                  ? { backgroundColor: 'rgba(255,255,255,0.25)', color: '#fff', fontWeight: 600 }
+                  : { backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)' }}
+              >
+                {periodLabels[p]}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* 统计数据行 */}
+        {selectedCompanyId && (
+          <div className="flex items-center gap-4">
+            <div>
+              <div className="text-white/60 text-[10px] mb-0.5">{periodLabels[period]}累计金额</div>
+              <div className="text-white text-xl font-bold leading-none">
+                {statsLoading ? '--' : `¥${Number(stats?.totalAmount || 0).toFixed(2)}`}
+              </div>
+            </div>
+            <div className="w-px h-8 bg-white/20" />
+            <div>
+              <div className="text-white/60 text-[10px] mb-0.5">{periodLabels[period]}开票条数</div>
+              <div className="text-white text-xl font-bold leading-none">
+                {statsLoading ? '--' : `${stats?.invoiceCount || 0}`}
+                <span className="text-white/60 text-xs font-normal ml-1">笔</span>
+              </div>
+            </div>
+            {stats?.salesmanCount > 0 && (
+              <>
+                <div className="w-px h-8 bg-white/20" />
+                <div>
+                  <div className="text-white/60 text-[10px] mb-0.5">业务员</div>
+                  <div className="text-white text-xl font-bold leading-none">
+                    {stats.salesmanCount}
+                    <span className="text-white/60 text-xs font-normal ml-1">人</span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+      {/* 白色发票列表区域 */}
+      {selectedCompanyId && (
+        <div className="bg-white">
+          <InvoiceListInline ledgerId={ledgerId} companyId={selectedCompanyId} period={period} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ========== 主面板 ==========
 export function AJOwnerPanel({ ledgerId, isFunder = false }: { ledgerId: number; isFunder?: boolean }) {
   const toast = useCenterToast();
@@ -336,8 +452,11 @@ export function AJOwnerPanel({ ledgerId, isFunder = false }: { ledgerId: number;
     });
   };
 
+  // 资方视角直接用独立组件
+  if (isFunder) return <FunderViewPanel ledgerId={ledgerId} />;
+
   return (
-    <div className={isFunder ? '' : 'min-h-[300px]'} style={isFunder ? {} : { background: '#F0F4FA' }}>
+    <div className="min-h-[300px]" style={{ background: '#F0F4FA' }}>
       {/* 顶部深蓝色区域：企业横向选择 */}
       <div className="px-4 pt-3 pb-4" style={{ backgroundColor: AJ_COLOR }}>
         {companiesLoading ? (
