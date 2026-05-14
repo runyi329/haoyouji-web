@@ -805,7 +805,7 @@ const AddTransaction = () => {
       {isCustomAJ ? (
         <div className="flex-1 overflow-hidden bg-[#F5F5F5] flex flex-col">
           {/* 单据头 */}
-          <div className="bg-[#1A2B4A] px-4 pt-1.5 pb-3 flex items-center justify-between flex-shrink-0">
+          <div className="bg-[#1A2B4A] px-4 pt-1.5 pb-4 flex items-center justify-between flex-shrink-0">
             <div>
               <div className="text-white text-xs opacity-80">申请人</div>
               <div className="text-white text-sm font-semibold mt-0.5">{applicantName}</div>
@@ -817,8 +817,10 @@ const AddTransaction = () => {
               </div>
             </div>
           </div>
+          {/* 可滚动内容区 */}
+          <div className="flex-1 overflow-y-auto pb-2">
           {/* 容器一：开票信息（紧凑两行） */}
-          <div className="mx-3 -mt-3 rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
+          <div className="mx-3 mt-2 rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
             <div className="px-3 py-3">
               {selectedCompany ? (
                 <div className="flex flex-col gap-2">
@@ -1111,7 +1113,9 @@ const AddTransaction = () => {
             </div>
           )}
 
-          {/* 提交按鈕（移入内容区内部，贴底显示） */}
+          </div>{/* 关闭可滚动内容区 */}
+
+          {/* 提交按鈕（固定在底部） */}
           <div className="flex-shrink-0 px-4 pt-3 pb-4 bg-white" style={{ borderTop: '1px solid #E2E8F0' }}>
             {(() => {
               const isReady = !!(amount && parseFloat(amount) > 0 && uploadedImages.length > 0);
