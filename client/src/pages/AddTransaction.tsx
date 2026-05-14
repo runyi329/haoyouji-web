@@ -817,51 +817,44 @@ const AddTransaction = () => {
               </div>
             </div>
           </div>
-          {/* 表单卡片 - flex-1 自动擑满剩余空间 */}
-          <div className="mx-3 -mt-3 rounded-2xl bg-white overflow-hidden shadow-md flex-1 flex flex-col" style={{ border: '1px solid #E2E8F0' }}>
-            {/* 开票信息区域 */}
-            <div className="px-4 py-2" style={{ borderBottom: '1px solid #F5F5F5' }}>
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-[#1A2B4A] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">0</span>
-                  <span className="text-xs text-gray-400 font-medium tracking-wider">开票信息</span>
-                </div>
-                {hasMultipleCompanies && (
-                  <button className="flex items-center gap-1 text-xs text-[#1A2B4A]" onClick={() => setShowCompanyPicker(true)}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                    <span>{selectedCompany ? '更换' : '选择企业'}</span>
-                  </button>
-                )}
-              </div>
+          {/* 容器一：开票信息（紧凑两行） */}
+          <div className="mx-3 -mt-3 rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
+            <div className="px-3 py-2.5">
               {selectedCompany ? (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2 bg-[#EEF2F8] rounded-lg px-3 py-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[10px] text-gray-400 mb-0.5">企业名称</div>
-                      <span className="text-base font-bold text-[#1A2B4A] leading-snug block truncate">{selectedCompany.name}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[10px] text-gray-400">开票单位</span>
+                      {hasMultipleCompanies && (
+                        <button className="text-[10px] text-[#1A2B4A] underline" onClick={() => setShowCompanyPicker(true)}>更换</button>
+                      )}
                     </div>
-                    <button className="flex-shrink-0 w-9 h-9 rounded-lg bg-[#1A2B4A] text-white flex items-center justify-center active:bg-[#0F1E36] shadow-sm" onClick={() => { navigator.clipboard.writeText(selectedCompany.name); toast.success('已复制企业名称'); }} title="复制企业名称">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                    </button>
+                    <div className="text-sm font-bold text-[#1A2B4A] truncate">{selectedCompany.name}</div>
+                    {selectedCompany.taxNo && (
+                      <div className="text-xs text-gray-500 mt-0.5 truncate">税号：{selectedCompany.taxNo}</div>
+                    )}
                   </div>
-                  {selectedCompany.taxNo && (
-                    <div className="flex items-center justify-between gap-2 bg-[#EEF2F8] rounded-lg px-3 py-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[10px] text-gray-400 mb-0.5">税号</div>
-                        <span className="text-base text-[#1A2B4A] font-medium block truncate">{selectedCompany.taxNo}</span>
-                      </div>
-                      <button className="flex-shrink-0 w-9 h-9 rounded-lg bg-[#1A2B4A] text-white flex items-center justify-center active:bg-[#0F1E36] shadow-sm" onClick={() => { navigator.clipboard.writeText(selectedCompany.taxNo); toast.success('已复制税号'); }} title="复制税号">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <div className="flex flex-col gap-1 flex-shrink-0">
+                    <button className="w-8 h-8 rounded-lg bg-[#1A2B4A] text-white flex items-center justify-center active:bg-[#0F1E36]" onClick={() => { navigator.clipboard.writeText(selectedCompany.name); toast.success('已复制企业名称'); }} title="复制企业名称">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    </button>
+                    {selectedCompany.taxNo && (
+                      <button className="w-8 h-8 rounded-lg bg-[#1A2B4A] text-white flex items-center justify-center active:bg-[#0F1E36]" onClick={() => { navigator.clipboard.writeText(selectedCompany.taxNo); toast.success('已复制税号'); }} title="复制税号">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="text-sm text-gray-300">请选择企业</div>
               )}
             </div>
-            {/* 报销金额 - 手动填写区 */}
-            <div className="px-4 pt-2 pb-2 flex-shrink-0" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C', minHeight: '100px' }}>
+          </div>
+
+          {/* 容器二：报销金额 + 发票凭证 */}
+          <div className="mx-3 mt-2 rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
+            {/* 报销金额 */}
+            <div className="px-4 pt-3 pb-2" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-5 h-5 rounded-full bg-[#C9A84C] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">①</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
@@ -920,9 +913,9 @@ const AddTransaction = () => {
                 </div>
               )}
             </div>
-            {/* 发票附件 - 手动操作区 */}
-            <div className="px-4 py-1.5" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
-              <div className="flex items-center gap-2 mb-1.5">
+            {/* 发票凭证 */}
+            <div className="px-4 py-2.5" style={{ background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+              <div className="flex items-center gap-2 mb-2">
                 <span className="w-5 h-5 rounded-full bg-[#C9A84C] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">②</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>发票 / 凭证</span>
                 <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#C9A84C', color: '#fff', fontSize: '10px' }}>必传</span>
@@ -970,7 +963,7 @@ const AddTransaction = () => {
             </div>
           </div>
 
-          {/* ===== 下方：费用报销明细单预览（紧凑小样） ===== */}
+          {/* 容器三：费用报销明细单预览 */}
           <div className="mx-3 mt-2 mb-2 bg-white rounded-xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 1px 8px rgba(26,43,74,0.08)', border: '1px solid #E2E8F0' }}>
 
             {/* 顶部色条 */}
