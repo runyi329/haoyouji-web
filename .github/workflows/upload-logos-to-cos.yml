@@ -1,0 +1,66 @@
+name: 上传 Logo 到 COS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 通过 SSH 上传图标到 COS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          script: |
+            cd /root/haoyouji-web
+            node -e "
+            import('dotenv').then(d => d.config());
+            " 2>/dev/null || true
+            
+            node --input-type=module << 'EOF'
+            import { createRequire } from 'module';
+            import { readFileSync } from 'fs';
+            import dotenv from 'dotenv';
+            import path from 'path';
+            import { fileURLToPath } from 'url';
+            
+            dotenv.config({ path: '/root/haoyouji-web/.env' });
+            
+            const COS_SECRET_ID = process.env.COS_SECRET_ID;
+            const COS_SECRET_KEY = process.env.COS_SECRET_KEY;
+            const BUCKET = process.env.COS_BUCKET || 'haoyouji-images-1396946788';
+            const REGION = process.env.COS_REGION || 'ap-shanghai';
+            
+            if (!COS_SECRET_ID || !COS_SECRET_KEY) {
+              console.error('❌ 未找到COS密钥');
+              process.exit(1);
+            }
+            
+            const require = createRequire(import.meta.url);
+            const COS = require('cos-nodejs-sdk-v5');
+            const cos = new COS({ SecretId: COS_SECRET_ID, SecretKey: COS_SECRET_KEY });
+            
+            const icons = [
+              { localPath: '/root/haoyouji-web/client/public/okx-circle-icon.png', cosKey: 'assets/logos/okx-circle-icon.png', name: 'OKX' },
+              { localPath: '/root/haoyouji-web/client/public/binance-circle-icon.png', cosKey: 'assets/logos/binance-circle-icon.png', name: '币安' },
+            ];
+            
+            for (const icon of icons) {
+              try {
+                const buffer = readFileSync(icon.localPath);
+                await new Promise((resolve, reject) => {
+                  cos.putObject({ Bucket: BUCKET, Region: REGION, Key: icon.cosKey, Body: buffer, ContentType: 'image/png' }, (err, data) => {
+                    if (err) reject(err); else resolve(data);
+                  });
+                });
+                console.log('✅ ' + icon.name + ' 上传成功: https://' + BUCKET + '.cos.' + REGION + '.myqcloud.com/' + icon.cosKey);
+              } catch (err) {
+                console.error('❌ ' + icon.name + ' 上传失败:', err.message);
+              }
+            }
+            EOF
