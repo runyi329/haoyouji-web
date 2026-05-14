@@ -408,15 +408,19 @@ function AccessPanel({
   const [showAddFunder, setShowAddFunder] = useState(false);
   const [showAddWorker, setShowAddWorker] = useState(false);
 
-  // 以企业为视角：创始人(owner)固定 / 资方(admin，已开通) / 劳方(非owner非admin，已开通)
+  // 以企业为视角（仅限 AJ 账本）：
+  // - 创始人：owner（固定）
+  // - 资方：admin（企业主）
+  // - 劳方：member / funder / employee 均归并为劳方（业务员）
+  const AJ_WORKER_ROLES = ['member', 'funder', 'employee'];
   const ownerMembers = (members as AccessMember[] | undefined)?.filter(m => m.role === 'owner') ?? [];
   const enabledFunders = (members as AccessMember[] | undefined)?.filter(m => m.role === 'admin' && m.isEnabled) ?? [];
-  const enabledWorkers = (members as AccessMember[] | undefined)?.filter(m => m.role !== 'owner' && m.role !== 'admin' && m.isEnabled) ?? [];
+  const enabledWorkers = (members as AccessMember[] | undefined)?.filter(m => AJ_WORKER_ROLES.includes(m.role) && m.isEnabled) ?? [];
   // 未开通的（可供添加）
   // 资方：只有 admin 角色可被添加为资方
   const availableFunders = (members as AccessMember[] | undefined)?.filter(m => m.role === 'admin' && !m.isEnabled) ?? [];
   // 劳方：所有非 owner 成员都可被添加为劳方（包括 admin，资方也可以以劳方身份开票）
-  // 但排除已在劳方列表中的人（isEnabled 且非 admin 角色已处理），以及已在劳方的 admin
+  // 排除已在劳方列表中的人
   const enabledWorkerIds = new Set(enabledWorkers.map(m => m.userId));
   const availableWorkers = (members as AccessMember[] | undefined)?.filter(m => m.role !== 'owner' && !enabledWorkerIds.has(m.userId)) ?? [];
 
