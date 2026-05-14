@@ -1011,10 +1011,9 @@ const AddTransaction = () => {
                 <span
                   className="ml-1"
                   style={{
-                    fontFamily: "'Ma Shan Zheng', 'STKaiti', 'KaiTi', cursive",
                     fontSize: '14px',
                     color: '#1a237e',
-                    letterSpacing: '2px',
+                    letterSpacing: '1px',
                     transform: 'rotate(-2deg)',
                     display: 'inline-block',
                   }}
@@ -1025,10 +1024,9 @@ const AddTransaction = () => {
                 <span
                   className="ml-1"
                   style={{
-                    fontFamily: "'Ma Shan Zheng', 'STKaiti', 'KaiTi', cursive",
                     fontSize: '14px',
                     color: '#1a237e',
-                    letterSpacing: '2px',
+                    letterSpacing: '1px',
                     transform: 'rotate(-1.5deg)',
                     display: 'inline-block',
                   }}
