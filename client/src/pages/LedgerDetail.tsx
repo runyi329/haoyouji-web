@@ -3303,13 +3303,13 @@ export default function LedgerDetail() {
                   // 普通账本 / 减肥账本：叠加头像，最多3个，超出部分用+N气泡
                   (() => {
                     const allMembers = membersData && membersData.length > 0 ? membersData : (user ? [{ username: user.username, avatar: user.avatar, nickname: user.nickname }] : []);
-                    const maxShow = 3;
+                    const maxShow = 5;
                     const shown = allMembers.slice(0, maxShow);
                     const extra = allMembers.length - maxShow;
                     return (
                       <div className="flex items-center" style={{ position: 'relative' }}>
                         {shown.map((m: any, i: number) => (
-                          <div key={i} style={{ marginLeft: i === 0 ? 0 : -10, zIndex: maxShow - i, position: 'relative' }}>
+                          <div key={i} style={{ marginLeft: i === 0 ? 0 : -16, zIndex: maxShow - i, position: 'relative' }}>
                             <UserAvatar
                               username={m.username || m.user?.username}
                               avatar={m.avatar || m.user?.avatar}
@@ -3319,26 +3319,17 @@ export default function LedgerDetail() {
                           </div>
                         ))}
                         {extra > 0 && (
-                          <div
+                          <span
                             style={{
-                              marginLeft: -10,
-                              zIndex: 0,
-                              width: 32,
-                              height: 32,
-                              borderRadius: '50%',
-                              backgroundColor: 'rgba(255,255,255,0.3)',
-                              border: '2px solid rgba(255,255,255,0.7)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: 11,
+                              marginLeft: 4,
+                              fontSize: 12,
                               fontWeight: 600,
-                              color: '#fff',
+                              color: 'rgba(255,255,255,0.9)',
                               flexShrink: 0,
                             }}
                           >
                             +{extra}
-                          </div>
+                          </span>
                         )}
                       </div>
                     );
