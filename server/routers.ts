@@ -16186,9 +16186,9 @@ ${klinesSummary}
           `SELECT c.id as companyId, c.name as companyName, c.tax_no as taxNo,
                   COUNT(lr.id) as invoiceCount,
                   COALESCE(SUM(lr.amount), 0) as totalAmount,
-                  COUNT(DISTINCT lr.created_by) as salesmanCount
+                  COUNT(DISTINCT lr.createdBy) as salesmanCount
            FROM aj_companies c
-           LEFT JOIN ledger_records lr ON lr.aj_company_id = c.id AND lr.ledger_id = ? ${dateFilter} AND lr.deleted_at IS NULL
+           LEFT JOIN ledger_records lr ON lr.aj_company_id = c.id AND lr.ledgerId = ? ${dateFilter} AND lr.deleted_at IS NULL
            WHERE c.ledger_id = ? ${companyFilter} AND (
              c.created_by = ?
              OR EXISTS (
@@ -16254,15 +16254,15 @@ ${klinesSummary}
           dateFilter = 'AND lr.recordDate >= ?';
           dateParams.push(new Date(now.getFullYear(), q*3, 1).toISOString().split('T')[0]);
         } else if (input.period === 'year') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
-        const finalSql = `SELECT lr.id, lr.amount, lr.recordDate as recordDate, lr.description, lr.category,
-                  lr.aj_status as ajStatus, lr.created_at as createdAt,
+        const finalSql = `SELECT lr.id, lr.amount, lr.recordDate as recordDate, lr.description, lr.categoryId,
+                  lr.aj_status as ajStatus, lr.createdAt as createdAt,
                   u.username as creatorUsername, u.name as creatorName,
                   lm.nickname as creatorNickname
            FROM ledger_records lr
-           LEFT JOIN users u ON u.id = lr.created_by
-           LEFT JOIN ledger_members lm ON lm.userId = lr.created_by AND lm.ledgerId = lr.ledger_id
-           WHERE lr.ledger_id=? AND lr.aj_company_id=? AND lr.deleted_at IS NULL ${dateFilter}
-           ORDER BY lr.recordDate DESC, lr.created_at DESC
+           LEFT JOIN users u ON u.id = lr.createdBy
+           LEFT JOIN ledger_members lm ON lm.userId = lr.createdBy AND lm.ledgerId = lr.ledgerId
+           WHERE lr.ledgerId=? AND lr.aj_company_id=? AND lr.deleted_at IS NULL ${dateFilter}
+           ORDER BY lr.recordDate DESC, lr.createdAt DESC
            LIMIT 200`;
         const finalParams = [input.ledgerId, input.companyId, ...dateParams];
         console.log('[ajOwnerGetCompanyInvoices] sql params:', finalParams, 'period:', input.period, 'dateFilter:', dateFilter);
@@ -16319,15 +16319,15 @@ ${klinesSummary}
            INNER JOIN ledger_members lm ON lm.userId = u.id AND lm.ledgerId = ?
            LEFT JOIN (
              SELECT
-               lr.created_by,
+               lr.createdBy,
                COUNT(lr.id) as invoiceCount,
                COALESCE(SUM(lr.amount), 0) as totalAmount,
                COUNT(CASE WHEN lr.aj_status = 'approved' THEN 1 END) as approvedCount,
                COALESCE(SUM(CASE WHEN lr.aj_status = 'approved' THEN lr.amount ELSE 0 END), 0) as approvedAmount
              FROM ledger_records lr
-             WHERE lr.ledger_id = ? AND lr.deleted_at IS NULL ${dateFilter}
-             GROUP BY lr.created_by
-           ) stats ON stats.created_by = u.id
+             WHERE lr.ledgerId = ? AND lr.deleted_at IS NULL ${dateFilter}
+             GROUP BY lr.createdBy
+           ) stats ON stats.createdBy = u.id
            WHERE u.invited_by_user_id = ?
            ORDER BY COALESCE(stats.totalAmount, 0) DESC, u.id ASC`,
           [input.ledgerId, input.ledgerId, ...dateParams, ctx.user.id]
