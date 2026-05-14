@@ -818,7 +818,7 @@ const AddTransaction = () => {
             </div>
           </div>
           {/* 可滚动内容区 */}
-          <div className="flex-1 overflow-y-auto pb-2">
+          <div className="flex-1 overflow-y-auto" style={{ paddingBottom: '80px' }}>
           {/* 容器一：开票信息（紧凑两行） */}
           <div className="mx-3 mt-2 rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
             <div className="px-3 py-3">
@@ -1115,11 +1115,8 @@ const AddTransaction = () => {
               ))}
             </div>
           )}
-
-          </div>
-
           {/* 提交按鈕（固定在底部） */}
-          <div className="flex-shrink-0 px-4 pt-3 pb-4 bg-white" style={{ borderTop: '1px solid #E2E8F0' }}>
+          <div className="fixed bottom-0 left-0 right-0 px-4 pt-3 pb-4 bg-white z-50" style={{ borderTop: '1px solid #E2E8F0', maxWidth: '480px', margin: '0 auto' }}>
             {(() => {
               const isReady = !!(amount && parseFloat(amount) > 0 && uploadedImages.length > 0);
               return (
