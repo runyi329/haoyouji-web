@@ -16085,6 +16085,30 @@ ${klinesSummary}
         );
         return rows as any[];
       }),
+    // 资方撤销自己的申请（仅限 pending 状态）
+    ajOwnerCancelRequest: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        requestId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 查询申请单，确认属于当前用户且状态为 pending
+        const [reqRows] = await (conn as any).execute(
+          `SELECT * FROM aj_company_requests WHERE id=? AND ledger_id=? AND requested_by=?`,
+          [input.requestId, input.ledgerId, ctx.user.id]
+        );
+        const req = (reqRows as any[])[0];
+        if (!req) throw new TRPCError({ code: 'NOT_FOUND', message: '申请单不存在' });
+        if (req.status !== 'pending') throw new TRPCError({ code: 'BAD_REQUEST', message: '仅可撤销待审核的申请' });
+        // 删除申请单
+        await (conn as any).execute(
+          `DELETE FROM aj_company_requests WHERE id=?`,
+          [input.requestId]
+        );
+        return { success: true };
+      }),
     // 管理员审核企业申请（通过/拒绝）
     ajAdminReviewRequest: protectedProcedure
       .input(z.object({
