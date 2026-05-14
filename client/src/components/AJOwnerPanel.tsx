@@ -337,7 +337,7 @@ export function AJOwnerPanel({ ledgerId, isFunder = false }: { ledgerId: number;
   };
 
   return (
-    <div className="min-h-[300px]" style={{ background: '#F0F4FA' }}>
+    <div className={isFunder ? '' : 'min-h-[300px]'} style={isFunder ? {} : { background: '#F0F4FA' }}>
       {/* 顶部深蓝色区域：企业横向选择 */}
       <div className="px-4 pt-3 pb-4" style={{ backgroundColor: AJ_COLOR }}>
         {companiesLoading ? (
