@@ -822,7 +822,10 @@ const AddTransaction = () => {
             {/* 开票信息区域 */}
             <div className="px-4 py-2" style={{ borderBottom: '1px solid #F5F5F5' }}>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs text-gray-400 font-medium tracking-wider">开票信息</span>
+                <div className="flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#1A2B4A] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">0</span>
+                  <span className="text-xs text-gray-400 font-medium tracking-wider">开票信息</span>
+                </div>
                 {hasMultipleCompanies && (
                   <button className="flex items-center gap-1 text-xs text-[#1A2B4A]" onClick={() => setShowCompanyPicker(true)}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -831,17 +834,23 @@ const AddTransaction = () => {
                 )}
               </div>
               {selectedCompany ? (
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-base font-bold text-gray-800 flex-1 leading-snug">{selectedCompany.name}</span>
-                    <button className="flex-shrink-0 p-1.5 rounded-full bg-gray-100 text-gray-500 active:bg-gray-200" onClick={() => { navigator.clipboard.writeText(selectedCompany.name); toast.success('已复制企业名称'); }} title="复制企业名称">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2 bg-[#EEF2F8] rounded-lg px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] text-gray-400 mb-0.5">企业名称（点右侧按钮复制）</div>
+                      <span className="text-sm font-bold text-[#1A2B4A] leading-snug block truncate">{selectedCompany.name}</span>
+                    </div>
+                    <button className="flex-shrink-0 w-9 h-9 rounded-lg bg-[#1A2B4A] text-white flex items-center justify-center active:bg-[#0F1E36] shadow-sm" onClick={() => { navigator.clipboard.writeText(selectedCompany.name); toast.success('已复制企业名称'); }} title="复制企业名称">
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>
                   </div>
                   {selectedCompany.taxNo && (
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-base text-gray-600 flex-1">{selectedCompany.taxNo}</span>
-                      <button className="flex-shrink-0 p-1.5 rounded-full bg-gray-100 text-gray-500 active:bg-gray-200" onClick={() => { navigator.clipboard.writeText(selectedCompany.taxNo); toast.success('已复制税号'); }} title="复制税号">
+                    <div className="flex items-center justify-between gap-2 bg-[#F5F7FA] rounded-lg px-3 py-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[10px] text-gray-400 mb-0.5">税号（点右侧按钮复制）</div>
+                        <span className="text-sm text-gray-700 block truncate">{selectedCompany.taxNo}</span>
+                      </div>
+                      <button className="flex-shrink-0 w-9 h-9 rounded-lg bg-[#C9A84C] text-white flex items-center justify-center active:bg-[#A8893A] shadow-sm" onClick={() => { navigator.clipboard.writeText(selectedCompany.taxNo); toast.success('已复制税号'); }} title="复制税号">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                       </button>
                     </div>
@@ -852,8 +861,9 @@ const AddTransaction = () => {
               )}
             </div>
             {/* 报销金额 - 手动填写区 - flex-1 自动擑满剩余空间 */}
-            <div className="px-4 pt-2 pb-1 flex-1 flex flex-col justify-center" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+            <div className="px-4 pt-2 pb-2 flex-1 flex flex-col justify-center" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
               <div className="flex items-center gap-2 mb-1">
+                <span className="w-5 h-5 rounded-full bg-[#C9A84C] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">①</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
                 <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#C9A84C', color: '#fff', fontSize: '10px' }}>必填</span>
               </div>
@@ -875,11 +885,46 @@ const AddTransaction = () => {
                   autoComplete="off"
                 />
               </div>
+              {amount && parseFloat(amount) > 0 && (
+                <div className="mt-1 text-[11px] font-medium truncate" style={{ color: '#8B6914' }}>
+                  {(() => {
+                    const num = parseFloat(amount) || 0;
+                    const digits = ['零','壹','贰','叁','肆','伍','陆','柒','捌','玖'];
+                    const units = ['','拾','佰','仟'];
+                    const bigUnits = ['','万','亿'];
+                    const [intPart, decPart] = num.toFixed(2).split('.');
+                    const intNum = parseInt(intPart);
+                    if (intNum === 0) return `大写：零元${parseInt(decPart) > 0 ? (digits[parseInt(decPart[0])] + (parseInt(decPart[0])>0?'角':'') + (parseInt(decPart[1])>0?digits[parseInt(decPart[1])]+'分':'')) : '整'}`;
+                    let result = '';
+                    const intStr = intNum.toString();
+                    const groups: string[] = [];
+                    for (let i = intStr.length; i > 0; i -= 4) groups.unshift(intStr.slice(Math.max(0, i-4), i));
+                    groups.forEach((g, gi) => {
+                      let groupStr = '';
+                      for (let i = 0; i < g.length; i++) {
+                        const d = parseInt(g[i]);
+                        const u = units[g.length - 1 - i];
+                        if (d !== 0) groupStr += digits[d] + u;
+                        else if (groupStr && !groupStr.endsWith('零')) groupStr += '零';
+                      }
+                      if (groupStr.endsWith('零')) groupStr = groupStr.slice(0,-1);
+                      if (groupStr) result += groupStr + bigUnits[groups.length - 1 - gi];
+                    });
+                    result += '元';
+                    const j = parseInt(decPart[0]), f = parseInt(decPart[1]);
+                    if (j > 0) result += digits[j] + '角';
+                    if (f > 0) result += digits[f] + '分';
+                    if (j === 0 && f === 0) result += '整';
+                    return `大写：${result}`;
+                  })()}
+                </div>
+              )}
             </div>
             {/* 发票附件 - 手动操作区 */}
             <div className="px-4 py-1.5" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
               <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>发票凭证</span>
+                <span className="w-5 h-5 rounded-full bg-[#C9A84C] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">②</span>
+                <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>发票 / 凭证</span>
                 <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#C9A84C', color: '#fff', fontSize: '10px' }}>必传</span>
               </div>
               <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
@@ -912,13 +957,14 @@ const AddTransaction = () => {
                   </div>
                 ))}
                 {uploadedImages.length < 10 && (
-                  <button className="w-16 h-16 flex-shrink-0 flex flex-col items-center justify-center gap-1 bg-[#F4F6F9] border border-[#C9A84C40] rounded text-[#1A2B4A]" onClick={() => fileInputRef.current?.click()}>
-                    <ImageIcon className="w-6 h-6" />
-                    <span className="text-xs">{uploadedImages.length > 0 ? `${uploadedImages.length}/10` : '上传'}</span>
+                  <button
+                    className="flex-shrink-0 flex flex-col items-center justify-center gap-1.5 rounded-xl text-[#1A2B4A] active:opacity-70"
+                    style={{ width: uploadedImages.length === 0 ? '100%' : '72px', height: uploadedImages.length === 0 ? '72px' : '72px', background: '#F4F6F9', border: '2px dashed #C9A84C80' }}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width={uploadedImages.length === 0 ? '32' : '24'} height={uploadedImages.length === 0 ? '32' : '24'} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    <span className="text-xs font-medium">{uploadedImages.length > 0 ? `${uploadedImages.length}/10` : '拍照上传发票/凭证'}</span>
                   </button>
-                )}
-                {uploadedImages.length === 0 && (
-                  <div className="flex items-center text-xs text-red-400 gap-1"><span>未上传（必填）</span></div>
                 )}
               </div>
             </div>
@@ -1032,6 +1078,11 @@ const AddTransaction = () => {
               </div>
             </div>
 
+            {/* 底部说明文字 */}
+            <div className="px-3 py-1.5 text-center" style={{ background: '#FAFAFA', borderTop: '1px solid #E0E0E0' }}>
+              <span className="text-[9px] text-gray-400">以下为系统自动生成的预览，提交后管理员可见</span>
+            </div>
+
             {/* 底部色条 */}
             <div style={{ height: 4, background: 'linear-gradient(90deg, #C9A84C 0%, #1A2B4A 100%)' }} />
 
@@ -1068,13 +1119,24 @@ const AddTransaction = () => {
           )}
 
           {/* 提交按鈕（移入内容区内部，贴底显示） */}
-          <div className="flex-shrink-0 px-4 py-4 bg-white" style={{ borderTop: '1px solid #E2E8F0' }}>
-            <button
-              className="w-full bg-[#1A2B4A] text-white py-4 rounded-2xl text-base font-bold active:bg-[#152238] shadow-md tracking-wider"
-              onClick={handleSave}
-            >
-              提交申请
-            </button>
+          <div className="flex-shrink-0 px-4 pt-3 pb-4 bg-white" style={{ borderTop: '1px solid #E2E8F0' }}>
+            {(() => {
+              const isReady = !!(amount && parseFloat(amount) > 0 && uploadedImages.length > 0);
+              return (
+                <>
+                  <div className="text-center text-xs text-gray-400 mb-2">
+                    {isReady ? '✓ 信息已完整，提交后管理员将收到通知' : '请填写金额并上传发票/凭证后提交'}
+                  </div>
+                  <button
+                    className="w-full text-white py-4 rounded-2xl text-base font-bold shadow-md tracking-wider transition-all duration-300"
+                    style={{ background: isReady ? 'linear-gradient(135deg, #1A6B4A 0%, #2E9E6B 100%)' : '#1A2B4A', opacity: isReady ? 1 : 0.85 }}
+                    onClick={handleSave}
+                  >
+                    {isReady ? '✓ 提交申请' : '提交申请'}
+                  </button>
+                </>
+              );
+            })()}
           </div>
         </div>
       ) : isCustomAA ? (
