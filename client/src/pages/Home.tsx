@@ -1814,9 +1814,20 @@ export default function Home() {
         const realDotIndex = ((socialPageIndex - 1 + SOCIAL_PAGES) % SOCIAL_PAGES);
         const socialPages = [
           // 页1：蓄水池动画（水滴）
-          <div key="p1" className="w-full h-full flex items-center justify-center">
-            <div style={{ width: '100%', aspectRatio: '4/3' }}>
-              <XushuchiLottie />
+          <div key="p1" className="w-full h-full flex flex-col px-3 py-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 社交</span>
+              <div onClick={handleRefresh} className="flex flex-col items-center cursor-pointer">
+                <div className={`w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors ${isFetching ? 'animate-spin' : ''}`}>
+                  <RefreshCw className="w-3.5 h-3.5 text-[#A80000]" />
+                </div>
+                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>刷新</span>
+              </div>
+            </div>
+            <div className="flex-1 flex items-center justify-center">
+              <div style={{ width: '100%', aspectRatio: '4/3' }}>
+                <XushuchiLottie />
+              </div>
             </div>
           </div>,
           // 页2：装修升级中
