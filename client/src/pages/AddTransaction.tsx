@@ -837,20 +837,20 @@ const AddTransaction = () => {
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2 bg-[#EEF2F8] rounded-lg px-3 py-2">
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10px] text-gray-400 mb-0.5">企业名称（点右侧按钮复制）</div>
-                      <span className="text-sm font-bold text-[#1A2B4A] leading-snug block truncate">{selectedCompany.name}</span>
+                      <div className="text-[10px] text-gray-400 mb-0.5">企业名称</div>
+                      <span className="text-base font-bold text-[#1A2B4A] leading-snug block truncate">{selectedCompany.name}</span>
                     </div>
                     <button className="flex-shrink-0 w-9 h-9 rounded-lg bg-[#1A2B4A] text-white flex items-center justify-center active:bg-[#0F1E36] shadow-sm" onClick={() => { navigator.clipboard.writeText(selectedCompany.name); toast.success('已复制企业名称'); }} title="复制企业名称">
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>
                   </div>
                   {selectedCompany.taxNo && (
-                    <div className="flex items-center justify-between gap-2 bg-[#F5F7FA] rounded-lg px-3 py-2">
+                    <div className="flex items-center justify-between gap-2 bg-[#EEF2F8] rounded-lg px-3 py-2">
                       <div className="flex-1 min-w-0">
-                        <div className="text-[10px] text-gray-400 mb-0.5">税号（点右侧按钮复制）</div>
-                        <span className="text-sm text-gray-700 block truncate">{selectedCompany.taxNo}</span>
+                        <div className="text-[10px] text-gray-400 mb-0.5">税号</div>
+                        <span className="text-base text-[#1A2B4A] font-medium block truncate">{selectedCompany.taxNo}</span>
                       </div>
-                      <button className="flex-shrink-0 w-9 h-9 rounded-lg bg-[#C9A84C] text-white flex items-center justify-center active:bg-[#A8893A] shadow-sm" onClick={() => { navigator.clipboard.writeText(selectedCompany.taxNo); toast.success('已复制税号'); }} title="复制税号">
+                      <button className="flex-shrink-0 w-9 h-9 rounded-lg bg-[#1A2B4A] text-white flex items-center justify-center active:bg-[#0F1E36] shadow-sm" onClick={() => { navigator.clipboard.writeText(selectedCompany.taxNo); toast.success('已复制税号'); }} title="复制税号">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                       </button>
                     </div>
@@ -860,8 +860,8 @@ const AddTransaction = () => {
                 <div className="text-sm text-gray-300">请选择企业</div>
               )}
             </div>
-            {/* 报销金额 - 手动填写区 - flex-1 自动擑满剩余空间 */}
-            <div className="px-4 pt-2 pb-2 flex-1 flex flex-col justify-center" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+            {/* 报销金额 - 手动填写区 */}
+            <div className="px-4 pt-2 pb-2 flex-shrink-0" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C', minHeight: '100px' }}>
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-5 h-5 rounded-full bg-[#C9A84C] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">①</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
