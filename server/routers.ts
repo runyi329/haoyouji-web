@@ -16169,17 +16169,17 @@ ${klinesSummary}
         const today = now.toISOString().split('T')[0];
         let dateFilter = '';
         const dateParams: string[] = [];
-        if (input.period === 'day') { dateFilter = 'AND lr.record_date = ?'; dateParams.push(today); }
+        if (input.period === 'day') { dateFilter = 'AND lr.recordDate = ?'; dateParams.push(today); }
         else if (input.period === 'week') {
           const ws = new Date(now); ws.setDate(ws.getDate() - ws.getDay() + 1);
-          dateFilter = 'AND lr.record_date >= ? AND lr.record_date <= ?';
+          dateFilter = 'AND lr.recordDate >= ? AND lr.recordDate <= ?';
           dateParams.push(ws.toISOString().split('T')[0], today);
-        } else if (input.period === 'month') { dateFilter = 'AND lr.record_date >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
+        } else if (input.period === 'month') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
         else if (input.period === 'quarter') {
           const q = Math.floor(now.getMonth()/3);
-          dateFilter = 'AND lr.record_date >= ?';
+          dateFilter = 'AND lr.recordDate >= ?';
           dateParams.push(new Date(now.getFullYear(), q*3, 1).toISOString().split('T')[0]);
-        } else if (input.period === 'year') { dateFilter = 'AND lr.record_date >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
+        } else if (input.period === 'year') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
         const companyFilter = input.companyId ? 'AND c.id = ?' : '';
         const companyParams = input.companyId ? [input.companyId] : [];
         const [rows] = await (conn as any).execute(
@@ -16243,18 +16243,18 @@ ${klinesSummary}
         const today = now.toISOString().split('T')[0];
         let dateFilter = '';
         const dateParams: string[] = [];
-        if (input.period === 'day') { dateFilter = 'AND lr.record_date = ?'; dateParams.push(today); }
+        if (input.period === 'day') { dateFilter = 'AND lr.recordDate = ?'; dateParams.push(today); }
         else if (input.period === 'week') {
           const ws = new Date(now); ws.setDate(ws.getDate() - ws.getDay() + 1);
-          dateFilter = 'AND lr.record_date >= ? AND lr.record_date <= ?';
+          dateFilter = 'AND lr.recordDate >= ? AND lr.recordDate <= ?';
           dateParams.push(ws.toISOString().split('T')[0], today);
-        } else if (input.period === 'month') { dateFilter = 'AND lr.record_date >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
+        } else if (input.period === 'month') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
         else if (input.period === 'quarter') {
           const q = Math.floor(now.getMonth()/3);
-          dateFilter = 'AND lr.record_date >= ?';
+          dateFilter = 'AND lr.recordDate >= ?';
           dateParams.push(new Date(now.getFullYear(), q*3, 1).toISOString().split('T')[0]);
-        } else if (input.period === 'year') { dateFilter = 'AND lr.record_date >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
-        const finalSql = `SELECT lr.id, lr.amount, lr.record_date as recordDate, lr.description, lr.category,
+        } else if (input.period === 'year') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
+        const finalSql = `SELECT lr.id, lr.amount, lr.recordDate as recordDate, lr.description, lr.category,
                   lr.aj_status as ajStatus, lr.created_at as createdAt,
                   u.username as creatorUsername, u.name as creatorName,
                   lm.nickname as creatorNickname
@@ -16262,7 +16262,7 @@ ${klinesSummary}
            LEFT JOIN users u ON u.id = lr.created_by
            LEFT JOIN ledger_members lm ON lm.userId = lr.created_by AND lm.ledgerId = lr.ledger_id
            WHERE lr.ledger_id=? AND lr.aj_company_id=? AND lr.deleted_at IS NULL ${dateFilter}
-           ORDER BY lr.record_date DESC, lr.created_at DESC
+           ORDER BY lr.recordDate DESC, lr.created_at DESC
            LIMIT 200`;
         const finalParams = [input.ledgerId, input.companyId, ...dateParams];
         console.log('[ajOwnerGetCompanyInvoices] sql params:', finalParams, 'period:', input.period, 'dateFilter:', dateFilter);
