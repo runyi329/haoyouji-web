@@ -901,16 +901,22 @@ export async function inviteMemberByUsername(ledgerId: number, inviterUserId: nu
     throw new Error("该用户已经是账本成员");
   }
 
-  // 添加为成员
+  // 读取账本默认权限
+  const defaultPermsA = await db.execute(
+    sql`SELECT default_permission_view, default_permission_add, default_permission_edit, default_permission_delete FROM ledgers WHERE id = ${ledgerId}`
+  );
+  const defRowA = (Array.isArray((defaultPermsA as any)[0]) ? (defaultPermsA as any)[0][0] : (defaultPermsA as any)[0]) || {};
+
+  // 添加为成员（使用账本默认权限）
   await db.insert(ledgerMembers).values({
     ledgerId,
     userId: inviteeUser.id,
     role: "member",
     memberType: "real",
-    permissionView: "all",
-    permissionAdd: "all",
-    permissionEdit: "own",
-    permissionDelete: "own",
+    permissionView: (defRowA.default_permission_view || "all") as any,
+    permissionAdd: (defRowA.default_permission_add || "all") as any,
+    permissionEdit: (defRowA.default_permission_edit || "own") as any,
+    permissionDelete: (defRowA.default_permission_delete || "own") as any,
     canEdit: true,
     canDelete: false,
     canInvite: false,
@@ -967,15 +973,28 @@ export async function inviteMemberByUsernameWithRole(
   const isAdmin = role === 'admin';
   const isFunder = role === 'funder';
 
+  // 读取账本默认权限（仅对 member/funder 角色生效，admin 保持全部权限）
+  let defViewR: any = "all", defAddR: any = "own", defEditR: any = "own", defDelR: any = "own";
+  if (!isAdmin) {
+    const defaultPermsR = await db.execute(
+      sql`SELECT default_permission_view, default_permission_add, default_permission_edit, default_permission_delete FROM ledgers WHERE id = ${ledgerId}`
+    );
+    const defRowR = (Array.isArray((defaultPermsR as any)[0]) ? (defaultPermsR as any)[0][0] : (defaultPermsR as any)[0]) || {};
+    defViewR = defRowR.default_permission_view || "all";
+    defAddR = defRowR.default_permission_add || "own";
+    defEditR = defRowR.default_permission_edit || "own";
+    defDelR = defRowR.default_permission_delete || "own";
+  }
+
   await db.insert(ledgerMembers).values({
     ledgerId,
     userId: inviteeUser.id,
     role: role as any,
     memberType: "real",
-    permissionView: "all",
-    permissionAdd: isAdmin ? "all" : "own",
-    permissionEdit: isAdmin ? "all" : "own",
-    permissionDelete: isAdmin ? "all" : "own",
+    permissionView: isAdmin ? "all" : defViewR,
+    permissionAdd: isAdmin ? "all" : defAddR,
+    permissionEdit: isAdmin ? "all" : defEditR,
+    permissionDelete: isAdmin ? "all" : defDelR,
     canEdit: isAdmin,
     canDelete: isAdmin,
     canInvite: isAdmin,
@@ -1027,16 +1046,22 @@ export async function joinLedger(ledgerId: number, userId: number, invitedBy: nu
     throw new Error("您已经是此账本的成员");
   }
 
-  // 添加为成员
+  // 读取账本默认权限
+  const defaultPerms = await db.execute(
+    sql`SELECT default_permission_view, default_permission_add, default_permission_edit, default_permission_delete, default_permission_backup FROM ledgers WHERE id = ${ledgerId}`
+  );
+  const defRow = (Array.isArray((defaultPerms as any)[0]) ? (defaultPerms as any)[0][0] : (defaultPerms as any)[0]) || {};
+
+  // 添加为成员（使用账本默认权限）
   await db.insert(ledgerMembers).values({
     ledgerId,
     userId,
     role: "member",
     memberType: "real",
-    permissionView: "all",
-    permissionAdd: "all",
-    permissionEdit: "own",
-    permissionDelete: "own",
+    permissionView: (defRow.default_permission_view || "all") as any,
+    permissionAdd: (defRow.default_permission_add || "all") as any,
+    permissionEdit: (defRow.default_permission_edit || "own") as any,
+    permissionDelete: (defRow.default_permission_delete || "own") as any,
     canEdit: true,
     canDelete: false,
     canInvite: false,
@@ -1661,16 +1686,22 @@ export async function joinLedgerByToken(token: string, userId: number) {
     throw new Error("您已经是该账本的成员");
   }
 
-  // 添加用户为账本成员
+  // 读取账本默认权限
+  const defaultPermsT = await db.execute(
+    sql`SELECT default_permission_view, default_permission_add, default_permission_edit, default_permission_delete, default_permission_backup FROM ledgers WHERE id = ${ledgerId}`
+  );
+  const defRowT = (Array.isArray((defaultPermsT as any)[0]) ? (defaultPermsT as any)[0][0] : (defaultPermsT as any)[0]) || {};
+
+  // 添加用户为账本成员（使用账本默认权限）
   await db.insert(ledgerMembers).values({
     ledgerId,
     userId,
     role: "member",
     memberType: "real",
-    permissionView: "all",
-    permissionAdd: "all",
-    permissionEdit: "own",
-    permissionDelete: "own",
+    permissionView: (defRowT.default_permission_view || "all") as any,
+    permissionAdd: (defRowT.default_permission_add || "all") as any,
+    permissionEdit: (defRowT.default_permission_edit || "own") as any,
+    permissionDelete: (defRowT.default_permission_delete || "own") as any,
   });
 
   // 自动初始化默认拨比：YJH 33.4%，自己 0%
@@ -5224,18 +5255,23 @@ export async function joinLedgerBySecretKey(secretKey: string, userId: number) {
     throw new Error('该账本已封存，无法加入');
   }
 
-  // 添加用户为账本成员
+  // 读取账本默认权限
+  const defaultPermsS = await db.execute(
+    sql`SELECT default_permission_view, default_permission_add, default_permission_edit, default_permission_delete FROM ledgers WHERE id = ${ledgerId}`
+  );
+  const defRowS = (Array.isArray((defaultPermsS as any)[0]) ? (defaultPermsS as any)[0][0] : (defaultPermsS as any)[0]) || {};
+
+  // 添加用户为账本成员（使用账本默认权限）
   await db.insert(ledgerMembers).values({
     ledgerId,
     userId,
     role: "member",
     memberType: "real",
-    permissionView: "all",
-    permissionAdd: "all",
-    permissionEdit: "own",
-    permissionDelete: "own",
+    permissionView: (defRowS.default_permission_view || "all") as any,
+    permissionAdd: (defRowS.default_permission_add || "all") as any,
+    permissionEdit: (defRowS.default_permission_edit || "own") as any,
+    permissionDelete: (defRowS.default_permission_delete || "own") as any,
   });
-
   // 自动初始化默认拨比：YJH 33.4%，自己 0%
   try {
     const YJH_USER_ID = 4957151;
@@ -5249,7 +5285,7 @@ export async function joinLedgerBySecretKey(secretKey: string, userId: number) {
     }
   } catch (e) {
     console.error('[joinLedgerBySecretKey] 初始化默认拨比失败:', e);
-  }
+  }}
 
   console.log('[joinLedgerBySecretKey] 用户通过密鑰加入账本:', { userId, ledgerId });
   return { ledgerId, ledgerName: ledgerRow.name };
