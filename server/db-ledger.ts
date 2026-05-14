@@ -3140,6 +3140,7 @@ export async function getTransactionsList(
       createdBy: ledgerRecords.createdBy,
       createdAt: ledgerRecords.createdAt,
       imageUrl: ledgerRecords.imageUrl,
+      images: ledgerRecords.images,
       reimbursementStatus: ledgerRecords.reimbursementStatus,
       pendingType: ledgerRecords.pendingType,
       pendingIncludeStats: ledgerRecords.pendingIncludeStats,
@@ -3291,6 +3292,13 @@ export async function getTransactionsList(
       description: record.description,
       createdAt: record.createdAt,
       imageUrl: record.imageUrl,
+      images: (() => {
+        if (record.images) {
+          const parsed = typeof record.images === 'string' ? JSON.parse(record.images) : record.images;
+          return Array.isArray(parsed) ? parsed : [];
+        }
+        return record.imageUrl ? [record.imageUrl] : [];
+      })(),
       reimbursementStatus: record.reimbursementStatus,
       pendingType: record.pendingType,
       pendingIncludeStats: record.pendingIncludeStats,
