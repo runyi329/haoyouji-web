@@ -50,6 +50,8 @@ jobs:
             echo "📦 安装依赖..."
             pnpm install
             echo "🔨 构建项目（旧 dist 在整个构建期间保持可用）..."
+            export NODE_OPTIONS="--max-old-space-size=4096"
+            set -o pipefail
             pnpm run build 2>&1 | tee /tmp/build_output.log || { echo "❌ 构建失败！错误日志："; cat /tmp/build_output.log | tail -50; exit 1; }
             echo "📊 执行数据库迁移..."
             bash scripts/post-deploy-migration.sh || true
