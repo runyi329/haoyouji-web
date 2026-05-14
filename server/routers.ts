@@ -15610,19 +15610,28 @@ ${klinesSummary}
            ORDER BY FIELD(lm.role,'owner','admin','funder','member')`,
           [input.ledgerId]
         );
-        // 获取该企业的权限记录
+        // 获取该企业的权限记录（按 access_type 分别记录资方/劳方权限）
         const [accessRows] = await (conn as any).execute(
-          `SELECT user_id, is_enabled FROM aj_company_access WHERE company_id=?`,
+          `SELECT user_id, access_type, is_enabled FROM aj_company_access WHERE company_id=?`,
           [input.companyId]
         );
-        const accessMap = new Map((accessRows as any[]).map((r: any) => [r.user_id, r.is_enabled]));
+        // 以 userId_accessType 为 key 建立 map
+        const accessMap = new Map<string, boolean>();
+        (accessRows as any[]).forEach((r: any) => {
+          accessMap.set(`${r.user_id}_${r.access_type}`, r.is_enabled === 1);
+        });
         return (members as any[]).map((m: any) => ({
           userId: m.userId,
           name: m.name,
           username: m.username,
           avatar: m.avatar,
           role: m.role,
-          isEnabled: accessMap.has(m.userId) ? accessMap.get(m.userId) === 1 : false,
+          // 资方权限（funder）：可查看该企业报销汇总
+          isFunderEnabled: accessMap.get(`${m.userId}_funder`) ?? false,
+          // 劳方权限（worker）：可向该企业提交报销
+          isWorkerEnabled: accessMap.get(`${m.userId}_worker`) ?? false,
+          // 兼容旧字段
+          isEnabled: accessMap.get(`${m.userId}_worker`) ?? accessMap.get(`${m.userId}_funder`) ?? false,
         }));
       }),
 
@@ -15633,6 +15642,8 @@ ${klinesSummary}
         ledgerId: z.number(),
         userId: z.number(),
         isEnabled: z.boolean(),
+        // accessType: 'funder'=资方权限，'worker'=劳方权限（默认 worker）
+        accessType: z.enum(['funder', 'worker']).optional().default('worker'),
       }))
       .mutation(async ({ ctx, input }) => {
         const conn = await (await import('./db')).getDbConnection();
@@ -15647,14 +15658,15 @@ ${klinesSummary}
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可修改权限' });
         }
         const enabledAt = input.isEnabled ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null;
+        const accessType = input.accessType ?? 'worker';
         await (conn as any).execute(
-          `INSERT INTO aj_company_access (ledger_id, company_id, user_id, is_enabled, enabled_by, enabled_at)
-           VALUES (?, ?, ?, ?, ?, ?)
+          `INSERT INTO aj_company_access (ledger_id, company_id, user_id, access_type, is_enabled, enabled_by, enabled_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE is_enabled=?, enabled_by=?, enabled_at=?`,
-          [input.ledgerId, input.companyId, input.userId, input.isEnabled ? 1 : 0, ctx.user.id, enabledAt,
+          [input.ledgerId, input.companyId, input.userId, accessType, input.isEnabled ? 1 : 0, ctx.user.id, enabledAt,
            input.isEnabled ? 1 : 0, ctx.user.id, enabledAt]
         );
-         return { success: true };
+        return { success: true };
       }),
     // 修改账本成员角色（管理员操作，用于企业管理页面切换资方/劳方）
     ajUpdateMemberRole: protectedProcedure
