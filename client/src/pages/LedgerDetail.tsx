@@ -3030,8 +3030,8 @@ export default function LedgerDetail() {
                   </>
                 )}
 
-                {/* AJ账本：劳/资视角切换（圆形滑动开关，仅企业主admin可见） */}
-                {isCustomAJ && isAdmin && !viewAsUserId && (
+                {/* AJ账本：劳/资视角切换（圆形滑动开关，admin或funder可见） */}
+                {isCustomAJ && (isAdmin || isFunder) && !viewAsUserId && (
                   <button
                     onClick={() => setAjViewMode(ajViewMode === 'salesman' ? 'owner' : 'salesman')}
                     className="relative flex items-center transition-all flex-shrink-0"
@@ -3903,10 +3903,10 @@ export default function LedgerDetail() {
         )}
         {/* AJ 账本：业务报销汇总面板 */}
         {isCustomAJ && (
-          <div className={isAdmin && !viewAsUserId && ajViewMode === 'owner' ? '' : 'px-4 pt-2 pb-4'}>
+          <div className={(isAdmin || isFunder) && !viewAsUserId && ajViewMode === 'owner' ? '' : 'px-4 pt-2 pb-4'}>
             {/* 资方视角：直接内嵌 AJOwnerPanel */}
-            {isAdmin && !viewAsUserId && ajViewMode === 'owner' ? (
-              <AJOwnerPanel ledgerId={Number(ledgerId)} />
+            {(isAdmin || isFunder) && !viewAsUserId && ajViewMode === 'owner' ? (
+              <AJOwnerPanel ledgerId={Number(ledgerId)} isFunder={!isOwner} />
             ) : (
               <>
                 {/* 劳方视角（或纯业务员）：报销汇总统计 */}
