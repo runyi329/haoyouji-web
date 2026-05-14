@@ -1116,7 +1116,7 @@ const AddTransaction = () => {
             </div>
           )}
 
-          </div>{/* 关闭可滚动内容区 */}
+          </div>
 
           {/* 提交按鈕（固定在底部） */}
           <div className="flex-shrink-0 px-4 pt-3 pb-4 bg-white" style={{ borderTop: '1px solid #E2E8F0' }}>
