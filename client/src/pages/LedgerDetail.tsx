@@ -5582,8 +5582,8 @@ export default function LedgerDetail() {
         )}
       </div>}
 
-      {/* 底部添加按鈕：AJ账本专用（劳方添加发票，资方添加企业） */}
-      {isCustomAJ && (
+      {/* 底部添加按鈕：AJ账本专用（劳方添加发票，资方仅 owner/创始人可添加企业） */}
+      {isCustomAJ && !(isAdmin && !viewAsUserId && ajViewMode === 'owner') && (
         <button
           onClick={() => {
             if (isAdmin && !viewAsUserId && ajViewMode === 'owner') {
