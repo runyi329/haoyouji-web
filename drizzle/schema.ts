@@ -1358,7 +1358,7 @@ export const bankCards = mysqlTable("bank_cards", {
 export const digitalWallets = mysqlTable("digital_wallets", {
 	id: varchar({ length: 36 }).primaryKey().notNull(),
 	userId: varchar("user_id", { length: 36 }).notNull(),
-	walletType: mysqlEnum("wallet_type", ['blockchain', 'alipay', 'wechat', 'other']).notNull(),
+	walletType: mysqlEnum("wallet_type", ['blockchain', 'binance', 'okx', 'alipay', 'wechat', 'other']).notNull(),
 	// 区块链钱包字段
 	network: varchar({ length: 50 }), // TRC20, ERC20, BEP20等
 	walletAddress: text("wallet_address"), // 钱包地址（加密存储）
