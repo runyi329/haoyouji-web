@@ -4040,12 +4040,13 @@ export default function LedgerDetail() {
                       if (!transactionsData) return <><div className="text-base font-bold text-white leading-tight">0张</div><div className="text-[11px] text-white/80 mt-0.5">¥0.00</div></>;
                       let count = 0; let amount = 0;
                       const now = new Date();
-                      const today = now.toISOString().split('T')[0];
-                      const weekStart = (() => { const d = new Date(now); d.setDate(d.getDate() - d.getDay() + 1); return d.toISOString().split('T')[0]; })();
+                      const bjNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+                      const today = bjNow.toISOString().split('T')[0];
+                      const weekStart = (() => { const d = new Date(bjNow); d.setUTCDate(d.getUTCDate() - d.getUTCDay() + (d.getUTCDay() === 0 ? -6 : 1)); return d.toISOString().split('T')[0]; })();
                       const currentMonth = today.slice(0, 7);
                       const currentYear = today.slice(0, 4);
-                      const currentQuarter = Math.floor(now.getMonth() / 3);
-                      const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
+                      const currentQuarter = Math.floor(bjNow.getUTCMonth() / 3);
+                      const quarterStart = new Date(Date.UTC(bjNow.getUTCFullYear(), currentQuarter * 3, 1)).toISOString().split('T')[0];
                       transactionsData.forEach((day: any) => {
                         let ok = false;
                         if (ajStatsPeriod === 'all') ok = true;
@@ -4071,12 +4072,13 @@ export default function LedgerDetail() {
                       if (!transactionsData) return <><div className="text-base font-bold text-white leading-tight">0张</div><div className="text-[11px] text-white/80 mt-0.5">¥0.00</div></>;
                       let count = 0; let amount = 0;
                       const now = new Date();
-                      const today = now.toISOString().split('T')[0];
-                      const weekStart = (() => { const d = new Date(now); d.setDate(d.getDate() - d.getDay() + 1); return d.toISOString().split('T')[0]; })();
+                      const bjNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+                      const today = bjNow.toISOString().split('T')[0];
+                      const weekStart = (() => { const d = new Date(bjNow); d.setUTCDate(d.getUTCDate() - d.getUTCDay() + (d.getUTCDay() === 0 ? -6 : 1)); return d.toISOString().split('T')[0]; })();
                       const currentMonth = today.slice(0, 7);
                       const currentYear = today.slice(0, 4);
-                      const currentQuarter = Math.floor(now.getMonth() / 3);
-                      const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
+                      const currentQuarter = Math.floor(bjNow.getUTCMonth() / 3);
+                      const quarterStart = new Date(Date.UTC(bjNow.getUTCFullYear(), currentQuarter * 3, 1)).toISOString().split('T')[0];
                       transactionsData.forEach((day: any) => {
                         let ok = false;
                         if (ajStatsPeriod === 'all') ok = true;
