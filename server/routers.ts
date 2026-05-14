@@ -15601,39 +15601,33 @@ ${klinesSummary}
         if (!isSysAdmin && memberRole !== 'owner' && memberRole !== 'admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看权限' });
         }
-        // 获取账本所有成员（不限角色，管理员/创建者/厂家等均可设置权限）
-        const [members] = await (conn as any).execute(
-          `SELECT lm.userId, lm.role, u.name, u.username, u.avatar
+        // 用一条 SQL 直接 LEFT JOIN 出每个成员的资方/劳方权限状态
+        const [rows] = await (conn as any).execute(
+          `SELECT 
+             lm.userId,
+             lm.role,
+             u.name,
+             u.username,
+             u.avatar,
+             MAX(CASE WHEN COALESCE(a.access_type,'worker')='funder' AND a.is_enabled=1 THEN 1 ELSE 0 END) as isFunder,
+             MAX(CASE WHEN COALESCE(a.access_type,'worker')='worker' AND a.is_enabled=1 THEN 1 ELSE 0 END) as isWorker
            FROM ledger_members lm
            LEFT JOIN users u ON u.id = lm.userId
+           LEFT JOIN aj_company_access a ON a.company_id=? AND a.user_id=lm.userId
            WHERE lm.ledgerId=?
+           GROUP BY lm.userId, lm.role, u.name, u.username, u.avatar
            ORDER BY FIELD(lm.role,'owner','admin','funder','member')`,
-          [input.ledgerId]
+          [input.companyId, input.ledgerId]
         );
-        // 获取该企业的权限记录（按 access_type 分别记录资方/劳方权限）
-        // 用 COALESCE 把 NULL 的 access_type 处理为 'worker'（兼容旧数据）
-        const [accessRows] = await (conn as any).execute(
-          `SELECT user_id, COALESCE(access_type, 'worker') as access_type, is_enabled FROM aj_company_access WHERE company_id=?`,
-          [input.companyId]
-        );
-        // 以 userId_accessType 为 key 建立 map，同一人可同时有资方和劳方两条记录
-        const accessMap = new Map<string, boolean>();
-        (accessRows as any[]).forEach((r: any) => {
-          const at = r.access_type || 'worker'; // 安全兼容
-          accessMap.set(`${r.user_id}_${at}`, !!(r.is_enabled));
-        });
-        return (members as any[]).map((m: any) => ({
-          userId: m.userId,
-          name: m.name,
-          username: m.username,
-          avatar: m.avatar,
-          role: m.role,
-          // 资方权限（funder）：可查看该企业报销汇总
-          isFunderEnabled: accessMap.get(`${m.userId}_funder`) ?? false,
-          // 劳方权限（worker）：可向该企业提交报销
-          isWorkerEnabled: accessMap.get(`${m.userId}_worker`) ?? false,
-          // 兼容旧字段
-          isEnabled: accessMap.get(`${m.userId}_worker`) ?? accessMap.get(`${m.userId}_funder`) ?? false,
+        return (rows as any[]).map((r: any) => ({
+          userId: r.userId,
+          name: r.name,
+          username: r.username,
+          avatar: r.avatar,
+          role: r.role,
+          isFunderEnabled: Number(r.isFunder) > 0,
+          isWorkerEnabled: Number(r.isWorker) > 0,
+          isEnabled: Number(r.isFunder) > 0 || Number(r.isWorker) > 0,
         }));
       }),
 
