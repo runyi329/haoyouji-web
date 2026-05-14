@@ -15620,7 +15620,7 @@ ${klinesSummary}
         const accessMap = new Map<string, boolean>();
         (accessRows as any[]).forEach((r: any) => {
           const at = r.access_type || 'worker'; // 安全兼容
-          accessMap.set(`${r.user_id}_${at}`, r.is_enabled === 1);
+          accessMap.set(`${r.user_id}_${at}`, !!(r.is_enabled));
         });
         return (members as any[]).map((m: any) => ({
           userId: m.userId,
