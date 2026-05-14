@@ -3994,6 +3994,65 @@ export default function LedgerDetail() {
                     </div>
                   </div>
                 </div>
+                {/* 第二行：审核中 + 已通过 */}
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  {/* 审核中张数 */}
+                  <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                    <div className="text-[10px] text-white/70 mb-1">审核中</div>
+                    <div className="text-base font-bold text-white">
+                      {(() => {
+                        if (!transactionsData) return '--';
+                        let count = 0;
+                        const now = new Date();
+                        const today = now.toISOString().split('T')[0];
+                        const weekStart = (() => { const d = new Date(now); d.setDate(d.getDate() - d.getDay() + 1); return d.toISOString().split('T')[0]; })();
+                        const currentMonth = today.slice(0, 7);
+                        const currentYear = today.slice(0, 4);
+                        const currentQuarter = Math.floor(now.getMonth() / 3);
+                        const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
+                        transactionsData.forEach((day: any) => {
+                          let ok = false;
+                          if (ajStatsPeriod === 'all') ok = true;
+                          else if (ajStatsPeriod === 'day') ok = day.date === today;
+                          else if (ajStatsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
+                          else if (ajStatsPeriod === 'month') ok = day.date.startsWith(currentMonth);
+                          else if (ajStatsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
+                          else if (ajStatsPeriod === 'year') ok = day.date.startsWith(currentYear);
+                          if (ok) count += (day.records || []).filter((r: any) => r.ajStatus === 'pending').length;
+                        });
+                        return count > 0 ? `${count}张` : '--';
+                      })()}
+                    </div>
+                  </div>
+                  {/* 已通过张数 */}
+                  <div className="rounded-2xl px-3 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                    <div className="text-[10px] text-white/70 mb-1">已通过</div>
+                    <div className="text-base font-bold text-white">
+                      {(() => {
+                        if (!transactionsData) return '--';
+                        let count = 0;
+                        const now = new Date();
+                        const today = now.toISOString().split('T')[0];
+                        const weekStart = (() => { const d = new Date(now); d.setDate(d.getDate() - d.getDay() + 1); return d.toISOString().split('T')[0]; })();
+                        const currentMonth = today.slice(0, 7);
+                        const currentYear = today.slice(0, 4);
+                        const currentQuarter = Math.floor(now.getMonth() / 3);
+                        const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
+                        transactionsData.forEach((day: any) => {
+                          let ok = false;
+                          if (ajStatsPeriod === 'all') ok = true;
+                          else if (ajStatsPeriod === 'day') ok = day.date === today;
+                          else if (ajStatsPeriod === 'week') ok = day.date >= weekStart && day.date <= today;
+                          else if (ajStatsPeriod === 'month') ok = day.date.startsWith(currentMonth);
+                          else if (ajStatsPeriod === 'quarter') ok = day.date >= quarterStart && day.date <= today;
+                          else if (ajStatsPeriod === 'year') ok = day.date.startsWith(currentYear);
+                          if (ok) count += (day.records || []).filter((r: any) => r.ajStatus === 'approved').length;
+                        });
+                        return count > 0 ? `${count}张` : '--';
+                      })()}
+                    </div>
+                  </div>
+                </div>
               </>
             )}
           </div>
