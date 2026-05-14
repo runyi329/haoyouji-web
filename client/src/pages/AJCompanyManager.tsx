@@ -413,16 +413,35 @@ function AccessPanel({
     onError: (e: any) => toast.error(e.message),
   });
 
-  const ROLE_LABELS: Record<string, string> = {
-    owner: '创始人', admin: '企业主', funder: '厂家', member: '业务员', employee: '员工', client: '客户',
-  };
-  // 只有 owner 才是管理员（创始人），admin 归入劳资双方
-  const isOwnerOnly = (role: string) => role === 'owner';
-  // 劳资双方可切换的角色选项（只有两个）
-  const WORKER_ROLES = [
-    { value: 'admin', label: '企业主（资方）' },
-    { value: 'member', label: '业务员（劳方）' },
-  ];
+  // 以企业为视角：创始人(owner)固定 / 资方(admin) / 劳方(非owner非admin)
+  const ownerMembers = (members as AccessMember[] | undefined)?.filter(m => m.role === 'owner') ?? [];
+  const funderMembers = (members as AccessMember[] | undefined)?.filter(m => m.role === 'admin') ?? [];
+  const workerMembers = (members as AccessMember[] | undefined)?.filter(m => m.role !== 'owner' && m.role !== 'admin') ?? [];
+
+  // 成员行渲染（带开关）
+  const renderMemberRow = (m: AccessMember) => (
+    <div key={m.userId} className="flex items-center justify-between py-2 px-1">
+      <div className="flex items-center gap-3">
+        {m.avatar ? (
+          <img src={m.avatar} className="w-9 h-9 rounded-full object-cover" />
+        ) : (
+          <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-sm font-medium">
+            {(m.name || m.username || '?')[0].toUpperCase()}
+          </div>
+        )}
+        <div>
+          <div className="text-sm font-medium text-gray-800">{m.name || m.username}</div>
+          {m.username && <div className="text-xs text-gray-400">@{m.username}</div>}
+        </div>
+      </div>
+      <button
+        onClick={() => toggleMutation.mutate({ companyId: company.id, ledgerId, userId: m.userId, isEnabled: !m.isEnabled })}
+        className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${m.isEnabled ? 'bg-[#C0392B]' : 'bg-gray-200'}`}
+      >
+        <span className={`absolute top-[3px] left-[3px] w-[18px] h-[18px] rounded-full bg-white shadow-md transition-transform duration-200 ${m.isEnabled ? 'translate-x-[20px]' : 'translate-x-0'}`} />
+      </button>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end">
@@ -430,7 +449,7 @@ function AccessPanel({
         <div className="flex items-center justify-between p-4 border-b border-gray-100">
           <div>
             <div className="font-semibold text-gray-800">{company.name}</div>
-            <div className="text-xs text-gray-400 mt-0.5">成员访问权限 &amp; 角色管理</div>
+            <div className="text-xs text-gray-400 mt-0.5">成员访问权限管理</div>
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100">
             <X className="w-4 h-4 text-gray-500" />
@@ -446,11 +465,11 @@ function AccessPanel({
             </div>
           ) : (
             <div className="space-y-1">
-              {/* 管理员区块（仅 owner） */}
-              {(members as AccessMember[]).filter(m => isOwnerOnly(m.role)).length > 0 && (
+              {/* 创始人区块（固定，不可修改） */}
+              {ownerMembers.length > 0 && (
                 <div className="mb-3">
                   <div className="text-xs text-gray-400 font-medium mb-2 px-1">创始人（默认可见所有企业）</div>
-                  {(members as AccessMember[]).filter(m => isOwnerOnly(m.role)).map((m) => (
+                  {ownerMembers.map((m) => (
                     <div key={m.userId} className="flex items-center justify-between py-2 px-1">
                       <div className="flex items-center gap-3">
                         {m.avatar ? (
@@ -462,7 +481,7 @@ function AccessPanel({
                         )}
                         <div>
                           <div className="text-sm font-medium text-gray-800">{m.name || m.username}</div>
-                          <div className="text-xs text-gray-400">{ROLE_LABELS[m.role] || m.role}{m.username ? ` · @${m.username}` : ''}</div>
+                          {m.username && <div className="text-xs text-gray-400">@{m.username}</div>}
                         </div>
                       </div>
                       <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">默认可见</span>
@@ -470,75 +489,24 @@ function AccessPanel({
                   ))}
                 </div>
               )}
-              {/* 分隔线 */}
-              {(members as AccessMember[]).filter(m => isOwnerOnly(m.role)).length > 0 &&
-               (members as AccessMember[]).filter(m => !isOwnerOnly(m.role)).length > 0 && (
-                <div className="border-t border-gray-100 my-2" />
-              )}
-              {/* 劳资双方成员区块（admin/funder/member 等） */}
-              {(members as AccessMember[]).filter(m => !isOwnerOnly(m.role)).length > 0 && (
-                <div>
-                  <div className="text-xs text-gray-400 font-medium mb-2 px-1">劳资双方成员（可配置访问权限和角色）</div>
-                  {(members as AccessMember[]).filter(m => !isOwnerOnly(m.role)).map((m) => (
-                    <div key={m.userId} className="py-2 px-1">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          {m.avatar ? (
-                            <img src={m.avatar} className="w-9 h-9 rounded-full object-cover" />
-                          ) : (
-                            <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-sm font-medium">
-                              {(m.name || m.username || '?')[0].toUpperCase()}
-                            </div>
-                          )}
-                          <div>
-                            <div className="text-sm font-medium text-gray-800">{m.name || m.username}</div>
-                            <div className="text-xs text-gray-400">{ROLE_LABELS[m.role] || m.role}{m.username ? ` · @${m.username}` : ''}</div>
-                          </div>
-                        </div>
-                        {/* 访问权限开关 */}
-                        <button
-                          onClick={() =>
-                            toggleMutation.mutate({
-                              companyId: company.id,
-                              ledgerId,
-                              userId: m.userId,
-                              isEnabled: !m.isEnabled,
-                            })
-                          }
-                          className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${
-                            m.isEnabled ? 'bg-[#C0392B]' : 'bg-gray-200'
-                          }`}
-                        >
-                          <span
-                            className={`absolute top-[3px] left-[3px] w-[18px] h-[18px] rounded-full bg-white shadow-md transition-transform duration-200 ${
-                              m.isEnabled ? 'translate-x-[20px]' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
-                      </div>
-                      {/* 角色切换按钮组 */}
-                      <div className="flex gap-1.5 mt-2 ml-12">
-                        {WORKER_ROLES.map(r => (
-                          <button
-                            key={r.value}
-                            onClick={() => {
-                              if (m.role === r.value) return;
-                              updateRoleMutation.mutate({ ledgerId, userId: m.userId, role: r.value });
-                            }}
-                            className={`text-xs px-2 py-1 rounded-full border transition-colors ${
-                              m.role === r.value
-                                ? 'bg-[#1A2B4A] text-white border-[#1A2B4A]'
-                                : 'bg-white text-gray-500 border-gray-200 hover:border-[#1A2B4A] hover:text-[#1A2B4A]'
-                            }`}
-                          >
-                            {r.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+              {/* 资方区块（admin角色，开关控制是否加入该企业资方） */}
+              {funderMembers.length > 0 && (
+                <div className="mb-3">
+                  {ownerMembers.length > 0 && <div className="border-t border-gray-100 mb-3" />}
+                  <div className="text-xs text-gray-400 font-medium mb-2 px-1">企业主（资方）— 开启后可查看该企业报销汇总</div>
+                  {funderMembers.map(renderMemberRow)}
                 </div>
               )}
+              {/* 劳方区块（非owner非admin，开关控制是否可提交该企业报销） */}
+              {workerMembers.length > 0 && (
+                <div>
+                  {(ownerMembers.length > 0 || funderMembers.length > 0) && <div className="border-t border-gray-100 mb-3" />}
+                  <div className="text-xs text-gray-400 font-medium mb-2 px-1">业务员（劳方）— 开启后可向该企业提交报销</div>
+                  {workerMembers.map(renderMemberRow)}
+                </div>
+              )}
+              {/* 占位 */}
+              <div className="h-2" />
             </div>
           )}
         </div>
@@ -546,6 +514,7 @@ function AccessPanel({
     </div>
   );
 }
+
 
 export default function AJCompanyManager() {
   const params = useParams<{ ledgerId: string }>();
