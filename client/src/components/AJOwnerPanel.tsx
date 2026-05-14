@@ -306,7 +306,7 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', year: '本年' };
 
   return (
-    <div>
+    <div className="flex flex-col flex-1 bg-white">
       {/* 顶部深蓝色区域 */}
       <div style={{ backgroundColor: AJ_COLOR }} className="px-4 pt-3 pb-4">
         {/* 第一行：企业选择 + 时间筛选 */}
