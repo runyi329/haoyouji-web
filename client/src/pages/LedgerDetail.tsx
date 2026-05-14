@@ -5606,34 +5606,44 @@ export default function LedgerDetail() {
                                 <div style={{ fontSize: '12px', color: '#444', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {record.description || '—'}
                                 </div>
-                                {/* 缩略图行：紧贴事由文字下方，高度固定18px不撑大卡片 */}
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '10px', color: '#aaa' }}>报销凭证</div>
                                 {(() => {
                                   const imgs: string[] = Array.isArray(record.images) && record.images.length > 0
                                     ? record.images
                                     : record.imageUrl ? [record.imageUrl] : [];
                                   return imgs.length > 0 ? (
-                                    <div style={{ display: 'flex', gap: '3px', marginTop: '3px' }}>
+                                    <div style={{ display: 'flex', gap: '3px', marginTop: '2px', flexWrap: 'wrap' }}>
                                       {imgs.slice(0, 4).map((url: string, i: number) => (
-                                        <div key={i} style={{
-                                          width: '18px', height: '18px', borderRadius: '3px',
-                                          overflow: 'hidden', flexShrink: 0,
-                                          border: '1px solid rgba(26,43,74,0.15)',
-                                          position: 'relative'
-                                        }}>
+                                        <a
+                                          key={i}
+                                          href={url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          onClick={e => e.stopPropagation()}
+                                          style={{
+                                            width: '20px', height: '20px', borderRadius: '3px',
+                                            overflow: 'hidden', flexShrink: 0,
+                                            border: '1px solid rgba(26,43,74,0.2)',
+                                            display: 'block', position: 'relative'
+                                          }}
+                                        >
                                           <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                                          {/* 第4张且还有更多时显示+N */}
                                           {i === 3 && imgs.length > 4 && (
                                             <div style={{
                                               position: 'absolute', inset: 0,
-                                              background: 'rgba(0,0,0,0.5)',
+                                              background: 'rgba(0,0,0,0.55)',
                                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                                               color: '#fff', fontSize: '8px', fontWeight: 700
                                             }}>+{imgs.length - 3}</div>
                                           )}
-                                        </div>
+                                        </a>
                                       ))}
                                     </div>
-                                  ) : null;
+                                  ) : (
+                                    <div style={{ fontSize: '12px', color: '#ccc', marginTop: '2px' }}>无</div>
+                                  );
                                 })()}
                               </div>
                             </div>
