@@ -1079,12 +1079,12 @@ const AddTransaction = () => {
               </div>
             </div>
 
-            {/* 底部色条 */
+            {/* 底部色条 */}
             <div style={{ height: 4, background: 'linear-gradient(90deg, #C9A84C 0%, #1A2B4A 100%)' }} />
 
           </div>
 
-          {/* 重复账目警告 */
+          {/* 重复账目警告 */}
           {duplicateWarnings.length > 0 && (
             <div className="mx-3 mt-1.5">
               {duplicateWarnings.map((w, idx) => (
