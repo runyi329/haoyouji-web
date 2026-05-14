@@ -647,7 +647,7 @@ const UnderConstructionLottie = React.memo(function UnderConstructionLottie() {
 });
 
 // ── 蓄水池 Lottie 动画组件（懒加载）──────────────────────────────────
-const RAINBOW_HUES = [0, 30, 60, 120, 200, 240, 280]; // 红橙黄绿蓝靛紫
+const RAINBOW_HUES = [0, 30, 60, 120, 180, 240, 270]; // 红橙黄绿青蓝紫
 const XushuchiLottie = React.memo(function XushuchiLottie() {
   const [animData, setAnimData] = React.useState<object | null>(null);
   const [colorIdx, setColorIdx] = React.useState(0);
