@@ -391,7 +391,7 @@ export default function FeedbackPage() {
             <p className="text-white/70 text-xs mt-0.5">提交后享 <span className="text-yellow-300 font-semibold">95折</span> 优惠</p>
           </div>
           <div className="ml-3 flex-shrink-0">
-            <img src="/kfc-logo.png" alt="KFC" className="w-16 h-16 object-contain drop-shadow-lg" />
+            <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/kfc-logo.png" alt="KFC" className="w-16 h-16 object-contain drop-shadow-lg" />
           </div>
         </div>
       </div>

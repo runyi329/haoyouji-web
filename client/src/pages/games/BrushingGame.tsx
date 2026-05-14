@@ -290,9 +290,9 @@ export default function BrushingGame() {
               <div className="mb-6 flex justify-center">
                 <img 
                   src={
-                    progress < 33 ? "/tooth-dirty.webp" :
-                    progress < 90 ? "/tooth-brushing.webp" :
-                    "/tooth-clean.webp"
+                    progress < 33 ? "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/games/tooth-dirty.webp" :
+                    progress < 90 ? "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/games/tooth-brushing.webp" :
+                    "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/games/tooth-clean.webp"
                   }
                   alt="tooth"
                   className="w-full max-w-md h-[50vh] object-contain transition-all duration-1000"
