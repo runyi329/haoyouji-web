@@ -572,17 +572,7 @@ export function AJOwnerPanel({ ledgerId }: { ledgerId: number }) {
         )}
       </div>
 
-      {/* 底部浮动「+」按钮（仅我的企业Tab显示） */}
-      {activeTab === 'companies' && !showAddForm && !editingCompany && !deletingCompany && (
-        <div className="fixed bottom-20 right-4 z-20">
-          <button
-            onClick={() => { setShowAddForm(true); setEditingCompany(null); }}
-            className="w-14 h-14 rounded-full bg-[#C0392B] shadow-lg flex items-center justify-center active:scale-95 transition-transform"
-          >
-            <Plus className="w-7 h-7 text-white" />
-          </button>
-        </div>
-      )}
+      {/* 底部浮动「+」按钮已隐藏，改由顶部深蓝加号按钮触发添加企业 */}
 
       {/* 开票分类面板 */}
       {expenseTypeCompany && (
