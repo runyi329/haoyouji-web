@@ -850,10 +850,11 @@ const AddTransaction = () => {
             </div>
           </div>
 
-          {/* 容器二：报销金额 + 发票凭证 */}
+          {/* 容器二：报销金额 + 发票凭证（左右两列等高） */}
           <div className="mx-3 mt-2 rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
-            {/* 报销金额 */}
-            <div className="px-4 pt-3 pb-2" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+            <div className="flex items-stretch" style={{ minHeight: 140 }}>
+            {/* 左列：报销金额 */}
+            <div className="flex-1 px-3 pt-3 pb-2 flex flex-col" style={{ background: '#FEF9EC', borderLeft: '4px solid #C9A84C', borderRight: '1px solid #E8D5A3' }}>
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-6 h-6 rounded-full bg-[#C9A84C] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
@@ -916,8 +917,9 @@ const AddTransaction = () => {
                 </div>
               )}
             </div>
-            {/* 发票凭证 */}
-            <div className="px-4 py-2.5" style={{ background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+            </div>{/* 关闭左列 */}
+            {/* 右列：发票凭证 */}
+            <div className="flex flex-col px-3 py-2.5" style={{ background: '#FEF9EC', width: 110, flexShrink: 0 }}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="w-6 h-6 rounded-full bg-[#C9A84C] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>发票 / 凭证</span>
@@ -971,7 +973,8 @@ const AddTransaction = () => {
                   </button>
                 ) : null}
               </div>
-            </div>
+            </div>{/* 关闭右列 */}
+            </div>{/* 关闭左右两列容器 */}
           </div>
 
           {/* 容器三：费用报销明细单预览 */}
