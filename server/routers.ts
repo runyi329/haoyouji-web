@@ -15663,6 +15663,38 @@ ${klinesSummary}
           [input.ledgerId, input.companyId, input.userId, accessType, input.isEnabled ? 1 : 0, ctx.user.id, enabledAt,
            input.isEnabled ? 1 : 0, ctx.user.id, enabledAt]
         );
+        // 同步更新 ledger_members.role：
+        // 添加 funder 权限时，若成员角色是 member，升级为 funder
+        // 移除 funder 权限时，若该用户已无任何 funder 授权，降回 member
+        if (accessType === 'funder') {
+          const [targetMemberRows] = await (conn as any).execute(
+            `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+            [input.ledgerId, input.userId]
+          );
+          const targetMemberRole = (targetMemberRows as any[])[0]?.role;
+          if (input.isEnabled) {
+            // 添加 funder：仅当角色是 member 时升级为 funder（不改 owner/admin）
+            if (targetMemberRole === 'member') {
+              await (conn as any).execute(
+                `UPDATE ledger_members SET role='funder' WHERE ledgerId=? AND userId=?`,
+                [input.ledgerId, input.userId]
+              );
+            }
+          } else {
+            // 移除 funder：检查是否还有其他 funder 授权
+            const [remainFunderRows] = await (conn as any).execute(
+              `SELECT COUNT(*) as cnt FROM aj_company_access WHERE ledger_id=? AND user_id=? AND access_type='funder' AND is_enabled=1`,
+              [input.ledgerId, input.userId]
+            );
+            const remainFunderCount = Number((remainFunderRows as any[])[0]?.cnt || 0);
+            if (remainFunderCount === 0 && targetMemberRole === 'funder') {
+              await (conn as any).execute(
+                `UPDATE ledger_members SET role='member' WHERE ledgerId=? AND userId=?`,
+                [input.ledgerId, input.userId]
+              );
+            }
+          }
+        }
         return { success: true };
       }),
     // 修改账本成员角色（管理员操作，用于企业管理页面切换资方/劳方）
@@ -16154,10 +16186,17 @@ ${klinesSummary}
                   COUNT(DISTINCT lr.userId) as salesmanCount
            FROM aj_companies c
            LEFT JOIN ledger_records lr ON lr.aj_company_id = c.id AND lr.ledger_id = ? ${dateFilter} AND lr.deleted_at IS NULL
-           WHERE c.ledger_id = ? AND c.created_by = ?
+           WHERE c.ledger_id = ? AND (
+             c.created_by = ?
+             OR EXISTS (
+               SELECT 1 FROM aj_company_access a
+               WHERE a.company_id=c.id AND a.user_id=? AND a.is_enabled=1
+               AND COALESCE(a.access_type,'worker')='funder'
+             )
+           )
            GROUP BY c.id, c.name, c.tax_no
            ORDER BY c.created_at ASC`,
-          [input.ledgerId, ...dateParams, input.ledgerId, ctx.user.id]
+          [input.ledgerId, ...dateParams, input.ledgerId, ctx.user.id, ctx.user.id]
         );
         return rows as any[];
       }),
@@ -16177,12 +16216,20 @@ ${klinesSummary}
         );
         const memberRole = (memberRows as any[])[0]?.role;
         if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        // 允许：自己创建的企业 OR 被授权为 funder 的企业
         const [companyRows] = await (conn as any).execute(
-          `SELECT id, name FROM aj_companies WHERE id=? AND ledger_id=? AND created_by=?`,
-          [input.companyId, input.ledgerId, ctx.user.id]
+          `SELECT id, name FROM aj_companies WHERE id=? AND ledger_id=? AND (
+            created_by=?
+            OR EXISTS (
+              SELECT 1 FROM aj_company_access a
+              WHERE a.company_id=aj_companies.id AND a.user_id=? AND a.is_enabled=1
+              AND COALESCE(a.access_type,'worker')='funder'
+            )
+          )`,
+          [input.companyId, input.ledgerId, ctx.user.id, ctx.user.id]
         );
         if ((companyRows as any[]).length === 0) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '您只能查看自己名下企业的开票记录' });
+          throw new TRPCError({ code: 'FORBIDDEN', message: '您没有权限查看该企业的开票记录' });
         }
         const now = new Date();
         const today = now.toISOString().split('T')[0];
