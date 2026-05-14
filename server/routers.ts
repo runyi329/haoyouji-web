@@ -15654,9 +15654,43 @@ ${klinesSummary}
           [input.ledgerId, input.companyId, input.userId, input.isEnabled ? 1 : 0, ctx.user.id, enabledAt,
            input.isEnabled ? 1 : 0, ctx.user.id, enabledAt]
         );
+         return { success: true };
+      }),
+    // 修改账本成员角色（管理员操作，用于企业管理页面切换资方/劳方）
+    ajUpdateMemberRole: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        userId: z.number(),
+        role: z.enum(['owner', 'admin', 'member', 'funder', 'client', 'employee']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 权限校验：仅 owner/admin 或系统管理员可操作
+        const [callerRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const callerRole = (callerRows as any[])[0]?.role;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (!isSysAdmin && callerRole !== 'owner' && callerRole !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可修改成员角色' });
+        }
+        // 不允许修改 owner 角色（账本创建者）
+        const [targetRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, input.userId]
+        );
+        const targetRole = (targetRows as any[])[0]?.role;
+        if (targetRole === 'owner') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '不能修改账本创建者的角色' });
+        }
+        await (conn as any).execute(
+          `UPDATE ledger_members SET role=? WHERE ledgerId=? AND userId=?`,
+          [input.role, input.ledgerId, input.userId]
+        );
         return { success: true };
       }),
-
     // 业务员获取自己有权限的企业（用于报销申请单选择企业）
     ajGetMyCompanies: protectedProcedure
       .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
