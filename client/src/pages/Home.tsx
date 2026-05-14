@@ -649,22 +649,37 @@ const UnderConstructionLottie = React.memo(function UnderConstructionLottie() {
 // ── 蓄水池 Lottie 动画组件（懒加载）──────────────────────────────────
 const XushuchiLottie = React.memo(function XushuchiLottie() {
   const [animData, setAnimData] = React.useState<object | null>(null);
+  const [hue, setHue] = React.useState(0);
   React.useEffect(() => {
     fetch('/xushuchi.json')
       .then(r => r.json())
       .then(setAnimData)
       .catch(() => {});
   }, []);
+  // 七彩循环：每 1.2 秒切换到下一个色相（7色 × 1.2s = 8.4s 一轮）
+  React.useEffect(() => {
+    const COLORS = [0, 30, 60, 120, 200, 240, 280]; // 红橙黄绿蓝靛紫
+    let idx = 0;
+    const timer = setInterval(() => {
+      idx = (idx + 1) % COLORS.length;
+      setHue(COLORS[idx]);
+    }, 1200);
+    return () => clearInterval(timer);
+  }, []);
   // 原始尺寸 1024×768，比例 4:3
-  // 手机容器宽度约 330-390px，高度约 42% 屏幕高（去掉圆点指示器）
-  // 最大清晰尺寸：宽度 100%，高度自适应（保持比例）
   if (!animData) return <div style={{ width: '100%', height: '100%' }} />;
   return (
-    <Lottie
-      animationData={animData}
-      loop={true}
-      style={{ width: '100%', height: '100%' }}
-    />
+    <div style={{
+      width: '100%', height: '100%',
+      filter: `hue-rotate(${hue}deg) saturate(1.4)`,
+      transition: 'filter 0.8s ease-in-out',
+    }}>
+      <Lottie
+        animationData={animData}
+        loop={true}
+        style={{ width: '100%', height: '100%' }}
+      />
+    </div>
   );
 });
 
