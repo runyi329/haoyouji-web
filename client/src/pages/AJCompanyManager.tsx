@@ -416,13 +416,12 @@ function AccessPanel({
   const ROLE_LABELS: Record<string, string> = {
     owner: '创始人', admin: '企业主', funder: '厂家', member: '业务员', employee: '员工', client: '客户',
   };
-  // 劳方角色（可开关权限 + 可切换角色）
-  const isWorkerRole = (role: string) => !['owner', 'admin'].includes(role);
-  // 劳方可切换的角色选项
+  // 只有 owner 才是管理员（创始人），admin 归入劳资双方
+  const isOwnerOnly = (role: string) => role === 'owner';
+  // 劳资双方可切换的角色选项（只有两个）
   const WORKER_ROLES = [
-    { value: 'funder', label: '厂家（资方）' },
+    { value: 'admin', label: '企业主（资方）' },
     { value: 'member', label: '业务员（劳方）' },
-    { value: 'employee', label: '员工' },
   ];
 
   return (
@@ -447,11 +446,11 @@ function AccessPanel({
             </div>
           ) : (
             <div className="space-y-1">
-              {/* 管理员区块 */}
-              {(members as AccessMember[]).filter(m => !isWorkerRole(m.role)).length > 0 && (
+              {/* 管理员区块（仅 owner） */}
+              {(members as AccessMember[]).filter(m => isOwnerOnly(m.role)).length > 0 && (
                 <div className="mb-3">
-                  <div className="text-xs text-gray-400 font-medium mb-2 px-1">管理员（默认可见所有企业）</div>
-                  {(members as AccessMember[]).filter(m => !isWorkerRole(m.role)).map((m) => (
+                  <div className="text-xs text-gray-400 font-medium mb-2 px-1">创始人（默认可见所有企业）</div>
+                  {(members as AccessMember[]).filter(m => isOwnerOnly(m.role)).map((m) => (
                     <div key={m.userId} className="flex items-center justify-between py-2 px-1">
                       <div className="flex items-center gap-3">
                         {m.avatar ? (
@@ -472,15 +471,15 @@ function AccessPanel({
                 </div>
               )}
               {/* 分隔线 */}
-              {(members as AccessMember[]).filter(m => !isWorkerRole(m.role)).length > 0 &&
-               (members as AccessMember[]).filter(m => isWorkerRole(m.role)).length > 0 && (
+              {(members as AccessMember[]).filter(m => isOwnerOnly(m.role)).length > 0 &&
+               (members as AccessMember[]).filter(m => !isOwnerOnly(m.role)).length > 0 && (
                 <div className="border-t border-gray-100 my-2" />
               )}
-              {/* 劳方成员区块 */}
-              {(members as AccessMember[]).filter(m => isWorkerRole(m.role)).length > 0 && (
+              {/* 劳资双方成员区块（admin/funder/member 等） */}
+              {(members as AccessMember[]).filter(m => !isOwnerOnly(m.role)).length > 0 && (
                 <div>
-                  <div className="text-xs text-gray-400 font-medium mb-2 px-1">劳方成员（可配置访问权限和角色）</div>
-                  {(members as AccessMember[]).filter(m => isWorkerRole(m.role)).map((m) => (
+                  <div className="text-xs text-gray-400 font-medium mb-2 px-1">劳资双方成员（可配置访问权限和角色）</div>
+                  {(members as AccessMember[]).filter(m => !isOwnerOnly(m.role)).map((m) => (
                     <div key={m.userId} className="py-2 px-1">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
