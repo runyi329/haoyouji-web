@@ -853,9 +853,8 @@ const AddTransaction = () => {
             {/* 报销金额 */}
             <div className="px-4 pt-3 pb-2" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
               <div className="flex items-center gap-2 mb-1">
-                <span className="w-5 h-5 rounded-full bg-[#C9A84C] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">①</span>
+                <span className="w-7 h-7 rounded-full bg-[#C9A84C] text-white text-sm font-bold flex items-center justify-center flex-shrink-0">1</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
-                <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#C9A84C', color: '#fff', fontSize: '10px' }}>必填</span>
               </div>
               <div className="flex items-end gap-1">
                 <span className="text-2xl font-light text-gray-400">¥</span>
@@ -913,9 +912,8 @@ const AddTransaction = () => {
             {/* 发票凭证 */}
             <div className="px-4 py-2.5" style={{ background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
               <div className="flex items-center gap-2 mb-2">
-                <span className="w-5 h-5 rounded-full bg-[#C9A84C] text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0">②</span>
+                <span className="w-7 h-7 rounded-full bg-[#C9A84C] text-white text-sm font-bold flex items-center justify-center flex-shrink-0">2</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>发票 / 凭证</span>
-                <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#C9A84C', color: '#fff', fontSize: '10px' }}>必传</span>
               </div>
               <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={async (e) => {
                 const files = e.target.files;
