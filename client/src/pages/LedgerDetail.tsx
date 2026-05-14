@@ -2700,19 +2700,20 @@ export default function LedgerDetail() {
 
   // 根据选择的周期计算统计数据
   const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const currentYear = `${now.getFullYear()}`;
+  // 北京时间 UTC+8
+  const bjNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const today = bjNow.toISOString().split('T')[0];
+  const currentMonth = today.slice(0, 7);
+  const currentYear = today.slice(0, 4);
   
-  // 计算本周的开始日期（周一）
-  const getWeekStart = (date: Date) => {
-    const day = date.getDay();
-    const diff = date.getDate() - day + (day === 0 ? -6 : 1); // 周日调整为上周最后一天
-    const weekStart = new Date(date);
-    weekStart.setDate(diff);
-    return `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
+  // 计算本周的开始日期（周一）——北京时间
+  const getWeekStart = (bjDate: Date) => {
+    const d = new Date(bjDate);
+    const day = d.getUTCDay();
+    d.setUTCDate(d.getUTCDate() - day + (day === 0 ? -6 : 1));
+    return d.toISOString().split('T')[0];
   };
-  const weekStart = getWeekStart(now);
+  const weekStart = getWeekStart(bjNow);
   
   const monthlyStats = {
     income: 0,
@@ -2744,8 +2745,8 @@ export default function LedgerDetail() {
             shouldInclude = day.date.startsWith(currentMonth);
             break;
           case 'quarter': {
-            const qtr = Math.floor(now.getMonth() / 3);
-            const qStart = new Date(now.getFullYear(), qtr * 3, 1).toISOString().split('T')[0];
+            const qtr = Math.floor(bjNow.getUTCMonth() / 3);
+            const qStart = new Date(Date.UTC(bjNow.getUTCFullYear(), qtr * 3, 1)).toISOString().split('T')[0];
             shouldInclude = day.date >= qStart && day.date <= today;
             break;
           }
@@ -3999,12 +4000,13 @@ export default function LedgerDetail() {
                         if (!transactionsData) return '--';
                         let count = 0;
                         const now = new Date();
-                        const today = now.toISOString().split('T')[0];
-                        const weekStart = (() => { const d = new Date(now); d.setDate(d.getDate() - d.getDay() + 1); return d.toISOString().split('T')[0]; })();
+                        const bjNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+                        const today = bjNow.toISOString().split('T')[0];
+                        const weekStart = (() => { const d = new Date(bjNow); d.setUTCDate(d.getUTCDate() - d.getUTCDay() + (d.getUTCDay() === 0 ? -6 : 1)); return d.toISOString().split('T')[0]; })();
                         const currentMonth = today.slice(0, 7);
                         const currentYear = today.slice(0, 4);
-                        const currentQuarter = Math.floor(now.getMonth() / 3);
-                        const quarterStart = new Date(now.getFullYear(), currentQuarter * 3, 1).toISOString().split('T')[0];
+                        const currentQuarter = Math.floor(bjNow.getUTCMonth() / 3);
+                        const quarterStart = new Date(Date.UTC(bjNow.getUTCFullYear(), currentQuarter * 3, 1)).toISOString().split('T')[0];
                         transactionsData.forEach((day: any) => {
                           let ok = false;
                           if (ajStatsPeriod === 'all') ok = true;

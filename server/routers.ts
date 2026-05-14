@@ -16259,19 +16259,23 @@ ${klinesSummary}
         const memberRole = (memberRows as any[])[0]?.role;
         if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
         const now = new Date();
-        const today = now.toISOString().split('T')[0];
+        // 北京时间 UTC+8
+        const bjOffset = 8 * 60 * 60 * 1000;
+        const bjNow = new Date(now.getTime() + bjOffset);
+        const today = bjNow.toISOString().split('T')[0];
         let dateFilter = '';
         const dateParams: string[] = [];
         if (input.period === 'day') { dateFilter = 'AND lr.recordDate = ?'; dateParams.push(today); }
         else if (input.period === 'week') {
-          const ws = new Date(now); ws.setDate(ws.getDate() - ws.getDay() + 1);
+          const ws = new Date(bjNow); ws.setUTCDate(ws.getUTCDate() - ws.getUTCDay() + (ws.getUTCDay() === 0 ? -6 : 1));
           dateFilter = 'AND lr.recordDate >= ? AND lr.recordDate <= ?';
           dateParams.push(ws.toISOString().split('T')[0], today);
         } else if (input.period === 'month') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
         else if (input.period === 'quarter') {
-          const q = Math.floor(now.getMonth()/3);
+          const q = Math.floor(bjNow.getUTCMonth()/3);
+          const qStart = new Date(Date.UTC(bjNow.getUTCFullYear(), q*3, 1));
           dateFilter = 'AND lr.recordDate >= ?';
-          dateParams.push(new Date(now.getFullYear(), q*3, 1).toISOString().split('T')[0]);
+          dateParams.push(qStart.toISOString().split('T')[0]);
         } else if (input.period === 'year') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
         const companyFilter = input.companyId ? 'AND c.id = ?' : '';
         const companyParams = input.companyId ? [input.companyId] : [];
@@ -16333,19 +16337,23 @@ ${klinesSummary}
           throw new TRPCError({ code: 'FORBIDDEN', message: '您没有权限查看该企业的开票记录' });
         }
         const now = new Date();
-        const today = now.toISOString().split('T')[0];
+        // 北京时间 UTC+8
+        const bjOffset = 8 * 60 * 60 * 1000;
+        const bjNow = new Date(now.getTime() + bjOffset);
+        const today = bjNow.toISOString().split('T')[0];
         let dateFilter = '';
         const dateParams: string[] = [];
         if (input.period === 'day') { dateFilter = 'AND lr.recordDate = ?'; dateParams.push(today); }
         else if (input.period === 'week') {
-          const ws = new Date(now); ws.setDate(ws.getDate() - ws.getDay() + 1);
+          const ws = new Date(bjNow); ws.setUTCDate(ws.getUTCDate() - ws.getUTCDay() + (ws.getUTCDay() === 0 ? -6 : 1));
           dateFilter = 'AND lr.recordDate >= ? AND lr.recordDate <= ?';
           dateParams.push(ws.toISOString().split('T')[0], today);
         } else if (input.period === 'month') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
         else if (input.period === 'quarter') {
-          const q = Math.floor(now.getMonth()/3);
+          const q = Math.floor(bjNow.getUTCMonth()/3);
+          const qStart = new Date(Date.UTC(bjNow.getUTCFullYear(), q*3, 1));
           dateFilter = 'AND lr.recordDate >= ?';
-          dateParams.push(new Date(now.getFullYear(), q*3, 1).toISOString().split('T')[0]);
+          dateParams.push(qStart.toISOString().split('T')[0]);
         } else if (input.period === 'year') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
         const finalSql = `SELECT lr.id, lr.amount, lr.recordDate as recordDate, lr.description, lr.categoryId,
                   lr.aj_status as ajStatus, lr.createdAt as createdAt,
@@ -16381,19 +16389,23 @@ ${klinesSummary}
         if (!(memberRows as any[])[0]) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
         // 日期过滤
         const now = new Date();
-        const today = now.toISOString().split('T')[0];
+        // 北京时间 UTC+8
+        const bjOffset = 8 * 60 * 60 * 1000;
+        const bjNow = new Date(now.getTime() + bjOffset);
+        const today = bjNow.toISOString().split('T')[0];
         let dateFilter = '';
         const dateParams: any[] = [];
         if (input.period === 'day') { dateFilter = 'AND lr.record_date = ?'; dateParams.push(today); }
         else if (input.period === 'week') {
-          const ws = new Date(now); ws.setDate(ws.getDate() - ws.getDay() + 1);
+          const ws = new Date(bjNow); ws.setUTCDate(ws.getUTCDate() - ws.getUTCDay() + (ws.getUTCDay() === 0 ? -6 : 1));
           dateFilter = 'AND lr.record_date >= ? AND lr.record_date <= ?';
           dateParams.push(ws.toISOString().split('T')[0], today);
         } else if (input.period === 'month') { dateFilter = 'AND lr.record_date >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
         else if (input.period === 'quarter') {
-          const q = Math.floor(now.getMonth()/3);
+          const q = Math.floor(bjNow.getUTCMonth()/3);
+          const qStart = new Date(Date.UTC(bjNow.getUTCFullYear(), q*3, 1));
           dateFilter = 'AND lr.record_date >= ?';
-          dateParams.push(new Date(now.getFullYear(), q*3, 1).toISOString().split('T')[0]);
+          dateParams.push(qStart.toISOString().split('T')[0]);
         } else if (input.period === 'year') { dateFilter = 'AND lr.record_date >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
         // 查询：推荐下线 AND 是该账本成员，统计开票业绩
         const [rows] = await (conn as any).execute(
