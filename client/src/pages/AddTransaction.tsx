@@ -1117,8 +1117,23 @@ const AddTransaction = () => {
                   </div>
                   <button
                     className="w-full text-white py-4 rounded-2xl text-base font-bold shadow-md tracking-wider transition-all duration-300"
-                    style={{ background: isReady ? 'linear-gradient(135deg, #1A6B4A 0%, #2E9E6B 100%)' : '#1A2B4A', opacity: isReady ? 1 : 0.85 }}
-                    onClick={handleSave}
+                    style={{
+                      background: isReady ? 'linear-gradient(135deg, #1A6B4A 0%, #2E9E6B 100%)' : '#B0B8C4',
+                      opacity: 1,
+                      cursor: isReady ? 'pointer' : 'not-allowed'
+                    }}
+                    disabled={!isReady}
+                    onClick={() => {
+                      if (!isReady) {
+                        if (!amount || parseFloat(amount) <= 0) {
+                          alert('请先填写报销金额');
+                        } else if (uploadedImages.length === 0) {
+                          alert('请至少上传一张发票或凭证');
+                        }
+                        return;
+                      }
+                      handleSave();
+                    }}
                   >
                     {isReady ? '✓ 提交申请' : '提交申请'}
                   </button>
