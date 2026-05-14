@@ -5502,6 +5502,8 @@ export default function LedgerDetail() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
+                                      const confirmed = window.confirm('确认撤销此申请单？\n\n撤销后将无法找回，管理员和您的记录中均不会保留此申请。');
+                                      if (!confirmed) return;
                                       withdrawReimbursementMutation.mutate({ ledgerId: Number(ledgerId), recordId: record.id });
                                     }}
                                     disabled={withdrawReimbursementMutation.isPending}
