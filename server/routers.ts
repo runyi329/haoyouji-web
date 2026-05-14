@@ -15619,6 +15619,7 @@ ${klinesSummary}
            ORDER BY FIELD(lm.role,'owner','admin','funder','member')`,
           [input.companyId, input.ledgerId]
         );
+        console.log('[DEBUG ajGetCompanyAccess] input:', JSON.stringify(input), 'userId:', ctx.user.id, 'rowCount:', (rows as any[]).length, 'rawRows:', JSON.stringify((rows as any[]).slice(0, 3)));
         return (rows as any[]).map((r: any) => ({
           userId: r.userId,
           name: r.name,
