@@ -2622,12 +2622,13 @@ export default function LedgerDetail() {
     }
   }, [ledgerId]);
 
-  // AJ账本：funder（企业主）角色加载完成后，自动切换到「资」（owner）视角
+  // AJ账本：admin（企业主/资方）角色加载完成后，自动切换到「资」（owner）视角
+  // AJ账本角色：owner=创始人, admin=企业主(资方), member=业务员(劳方)，不存在funder角色
   useEffect(() => {
-    if (isFunder && isCustomAJ) {
+    if (isCustomAJ && isAdmin) {
       setAjViewMode('owner');
     }
-  }, [isFunder, isCustomAJ]);
+  }, [isCustomAJ, isAdmin]);
 
   // 定制账本(AD)：永忆
   const isCustomAD = (ledgerData as any)?.type === 'custom_ad';
