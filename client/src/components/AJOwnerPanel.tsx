@@ -328,20 +328,20 @@ function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
               </div>
             )}
           </div>
-          {/* 时间筛选 */}
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {(['day', 'week', 'month', 'year'] as const).map(p => (
-              <button
-                key={p}
-                onClick={() => setPeriod(p)}
-                className="text-xs px-2.5 py-1 rounded-full transition-all"
-                style={period === p
-                  ? { backgroundColor: 'rgba(255,255,255,0.25)', color: '#fff', fontWeight: 600 }
-                  : { backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)' }}
-              >
-                {periodLabels[p]}
-              </button>
-            ))}
+          {/* 时间筛选（与劳方首页一致） */}
+          <div className="relative flex-shrink-0">
+            <select
+              value={period}
+              onChange={e => setPeriod(e.target.value as any)}
+              className="appearance-none text-xs text-white/90 pl-2 pr-6 py-1 rounded-full border border-white/30 cursor-pointer outline-none focus:outline-none focus:ring-0"
+              style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}
+            >
+              <option value="day" style={{ color: '#222' }}>今日</option>
+              <option value="week" style={{ color: '#222' }}>本周</option>
+              <option value="month" style={{ color: '#222' }}>本月</option>
+              <option value="year" style={{ color: '#222' }}>本年</option>
+            </select>
+            <svg className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 fill-white/70" viewBox="0 0 12 12"><path d="M6 8L2 4h8z"/></svg>
           </div>
         </div>
         {/* 统计数据行 */}
