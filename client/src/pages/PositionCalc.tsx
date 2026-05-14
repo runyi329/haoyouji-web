@@ -735,7 +735,7 @@ export default function PositionCalc() {
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-1.5 font-semibold text-base" style={{ letterSpacing: '0.05em', background: 'linear-gradient(180deg, #f0f0f0 0%, #c8c8c8 30%, #a0a0a0 60%, #d0d0d0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.8))' }}>
-            <img src="/eth-circle-icon.webp" alt="ETH" className="w-5 h-5 object-contain rounded-full flex-shrink-0" />
+            <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp" alt="ETH" className="w-5 h-5 object-contain rounded-full flex-shrink-0" />
             智能仓位管理
           </div>
         </div>

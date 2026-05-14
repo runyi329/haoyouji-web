@@ -530,7 +530,7 @@ export default function AntonymGame() {
                       {/* 卡通风格绿色按钮图片 */}
                       <div className="flex-1 relative h-20">
                         <img 
-                          src="/button-green.png" 
+                          src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/games/button-green.png" 
                           alt="绿色按钮" 
                           className="w-full h-full object-contain"
                         />

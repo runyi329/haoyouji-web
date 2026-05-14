@@ -2987,7 +2987,7 @@ export default function LedgerDetail() {
                         title="数字B"
                       >
                         <img
-                          src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_trimmed_9f204c04.png"
+                          src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/btc-icon-trimmed.png"
                           alt="数字B"
                           className="w-full h-full object-cover rounded-full"
                         />
@@ -3139,7 +3139,7 @@ export default function LedgerDetail() {
                     )}
                     {myShortcuts.digitalB && (
                       <div className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)' }} onClick={() => { sessionStorage.setItem('ledger_back_from', String(ledgerId)); setLocation('/ledger/52'); }} title="数字B">
-                        <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_trimmed_9f204c04.png" alt="数字B" className="w-full h-full object-cover rounded-full" />
+                        <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/btc-icon-trimmed.png" alt="数字B" className="w-full h-full object-cover rounded-full" />
                       </div>
                     )}
                     {myShortcuts.ledger59 && (
