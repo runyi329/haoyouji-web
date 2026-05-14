@@ -15717,10 +15717,12 @@ ${klinesSummary}
         const targetUserId = input.viewAsUserId || ctx.user.id;
 
         // 所有人（包括管理员、超管）一律按权限记录过滤，没有被开启就看不到
+        // 劳方视角只返回 access_type='worker' 的企业（旧数据 NULL 也视为 worker）
         const [rows] = await (conn as any).execute(
           `SELECT c.id, c.name, c.tax_no as taxNo, c.address, c.phone, c.bank_name as bankName, c.bank_account as bankAccount, c.remark
            FROM aj_companies c
            INNER JOIN aj_company_access a ON a.company_id=c.id AND a.user_id=? AND a.is_enabled=1
+             AND COALESCE(a.access_type,'worker')='worker'
            WHERE c.ledger_id=? ORDER BY c.created_at ASC`,
           [targetUserId, input.ledgerId]
         );
@@ -15868,12 +15870,20 @@ ${klinesSummary}
         );
         const memberRole = (memberRows as any[])[0]?.role;
         if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        // 返回：自己创建的企业 + 被管理员授权为资方(funder)的企业（去重合并）
         const [rows] = await (conn as any).execute(
           `SELECT c.id, c.name, c.tax_no as taxNo, c.address, c.phone, c.bank_name as bankName, c.bank_account as bankAccount, c.remark, c.created_by as createdBy
            FROM aj_companies c
-           WHERE c.ledger_id=? AND c.created_by=?
+           WHERE c.ledger_id=? AND (
+             c.created_by=?
+             OR EXISTS (
+               SELECT 1 FROM aj_company_access a
+               WHERE a.company_id=c.id AND a.user_id=? AND a.is_enabled=1
+               AND COALESCE(a.access_type,'worker')='funder'
+             )
+           )
            ORDER BY c.created_at ASC`,
-          [input.ledgerId, ctx.user.id]
+          [input.ledgerId, ctx.user.id, ctx.user.id]
         );
         return rows as any[];
       }),
