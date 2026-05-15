@@ -64,7 +64,16 @@ async function main() {
     }
   }
 
-  // 1. 查询需要补全的记录
+  // 1. 先清空所有旧编号，重新按新规则生成
+  await conn.execute(`
+    UPDATE ledger_records lr
+    JOIN ledgers l ON l.id = lr.ledgerId
+    SET lr.aj_employee_no = NULL
+    WHERE l.type = 'custom_aj'
+  `);
+  console.log('✅ 已清空旧编号，重新按新规则生成');
+
+  // 2. 查询需要补全的记录
   const [records] = await conn.execute(`
     SELECT lr.id, lr.ledgerId, lr.createdBy, lr.aj_company_name
     FROM ledger_records lr
@@ -80,20 +89,7 @@ async function main() {
     return;
   }
 
-  // 2. 查询已有编号
-  const [existingRows] = await conn.execute(`
-    SELECT ledgerId, createdBy, MIN(aj_employee_no) as aj_employee_no
-    FROM ledger_records
-    WHERE aj_employee_no IS NOT NULL AND aj_employee_no != ''
-    GROUP BY ledgerId, createdBy
-  `);
-  const existingMap = new Map();
-  for (const row of existingRows) {
-    existingMap.set(`${row.ledgerId}:${row.createdBy}`, row.aj_employee_no);
-  }
-  console.log(`已有编号的用户数: ${existingMap.size}`);
-
-  // 3. 查询各账本各前缀的最大序号
+  // 3. 查询各账本各前缀的最大序号（清空后为空）
   const [maxRows] = await conn.execute(`
     SELECT ledgerId,
            SUBSTRING_INDEX(aj_employee_no, '-', 1) as prefix,
@@ -120,10 +116,7 @@ async function main() {
 
   for (const [key, recs] of groups) {
     let empNo;
-    if (existingMap.has(key)) {
-      empNo = existingMap.get(key);
-      console.log(`  用户 ${recs[0].createdBy} 账本 ${recs[0].ledgerId}: 复用已有编号 ${empNo}，${recs.length} 条`);
-    } else if (newAssignments.has(key)) {
+    if (newAssignments.has(key)) {
       empNo = newAssignments.get(key);
     } else {
       const companyName = recs[0].aj_company_name || '';
