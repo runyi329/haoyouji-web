@@ -22829,6 +22829,94 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
 
       console.error(`[getUsStockPrice] ${symbol} 所有数据源均失败`);
       return { symbol, price: 0, change: 0, currency: 'USD' };
+
+  // ========== AJ型定制账本：劳方签约接口 ==========
+  ajContract: router({
+    // 查询当前用户在指定账本的签约状态
+    getMyContract: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const [rows] = await dbConn.execute(
+          `SELECT id, ledger_id, user_id, real_name, id_card, bank_name, bank_account, signed_at FROM aj_contracts WHERE ledger_id = ? AND user_id = ? LIMIT 1`,
+          [input.ledgerId, ctx.user.id]
+        ) as any[];
+        const row = (rows as any[])[0];
+        if (!row) return { signed: false, contract: null };
+        return {
+          signed: true,
+          contract: {
+            id: row.id as number,
+            realName: row.real_name as string,
+            idCard: row.id_card as string,
+            bankName: row.bank_name as string | null,
+            bankAccount: row.bank_account as string,
+            signedAt: new Date(row.signed_at),
+          },
+        };
+      }),
+
+    // 提交签约
+    sign: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        realName: z.string().min(2).max(50),
+        idCard: z.string().min(15).max(30),
+        bankName: z.string().max(100).optional(),
+        bankAccount: z.string().min(10).max(100),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const [existing] = await dbConn.execute(
+          `SELECT id FROM aj_contracts WHERE ledger_id = ? AND user_id = ? LIMIT 1`,
+          [input.ledgerId, ctx.user.id]
+        ) as any[];
+        if ((existing as any[]).length > 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '您已签约，请勿重复操作' });
+        }
+        const now = new Date();
+        await dbConn.execute(
+          `INSERT INTO aj_contracts (ledger_id, user_id, real_name, id_card, bank_name, bank_account, signed_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [input.ledgerId, ctx.user.id, input.realName, input.idCard, input.bankName || null, input.bankAccount, now]
+        );
+        return { success: true, signedAt: now };
+      }),
+
+    // 资方查看所有签约记录（仅管理员/资方）
+    listContracts: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const [memberRows] = await dbConn.execute(
+          `SELECT role FROM ledger_members WHERE ledger_id = ? AND user_id = ? LIMIT 1`,
+          [input.ledgerId, ctx.user.id]
+        ) as any[];
+        const role = (memberRows as any[])[0]?.role;
+        if (!['admin', 'funder', 'owner'].includes(role) && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权查看签约记录' });
+        }
+        const [rows] = await dbConn.execute(
+          `SELECT c.id, c.user_id, c.real_name, c.id_card, c.bank_name, c.bank_account, c.signed_at, u.nickname
+           FROM aj_contracts c LEFT JOIN users u ON u.id = c.user_id
+           WHERE c.ledger_id = ? ORDER BY c.signed_at DESC`,
+          [input.ledgerId]
+        ) as any[];
+        return (rows as any[]).map(r => ({
+          id: r.id as number,
+          userId: r.user_id as number,
+          nickname: r.nickname as string,
+          realName: r.real_name as string,
+          idCard: r.id_card as string,
+          bankName: r.bank_name as string | null,
+          bankAccount: r.bank_account as string,
+          signedAt: new Date(r.signed_at),
+        }));
+      }),
+  }),
+
     }),
 });
 

@@ -2107,3 +2107,20 @@ export const ajCompanyAccess = mysqlTable("aj_company_access", {
   index("aj_company_access_user_idx").on(table.userId),
 ]);
 export type AjCompanyAccess = typeof ajCompanyAccess.$inferSelect;
+
+// ========== AJ型定制账本：劳方签约记录表 ==========
+export const ajContracts = mysqlTable("aj_contracts", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),
+  userId: int('user_id').notNull(),
+  realName: varchar('real_name', { length: 50 }).notNull(),
+  idCard: varchar('id_card', { length: 30 }).notNull(),
+  bankName: varchar('bank_name', { length: 100 }),
+  bankAccount: varchar('bank_account', { length: 100 }).notNull(),
+  signedAt: timestamp('signed_at', { mode: 'date' }).defaultNow().notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+  uniqueIndex("aj_contracts_ledger_user_uniq").on(table.ledgerId, table.userId),
+  index("aj_contracts_ledger_idx").on(table.ledgerId),
+]);
+export type AjContract = typeof ajContracts.$inferSelect;

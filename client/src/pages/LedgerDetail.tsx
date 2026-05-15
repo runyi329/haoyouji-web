@@ -3047,6 +3047,16 @@ export default function LedgerDetail() {
                 {/* AJ账本：刷新/返回按钮（与劳/资开关同行，仅AJ账本显示） */}
                 {isCustomAJ && (
                   <>
+                    {/* 签约按钮：仅劳方（非资方、非管理员）可见 */}
+                    {!isFunder && !isAdmin && (
+                      <button
+                        onClick={() => setLocation(`/ledger/${ledgerId}/aj-contract`)}
+                        className="flex items-center justify-center text-xs font-medium flex-shrink-0"
+                        style={{ height: 32, padding: '0 12px', borderRadius: 16, backgroundColor: 'rgba(201,168,76,0.25)', border: '1px solid rgba(201,168,76,0.6)', color: '#C9A84C' }}
+                      >
+                        签约
+                      </button>
+                    )}
                     <button
                       onClick={() => window.location.reload()}
                       className="flex items-center justify-center text-xs font-medium text-white flex-shrink-0"
