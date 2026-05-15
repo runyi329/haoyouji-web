@@ -457,18 +457,19 @@ function InvoiceListInline({
   const toast = useCenterToast();
   const utils = trpc.useUtils();
   const updateCategoryMutation = (trpc as any).ledger.ajOwnerUpdateInvoiceCategory.useMutation({
-    onSuccess: (data: any, variables: any) => {
-      setLocalCategories(prev => ({ ...prev, [variables.recordId]: variables.categoryName }));
+    onSuccess: () => {
       toast.show('类目已更新', 'success');
     },
     onError: () => toast.show('更新失败，请重试', 'error'),
   });
-
   const handleCategorySelect = useCallback((categoryName: string) => {
     if (pickerInvoiceId == null) return;
+    const invoiceId = pickerInvoiceId; // 闭包捕获当前值
     setPickerInvoiceId(null);
-    updateCategoryMutation.mutate({ ledgerId, recordId: pickerInvoiceId, categoryName });
-  }, [pickerInvoiceId, ledgerId]);
+    // 乐观更新：立即更新本地显示
+    setLocalCategories(prev => ({ ...prev, [invoiceId]: categoryName }));
+    updateCategoryMutation.mutate({ ledgerId, recordId: invoiceId, categoryName });
+  }, [pickerInvoiceId, ledgerId]);;
 
   // 搜索过滤
   const filteredInvoices = useMemo(() => {
