@@ -772,10 +772,10 @@ const AddTransaction = () => {
               </div>
             </div>
           </div>
-          {/* 可滚动内容区 */}
-          <div className="flex-1 overflow-y-auto pb-2">
+          {/* 固定内容区（不可滚动） */}
+          <div className="flex-1 overflow-hidden flex flex-col px-3 pt-2 pb-0 gap-2">
           {/* 容器一：开票信息（紧凑两行） */}
-          <div className="mx-3 mt-2 rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
+          <div className="rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
             <div className="px-3 py-3">
               {selectedCompany ? (
                 <div className="flex flex-col gap-2">
@@ -811,10 +811,10 @@ const AddTransaction = () => {
             </div>
           </div>
 
-          {/* 容器二：报销金额 + 发票凭证 */}
-          <div className="mx-3 mt-2 rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
+          {/* 容器二：报销金额 + 发票凭证（自适应高度） */}
+          <div className="rounded-2xl bg-white overflow-hidden shadow-sm flex-1 flex flex-col min-h-0" style={{ border: '1px solid #E2E8F0' }}>
             {/* 报销金额 */}
-            <div className="px-4 pt-3 pb-2" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C', minHeight: 124 }}>
+            <div className="px-4 pt-3 pb-2 flex-1 flex flex-col justify-center" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
               <div className="flex items-center gap-2 mb-1">
                 <span className="w-6 h-6 rounded-full bg-[#C9A84C] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
@@ -878,7 +878,7 @@ const AddTransaction = () => {
               )}
             </div>
             {/* 发票凭证 */}
-            <div className="px-4 py-2.5" style={{ background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+            <div className="px-4 py-2.5 flex-1 flex flex-col justify-center" style={{ background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="w-6 h-6 rounded-full bg-[#C9A84C] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>发票 / 凭证</span>
@@ -937,10 +937,10 @@ const AddTransaction = () => {
 
           {/* 容器三：费用报销明细单预览 */}
           {/* AI提示语 */}
-          <div className="mx-3 mt-2 px-3 py-1.5 rounded-xl flex-shrink-0" style={{ background: '#F0F4FF', border: '1px solid #D0DAF5' }}>
+          <div className="px-3 py-1.5 rounded-xl flex-shrink-0" style={{ background: '#F0F4FF', border: '1px solid #D0DAF5' }}>
             <span className="text-[11px]" style={{ color: '#4A5A8A' }}>以下为 <strong>AI财会助理</strong> 自动生成预览，提交后管理员可见</span>
           </div>
-          <div className="mx-3 mt-1.5 mb-2 bg-white rounded-xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 1px 8px rgba(26,43,74,0.08)', border: '1px solid #E2E8F0' }}>
+          <div className="mb-2 bg-white rounded-xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 1px 8px rgba(26,43,74,0.08)', border: '1px solid #E2E8F0' }}>
 
             {/* 顶部色条 */}
             <div style={{ height: 4, background: 'linear-gradient(90deg, #1A2B4A 0%, #C9A84C 100%)' }} />
@@ -1074,7 +1074,7 @@ const AddTransaction = () => {
             </div>
           )}
 
-          </div>{/* 关闭可滚动内容区 */}
+          </div>{/* 关闭固定内容区 */}
 
           {/* 提交按鈕（固定在底部） */}
           <div className="flex-shrink-0 px-4 pt-3 pb-4 bg-white" style={{ borderTop: '1px solid #E2E8F0' }}>
