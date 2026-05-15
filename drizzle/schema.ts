@@ -561,6 +561,7 @@ export const ledgerRecords = mysqlTable("ledger_records", {
 	ajTaxCategory: varchar('aj_tax_category', { length: 200 }),   // 资方选定的税务分类（如：现代服务-广告服务）
 	ajAccountingCode: varchar('aj_accounting_code', { length: 100 }), // 资方选定的会计科目（如：销售费用-广告费）
 	ajExpenseReason: varchar('aj_expense_reason', { length: 200 }), // 资方确认的报销事由（如：出差-客户拜访）
+	ajEmployeeNo: varchar('aj_employee_no', { length: 50 }),         // 员工编号（每用户每企业账本唯一，自动生成）
 	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 	deletedAt: timestamp('deleted_at', { mode: 'string' }),
