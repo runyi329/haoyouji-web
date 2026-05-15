@@ -817,7 +817,7 @@ const AddTransaction = () => {
             <div className="px-4 py-0 flex-1 flex flex-col justify-center" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="w-6 h-6 rounded-full bg-[#C9A84C] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
-                <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
+                <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额</span>
               </div>
               <div className="flex items-end gap-1">
                 <span className="text-2xl font-bold text-gray-400">¥</span>
