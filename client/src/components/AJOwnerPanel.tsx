@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
+import taxCategoriesRaw from "@/data/tax_categories.json";
 import {
   Building2, Pencil, Trash2, Clock, CheckCircle, XCircle,
   ChevronRight, List, X, Receipt, ChevronDown, Search
@@ -11,6 +12,113 @@ import { EXPENSE_CATEGORIES, getDefaultExpenseConfig } from "@/pages/AJCompanyMa
 
 // AJ 账本主色调（与账本首页一致）
 const AJ_COLOR = '#1A2B4A';
+
+// 税务分类数据
+const TAX_CATEGORIES = taxCategoriesRaw as Array<{
+  code: string; name: string; short: string; level: number;
+  pian: string; lei: string; zhang: string; jie: string;
+}>;
+
+// ========== 税务分类搜索弹窗 ==========
+function TaxCategoryPicker({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (name: string) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [selectedPian, setSelectedPian] = useState<string>('');
+
+  const topCategories = useMemo(() => TAX_CATEGORIES.filter(r => r.level === 1), []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim();
+    if (q) {
+      return TAX_CATEGORIES.filter(r => r.level >= 2 && (r.name.includes(q) || r.short.includes(q))).slice(0, 60);
+    }
+    if (!selectedPian) return [];
+    return TAX_CATEGORIES.filter(r => r.pian === selectedPian && r.level >= 2 && r.level <= 4);
+  }, [query, selectedPian]);
+
+  const levelLabel = (lv: number) => ['', '篇', '类', '章', '节'][lv] || '';
+  const levelIndent = (lv: number) => (lv - 2) * 12;
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: '#fff', borderRadius: '16px 16px 0 0', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* 标题栏 */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', borderBottom: '1px solid #f0f0f0' }}>
+          <span style={{ fontSize: '15px', fontWeight: 700, color: AJ_COLOR }}>选择报销类目</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
+            <X style={{ width: 18, height: 18, color: '#999' }} />
+          </button>
+        </div>
+        {/* 搜索框 */}
+        <div style={{ padding: '10px 16px 6px', position: 'relative' }}>
+          <Search style={{ position: 'absolute', left: 26, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: '#bbb' }} />
+          <input
+            autoFocus
+            value={query}
+            onChange={e => { setQuery(e.target.value); setSelectedPian(''); }}
+            placeholder="搜索类目名称..."
+            style={{ width: '100%', padding: '8px 10px 8px 32px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+          />
+        </div>
+        {/* 6大顶类快捷选 */}
+        {!query.trim() && (
+          <div style={{ display: 'flex', gap: '6px', padding: '4px 16px 8px', overflowX: 'auto', flexShrink: 0 }}>
+            {topCategories.map(cat => (
+              <button
+                key={cat.pian}
+                onClick={() => setSelectedPian(cat.pian === selectedPian ? '' : cat.pian)}
+                style={{
+                  flexShrink: 0, padding: '5px 12px', borderRadius: '20px', border: '1px solid',
+                  borderColor: selectedPian === cat.pian ? AJ_COLOR : '#e5e7eb',
+                  background: selectedPian === cat.pian ? AJ_COLOR : '#fff',
+                  color: selectedPian === cat.pian ? '#fff' : '#555',
+                  fontSize: '12px', cursor: 'pointer', fontWeight: 500,
+                }}
+              >{cat.name}</button>
+            ))}
+          </div>
+        )}
+        {/* 分类列表 */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '0 0 16px' }}>
+          {filtered.length === 0 && (
+            <div style={{ textAlign: 'center', color: '#bbb', fontSize: '13px', padding: '32px 0' }}>
+              {query.trim() ? '未找到匹配类目' : '请选择左侧大类或搜索关键词'}
+            </div>
+          )}
+          {filtered.map((cat, i) => (
+            <div
+              key={cat.code}
+              onClick={() => onSelect(cat.name)}
+              style={{
+                display: 'flex', alignItems: 'center', padding: '10px 16px',
+                paddingLeft: 16 + levelIndent(cat.level),
+                borderBottom: '1px solid #f5f5f5', cursor: 'pointer',
+                background: cat.level === 2 ? '#fafafa' : '#fff',
+              }}
+            >
+              <span style={{ fontSize: '10px', color: '#bbb', marginRight: '6px', flexShrink: 0 }}>{levelLabel(cat.level)}</span>
+              <span style={{ fontSize: '13px', color: cat.level === 2 ? AJ_COLOR : '#333', fontWeight: cat.level === 2 ? 600 : 400, flex: 1 }}>{cat.name}</span>
+              {cat.short && cat.short !== cat.name && (
+                <span style={{ fontSize: '11px', color: '#aaa', marginLeft: '6px' }}>{cat.short}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 type RequestType = 'add' | 'update' | 'delete';
 type CompanyFormData = {
@@ -192,6 +300,23 @@ function InvoiceListInline({
   const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', year: '本年' };
   const [previewImages, setPreviewImages] = useState<string[] | null>(null);
   const [previewIndex, setPreviewIndex] = useState(0);
+  const [pickerInvoiceId, setPickerInvoiceId] = useState<number | null>(null);
+  const [localCategories, setLocalCategories] = useState<Record<number, string>>({});
+  const toast = useCenterToast();
+  const utils = trpc.useUtils();
+  const updateCategoryMutation = (trpc as any).ledger.ajOwnerUpdateInvoiceCategory.useMutation({
+    onSuccess: (data: any, variables: any) => {
+      setLocalCategories(prev => ({ ...prev, [variables.recordId]: variables.categoryName }));
+      toast.show('类目已更新', 'success');
+    },
+    onError: () => toast.show('更新失败，请重试', 'error'),
+  });
+
+  const handleCategorySelect = useCallback((categoryName: string) => {
+    if (pickerInvoiceId == null) return;
+    setPickerInvoiceId(null);
+    updateCategoryMutation.mutate({ ledgerId, recordId: pickerInvoiceId, categoryName });
+  }, [pickerInvoiceId, ledgerId]);
 
   // 搜索过滤
   const filteredInvoices = useMemo(() => {
@@ -228,6 +353,12 @@ function InvoiceListInline({
             <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3" style={{ color: AJ_COLOR }} />
           </div>
         </div>
+      )}
+      {pickerInvoiceId != null && (
+        <TaxCategoryPicker
+          onSelect={handleCategorySelect}
+          onClose={() => setPickerInvoiceId(null)}
+        />
       )}
       {previewImages && (
         <ImageFullscreenViewer
@@ -288,9 +419,17 @@ function InvoiceListInline({
                     <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
                     <div style={{ fontSize: '12px', color: '#444', fontWeight: 500 }}>待确认</div>
                   </div>
-                  <div>
-                    <div style={{ fontSize: '10px', color: '#aaa' }}>报销类目</div>
-                    <div style={{ fontSize: '12px', color: '#444', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{safeStr(inv.categoryName || '—')}</div>
+                  <div
+                    onClick={e => { e.stopPropagation(); setPickerInvoiceId(inv.id); }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div style={{ fontSize: '10px', color: '#aaa', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                      报销类目
+                      <Pencil style={{ width: 8, height: 8, color: '#ccc' }} />
+                    </div>
+                    <div style={{ fontSize: '12px', color: localCategories[inv.id] || inv.categoryName ? AJ_COLOR : '#bbb', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {safeStr(localCategories[inv.id] || inv.categoryName || '点击选择')}
+                    </div>
                   </div>
                   <div>
                     <div style={{ fontSize: '10px', color: '#aaa' }}>报销凭证</div>
