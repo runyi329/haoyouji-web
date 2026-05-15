@@ -29,13 +29,14 @@ function TaxCategoryPicker({
 }) {
   const [query, setQuery] = useState('');
   const [selectedPian, setSelectedPian] = useState<string>('');
+  const [pending, setPending] = useState<string>(''); // 待确认的选中项
 
   const topCategories = useMemo(() => TAX_CATEGORIES.filter(r => r.level === 1), []);
 
   const filtered = useMemo(() => {
     const q = query.trim();
     if (q) {
-      return TAX_CATEGORIES.filter(r => r.level >= 2 && (r.name.includes(q) || r.short.includes(q))).slice(0, 60);
+      return TAX_CATEGORIES.filter(r => r.level >= 2 && (r.name.includes(q) || r.short.includes(q))).slice(0, 80);
     }
     if (!selectedPian) return [];
     return TAX_CATEGORIES.filter(r => r.pian === selectedPian && r.level >= 2 && r.level <= 4);
@@ -45,76 +46,97 @@ function TaxCategoryPicker({
   const levelIndent = (lv: number) => (lv - 2) * 12;
 
   return (
-    <div
-      style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}
-      onClick={onClose}
-    >
-      <div
-        style={{ background: '#fff', borderRadius: '16px 16px 0 0', maxHeight: '80vh', display: 'flex', flexDirection: 'column', color: '#333' }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* 标题栏 */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', borderBottom: '1px solid #f0f0f0' }}>
-          <span style={{ fontSize: '15px', fontWeight: 700, color: AJ_COLOR }}>选择报销类目</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
-            <X style={{ width: 18, height: 18, color: '#999' }} />
-          </button>
-        </div>
-        {/* 搜索框 */}
-        <div style={{ padding: '10px 16px 6px', position: 'relative' }}>
-          <Search style={{ position: 'absolute', left: 26, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: '#bbb' }} />
-          <input
-            autoFocus
-            value={query}
-            onChange={e => { setQuery(e.target.value); setSelectedPian(''); }}
-            placeholder="搜索类目名称..."
-            style={{ width: '100%', padding: '8px 10px 8px 32px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '13px', outline: 'none', boxSizing: 'border-box', color: '#333', background: '#fff' }}
-          />
-        </div>
-        {/* 6大顶类快捷选 */}
-        {!query.trim() && (
-          <div style={{ display: 'flex', gap: '6px', padding: '4px 16px 8px', overflowX: 'auto', flexShrink: 0 }}>
-            {topCategories.map(cat => (
-              <button
-                key={cat.pian}
-                onClick={() => setSelectedPian(cat.pian === selectedPian ? '' : cat.pian)}
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#f5f6f8', display: 'flex', flexDirection: 'column', color: '#333' }}>
+      {/* 顶部导航栏 */}
+      <div style={{ background: '#1A2B4A', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}>
+          <ChevronRight style={{ width: 20, height: 20, color: '#fff', transform: 'rotate(180deg)' }} />
+        </button>
+        <span style={{ fontSize: '16px', fontWeight: 700, color: '#fff', flex: 1 }}>选择报销类目</span>
+      </div>
+
+      {/* 搜索框 */}
+      <div style={{ padding: '10px 16px', background: '#fff', borderBottom: '1px solid #eee', flexShrink: 0, position: 'relative' }}>
+        <Search style={{ position: 'absolute', left: 28, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: '#bbb' }} />
+        <input
+          autoFocus
+          value={query}
+          onChange={e => { setQuery(e.target.value); setSelectedPian(''); setPending(''); }}
+          placeholder="搜索类目名称，如：广告、差旅、办公..."
+          style={{ width: '100%', padding: '9px 12px 9px 34px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none', boxSizing: 'border-box', color: '#333', background: '#f9f9f9' }}
+        />
+      </div>
+
+      {/* 6大顶类快捷选 */}
+      {!query.trim() && (
+        <div style={{ display: 'flex', gap: '8px', padding: '10px 16px', overflowX: 'auto', flexShrink: 0, background: '#fff', borderBottom: '1px solid #eee' }}>
+          {topCategories.map(cat => (
+            <button
+              key={cat.pian}
+              onClick={() => { setSelectedPian(cat.pian === selectedPian ? '' : cat.pian); setPending(''); }}
               style={{
-                flexShrink: 0, padding: '5px 12px', borderRadius: '20px', border: '1px solid',
-                borderColor: selectedPian === cat.pian ? AJ_COLOR : '#e5e7eb',
-                background: selectedPian === cat.pian ? AJ_COLOR : '#f5f5f5',
-                color: selectedPian === cat.pian ? '#fff' : '#333',
-                fontSize: '12px', cursor: 'pointer', fontWeight: 500,
+                flexShrink: 0, padding: '6px 14px', borderRadius: '20px', border: '1px solid',
+                borderColor: selectedPian === cat.pian ? '#1A2B4A' : '#ddd',
+                background: selectedPian === cat.pian ? '#1A2B4A' : '#f5f5f5',
+                color: selectedPian === cat.pian ? '#fff' : '#444',
+                fontSize: '13px', cursor: 'pointer', fontWeight: 500,
               }}
-              >{cat.name}</button>
-            ))}
-          </div>
-        )}
-        {/* 分类列表 */}
-        <div style={{ overflowY: 'auto', flex: 1, padding: '0 0 16px' }}>
-          {filtered.length === 0 && (
-            <div style={{ textAlign: 'center', color: '#bbb', fontSize: '13px', padding: '32px 0' }}>
-              {query.trim() ? '未找到匹配类目' : '请选择左侧大类或搜索关键词'}
-            </div>
-          )}
-          {filtered.map((cat, i) => (
-            <div
-              key={cat.code}
-              onClick={() => onSelect(cat.name)}
-              style={{
-                display: 'flex', alignItems: 'center', padding: '10px 16px',
-                paddingLeft: 16 + levelIndent(cat.level),
-                borderBottom: '1px solid #f5f5f5', cursor: 'pointer',
-                background: cat.level === 2 ? '#fafafa' : '#fff',
-              }}
-            >
-              <span style={{ fontSize: '10px', color: '#bbb', marginRight: '6px', flexShrink: 0 }}>{levelLabel(cat.level)}</span>
-              <span style={{ fontSize: '13px', color: cat.level === 2 ? AJ_COLOR : '#333', fontWeight: cat.level === 2 ? 600 : 400, flex: 1 }}>{cat.name}</span>
-              {cat.short && cat.short !== cat.name && (
-                <span style={{ fontSize: '11px', color: '#aaa', marginLeft: '6px' }}>{cat.short}</span>
-              )}
-            </div>
+            >{cat.name}</button>
           ))}
         </div>
+      )}
+
+      {/* 已选提示条 */}
+      {pending && (
+        <div style={{ background: '#EEF2FF', padding: '8px 16px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '12px', color: '#666' }}>已选：</span>
+          <span style={{ fontSize: '13px', color: '#1A2B4A', fontWeight: 600, flex: 1 }}>{pending}</span>
+          <button onClick={() => setPending('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}>
+            <X style={{ width: 14, height: 14, color: '#999' }} />
+          </button>
+        </div>
+      )}
+
+      {/* 分类列表 */}
+      <div style={{ overflowY: 'auto', flex: 1 }}>
+        {filtered.length === 0 && (
+          <div style={{ textAlign: 'center', color: '#bbb', fontSize: '14px', padding: '48px 0' }}>
+            {query.trim() ? '未找到匹配类目' : '请选择上方大类或搜索关键词'}
+          </div>
+        )}
+        {filtered.map((cat) => (
+          <div
+            key={cat.code}
+            onClick={() => setPending(cat.name)}
+            style={{
+              display: 'flex', alignItems: 'center', padding: '12px 16px',
+              paddingLeft: 16 + levelIndent(cat.level),
+              borderBottom: '1px solid #f0f0f0', cursor: 'pointer',
+              background: pending === cat.name ? '#EEF2FF' : (cat.level === 2 ? '#fafafa' : '#fff'),
+            }}
+          >
+            <span style={{ fontSize: '10px', color: '#bbb', marginRight: '6px', flexShrink: 0, minWidth: '14px' }}>{levelLabel(cat.level)}</span>
+            <span style={{ fontSize: '14px', color: pending === cat.name ? '#1A2B4A' : (cat.level === 2 ? '#1A2B4A' : '#444'), fontWeight: (pending === cat.name || cat.level === 2) ? 600 : 400, flex: 1 }}>{cat.name}</span>
+            {pending === cat.name && (
+              <CheckCircle style={{ width: 16, height: 16, color: '#1A2B4A', flexShrink: 0 }} />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* 底部确定按鈕 */}
+      <div style={{ padding: '12px 16px', background: '#fff', borderTop: '1px solid #eee', flexShrink: 0 }}>
+        <button
+          onClick={() => { if (pending) { onSelect(pending); } }}
+          disabled={!pending}
+          style={{
+            width: '100%', padding: '13px', borderRadius: '10px', border: 'none',
+            background: pending ? '#1A2B4A' : '#ccc',
+            color: '#fff', fontSize: '15px', fontWeight: 700, cursor: pending ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {pending ? `确定选择「${pending}」` : '请先选择一个类目'}
+        </button>
       </div>
     </div>
   );
