@@ -50,7 +50,7 @@ function TaxCategoryPicker({
       onClick={onClose}
     >
       <div
-        style={{ background: '#fff', borderRadius: '16px 16px 0 0', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}
+        style={{ background: '#fff', borderRadius: '16px 16px 0 0', maxHeight: '80vh', display: 'flex', flexDirection: 'column', color: '#333' }}
         onClick={e => e.stopPropagation()}
       >
         {/* 标题栏 */}
@@ -68,7 +68,7 @@ function TaxCategoryPicker({
             value={query}
             onChange={e => { setQuery(e.target.value); setSelectedPian(''); }}
             placeholder="搜索类目名称..."
-            style={{ width: '100%', padding: '8px 10px 8px 32px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+            style={{ width: '100%', padding: '8px 10px 8px 32px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '13px', outline: 'none', boxSizing: 'border-box', color: '#333', background: '#fff' }}
           />
         </div>
         {/* 6大顶类快捷选 */}
@@ -78,13 +78,13 @@ function TaxCategoryPicker({
               <button
                 key={cat.pian}
                 onClick={() => setSelectedPian(cat.pian === selectedPian ? '' : cat.pian)}
-                style={{
-                  flexShrink: 0, padding: '5px 12px', borderRadius: '20px', border: '1px solid',
-                  borderColor: selectedPian === cat.pian ? AJ_COLOR : '#e5e7eb',
-                  background: selectedPian === cat.pian ? AJ_COLOR : '#fff',
-                  color: selectedPian === cat.pian ? '#fff' : '#555',
-                  fontSize: '12px', cursor: 'pointer', fontWeight: 500,
-                }}
+              style={{
+                flexShrink: 0, padding: '5px 12px', borderRadius: '20px', border: '1px solid',
+                borderColor: selectedPian === cat.pian ? AJ_COLOR : '#e5e7eb',
+                background: selectedPian === cat.pian ? AJ_COLOR : '#f5f5f5',
+                color: selectedPian === cat.pian ? '#fff' : '#333',
+                fontSize: '12px', cursor: 'pointer', fontWeight: 500,
+              }}
               >{cat.name}</button>
             ))}
           </div>
