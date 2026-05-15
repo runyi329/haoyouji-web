@@ -781,7 +781,7 @@ const AddTransaction = () => {
                 <div className="flex flex-col gap-2">
                   {/* 第一行：公司名称 + 复制按鈕 */}
                   <div className="flex items-center gap-3">
-                    <div className="flex-1 min-w-0 text-base font-bold text-[#1A2B4A] leading-tight" style={{ wordBreak: 'break-all' }}>{selectedCompany.name}</div>
+                    <div className="flex-1 min-w-0 text-lg font-bold text-[#1A2B4A] leading-tight" style={{ wordBreak: 'break-all' }}>{selectedCompany.name}</div>
                     <button className="w-8 h-8 flex-shrink-0 rounded-md border border-gray-300 text-gray-500 flex items-center justify-center active:bg-gray-100" onClick={() => { navigator.clipboard.writeText(selectedCompany.name); toast.success('\u5df2\u590d\u5236\u4f01\u4e1a\u540d\u79f0'); }} title="\u590d\u5236\u4f01\u4e1a\u540d\u79f0">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                     </button>
@@ -789,7 +789,7 @@ const AddTransaction = () => {
                   {/* 第二行：税号 + 复制按鈕 */}
                   {selectedCompany.taxNo && (
                     <div className="flex items-center gap-3">
-                      <div className="flex-1 min-w-0 text-base font-bold text-[#1A2B4A] leading-tight" style={{ wordBreak: 'break-all' }}>{selectedCompany.taxNo}</div>
+                      <div className="flex-1 min-w-0 text-lg font-bold text-[#1A2B4A] leading-tight" style={{ wordBreak: 'break-all' }}>{selectedCompany.taxNo}</div>
                       <button className="w-8 h-8 flex-shrink-0 rounded-md border border-gray-300 text-gray-500 flex items-center justify-center active:bg-gray-100" onClick={() => { navigator.clipboard.writeText(selectedCompany.taxNo); toast.success('\u5df2\u590d\u5236\u7a0e\u53f7'); }} title="\u590d\u5236\u7a0e\u53f7">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                       </button>
