@@ -22830,7 +22830,6 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       console.error(`[getUsStockPrice] ${symbol} 所有数据源均失败`);
       return { symbol, price: 0, change: 0, currency: 'USD' };
     }),
-  }),
 
   // ========== AJ型定制账本：劳方签约接口 ==========
   ajContract: router({
