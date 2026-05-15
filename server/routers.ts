@@ -16367,6 +16367,7 @@ ${klinesSummary}
 
         const finalSql = `SELECT lr.id, lr.amount, lr.recordDate as recordDate, lr.description, lr.categoryId,
                   lr.aj_status as ajStatus, lr.createdAt as createdAt,
+                  lr.images as images,
                   u.username as creatorUsername, u.name as creatorName,
                   lm.nickname as creatorNickname,
                   ac.name as companyName

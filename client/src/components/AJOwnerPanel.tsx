@@ -142,6 +142,38 @@ function ExpenseTypePanel({
   );
 }
 
+// ========== 图片全屏预览弹窗 ==========
+function ImageFullscreenViewer({ images, initialIndex, onClose }: { images: string[]; initialIndex: number; onClose: () => void }) {
+  const [current, setCurrent] = useState(initialIndex);
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
+      onClick={onClose}
+    >
+      <img
+        src={images[current]}
+        alt="凭证"
+        style={{ maxWidth: '96vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px' }}
+        onClick={e => e.stopPropagation()}
+      />
+      {images.length > 1 && (
+        <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }} onClick={e => e.stopPropagation()}>
+          {images.map((img, i) => (
+            <div
+              key={i}
+              onClick={() => setCurrent(i)}
+              style={{ width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', border: i === current ? '2px solid #fff' : '2px solid transparent', cursor: 'pointer' }}
+            >
+              <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{ marginTop: '20px', color: 'rgba(255,255,255,0.6)', fontSize: '13px' }}>点击任意处关闭</div>
+    </div>
+  );
+}
+
 // ========== 企业发票列表（内嵌展开，带时间筛选下拉框） ==========
 function InvoiceListInline({
   ledgerId,
@@ -158,6 +190,8 @@ function InvoiceListInline({
   const period = externalPeriod ?? internalPeriod;
   const { data: invoices, isLoading } = (trpc as any).ledger.ajOwnerGetCompanyInvoices.useQuery({ ledgerId, companyId, period });
   const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', year: '本年' };
+  const [previewImages, setPreviewImages] = useState<string[] | null>(null);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   // 搜索过滤
   const filteredInvoices = useMemo(() => {
@@ -194,6 +228,13 @@ function InvoiceListInline({
             <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3" style={{ color: AJ_COLOR }} />
           </div>
         </div>
+      )}
+      {previewImages && (
+        <ImageFullscreenViewer
+          images={previewImages}
+          initialIndex={previewIndex}
+          onClose={() => setPreviewImages(null)}
+        />
       )}
       {isLoading ? (
         <div className="text-center py-8 text-gray-400 text-sm">加载中...</div>
@@ -241,15 +282,46 @@ function InvoiceListInline({
                 </div>
                 {/* 虚线分隔 */}
                 <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
-                {/* 两格信息 */}
+                {/* 两格信息：报销事由 + 报销凭证 */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginBottom: '8px' }}>
                   <div>
-                    <div style={{ fontSize: '10px', color: '#aaa' }}>报销类型</div>
-                    <div style={{ fontSize: '12px', color: '#444', fontWeight: 500 }}>{safeStr(inv.category || '—')}</div>
+                    <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
+                    <div style={{ fontSize: '12px', color: '#444', fontWeight: 500 }}>待确认</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
-                    <div style={{ fontSize: '12px', color: '#444', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{safeStr(inv.description || '待确认')}</div>
+                    <div style={{ fontSize: '10px', color: '#aaa' }}>报销凭证</div>
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '2px' }}>
+                      {(() => {
+                        let imgs: string[] = [];
+                        try { imgs = JSON.parse(inv.images || '[]'); } catch {}
+                        if (!Array.isArray(imgs) || imgs.length === 0) {
+                          return <span style={{ fontSize: '11px', color: '#bbb' }}>无</span>;
+                        }
+                        const show = imgs.slice(0, 3);
+                        const extra = imgs.length - 3;
+                        return (
+                          <>
+                            {show.map((url: string, i: number) => (
+                              <div
+                                key={i}
+                                onClick={e => { e.stopPropagation(); setPreviewImages(imgs); setPreviewIndex(i); }}
+                                style={{ width: '28px', height: '28px', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(26,43,74,0.15)', cursor: 'pointer', flexShrink: 0 }}
+                              >
+                                <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              </div>
+                            ))}
+                            {extra > 0 && (
+                              <div
+                                onClick={e => { e.stopPropagation(); setPreviewImages(imgs); setPreviewIndex(3); }}
+                                style={{ width: '28px', height: '28px', borderRadius: '4px', background: 'rgba(26,43,74,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#1A2B4A', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}
+                              >
+                                +{extra}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
                 {/* 虚线分隔 */}
