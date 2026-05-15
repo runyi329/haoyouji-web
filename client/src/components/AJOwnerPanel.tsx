@@ -205,7 +205,7 @@ function TaxCategoryPicker({
                           onClick={() => handleSelect(item, levelIdx)}
                           style={{
                             padding: '7px 14px',
-                            borderRadius: '20px',
+                            borderRadius: '4px',
                             border: '1.5px solid',
                             borderColor: isSelected ? color : '#e0e0e0',
                             background: isSelected ? color : '#fff',
@@ -225,7 +225,7 @@ function TaxCategoryPicker({
                               fontSize: '10px',
                               color: isSelected ? 'rgba(255,255,255,0.75)' : '#bbb',
                               background: isSelected ? 'rgba(255,255,255,0.2)' : '#f0f0f0',
-                              borderRadius: '10px',
+                              borderRadius: '3px',
                               padding: '1px 5px',
                               lineHeight: 1.4,
                             }}>{childCount}</span>
@@ -304,23 +304,24 @@ function AccountingCodePicker({
   onSelect: (name: string) => void;
   onClose: () => void;
 }) {
-  const [selectedSubject, setSelectedSubject] = useState<typeof ACCOUNTING_SUBJECTS[0] | null>(null);
+  // expandedCode: 当前展开的一级科目 code（树形手风琴）
+  const [expandedCode, setExpandedCode] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
 
   const handleSubjectClick = (subject: typeof ACCOUNTING_SUBJECTS[0]) => {
     if (subject.children.length === 0) {
       // 无明细，直接选中
       setPending(subject.name);
-      setSelectedSubject(subject);
+      setExpandedCode(null);
     } else {
-      setSelectedSubject(subject);
+      // toggle 展开/收起
+      setExpandedCode(prev => prev === subject.code ? null : subject.code);
       setPending(null);
     }
   };
 
-  const handleDetailClick = (detail: string) => {
-    if (!selectedSubject) return;
-    setPending(`${selectedSubject.name}-${detail}`);
+  const handleDetailClick = (subject: typeof ACCOUNTING_SUBJECTS[0], detail: string) => {
+    setPending(`${subject.name}-${detail}`);
   };
 
   return (
@@ -333,76 +334,81 @@ function AccountingCodePicker({
         <span style={{ fontSize: '16px', fontWeight: 700, color: '#fff', flex: 1 }}>选择会计科目</span>
       </div>
 
-      {/* 内容区域 */}
-      <div style={{ overflowY: 'auto', flex: 1, padding: '16px' }}>
-        {/* 一级科目 */}
-        <div style={{ marginBottom: '16px' }}>
-          <div style={{ fontSize: '11px', color: '#999', marginBottom: '8px', fontWeight: 500 }}>一级科目（点击展开明细）</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {ACCOUNTING_SUBJECTS.map((subject, idx) => {
-              const isSelected = selectedSubject?.code === subject.code;
-              const colors = ['#1A2B4A','#2563EB','#7C3AED','#059669','#D97706','#DC2626','#0891B2','#BE185D','#65A30D','#EA580C'];
-              const color = colors[idx % colors.length];
-              return (
-                <button
-                  key={subject.code}
-                  onClick={() => handleSubjectClick(subject)}
-                  style={{
-                    padding: '7px 14px', borderRadius: '20px', border: '1.5px solid',
-                    borderColor: isSelected ? color : '#e0e0e0',
-                    background: isSelected ? color : '#fff',
-                    color: isSelected ? '#fff' : '#444',
-                    fontSize: '13px', fontWeight: isSelected ? 600 : 400,
-                    cursor: 'pointer', transition: 'all 0.15s',
-                    display: 'flex', alignItems: 'center', gap: '4px',
-                  }}
-                >
-                  <span style={{ fontSize: '10px', opacity: 0.7 }}>{subject.code}</span>
-                  <span>{subject.name}</span>
-                  {subject.children.length > 0 && (
-                    <span style={{ fontSize: '10px', color: isSelected ? 'rgba(255,255,255,0.75)' : '#bbb', background: isSelected ? 'rgba(255,255,255,0.2)' : '#f0f0f0', borderRadius: '10px', padding: '1px 5px' }}>
-                      {subject.children.length}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 明细科目（如果选中的一级科目有明细）*/}
-        {selectedSubject && selectedSubject.children.length > 0 && (
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ fontSize: '11px', color: '#999', marginBottom: '8px', fontWeight: 500 }}>
-              {selectedSubject.name} — 明细科目
+      {/* 内容区域：树形列表 */}
+      <div style={{ overflowY: 'auto', flex: 1, padding: '8px 0 8px' }}>
+        <div style={{ fontSize: '11px', color: '#999', padding: '8px 16px 4px', fontWeight: 500 }}>一级科目（点击有角标的科目可展开明细）</div>
+        {ACCOUNTING_SUBJECTS.map((subject, idx) => {
+          const isExpanded = expandedCode === subject.code;
+          const isSubjectPending = pending === subject.name;
+          const hasChildren = subject.children.length > 0;
+          const colors = ['#1A2B4A','#2563EB','#7C3AED','#059669','#D97706','#DC2626','#0891B2','#BE185D','#65A30D','#EA580C'];
+          const color = colors[idx % colors.length];
+          return (
+            <div key={subject.code}>
+              {/* 一级科目行 */}
+              <div
+                onClick={() => handleSubjectClick(subject)}
+                style={{
+                  display: 'flex', alignItems: 'center', padding: '11px 16px',
+                  borderBottom: '1px solid #f0f0f0', cursor: 'pointer',
+                  background: isExpanded ? '#EEF2FF' : (isSubjectPending ? '#EEF2FF' : '#fff'),
+                }}
+              >
+                <span style={{ fontSize: '11px', color: '#aaa', marginRight: '6px', flexShrink: 0, minWidth: '36px' }}>{subject.code}</span>
+                <span style={{ fontSize: '14px', color: isExpanded || isSubjectPending ? color : '#333', fontWeight: isExpanded || isSubjectPending ? 600 : 400, flex: 1 }}>{subject.name}</span>
+                {hasChildren ? (
+                  <>
+                    <span style={{
+                      fontSize: '10px',
+                      color: isExpanded ? '#fff' : '#bbb',
+                      background: isExpanded ? color : '#f0f0f0',
+                      borderRadius: '3px',
+                      padding: '1px 5px',
+                      marginRight: '6px',
+                    }}>{subject.children.length}</span>
+                    <ChevronRight style={{ width: 14, height: 14, color: '#bbb', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }} />
+                  </>
+                ) : (
+                  isSubjectPending && <CheckCircle style={{ width: 15, height: 15, color, flexShrink: 0 }} />
+                )}
+              </div>
+              {/* 展开的明细科目（内联，手风琴）*/}
+              {isExpanded && hasChildren && (
+                <div style={{ background: '#f7f8fc', borderBottom: '1px solid #e8eaf0', padding: '10px 16px 10px 52px' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                    {subject.children.map((detail, dIdx) => {
+                      const fullName = `${subject.name}-${detail}`;
+                      const isDetailPending = pending === fullName;
+                      const dColor = colors[dIdx % colors.length];
+                      return (
+                        <button
+                          key={detail}
+                          onClick={() => handleDetailClick(subject, detail)}
+                          style={{
+                            padding: '5px 12px',
+                            borderRadius: '4px',
+                            border: '1.5px solid',
+                            borderColor: isDetailPending ? dColor : '#d8dce8',
+                            background: isDetailPending ? dColor : '#fff',
+                            color: isDetailPending ? '#fff' : '#555',
+                            fontSize: '12px',
+                            fontWeight: isDetailPending ? 600 : 400,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s',
+                            display: 'flex', alignItems: 'center', gap: '3px',
+                          }}
+                        >
+                          {detail}
+                          {isDetailPending && <CheckCircle style={{ width: 11, height: 11, color: '#fff' }} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {selectedSubject.children.map((detail, idx) => {
-                const fullName = `${selectedSubject.name}-${detail}`;
-                const isSelected = pending === fullName;
-                const colors = ['#1A2B4A','#2563EB','#7C3AED','#059669','#D97706','#DC2626','#0891B2','#BE185D','#65A30D','#EA580C'];
-                const color = colors[idx % colors.length];
-                return (
-                  <button
-                    key={detail}
-                    onClick={() => handleDetailClick(detail)}
-                    style={{
-                      padding: '7px 14px', borderRadius: '20px', border: '1.5px solid',
-                      borderColor: isSelected ? color : '#e0e0e0',
-                      background: isSelected ? color : '#fff',
-                      color: isSelected ? '#fff' : '#444',
-                      fontSize: '13px', fontWeight: isSelected ? 600 : 400,
-                      cursor: 'pointer', transition: 'all 0.15s',
-                    }}
-                  >
-                    {detail}
-                    {isSelected && <CheckCircle style={{ width: 13, height: 13, color: '#fff', marginLeft: '4px' }} />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+          );
+        })}
       </div>
 
       {/* 已选提示 + 确定按钮 */}
