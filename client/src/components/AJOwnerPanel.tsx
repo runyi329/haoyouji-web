@@ -784,6 +784,15 @@ function InvoiceListInline({
     setLocalExpenseReasons(prev => ({ ...prev, [invoiceId]: reason }));
     updateExpenseReasonMutation.mutate({ ledgerId, recordId: invoiceId, expenseReason: reason });
   }, [reasonPickerInvoiceId, ledgerId]);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
+  const approveMutation = (trpc as any).ledger.approveTransaction.useMutation({
+    onSuccess: () => {
+      toast.show('审批通过', 'success');
+      setApprovingId(null);
+      utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId, companyId });
+    },
+    onError: () => { toast.show('审批失败，请重试', 'error'); setApprovingId(null); },
+  });
 
   // 搜索过滤
   const filteredInvoices = useMemo(() => {
@@ -892,44 +901,16 @@ function InvoiceListInline({
                 </div>
                 {/* 虚线分隔 */}
                 <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
-                {/* 四格信息：报销事由 | 报销类目 | 会计科目 | 报销凭证 */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px 6px', marginBottom: '8px' }}>
-                  <div
-                    onClick={e => { e.stopPropagation(); setReasonPickerInvoiceId(inv.id); }}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div style={{ fontSize: '10px', color: '#aaa', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                      报销事由
-                      <Pencil style={{ width: 8, height: 8, color: '#ccc' }} />
-                    </div>
-                    <div style={{ fontSize: '11px', color: localExpenseReasons[inv.id] || inv.ajExpenseReason ? '#D97706' : '#bbb', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {safeStr(localExpenseReasons[inv.id] || inv.ajExpenseReason || '点击选择')}
+                {/* 六格信息：第一行（申请日期、报销凭证、员工编号），第二行（报销事由✏️、报销类目✏️、会计科目✏️） */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px 8px', marginBottom: '8px' }}>
+                  {/* 第一行：申请日期 */}
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#aaa' }}>申请日期</div>
+                    <div style={{ fontSize: '11px', color: '#444', fontWeight: 500 }}>
+                      {(() => { const d = new Date(inv.createdAt || inv.recordDate || Date.now()); return `${d.getFullYear()}年${String(d.getMonth()+1).padStart(2,'0')}月${String(d.getDate()).padStart(2,'0')}日`; })()}
                     </div>
                   </div>
-                  <div
-                    onClick={e => { e.stopPropagation(); setPickerInvoiceId(inv.id); }}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div style={{ fontSize: '10px', color: '#aaa', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                      报销类目
-                      <Pencil style={{ width: 8, height: 8, color: '#ccc' }} />
-                    </div>
-                    <div style={{ fontSize: '11px', color: localCategories[inv.id] || inv.ajTaxCategory ? AJ_COLOR : '#bbb', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {safeStr(localCategories[inv.id] || inv.ajTaxCategory || '点击选择')}
-                    </div>
-                  </div>
-                  <div
-                    onClick={e => { e.stopPropagation(); setAccountingPickerInvoiceId(inv.id); }}
-                    style={{ cursor: 'pointer' }}
-                  >
-                    <div style={{ fontSize: '10px', color: '#aaa', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                      会计科目
-                      <Pencil style={{ width: 8, height: 8, color: '#ccc' }} />
-                    </div>
-                    <div style={{ fontSize: '11px', color: localAccountingCodes[inv.id] || inv.ajAccountingCode ? '#059669' : '#bbb', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {safeStr(localAccountingCodes[inv.id] || inv.ajAccountingCode || '自动匹配')}
-                    </div>
-                  </div>
+                  {/* 第一行：报销凭证 */}
                   <div>
                     <div style={{ fontSize: '10px', color: '#aaa' }}>报销凭证</div>
                     <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '2px' }}>
@@ -947,7 +928,7 @@ function InvoiceListInline({
                               <div
                                 key={i}
                                 onClick={e => { e.stopPropagation(); setPreviewImages(imgs); setPreviewIndex(i); }}
-                                style={{ width: '28px', height: '28px', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(26,43,74,0.15)', cursor: 'pointer', flexShrink: 0 }}
+                                style={{ width: '22px', height: '22px', borderRadius: '3px', overflow: 'hidden', border: '1px solid rgba(26,43,74,0.15)', cursor: 'pointer', flexShrink: 0 }}
                               >
                                 <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                               </div>
@@ -955,7 +936,7 @@ function InvoiceListInline({
                             {extra > 0 && (
                               <div
                                 onClick={e => { e.stopPropagation(); setPreviewImages(imgs); setPreviewIndex(3); }}
-                                style={{ width: '28px', height: '28px', borderRadius: '4px', background: 'rgba(26,43,74,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: '#1A2B4A', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}
+                                style={{ width: '22px', height: '22px', borderRadius: '3px', background: 'rgba(26,43,74,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: '#1A2B4A', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}
                               >
                                 +{extra}
                               </div>
@@ -965,16 +946,57 @@ function InvoiceListInline({
                       })()}
                     </div>
                   </div>
+                  {/* 第一行：员工编号 */}
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#aaa' }}>员工编号</div>
+                    <div style={{ fontSize: '11px', fontWeight: 500, color: '#444', fontFamily: 'monospace' }}>
+                      {safeStr(inv.ajEmployeeNo || '—')}
+                    </div>
+                  </div>
+                  {/* 第二行：报销事由（可编辑） */}
+                  <div
+                    onClick={e => { e.stopPropagation(); setReasonPickerInvoiceId(inv.id); }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div style={{ fontSize: '10px', color: '#aaa', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                      报销事由
+                      <Pencil style={{ width: 8, height: 8, color: '#ccc' }} />
+                    </div>
+                    <div style={{ fontSize: '11px', color: localExpenseReasons[inv.id] || inv.ajExpenseReason ? '#D97706' : '#bbb', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {safeStr(localExpenseReasons[inv.id] || inv.ajExpenseReason || '点击选择')}
+                    </div>
+                  </div>
+                  {/* 第二行：报销类目（可编辑） */}
+                  <div
+                    onClick={e => { e.stopPropagation(); setPickerInvoiceId(inv.id); }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div style={{ fontSize: '10px', color: '#aaa', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                      报销类目
+                      <Pencil style={{ width: 8, height: 8, color: '#ccc' }} />
+                    </div>
+                    <div style={{ fontSize: '11px', color: localCategories[inv.id] || inv.ajTaxCategory ? AJ_COLOR : '#bbb', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {safeStr(localCategories[inv.id] || inv.ajTaxCategory || '点击选择')}
+                    </div>
+                  </div>
+                  {/* 第二行：会计科目（可编辑） */}
+                  <div
+                    onClick={e => { e.stopPropagation(); setAccountingPickerInvoiceId(inv.id); }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div style={{ fontSize: '10px', color: '#aaa', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                      会计科目
+                      <Pencil style={{ width: 8, height: 8, color: '#ccc' }} />
+                    </div>
+                    <div style={{ fontSize: '11px', color: localAccountingCodes[inv.id] || inv.ajAccountingCode ? '#059669' : '#bbb', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {safeStr(localAccountingCodes[inv.id] || inv.ajAccountingCode || '自动匹配')}
+                    </div>
+                  </div>
                 </div>
                 {/* 虚线分隔 */}
                 <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
-                {/* 底部：日期时间 + 状态 */}
+                {/* 底部：状态 + 审批通过按钮 */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: '11px', color: '#aaa' }}>
-                    {inv.createdAt
-                      ? new Date(inv.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-                      : safeStr(inv.recordDate || inv.date)}
-                  </div>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                     <span style={{
                       width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0, display: 'inline-block',
@@ -987,6 +1009,23 @@ function InvoiceListInline({
                       {inv.ajStatus === 'approved' ? '已审核' : inv.ajStatus === 'rejected' ? '已拒绝' : '待审核'}
                     </span>
                   </div>
+                  {(!inv.ajStatus || inv.ajStatus === 'pending') && (
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        setApprovingId(inv.id);
+                        approveMutation.mutate({ transactionId: inv.id, action: 'approved' });
+                      }}
+                      disabled={approvingId === inv.id}
+                      style={{
+                        background: '#1A2B4A', color: '#fff', border: 'none', borderRadius: '4px',
+                        padding: '4px 12px', fontSize: '12px', fontWeight: 600, cursor: approvingId === inv.id ? 'not-allowed' : 'pointer',
+                        opacity: approvingId === inv.id ? 0.6 : 1, letterSpacing: '0.5px'
+                      }}
+                    >
+                      {approvingId === inv.id ? '处理中...' : '审批通过'}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
