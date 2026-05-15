@@ -3027,39 +3027,36 @@ export async function addTransaction(data: {
 
   // AJ账本：自动生成员工编号（每用户每账本唯一，一旦生成不变，格式：公司拼音缩写-4位数字）
   if (isAJRecord) {
-    // 先查该用户在该账本是否已有编号（包括已删除的记录，确保移除再加入编号不变）
-    const existingEmployeeNo = await (db as any)
-      .execute(
-        `SELECT aj_employee_no FROM ledger_records
-         WHERE ledgerId = ? AND createdBy = ? AND aj_employee_no IS NOT NULL LIMIT 1`,
-        [data.ledgerId, data.userId]
-      ).then((rows: any) => {
-        const r = Array.isArray(rows) ? rows : rows[0];
-        return Array.isArray(r) ? r[0]?.aj_employee_no : r?.aj_employee_no;
-      }).catch(() => null);
-
-    if (existingEmployeeNo) {
-      (recordData as any).ajEmployeeNo = existingEmployeeNo;
-    } else {
-      // 生成新编号：公司名拼音缩写 + 该公司内的序号
-      const companyName = data.ajCompanyName || '';
-      const prefix = getCompanyInitials(companyName);
-      // 查该账本内同前缀的最大序号
-      const maxNo = await (db as any)
-        .execute(
-          `SELECT MAX(CAST(SUBSTRING_INDEX(aj_employee_no, '-', -1) AS UNSIGNED)) as maxNum
-           FROM ledger_records
-           WHERE ledgerId = ? AND aj_employee_no LIKE ? AND aj_employee_no IS NOT NULL`,
-          [data.ledgerId, `${prefix}-%`]
-        ).then((rows: any) => {
-          const r = Array.isArray(rows) ? rows : rows[0];
-          const row = Array.isArray(r) ? r[0] : r;
-          return row?.maxNum || 0;
-        }).catch(() => 0);
-      const nextNum = (Number(maxNo) || 0) + 1;
-      (recordData as any).ajEmployeeNo = `${prefix}-${String(nextNum).padStart(4, '0')}`;
+    try {
+      const conn = await getDbConnection();
+      if (conn) {
+        // 先查该用户在该账本是否已有编号（包括已删除的记录，确保移除再加入编号不变）
+        const [existingRows] = await (conn as any).execute(
+          `SELECT aj_employee_no FROM ledger_records WHERE ledgerId = ? AND createdBy = ? AND aj_employee_no IS NOT NULL LIMIT 1`,
+          [data.ledgerId, data.userId]
+        ) as any;
+        const existingEmployeeNo = existingRows?.[0]?.aj_employee_no || null;
+        if (existingEmployeeNo) {
+          (recordData as any).ajEmployeeNo = existingEmployeeNo;
+        } else {
+          // 生成新编号：公司名拼音缩写 + 该账本内的序号
+          const companyName = data.ajCompanyName || '';
+          const prefix = getCompanyInitials(companyName);
+          // 查该账本内同前缀的最大序号
+          const [maxRows] = await (conn as any).execute(
+            `SELECT MAX(CAST(SUBSTRING_INDEX(aj_employee_no, '-', -1) AS UNSIGNED)) as maxNum FROM ledger_records WHERE ledgerId = ? AND aj_employee_no LIKE ? AND aj_employee_no IS NOT NULL`,
+            [data.ledgerId, `${prefix}-%`]
+          ) as any;
+          const maxNo = maxRows?.[0]?.maxNum || 0;
+          const nextNum = (Number(maxNo) || 0) + 1;
+          (recordData as any).ajEmployeeNo = `${prefix}-${String(nextNum).padStart(4, '0')}`;
+        }
+      }
+    } catch (e: any) {
+      console.error('[addTransaction] 员工编号生成失败:', e.message);
+      // 生成失败不影响主流程，编号留空
     }
-  }
+  }}
 
   const encryptedRecordData = await encryptFields(db, 'ledger_records', recordData, LEDGER_RECORD_ENCRYPT_FIELDS);
 
