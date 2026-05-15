@@ -1,0 +1,54 @@
+name: 更新COS密钥并测试
+on:
+  workflow_dispatch:
+jobs:
+  update:
+    name: 更新COS密钥
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH更新并测试
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          script: |
+            cd /root/haoyouji-web
+            echo "=== 当前COS配置 ==="
+            grep "COS_" .env 2>/dev/null | sed 's/=.*/=***/' || echo "未找到COS配置"
+            echo "=== 更新COS_SECRET_ID ==="
+            if grep -q "^COS_SECRET_ID=" .env 2>/dev/null; then
+              sed -i "s|^COS_SECRET_ID=.*|COS_SECRET_ID=${{ secrets.COS_SECRET_ID_NEW }}|" .env
+            else
+              echo "COS_SECRET_ID=${{ secrets.COS_SECRET_ID_NEW }}" >> .env
+            fi
+            echo "=== 更新COS_SECRET_KEY ==="
+            if grep -q "^COS_SECRET_KEY=" .env 2>/dev/null; then
+              sed -i "s|^COS_SECRET_KEY=.*|COS_SECRET_KEY=${{ secrets.COS_SECRET_KEY_NEW }}|" .env
+            else
+              echo "COS_SECRET_KEY=${{ secrets.COS_SECRET_KEY_NEW }}" >> .env
+            fi
+            echo "=== 更新后COS配置 ==="
+            grep "COS_" .env 2>/dev/null | sed 's/=.*/=***/'
+            echo "=== 重启服务 ==="
+            pm2 restart haoyouji
+            sleep 3
+            pm2 status haoyouji
+            echo "=== 测试COS上传 ==="
+            node -e "
+              require('dotenv').config();
+              const COS = require('cos-nodejs-sdk-v5');
+              const cos = new COS({ SecretId: process.env.COS_SECRET_ID, SecretKey: process.env.COS_SECRET_KEY });
+              console.log('SecretId前8位:', process.env.COS_SECRET_ID ? process.env.COS_SECRET_ID.substring(0,8) + '...' : '未设置');
+              cos.putObject({
+                Bucket: 'haoyouji-images-1396946788',
+                Region: 'ap-shanghai',
+                Key: 'test/connection-test.txt',
+                Body: Buffer.from('test'),
+                ContentType: 'text/plain'
+              }, (err, data) => {
+                if (err) { console.log('COS上传测试失败:', err.message, err.code); }
+                else { console.log('COS上传测试成功! ETag:', data.ETag); }
+              });
+            "
