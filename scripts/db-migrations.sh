@@ -136,3 +136,6 @@ echo "✅ ledger_records.aj_tax_category 字段确认完成"
 echo "📊 确保 ledger_records.aj_accounting_code 字段存在（AJ账本会计科目）..."
 $DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='ledger_records' AND COLUMN_NAME='aj_accounting_code'; SET @s = IF(@c=0, 'ALTER TABLE ledger_records ADD COLUMN aj_accounting_code VARCHAR(100) NULL COMMENT \\'资方选定的会计科目\\' AFTER aj_tax_category', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
 echo "✅ ledger_records.aj_accounting_code 字段确认完成"
+echo "📊 确保 ledger_records.aj_expense_reason 字段存在（AJ账本报销事由）..."
+$DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='ledger_records' AND COLUMN_NAME='aj_expense_reason'; SET @s = IF(@c=0, 'ALTER TABLE ledger_records ADD COLUMN aj_expense_reason VARCHAR(200) NULL COMMENT \\'资方选定的报销事由\\' AFTER aj_accounting_code', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
+echo "✅ ledger_records.aj_expense_reason 字段确认完成"

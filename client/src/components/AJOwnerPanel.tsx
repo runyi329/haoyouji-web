@@ -440,6 +440,116 @@ function AccountingCodePicker({
   );
 }
 
+// ========== 预设报销事由数据 ==========
+const PRESET_EXPENSE_REASONS = [
+  { group: '差旅类', items: ['出差-客户拜访', '出差-项目驻场', '出差-参加会议', '出差-培训学习', '出差-展会参展'] },
+  { group: '日常运营类', items: ['办公用品采购', '设备购置', '软件订阅', '快递邮寄', '水电物业'] },
+  { group: '业务拓展类', items: ['客户招待', '业务推广', '合同履约', '市场调研'] },
+  { group: '行政后勤类', items: ['员工福利', '车辆费用', '房租支付', '维修费用'] },
+];
+
+// ========== 报销事由选择器 ==========
+function ExpenseReasonPicker({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (reason: string) => void;
+  onClose: () => void;
+}) {
+  const [customInput, setCustomInput] = useState('');
+  const [pending, setPending] = useState<string | null>(null);
+
+  const handleConfirm = () => {
+    const val = customInput.trim() || pending;
+    if (val) onSelect(val);
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#f5f6f8', display: 'flex', flexDirection: 'column', color: '#333' }}>
+      {/* 顶部导航栏 */}
+      <div style={{ background: '#1A2B4A', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}>
+          <ChevronRight style={{ width: 20, height: 20, color: '#fff', transform: 'rotate(180deg)' }} />
+        </button>
+        <span style={{ fontSize: '16px', fontWeight: 700, color: '#fff', flex: 1 }}>选择报销事由</span>
+      </div>
+
+      {/* 自定义输入框 */}
+      <div style={{ padding: '12px 16px', background: '#fff', borderBottom: '1px solid #eee', flexShrink: 0 }}>
+        <div style={{ fontSize: '11px', color: '#999', marginBottom: '6px' }}>手动输入自定义事由</div>
+        <input
+          value={customInput}
+          onChange={e => { setCustomInput(e.target.value); setPending(null); }}
+          placeholder="输入报销事由，如：出差北京拜访客户..."
+          style={{ width: '100%', padding: '9px 12px', borderRadius: '6px', border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none', boxSizing: 'border-box', color: '#333', background: '#f9f9f9' }}
+        />
+      </div>
+
+      {/* 预设列表 */}
+      <div style={{ overflowY: 'auto', flex: 1, padding: '8px 0' }}>
+        {PRESET_EXPENSE_REASONS.map(group => (
+          <div key={group.group}>
+            <div style={{ fontSize: '11px', color: '#999', padding: '8px 16px 4px', fontWeight: 500 }}>{group.group}</div>
+            <div style={{ padding: '0 16px 8px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {group.items.map(item => {
+                const isSelected = pending === item && !customInput.trim();
+                return (
+                  <button
+                    key={item}
+                    onClick={() => { setPending(item); setCustomInput(''); }}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '4px',
+                      border: '1.5px solid',
+                      borderColor: isSelected ? '#D97706' : '#e0e0e0',
+                      background: isSelected ? '#D97706' : '#fff',
+                      color: isSelected ? '#fff' : '#444',
+                      fontSize: '13px',
+                      fontWeight: isSelected ? 600 : 400,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      display: 'flex', alignItems: 'center', gap: '4px',
+                    }}
+                  >
+                    {item}
+                    {isSelected && <CheckCircle style={{ width: 12, height: 12, color: '#fff' }} />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 已选提示 + 确定按钮 */}
+      <div style={{ padding: '10px 16px 16px', background: '#fff', borderTop: '1px solid #eee', flexShrink: 0 }}>
+        {(pending || customInput.trim()) && (
+          <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '12px', color: '#888' }}>已选：</span>
+            <span style={{ fontSize: '13px', color: '#D97706', fontWeight: 600, flex: 1 }}>{customInput.trim() || pending}</span>
+            <button onClick={() => { setPending(null); setCustomInput(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}>
+              <X style={{ width: 13, height: 13, color: '#bbb' }} />
+            </button>
+          </div>
+        )}
+        <button
+          onClick={handleConfirm}
+          disabled={!pending && !customInput.trim()}
+          style={{
+            width: '100%', padding: '13px', borderRadius: '10px', border: 'none',
+            background: (pending || customInput.trim()) ? '#D97706' : '#e0e0e0',
+            color: (pending || customInput.trim()) ? '#fff' : '#aaa',
+            fontSize: '15px', fontWeight: 700,
+            cursor: (pending || customInput.trim()) ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {(pending || customInput.trim()) ? `确定「${customInput.trim() || pending}」` : '请选择或输入事由'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 type RequestType = 'add' | 'update' | 'delete';
 type CompanyFormData = {
   name: string;
@@ -624,6 +734,8 @@ function InvoiceListInline({
   const [localCategories, setLocalCategories] = useState<Record<number, string>>({});
   const [accountingPickerInvoiceId, setAccountingPickerInvoiceId] = useState<number | null>(null);
   const [localAccountingCodes, setLocalAccountingCodes] = useState<Record<number, string>>({});
+  const [reasonPickerInvoiceId, setReasonPickerInvoiceId] = useState<number | null>(null);
+  const [localExpenseReasons, setLocalExpenseReasons] = useState<Record<number, string>>({});
   const toast = useCenterToast();
   const utils = trpc.useUtils();
   const updateCategoryMutation = (trpc as any).ledger.ajOwnerUpdateInvoiceCategory.useMutation({
@@ -635,6 +747,12 @@ function InvoiceListInline({
   const updateAccountingCodeMutation = (trpc as any).ledger.ajOwnerUpdateAccountingCode.useMutation({
     onSuccess: () => {
       toast.show('会计科目已更新', 'success');
+    },
+    onError: () => toast.show('更新失败，请重试', 'error'),
+  });
+  const updateExpenseReasonMutation = (trpc as any).ledger.ajOwnerUpdateExpenseReason.useMutation({
+    onSuccess: () => {
+      toast.show('报销事由已更新', 'success');
     },
     onError: () => toast.show('更新失败，请重试', 'error'),
   });
@@ -659,6 +777,13 @@ function InvoiceListInline({
     setLocalAccountingCodes(prev => ({ ...prev, [invoiceId]: code }));
     updateAccountingCodeMutation.mutate({ ledgerId, recordId: invoiceId, accountingCode: code });
   }, [accountingPickerInvoiceId, ledgerId]);
+  const handleExpenseReasonSelect = useCallback((reason: string) => {
+    if (reasonPickerInvoiceId == null) return;
+    const invoiceId = reasonPickerInvoiceId;
+    setReasonPickerInvoiceId(null);
+    setLocalExpenseReasons(prev => ({ ...prev, [invoiceId]: reason }));
+    updateExpenseReasonMutation.mutate({ ledgerId, recordId: invoiceId, expenseReason: reason });
+  }, [reasonPickerInvoiceId, ledgerId]);
 
   // 搜索过滤
   const filteredInvoices = useMemo(() => {
@@ -706,6 +831,12 @@ function InvoiceListInline({
         <AccountingCodePicker
           onSelect={handleAccountingCodeSelect}
           onClose={() => setAccountingPickerInvoiceId(null)}
+        />
+      )}
+      {reasonPickerInvoiceId != null && (
+        <ExpenseReasonPicker
+          onSelect={handleExpenseReasonSelect}
+          onClose={() => setReasonPickerInvoiceId(null)}
         />
       )}
       {previewImages && (
@@ -763,9 +894,17 @@ function InvoiceListInline({
                 <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
                 {/* 四格信息：报销事由 | 报销类目 | 会计科目 | 报销凭证 */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px 6px', marginBottom: '8px' }}>
-                  <div>
-                    <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
-                    <div style={{ fontSize: '11px', color: '#444', fontWeight: 500 }}>待确认</div>
+                  <div
+                    onClick={e => { e.stopPropagation(); setReasonPickerInvoiceId(inv.id); }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div style={{ fontSize: '10px', color: '#aaa', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                      报销事由
+                      <Pencil style={{ width: 8, height: 8, color: '#ccc' }} />
+                    </div>
+                    <div style={{ fontSize: '11px', color: localExpenseReasons[inv.id] || inv.ajExpenseReason ? '#D97706' : '#bbb', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {safeStr(localExpenseReasons[inv.id] || inv.ajExpenseReason || '点击选择')}
+                    </div>
                   </div>
                   <div
                     onClick={e => { e.stopPropagation(); setPickerInvoiceId(inv.id); }}
