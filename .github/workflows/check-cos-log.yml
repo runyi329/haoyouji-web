@@ -1,0 +1,22 @@
+name: 检查COS上传日志
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    name: 检查日志
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH检查
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          script: |
+            echo "=== PM2日志中的COS上传记录 ==="
+            pm2 logs haoyouji --nostream --lines 200 2>/dev/null | grep -E "\[COS\]|uploadLedgerImage|上传" | tail -30
+            echo "=== COS相关错误 ==="
+            pm2 logs haoyouji --nostream --lines 500 2>/dev/null | grep -i "error\|Error\|失败\|COS_SECRET\|SecretId\|SecretKey" | grep -i "cos\|upload\|secret" | tail -20
+            echo "=== 检查.env中COS配置 ==="
+            cd /root/haoyouji-web && grep "COS_" .env 2>/dev/null | sed 's/=.*/=***/'
