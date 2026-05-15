@@ -19,7 +19,43 @@ const TAX_CATEGORIES = taxCategoriesRaw as Array<{
   pian: string; lei: string; zhang: string; jie: string;
 }>;
 
-// ========== 税务分类搜索弹窗 ==========
+// 预计算每个节点的子节点数量
+const childCountMap = (() => {
+  const map: Record<string, number> = {};
+  for (const item of TAX_CATEGORIES) {
+    if (item.level === 1) continue;
+    // 找父节点：level-1 的节点，且 pian/lei/zhang/jie 前缀匹配
+    for (const parent of TAX_CATEGORIES) {
+      if (parent.level !== item.level - 1) continue;
+      // 通过 code 前缀判断父子关系（父 code 是子 code 的前缀，去掉尾部0）
+      const pCode = parent.code.replace(/0+$/, '');
+      const cCode = item.code.replace(/0+$/, '');
+      if (cCode.startsWith(pCode) && cCode.length > pCode.length) {
+        map[parent.code] = (map[parent.code] || 0) + 1;
+        break;
+      }
+    }
+  }
+  return map;
+})();
+
+// 根据父节点 code 获取直接子节点
+function getChildren(parentCode: string, parentLevel: number) {
+  const pCode = parentCode.replace(/0+$/, '');
+  return TAX_CATEGORIES.filter(item => {
+    if (item.level !== parentLevel + 1) return false;
+    const cCode = item.code.replace(/0+$/, '');
+    return cCode.startsWith(pCode) && cCode.length > pCode.length;
+  });
+}
+
+// 颜色主题（与账本一致）
+const LEVEL_COLORS = [
+  ['#1A2B4A', '#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626'],
+  ['#1A2B4A', '#2563EB', '#7C3AED', '#059669', '#D97706', '#DC2626', '#0891B2', '#BE185D'],
+];
+
+// ========== 税务分类选择器（账本胶囊风格）==========
 function TaxCategoryPicker({
   onSelect,
   onClose,
@@ -28,22 +64,57 @@ function TaxCategoryPicker({
   onClose: () => void;
 }) {
   const [query, setQuery] = useState('');
-  const [selectedPian, setSelectedPian] = useState<string>('');
-  const [pending, setPending] = useState<string>(''); // 待确认的选中项
+  // selectedPath: 每一层选中的节点 code，如 ['1000000000000000000', '1010000000000000000', ...]
+  const [selectedPath, setSelectedPath] = useState<string[]>([]);
+  const [pending, setPending] = useState<{ code: string; name: string } | null>(null);
 
-  const topCategories = useMemo(() => TAX_CATEGORIES.filter(r => r.level === 1), []);
+  // 顶层6大类
+  const topLevel = useMemo(() => TAX_CATEGORIES.filter(r => r.level === 1), []);
 
-  const filtered = useMemo(() => {
-    const q = query.trim();
-    if (q) {
-      return TAX_CATEGORIES.filter(r => r.level >= 2 && (r.name.includes(q) || r.short.includes(q))).slice(0, 80);
+  // 根据 selectedPath 构建各层级的候选列表
+  const levels = useMemo(() => {
+    const result: Array<{ items: typeof TAX_CATEGORIES; selectedCode: string | null }> = [];
+    // 第0层：顶层6大类
+    result.push({ items: topLevel, selectedCode: selectedPath[0] || null });
+    // 后续层：根据上一层选中的节点展开子节点
+    for (let i = 0; i < selectedPath.length; i++) {
+      const parentCode = selectedPath[i];
+      const parentItem = TAX_CATEGORIES.find(r => r.code === parentCode);
+      if (!parentItem) break;
+      const children = getChildren(parentCode, parentItem.level);
+      if (children.length === 0) break;
+      result.push({ items: children, selectedCode: selectedPath[i + 1] || null });
     }
-    if (!selectedPian) return [];
-    return TAX_CATEGORIES.filter(r => r.pian === selectedPian && r.level >= 2 && r.level <= 4);
-  }, [query, selectedPian]);
+    return result;
+  }, [selectedPath, topLevel]);
 
-  const levelLabel = (lv: number) => ['', '篇', '类', '章', '节'][lv] || '';
-  const levelIndent = (lv: number) => (lv - 2) * 12;
+  // 搜索结果
+  const searchResults = useMemo(() => {
+    const q = query.trim();
+    if (!q) return [];
+    return TAX_CATEGORIES.filter(r => r.name.includes(q) || r.short.includes(q)).slice(0, 80);
+  }, [query]);
+
+  const handleSelect = (item: typeof TAX_CATEGORIES[0], level: number) => {
+    // 如果已选中同一个，取消选中
+    if (selectedPath[level] === item.code) {
+      setSelectedPath(selectedPath.slice(0, level));
+      setPending(null);
+      return;
+    }
+    const newPath = [...selectedPath.slice(0, level), item.code];
+    setSelectedPath(newPath);
+    // 检查是否有子节点
+    const children = getChildren(item.code, item.level);
+    if (children.length === 0) {
+      // 叶子节点，设为待选
+      setPending({ code: item.code, name: item.name });
+    } else {
+      setPending(null);
+    }
+  };
+
+  const levelNames = ['篇','类','章','节','条','款','项','目','子目','细目'];
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#f5f6f8', display: 'flex', flexDirection: 'column', color: '#333' }}>
@@ -59,83 +130,142 @@ function TaxCategoryPicker({
       <div style={{ padding: '10px 16px', background: '#fff', borderBottom: '1px solid #eee', flexShrink: 0, position: 'relative' }}>
         <Search style={{ position: 'absolute', left: 28, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: '#bbb' }} />
         <input
-          autoFocus
           value={query}
-          onChange={e => { setQuery(e.target.value); setSelectedPian(''); setPending(''); }}
+          onChange={e => { setQuery(e.target.value); setSelectedPath([]); setPending(null); }}
           placeholder="搜索类目名称，如：广告、差旅、办公..."
           style={{ width: '100%', padding: '9px 12px 9px 34px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '14px', outline: 'none', boxSizing: 'border-box', color: '#333', background: '#f9f9f9' }}
         />
       </div>
 
-      {/* 6大顶类快捷选 */}
-      {!query.trim() && (
-        <div style={{ display: 'flex', gap: '8px', padding: '10px 16px', overflowX: 'auto', flexShrink: 0, background: '#fff', borderBottom: '1px solid #eee' }}>
-          {topCategories.map(cat => (
-            <button
-              key={cat.pian}
-              onClick={() => { setSelectedPian(cat.pian === selectedPian ? '' : cat.pian); setPending(''); }}
-              style={{
-                flexShrink: 0, padding: '6px 14px', borderRadius: '20px', border: '1px solid',
-                borderColor: selectedPian === cat.pian ? '#1A2B4A' : '#ddd',
-                background: selectedPian === cat.pian ? '#1A2B4A' : '#f5f5f5',
-                color: selectedPian === cat.pian ? '#fff' : '#444',
-                fontSize: '13px', cursor: 'pointer', fontWeight: 500,
-              }}
-            >{cat.name}</button>
-          ))}
-        </div>
-      )}
-
-      {/* 已选提示条 */}
-      {pending && (
-        <div style={{ background: '#EEF2FF', padding: '8px 16px', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '12px', color: '#666' }}>已选：</span>
-          <span style={{ fontSize: '13px', color: '#1A2B4A', fontWeight: 600, flex: 1 }}>{pending}</span>
-          <button onClick={() => setPending('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}>
-            <X style={{ width: 14, height: 14, color: '#999' }} />
-          </button>
-        </div>
-      )}
-
-      {/* 分类列表 */}
-      <div style={{ overflowY: 'auto', flex: 1 }}>
-        {filtered.length === 0 && (
-          <div style={{ textAlign: 'center', color: '#bbb', fontSize: '14px', padding: '48px 0' }}>
-            {query.trim() ? '未找到匹配类目' : '请选择上方大类或搜索关键词'}
+      {/* 内容区域 */}
+      <div style={{ overflowY: 'auto', flex: 1, padding: '0 0 8px' }}>
+        {query.trim() ? (
+          /* 搜索模式：列表展示 */
+          <div>
+            {searchResults.length === 0 && (
+              <div style={{ textAlign: 'center', color: '#bbb', fontSize: '14px', padding: '48px 0' }}>未找到匹配类目</div>
+            )}
+            {searchResults.map(cat => {
+              const isSelected = pending?.code === cat.code;
+              const childCount = childCountMap[cat.code] || 0;
+              return (
+                <div
+                  key={cat.code}
+                  onClick={() => {
+                    if (childCount === 0) {
+                      setPending({ code: cat.code, name: cat.name });
+                    } else {
+                      // 有子节点，直接选中也可以
+                      setPending({ code: cat.code, name: cat.name });
+                    }
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', padding: '11px 16px',
+                    borderBottom: '1px solid #f0f0f0', cursor: 'pointer',
+                    background: isSelected ? '#EEF2FF' : '#fff',
+                  }}
+                >
+                  <span style={{ fontSize: '10px', color: '#aaa', marginRight: '6px', flexShrink: 0, minWidth: '16px' }}>
+                    {levelNames[cat.level - 1]}
+                  </span>
+                  <span style={{ fontSize: '14px', color: isSelected ? '#1A2B4A' : '#333', fontWeight: isSelected ? 600 : 400, flex: 1 }}>{cat.name}</span>
+                  {childCount > 0 && <span style={{ fontSize: '11px', color: '#bbb', marginLeft: '4px' }}>{childCount}个子类</span>}
+                  {isSelected && <CheckCircle style={{ width: 16, height: 16, color: '#1A2B4A', flexShrink: 0, marginLeft: '6px' }} />}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* 浏览模式：账本风格胶囊逐级展开 */
+          <div style={{ padding: '16px' }}>
+            {levels.map((level, levelIdx) => {
+              const levelName = levelNames[levelIdx];
+              return (
+                <div key={levelIdx} style={{ marginBottom: '16px' }}>
+                  <div style={{ fontSize: '11px', color: '#999', marginBottom: '8px', fontWeight: 500, letterSpacing: '0.05em' }}>
+                    {levelName}级分类
+                    {levelIdx === 0 && <span style={{ color: '#bbb', fontWeight: 400 }}>（点击展开子类）</span>}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {level.items.map((item, itemIdx) => {
+                      const isSelected = level.selectedCode === item.code;
+                      const childCount = childCountMap[item.code] || 0;
+                      const isLeaf = childCount === 0;
+                      const isPending = pending?.code === item.code;
+                      // 胶囊颜色：选中用主色，未选用浅灰
+                      const colors = [
+                        '#1A2B4A','#2563EB','#7C3AED','#059669','#D97706','#DC2626',
+                        '#0891B2','#BE185D','#65A30D','#EA580C',
+                      ];
+                      const color = colors[itemIdx % colors.length];
+                      return (
+                        <button
+                          key={item.code}
+                          onClick={() => handleSelect(item, levelIdx)}
+                          style={{
+                            padding: '7px 14px',
+                            borderRadius: '20px',
+                            border: '1.5px solid',
+                            borderColor: isSelected ? color : '#e0e0e0',
+                            background: isSelected ? color : '#fff',
+                            color: isSelected ? '#fff' : '#444',
+                            fontSize: '13px',
+                            fontWeight: isSelected ? 600 : 400,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                          }}
+                        >
+                          <span>{item.name}</span>
+                          {childCount > 0 && (
+                            <span style={{
+                              fontSize: '10px',
+                              color: isSelected ? 'rgba(255,255,255,0.75)' : '#bbb',
+                              background: isSelected ? 'rgba(255,255,255,0.2)' : '#f0f0f0',
+                              borderRadius: '10px',
+                              padding: '1px 5px',
+                              lineHeight: 1.4,
+                            }}>{childCount}</span>
+                          )}
+                          {isPending && isLeaf && (
+                            <CheckCircle style={{ width: 13, height: 13, color: isSelected ? '#fff' : '#1A2B4A' }} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
-        {filtered.map((cat) => (
-          <div
-            key={cat.code}
-            onClick={() => setPending(cat.name)}
-            style={{
-              display: 'flex', alignItems: 'center', padding: '12px 16px',
-              paddingLeft: 16 + levelIndent(cat.level),
-              borderBottom: '1px solid #f0f0f0', cursor: 'pointer',
-              background: pending === cat.name ? '#EEF2FF' : (cat.level === 2 ? '#fafafa' : '#fff'),
-            }}
-          >
-            <span style={{ fontSize: '10px', color: '#bbb', marginRight: '6px', flexShrink: 0, minWidth: '14px' }}>{levelLabel(cat.level)}</span>
-            <span style={{ fontSize: '14px', color: pending === cat.name ? '#1A2B4A' : (cat.level === 2 ? '#1A2B4A' : '#444'), fontWeight: (pending === cat.name || cat.level === 2) ? 600 : 400, flex: 1 }}>{cat.name}</span>
-            {pending === cat.name && (
-              <CheckCircle style={{ width: 16, height: 16, color: '#1A2B4A', flexShrink: 0 }} />
-            )}
-          </div>
-        ))}
       </div>
 
-      {/* 底部确定按鈕 */}
-      <div style={{ padding: '12px 16px', background: '#fff', borderTop: '1px solid #eee', flexShrink: 0 }}>
+      {/* 已选提示 + 确定按鈕 */}
+      <div style={{ padding: '10px 16px 16px', background: '#fff', borderTop: '1px solid #eee', flexShrink: 0 }}>
+        {pending && (
+          <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '12px', color: '#888' }}>已选：</span>
+            <span style={{ fontSize: '13px', color: '#1A2B4A', fontWeight: 600, flex: 1 }}>{pending.name}</span>
+            <button onClick={() => setPending(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}>
+              <X style={{ width: 13, height: 13, color: '#bbb' }} />
+            </button>
+          </div>
+        )}
         <button
-          onClick={() => { if (pending) { onSelect(pending); } }}
+          onClick={() => { if (pending) { onSelect(pending.name); } }}
           disabled={!pending}
           style={{
             width: '100%', padding: '13px', borderRadius: '10px', border: 'none',
-            background: pending ? '#1A2B4A' : '#ccc',
-            color: '#fff', fontSize: '15px', fontWeight: 700, cursor: pending ? 'pointer' : 'not-allowed',
+            background: pending ? '#1A2B4A' : '#e0e0e0',
+            color: pending ? '#fff' : '#aaa',
+            fontSize: '15px', fontWeight: 700,
+            cursor: pending ? 'pointer' : 'not-allowed',
           }}
         >
-          {pending ? `确定选择「${pending}」` : '请先选择一个类目'}
+          {pending ? `确定「${pending.name}」` : '请先选择一个类目'}
         </button>
       </div>
     </div>
