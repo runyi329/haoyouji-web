@@ -5541,14 +5541,7 @@ export default function LedgerDetail() {
                       <div
                         key={record.id}
                         style={{ filter: 'drop-shadow(0 2px 8px rgba(168,0,0,0.15))' }}
-                        className="cursor-pointer mb-3"
-                        onClick={() => {
-                          if ((user as any)?.username === 'jiang') {
-                            setLocation(`/ledger/${ledgerId}/transaction/${record.id}`);
-                          } else {
-                            toast.error('无权限查看详情');
-                          }
-                        }}
+                        className="mb-3"
                       >
                         <div style={{
                           background: '#FDFCF7',
