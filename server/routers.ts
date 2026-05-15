@@ -16399,9 +16399,9 @@ ${klinesSummary}
       .mutation(async ({ ctx, input }) => {
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
-        // 验证当前用户是该账本的资方成员
+        // 验证当前用户是该账本的成员
         const [memberRows] = await (conn as any).execute(
-          `SELECT lm.id, lm.role FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? AND lm.deleted_at IS NULL LIMIT 1`,
+          `SELECT lm.id, lm.role FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? LIMIT 1`,
           [input.ledgerId, ctx.user.id]
         ) as any;
         if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
@@ -16439,7 +16439,7 @@ ${klinesSummary}
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
-          `SELECT lm.id FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? AND lm.deleted_at IS NULL LIMIT 1`,
+          `SELECT lm.id FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? LIMIT 1`,
           [input.ledgerId, ctx.user.id]
         ) as any;
         if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
@@ -16461,7 +16461,7 @@ ${klinesSummary}
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
-          `SELECT lm.id FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? AND lm.deleted_at IS NULL LIMIT 1`,
+          `SELECT lm.id FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? LIMIT 1`,
           [input.ledgerId, ctx.user.id]
         ) as any;
         if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
@@ -16483,7 +16483,7 @@ ${klinesSummary}
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
         const [memberRows] = await (conn as any).execute(
-          `SELECT lm.id FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? AND lm.deleted_at IS NULL LIMIT 1`,
+          `SELECT lm.id FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? LIMIT 1`,
           [input.ledgerId, ctx.user.id]
         ) as any;
         if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
