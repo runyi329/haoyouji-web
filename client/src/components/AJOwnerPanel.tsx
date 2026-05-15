@@ -741,18 +741,24 @@ function InvoiceListInline({
   const updateCategoryMutation = (trpc as any).ledger.ajOwnerUpdateInvoiceCategory.useMutation({
     onSuccess: () => {
       toast.show('类目已更新', 'success');
+      utils.ledger.getTransactions.invalidate();
+      utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId, companyId });
     },
     onError: () => toast.show('更新失败，请重试', 'error'),
   });
   const updateAccountingCodeMutation = (trpc as any).ledger.ajOwnerUpdateAccountingCode.useMutation({
     onSuccess: () => {
       toast.show('会计科目已更新', 'success');
+      utils.ledger.getTransactions.invalidate();
+      utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId, companyId });
     },
     onError: () => toast.show('更新失败，请重试', 'error'),
   });
   const updateExpenseReasonMutation = (trpc as any).ledger.ajOwnerUpdateExpenseReason.useMutation({
     onSuccess: () => {
       toast.show('报销事由已更新', 'success');
+      utils.ledger.getTransactions.invalidate();
+      utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId, companyId });
     },
     onError: () => toast.show('更新失败，请重试', 'error'),
   });
