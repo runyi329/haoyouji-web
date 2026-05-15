@@ -22879,16 +22879,11 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         if ((existing as any[]).length > 0) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '您已签约，请勿重复操作' });
         }
-        // 上传签名图片到S3
+        // 上传签名图片到腾讯云COS
         let signatureUrl = '';
         try {
-          const { storagePut } = await import('./storage');
-          const base64Data = input.signatureImage.replace(/^data:image\/\w+;base64,/, '');
-          const buffer = Buffer.from(base64Data, 'base64');
-          const randomSuffix = Math.random().toString(36).substring(2, 10);
-          const fileKey = `signatures/${ctx.user.id}-${input.ledgerId}-${randomSuffix}.png`;
-          const result = await storagePut(fileKey, buffer, 'image/png');
-          signatureUrl = result.url;
+          const { uploadImageToCOS } = await import('./cos-upload');
+          signatureUrl = await uploadImageToCOS(input.signatureImage, 'signatures');
         } catch (e) {
           console.error('签名图片上传失败:', e);
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '签名图片上传失败，请重试' });
