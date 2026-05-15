@@ -814,8 +814,8 @@ const AddTransaction = () => {
           {/* 容器二：报销金额 + 发票凭证（自适应高度） */}
           <div className="rounded-2xl bg-white overflow-hidden shadow-sm flex-1 flex flex-col min-h-0" style={{ border: '1px solid #E2E8F0' }}>
             {/* 报销金额 */}
-            <div className="px-4 pt-3 pb-2 flex-1 flex flex-col justify-center" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
-              <div className="flex items-center gap-2 mb-1">
+            <div className="px-4 py-0 flex-1 flex flex-col justify-center" style={{ borderBottom: '1px solid #E8D5A3', background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+              <div className="flex items-center gap-2 mb-2">
                 <span className="w-6 h-6 rounded-full bg-[#C9A84C] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>报销金额（元）</span>
               </div>
@@ -878,7 +878,7 @@ const AddTransaction = () => {
               )}
             </div>
             {/* 发票凭证 */}
-            <div className="px-4 py-2.5 flex-1 flex flex-col justify-center" style={{ background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
+            <div className="px-4 py-0 flex-1 flex flex-col justify-center" style={{ background: '#FEF9EC', borderLeft: '4px solid #C9A84C' }}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="w-6 h-6 rounded-full bg-[#C9A84C] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
                 <span className="text-xs font-bold tracking-wider" style={{ color: '#8B6914' }}>发票 / 凭证</span>
