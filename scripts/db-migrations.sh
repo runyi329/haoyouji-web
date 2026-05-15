@@ -130,3 +130,9 @@ echo "✅ users.balance 字段确认完成"
 echo "💰 确保 balance_history 表存在（钱包明细/报销奖励记录）..."
 $DB_CMD -e "CREATE TABLE IF NOT EXISTS balance_history (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, amount DECIMAL(20,8) NOT NULL COMMENT '变动金额（正数增加，负数减少）', type ENUM('recharge','consume','refund','reward','withdraw') NOT NULL, related_id INT DEFAULT NULL COMMENT '关联订单/账目ID', balance DECIMAL(20,8) NOT NULL COMMENT '变动后余额', description TEXT DEFAULT NULL, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX balance_history_user_id_idx (user_id), INDEX balance_history_type_idx (type))" || true
 echo "✅ balance_history 表确认完成"
+echo "📊 确保 ledger_records.aj_tax_category 字段存在（AJ账本税务分类）..."
+$DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='ledger_records' AND COLUMN_NAME='aj_tax_category'; SET @s = IF(@c=0, 'ALTER TABLE ledger_records ADD COLUMN aj_tax_category VARCHAR(200) NULL COMMENT \\'资方选定的税务分类\\' AFTER aj_approve_comment', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
+echo "✅ ledger_records.aj_tax_category 字段确认完成"
+echo "📊 确保 ledger_records.aj_accounting_code 字段存在（AJ账本会计科目）..."
+$DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='ledger_records' AND COLUMN_NAME='aj_accounting_code'; SET @s = IF(@c=0, 'ALTER TABLE ledger_records ADD COLUMN aj_accounting_code VARCHAR(100) NULL COMMENT \\'资方选定的会计科目\\' AFTER aj_tax_category', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
+echo "✅ ledger_records.aj_accounting_code 字段确认完成"
