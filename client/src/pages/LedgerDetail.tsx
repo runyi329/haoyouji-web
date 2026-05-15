@@ -5592,11 +5592,11 @@ export default function LedgerDetail() {
                             <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
 
                             {/* 四格信息网格 */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginBottom: '8px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px 8px', marginBottom: '8px' }}>
                               <div>
                                 <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
                                 <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#444' }}>
-                                  {(record as any).ajExpenseReason || '待AI会计确认'}
+                                  {(record as any).ajExpenseReason || '待AI部门确认'}
                                 </div>
                               </div>
                               <div>
@@ -5608,7 +5608,13 @@ export default function LedgerDetail() {
                               <div>
                                 <div style={{ fontSize: '10px', color: '#aaa' }}>报销类目</div>
                                 <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#444' }}>
-                                  {(record as any).ajTaxCategory || '待AI会计确认'}
+                                  {(record as any).ajTaxCategory || '待AI财务确认'}
+                                </div>
+                              </div>
+                              <div>
+                                <div style={{ fontSize: '10px', color: '#aaa' }}>会计科目</div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#444' }}>
+                                  {(record as any).ajAccountingCode || '待AI会计确认'}
                                 </div>
                               </div>
                               <div>
