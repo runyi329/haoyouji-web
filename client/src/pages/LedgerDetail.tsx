@@ -5595,19 +5595,19 @@ export default function LedgerDetail() {
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginBottom: '8px' }}>
                               <div>
                                 <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
-                                <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: (record as any).ajExpenseReason ? '#444' : '#bbb' }}>
+                                <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#444' }}>
                                   {(record as any).ajExpenseReason || '待确认'}
                                 </div>
                               </div>
                               <div>
                                 <div style={{ fontSize: '10px', color: '#aaa' }}>申请日期</div>
                                 <div style={{ fontSize: '12px', color: '#444', fontWeight: 500 }}>
-                                  {new Date(record.createdAt).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }).replace('/', '月').replace('/', '日')}
+                                  {(() => { const d = new Date(record.createdAt); return `${d.getFullYear()}年${String(d.getMonth()+1).padStart(2,'0')}月${String(d.getDate()).padStart(2,'0')}日`; })()}
                                 </div>
                               </div>
                               <div>
                                 <div style={{ fontSize: '10px', color: '#aaa' }}>报销类目</div>
-                                <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: (record as any).ajTaxCategory ? '#444' : '#bbb' }}>
+                                <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#444' }}>
                                   {(record as any).ajTaxCategory || '待确认'}
                                 </div>
                               </div>
