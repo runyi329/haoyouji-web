@@ -103,10 +103,11 @@ async function main() {
     maxMap.set(`${row.ledgerId}:${row.prefix}`, Number(row.maxNum) || 0);
   }
 
-  // 4. 按 (ledgerId, createdBy) 分组生成编号
+  // 4. 按 (ledgerId, createdBy, aj_company_name) 分组生成编号
+  // 同一用户在同一账本不同公司应有独立编号
   const groups = new Map();
   for (const rec of records) {
-    const key = `${rec.ledgerId}:${rec.createdBy}`;
+    const key = `${rec.ledgerId}:${rec.createdBy}:${rec.aj_company_name || ''}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(rec);
   }
