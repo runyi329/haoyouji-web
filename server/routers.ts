@@ -16420,10 +16420,10 @@ ${klinesSummary}
           ) as any;
           categoryId = insertResult.insertId;
         }
-        // 更新记录的 categoryId
+        // 更新记录的 categoryId，同时写入 aj_tax_category（报销类目名称）
         await (conn as any).execute(
-          `UPDATE ledger_records SET categoryId=? WHERE id=? AND ledgerId=? AND deleted_at IS NULL`,
-          [categoryId, input.recordId, input.ledgerId]
+          `UPDATE ledger_records SET categoryId=?, aj_tax_category=? WHERE id=? AND ledgerId=? AND deleted_at IS NULL`,
+          [categoryId, input.categoryName, input.recordId, input.ledgerId]
         );
         return { success: true, categoryId, categoryName: input.categoryName };
       }),
