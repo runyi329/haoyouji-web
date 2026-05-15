@@ -205,36 +205,75 @@ function InvoiceListInline({
           </div>
         </div>
       ) : (
-        <div className="divide-y divide-gray-50">
+        <div className="px-4 py-3 space-y-3">
           {filteredInvoices.map((inv: any, idx: number) => (
-            <div key={inv.id ?? idx} className="px-4 py-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold text-gray-800">
-                    ¥{Number(inv.amount || 0).toFixed(2)}
+            <div key={inv.id ?? idx} style={{ background: '#fff', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(26,43,74,0.08)', border: '1px solid rgba(26,43,74,0.07)' }}>
+              {/* 顶部标题栏（带棱角裁切） */}
+              <div style={{
+                background: '#1A2B4A',
+                padding: '7px 12px 14px 12px',
+                position: 'relative',
+                clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 7px), 97% 100%, 94% calc(100% - 5px), 91% 100%, 88% calc(100% - 5px), 85% 100%, 82% calc(100% - 5px), 79% 100%, 76% calc(100% - 5px), 73% 100%, 70% calc(100% - 5px), 67% 100%, 64% calc(100% - 5px), 61% 100%, 58% calc(100% - 5px), 55% 100%, 52% calc(100% - 5px), 49% 100%, 46% calc(100% - 5px), 43% 100%, 40% calc(100% - 5px), 37% 100%, 34% calc(100% - 5px), 31% 100%, 28% calc(100% - 5px), 25% 100%, 22% calc(100% - 5px), 19% 100%, 16% calc(100% - 5px), 13% 100%, 10% calc(100% - 5px), 7% 100%, 4% calc(100% - 5px), 1% 100%, 0 calc(100% - 7px))'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: '#FFFFFF', fontSize: '12px', fontWeight: 700, letterSpacing: '3px' }}>报 销 申 请 单</span>
+                  <span style={{ color: 'rgba(255,255,255,0.65)', fontSize: '10px', fontFamily: 'monospace' }}>
+                    No.{inv.id ? String(inv.id).padStart(4, '0') : String(idx + 1).padStart(4, '0')}
+                  </span>
+                </div>
+              </div>
+              {/* 主体内容 */}
+              <div style={{ padding: '10px 12px 12px 12px' }}>
+                {/* 企业名称 + 金额 */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '11px', color: '#999', marginBottom: '2px' }}>开票单位</div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {safeStr(inv.companyName || inv.ajCompanyName || '—')}
+                    </div>
                   </div>
-                  {inv.description && (
-                    <div className="text-xs text-gray-500 mt-0.5 truncate">{safeStr(inv.description)}</div>
-                  )}
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <span className="text-xs text-gray-400">{safeStr(inv.recordDate || inv.date)}</span>
-                    {(inv.creatorNickname || inv.creatorName) && (
-                      <span className="text-xs text-gray-400">· {safeStr(inv.creatorNickname || inv.creatorName)}</span>
-                    )}
-                    {inv.category && (
-                      <span className="text-xs bg-blue-50 px-1.5 py-0.5 rounded" style={{ color: AJ_COLOR }}>
-                        {safeStr(inv.category)}
-                      </span>
-                    )}
+                  <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '12px' }}>
+                    <div style={{ fontSize: '11px', color: '#999', marginBottom: '2px' }}>报销金额</div>
+                    <div style={{ fontSize: '18px', fontWeight: 700, color: '#1A2B4A', lineHeight: 1 }}>
+                      ¥{Number(inv.amount || 0).toFixed(2)}
+                    </div>
                   </div>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
-                  inv.ajStatus === 'approved' ? 'bg-green-50 text-green-600' :
-                  inv.ajStatus === 'rejected' ? 'bg-gray-100 text-gray-400' :
-                  'bg-amber-50 text-amber-600'
-                }`}>
-                  {inv.ajStatus === 'approved' ? '已审核' : inv.ajStatus === 'rejected' ? '已拒绝' : '待审核'}
-                </span>
+                {/* 虚线分隔 */}
+                <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
+                {/* 两格信息 */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginBottom: '8px' }}>
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#aaa' }}>报销类型</div>
+                    <div style={{ fontSize: '12px', color: '#444', fontWeight: 500 }}>{safeStr(inv.category || '—')}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
+                    <div style={{ fontSize: '12px', color: '#444', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{safeStr(inv.description || '待确认')}</div>
+                  </div>
+                </div>
+                {/* 虚线分隔 */}
+                <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
+                {/* 底部：日期时间 + 状态 */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: '11px', color: '#aaa' }}>
+                    {inv.createdAt
+                      ? new Date(inv.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+                      : safeStr(inv.recordDate || inv.date)}
+                  </div>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <span style={{
+                      width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0, display: 'inline-block',
+                      backgroundColor: inv.ajStatus === 'approved' ? '#4CAF50' : inv.ajStatus === 'rejected' ? '#BDBDBD' : '#F59E0B'
+                    }} />
+                    <span style={{
+                      fontSize: '12px', fontWeight: 500,
+                      color: inv.ajStatus === 'approved' ? '#2E7D32' : inv.ajStatus === 'rejected' ? '#757575' : '#B45309'
+                    }}>
+                      {inv.ajStatus === 'approved' ? '已审核' : inv.ajStatus === 'rejected' ? '已拒绝' : '待审核'}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           ))}
