@@ -3055,9 +3055,8 @@ export async function addTransaction(data: {
     } catch (e: any) {
       console.error('[addTransaction] 员工编号生成失败:', e.message);
       // 生成失败不影响主流程，编号留空
-    }
-  }}
-
+     }
+  }
   const encryptedRecordData = await encryptFields(db, 'ledger_records', recordData, LEDGER_RECORD_ENCRYPT_FIELDS);
 
   let result: any;
