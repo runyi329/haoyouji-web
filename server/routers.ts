@@ -16355,16 +16355,28 @@ ${klinesSummary}
           dateFilter = 'AND lr.recordDate >= ?';
           dateParams.push(qStart.toISOString().split('T')[0]);
         } else if (input.period === 'year') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
-        const finalSql = `SELECT lr.id, lr.amount, lr.recordDate as recordDate, lr.description, lr.categoryId,
+
+
+
+
+
+
+
+
+
+
+        const finalSql = \`SELECT lr.id, lr.amount, lr.recordDate as recordDate, lr.description, lr.categoryId,
                   lr.aj_status as ajStatus, lr.createdAt as createdAt,
                   u.username as creatorUsername, u.name as creatorName,
-                  lm.nickname as creatorNickname
+                  lm.nickname as creatorNickname,
+                  ac.name as companyName
            FROM ledger_records lr
            LEFT JOIN users u ON u.id = lr.createdBy
            LEFT JOIN ledger_members lm ON lm.userId = lr.createdBy AND lm.ledgerId = lr.ledgerId
+           LEFT JOIN aj_companies ac ON ac.id = lr.aj_company_id
            WHERE lr.ledgerId=? AND lr.aj_company_id=? AND lr.deleted_at IS NULL ${dateFilter}
            ORDER BY lr.recordDate DESC, lr.createdAt DESC
-           LIMIT 200`;
+           LIMIT 200\`;
         const finalParams = [input.ledgerId, input.companyId, ...dateParams];
         console.log('[ajOwnerGetCompanyInvoices] sql params:', finalParams, 'period:', input.period, 'dateFilter:', dateFilter);
         const [rows] = await (conn as any).execute(finalSql, finalParams);
