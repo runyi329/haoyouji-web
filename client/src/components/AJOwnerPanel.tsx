@@ -282,11 +282,15 @@ function InvoiceListInline({
                 </div>
                 {/* 虚线分隔 */}
                 <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
-                {/* 两格信息：报销事由 + 报销凭证 */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginBottom: '8px' }}>
+                {/* 三格信息：报销事由 | 报销类目 | 报销凭证 */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px 8px', marginBottom: '8px' }}>
                   <div>
                     <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
                     <div style={{ fontSize: '12px', color: '#444', fontWeight: 500 }}>待确认</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '10px', color: '#aaa' }}>报销类目</div>
+                    <div style={{ fontSize: '12px', color: '#444', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{safeStr(inv.categoryName || '—')}</div>
                   </div>
                   <div>
                     <div style={{ fontSize: '10px', color: '#aaa' }}>报销凭证</div>
