@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import taxCategoriesRaw from "@/data/tax_categories.json";
+import taxAccountingMap from "@/data/tax_accounting_map.json";
 import {
   Building2, Pencil, Trash2, Clock, CheckCircle, XCircle,
   ChevronRight, List, X, Receipt, ChevronDown, Search
@@ -637,30 +638,9 @@ function InvoiceListInline({
     setPickerInvoiceId(null);
     setLocalCategories(prev => ({ ...prev, [invoiceId]: categoryName }));
     updateCategoryMutation.mutate({ ledgerId, recordId: invoiceId, categoryName });
-    // 根据22条对照规则自动预填会计科目
-    const autoMap: Record<string, string> = {
-      '文教办公用品': '管理费用-办公费', '办公用品': '管理费用-办公费',
-      '机械设备': '固定资产-机械设备', '电子设备': '固定资产-电子设备',
-      '租赁服务': '管理费用-租赁费', '不动产租赁': '管理费用-租赁费',
-      '商务辅助服务': '管理费用-物业费', '物业': '管理费用-物业费',
-      '电力': '管理费用-水电费', '水': '管理费用-水电费', '燃气': '管理费用-水电费',
-      '鉴证咨询': '管理费用-咨询费', '咨询': '管理费用-咨询费',
-      '广告': '销售费用-广告费', '设计服务': '销售费用-广告费',
-      '会展': '管理费用-会议费', '会议': '管理费用-会议费',
-      '住宿': '管理费用-差旅费', '旅客运输': '管理费用-差旅费', '航空': '管理费用-差旅费',
-      '餐饮': '管理费用-业务招待费', '餐饮服务': '管理费用-业务招待费',
-      '修理修配': '管理费用-车辆费', '维修': '管理费用-维修费',
-      '交通运输': '管理费用-差旅费', '物流': '销售费用-运输费',
-      '建筑服务': '长期待摊费用-装修费',
-      '信息技术服务': '管理费用-软件服务费', '软件': '管理费用-软件服务费',
-      '教育': '管理费用-职工教育经费',
-      '劳保': '管理费用-劳保费',
-      '直接收费金融': '财务费用-手续费', '金融': '财务费用-手续费',
-    };
-    let autoCode = '';
-    for (const [key, val] of Object.entries(autoMap)) {
-      if (categoryName.includes(key)) { autoCode = val; break; }
-    }
+    // 从预设对照表中查找对应会计科目（4199条全覆盖）
+    const map = taxAccountingMap as Record<string, string>;
+    const autoCode = map[categoryName] || '';
     if (autoCode) {
       setLocalAccountingCodes(prev => ({ ...prev, [invoiceId]: autoCode }));
       updateAccountingCodeMutation.mutate({ ledgerId, recordId: invoiceId, accountingCode: autoCode });
