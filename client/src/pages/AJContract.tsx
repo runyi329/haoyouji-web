@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCenterToast } from "@/components/ui/center-toast";
+import SignaturePad from "@/components/SignaturePad";
 
 // ── 合同正文（纯文本渲染） ──
 const CONTRACT_SECTIONS = [
@@ -113,6 +114,7 @@ export default function AJContract() {
   const [idCard, setIdCard] = useState("");
   const [bankName, setBankName] = useState("");
   const [bankAccount, setBankAccount] = useState("");
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [signedAt, setSignedAt] = useState<string>("");
 
@@ -133,12 +135,24 @@ export default function AJContract() {
     },
   });
 
+  const handleSignatureChange = useCallback((dataUrl: string | null) => {
+    setSignatureDataUrl(dataUrl);
+  }, []);
+
   const handleSign = () => {
     if (!realName.trim()) { toast.error("请填写真实姓名"); return; }
     if (!idCard.trim()) { toast.error("请填写身份证号码"); return; }
     if (!bankAccount.trim()) { toast.error("请填写银行账号"); return; }
+    if (!signatureDataUrl) { toast.error("请手写签名"); return; }
     if (!agreed) { toast.error("请勾选同意协议"); return; }
-    signMutation.mutate({ ledgerId, realName: realName.trim(), idCard: idCard.trim(), bankName: bankName.trim(), bankAccount: bankAccount.trim() });
+    signMutation.mutate({
+      ledgerId,
+      realName: realName.trim(),
+      idCard: idCard.trim(),
+      bankName: bankName.trim(),
+      bankAccount: bankAccount.trim(),
+      signatureImage: signatureDataUrl,
+    });
   };
 
   const alreadySigned = contractData?.signed;
@@ -259,6 +273,15 @@ export default function AJContract() {
                 </div>
               </div>
             </div>
+            {/* 已签约时显示签名图片 */}
+            {existingInfo.signatureUrl && (
+              <div style={{ marginTop: 16, textAlign: "center" }}>
+                <div style={{ fontSize: 12, color: "#999", marginBottom: 8 }}>乙方签名</div>
+                <div style={{ border: "1px solid #E2E8F0", borderRadius: 8, padding: 8, background: "#FAFAFA", display: "inline-block" }}>
+                  <img src={existingInfo.signatureUrl} alt="签名" style={{ maxWidth: "100%", height: 80, objectFit: "contain" }} />
+                </div>
+              </div>
+            )}
           </div>
         ) : submitted ? (
           /* 刚签约成功 */
@@ -312,6 +335,11 @@ export default function AJContract() {
               </div>
             ))}
 
+            {/* 手写签名区域 */}
+            <div style={{ marginTop: 16, marginBottom: 16 }}>
+              <SignaturePad onSignatureChange={handleSignatureChange} height={150} />
+            </div>
+
             {/* 同意条款 */}
             <div
               style={{ display: "flex", alignItems: "flex-start", gap: 10, marginTop: 16, cursor: "pointer" }}
@@ -345,11 +373,11 @@ export default function AJContract() {
                 marginTop: 20,
                 borderRadius: 12,
                 border: "none",
-                background: agreed ? "linear-gradient(135deg, #1A2B4A 0%, #2D4A7A 100%)" : "#CBD5E0",
-                color: agreed ? "#C9A84C" : "#fff",
+                background: agreed && signatureDataUrl ? "linear-gradient(135deg, #1A2B4A 0%, #2D4A7A 100%)" : "#CBD5E0",
+                color: agreed && signatureDataUrl ? "#C9A84C" : "#fff",
                 fontSize: 15,
                 fontWeight: 700,
-                cursor: agreed ? "pointer" : "not-allowed",
+                cursor: agreed && signatureDataUrl ? "pointer" : "not-allowed",
                 letterSpacing: 2,
                 transition: "all 0.2s",
               }}
