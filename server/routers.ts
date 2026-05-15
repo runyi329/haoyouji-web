@@ -16365,7 +16365,7 @@ ${klinesSummary}
 
 
 
-        const finalSql = \`SELECT lr.id, lr.amount, lr.recordDate as recordDate, lr.description, lr.categoryId,
+        const finalSql = `SELECT lr.id, lr.amount, lr.recordDate as recordDate, lr.description, lr.categoryId,
                   lr.aj_status as ajStatus, lr.createdAt as createdAt,
                   u.username as creatorUsername, u.name as creatorName,
                   lm.nickname as creatorNickname,
@@ -16376,7 +16376,7 @@ ${klinesSummary}
            LEFT JOIN aj_companies ac ON ac.id = lr.aj_company_id
            WHERE lr.ledgerId=? AND lr.aj_company_id=? AND lr.deleted_at IS NULL ${dateFilter}
            ORDER BY lr.recordDate DESC, lr.createdAt DESC
-           LIMIT 200\`;
+           LIMIT 200`;
         const finalParams = [input.ledgerId, input.companyId, ...dateParams];
         console.log('[ajOwnerGetCompanyInvoices] sql params:', finalParams, 'period:', input.period, 'dateFilter:', dateFilter);
         const [rows] = await (conn as any).execute(finalSql, finalParams);
