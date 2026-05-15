@@ -982,15 +982,15 @@ const AddTransaction = () => {
                   <td className="px-0.5 py-1 text-center border-r border-gray-200 whitespace-nowrap">1</td>
                   <td className="px-0.5 py-1 text-center border-r border-gray-200">{String(selectedDate.getMonth()+1).padStart(2,'0')}/{String(selectedDate.getDate()).padStart(2,'0')}</td>
                   <td className="px-0.5 py-1 text-center border-r border-gray-200 text-[#444] whitespace-nowrap text-[9px]">待AI主管确认</td>
-                  <td className="px-1 py-1 border-r border-gray-200 text-[#444] text-[9px]">待AI财务确认</td>
-                  <td className="px-1 py-1 text-right border-r border-gray-200 font-bold text-[#1A3A5C] whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-1 py-1 text-center border-r border-gray-200 text-[#444] text-[9px]">待AI财务确认</td>
+                  <td className="px-1 py-1 text-center border-r border-gray-200 font-bold text-[#1A3A5C] whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-1 py-1 text-center whitespace-nowrap">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</td>
                 </tr>
               </tbody>
               <tfoot>
                 <tr style={{ background: '#EEF2F7' }}>
-                  <td colSpan={3} className="px-1.5 py-1 font-bold border-r border-gray-300 whitespace-nowrap">合计金额（大写）</td>
-                  <td className="px-1.5 py-1.5 font-bold text-[#1A3A5C] border-r border-gray-300">
+                  <td colSpan={3} className="px-1.5 py-1 text-center font-bold border-r border-gray-300 whitespace-nowrap">合计金额（大写）</td>
+                  <td className="px-1.5 py-1.5 text-center font-bold text-[#1A3A5C] border-r border-gray-300">
                     {(() => {
                       const num = parseFloat(amount) || 0;
                       if (num <= 0) return '—';
@@ -1013,7 +1013,7 @@ const AddTransaction = () => {
                       return result;
                     })()}
                   </td>
-                  <td className="px-1 py-1 text-right font-bold text-[#1A3A5C] border-r border-gray-300 whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-1 py-1 text-center font-bold text-[#1A3A5C] border-r border-gray-300 whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-1 py-1 text-center whitespace-nowrap">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</td>
                 </tr>
               </tfoot>
