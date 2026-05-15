@@ -3149,6 +3149,9 @@ export async function getTransactionsList(
       ajCompanyName: ledgerRecords.ajCompanyName,
       ajApprovedBy: ledgerRecords.ajApprovedBy,
       ajApprovedAt: ledgerRecords.ajApprovedAt,
+      ajTaxCategory: ledgerRecords.ajTaxCategory,
+      ajAccountingCode: ledgerRecords.ajAccountingCode,
+      ajExpenseReason: ledgerRecords.ajExpenseReason,
     })
     .from(ledgerRecords)
     .where(and(...conditions, isNull(ledgerRecords.deletedAt)))
@@ -3394,6 +3397,9 @@ export async function getTransactionDetail(
       pendingIncludeStats: ledgerRecords.pendingIncludeStats,
       ajStatus: ledgerRecords.ajStatus,
       ajCreatedBy: ledgerRecords.createdBy,
+      ajTaxCategory: ledgerRecords.ajTaxCategory,
+      ajAccountingCode: ledgerRecords.ajAccountingCode,
+      ajExpenseReason: ledgerRecords.ajExpenseReason,
     })
     .from(ledgerRecords)
     .where(

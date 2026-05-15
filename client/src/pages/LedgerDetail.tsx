@@ -5594,8 +5594,10 @@ export default function LedgerDetail() {
                             {/* 四格信息网格 */}
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginBottom: '8px' }}>
                               <div>
-                                <div style={{ fontSize: '10px', color: '#aaa' }}>报销类型</div>
-                                <div style={{ fontSize: '12px', color: '#444', fontWeight: 500 }}>{record.category || '—'}</div>
+                                <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: (record as any).ajExpenseReason ? '#444' : '#bbb' }}>
+                                  {(record as any).ajExpenseReason || '待确认'}
+                                </div>
                               </div>
                               <div>
                                 <div style={{ fontSize: '10px', color: '#aaa' }}>申请日期</div>
@@ -5604,9 +5606,9 @@ export default function LedgerDetail() {
                                 </div>
                               </div>
                               <div>
-                                <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
-                                <div style={{ fontSize: '12px', color: '#444', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {record.description || '—'}
+                                <div style={{ fontSize: '10px', color: '#aaa' }}>报销类目</div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: (record as any).ajTaxCategory ? '#444' : '#bbb' }}>
+                                  {(record as any).ajTaxCategory || '待确认'}
                                 </div>
                               </div>
                               <div>
