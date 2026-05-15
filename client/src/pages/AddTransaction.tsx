@@ -984,7 +984,14 @@ const AddTransaction = () => {
                   <td className="px-0.5 py-1 text-center border-r border-gray-200 text-[#444] whitespace-nowrap text-[9px]">待AI主管确认</td>
                   <td className="px-1 py-1 text-center border-r border-gray-200 text-[#444] text-[9px]">待AI财务确认</td>
                   <td className="px-1 py-1 text-center border-r border-gray-200 font-bold text-[#1A3A5C] whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td className="px-1 py-1 text-center whitespace-nowrap">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</td>
+                  <td className="py-0.5 text-center" style={{ verticalAlign: 'middle' }}>
+                    {uploadedImages.length > 0 ? (
+                      <div className="flex items-center justify-center gap-0.5">
+                        <img src={uploadedImages[0]} alt="附件" className="object-cover rounded" style={{ width: 20, height: 20 }} />
+                        {uploadedImages.length > 1 && <span className="text-[8px] text-gray-500">+{uploadedImages.length - 1}</span>}
+                      </div>
+                    ) : null}
+                  </td>
                 </tr>
               </tbody>
               <tfoot>
@@ -1014,7 +1021,7 @@ const AddTransaction = () => {
                     })()}
                   </td>
                   <td className="px-1 py-1 text-center font-bold text-[#1A3A5C] border-r border-gray-300 whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td className="px-1 py-1 text-center whitespace-nowrap">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</td>
+                  <td className="px-1 py-1 text-center whitespace-nowrap"></td>
                 </tr>
               </tfoot>
             </table>
