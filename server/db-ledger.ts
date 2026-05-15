@@ -1,4 +1,24 @@
 import { getLedgerDb, getDbConnection } from "./db";
+import { pinyin } from 'pinyin-pro';
+
+/**
+ * 从公司名提取拼音首字母缩写
+ * 例：上海宇杰 -> YJ，北京科技有限公司 -> BJKJ
+ */
+function getCompanyInitials(companyName: string): string {
+  if (!companyName) return 'EMP';
+  // 去掉通用后缀
+  const cleaned = companyName
+    .replace(/(有限责任公司|有限公司|股份有限公司|股份公司|集团有限公司|集团公司|集团|公司|企业|工作室|合伙企业|个体工商户)/g, '')
+    .replace(/[（(][^）)]*[）)]/g, '') // 去掉括号内容
+    .trim();
+  if (!cleaned) return 'EMP';
+  // 提取每个汉字的拼音首字母
+  const initials = pinyin(cleaned, { pattern: 'first', toneType: 'none', separator: '' })
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '');
+  return initials || 'EMP';
+}
 import { ledgers, ledgerMembers, ledgerCategories, ledgerRecords, users } from "../drizzle/schema";
 import { eq, and, desc, sql, isNull, isNotNull, asc, ne } from "drizzle-orm";
 import { encryptFields, decryptFields, decryptFieldsArray } from "./encryption";
@@ -3005,13 +3025,13 @@ export async function addTransaction(data: {
     } : {}),
   };
 
-  // AJ账本：自动生成员工编号（每用户每账本唯一，一旦生成不变）
+  // AJ账本：自动生成员工编号（每用户每账本唯一，一旦生成不变，格式：公司拼音缩写-4位数字）
   if (isAJRecord) {
+    // 先查该用户在该账本是否已有编号（包括已删除的记录，确保移除再加入编号不变）
     const existingEmployeeNo = await (db as any)
       .execute(
         `SELECT aj_employee_no FROM ledger_records
-         WHERE ledgerId = ? AND createdBy = ? AND aj_employee_no IS NOT NULL
-         AND deleted_at IS NULL LIMIT 1`,
+         WHERE ledgerId = ? AND createdBy = ? AND aj_employee_no IS NOT NULL LIMIT 1`,
         [data.ledgerId, data.userId]
       ).then((rows: any) => {
         const r = Array.isArray(rows) ? rows : rows[0];
@@ -3021,19 +3041,23 @@ export async function addTransaction(data: {
     if (existingEmployeeNo) {
       (recordData as any).ajEmployeeNo = existingEmployeeNo;
     } else {
-      // 生成新编号：查当前账本最大编号 + 1
+      // 生成新编号：公司名拼音缩写 + 该公司内的序号
+      const companyName = data.ajCompanyName || '';
+      const prefix = getCompanyInitials(companyName);
+      // 查该账本内同前缀的最大序号
       const maxNo = await (db as any)
         .execute(
-          `SELECT MAX(CAST(SUBSTRING(aj_employee_no, 5) AS UNSIGNED)) as maxNum
-           FROM ledger_records WHERE ledgerId = ? AND aj_employee_no IS NOT NULL AND deleted_at IS NULL`,
-          [data.ledgerId]
+          `SELECT MAX(CAST(SUBSTRING_INDEX(aj_employee_no, '-', -1) AS UNSIGNED)) as maxNum
+           FROM ledger_records
+           WHERE ledgerId = ? AND aj_employee_no LIKE ? AND aj_employee_no IS NOT NULL`,
+          [data.ledgerId, `${prefix}-%`]
         ).then((rows: any) => {
           const r = Array.isArray(rows) ? rows : rows[0];
           const row = Array.isArray(r) ? r[0] : r;
           return row?.maxNum || 0;
         }).catch(() => 0);
       const nextNum = (Number(maxNo) || 0) + 1;
-      (recordData as any).ajEmployeeNo = `EMP-${String(nextNum).padStart(4, '0')}`;
+      (recordData as any).ajEmployeeNo = `${prefix}-${String(nextNum).padStart(4, '0')}`;
     }
   }
 
