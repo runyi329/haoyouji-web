@@ -3368,6 +3368,10 @@ export async function getTransactionsList(
       ajCompanyName: record.ajCompanyName || null,
       ajApprovedBy: record.ajApprovedBy || null,
       ajApprovedAt: record.ajApprovedAt || null,
+      ajTaxCategory: record.ajTaxCategory || null,
+      ajAccountingCode: record.ajAccountingCode || null,
+      ajExpenseReason: record.ajExpenseReason || null,
+      ajEmployeeNo: record.ajEmployeeNo || null,
       member: creator ? {
         id: creator.id,
         username: creator.username,
