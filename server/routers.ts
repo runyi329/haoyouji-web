@@ -16407,7 +16407,7 @@ ${klinesSummary}
         if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         // 查找或创建对应的 ledger_category
         const [catRows] = await (conn as any).execute(
-          `SELECT id FROM ledger_categories WHERE ledgerId=? AND name=? AND deleted_at IS NULL LIMIT 1`,
+          `SELECT id FROM ledger_categories WHERE ledgerId=? AND name=? LIMIT 1`,
           [input.ledgerId, input.categoryName]
         ) as any;
         let categoryId: number;
