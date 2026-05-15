@@ -9,12 +9,33 @@ dotenv.config();
 
 function getCompanyInitials(companyName) {
   if (!companyName) return 'EMP';
-  const cleaned = companyName
+  // 1. 去掉公司后缀
+  let cleaned = companyName
     .replace(/(有限责任公司|有限公司|股份有限公司|股份公司|集团有限公司|集团公司|集团|公司|企业|工作室|合伙企业|个体工商户)/g, '')
     .replace(/[（(][^）)]*[）)]/g, '')
     .trim();
+  // 2. 去掉省市地名前缀
+  cleaned = cleaned
+    .replace(/^(北京|上海|天津|重庆|香港|澳门|台湾)/g, '')
+    .replace(/^(黑龙江|内蒙古|新疆|西藏)/g, '')
+    .replace(/^[\u4e00-\u9fa5]{2,3}(省|市|区|县|州)/g, '')
+    .trim();
+  // 3. 去掉通用行业词
+  cleaned = cleaned
+    .replace(/(商务|信息|咨询|科技|技术|贸易|实业|投资|管理|服务|文化|传媒|网络|电子|机械|建筑|装饰|装修|物流|运输|租赁|餐饮|食品|医疗|教育|培训|金融|保险|房地产|农业|能源|化工|纺织|服装)/g, '')
+    .trim();
+  if (!cleaned) {
+    cleaned = companyName
+      .replace(/(有限责任公司|有限公司|股份有限公司|股份公司|集团有限公司|集团公司|集团|公司)/g, '')
+      .replace(/[（(][^）)]*[）)]/g, '')
+      .trim();
+  }
   if (!cleaned) return 'EMP';
-  const initials = pinyin(cleaned, { pattern: 'first', toneType: 'none', separator: '' })
+  // 4. 取前2~4个汉字的拼音首字母
+  const chars = cleaned.match(/[\u4e00-\u9fa5]/g) || [];
+  const coreChars = chars.slice(0, 4).join('');
+  if (!coreChars) return 'EMP';
+  const initials = pinyin(coreChars, { pattern: 'first', toneType: 'none', separator: '' })
     .toUpperCase()
     .replace(/[^A-Z]/g, '');
   return initials || 'EMP';
@@ -49,7 +70,6 @@ async function main() {
     FROM ledger_records lr
     JOIN ledgers l ON l.id = lr.ledgerId
     WHERE l.type = 'custom_aj'
-      AND lr.aj_employee_no IS NULL
       AND lr.aj_company_name IS NOT NULL
     ORDER BY lr.ledgerId, lr.createdBy, lr.id
   `);
