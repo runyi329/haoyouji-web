@@ -102,6 +102,14 @@ const CONTRACT_SECTIONS = [
   },
 ];
 
+// 脱敏显示卡号（保留前4后4）
+function maskCardNumber(num: string): string {
+  if (!num) return '';
+  const cleaned = num.replace(/\s/g, '');
+  if (cleaned.length <= 8) return cleaned;
+  return cleaned.slice(0, 4) + ' **** **** ' + cleaned.slice(-4);
+}
+
 export default function AJContract() {
   const params = useParams<{ ledgerId: string }>();
   const ledgerId = Number(params.ledgerId);
@@ -112,17 +120,33 @@ export default function AJContract() {
   const [agreed, setAgreed] = useState(false);
   const [realName, setRealName] = useState("");
   const [idCard, setIdCard] = useState("");
-  const [bankName, setBankName] = useState("");
-  const [bankAccount, setBankAccount] = useState("");
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [signedAt, setSignedAt] = useState<string>("");
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [showCardSelector, setShowCardSelector] = useState(false);
 
   // 检查是否已签约
   const { data: contractData, isLoading } = trpc.ajContract.getMyContract.useQuery(
     { ledgerId },
     { enabled: !!user }
   );
+
+  // 获取用户已绑定的银行卡列表
+  const { data: bankCards, isLoading: bankCardsLoading } = trpc.paymentAccounts.getBankCards.useQuery(
+    undefined,
+    { enabled: !!user }
+  );
+
+  // 选中的银行卡（默认选择 is_default=1 的卡，否则选第一张）
+  const selectedCard = (() => {
+    if (!bankCards || bankCards.length === 0) return null;
+    if (selectedCardId) {
+      return bankCards.find((c: { id: string }) => c.id === selectedCardId) || null;
+    }
+    const defaultCard = bankCards.find((c: { isDefault: number }) => c.isDefault === 1);
+    return defaultCard || bankCards[0];
+  })();
 
   const signMutation = trpc.ajContract.sign.useMutation({
     onSuccess: (data) => {
@@ -142,15 +166,15 @@ export default function AJContract() {
   const handleSign = () => {
     if (!realName.trim()) { toast.error("请填写真实姓名"); return; }
     if (!idCard.trim()) { toast.error("请填写身份证号码"); return; }
-    if (!bankAccount.trim()) { toast.error("请填写银行账号"); return; }
+    if (!selectedCard) { toast.error("请先绑定银行卡"); return; }
     if (!signatureDataUrl) { toast.error("请手写签名"); return; }
     if (!agreed) { toast.error("请勾选同意协议"); return; }
     signMutation.mutate({
       ledgerId,
       realName: realName.trim(),
       idCard: idCard.trim(),
-      bankName: bankName.trim(),
-      bankAccount: bankAccount.trim(),
+      bankName: selectedCard.bankName,
+      bankAccount: selectedCard.cardNumber,
       signatureImage: signatureDataUrl,
     });
   };
@@ -269,7 +293,7 @@ export default function AJContract() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span style={{ color: "#999" }}>银行账号</span>
-                  <span style={{ fontWeight: 600, color: "#333" }}>{existingInfo.bankAccount.replace(/^(.{4})(.+)(.{4})$/, "$1****$3")}</span>
+                  <span style={{ fontWeight: 600, color: "#333" }}>{existingInfo.bankAccount ? maskCardNumber(existingInfo.bankAccount) : "—"}</span>
                 </div>
               </div>
             </div>
@@ -302,38 +326,228 @@ export default function AJContract() {
             <div style={{ fontSize: 13, fontWeight: 700, color: "#1A2B4A", marginBottom: 14, paddingBottom: 6, borderBottom: "1px solid #EEF2FF" }}>
               乙方签约信息
             </div>
-            {/* 表单字段 */}
-            {[
-              { label: "真实姓名", value: realName, setter: setRealName, placeholder: "请输入真实姓名", type: "text" },
-              { label: "身份证号码", value: idCard, setter: setIdCard, placeholder: "请输入18位身份证号码", type: "text" },
-              { label: "开户行", value: bankName, setter: setBankName, placeholder: "如：中国工商银行上海分行", type: "text" },
-              { label: "银行账号", value: bankAccount, setter: setBankAccount, placeholder: "请输入银行卡号", type: "text" },
-            ].map(({ label, value, setter, placeholder, type }) => (
-              <div key={label} style={{ marginBottom: 12 }}>
-                <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>
-                  {label}
-                  {label !== "开户行" && <span style={{ color: "#E53E3E", marginLeft: 2 }}>*</span>}
-                </div>
-                <input
-                  type={type}
-                  value={value}
-                  onChange={e => setter(e.target.value)}
-                  placeholder={placeholder}
-                  style={{
-                    width: "100%",
-                    height: 40,
-                    border: "1px solid #E2E8F0",
-                    borderRadius: 8,
-                    padding: "0 12px",
-                    fontSize: 13,
-                    color: "#333",
-                    background: "#FAFAFA",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                />
+
+            {/* 真实姓名 */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>
+                真实姓名<span style={{ color: "#E53E3E", marginLeft: 2 }}>*</span>
               </div>
-            ))}
+              <input
+                type="text"
+                value={realName}
+                onChange={e => setRealName(e.target.value)}
+                placeholder="请输入真实姓名"
+                style={{
+                  width: "100%",
+                  height: 40,
+                  border: "1px solid #E2E8F0",
+                  borderRadius: 8,
+                  padding: "0 12px",
+                  fontSize: 13,
+                  color: "#333",
+                  background: "#FAFAFA",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {/* 身份证号码 */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>
+                身份证号码<span style={{ color: "#E53E3E", marginLeft: 2 }}>*</span>
+              </div>
+              <input
+                type="text"
+                value={idCard}
+                onChange={e => setIdCard(e.target.value)}
+                placeholder="请输入18位身份证号码"
+                style={{
+                  width: "100%",
+                  height: 40,
+                  border: "1px solid #E2E8F0",
+                  borderRadius: 8,
+                  padding: "0 12px",
+                  fontSize: 13,
+                  color: "#333",
+                  background: "#FAFAFA",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {/* 银行卡区域 */}
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: "#666", marginBottom: 8 }}>
+                收款银行卡<span style={{ color: "#E53E3E", marginLeft: 2 }}>*</span>
+              </div>
+
+              {bankCardsLoading ? (
+                <div style={{ padding: "12px", background: "#F8F9FA", borderRadius: 8, textAlign: "center", fontSize: 12, color: "#999" }}>
+                  加载银行卡信息...
+                </div>
+              ) : !bankCards || bankCards.length === 0 ? (
+                /* 没有绑定银行卡 */
+                <div style={{
+                  padding: "16px",
+                  background: "#FFF8E7",
+                  borderRadius: 10,
+                  border: "1px dashed #C9A84C",
+                  textAlign: "center",
+                }}>
+                  <div style={{ fontSize: 13, color: "#8B6914", marginBottom: 10, fontWeight: 500 }}>
+                    您尚未绑定银行卡
+                  </div>
+                  <div style={{ fontSize: 11, color: "#999", marginBottom: 12 }}>
+                    签约需要绑定银行卡，以便接收费用报销和业务提成
+                  </div>
+                  <button
+                    onClick={() => setLocation("/payment-accounts")}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "8px 20px",
+                      background: "linear-gradient(135deg, #C9A84C, #F5E27A)",
+                      border: "none",
+                      borderRadius: 8,
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: "#1A2B4A",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+                      <line x1="1" y1="10" x2="23" y2="10" />
+                    </svg>
+                    去绑定银行卡
+                  </button>
+                </div>
+              ) : (
+                /* 有银行卡 */
+                <div>
+                  {/* 当前选中的卡 */}
+                  {selectedCard && (
+                    <div
+                      style={{
+                        padding: "12px 14px",
+                        background: "linear-gradient(135deg, #1A2B4A 0%, #2D4A7A 100%)",
+                        borderRadius: 10,
+                        marginBottom: bankCards.length > 1 ? 8 : 0,
+                        position: "relative",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {/* 装饰圆 */}
+                      <div style={{ position: "absolute", right: -20, top: -20, width: 80, height: 80, borderRadius: "50%", background: "rgba(201,168,76,0.1)" }} />
+                      <div style={{ position: "absolute", right: 20, bottom: -30, width: 60, height: 60, borderRadius: "50%", background: "rgba(201,168,76,0.08)" }} />
+
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", position: "relative" }}>
+                        <div>
+                          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", marginBottom: 4 }}>
+                            {selectedCard.cardType === 'debit' ? '储蓄卡' : '信用卡'}
+                            {selectedCard.isDefault === 1 && (
+                              <span style={{ marginLeft: 6, fontSize: 10, color: "#C9A84C", background: "rgba(201,168,76,0.2)", padding: "1px 6px", borderRadius: 4, border: "1px solid rgba(201,168,76,0.4)" }}>
+                                默认
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: 2, marginBottom: 6 }}>
+                            {maskCardNumber(selectedCard.cardNumber)}
+                          </div>
+                          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }}>
+                            {selectedCard.bankName}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", background: "rgba(201,168,76,0.2)", flexShrink: 0 }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+                            <line x1="1" y1="10" x2="23" y2="10" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 多张卡时显示切换按钮 */}
+                  {bankCards.length > 1 && (
+                    <div>
+                      <button
+                        onClick={() => setShowCardSelector(!showCardSelector)}
+                        style={{
+                          width: "100%",
+                          padding: "8px 12px",
+                          background: "#F8F9FA",
+                          border: "1px solid #E2E8F0",
+                          borderRadius: 8,
+                          fontSize: 12,
+                          color: "#666",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 4,
+                        }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points={showCardSelector ? "18 15 12 9 6 15" : "6 9 12 15 18 9"} />
+                        </svg>
+                        {showCardSelector ? "收起" : `切换银行卡（共${bankCards.length}张）`}
+                      </button>
+
+                      {showCardSelector && (
+                        <div style={{ marginTop: 8, border: "1px solid #E2E8F0", borderRadius: 8, overflow: "hidden" }}>
+                          {bankCards.map((card: { id: string; bankName: string; cardNumber: string; cardType: string; isDefault: number }, idx: number) => {
+                            const isSelected = selectedCardId === card.id ||
+                              (!selectedCardId && card.isDefault === 1) ||
+                              (!selectedCardId && idx === 0 && !bankCards.find((c: { isDefault: number }) => c.isDefault === 1));
+                            return (
+                              <div
+                                key={card.id}
+                                onClick={() => {
+                                  setSelectedCardId(card.id);
+                                  setShowCardSelector(false);
+                                }}
+                                style={{
+                                  padding: "10px 14px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 10,
+                                  cursor: "pointer",
+                                  background: isSelected ? "#F0F4FF" : "#fff",
+                                  borderBottom: idx < bankCards.length - 1 ? "1px solid #F0F0F0" : "none",
+                                }}
+                              >
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: "#333" }}>
+                                    {card.bankName}
+                                    {card.isDefault === 1 && (
+                                      <span style={{ marginLeft: 6, fontSize: 10, color: "#C9A84C", background: "rgba(201,168,76,0.1)", padding: "1px 5px", borderRadius: 3, border: "1px solid rgba(201,168,76,0.3)" }}>
+                                        默认
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: 11, color: "#888", marginTop: 2, fontFamily: "monospace" }}>
+                                    {maskCardNumber(card.cardNumber)}
+                                  </div>
+                                </div>
+                                {isSelected && (
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A2B4A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* 手写签名区域 */}
             <div style={{ marginTop: 16, marginBottom: 16 }}>
@@ -366,18 +580,18 @@ export default function AJContract() {
             {/* 签约按钮 */}
             <button
               onClick={handleSign}
-              disabled={signMutation.isPending}
+              disabled={signMutation.isPending || !selectedCard}
               style={{
                 width: "100%",
                 height: 48,
                 marginTop: 20,
                 borderRadius: 12,
                 border: "none",
-                background: agreed && signatureDataUrl ? "linear-gradient(135deg, #1A2B4A 0%, #2D4A7A 100%)" : "#CBD5E0",
-                color: agreed && signatureDataUrl ? "#C9A84C" : "#fff",
+                background: (agreed && signatureDataUrl && selectedCard) ? "linear-gradient(135deg, #1A2B4A 0%, #2D4A7A 100%)" : "#CBD5E0",
+                color: (agreed && signatureDataUrl && selectedCard) ? "#C9A84C" : "#fff",
                 fontSize: 15,
                 fontWeight: 700,
-                cursor: agreed && signatureDataUrl ? "pointer" : "not-allowed",
+                cursor: (agreed && signatureDataUrl && selectedCard) ? "pointer" : "not-allowed",
                 letterSpacing: 2,
                 transition: "all 0.2s",
               }}
