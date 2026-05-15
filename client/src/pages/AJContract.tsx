@@ -224,7 +224,7 @@ export default function AJContract() {
               <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2B4A", marginBottom: 6 }}>甲方（委托方）</div>
               <div style={{ fontSize: 11, color: "#444", lineHeight: 1.8 }}>
                 <div>上海煦水驰企业管理咨询有限公司</div>
-                <div>法定代表人：胡先生</div>
+                <div>法定代表人：周栩</div>
                 <div>地址：上海市</div>
               </div>
             </div>
