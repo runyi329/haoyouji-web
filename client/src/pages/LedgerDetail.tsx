@@ -2044,6 +2044,8 @@ export default function LedgerDetail() {
   });
 
   // 成员弹窗状态
+  // 图片全屏预览
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [showMembersDialog, setShowMembersDialog] = useState(false);
   const [showInviteTree, setShowInviteTree] = useState(false);
   const [editingNoteUserId, setEditingNoteUserId] = useState<number | null>(null);
@@ -5616,17 +5618,14 @@ export default function LedgerDetail() {
                                   return imgs.length > 0 ? (
                                     <div style={{ display: 'flex', gap: '3px', marginTop: '2px', flexWrap: 'wrap' }}>
                                       {imgs.slice(0, 4).map((url: string, i: number) => (
-                                        <a
+                                        <div
                                           key={i}
-                                          href={url}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          onClick={e => e.stopPropagation()}
+                                          onClick={e => { e.stopPropagation(); setPreviewImageUrl(url); }}
                                           style={{
                                             width: '20px', height: '20px', borderRadius: '3px',
                                             overflow: 'hidden', flexShrink: 0,
                                             border: '1px solid rgba(26,43,74,0.2)',
-                                            display: 'block', position: 'relative'
+                                            display: 'block', position: 'relative', cursor: 'pointer'
                                           }}
                                         >
                                           <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
@@ -5638,7 +5637,7 @@ export default function LedgerDetail() {
                                               color: '#fff', fontSize: '8px', fontWeight: 700
                                             }}>+{imgs.length - 3}</div>
                                           )}
-                                        </a>
+                                        </div>
                                       ))}
                                     </div>
                                   ) : (
@@ -6779,6 +6778,38 @@ export default function LedgerDetail() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+      {/* 报销凭证图片全屏预览 */}
+      {previewImageUrl && (
+        <div
+          onClick={() => setPreviewImageUrl(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 99999,
+            background: 'rgba(0,0,0,0.92)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <img
+            src={previewImageUrl}
+            alt="凭证大图"
+            onClick={e => e.stopPropagation()}
+            style={{
+              maxWidth: '95vw', maxHeight: '90vh',
+              objectFit: 'contain', borderRadius: '8px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+            }}
+          />
+          <div
+            onClick={() => setPreviewImageUrl(null)}
+            style={{
+              position: 'absolute', top: '20px', right: '20px',
+              width: '36px', height: '36px', borderRadius: '50%',
+              background: 'rgba(255,255,255,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer', fontSize: '20px', color: '#fff', fontWeight: 300
+            }}
+          >×</div>
         </div>
       )}
       {/* 股权编号复制 Toast */}
