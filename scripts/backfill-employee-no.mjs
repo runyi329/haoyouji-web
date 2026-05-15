@@ -1,12 +1,11 @@
 /**
- * 批量补全现有报销记录的员工编号
- * 格式：公司名拼音缩写-4位数字（如 YJ-0001）
- * 规则：同一用户在同一账本内编号唯一，按首次提交时间排序分配
- * 移除再加入编号不变（查询时不过滤 deleted_at）
+ * 补全历史报销订单的员工编号
+ * 用法: node scripts/backfill-employee-no.mjs
  */
-
+import { createConnection } from 'mysql2/promise';
 import { pinyin } from 'pinyin-pro';
-import mysql from 'mysql2/promise';
+import dotenv from 'dotenv';
+dotenv.config();
 
 function getCompanyInitials(companyName) {
   if (!companyName) return 'EMP';
@@ -22,141 +21,135 @@ function getCompanyInitials(companyName) {
 }
 
 async function main() {
-  // 优先使用 DATABASE_URL 环境变量，否则使用服务器本地 MySQL
-  let conn;
-  const DATABASE_URL = process.env.DATABASE_URL || process.env.EXTERNAL_DATABASE_URL;
+  // 解析 DATABASE_URL
+  const dbUrl = process.env.DATABASE_URL || process.env.EXTERNAL_DATABASE_URL;
+  if (!dbUrl) {
+    console.error('❌ DATABASE_URL not found');
+    process.exit(1);
+  }
 
-  if (DATABASE_URL) {
+  let conn;
+  try {
+    conn = await createConnection(dbUrl + '?ssl={"rejectUnauthorized":false}');
+    console.log('✅ 数据库连接成功');
+  } catch (e) {
+    // 尝试不带 ssl
     try {
-      const url = new URL(DATABASE_URL);
-      conn = await mysql.createConnection({
-        host: url.hostname,
-        port: parseInt(url.port) || 4000,
-        user: url.username,
-        password: decodeURIComponent(url.password),
-        database: url.pathname.slice(1).split('?')[0],
-        ssl: { rejectUnauthorized: false },
-      });
-    } catch (e) {
-      console.log('DATABASE_URL 连接失败，尝试本地 MySQL...');
+      conn = await createConnection(dbUrl);
+      console.log('✅ 数据库连接成功（无SSL）');
+    } catch (e2) {
+      console.error('❌ 数据库连接失败:', e2.message);
+      process.exit(1);
     }
   }
 
-  if (!conn) {
-    conn = await mysql.createConnection({
-      host: '127.0.0.1',
-      port: 3306,
-      user: 'root',
-      password: 'Miao@20190603',
-      database: 'crm_db',
-    });
-  }
-
-  console.log('✅ 数据库连接成功');
-
-  // 查找所有 aj_status 不为 null 且 aj_employee_no 为 null 的记录
-  const [rows] = await conn.execute(
-    `SELECT id, ledgerId, createdBy, aj_company_name, created_at
-     FROM ledger_records
-     WHERE aj_status IS NOT NULL AND (aj_employee_no IS NULL OR aj_employee_no = '')
-     ORDER BY created_at ASC`
-  );
-
-  console.log(`📊 找到 ${rows.length} 条需要补全编号的记录`);
-  if (rows.length === 0) {
-    console.log('✅ 无需补全，所有记录已有编号');
+  // 1. 查询需要补全的记录
+  const [records] = await conn.execute(`
+    SELECT lr.id, lr.ledgerId, lr.createdBy, lr.aj_company_name
+    FROM ledger_records lr
+    JOIN ledgers l ON l.id = lr.ledgerId
+    WHERE l.type = 'custom_aj'
+      AND lr.aj_employee_no IS NULL
+      AND lr.aj_company_name IS NOT NULL
+    ORDER BY lr.ledgerId, lr.createdBy, lr.id
+  `);
+  console.log(`\n需要补全的记录数: ${records.length}`);
+  if (records.length === 0) {
+    console.log('没有需要补全的记录');
     await conn.end();
     return;
   }
 
-  // 按 ledgerId + createdBy 分组
-  const userLedgerMap = new Map();
-  for (const row of rows) {
-    const key = `${row.ledgerId}:${row.createdBy}`;
-    if (!userLedgerMap.has(key)) {
-      userLedgerMap.set(key, {
-        ledgerId: row.ledgerId,
-        createdBy: row.createdBy,
-        companyName: row.aj_company_name || '',
-        recordIds: [],
-      });
-    }
-    userLedgerMap.get(key).recordIds.push(row.id);
+  // 2. 查询已有编号
+  const [existingRows] = await conn.execute(`
+    SELECT ledgerId, createdBy, aj_employee_no
+    FROM ledger_records
+    WHERE aj_employee_no IS NOT NULL
+    GROUP BY ledgerId, createdBy
+  `);
+  const existingMap = new Map();
+  for (const row of existingRows) {
+    existingMap.set(`${row.ledgerId}:${row.createdBy}`, row.aj_employee_no);
+  }
+  console.log(`已有编号的用户数: ${existingMap.size}`);
+
+  // 3. 查询各账本各前缀的最大序号
+  const [maxRows] = await conn.execute(`
+    SELECT ledgerId,
+           SUBSTRING_INDEX(aj_employee_no, '-', 1) as prefix,
+           MAX(CAST(SUBSTRING_INDEX(aj_employee_no, '-', -1) AS UNSIGNED)) as maxNum
+    FROM ledger_records
+    WHERE aj_employee_no IS NOT NULL
+    GROUP BY ledgerId, SUBSTRING_INDEX(aj_employee_no, '-', 1)
+  `);
+  const maxMap = new Map();
+  for (const row of maxRows) {
+    maxMap.set(`${row.ledgerId}:${row.prefix}`, Number(row.maxNum) || 0);
   }
 
-  // 按 ledgerId 分组
-  const ledgerMap = new Map();
-  for (const [, info] of userLedgerMap) {
-    if (!ledgerMap.has(info.ledgerId)) ledgerMap.set(info.ledgerId, []);
-    ledgerMap.get(info.ledgerId).push(info);
+  // 4. 按 (ledgerId, createdBy) 分组生成编号
+  const groups = new Map();
+  for (const rec of records) {
+    const key = `${rec.ledgerId}:${rec.createdBy}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(rec);
   }
 
-  let totalUpdated = 0;
+  const newAssignments = new Map();
+  const updates = [];
 
-  for (const [ledgerId, users] of ledgerMap) {
-    console.log(`\n📁 账本 ${ledgerId}，${users.length} 个用户需要分配编号`);
-
-    // 查该账本已有的编号（包括已删除记录，避免重复）
-    const [existingRows] = await conn.execute(
-      `SELECT aj_employee_no FROM ledger_records
-       WHERE ledgerId = ? AND aj_employee_no IS NOT NULL AND aj_employee_no != ''`,
-      [ledgerId]
-    );
-
-    // 按前缀统计已有最大序号
-    const prefixCounters = new Map();
-    for (const row of existingRows) {
-      const no = row.aj_employee_no;
-      const lastDash = no.lastIndexOf('-');
-      if (lastDash > 0) {
-        const prefix = no.substring(0, lastDash);
-        const num = parseInt(no.substring(lastDash + 1)) || 0;
-        if (!prefixCounters.has(prefix) || prefixCounters.get(prefix) < num) {
-          prefixCounters.set(prefix, num);
-        }
-      }
+  for (const [key, recs] of groups) {
+    let empNo;
+    if (existingMap.has(key)) {
+      empNo = existingMap.get(key);
+      console.log(`  用户 ${recs[0].createdBy} 账本 ${recs[0].ledgerId}: 复用已有编号 ${empNo}，${recs.length} 条`);
+    } else if (newAssignments.has(key)) {
+      empNo = newAssignments.get(key);
+    } else {
+      const companyName = recs[0].aj_company_name || '';
+      const prefix = getCompanyInitials(companyName) || 'EMP';
+      const prefixKey = `${recs[0].ledgerId}:${prefix}`;
+      const currentMax = maxMap.get(prefixKey) || 0;
+      const nextNum = currentMax + 1;
+      empNo = `${prefix}-${String(nextNum).padStart(4, '0')}`;
+      maxMap.set(prefixKey, nextNum);
+      newAssignments.set(key, empNo);
+      console.log(`  用户 ${recs[0].createdBy} 账本 ${recs[0].ledgerId}: 新编号 ${empNo}（${companyName}），${recs.length} 条`);
     }
-
-    for (const userInfo of users) {
-      // 先检查该用户是否已有编号（包括已删除记录）
-      const [existCheck] = await conn.execute(
-        `SELECT aj_employee_no FROM ledger_records
-         WHERE ledgerId = ? AND createdBy = ? AND aj_employee_no IS NOT NULL AND aj_employee_no != ''
-         LIMIT 1`,
-        [ledgerId, userInfo.createdBy]
-      );
-
-      let employeeNo;
-      if (existCheck.length > 0) {
-        // 已有编号，直接用已有的（补全到其他记录）
-        employeeNo = existCheck[0].aj_employee_no;
-        console.log(`  👤 用户 ${userInfo.createdBy} 已有编号 ${employeeNo}，补全到空记录`);
-      } else {
-        // 生成新编号
-        const prefix = getCompanyInitials(userInfo.companyName);
-        const currentMax = prefixCounters.get(prefix) || 0;
-        const nextNum = currentMax + 1;
-        employeeNo = `${prefix}-${String(nextNum).padStart(4, '0')}`;
-        prefixCounters.set(prefix, nextNum);
-        console.log(`  👤 用户 ${userInfo.createdBy} → 新编号 ${employeeNo}（公司：${userInfo.companyName || '未知'}）`);
-      }
-
-      // 更新该用户在该账本的所有空编号记录
-      const [updateResult] = await conn.execute(
-        `UPDATE ledger_records SET aj_employee_no = ?
-         WHERE ledgerId = ? AND createdBy = ? AND (aj_employee_no IS NULL OR aj_employee_no = '')`,
-        [employeeNo, ledgerId, userInfo.createdBy]
-      );
-      console.log(`    更新 ${updateResult.affectedRows} 条记录`);
-      totalUpdated += updateResult.affectedRows;
+    for (const rec of recs) {
+      updates.push([empNo, rec.id]);
     }
   }
 
-  console.log(`\n✅ 完成！共更新 ${totalUpdated} 条记录`);
+  // 5. 批量更新
+  console.log(`\n开始更新 ${updates.length} 条记录...`);
+  let success = 0, fail = 0;
+  for (const [empNo, id] of updates) {
+    try {
+      await conn.execute('UPDATE ledger_records SET aj_employee_no = ? WHERE id = ?', [empNo, id]);
+      success++;
+    } catch (e) {
+      console.error(`  ❌ 更新 id=${id} 失败:`, e.message);
+      fail++;
+    }
+  }
+
+  console.log(`\n✅ 成功: ${success} 条，❌ 失败: ${fail} 条`);
+
+  // 6. 验证
+  const [verifyRows] = await conn.execute(`
+    SELECT COUNT(*) as total,
+           SUM(CASE WHEN aj_employee_no IS NULL THEN 1 ELSE 0 END) as missing
+    FROM ledger_records lr
+    JOIN ledgers l ON l.id = lr.ledgerId
+    WHERE l.type = 'custom_aj' AND lr.aj_company_name IS NOT NULL
+  `);
+  console.log(`\n验证结果: 总计 ${verifyRows[0].total} 条，仍缺少编号 ${verifyRows[0].missing} 条`);
+
   await conn.end();
 }
 
-main().catch(err => {
-  console.error('❌ 错误：', err.message);
+main().catch(e => {
+  console.error('❌ 脚本执行失败:', e);
   process.exit(1);
 });
