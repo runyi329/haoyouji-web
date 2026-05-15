@@ -9,6 +9,7 @@ interface SignaturePadProps {
 
 export default function SignaturePad({ onSignatureChange, width = 320, height = 160, disabled = false }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -31,6 +32,36 @@ export default function SignaturePad({ onSignatureChange, width = 320, height = 
     ctx.strokeStyle = "#1A2B4A";
   }, [width, height]);
 
+  // 禁用长按菜单和文本选择（原生事件监听）
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const preventContextMenu = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    };
+
+    const preventSelect = (e: Event) => {
+      e.preventDefault();
+      return false;
+    };
+
+    // 禁用右键菜单（长按触发）
+    container.addEventListener("contextmenu", preventContextMenu, { passive: false });
+    // 禁用文本选择
+    container.addEventListener("selectstart", preventSelect, { passive: false });
+    // iOS Safari 长按预览
+    container.addEventListener("webkitcontextmenu" as any, preventContextMenu, { passive: false });
+
+    return () => {
+      container.removeEventListener("contextmenu", preventContextMenu);
+      container.removeEventListener("selectstart", preventSelect);
+      container.removeEventListener("webkitcontextmenu" as any, preventContextMenu);
+    };
+  }, []);
+
   const getPosition = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
@@ -45,6 +76,7 @@ export default function SignaturePad({ onSignatureChange, width = 320, height = 
   const startDraw = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     if (disabled) return;
     e.preventDefault();
+    e.stopPropagation();
     const pos = getPosition(e);
     lastPointRef.current = pos;
     setIsDrawing(true);
@@ -58,6 +90,7 @@ export default function SignaturePad({ onSignatureChange, width = 320, height = 
   const draw = useCallback((e: React.TouchEvent | React.MouseEvent) => {
     if (!isDrawing || disabled) return;
     e.preventDefault();
+    e.stopPropagation();
     const pos = getPosition(e);
     const ctx = canvasRef.current?.getContext("2d");
     if (ctx && lastPointRef.current) {
@@ -115,6 +148,7 @@ export default function SignaturePad({ onSignatureChange, width = 320, height = 
         )}
       </div>
       <div
+        ref={containerRef}
         style={{
           border: `2px dashed ${hasSignature ? "#1A2B4A" : "#CBD5E0"}`,
           borderRadius: 8,
@@ -122,7 +156,13 @@ export default function SignaturePad({ onSignatureChange, width = 320, height = 
           position: "relative",
           overflow: "hidden",
           touchAction: "none",
+          // 防止长按选择和弹出菜单
+          WebkitUserSelect: "none",
+          userSelect: "none",
+          WebkitTouchCallout: "none" as any,
+          WebkitTapHighlightColor: "transparent",
         }}
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
       >
         <canvas
           ref={canvasRef}
@@ -131,6 +171,11 @@ export default function SignaturePad({ onSignatureChange, width = 320, height = 
             width: "100%",
             height: `${height}px`,
             cursor: disabled ? "default" : "crosshair",
+            // 防止canvas上的文本选择和长按菜单
+            WebkitUserSelect: "none",
+            userSelect: "none",
+            WebkitTouchCallout: "none" as any,
+            touchAction: "none",
           }}
           onMouseDown={startDraw}
           onMouseMove={draw}
@@ -139,6 +184,7 @@ export default function SignaturePad({ onSignatureChange, width = 320, height = 
           onTouchStart={startDraw}
           onTouchMove={draw}
           onTouchEnd={endDraw}
+          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}
         />
         {!hasSignature && !disabled && (
           <div
@@ -151,6 +197,7 @@ export default function SignaturePad({ onSignatureChange, width = 320, height = 
               color: "#BBB",
               pointerEvents: "none",
               userSelect: "none",
+              WebkitUserSelect: "none",
             }}
           >
             请在此处手写签名
