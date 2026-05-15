@@ -16370,11 +16370,13 @@ ${klinesSummary}
                   lr.images as images,
                   u.username as creatorUsername, u.name as creatorName,
                   lm.nickname as creatorNickname,
-                  ac.name as companyName
+                  ac.name as companyName,
+                  lc.name as categoryName
            FROM ledger_records lr
            LEFT JOIN users u ON u.id = lr.createdBy
            LEFT JOIN ledger_members lm ON lm.userId = lr.createdBy AND lm.ledgerId = lr.ledgerId
            LEFT JOIN aj_companies ac ON ac.id = lr.aj_company_id
+           LEFT JOIN ledger_categories lc ON lc.id = lr.categoryId
            WHERE lr.ledgerId=? AND lr.aj_company_id=? AND lr.deleted_at IS NULL ${dateFilter}
            ORDER BY lr.recordDate DESC, lr.createdAt DESC
            LIMIT 200`;
