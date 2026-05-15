@@ -958,11 +958,8 @@ function InvoiceListInline({
                     onClick={e => { e.stopPropagation(); setReasonPickerInvoiceId(inv.id); }}
                     style={{ cursor: 'pointer' }}
                   >
-                    <div style={{ fontSize: '10px', color: '#aaa', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                      报销事由
-                      <Pencil style={{ width: 8, height: 8, color: '#ccc' }} />
-                    </div>
-                    <div style={{ fontSize: '11px', color: localExpenseReasons[inv.id] || inv.ajExpenseReason ? '#D97706' : '#bbb', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
+                    <div style={{ fontSize: '11px', color: '#1A2B4A', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', borderBottom: '1px dashed #1A2B4A', display: 'inline-block', maxWidth: '100%' }}>
                       {safeStr(localExpenseReasons[inv.id] || inv.ajExpenseReason || '点击选择')}
                     </div>
                   </div>
@@ -971,11 +968,8 @@ function InvoiceListInline({
                     onClick={e => { e.stopPropagation(); setPickerInvoiceId(inv.id); }}
                     style={{ cursor: 'pointer' }}
                   >
-                    <div style={{ fontSize: '10px', color: '#aaa', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                      报销类目
-                      <Pencil style={{ width: 8, height: 8, color: '#ccc' }} />
-                    </div>
-                    <div style={{ fontSize: '11px', color: localCategories[inv.id] || inv.ajTaxCategory ? AJ_COLOR : '#bbb', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: '10px', color: '#aaa' }}>报销类目</div>
+                    <div style={{ fontSize: '11px', color: '#1A2B4A', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', borderBottom: '1px dashed #1A2B4A', display: 'inline-block', maxWidth: '100%' }}>
                       {safeStr(localCategories[inv.id] || inv.ajTaxCategory || '点击选择')}
                     </div>
                   </div>
@@ -984,11 +978,8 @@ function InvoiceListInline({
                     onClick={e => { e.stopPropagation(); setAccountingPickerInvoiceId(inv.id); }}
                     style={{ cursor: 'pointer' }}
                   >
-                    <div style={{ fontSize: '10px', color: '#aaa', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                      会计科目
-                      <Pencil style={{ width: 8, height: 8, color: '#ccc' }} />
-                    </div>
-                    <div style={{ fontSize: '11px', color: localAccountingCodes[inv.id] || inv.ajAccountingCode ? '#059669' : '#bbb', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: '10px', color: '#aaa' }}>会计科目</div>
+                    <div style={{ fontSize: '11px', color: '#1A2B4A', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', borderBottom: '1px dashed #1A2B4A', display: 'inline-block', maxWidth: '100%' }}>
                       {safeStr(localAccountingCodes[inv.id] || inv.ajAccountingCode || '自动匹配')}
                     </div>
                   </div>
