@@ -16386,8 +16386,45 @@ ${klinesSummary}
         console.log('[ajOwnerGetCompanyInvoices] rows count:', (rows as any[]).length);
         return rows as any[];
       }),
-
-    // AJ账本市场管理：获取当前用户的推荐下线中同时是该账本成员的人员及其开票业绩
+    // AJ账本资方：修改申请单的报销类目（税务分类名称）
+    ajOwnerUpdateInvoiceCategory: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        recordId: z.number(),
+        categoryName: z.string().max(100),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 验证当前用户是该账本的资方成员
+        const [memberRows] = await (conn as any).execute(
+          `SELECT lm.id, lm.role FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? AND lm.deleted_at IS NULL LIMIT 1`,
+          [input.ledgerId, ctx.user.id]
+        ) as any;
+        if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        // 查找或创建对应的 ledger_category
+        const [catRows] = await (conn as any).execute(
+          `SELECT id FROM ledger_categories WHERE ledgerId=? AND name=? AND deleted_at IS NULL LIMIT 1`,
+          [input.ledgerId, input.categoryName]
+        ) as any;
+        let categoryId: number;
+        if (catRows && catRows.length > 0) {
+          categoryId = catRows[0].id;
+        } else {
+          const [insertResult] = await (conn as any).execute(
+            `INSERT INTO ledger_categories (ledgerId, name, parentId, isDefault, createdAt) VALUES (?, ?, NULL, 0, NOW())`,
+            [input.ledgerId, input.categoryName]
+          ) as any;
+          categoryId = insertResult.insertId;
+        }
+        // 更新记录的 categoryId
+        await (conn as any).execute(
+          `UPDATE ledger_records SET categoryId=? WHERE id=? AND ledgerId=? AND deleted_at IS NULL`,
+          [categoryId, input.recordId, input.ledgerId]
+        );
+        return { success: true, categoryId, categoryName: input.categoryName };
+      }),
+    // AJ账本市场管理：获取当前用户的推荐下线中同时是该账本成员的人员及其开票业绩绩
     ajGetMarketTeam: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
