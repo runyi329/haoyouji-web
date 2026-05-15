@@ -2041,6 +2041,7 @@ export default function LedgerDetail() {
   const { data: transactionsData, refetch: refetchTransactions } = trpc.ledger.getTransactions.useQuery(filters, {
     refetchOnMount: true,
     refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   // 成员弹窗状态
