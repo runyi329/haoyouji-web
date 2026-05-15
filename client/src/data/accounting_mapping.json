@@ -1,0 +1,198 @@
+[
+  {
+    "category": "办公用品/文具耗材",
+    "tax_keywords": [
+      "文教办公",
+      "办公用品",
+      "文具"
+    ],
+    "accounting": "管理费用-办公费"
+  },
+  {
+    "category": "电脑/打印机/办公设备",
+    "tax_keywords": [
+      "机械设备",
+      "电子设备",
+      "计算机"
+    ],
+    "accounting": "固定资产-电子设备"
+  },
+  {
+    "category": "房租/场地租赁",
+    "tax_keywords": [
+      "租赁服务",
+      "不动产租赁",
+      "房屋租赁"
+    ],
+    "accounting": "管理费用-租赁费"
+  },
+  {
+    "category": "物业费/保洁服务费",
+    "tax_keywords": [
+      "商务辅助",
+      "物业",
+      "保洁"
+    ],
+    "accounting": "管理费用-物业费"
+  },
+  {
+    "category": "水电燃气费",
+    "tax_keywords": [
+      "电力",
+      "水",
+      "燃气",
+      "水电"
+    ],
+    "accounting": "管理费用-水电费"
+  },
+  {
+    "category": "咨询/税务/律师/审计费",
+    "tax_keywords": [
+      "鉴证咨询",
+      "咨询",
+      "法律",
+      "审计"
+    ],
+    "accounting": "管理费用-咨询费"
+  },
+  {
+    "category": "广告/推广/设计/短视频制作",
+    "tax_keywords": [
+      "广告",
+      "设计服务",
+      "推广"
+    ],
+    "accounting": "销售费用-广告费"
+  },
+  {
+    "category": "会议费/会展展位费",
+    "tax_keywords": [
+      "会展",
+      "会议"
+    ],
+    "accounting": "管理费用-会议费"
+  },
+  {
+    "category": "差旅费-住宿费",
+    "tax_keywords": [
+      "住宿"
+    ],
+    "accounting": "管理费用-差旅费"
+  },
+  {
+    "category": "差旅费-机票/火车票/大巴票",
+    "tax_keywords": [
+      "旅客运输",
+      "航空",
+      "铁路",
+      "道路旅客"
+    ],
+    "accounting": "管理费用-差旅费"
+  },
+  {
+    "category": "差旅费-出租车/网约车",
+    "tax_keywords": [
+      "出租",
+      "网约",
+      "城市客运"
+    ],
+    "accounting": "管理费用-差旅费"
+  },
+  {
+    "category": "餐饮/工作餐",
+    "tax_keywords": [
+      "餐饮"
+    ],
+    "accounting": "管理费用-业务招待费"
+  },
+  {
+    "category": "车辆维修/保养/洗车费",
+    "tax_keywords": [
+      "修理修配",
+      "汽车维修",
+      "车辆维修"
+    ],
+    "accounting": "管理费用-车辆费"
+  },
+  {
+    "category": "运输费/物流快递费",
+    "tax_keywords": [
+      "货物运输",
+      "物流",
+      "快递",
+      "邮政"
+    ],
+    "accounting": "销售费用-运输费"
+  },
+  {
+    "category": "建筑装修/工程维修",
+    "tax_keywords": [
+      "建筑",
+      "装修",
+      "工程"
+    ],
+    "accounting": "长期待摊费用-装修费"
+  },
+  {
+    "category": "软件服务费/系统年费",
+    "tax_keywords": [
+      "信息技术",
+      "软件",
+      "系统"
+    ],
+    "accounting": "管理费用-软件服务费"
+  },
+  {
+    "category": "培训费/员工学习课程",
+    "tax_keywords": [
+      "教育",
+      "培训"
+    ],
+    "accounting": "管理费用-职工教育经费"
+  },
+  {
+    "category": "劳保用品/工作服/防护物资",
+    "tax_keywords": [
+      "劳保",
+      "日用百货",
+      "防护"
+    ],
+    "accounting": "管理费用-劳保费"
+  },
+  {
+    "category": "业务招待餐费/礼品",
+    "tax_keywords": [
+      "餐饮",
+      "礼品",
+      "食品"
+    ],
+    "accounting": "管理费用-业务招待费"
+  },
+  {
+    "category": "员工团建/福利餐费",
+    "tax_keywords": [
+      "餐饮",
+      "娱乐",
+      "旅游"
+    ],
+    "accounting": "管理费用-福利费"
+  },
+  {
+    "category": "银行手续费/账户管理费",
+    "tax_keywords": [
+      "金融服务",
+      "手续费",
+      "银行"
+    ],
+    "accounting": "财务费用-手续费"
+  },
+  {
+    "category": "原材料/库存商品采购",
+    "tax_keywords": [
+      "农产品",
+      "工业品",
+      "商品"
+    ],
+    "accounting": "主营业务成本"
+  }
+]

@@ -122,6 +122,7 @@ const AfOrderManage = lazy(() => import("./pages/AfOrderManage"));
 const AJCompanyManager = lazy(() => import("./pages/AJCompanyManager"));
 const AJOwnerCompanies = lazy(() => import("./pages/AJOwnerCompanies"));
 const AJMarketTeam = lazy(() => import("./pages/AJMarketTeam"));
+const AJContract = lazy(() => import("./pages/AJContract"));
 
 const AfFeeDetail = lazy(() => import("./pages/AfFeeDetail"));
 const AfPayoutManage = lazy(() => import("./pages/AfPayoutManage"));
@@ -500,6 +501,7 @@ function Router() {
         <Route path="/ledger/:ledgerId/aj-companies" component={AJCompanyManager} />
         <Route path="/ledger/:ledgerId/aj-owner-companies" component={AJOwnerCompanies} />
         <Route path="/ledger/:ledgerId/aj-market-team" component={AJMarketTeam} />
+        <Route path="/ledger/:ledgerId/aj-contract" component={AJContract} />
         <Route path="/ledger/:id/market-eval-settings" component={MarketEvalSettings} />
         <Route path="/ledger/:id/be-data" component={BeDataPage} />
         <Route path="/ledger/:id/other-coins" component={OtherCoinsPage} />
