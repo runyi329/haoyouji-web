@@ -16422,7 +16422,7 @@ ${klinesSummary}
         }
         // 更新记录的 categoryId，同时写入 aj_tax_category（报销类目名称）
         await (conn as any).execute(
-          `UPDATE ledger_records SET categoryId=?, aj_tax_category=? WHERE id=? AND ledgerId=? AND deleted_at IS NULL`,
+          `UPDATE ledger_records SET categoryId=?, aj_tax_category=? WHERE id=? AND ledgerId=?`,
           [categoryId, input.categoryName, input.recordId, input.ledgerId]
         );
         return { success: true, categoryId, categoryName: input.categoryName };
@@ -16444,7 +16444,7 @@ ${klinesSummary}
         ) as any;
         if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         await (conn as any).execute(
-          `UPDATE ledger_records SET aj_tax_category=? WHERE id=? AND ledgerId=? AND deleted_at IS NULL`,
+          `UPDATE ledger_records SET aj_tax_category=? WHERE id=? AND ledgerId=?`,
           [input.taxCategory, input.recordId, input.ledgerId]
         );
         return { success: true, taxCategory: input.taxCategory };
@@ -16466,7 +16466,7 @@ ${klinesSummary}
         ) as any;
         if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         await (conn as any).execute(
-          `UPDATE ledger_records SET aj_accounting_code=? WHERE id=? AND ledgerId=? AND deleted_at IS NULL`,
+          `UPDATE ledger_records SET aj_accounting_code=? WHERE id=? AND ledgerId=?`,
           [input.accountingCode, input.recordId, input.ledgerId]
         );
         return { success: true, accountingCode: input.accountingCode };
@@ -16488,7 +16488,7 @@ ${klinesSummary}
         ) as any;
         if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         await (conn as any).execute(
-          `UPDATE ledger_records SET aj_expense_reason=? WHERE id=? AND ledgerId=? AND deleted_at IS NULL`,
+          `UPDATE ledger_records SET aj_expense_reason=? WHERE id=? AND ledgerId=?`,
           [input.expenseReason, input.recordId, input.ledgerId]
         );
         return { success: true, expenseReason: input.expenseReason };
