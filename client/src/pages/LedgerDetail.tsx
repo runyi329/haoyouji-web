@@ -5596,7 +5596,7 @@ export default function LedgerDetail() {
                               <div>
                                 <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
                                 <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#444' }}>
-                                  {(record as any).ajExpenseReason || '待确认'}
+                                  {(record as any).ajExpenseReason || '待AI会计确认'}
                                 </div>
                               </div>
                               <div>
@@ -5608,7 +5608,7 @@ export default function LedgerDetail() {
                               <div>
                                 <div style={{ fontSize: '10px', color: '#aaa' }}>报销类目</div>
                                 <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#444' }}>
-                                  {(record as any).ajTaxCategory || '待确认'}
+                                  {(record as any).ajTaxCategory || '待AI会计确认'}
                                 </div>
                               </div>
                               <div>
