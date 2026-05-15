@@ -102,6 +102,8 @@ jobs:
             echo "Nginx错误日志（最后10行）："
             tail -10 /var/log/nginx/haoyouji_error.log 2>/dev/null || true
             tail -10 /var/log/nginx/error.log 2>/dev/null || true
+            echo "👤 补全历史订单员工编号..."
+            cd /root/haoyouji-web && node scripts/backfill-employee-no.mjs || echo "⚠️ 员工编号补全失败（非致命）"
             echo "📊 导入/更新黄金历史日K线数据..."
             cd /root/haoyouji-web && node scripts/update-gold-daily.mjs || echo "⚠️ 黄金数据更新失败（非致命）"
             echo "📊 初始化/更新数字币价格缓存..."
