@@ -22840,7 +22840,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         const [rows] = await dbConn.execute(
-          `SELECT id, ledger_id, user_id, real_name, id_card, bank_name, bank_account, signed_at FROM aj_contracts WHERE ledger_id = ? AND user_id = ? LIMIT 1`,
+          `SELECT id, ledger_id, user_id, real_name, id_card, bank_name, bank_account, signature_url, signed_at FROM aj_contracts WHERE ledger_id = ? AND user_id = ? LIMIT 1`,
           [input.ledgerId, ctx.user.id]
         ) as any[];
         const row = (rows as any[])[0];
@@ -22853,6 +22853,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
             idCard: row.id_card as string,
             bankName: row.bank_name as string | null,
             bankAccount: row.bank_account as string,
+            signatureUrl: row.signature_url as string | null,
             signedAt: new Date(row.signed_at),
           },
         };
@@ -22866,6 +22867,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         idCard: z.string().min(15).max(30),
         bankName: z.string().max(100).optional(),
         bankAccount: z.string().min(10).max(100),
+        signatureImage: z.string().min(1), // base64 data URL
       }))
       .mutation(async ({ ctx, input }) => {
         const dbConn = await getDbConnection();
@@ -22877,10 +22879,24 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         if ((existing as any[]).length > 0) {
           throw new TRPCError({ code: 'BAD_REQUEST', message: '您已签约，请勿重复操作' });
         }
+        // 上传签名图片到S3
+        let signatureUrl = '';
+        try {
+          const { storagePut } = await import('./storage');
+          const base64Data = input.signatureImage.replace(/^data:image\/\w+;base64,/, '');
+          const buffer = Buffer.from(base64Data, 'base64');
+          const randomSuffix = Math.random().toString(36).substring(2, 10);
+          const fileKey = `signatures/${ctx.user.id}-${input.ledgerId}-${randomSuffix}.png`;
+          const result = await storagePut(fileKey, buffer, 'image/png');
+          signatureUrl = result.url;
+        } catch (e) {
+          console.error('签名图片上传失败:', e);
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '签名图片上传失败，请重试' });
+        }
         const now = new Date();
         await dbConn.execute(
-          `INSERT INTO aj_contracts (ledger_id, user_id, real_name, id_card, bank_name, bank_account, signed_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [input.ledgerId, ctx.user.id, input.realName, input.idCard, input.bankName || null, input.bankAccount, now]
+          `INSERT INTO aj_contracts (ledger_id, user_id, real_name, id_card, bank_name, bank_account, signature_url, signed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [input.ledgerId, ctx.user.id, input.realName, input.idCard, input.bankName || null, input.bankAccount, signatureUrl, now]
         );
         return { success: true, signedAt: now };
       }),

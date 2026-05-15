@@ -2117,6 +2117,7 @@ export const ajContracts = mysqlTable("aj_contracts", {
   idCard: varchar('id_card', { length: 30 }).notNull(),
   bankName: varchar('bank_name', { length: 100 }),
   bankAccount: varchar('bank_account', { length: 100 }).notNull(),
+  signatureUrl: varchar('signature_url', { length: 500 }),
   signedAt: timestamp('signed_at', { mode: 'date' }).defaultNow().notNull(),
   createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
 }, (table) => [
