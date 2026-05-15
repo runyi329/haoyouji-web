@@ -1,0 +1,28 @@
+name: 测试图片访问
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    name: 测试图片访问
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH测试
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          script: |
+            cd /root/haoyouji-web
+            node -e "
+              require('dotenv').config();
+              const mysql = require('mysql2/promise');
+              async function main() {
+                const conn = await mysql.createConnection(process.env.DATABASE_URL);
+                const [rows] = await conn.execute('SELECT id, imageUrl, images FROM ledger_records WHERE ledgerId = 76 AND (imageUrl IS NOT NULL OR images IS NOT NULL) ORDER BY createdAt DESC LIMIT 5');
+                rows.forEach(r => console.log('id:', r.id, 'imageUrl:', r.imageUrl, 'images:', r.images));
+                await conn.end();
+              }
+              main().catch(e => console.error('DB Error:', e.message));
+            "
