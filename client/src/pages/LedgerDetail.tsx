@@ -5591,32 +5591,16 @@ export default function LedgerDetail() {
                             {/* 虚线分隔 */}
                             <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
 
-                            {/* 四格信息网格 */}
+                            {/* 六格信息网格：第一行（申请日期、报销凭证、员工编号），第二行（报销事由、报销类目、会计科目） */}
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px 8px', marginBottom: '8px' }}>
-                              <div>
-                                <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
-                                <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#444' }}>
-                                  {(record as any).ajExpenseReason || '待AI主管确认'}
-                                </div>
-                              </div>
+                              {/* 第一行：申请日期 */}
                               <div>
                                 <div style={{ fontSize: '10px', color: '#aaa' }}>申请日期</div>
                                 <div style={{ fontSize: '12px', color: '#444', fontWeight: 500 }}>
                                   {(() => { const d = new Date(record.createdAt); return `${d.getFullYear()}年${String(d.getMonth()+1).padStart(2,'0')}月${String(d.getDate()).padStart(2,'0')}日`; })()}
                                 </div>
                               </div>
-                              <div>
-                                <div style={{ fontSize: '10px', color: '#aaa' }}>报销类目</div>
-                                <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#444' }}>
-                                  {(record as any).ajTaxCategory || '待AI财务确认'}
-                                </div>
-                              </div>
-                              <div>
-                                <div style={{ fontSize: '10px', color: '#aaa' }}>会计科目</div>
-                                <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#444' }}>
-                                  {(record as any).ajAccountingCode || '待AI会计确认'}
-                                </div>
-                              </div>
+                              {/* 第一行：报销凭证 */}
                               <div>
                                 <div style={{ fontSize: '10px', color: '#aaa' }}>报销凭证</div>
                                 {(() => {
@@ -5652,6 +5636,34 @@ export default function LedgerDetail() {
                                     <div style={{ fontSize: '12px', color: '#ccc', marginTop: '2px' }}>无</div>
                                   );
                                 })()}
+                              </div>
+                              {/* 第一行：员工编号 */}
+                              <div>
+                                <div style={{ fontSize: '10px', color: '#aaa' }}>员工编号</div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, color: '#444', fontFamily: 'monospace' }}>
+                                  {(record as any).ajEmployeeNo || '—'}
+                                </div>
+                              </div>
+                              {/* 第二行：报销事由 */}
+                              <div>
+                                <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#444' }}>
+                                  {(record as any).ajExpenseReason || '待AI主管确认'}
+                                </div>
+                              </div>
+                              {/* 第二行：报销类目 */}
+                              <div>
+                                <div style={{ fontSize: '10px', color: '#aaa' }}>报销类目</div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#444' }}>
+                                  {(record as any).ajTaxCategory || '待AI财务确认'}
+                                </div>
+                              </div>
+                              {/* 第二行：会计科目 */}
+                              <div>
+                                <div style={{ fontSize: '10px', color: '#aaa' }}>会计科目</div>
+                                <div style={{ fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#444' }}>
+                                  {(record as any).ajAccountingCode || '待AI会计确认'}
+                                </div>
                               </div>
                             </div>
 

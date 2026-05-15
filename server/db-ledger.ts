@@ -3004,6 +3004,39 @@ export async function addTransaction(data: {
       ajCompanyName: data.ajCompanyName || null,
     } : {}),
   };
+
+  // AJ账本：自动生成员工编号（每用户每账本唯一，一旦生成不变）
+  if (isAJRecord) {
+    const existingEmployeeNo = await (db as any)
+      .execute(
+        `SELECT aj_employee_no FROM ledger_records
+         WHERE ledgerId = ? AND createdBy = ? AND aj_employee_no IS NOT NULL
+         AND deleted_at IS NULL LIMIT 1`,
+        [data.ledgerId, data.userId]
+      ).then((rows: any) => {
+        const r = Array.isArray(rows) ? rows : rows[0];
+        return Array.isArray(r) ? r[0]?.aj_employee_no : r?.aj_employee_no;
+      }).catch(() => null);
+
+    if (existingEmployeeNo) {
+      (recordData as any).ajEmployeeNo = existingEmployeeNo;
+    } else {
+      // 生成新编号：查当前账本最大编号 + 1
+      const maxNo = await (db as any)
+        .execute(
+          `SELECT MAX(CAST(SUBSTRING(aj_employee_no, 5) AS UNSIGNED)) as maxNum
+           FROM ledger_records WHERE ledgerId = ? AND aj_employee_no IS NOT NULL AND deleted_at IS NULL`,
+          [data.ledgerId]
+        ).then((rows: any) => {
+          const r = Array.isArray(rows) ? rows : rows[0];
+          const row = Array.isArray(r) ? r[0] : r;
+          return row?.maxNum || 0;
+        }).catch(() => 0);
+      const nextNum = (Number(maxNo) || 0) + 1;
+      (recordData as any).ajEmployeeNo = `EMP-${String(nextNum).padStart(4, '0')}`;
+    }
+  }
+
   const encryptedRecordData = await encryptFields(db, 'ledger_records', recordData, LEDGER_RECORD_ENCRYPT_FIELDS);
 
   let result: any;
@@ -3152,6 +3185,7 @@ export async function getTransactionsList(
       ajTaxCategory: ledgerRecords.ajTaxCategory,
       ajAccountingCode: ledgerRecords.ajAccountingCode,
       ajExpenseReason: ledgerRecords.ajExpenseReason,
+      ajEmployeeNo: ledgerRecords.ajEmployeeNo,
     })
     .from(ledgerRecords)
     .where(and(...conditions, isNull(ledgerRecords.deletedAt)))
@@ -3400,6 +3434,7 @@ export async function getTransactionDetail(
       ajTaxCategory: ledgerRecords.ajTaxCategory,
       ajAccountingCode: ledgerRecords.ajAccountingCode,
       ajExpenseReason: ledgerRecords.ajExpenseReason,
+      ajEmployeeNo: ledgerRecords.ajEmployeeNo,
     })
     .from(ledgerRecords)
     .where(
