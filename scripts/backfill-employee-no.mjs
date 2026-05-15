@@ -62,9 +62,9 @@ async function main() {
 
   // 2. 查询已有编号
   const [existingRows] = await conn.execute(`
-    SELECT ledgerId, createdBy, aj_employee_no
+    SELECT ledgerId, createdBy, MIN(aj_employee_no) as aj_employee_no
     FROM ledger_records
-    WHERE aj_employee_no IS NOT NULL
+    WHERE aj_employee_no IS NOT NULL AND aj_employee_no != ''
     GROUP BY ledgerId, createdBy
   `);
   const existingMap = new Map();
