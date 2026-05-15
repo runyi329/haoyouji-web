@@ -272,6 +272,167 @@ function TaxCategoryPicker({
   );
 }
 
+// ========== 标准会计科目数据（两层：一级科目 → 常用明细）==========
+const ACCOUNTING_SUBJECTS = [
+  { code: '1001', name: '库存现金', children: [] },
+  { code: '1002', name: '银行存款', children: [] },
+  { code: '1122', name: '应收账款', children: [] },
+  { code: '1221', name: '其他应收款', children: [] },
+  { code: '1401', name: '原材料', children: [] },
+  { code: '1403', name: '库存商品', children: [] },
+  { code: '1601', name: '固定资产', children: ['办公设备','电子设备','交通运输工具','机械设备'] },
+  { code: '1701', name: '无形资产', children: ['软件使用权','商标权','专利权'] },
+  { code: '1801', name: '长期待摊费用', children: ['装修费','开办费'] },
+  { code: '2202', name: '应付账款', children: [] },
+  { code: '2241', name: '其他应付款', children: [] },
+  { code: '5001', name: '生产成本', children: ['直接材料','直接人工','制造费用'] },
+  { code: '6001', name: '主营业务收入', children: [] },
+  { code: '6051', name: '其他业务收入', children: [] },
+  { code: '6401', name: '主营业务成本', children: [] },
+  { code: '6601', name: '销售费用', children: ['广告费','宣传费','业务招待费','运输费','销售人员工资','展览费'] },
+  { code: '6602', name: '管理费用', children: ['办公费','差旅费','咨询费','租赁费','水电费','物业费','劳保费','职工教育经费','福利费','车辆费','会议费','软件服务费','折旧费','维修费','业务招待费'] },
+  { code: '6603', name: '财务费用', children: ['利息支出','手续费','汇兑损益'] },
+  { code: '6711', name: '营业外支出', children: ['罚款支出','捐赠支出'] },
+];
+
+// ========== 会计科目选择器 ==========
+function AccountingCodePicker({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (name: string) => void;
+  onClose: () => void;
+}) {
+  const [selectedSubject, setSelectedSubject] = useState<typeof ACCOUNTING_SUBJECTS[0] | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
+
+  const handleSubjectClick = (subject: typeof ACCOUNTING_SUBJECTS[0]) => {
+    if (subject.children.length === 0) {
+      // 无明细，直接选中
+      setPending(subject.name);
+      setSelectedSubject(subject);
+    } else {
+      setSelectedSubject(subject);
+      setPending(null);
+    }
+  };
+
+  const handleDetailClick = (detail: string) => {
+    if (!selectedSubject) return;
+    setPending(`${selectedSubject.name}-${detail}`);
+  };
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#f5f6f8', display: 'flex', flexDirection: 'column', color: '#333' }}>
+      {/* 顶部导航栏 */}
+      <div style={{ background: '#1A2B4A', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}>
+          <ChevronRight style={{ width: 20, height: 20, color: '#fff', transform: 'rotate(180deg)' }} />
+        </button>
+        <span style={{ fontSize: '16px', fontWeight: 700, color: '#fff', flex: 1 }}>选择会计科目</span>
+      </div>
+
+      {/* 内容区域 */}
+      <div style={{ overflowY: 'auto', flex: 1, padding: '16px' }}>
+        {/* 一级科目 */}
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ fontSize: '11px', color: '#999', marginBottom: '8px', fontWeight: 500 }}>一级科目（点击展开明细）</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {ACCOUNTING_SUBJECTS.map((subject, idx) => {
+              const isSelected = selectedSubject?.code === subject.code;
+              const colors = ['#1A2B4A','#2563EB','#7C3AED','#059669','#D97706','#DC2626','#0891B2','#BE185D','#65A30D','#EA580C'];
+              const color = colors[idx % colors.length];
+              return (
+                <button
+                  key={subject.code}
+                  onClick={() => handleSubjectClick(subject)}
+                  style={{
+                    padding: '7px 14px', borderRadius: '20px', border: '1.5px solid',
+                    borderColor: isSelected ? color : '#e0e0e0',
+                    background: isSelected ? color : '#fff',
+                    color: isSelected ? '#fff' : '#444',
+                    fontSize: '13px', fontWeight: isSelected ? 600 : 400,
+                    cursor: 'pointer', transition: 'all 0.15s',
+                    display: 'flex', alignItems: 'center', gap: '4px',
+                  }}
+                >
+                  <span style={{ fontSize: '10px', opacity: 0.7 }}>{subject.code}</span>
+                  <span>{subject.name}</span>
+                  {subject.children.length > 0 && (
+                    <span style={{ fontSize: '10px', color: isSelected ? 'rgba(255,255,255,0.75)' : '#bbb', background: isSelected ? 'rgba(255,255,255,0.2)' : '#f0f0f0', borderRadius: '10px', padding: '1px 5px' }}>
+                      {subject.children.length}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 明细科目（如果选中的一级科目有明细）*/}
+        {selectedSubject && selectedSubject.children.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ fontSize: '11px', color: '#999', marginBottom: '8px', fontWeight: 500 }}>
+              {selectedSubject.name} — 明细科目
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {selectedSubject.children.map((detail, idx) => {
+                const fullName = `${selectedSubject.name}-${detail}`;
+                const isSelected = pending === fullName;
+                const colors = ['#1A2B4A','#2563EB','#7C3AED','#059669','#D97706','#DC2626','#0891B2','#BE185D','#65A30D','#EA580C'];
+                const color = colors[idx % colors.length];
+                return (
+                  <button
+                    key={detail}
+                    onClick={() => handleDetailClick(detail)}
+                    style={{
+                      padding: '7px 14px', borderRadius: '20px', border: '1.5px solid',
+                      borderColor: isSelected ? color : '#e0e0e0',
+                      background: isSelected ? color : '#fff',
+                      color: isSelected ? '#fff' : '#444',
+                      fontSize: '13px', fontWeight: isSelected ? 600 : 400,
+                      cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                  >
+                    {detail}
+                    {isSelected && <CheckCircle style={{ width: 13, height: 13, color: '#fff', marginLeft: '4px' }} />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 已选提示 + 确定按钮 */}
+      <div style={{ padding: '10px 16px 16px', background: '#fff', borderTop: '1px solid #eee', flexShrink: 0 }}>
+        {pending && (
+          <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ fontSize: '12px', color: '#888' }}>已选：</span>
+            <span style={{ fontSize: '13px', color: '#1A2B4A', fontWeight: 600, flex: 1 }}>{pending}</span>
+            <button onClick={() => setPending(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}>
+              <X style={{ width: 13, height: 13, color: '#bbb' }} />
+            </button>
+          </div>
+        )}
+        <button
+          onClick={() => { if (pending) { onSelect(pending); } }}
+          disabled={!pending}
+          style={{
+            width: '100%', padding: '13px', borderRadius: '10px', border: 'none',
+            background: pending ? '#1A2B4A' : '#e0e0e0',
+            color: pending ? '#fff' : '#aaa',
+            fontSize: '15px', fontWeight: 700,
+            cursor: pending ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {pending ? `确定「${pending}」` : '请先选择一个科目'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 type RequestType = 'add' | 'update' | 'delete';
 type CompanyFormData = {
   name: string;
@@ -454,6 +615,8 @@ function InvoiceListInline({
   const [previewIndex, setPreviewIndex] = useState(0);
   const [pickerInvoiceId, setPickerInvoiceId] = useState<number | null>(null);
   const [localCategories, setLocalCategories] = useState<Record<number, string>>({});
+  const [accountingPickerInvoiceId, setAccountingPickerInvoiceId] = useState<number | null>(null);
+  const [localAccountingCodes, setLocalAccountingCodes] = useState<Record<number, string>>({});
   const toast = useCenterToast();
   const utils = trpc.useUtils();
   const updateCategoryMutation = (trpc as any).ledger.ajOwnerUpdateInvoiceCategory.useMutation({
@@ -462,14 +625,54 @@ function InvoiceListInline({
     },
     onError: () => toast.show('更新失败，请重试', 'error'),
   });
+  const updateAccountingCodeMutation = (trpc as any).ledger.ajOwnerUpdateAccountingCode.useMutation({
+    onSuccess: () => {
+      toast.show('会计科目已更新', 'success');
+    },
+    onError: () => toast.show('更新失败，请重试', 'error'),
+  });
   const handleCategorySelect = useCallback((categoryName: string) => {
     if (pickerInvoiceId == null) return;
-    const invoiceId = pickerInvoiceId; // 闭包捕获当前值
+    const invoiceId = pickerInvoiceId;
     setPickerInvoiceId(null);
-    // 乐观更新：立即更新本地显示
     setLocalCategories(prev => ({ ...prev, [invoiceId]: categoryName }));
     updateCategoryMutation.mutate({ ledgerId, recordId: invoiceId, categoryName });
-  }, [pickerInvoiceId, ledgerId]);;
+    // 根据22条对照规则自动预填会计科目
+    const autoMap: Record<string, string> = {
+      '文教办公用品': '管理费用-办公费', '办公用品': '管理费用-办公费',
+      '机械设备': '固定资产-机械设备', '电子设备': '固定资产-电子设备',
+      '租赁服务': '管理费用-租赁费', '不动产租赁': '管理费用-租赁费',
+      '商务辅助服务': '管理费用-物业费', '物业': '管理费用-物业费',
+      '电力': '管理费用-水电费', '水': '管理费用-水电费', '燃气': '管理费用-水电费',
+      '鉴证咨询': '管理费用-咨询费', '咨询': '管理费用-咨询费',
+      '广告': '销售费用-广告费', '设计服务': '销售费用-广告费',
+      '会展': '管理费用-会议费', '会议': '管理费用-会议费',
+      '住宿': '管理费用-差旅费', '旅客运输': '管理费用-差旅费', '航空': '管理费用-差旅费',
+      '餐饮': '管理费用-业务招待费', '餐饮服务': '管理费用-业务招待费',
+      '修理修配': '管理费用-车辆费', '维修': '管理费用-维修费',
+      '交通运输': '管理费用-差旅费', '物流': '销售费用-运输费',
+      '建筑服务': '长期待摊费用-装修费',
+      '信息技术服务': '管理费用-软件服务费', '软件': '管理费用-软件服务费',
+      '教育': '管理费用-职工教育经费',
+      '劳保': '管理费用-劳保费',
+      '直接收费金融': '财务费用-手续费', '金融': '财务费用-手续费',
+    };
+    let autoCode = '';
+    for (const [key, val] of Object.entries(autoMap)) {
+      if (categoryName.includes(key)) { autoCode = val; break; }
+    }
+    if (autoCode) {
+      setLocalAccountingCodes(prev => ({ ...prev, [invoiceId]: autoCode }));
+      updateAccountingCodeMutation.mutate({ ledgerId, recordId: invoiceId, accountingCode: autoCode });
+    }
+  }, [pickerInvoiceId, ledgerId]);
+  const handleAccountingCodeSelect = useCallback((code: string) => {
+    if (accountingPickerInvoiceId == null) return;
+    const invoiceId = accountingPickerInvoiceId;
+    setAccountingPickerInvoiceId(null);
+    setLocalAccountingCodes(prev => ({ ...prev, [invoiceId]: code }));
+    updateAccountingCodeMutation.mutate({ ledgerId, recordId: invoiceId, accountingCode: code });
+  }, [accountingPickerInvoiceId, ledgerId]);
 
   // 搜索过滤
   const filteredInvoices = useMemo(() => {
@@ -511,6 +714,12 @@ function InvoiceListInline({
         <TaxCategoryPicker
           onSelect={handleCategorySelect}
           onClose={() => setPickerInvoiceId(null)}
+        />
+      )}
+      {accountingPickerInvoiceId != null && (
+        <AccountingCodePicker
+          onSelect={handleAccountingCodeSelect}
+          onClose={() => setAccountingPickerInvoiceId(null)}
         />
       )}
       {previewImages && (
@@ -566,11 +775,11 @@ function InvoiceListInline({
                 </div>
                 {/* 虚线分隔 */}
                 <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
-                {/* 三格信息：报销事由 | 报销类目 | 报销凭证 */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px 8px', marginBottom: '8px' }}>
+                {/* 四格信息：报销事由 | 报销类目 | 会计科目 | 报销凭证 */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px 6px', marginBottom: '8px' }}>
                   <div>
                     <div style={{ fontSize: '10px', color: '#aaa' }}>报销事由</div>
-                    <div style={{ fontSize: '12px', color: '#444', fontWeight: 500 }}>待确认</div>
+                    <div style={{ fontSize: '11px', color: '#444', fontWeight: 500 }}>待确认</div>
                   </div>
                   <div
                     onClick={e => { e.stopPropagation(); setPickerInvoiceId(inv.id); }}
@@ -580,8 +789,20 @@ function InvoiceListInline({
                       报销类目
                       <Pencil style={{ width: 8, height: 8, color: '#ccc' }} />
                     </div>
-                    <div style={{ fontSize: '12px', color: localCategories[inv.id] || inv.categoryName ? AJ_COLOR : '#bbb', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {safeStr(localCategories[inv.id] || inv.categoryName || '点击选择')}
+                    <div style={{ fontSize: '11px', color: localCategories[inv.id] || inv.ajTaxCategory ? AJ_COLOR : '#bbb', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {safeStr(localCategories[inv.id] || inv.ajTaxCategory || '点击选择')}
+                    </div>
+                  </div>
+                  <div
+                    onClick={e => { e.stopPropagation(); setAccountingPickerInvoiceId(inv.id); }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <div style={{ fontSize: '10px', color: '#aaa', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                      会计科目
+                      <Pencil style={{ width: 8, height: 8, color: '#ccc' }} />
+                    </div>
+                    <div style={{ fontSize: '11px', color: localAccountingCodes[inv.id] || inv.ajAccountingCode ? '#059669' : '#bbb', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {safeStr(localAccountingCodes[inv.id] || inv.ajAccountingCode || '自动匹配')}
                     </div>
                   </div>
                   <div>

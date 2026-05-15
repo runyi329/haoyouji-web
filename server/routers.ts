@@ -16368,6 +16368,8 @@ ${klinesSummary}
         const finalSql = `SELECT lr.id, lr.amount, lr.recordDate as recordDate, lr.description, lr.categoryId,
                   lr.aj_status as ajStatus, lr.createdAt as createdAt,
                   lr.images as images,
+                  lr.aj_tax_category as ajTaxCategory,
+                  lr.aj_accounting_code as ajAccountingCode,
                   u.username as creatorUsername, u.name as creatorName,
                   lm.nickname as creatorNickname,
                   ac.name as companyName,
@@ -16424,6 +16426,51 @@ ${klinesSummary}
         );
         return { success: true, categoryId, categoryName: input.categoryName };
       }),
+
+    // AJ账本：资方更新申请单的税务分类（aj_tax_category）
+    ajOwnerUpdateTaxCategory: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        recordId: z.number(),
+        taxCategory: z.string().max(200),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT lm.id FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? AND lm.deleted_at IS NULL LIMIT 1`,
+          [input.ledgerId, ctx.user.id]
+        ) as any;
+        if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        await (conn as any).execute(
+          `UPDATE ledger_records SET aj_tax_category=? WHERE id=? AND ledgerId=? AND deleted_at IS NULL`,
+          [input.taxCategory, input.recordId, input.ledgerId]
+        );
+        return { success: true, taxCategory: input.taxCategory };
+      }),
+
+    // AJ账本：资方更新申请单的会计科目（aj_accounting_code）
+    ajOwnerUpdateAccountingCode: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        recordId: z.number(),
+        accountingCode: z.string().max(100),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT lm.id FROM ledger_members lm WHERE lm.ledgerId=? AND lm.userId=? AND lm.deleted_at IS NULL LIMIT 1`,
+          [input.ledgerId, ctx.user.id]
+        ) as any;
+        if (!memberRows || memberRows.length === 0) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        await (conn as any).execute(
+          `UPDATE ledger_records SET aj_accounting_code=? WHERE id=? AND ledgerId=? AND deleted_at IS NULL`,
+          [input.accountingCode, input.recordId, input.ledgerId]
+        );
+        return { success: true, accountingCode: input.accountingCode };
+      }),
+
     // AJ账本市场管理：获取当前用户的推荐下线中同时是该账本成员的人员及其开票业绩绩
     ajGetMarketTeam: protectedProcedure
       .input(z.object({
