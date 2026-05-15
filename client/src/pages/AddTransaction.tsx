@@ -981,8 +981,8 @@ const AddTransaction = () => {
                 <tr style={{ background: '#fff' }}>
                   <td className="px-0.5 py-1 text-center border-r border-gray-200 whitespace-nowrap">1</td>
                   <td className="px-0.5 py-1 text-center border-r border-gray-200">{String(selectedDate.getMonth()+1).padStart(2,'0')}/{String(selectedDate.getDate()).padStart(2,'0')}</td>
-                  <td className="px-0.5 py-1 text-center border-r border-gray-200 text-[#999] whitespace-nowrap">待确认</td>
-                  <td className="px-1 py-1 border-r border-gray-200 text-[#999] text-[9px]">待确认</td>
+                  <td className="px-0.5 py-1 text-center border-r border-gray-200 text-[#444] whitespace-nowrap text-[9px]">待AI会计确认</td>
+                  <td className="px-1 py-1 border-r border-gray-200 text-[#444] text-[9px]">待AI会计确认</td>
                   <td className="px-1 py-1 text-right border-r border-gray-200 font-bold text-[#1A3A5C] whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="px-1 py-1 text-center whitespace-nowrap">{uploadedImages.length > 0 ? uploadedImages.length : '—'}</td>
                 </tr>
