@@ -3044,6 +3044,9 @@ export default function LedgerDetail() {
                   </>);
                 })()}
 
+              </div>
+              {/* 右侧按钮组：独立flex容器，与左侧头像+名字真正两端对齐 */}
+              <div className="flex items-center gap-2 flex-shrink-0">
                 {/* AJ账本：刷新/返回按钮（与劳/资开关同行，仅AJ账本显示） */}
                 {isCustomAJ && (
                   <>
@@ -3127,10 +3130,10 @@ export default function LedgerDetail() {
                   </button>
                 )}
 
-                {/* AI账本：按鈕移到第二行，此处不再渲染；AJ账本设置按鈕已移到报销汇总行，此处不显示 */}
-                {(!isCustomAJ && effectiveIsManager) && (
+                {/* 设置按鈕：AJ账本仅owner可见，其他账本管理员可见 */}
+                {(isCustomAJ ? effectiveIsOwner : effectiveIsManager) && (
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
+                    className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0"
                     style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
                     onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
                   >
@@ -3984,19 +3987,7 @@ export default function LedgerDetail() {
               <>
                 {/* 劳方视角（或纯业务员）：报销汇总统计 */}
                 <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    {/* 设置按鈕：仅创建者(owner)可见，放在报销汇总左侧 */}
-                    {effectiveIsOwner && (
-                      <div
-                        className="w-6 h-6 rounded-full flex items-center justify-center cursor-pointer flex-shrink-0"
-                        style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
-                        onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
-                      >
-                        <Settings className="w-3.5 h-3.5 text-white" />
-                      </div>
-                    )}
-                    <span className="text-xs text-white/80">报销汇总</span>
-                  </div>
+                  <span className="text-xs text-white/80">报销汇总</span>
                   <div className="relative">
                     <select
                       value={ajStatsPeriod}
