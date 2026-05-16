@@ -3052,7 +3052,7 @@ export default function LedgerDetail() {
                       <button
                         onClick={() => setLocation(`/ledger/${ledgerId}/aj-contract`)}
                         className="flex items-center justify-center text-xs font-medium flex-shrink-0"
-                        style={{ height: 32, padding: '0 12px', borderRadius: 16, backgroundColor: 'rgba(201,168,76,0.25)', border: '1px solid rgba(201,168,76,0.6)', color: '#C9A84C' }}
+                        style={{ height: 32, padding: '0 12px', borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.35)', color: '#fff' }}
                       >
                         签约
                       </button>
