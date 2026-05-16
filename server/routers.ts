@@ -15971,7 +15971,18 @@ ${klinesSummary}
         );
         const memberRole = (memberRows as any[])[0]?.role;
         if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
-        // 返回：自己创建的企业 + 被管理员授权为资方(funder)的企业（去重合并）
+        // owner（创建者）直接返回该账本下所有企业，无需过滤
+        if (memberRole === 'owner') {
+          const [allRows] = await (conn as any).execute(
+            `SELECT c.id, c.name, c.tax_no as taxNo, c.address, c.phone, c.bank_name as bankName, c.bank_account as bankAccount, c.remark, c.created_by as createdBy
+             FROM aj_companies c
+             WHERE c.ledger_id=?
+             ORDER BY c.created_at ASC`,
+            [input.ledgerId]
+          );
+          return allRows as any[];
+        }
+        // 普通成员：返回自己创建的企业 + 被管理员授权为资方(funder)的企业（去重合并）
         const [rows] = await (conn as any).execute(
           `SELECT c.id, c.name, c.tax_no as taxNo, c.address, c.phone, c.bank_name as bankName, c.bank_account as bankAccount, c.remark, c.created_by as createdBy
            FROM aj_companies c
