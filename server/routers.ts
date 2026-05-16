@@ -9717,6 +9717,7 @@ ${klinesSummary}
     ajSendBackup: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
+        companyId: z.number().optional(),
         period: z.enum(['week', 'month', 'quarter', 'year', 'custom']).default('month'),
         startDate: z.string().optional(),
         endDate: z.string().optional(),
@@ -9732,6 +9733,7 @@ ${klinesSummary}
         );
         const memberRole = (memberRows as any[])[0]?.role;
         if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+        if (!input.companyId) throw new TRPCError({ code: 'BAD_REQUEST', message: '请先选择要备份的企业' });
 
         // 获取用户邮箱
         const db_instance = await (await import('./db')).getLedgerDb();
@@ -9774,35 +9776,15 @@ ${klinesSummary}
           periodLabel = '本年';
         }
 
-        // 查询该用户有权限的企业
-        let companyIds: number[] = [];
-        if (memberRole === 'owner' || memberRole === 'admin') {
-          const [allCompanyRows] = await (conn as any).execute(
-            `SELECT id FROM aj_companies WHERE ledger_id=?`,
-            [input.ledgerId]
-          );
-          companyIds = (allCompanyRows as any[]).map((c: any) => c.id);
-        } else {
-          const [myCompanyRows] = await (conn as any).execute(
-            `SELECT c.id FROM aj_companies c
-             WHERE c.ledger_id=? AND (
-               c.created_by=?
-               OR EXISTS (
-                 SELECT 1 FROM aj_company_access a
-                 WHERE a.company_id=c.id AND a.user_id=? AND a.is_enabled=1
-                 AND COALESCE(a.access_type,'worker')='funder'
-               )
-             )`,
-            [input.ledgerId, ctx.user.id, ctx.user.id]
-          );
-          companyIds = (myCompanyRows as any[]).map((c: any) => c.id);
+        // 验证该企业属于此账本且用户有权限访问
+        const [companyCheckRows] = await (conn as any).execute(
+          `SELECT id, name FROM aj_companies WHERE id=? AND ledger_id=?`,
+          [input.companyId, input.ledgerId]
+        );
+        if (!(companyCheckRows as any[])[0]) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权访问该企业' });
         }
 
-        if (companyIds.length === 0) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: '该时间段内没有可备份的报销记录' });
-        }
-
-        const placeholders = companyIds.map(() => '?').join(',');
         const [invoiceRows] = await (conn as any).execute(
           `SELECT
             lr.id as id,
@@ -9827,11 +9809,11 @@ ${klinesSummary}
            LEFT JOIN aj_companies ac ON ac.id = lr.aj_company_id
            WHERE lr.ledgerId=?
              AND lr.deleted_at IS NULL
-             AND lr.aj_company_id IN (${placeholders})
+             AND lr.aj_company_id = ?
              AND lr.recordDate >= ?
              AND lr.recordDate <= ?
            ORDER BY lr.recordDate DESC, lr.createdAt DESC`,
-          [input.ledgerId, ...companyIds, startDate, endDate]
+          [input.ledgerId, input.companyId, startDate, endDate]
         );
         const invoices = invoiceRows as any[];
 
