@@ -3078,47 +3078,64 @@ export default function LedgerDetail() {
                 {isCustomAJ && (isAdmin || isFunder || isOwner) && !viewAsUserId && (
                   <button
                     onClick={() => setAjViewMode(ajViewMode === 'salesman' ? 'owner' : 'salesman')}
-                    className="relative flex items-center transition-all flex-shrink-0"
+                    className="relative flex items-center flex-shrink-0"
                     style={{
-                      width: 64,
+                      width: 56,
                       height: 32,
                       borderRadius: 16,
-                      backgroundColor: 'rgba(255,255,255,0.22)',
+                      backgroundColor: 'rgba(255,255,255,0.18)',
                       border: '1px solid rgba(255,255,255,0.35)',
                       padding: 0,
+                      overflow: 'hidden',
                     }}
                     aria-label={ajViewMode === 'salesman' ? '切换到资方' : '切换到劳方'}
                   >
-                    {/* 滑块 */}
+                    {/* 左侧文字 */}
                     <span
-                      className="absolute flex items-center justify-center text-xs font-bold transition-all duration-200"
+                      className="absolute flex items-center justify-center text-xs font-bold"
                       style={{
                         width: 28,
-                        height: 28,
+                        height: 32,
+                        left: 0,
+                        top: 0,
+                        color: ajViewMode === 'salesman' ? '#fff' : 'rgba(255,255,255,0.5)',
+                        transition: 'color 0.2s',
+                        zIndex: 2,
+                      }}
+                    >
+                      劳
+                    </span>
+                    {/* 右侧文字 */}
+                    <span
+                      className="absolute flex items-center justify-center text-xs font-bold"
+                      style={{
+                        width: 28,
+                        height: 32,
+                        right: 0,
+                        top: 0,
+                        color: ajViewMode === 'owner' ? '#fff' : 'rgba(255,255,255,0.5)',
+                        transition: 'color 0.2s',
+                        zIndex: 2,
+                      }}
+                    >
+                      资
+                    </span>
+                    {/* 滑块 */}
+                    <span
+                      className="absolute flex items-center justify-center"
+                      style={{
+                        width: 26,
+                        height: 26,
                         borderRadius: '50%',
                         backgroundColor: 'rgba(255,255,255,0.92)',
-                        color: '#8B0000',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        left: ajViewMode === 'salesman' ? 2 : 34,
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                        left: ajViewMode === 'salesman' ? 3 : 27,
+                        transition: 'left 0.2s ease',
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
+                        zIndex: 1,
                       }}
-                    >
-                      {ajViewMode === 'salesman' ? '劳' : '资'}
-                    </span>
-                    {/* 背景文字（另一侧） */}
-                    <span
-                      className="absolute text-xs font-medium"
-                      style={{
-                        color: 'rgba(255,255,255,0.7)',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        right: ajViewMode === 'salesman' ? 7 : undefined,
-                        left: ajViewMode === 'owner' ? 7 : undefined,
-                      }}
-                    >
-                      {ajViewMode === 'salesman' ? '资' : '劳'}
-                    </span>
+                    />
                   </button>
                 )}
 
