@@ -2842,7 +2842,6 @@ export default function LedgerDetail() {
   ];
 
   // 资方视角：直接返回独立页面，完全绕过原有复杂容器结构，避免蓝色横线
-  // 注意：创建者(owner)不走这个early return，否则会丢失顶部导航栏
   if (isCustomAJ && isFunder && !viewAsUserId) {
     return (
       <div className="flex flex-col min-h-screen bg-white">
@@ -2858,7 +2857,7 @@ export default function LedgerDetail() {
       backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E"), repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(58,20,0,0.018) 2px, rgba(58,20,0,0.018) 3px), repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(58,20,0,0.012) 4px, rgba(58,20,0,0.012) 5px)`,
     } : {}}>
       {/* 顶部区域 */}
-      <div className={isCustomAJ && (isFunder || (isOwner && ajViewMode === 'owner')) && !viewAsUserId ? "pb-0" : "pb-4"} style={isCustomAI ? { flexShrink: 0, background: 'linear-gradient(160deg, #3D1F0D 0%, #5C2E10 30%, #3D1F0D 100%)', color: '#1A0A00', borderBottom: '1px solid rgba(58,20,0,0.4)' } : (isCustomAF || isCustomAH) ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', color: '#FFFFFF' } : isCustomAJ ? ((isFunder || (isOwner && ajViewMode === 'owner')) && !viewAsUserId ? { backgroundColor: 'transparent' } : { backgroundColor: '#1A2B4A', color: '#FFFFFF' }) : { backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
+      <div className={isCustomAJ && isFunder && !viewAsUserId ? "pb-0" : "pb-4"} style={isCustomAI ? { flexShrink: 0, background: 'linear-gradient(160deg, #3D1F0D 0%, #5C2E10 30%, #3D1F0D 100%)', color: '#1A0A00', borderBottom: '1px solid rgba(58,20,0,0.4)' } : (isCustomAF || isCustomAH) ? { background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)', color: '#FFFFFF' } : isCustomAJ ? (isFunder && !viewAsUserId ? { backgroundColor: 'transparent' } : { backgroundColor: '#1A2B4A', color: '#FFFFFF' }) : { backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
         {/* AF/AH 账本：顶部两行布局 */}
         {(isCustomAF || isCustomAH || isCustomAI || isCustomAJ) ? (
           <div className="px-4 pt-3 pb-2">
@@ -3977,10 +3976,10 @@ export default function LedgerDetail() {
         )}
         {/* AJ 账本：业务报销汇总面板 */}
         {isCustomAJ && (
-          <div className={(((isAdmin || isOwner) && ajViewMode === 'owner') || isFunder) && !viewAsUserId ? '' : 'px-4 pt-2 pb-4'}>
-            {/* 资方视角：直接内嵌 AJOwnerPanel（admin、owner切到资方视角，或funder角色） */}
-            {(((isAdmin || isOwner) && ajViewMode === 'owner') || isFunder) && !viewAsUserId ? (
-              <AJOwnerPanel ledgerId={Number(ledgerId)} isFunder={false} />
+          <div className={((isAdmin && ajViewMode === 'owner') || isFunder) && !viewAsUserId ? '' : 'px-4 pt-2 pb-4'}>
+            {/* 资方视角：直接内嵌 AJOwnerPanel */}
+            {((isAdmin && ajViewMode === 'owner') || isFunder) && !viewAsUserId ? (
+              <AJOwnerPanel ledgerId={Number(ledgerId)} isFunder={!isOwner} />
             ) : (
               <>
                 {/* 劳方视角（或纯业务员）：报销汇总统计 */}
@@ -5522,7 +5521,7 @@ export default function LedgerDetail() {
       )}
 
       {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示；AJ账本切换到资方视角时也隐藏 */}
-      {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && !(isCustomAJ && (((isAdmin || isOwner) && ajViewMode === 'owner') || isFunder) && !viewAsUserId) && <div className={`flex-1 pb-20 space-y-3`}>
+      {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && !(isCustomAJ && ((isAdmin && ajViewMode === 'owner') || isFunder) && !viewAsUserId) && <div className={`flex-1 pb-20 space-y-3`}>
         {!hasRecords ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-base mb-1">{ledgerData?.type === 'diet' ? '还没有减肥记录' : '还没有记账记录'}</div>
@@ -5856,7 +5855,7 @@ export default function LedgerDetail() {
       </div>}
 
       {/* 底部添加按鈕：AJ账本专用（劳方添加发票，资方仅 owner/创始人可添加企业） */}
-      {isCustomAJ && !(((isAdmin || isOwner) && ajViewMode === 'owner' || isFunder) && !viewAsUserId) && (
+      {isCustomAJ && !((isAdmin && ajViewMode === 'owner' || isFunder) && !viewAsUserId) && (
         <button
           onClick={() => {
             if (isAdmin && !viewAsUserId && ajViewMode === 'owner') {
