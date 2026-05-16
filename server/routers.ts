@@ -9784,6 +9784,7 @@ ${klinesSummary}
         if (!(companyCheckRows as any[])[0]) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '无权访问该企业' });
         }
+        const companyName = (companyCheckRows as any[])[0].name || '未知企业';
 
         const [invoiceRows] = await (conn as any).execute(
           `SELECT
