@@ -244,9 +244,9 @@ export default function LedgerSettings() {
  };
 
  const frequencyLabel = (f: string) => {
- if (f === 'weekly') return '';
- if (f === 'monthly') return '';
- if (f === 'quarterly') return '';
+ if (f === 'weekly') return '每周';
+   if (f === 'monthly') return '每月';
+   if (f === 'quarterly') return '每季度';
  return f;
  };
 
@@ -1047,10 +1047,10 @@ export default function LedgerSettings() {
  <Dialog open={showBackupDialog} onOpenChange={setShowBackupDialog}>
  <DialogContent className="max-w-md mx-auto">
  <DialogTitle className="text-xl font-bold text-center mb-4">
- {backupEditMode ? '' : ''}
+ {backupEditMode ? '编辑备份设置' : '账本备份管理'}
  </DialogTitle>
  
- {/* ===== ===== */}
+ {/* ===== 查看模式 / 编辑模式 ===== */}
  {!backupEditMode && backupSettings ? (
  <div className="space-y-4">
  {/* */}
@@ -1063,35 +1063,35 @@ export default function LedgerSettings() {
  <span className={`text-sm font-medium ${
  backupSettings.enabled === 1 ? 'text-green-700' : 'text-gray-500'
  }`}>
- {backupSettings.enabled === 1 ? '' : ''}
+ {backupSettings.enabled === 1 ? '自动备份已开启' : '自动备份已关闭'}
  </span>
  </div>
 
- {/* */}
- <div className="bg-gray-50 rounded-lg border border-gray-200 divide-y divide-gray-200">
+ {/* 备份详情 */}
+         <div className="bg-gray-50 rounded-lg border border-gray-200 divide-y divide-gray-200">
  <div className="flex justify-between items-center px-4 py-3">
- <span className="text-sm text-gray-500"></span>
- <span className="text-sm font-medium text-gray-900">{user?.email || ''}</span>
+           <span className="text-sm text-gray-500">备份邮箱</span>
+               <span className="text-sm font-medium text-gray-900">{user?.email || '未设置'}</span>
  </div>
  <div className="flex justify-between items-center px-4 py-3">
- <span className="text-sm text-gray-500"></span>
- <span className="text-sm font-medium text-gray-900">{frequencyLabel(backupSettings.frequency)}</span>
+           <span className="text-sm text-gray-500">备份频率</span>
+               <span className="text-sm font-medium text-gray-900">{frequencyLabel(backupSettings.frequency)}</span>
  </div>
  <div className="flex justify-between items-center px-4 py-3">
- <span className="text-sm text-gray-500"></span>
- <span className="text-sm font-medium text-gray-900">{formatDate(backupSettings.createdAt)}</span>
+           <span className="text-sm text-gray-500">创建时间</span>
+               <span className="text-sm font-medium text-gray-900">{formatDate(backupSettings.createdAt)}</span>
  </div>
  <div className="flex justify-between items-center px-4 py-3">
- <span className="text-sm text-gray-500"></span>
- <span className="text-sm font-medium text-gray-900">{backupSettings.backupCount ?? 0} </span>
+           <span className="text-sm text-gray-500">备份次数</span>
+               <span className="text-sm font-medium text-gray-900">{backupSettings.backupCount ?? 0} 次</span>
  </div>
  <div className="flex justify-between items-center px-4 py-3">
- <span className="text-sm text-gray-500"></span>
- <span className="text-sm font-medium text-gray-900">{formatDateTime(backupSettings.lastBackupAt)}</span>
+           <span className="text-sm text-gray-500">上次备份</span>
+               <span className="text-sm font-medium text-gray-900">{formatDateTime(backupSettings.lastBackupAt)}</span>
  </div>
  <div className="flex justify-between items-center px-4 py-3">
- <span className="text-sm text-gray-500"></span>
- <span className={`text-sm font-medium ${
+           <span className="text-sm text-gray-500">下次备份</span>
+               <span className={`text-sm font-medium ${
  backupSettings.enabled === 1 ? 'text-[#D32F2F]' : 'text-gray-400'
  }`}>
  {backupSettings.enabled === 1 ? formatDateTime(backupSettings.nextBackupAt) : ''}
@@ -1099,55 +1099,55 @@ export default function LedgerSettings() {
  </div>
  </div>
 
- {/* */}
- <div className="space-y-2 pt-1">
- <Button
- onClick={() => {
- setBackupEditMode(true);
- setBackupFrequency(backupSettings.frequency);
- setBackupEnabled(backupSettings.enabled === 1);
- }}
- className="w-full h-11 text-sm font-medium text-white rounded-lg"
- style={{ backgroundColor: '#D32F2F' }}
- >
- 
- </Button>
- <Button
- onClick={handleSendTestBackup}
- disabled={sendTestBackupMutation.isPending || !user?.email}
- variant="outline"
- className="w-full h-11 text-sm font-medium rounded-lg border-[#D32F2F] text-[#D32F2F] hover:bg-red-50"
- >
- {sendTestBackupMutation.isPending ? '...' : ''}
- </Button>
- <Button
- onClick={() => setShowBackupDialog(false)}
- variant="outline"
- className="w-full h-11 text-sm font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50"
- >
- 
- </Button>
+ {/* 操作按钮 */}
+         <div className="space-y-2 pt-1">
+           <Button
+             onClick={() => {
+               setBackupEditMode(true);
+               setBackupFrequency(backupSettings.frequency);
+               setBackupEnabled(backupSettings.enabled === 1);
+             }}
+             className="w-full h-11 text-sm font-medium text-white rounded-lg"
+             style={{ backgroundColor: '#D32F2F' }}
+           >
+             修改备份设置
+           </Button>
+           <Button
+             onClick={handleSendTestBackup}
+             disabled={sendTestBackupMutation.isPending || !user?.email}
+             variant="outline"
+             className="w-full h-11 text-sm font-medium rounded-lg border-[#D32F2F] text-[#D32F2F] hover:bg-red-50"
+           >
+             {sendTestBackupMutation.isPending ? '发送中...' : '立即手动备份'}
+           </Button>
+           <Button
+             onClick={() => setShowBackupDialog(false)}
+             variant="outline"
+             className="w-full h-11 text-sm font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50"
+           >
+             关闭
+           </Button>
  </div>
  </div>
  ) : (
- /* ===== ===== */
- <div className="space-y-5">
- {/* */}
- <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
- <div className="text-xs text-gray-500 mb-1"></div>
- <div className="text-sm font-medium text-gray-900">{user?.email || ''}</div>
+ /* ===== 编辑模式 ===== */
+         <div className="space-y-5">
+           {/* 备份邮箱 */}
+           <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+             <div className="text-xs text-gray-500 mb-1">备份将发送至</div>
+             <div className="text-sm font-medium text-gray-900">{user?.email || '未设置邮箱'}</div>
  </div>
 
- {/* */}
- <div>
- <label className="block text-xs font-medium text-gray-500 mb-2">
- 
- </label>
- <div className="space-y-2">
- {[
- { value: 'weekly' as const, label: '' },
- { value: 'monthly' as const, label: '' },
- { value: 'quarterly' as const, label: '' },
+ {/* 备份频率 */}
+           <div>
+             <label className="block text-xs font-medium text-gray-500 mb-2">
+               备份频率
+             </label>
+             <div className="space-y-2">
+               {[
+                 { value: 'weekly' as const, label: '每周备份' },
+                 { value: 'monthly' as const, label: '每月备份' },
+                 { value: 'quarterly' as const, label: '每季度备份' },
  ].map((option) => (
  <button
  key={option.value}
@@ -1164,49 +1164,49 @@ export default function LedgerSettings() {
  </div>
  </div>
 
- {/* */}
- <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg border border-gray-200">
- <span className="text-sm font-medium text-gray-700"></span>
+ {/* 启用开关 */}
+           <div className="flex items-center justify-between bg-gray-50 p-4 rounded-lg border border-gray-200">
+             <span className="text-sm font-medium text-gray-700">启用自动备份</span>
  <Switch
  checked={backupEnabled}
  onCheckedChange={setBackupEnabled}
  />
  </div>
 
- {/* */}
- <div className="space-y-2 pt-1">
- <Button
- onClick={() => {
- saveBackupMutation.mutate({
- ledgerId,
- frequency: backupFrequency,
- enabled: backupEnabled,
- });
- }}
- disabled={saveBackupMutation.isPending}
- className="w-full h-11 text-sm font-medium text-white rounded-lg"
- style={{ backgroundColor: '#D32F2F' }}
- >
- {saveBackupMutation.isPending ? '...' : ''}
- </Button>
- {backupSettings && (
- <Button
- onClick={() => setBackupEditMode(false)}
- variant="outline"
- className="w-full h-11 text-sm font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50"
- >
- 
- </Button>
- )}
- {!backupSettings && (
- <Button
- onClick={() => setShowBackupDialog(false)}
- variant="outline"
- className="w-full h-11 text-sm font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50"
- >
- 
- </Button>
- )}
+ {/* 保存按钮 */}
+           <div className="space-y-2 pt-1">
+             <Button
+               onClick={() => {
+                 saveBackupMutation.mutate({
+                   ledgerId,
+                   frequency: backupFrequency,
+                   enabled: backupEnabled,
+                 });
+               }}
+               disabled={saveBackupMutation.isPending}
+               className="w-full h-11 text-sm font-medium text-white rounded-lg"
+               style={{ backgroundColor: '#D32F2F' }}
+             >
+               {saveBackupMutation.isPending ? '保存中...' : '保存设置'}
+             </Button>
+             {backupSettings && (
+               <Button
+                 onClick={() => setBackupEditMode(false)}
+                 variant="outline"
+                 className="w-full h-11 text-sm font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50"
+               >
+                 取消
+               </Button>
+             )}
+             {!backupSettings && (
+               <Button
+                 onClick={() => setShowBackupDialog(false)}
+                 variant="outline"
+                 className="w-full h-11 text-sm font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50"
+               >
+                 关闭
+               </Button>
+             )}
  </div>
  </div>
  )}
