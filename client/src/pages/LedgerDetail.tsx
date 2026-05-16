@@ -3090,52 +3090,40 @@ export default function LedgerDetail() {
                     }}
                     aria-label={ajViewMode === 'salesman' ? '切换到资方' : '切换到劳方'}
                   >
-                    {/* 左侧文字 */}
+                    {/* 背景侧文字（未激活侧，固定位置，白色半透明） */}
                     <span
                       className="absolute flex items-center justify-center text-xs font-bold"
                       style={{
-                        width: 28,
-                        height: 32,
-                        left: 0,
-                        top: 0,
-                        color: ajViewMode === 'salesman' ? '#fff' : 'rgba(255,255,255,0.5)',
-                        transition: 'color 0.2s',
-                        zIndex: 2,
+                        width: 26,
+                        height: 26,
+                        left: ajViewMode === 'salesman' ? 27 : 3,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        color: 'rgba(255,255,255,0.6)',
+                        zIndex: 1,
                       }}
                     >
-                      劳
+                      {ajViewMode === 'salesman' ? '资' : '劳'}
                     </span>
-                    {/* 右侧文字 */}
+                    {/* 滑块（带当前激活文字，字色深红可见） */}
                     <span
                       className="absolute flex items-center justify-center text-xs font-bold"
-                      style={{
-                        width: 28,
-                        height: 32,
-                        right: 0,
-                        top: 0,
-                        color: ajViewMode === 'owner' ? '#fff' : 'rgba(255,255,255,0.5)',
-                        transition: 'color 0.2s',
-                        zIndex: 2,
-                      }}
-                    >
-                      资
-                    </span>
-                    {/* 滑块 */}
-                    <span
-                      className="absolute flex items-center justify-center"
                       style={{
                         width: 26,
                         height: 26,
                         borderRadius: '50%',
-                        backgroundColor: 'rgba(255,255,255,0.92)',
+                        backgroundColor: 'rgba(255,255,255,0.95)',
+                        color: '#8B0000',
                         top: '50%',
                         transform: 'translateY(-50%)',
                         left: ajViewMode === 'salesman' ? 3 : 27,
                         transition: 'left 0.2s ease',
                         boxShadow: '0 1px 4px rgba(0,0,0,0.25)',
-                        zIndex: 1,
+                        zIndex: 2,
                       }}
-                    />
+                    >
+                      {ajViewMode === 'salesman' ? '劳' : '资'}
+                    </span>
                   </button>
                 )}
 
