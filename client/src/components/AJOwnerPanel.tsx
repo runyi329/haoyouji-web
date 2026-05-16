@@ -1090,7 +1090,7 @@ function CompanyForm({
 }
 
 // ========== 资方视角面板（重写） ==========
-function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
+export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   const [period, setPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>('all');
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [searchText, setSearchText] = useState('');
