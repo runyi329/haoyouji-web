@@ -2535,9 +2535,9 @@ export default function LedgerDetail() {
   // AJ账本专用独立统计周期，不影响普通账本的statsPeriod
   const [ajStatsPeriod, setAjStatsPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>('month');
   // AJ账本视角切换：企业负责人 / 业务负责人（仅isAdmin角色有此切换）
-  // funder（企业主）角色默认停在「资」（owner）视角
+  // funder（企业主）角色或owner（创建者）角色默认停在「资」（owner）视角
   const [ajViewMode, setAjViewMode] = useState<'owner' | 'salesman'>(
-    (ledgerData as any)?.userRole === 'funder' ? 'owner' : 'salesman'
+    ((ledgerData as any)?.userRole === 'funder' || (ledgerData as any)?.userRole === 'owner') ? 'owner' : 'salesman'
   );
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
   const [aiProductDetail, setAiProductDetail] = useState<string | null>(null);
@@ -2625,13 +2625,13 @@ export default function LedgerDetail() {
     }
   }, [ledgerId]);
 
-  // AJ账本：admin（企业主/资方）角色加载完成后，自动切换到「资」（owner）视角
+  // AJ账本：admin（企业主/资方）或owner（创建者）角色加载完成后，自动切换到「资」（owner）视角
   // AJ账本角色：owner=创始人, admin=企业主(资方), member=业务员(劳方)，不存在funder角色
   useEffect(() => {
-    if (isCustomAJ && isAdmin) {
+    if (isCustomAJ && (isAdmin || isOwner)) {
       setAjViewMode('owner');
     }
-  }, [isCustomAJ, isAdmin]);
+  }, [isCustomAJ, isAdmin, isOwner]);
 
   // 定制账本(AD)：永忆
   const isCustomAD = (ledgerData as any)?.type === 'custom_ad';
@@ -3074,8 +3074,8 @@ export default function LedgerDetail() {
                   </>
                 )}
 
-                {/* AJ账本：劳/资视角切换（圆形滑动开关，admin或funder可见） */}
-                {isCustomAJ && (isAdmin || isFunder) && !viewAsUserId && (
+                {/* AJ账本：劳/资视角切换（圆形滑动开关，admin、funder或owner可见） */}
+                {isCustomAJ && (isAdmin || isFunder || isOwner) && !viewAsUserId && (
                   <button
                     onClick={() => setAjViewMode(ajViewMode === 'salesman' ? 'owner' : 'salesman')}
                     className="relative flex items-center transition-all flex-shrink-0"
