@@ -9713,6 +9713,228 @@ ${klinesSummary}
         return { success: true };
       }),
 
+    // AJ账本专用备份：导出报销申请单Excel
+    ajSendBackup: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        period: z.enum(['week', 'month', 'quarter', 'year', 'custom']).default('month'),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+
+        // 权限检查
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role;
+        if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
+
+        // 获取用户邮箱
+        const db_instance = await (await import('./db')).getLedgerDb();
+        if (!db_instance) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const { users: usersTable } = await import('../drizzle/schema');
+        const { eq: eqOp } = await import('drizzle-orm');
+        const userRows = await db_instance.select({ email: usersTable.email }).from(usersTable).where(eqOp(usersTable.id, ctx.user.id)).limit(1);
+        if (!userRows[0]?.email) throw new TRPCError({ code: 'BAD_REQUEST', message: '用户邮箱未设置，请先在个人资料中填写邮箱地址' });
+        const userEmail = userRows[0].email;
+
+        // 计算日期范围
+        const bjOffset = 8 * 60 * 60 * 1000;
+        const bjNow = new Date(Date.now() + bjOffset);
+        const today = bjNow.toISOString().split('T')[0];
+        let startDate = '';
+        let endDate = today;
+        let periodLabel = '';
+
+        if (input.period === 'custom') {
+          if (!input.startDate || !input.endDate) throw new TRPCError({ code: 'BAD_REQUEST', message: '自定义时间段需要提供开始和结束日期' });
+          startDate = input.startDate;
+          endDate = input.endDate;
+          periodLabel = `${startDate} 至 ${endDate}`;
+        } else if (input.period === 'week') {
+          const ws2 = new Date(bjNow);
+          const day = ws2.getUTCDay();
+          ws2.setUTCDate(ws2.getUTCDate() - (day === 0 ? 6 : day - 1));
+          startDate = ws2.toISOString().split('T')[0];
+          periodLabel = '本周';
+        } else if (input.period === 'month') {
+          startDate = today.slice(0, 7) + '-01';
+          periodLabel = '本月';
+        } else if (input.period === 'quarter') {
+          const q = Math.floor(bjNow.getUTCMonth() / 3);
+          const qStart = new Date(Date.UTC(bjNow.getUTCFullYear(), q * 3, 1));
+          startDate = qStart.toISOString().split('T')[0];
+          periodLabel = '本季度';
+        } else if (input.period === 'year') {
+          startDate = today.slice(0, 4) + '-01-01';
+          periodLabel = '本年';
+        }
+
+        // 查询该用户有权限的企业
+        let companyIds: number[] = [];
+        if (memberRole === 'owner' || memberRole === 'admin') {
+          const [allCompanyRows] = await (conn as any).execute(
+            `SELECT id FROM aj_companies WHERE ledger_id=?`,
+            [input.ledgerId]
+          );
+          companyIds = (allCompanyRows as any[]).map((c: any) => c.id);
+        } else {
+          const [myCompanyRows] = await (conn as any).execute(
+            `SELECT c.id FROM aj_companies c
+             WHERE c.ledger_id=? AND (
+               c.created_by=?
+               OR EXISTS (
+                 SELECT 1 FROM aj_company_access a
+                 WHERE a.company_id=c.id AND a.user_id=? AND a.is_enabled=1
+                 AND COALESCE(a.access_type,'worker')='funder'
+               )
+             )`,
+            [input.ledgerId, ctx.user.id, ctx.user.id]
+          );
+          companyIds = (myCompanyRows as any[]).map((c: any) => c.id);
+        }
+
+        if (companyIds.length === 0) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '该时间段内没有可备份的报销记录' });
+        }
+
+        const placeholders = companyIds.map(() => '?').join(',');
+        const [invoiceRows] = await (conn as any).execute(
+          `SELECT
+            lr.id as id,
+            ac.name as companyName,
+            ac.tax_no as taxNo,
+            lr.amount as amount,
+            lr.recordDate as recordDate,
+            COALESCE(lm.nickname, u.name, u.username) as applicant,
+            lr.aj_employee_no as employeeNo,
+            lr.aj_expense_reason as expenseReason,
+            lr.aj_tax_category as taxCategory,
+            lr.aj_accounting_code as accountingCode,
+            CASE lr.aj_status
+              WHEN 'approved' THEN '已审批'
+              WHEN 'rejected' THEN '已驳回'
+              ELSE '待审核'
+            END as status,
+            lr.description as remark
+           FROM ledger_records lr
+           LEFT JOIN users u ON u.id = lr.createdBy
+           LEFT JOIN ledger_members lm ON lm.userId = lr.createdBy AND lm.ledgerId = lr.ledgerId
+           LEFT JOIN aj_companies ac ON ac.id = lr.aj_company_id
+           WHERE lr.ledgerId=?
+             AND lr.deleted_at IS NULL
+             AND lr.aj_company_id IN (${placeholders})
+             AND lr.recordDate >= ?
+             AND lr.recordDate <= ?
+           ORDER BY lr.recordDate DESC, lr.createdAt DESC`,
+          [input.ledgerId, ...companyIds, startDate, endDate]
+        );
+        const invoices = invoiceRows as any[];
+
+        // 生成Excel
+        const ExcelJS = (await import('exceljs')).default;
+        const workbook = new ExcelJS.Workbook();
+        const wsSheet = workbook.addWorksheet('报销申请单');
+
+        const colDefs = [
+          { header: '申请单号', key: 'id', width: 12 },
+          { header: '开票单位', key: 'companyName', width: 30 },
+          { header: '税号', key: 'taxNo', width: 22 },
+          { header: '报销金额', key: 'amount', width: 14 },
+          { header: '申请日期', key: 'recordDate', width: 14 },
+          { header: '申请人', key: 'applicant', width: 14 },
+          { header: '员工编号', key: 'employeeNo', width: 14 },
+          { header: '报销事由', key: 'expenseReason', width: 25 },
+          { header: '报销类目', key: 'taxCategory', width: 18 },
+          { header: '会计科目', key: 'accountingCode', width: 18 },
+          { header: '审批状态', key: 'status', width: 12 },
+          { header: '备注', key: 'remark', width: 25 },
+        ];
+        wsSheet.columns = colDefs;
+
+        // 表头样式：AJ深蓝
+        wsSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+        wsSheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A2B4A' } };
+        wsSheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+        wsSheet.getRow(1).height = 24;
+
+        invoices.forEach((inv: any, idx: number) => {
+          const row = wsSheet.addRow({
+            id: `No.${inv.id}`,
+            companyName: inv.companyName || '',
+            taxNo: inv.taxNo || '',
+            amount: inv.amount ? `¥${Number(inv.amount).toFixed(2)}` : '',
+            recordDate: inv.recordDate || '',
+            applicant: inv.applicant || '',
+            employeeNo: inv.employeeNo || '',
+            expenseReason: inv.expenseReason || '',
+            taxCategory: inv.taxCategory || '',
+            accountingCode: inv.accountingCode || '',
+            status: inv.status || '',
+            remark: inv.remark || '',
+          });
+          row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: idx % 2 === 0 ? 'FFF5F7FA' : 'FFFFFFFF' } };
+          row.alignment = { vertical: 'middle' };
+        });
+
+        // 汇总行
+        const totalAmount = invoices.reduce((sum: number, inv: any) => sum + Number(inv.amount || 0), 0);
+        const summaryRow = wsSheet.addRow({
+          id: '',
+          companyName: '合计',
+          taxNo: '',
+          amount: `¥${totalAmount.toFixed(2)}`,
+          recordDate: '',
+          applicant: '',
+          employeeNo: '',
+          expenseReason: '',
+          taxCategory: '',
+          accountingCode: `共${invoices.length}笔`,
+          status: '',
+          remark: '',
+        });
+        summaryRow.font = { bold: true };
+        summaryRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8ECF2' } };
+
+        const buffer = await workbook.xlsx.writeBuffer();
+
+        // 获取账本名称
+        const [ledgerNameRows] = await (conn as any).execute(`SELECT name FROM ledgers WHERE id=? LIMIT 1`, [input.ledgerId]);
+        const ledgerName = (ledgerNameRows as any[])[0]?.name || '账本';
+
+        // 发送邮件
+        const { sendBackupEmail } = await import('./email-service');
+        await sendBackupEmail({
+          to: userEmail,
+          ledgerName: `${ledgerName}（${periodLabel}）`,
+          excelBuffer: Buffer.from(buffer),
+          stats: {
+            totalRecords: invoices.length,
+            earliestDate: startDate,
+            latestDate: endDate,
+            totalIncome: totalAmount,
+            totalExpense: 0,
+            balance: totalAmount,
+          },
+        });
+
+        // 更新备份记录
+        const { ledgerBackupSettings } = await import('../drizzle/schema');
+        const { and: andOp2, sql: sqlOp2, eq: eqOp2 } = await import('drizzle-orm');
+        const now2 = new Date();
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const nowStr = `${now2.getFullYear()}-${pad(now2.getMonth()+1)}-${pad(now2.getDate())} ${pad(now2.getHours())}:${pad(now2.getMinutes())}:${pad(now2.getSeconds())}`;
+        await db_instance.update(ledgerBackupSettings)
+          .set({ backupCount: sqlOp2`backup_count + 1`, lastBackupAt: nowStr })
+          .where(andOp2(eqOp2(ledgerBackupSettings.ledgerId, input.ledgerId), eqOp2(ledgerBackupSettings.userId, ctx.user.id)));
+
+        return { success: true, recordCount: invoices.length, periodLabel };
+      }),
+
     // 解析导入数据
     parseImportData: protectedProcedure
       .input(z.object({
