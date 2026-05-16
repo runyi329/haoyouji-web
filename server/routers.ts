@@ -16382,6 +16382,7 @@ ${klinesSummary}
                   lr.aj_tax_category as ajTaxCategory,
                   lr.aj_accounting_code as ajAccountingCode,
                   lr.aj_expense_reason as ajExpenseReason,
+                  lr.aj_employee_no as ajEmployeeNo,
                   u.username as creatorUsername, u.name as creatorName,
                   lm.nickname as creatorNickname,
                   ac.name as companyName,
