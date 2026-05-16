@@ -3980,13 +3980,9 @@ export default function LedgerDetail() {
         {/* AJ 账本：业务报销汇总面板 */}
         {isCustomAJ && (
           <div className={(((isAdmin || isOwner) && ajViewMode === 'owner') || isFunder) && !viewAsUserId ? '' : 'px-4 pt-2 pb-4'}>
-            {/* 资方视角：直接内嵌 AJOwnerPanel 或 FunderViewPanel */}
+            {/* 资方视角：owner/admin/funder 统一使用 FunderViewPanel 新版 */}
             {(((isAdmin || isOwner) && ajViewMode === 'owner') || isFunder) && !viewAsUserId ? (
-              (isOwner && ajViewMode === 'owner') ? (
-                <FunderViewPanel ledgerId={Number(ledgerId)} />
-              ) : (
-              <AJOwnerPanel ledgerId={Number(ledgerId)} isFunder={isFunder} />
-              )
+              <FunderViewPanel ledgerId={Number(ledgerId)} />
             ) : (
               <>
                 {/* 劳方视角（或纯业务员）：报销汇总统计 */}
