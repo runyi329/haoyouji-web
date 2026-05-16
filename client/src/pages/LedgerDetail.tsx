@@ -3979,10 +3979,10 @@ export default function LedgerDetail() {
         )}
         {/* AJ 账本：业务报销汇总面板 */}
         {isCustomAJ && (
-          <div className={((isAdmin && ajViewMode === 'owner') || isFunder) && !viewAsUserId ? '' : 'px-4 pt-2 pb-4'}>
+          <div className={(((isAdmin || isOwner) && ajViewMode === 'owner') || isFunder) && !viewAsUserId ? '' : 'px-4 pt-2 pb-4'}>
             {/* 资方视角：直接内嵌 AJOwnerPanel */}
-            {((isAdmin && ajViewMode === 'owner') || isFunder) && !viewAsUserId ? (
-              <AJOwnerPanel ledgerId={Number(ledgerId)} isFunder={!isOwner} />
+            {(((isAdmin || isOwner) && ajViewMode === 'owner') || isFunder) && !viewAsUserId ? (
+              <AJOwnerPanel ledgerId={Number(ledgerId)} isFunder={isFunder} />
             ) : (
               <>
                 {/* 劳方视角（或纯业务员）：报销汇总统计 */}
@@ -5524,7 +5524,7 @@ export default function LedgerDetail() {
       )}
 
       {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示；AJ账本切换到资方视角时也隐藏 */}
-      {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && !(isCustomAJ && ((isAdmin && ajViewMode === 'owner') || isFunder) && !viewAsUserId) && <div className={`flex-1 pb-20 space-y-3`}>
+      {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && !(isCustomAJ && (((isAdmin || isOwner) && ajViewMode === 'owner') || isFunder) && !viewAsUserId) && <div className={`flex-1 pb-20 space-y-3`}>
         {!hasRecords ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-base mb-1">{ledgerData?.type === 'diet' ? '还没有减肥记录' : '还没有记账记录'}</div>
@@ -5858,10 +5858,10 @@ export default function LedgerDetail() {
       </div>}
 
       {/* 底部添加按鈕：AJ账本专用（劳方添加发票，资方仅 owner/创始人可添加企业） */}
-      {isCustomAJ && !((isAdmin && ajViewMode === 'owner' || isFunder) && !viewAsUserId) && (
+      {isCustomAJ && !(((isAdmin || isOwner) && ajViewMode === 'owner' || isFunder) && !viewAsUserId) && (
         <button
           onClick={() => {
-            if (isAdmin && !viewAsUserId && ajViewMode === 'owner') {
+            if ((isAdmin || isOwner) && !viewAsUserId && ajViewMode === 'owner') {
               // 资方视角：添加企业申请（触发AJOwnerPanel内的添加企业弹窗）
               // 通过自定义事件通知AJOwnerPanel打开添加弹窗
               window.dispatchEvent(new CustomEvent('aj-owner-add-company'));
