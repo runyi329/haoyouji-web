@@ -2842,8 +2842,8 @@ export default function LedgerDetail() {
   ];
 
   // 资方视角：直接返回独立页面，完全绕过原有复杂容器结构，避免蓝色横线
-  // 创建者(owner)切到资方视角时，同样进入资方页面
-  if (isCustomAJ && (isFunder || (isOwner && ajViewMode === 'owner')) && !viewAsUserId) {
+  // 注意：创建者(owner)不走这个early return，否则会丢失顶部导航栏
+  if (isCustomAJ && isFunder && !viewAsUserId) {
     return (
       <div className="flex flex-col min-h-screen bg-white">
         <AJOwnerPanel ledgerId={Number(ledgerId)} isFunder={true} />
