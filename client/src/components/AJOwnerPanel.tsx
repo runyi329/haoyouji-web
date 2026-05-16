@@ -1137,10 +1137,37 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   // 手动备份（AJ专用：导出报销申请单）
   const ajSendBackupMutation = (trpc as any).ledger.ajSendBackup.useMutation({
     onSuccess: (data: any) => {
-      toast.success(`备份已发送至您的邮箱（共${data.recordCount}笔记录）`);
+      toast.success(`备份已发送至所有邮箱（共${data.recordCount}笔记录）`);
       refetchBackupSettings();
     },
     onError: (e: any) => toast.error('备份失败: ' + e.message),
+  });
+
+  // 额外收件邮箱
+  const [showAddEmail, setShowAddEmail] = useState(false);
+  const [newEmailInput, setNewEmailInput] = useState('');
+  const { data: extraEmailsData, refetch: refetchExtraEmails } = (trpc as any).ledger.ajGetBackupEmails.useQuery(
+    { ledgerId },
+    { enabled: showBackupDialog }
+  );
+  const extraEmails: { id: number; email: string; label: string | null }[] = Array.isArray(extraEmailsData) ? extraEmailsData : [];
+
+  const addEmailMutation = (trpc as any).ledger.ajAddBackupEmail.useMutation({
+    onSuccess: () => {
+      toast.success('邮箱已添加');
+      setNewEmailInput('');
+      setShowAddEmail(false);
+      refetchExtraEmails();
+    },
+    onError: (e: any) => toast.error('添加失败: ' + e.message),
+  });
+
+  const deleteEmailMutation = (trpc as any).ledger.ajDeleteBackupEmail.useMutation({
+    onSuccess: () => {
+      toast.success('已删除');
+      refetchExtraEmails();
+    },
+    onError: (e: any) => toast.error('删除失败: ' + e.message),
   });
 
   const frequencyLabel = (f: string) => {
@@ -1347,8 +1374,52 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                 </div>
               </div>
               <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
-                <div className="text-white/60 text-xs mb-1">备份接收邮箱</div>
-                <div className="text-white text-sm font-medium">{(user as any)?.email || '未设置邮箱'}</div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-white/60 text-xs">备份接收邮箱</div>
+                  <button
+                    onClick={() => setShowAddEmail(v => !v)}
+                    className="text-white/70 hover:text-white text-xs flex items-center gap-1 border border-white/30 rounded-lg px-2 py-0.5"
+                  >
+                    <span>+</span><span>添加</span>
+                  </button>
+                </div>
+                {/* 主邮箱（个人中心） */}
+                <div className="flex items-center gap-2 py-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-white/60 flex-shrink-0" />
+                  <span className="text-white text-sm flex-1">{(user as any)?.email || '未设置邮箱'}</span>
+                  <span className="text-white/40 text-xs">主邮箱</span>
+                </div>
+                {/* 额外邮箱列表 */}
+                {extraEmails.map(item => (
+                  <div key={item.id} className="flex items-center gap-2 py-1 border-t border-white/10 mt-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-blue-300/70 flex-shrink-0" />
+                    <span className="text-white/90 text-sm flex-1 truncate">{item.email}</span>
+                    <button
+                      onClick={() => deleteEmailMutation.mutate({ id: item.id })}
+                      className="text-white/40 hover:text-red-300 text-xs flex-shrink-0 ml-1"
+                    >✕</button>
+                  </div>
+                ))}
+                {/* 添加邮箱输入框 */}
+                {showAddEmail && (
+                  <div className="flex gap-2 mt-2 border-t border-white/10 pt-2">
+                    <input
+                      type="email"
+                      value={newEmailInput}
+                      onChange={e => setNewEmailInput(e.target.value)}
+                      placeholder="输入邮箱地址"
+                      className="flex-1 rounded-lg px-2 py-1.5 text-xs bg-white/10 text-white border border-white/20 focus:outline-none focus:border-white/50 placeholder:text-white/30"
+                    />
+                    <button
+                      onClick={() => {
+                        if (!newEmailInput.trim()) return;
+                        addEmailMutation.mutate({ ledgerId, email: newEmailInput.trim() });
+                      }}
+                      disabled={addEmailMutation.isPending}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/20 text-white hover:bg-white/30 disabled:opacity-50"
+                    >确定</button>
+                  </div>
+                )}
               </div>
               {/* 时间周期选择 */}
               <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
@@ -1399,7 +1470,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                 </div>
               )}
               <div className="rounded-xl p-3 mb-5" style={{ backgroundColor: 'rgba(255,255,255,0.07)' }}>
-                <p className="text-white/50 text-xs leading-relaxed">系统将所选时间段内的报销申请单打包为 Excel 文件，发送至您的登录邮箱。</p>
+                <p className="text-white/50 text-xs leading-relaxed">系统将所选时间段内的报销申请单打包为 Excel 文件，同时发送至以上所有收件邮箱。</p>
               </div>
               <button
                 onClick={() => {

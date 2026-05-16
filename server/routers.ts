@@ -9713,6 +9713,75 @@ ${klinesSummary}
         return { success: true };
       }),
 
+    // AJ账本专用备份：获取额外收件邮箱列表
+    ajGetBackupEmails: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return [];
+        // 确保表存在
+        await (conn as any).execute(`
+          CREATE TABLE IF NOT EXISTS aj_backup_emails (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL,
+            user_id INT NOT NULL,
+            email VARCHAR(200) NOT NULL,
+            label VARCHAR(50) NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            INDEX aj_backup_emails_ledger_user_idx (ledger_id, user_id)
+          )
+        `);
+        const [rows] = await (conn as any).execute(
+          `SELECT id, email, label FROM aj_backup_emails WHERE ledger_id=? AND user_id=? ORDER BY id ASC`,
+          [input.ledgerId, ctx.user.id]
+        );
+        return rows as { id: number; email: string; label: string | null }[];
+      }),
+
+    // AJ账本专用备份：添加额外收件邮箱
+    ajAddBackupEmail: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), email: z.string().email('请输入有效的邮箱地址'), label: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 确保表存在
+        await (conn as any).execute(`
+          CREATE TABLE IF NOT EXISTS aj_backup_emails (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL,
+            user_id INT NOT NULL,
+            email VARCHAR(200) NOT NULL,
+            label VARCHAR(50) NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            INDEX aj_backup_emails_ledger_user_idx (ledger_id, user_id)
+          )
+        `);
+        // 检查是否已存在
+        const [existing] = await (conn as any).execute(
+          `SELECT id FROM aj_backup_emails WHERE ledger_id=? AND user_id=? AND email=?`,
+          [input.ledgerId, ctx.user.id, input.email]
+        );
+        if ((existing as any[]).length > 0) throw new TRPCError({ code: 'BAD_REQUEST', message: '该邮箱已添加' });
+        await (conn as any).execute(
+          `INSERT INTO aj_backup_emails (ledger_id, user_id, email, label) VALUES (?, ?, ?, ?)`,
+          [input.ledgerId, ctx.user.id, input.email, input.label || null]
+        );
+        return { success: true };
+      }),
+
+    // AJ账本专用备份：删除额外收件邮箱
+    ajDeleteBackupEmail: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await (conn as any).execute(
+          `DELETE FROM aj_backup_emails WHERE id=? AND user_id=?`,
+          [input.id, ctx.user.id]
+        );
+        return { success: true };
+      }),
+
     // AJ账本专用备份：导出报销申请单Excel
     ajSendBackup: protectedProcedure
       .input(z.object({
@@ -9894,22 +9963,35 @@ ${klinesSummary}
         const rejectedCount = invoices.filter((r: any) => r.status === '已驳回').length;
         const pendingCount = invoices.filter((r: any) => r.status === '待审核').length;
 
-        // 发送AJ专用邮件
+        // 获取额外收件邮箱列表
+        const [extraEmailRows] = await (conn as any).execute(
+          `SELECT email FROM aj_backup_emails WHERE ledger_id=? AND user_id=? ORDER BY id ASC`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const extraEmails: string[] = (extraEmailRows as any[]).map((r: any) => r.email);
+        // 合并主邮箱 + 额外邮箱，去重
+        const allEmails = Array.from(new Set([userEmail, ...extraEmails]));
+
+        // 发送AJ专用邮件（对所有邮箱并发）
         const { sendAJBackupEmail } = await import('./email-service');
-        await sendAJBackupEmail({
-          to: userEmail,
-          companyName,
-          excelBuffer: Buffer.from(buffer),
-          stats: {
-            totalRecords: invoices.length,
-            startDate,
-            endDate,
-            totalAmount,
-            approvedCount,
-            pendingCount,
-            rejectedCount,
-          },
-        });
+        const excelBuf = Buffer.from(buffer);
+        const emailStats = {
+          totalRecords: invoices.length,
+          startDate,
+          endDate,
+          totalAmount,
+          approvedCount,
+          pendingCount,
+          rejectedCount,
+        };
+        await Promise.all(allEmails.map(toEmail =>
+          sendAJBackupEmail({
+            to: toEmail,
+            companyName,
+            excelBuffer: excelBuf,
+            stats: emailStats,
+          })
+        ));
 
         // 更新备份记录
         const { ledgerBackupSettings } = await import('../drizzle/schema');
