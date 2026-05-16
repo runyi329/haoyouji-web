@@ -1339,6 +1339,14 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
           {backupTab === 'manual' && (
             <div className="px-5 pb-6">
               <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                <div className="text-white/60 text-xs mb-1">备份企业</div>
+                <div className="text-white text-sm font-medium">
+                  {selectedCompanyId
+                    ? companies.find((c: any) => c.id === selectedCompanyId)?.name || '当前企业'
+                    : '请先选择企业'}
+                </div>
+              </div>
+              <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
                 <div className="text-white/60 text-xs mb-1">备份接收邮箱</div>
                 <div className="text-white text-sm font-medium">{(user as any)?.email || '未设置邮箱'}</div>
               </div>
@@ -1401,6 +1409,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                   }
                   ajSendBackupMutation.mutate({
                     ledgerId,
+                    companyId: selectedCompanyId ?? undefined,
                     period: backupPeriod,
                     ...(backupPeriod === 'custom' ? { startDate: backupCustomStart, endDate: backupCustomEnd } : {}),
                   });
