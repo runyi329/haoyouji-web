@@ -1572,7 +1572,7 @@ import {
   Calculator,
   TrendingUp,
 } from "lucide-react";
-import { AJOwnerPanel } from "@/components/AJOwnerPanel";
+import { AJOwnerPanel, FunderViewPanel } from "@/components/AJOwnerPanel";
 
 
 // ========== 中国法定节假日数据（2025-2026年） ==========
@@ -3980,9 +3980,13 @@ export default function LedgerDetail() {
         {/* AJ 账本：业务报销汇总面板 */}
         {isCustomAJ && (
           <div className={(((isAdmin || isOwner) && ajViewMode === 'owner') || isFunder) && !viewAsUserId ? '' : 'px-4 pt-2 pb-4'}>
-            {/* 资方视角：直接内嵌 AJOwnerPanel */}
+            {/* 资方视角：直接内嵌 AJOwnerPanel 或 FunderViewPanel */}
             {(((isAdmin || isOwner) && ajViewMode === 'owner') || isFunder) && !viewAsUserId ? (
+              (isOwner && ajViewMode === 'owner') ? (
+                <FunderViewPanel ledgerId={Number(ledgerId)} />
+              ) : (
               <AJOwnerPanel ledgerId={Number(ledgerId)} isFunder={isFunder} />
+              )
             ) : (
               <>
                 {/* 劳方视角（或纯业务员）：报销汇总统计 */}
