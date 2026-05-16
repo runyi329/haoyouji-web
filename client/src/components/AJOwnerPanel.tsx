@@ -1103,6 +1103,10 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   const [backupTab, setBackupTab] = useState<'manual' | 'auto'>('manual');
   const [backupFrequency, setBackupFrequency] = useState<'weekly' | 'monthly' | 'quarterly'>('monthly');
   const [backupEnabled, setBackupEnabled] = useState(false);
+  // 手动备份时间周期
+  const [backupPeriod, setBackupPeriod] = useState<'week' | 'month' | 'quarter' | 'year' | 'custom'>('month');
+  const [backupCustomStart, setBackupCustomStart] = useState('');
+  const [backupCustomEnd, setBackupCustomEnd] = useState('');
 
   // 获取当前用户邮箱
   const { data: user } = trpc.auth.me.useQuery();
@@ -1130,10 +1134,10 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
     onError: (e: any) => toast.error('保存失败: ' + e.message),
   });
 
-  // 手动备份
-  const sendTestBackupMutation = (trpc as any).ledger.sendTestBackup.useMutation({
-    onSuccess: () => {
-      toast.success('备份已发送至您的邮箱');
+  // 手动备份（AJ专用：导出报销申请单）
+  const ajSendBackupMutation = (trpc as any).ledger.ajSendBackup.useMutation({
+    onSuccess: (data: any) => {
+      toast.success(`备份已发送至您的邮箱（共${data.recordCount}笔记录）`);
       refetchBackupSettings();
     },
     onError: (e: any) => toast.error('备份失败: ' + e.message),
@@ -1338,6 +1342,48 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                 <div className="text-white/60 text-xs mb-1">备份接收邮箱</div>
                 <div className="text-white text-sm font-medium">{(user as any)?.email || '未设置邮箱'}</div>
               </div>
+              {/* 时间周期选择 */}
+              <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                <div className="text-white/60 text-xs mb-2">备份时间周期</div>
+                <div className="grid grid-cols-5 gap-1.5 mb-3">
+                  {([
+                    { key: 'week', label: '本周' },
+                    { key: 'month', label: '本月' },
+                    { key: 'quarter', label: '本季' },
+                    { key: 'year', label: '本年' },
+                    { key: 'custom', label: '自定义' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setBackupPeriod(opt.key)}
+                      className={`py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        backupPeriod === opt.key
+                          ? 'bg-white text-[#1A2B4A]'
+                          : 'border border-white/30 text-white/70 hover:text-white'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                {backupPeriod === 'custom' && (
+                  <div className="flex gap-2 items-center mt-2">
+                    <input
+                      type="date"
+                      value={backupCustomStart}
+                      onChange={e => setBackupCustomStart(e.target.value)}
+                      className="flex-1 rounded-lg px-2 py-1.5 text-xs bg-white/10 text-white border border-white/20 focus:outline-none focus:border-white/50"
+                    />
+                    <span className="text-white/50 text-xs">至</span>
+                    <input
+                      type="date"
+                      value={backupCustomEnd}
+                      onChange={e => setBackupCustomEnd(e.target.value)}
+                      className="flex-1 rounded-lg px-2 py-1.5 text-xs bg-white/10 text-white border border-white/20 focus:outline-none focus:border-white/50"
+                    />
+                  </div>
+                )}
+              </div>
               {backupSettings?.lastManualBackupAt && (
                 <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
                   <div className="text-white/60 text-xs mb-1">上次备份时间</div>
@@ -1345,15 +1391,25 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                 </div>
               )}
               <div className="rounded-xl p-3 mb-5" style={{ backgroundColor: 'rgba(255,255,255,0.07)' }}>
-                <p className="text-white/50 text-xs leading-relaxed">点击下方按钮，系统将账本所有数据打包为 Excel 并发送至您的登录邮箱。</p>
+                <p className="text-white/50 text-xs leading-relaxed">系统将所选时间段内的报销申请单打包为 Excel 文件，发送至您的登录邮箱。</p>
               </div>
               <button
-                onClick={() => sendTestBackupMutation.mutate({ ledgerId })}
-                disabled={sendTestBackupMutation.isPending}
+                onClick={() => {
+                  if (backupPeriod === 'custom' && (!backupCustomStart || !backupCustomEnd)) {
+                    toast.error('请选择自定义时间段的开始和结束日期');
+                    return;
+                  }
+                  ajSendBackupMutation.mutate({
+                    ledgerId,
+                    period: backupPeriod,
+                    ...(backupPeriod === 'custom' ? { startDate: backupCustomStart, endDate: backupCustomEnd } : {}),
+                  });
+                }}
+                disabled={ajSendBackupMutation.isPending}
                 className="w-full py-3 rounded-xl text-sm font-bold transition-opacity disabled:opacity-60"
                 style={{ backgroundColor: '#fff', color: AJ_COLOR }}
               >
-                {sendTestBackupMutation.isPending ? '备份中...' : '立即备份'}
+                {ajSendBackupMutation.isPending ? '备份中...' : '立即备份'}
               </button>
             </div>
           )}
