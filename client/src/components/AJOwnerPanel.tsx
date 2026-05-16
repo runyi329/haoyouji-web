@@ -4,10 +4,13 @@ import taxCategoriesRaw from "@/data/tax_categories.json";
 import taxAccountingMap from "@/data/tax_accounting_map.json";
 import {
   Building2, Pencil, Trash2, Clock, CheckCircle, XCircle,
-  ChevronRight, List, X, Receipt, ChevronDown, Search
+  ChevronRight, List, X, Receipt, ChevronDown, Search, Archive
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { useCenterToast } from "@/components/ui/center-toast";
 import { EXPENSE_CATEGORIES, getDefaultExpenseConfig } from "@/pages/AJCompanyManager";
 
@@ -1095,6 +1098,60 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [searchText, setSearchText] = useState('');
 
+  // 备份弹窗状态
+  const [showBackupDialog, setShowBackupDialog] = useState(false);
+  const [backupTab, setBackupTab] = useState<'manual' | 'auto'>('manual');
+  const [backupFrequency, setBackupFrequency] = useState<'weekly' | 'monthly' | 'quarterly'>('monthly');
+  const [backupEnabled, setBackupEnabled] = useState(false);
+
+  // 获取当前用户邮箱
+  const { data: user } = trpc.auth.me.useQuery();
+
+  // 备份设置查询
+  const { data: backupSettings, refetch: refetchBackupSettings } = (trpc as any).ledger.getBackupSettings.useQuery(
+    { ledgerId },
+    { enabled: showBackupDialog }
+  );
+
+  // 同步备份设置到本地状态
+  useEffect(() => {
+    if (backupSettings) {
+      setBackupFrequency(backupSettings.frequency);
+      setBackupEnabled(backupSettings.enabled === 1);
+    }
+  }, [backupSettings]);
+
+  // 保存自动备份设置
+  const saveBackupMutation = (trpc as any).ledger.saveBackupSettings.useMutation({
+    onSuccess: () => {
+      toast.success('备份设置已保存');
+      refetchBackupSettings();
+    },
+    onError: (e: any) => toast.error('保存失败: ' + e.message),
+  });
+
+  // 手动备份
+  const sendTestBackupMutation = (trpc as any).ledger.sendTestBackup.useMutation({
+    onSuccess: () => {
+      toast.success('备份已发送至您的邮箱');
+      refetchBackupSettings();
+    },
+    onError: (e: any) => toast.error('备份失败: ' + e.message),
+  });
+
+  const frequencyLabel = (f: string) => {
+    if (f === 'weekly') return '每周';
+    if (f === 'monthly') return '每月';
+    if (f === 'quarterly') return '每季度';
+    return f;
+  };
+
+  const formatDateTime = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '—';
+    const d = new Date(dateStr);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+
   // 获取资方可见的企业列表
   const { data: myCompanies, isLoading: companiesLoading } = (trpc as any).ledger.ajOwnerGetMyCompanies.useQuery({ ledgerId });
   const companies: any[] = Array.isArray(myCompanies) ? myCompanies : [];
@@ -1123,7 +1180,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
     <div className="flex flex-col flex-1 bg-white">
       {/* 顶部深蓝色区域 */}
       <div style={{ backgroundColor: AJ_COLOR }} className="px-4 pt-3 pb-4">
-        {/* 第一行：企业选择 + 时间筛选 */}
+        {/* 第一行：企业选择 + 时间筛选 + 备份按钮 */}
         <div className="flex items-center gap-2 mb-3">
           {companiesLoading ? (
             <div className="text-white/60 text-xs flex-1">加载中...</div>
@@ -1165,6 +1222,15 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
             </select>
             <svg className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 fill-white/70" viewBox="0 0 12 12"><path d="M6 8L2 4h8z"/></svg>
           </div>
+          {/* 备份按钮 */}
+          <button
+            onClick={() => setShowBackupDialog(true)}
+            className="flex-shrink-0 flex items-center gap-1 text-xs text-white/90 pl-2 pr-3 py-1 rounded-full border border-white/30 cursor-pointer"
+            style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}
+          >
+            <Archive className="w-3 h-3" />
+            <span>备份</span>
+          </button>
         </div>
         {/* 统计数据行 */}
         {selectedCompanyId != null && (
@@ -1225,6 +1291,128 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
           <InvoiceListInline ledgerId={ledgerId} companyId={selectedCompanyId} period={period} searchText={searchText} />
         </div>
       )}
+
+      {/* 备份弹窗 */}
+      <Dialog open={showBackupDialog} onOpenChange={setShowBackupDialog}>
+        <DialogContent className="p-0 overflow-hidden rounded-2xl border-0 max-w-sm mx-auto" style={{ backgroundColor: AJ_COLOR }}>
+          <DialogTitle className="sr-only">账本备份</DialogTitle>
+          {/* 弹窗标题区 */}
+          <div className="flex items-center justify-between px-5 pt-5 pb-3">
+            <div className="flex items-center gap-2">
+              <Archive className="w-5 h-5 text-white/80" />
+              <span className="text-white font-bold text-base">账本备份</span>
+            </div>
+            <button onClick={() => setShowBackupDialog(false)} className="text-white/60 hover:text-white">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Tab 切换 */}
+          <div className="flex mx-5 mb-4 rounded-xl overflow-hidden border border-white/20">
+            <button
+              onClick={() => setBackupTab('manual')}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                backupTab === 'manual'
+                  ? 'bg-white text-[#1A2B4A]'
+                  : 'text-white/70 hover:text-white'
+              }`}
+            >
+              手动备份
+            </button>
+            <button
+              onClick={() => setBackupTab('auto')}
+              className={`flex-1 py-2 text-sm font-medium transition-colors ${
+                backupTab === 'auto'
+                  ? 'bg-white text-[#1A2B4A]'
+                  : 'text-white/70 hover:text-white'
+              }`}
+            >
+              自动备份
+            </button>
+          </div>
+
+          {/* 手动备份 Tab */}
+          {backupTab === 'manual' && (
+            <div className="px-5 pb-6">
+              <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                <div className="text-white/60 text-xs mb-1">备份接收邮箱</div>
+                <div className="text-white text-sm font-medium">{(user as any)?.email || '未设置邮箱'}</div>
+              </div>
+              {backupSettings?.lastManualBackupAt && (
+                <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                  <div className="text-white/60 text-xs mb-1">上次备份时间</div>
+                  <div className="text-white text-sm">{formatDateTime(backupSettings.lastManualBackupAt)}</div>
+                </div>
+              )}
+              <div className="rounded-xl p-3 mb-5" style={{ backgroundColor: 'rgba(255,255,255,0.07)' }}>
+                <p className="text-white/50 text-xs leading-relaxed">点击下方按钮，系统将账本所有数据打包为 Excel 并发送至您的登录邮箱。</p>
+              </div>
+              <button
+                onClick={() => sendTestBackupMutation.mutate({ ledgerId })}
+                disabled={sendTestBackupMutation.isPending}
+                className="w-full py-3 rounded-xl text-sm font-bold transition-opacity disabled:opacity-60"
+                style={{ backgroundColor: '#fff', color: AJ_COLOR }}
+              >
+                {sendTestBackupMutation.isPending ? '备份中...' : '立即备份'}
+              </button>
+            </div>
+          )}
+
+          {/* 自动备份 Tab */}
+          {backupTab === 'auto' && (
+            <div className="px-5 pb-6">
+              <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-white text-sm font-medium">自动备份</div>
+                    <div className="text-white/50 text-xs mt-0.5">开启后按频率自动发送备份邮件</div>
+                  </div>
+                  <Switch
+                    checked={backupEnabled}
+                    onCheckedChange={setBackupEnabled}
+                    className="data-[state=checked]:bg-green-400"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                <div className="text-white/60 text-xs mb-2">备份频率</div>
+                <div className="flex gap-2">
+                  {(['weekly', 'monthly', 'quarterly'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setBackupFrequency(f)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        backupFrequency === f
+                          ? 'bg-white text-[#1A2B4A]'
+                          : 'border border-white/30 text-white/70'
+                      }`}
+                    >
+                      {frequencyLabel(f)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {backupSettings?.lastAutoBackupAt && (
+                <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'rgba(255,255,255,0.1)' }}>
+                  <div className="text-white/60 text-xs mb-1">上次自动备份</div>
+                  <div className="text-white text-sm">{formatDateTime(backupSettings.lastAutoBackupAt)}</div>
+                </div>
+              )}
+
+              <button
+                onClick={() => saveBackupMutation.mutate({ ledgerId, frequency: backupFrequency, enabled: backupEnabled })}
+                disabled={saveBackupMutation.isPending}
+                className="w-full py-3 rounded-xl text-sm font-bold transition-opacity disabled:opacity-60"
+                style={{ backgroundColor: '#fff', color: AJ_COLOR }}
+              >
+                {saveBackupMutation.isPending ? '保存中...' : '保存设置'}
+              </button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
