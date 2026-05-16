@@ -2125,3 +2125,16 @@ export const ajContracts = mysqlTable("aj_contracts", {
   index("aj_contracts_ledger_idx").on(table.ledgerId),
 ]);
 export type AjContract = typeof ajContracts.$inferSelect;
+
+// ========== AJ型定制账本：备份额外邮箱表 ==========
+export const ajBackupEmails = mysqlTable("aj_backup_emails", {
+  id: int().autoincrement().notNull(),
+  ledgerId: int('ledger_id').notNull(),
+  userId: int('user_id').notNull(),
+  email: varchar('email', { length: 200 }).notNull(),
+  label: varchar('label', { length: 50 }),
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+  index("aj_backup_emails_ledger_user_idx").on(table.ledgerId, table.userId),
+]);
+export type AjBackupEmail = typeof ajBackupEmails.$inferSelect;
