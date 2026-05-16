@@ -1212,6 +1212,16 @@ export default function Home() {
     staleTime: 30000,
     refetchInterval: 60000,
   });
+  // 检查当前用户是否是76号账本（AJ账本）成员，用于控制「智能会计」入口权限
+  const { data: ledger76Data } = (trpc as any).ledger.getLedger.useQuery(
+    { id: 76 },
+    {
+      enabled: !!user,
+      staleTime: 300000,
+      retry: false,
+    }
+  );
+  const isLedger76Member = !!ledger76Data;
 
   // 商品分类页：分类列表 + 选中分类 + 底部弹出状态
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
@@ -2533,7 +2543,11 @@ export default function Home() {
               {/* 智能会计 - 黑白金立体风格，点击跳转76号账本报销申请单 */}
               <div
                 className="flex items-center justify-center rounded-xl cursor-pointer active:scale-[0.98] relative overflow-hidden"
-                onClick={() => requireLogin(() => navigate('/ledger/76/add?from=home'))}
+                onClick={() => {
+                  if (!user) return; // 未登录无反应
+                  if (!isLedger76Member) return; // 非76号账本成员无反应
+                  navigate('/ledger/76/add?from=home');
+                }}
                 style={{
                   background: 'linear-gradient(135deg, #111111 0%, #2a2a2a 45%, #1a1a1a 100%)',
                   boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
