@@ -130,6 +130,178 @@ export async function sendBackupEmail(options: {
   console.log(`[sendBackupEmail] 邮件已发送至 ${to}`);
 }
 
+
+// ============================================================
+// AJ账本（76号）专用备份邮件
+// ============================================================
+export async function sendAJBackupEmail(options: {
+  to: string;
+  companyName: string;
+  excelBuffer: Buffer;
+  stats: {
+    totalRecords: number;
+    startDate: string;
+    endDate: string;
+    totalAmount: number;
+    approvedCount: number;
+    pendingCount: number;
+    rejectedCount: number;
+  };
+}): Promise<void> {
+  const { to, companyName, excelBuffer, stats } = options;
+
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const filename = `${companyName}_报销申请单备份_${dateStr}.xlsx`;
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', Arial, sans-serif; background-color: #f0f2f5; color: #333; }
+    .wrapper { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .card { background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(26,43,74,0.12); }
+    .header { background: linear-gradient(135deg, #1A2B4A 0%, #243660 100%); padding: 28px 24px; text-align: center; }
+    .header-badge { display: inline-block; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; padding: 4px 14px; font-size: 12px; color: rgba(255,255,255,0.8); margin-bottom: 12px; letter-spacing: 1px; }
+    .header h1 { color: #fff; font-size: 22px; font-weight: 700; margin-bottom: 6px; letter-spacing: 1px; }
+    .header p { color: rgba(255,255,255,0.7); font-size: 13px; }
+    .company-banner { background: linear-gradient(135deg, #1A2B4A 0%, #2d4a8a 100%); padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+    .company-icon { width: 40px; height: 40px; background: rgba(255,255,255,0.15); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+    .company-info { flex: 1; }
+    .company-name { color: #fff; font-size: 15px; font-weight: 600; }
+    .company-label { color: rgba(255,255,255,0.6); font-size: 11px; margin-top: 2px; }
+    .body { padding: 24px; }
+    .greeting { font-size: 14px; color: #555; line-height: 1.8; margin-bottom: 20px; }
+    .section-title { font-size: 13px; font-weight: 600; color: #1A2B4A; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #1A2B4A; }
+    .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+    .stat-card { background: #f8f9fc; border-radius: 12px; padding: 14px; border: 1px solid #e8ecf4; }
+    .stat-label { font-size: 11px; color: #888; margin-bottom: 4px; }
+    .stat-value { font-size: 18px; font-weight: 700; color: #1A2B4A; }
+    .stat-card.full { grid-column: 1 / -1; }
+    .stat-card.highlight { background: linear-gradient(135deg, #1A2B4A, #243660); border: none; }
+    .stat-card.highlight .stat-label { color: rgba(255,255,255,0.7); }
+    .stat-card.highlight .stat-value { color: #fff; font-size: 22px; }
+    .status-row { display: flex; gap: 8px; margin-bottom: 20px; }
+    .status-badge { flex: 1; text-align: center; padding: 10px 6px; border-radius: 10px; }
+    .status-badge .badge-count { font-size: 20px; font-weight: 700; }
+    .status-badge .badge-label { font-size: 11px; margin-top: 3px; }
+    .status-pending { background: #fff8e6; }
+    .status-pending .badge-count { color: #f59e0b; }
+    .status-pending .badge-label { color: #92400e; }
+    .status-approved { background: #e8f5e9; }
+    .status-approved .badge-count { color: #22c55e; }
+    .status-approved .badge-label { color: #166534; }
+    .status-rejected { background: #fef2f2; }
+    .status-rejected .badge-count { color: #ef4444; }
+    .status-rejected .badge-label { color: #991b1b; }
+    .info-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    .info-table td { padding: 11px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+    .info-table td:first-child { color: #888; width: 35%; }
+    .info-table td:last-child { color: #333; font-weight: 500; text-align: right; }
+    .attachment-tip { background: #f0f4ff; border: 1px solid #c7d7ff; border-radius: 10px; padding: 14px 16px; display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .attachment-tip .tip-icon { font-size: 22px; }
+    .attachment-tip .tip-text { font-size: 13px; color: #3b5bdb; line-height: 1.5; }
+    .footer { background: #f8f9fc; padding: 16px 24px; text-align: center; border-top: 1px solid #eee; }
+    .footer p { font-size: 11px; color: #aaa; line-height: 1.8; }
+    .footer .brand { color: #1A2B4A; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="card">
+      <!-- 头部 -->
+      <div class="header">
+        <div class="header-badge">Ai-OA 报销系统</div>
+        <h1>报销申请单备份</h1>
+        <p>备份时间：${dateStr}</p>
+      </div>
+
+      <!-- 企业名称横幅 -->
+      <div class="company-banner">
+        <div class="company-icon">🏢</div>
+        <div class="company-info">
+          <div class="company-name">${companyName}</div>
+          <div class="company-label">开票单位</div>
+        </div>
+      </div>
+
+      <!-- 正文 -->
+      <div class="body">
+        <p class="greeting">您好，以下是 <strong>${companyName}</strong> 在 ${stats.startDate} 至 ${stats.endDate} 期间的报销申请单备份，详细数据请查收附件 Excel 文件。</p>
+
+        <!-- 核心统计 -->
+        <div class="section-title">备份概览</div>
+        <div class="stats-grid">
+          <div class="stat-card highlight full">
+            <div class="stat-label">报销总金额</div>
+            <div class="stat-value">¥${stats.totalAmount.toFixed(2)}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">申请单总数</div>
+            <div class="stat-value">${stats.totalRecords} 笔</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">时间范围</div>
+            <div class="stat-value" style="font-size:13px; padding-top:4px;">${stats.startDate}<br>至 ${stats.endDate}</div>
+          </div>
+        </div>
+
+        <!-- 审批状态分布 -->
+        <div class="section-title">审批状态分布</div>
+        <div class="status-row">
+          <div class="status-badge status-pending">
+            <div class="badge-count">${stats.pendingCount}</div>
+            <div class="badge-label">待审核</div>
+          </div>
+          <div class="status-badge status-approved">
+            <div class="badge-count">${stats.approvedCount}</div>
+            <div class="badge-label">已审批</div>
+          </div>
+          <div class="status-badge status-rejected">
+            <div class="badge-count">${stats.rejectedCount}</div>
+            <div class="badge-label">已驳回</div>
+          </div>
+        </div>
+
+        <!-- 附件提示 -->
+        <div class="attachment-tip">
+          <div class="tip-icon">📎</div>
+          <div class="tip-text">附件 <strong>${filename}</strong> 包含所有报销申请单的完整字段，包括开票单位、税号、报销金额、申请人、员工编号、报销事由、报销类目、会计科目及审批状态。</div>
+        </div>
+      </div>
+
+      <!-- 底部 -->
+      <div class="footer">
+        <p>此邮件由 <span class="brand">Ai-OA 报销系统</span> 自动发送，请勿直接回复。</p>
+        <p>如有疑问，请联系您的账本管理员。</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+  `;
+
+  const transporter = getTransporter();
+
+  await transporter.sendMail({
+    from: `"Ai-OA 报销系统备份" <${SMTP_CONFIG.auth.user}>`,
+    to,
+    subject: `【报销备份】${companyName} ${stats.startDate} 至 ${stats.endDate}（共${stats.totalRecords}笔）`,
+    html: htmlContent,
+    attachments: [
+      {
+        filename,
+        content: excelBuffer,
+      },
+    ],
+  });
+
+  console.log(`[sendAJBackupEmail] 邮件已发送至 ${to}`);
+}
 // ============================================================
 // 预警邮件（支持自定义模板变量）
 // ============================================================

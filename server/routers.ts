@@ -9888,19 +9888,25 @@ ${klinesSummary}
         const [ledgerNameRows] = await (conn as any).execute(`SELECT name FROM ledgers WHERE id=? LIMIT 1`, [input.ledgerId]);
         const ledgerName = (ledgerNameRows as any[])[0]?.name || '账本';
 
-        // 发送邮件
-        const { sendBackupEmail } = await import('./email-service');
-        await sendBackupEmail({
+        // 统计审批状态分布
+        const approvedCount = invoices.filter((r: any) => r.status === '已审批').length;
+        const rejectedCount = invoices.filter((r: any) => r.status === '已驳回').length;
+        const pendingCount = invoices.filter((r: any) => r.status === '待审核').length;
+
+        // 发送AJ专用邮件
+        const { sendAJBackupEmail } = await import('./email-service');
+        await sendAJBackupEmail({
           to: userEmail,
-          ledgerName: `${ledgerName}（${periodLabel}）`,
+          companyName,
           excelBuffer: Buffer.from(buffer),
           stats: {
             totalRecords: invoices.length,
-            earliestDate: startDate,
-            latestDate: endDate,
-            totalIncome: totalAmount,
-            totalExpense: 0,
-            balance: totalAmount,
+            startDate,
+            endDate,
+            totalAmount,
+            approvedCount,
+            pendingCount,
+            rejectedCount,
           },
         });
 
