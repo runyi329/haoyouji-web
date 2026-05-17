@@ -796,17 +796,25 @@ function InvoiceListInline({
   const [approvingId, setApprovingId] = useState<number | null>(null);
   // 审批确认弹窗状态
   const [confirmApproveInv, setConfirmApproveInv] = useState<any | null>(null);
+  // 当前弹窗内正在处理的 action
+  const [approvingAction, setApprovingAction] = useState<string | null>(null);
   const approveMutation = (trpc as any).ledger.approveTransaction.useMutation({
     onSuccess: (_data: any, variables: any) => {
       const actionMap: Record<string, string> = { approved: '审批通过', support_needed: '已标记补充材料', pending: '已撤回审批', rejected: '已拒绝' };
       toast.show(actionMap[variables.action] || '操作成功', 'success');
       setApprovingId(null);
+      setApprovingAction(null);
       setConfirmApproveInv(null);
       // 不带参数全量 invalidate，确保所有 period 的缓存都刷新
       utils.ledger.ajOwnerGetCompanyInvoices.invalidate();
       utils.ledger.getTransactions.invalidate();
     },
-    onError: () => { toast.show('操作失败，请重试', 'error'); setApprovingId(null); setConfirmApproveInv(null); },
+    onError: () => {
+      toast.show('操作失败，请重试', 'error');
+      setApprovingId(null);
+      setApprovingAction(null);
+      setConfirmApproveInv(null);
+    },
   });
 
   // 搜索过滤
@@ -1005,14 +1013,12 @@ function InvoiceListInline({
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
                   <button
                     onClick={e => { e.stopPropagation(); setConfirmApproveInv(inv); }}
-                    disabled={approvingId === inv.id}
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: '6px',
                       background: 'transparent',
                       border: '1px solid rgba(26,43,74,0.2)',
                       borderRadius: '6px', padding: '4px 10px',
-                      cursor: approvingId === inv.id ? 'not-allowed' : 'pointer',
-                      opacity: approvingId === inv.id ? 0.6 : 1,
+                      cursor: 'pointer',
                     }}
                   >
                     <span style={{
@@ -1020,7 +1026,7 @@ function InvoiceListInline({
                       backgroundColor: inv.ajStatus === 'approved' ? '#4CAF50' : inv.ajStatus === 'support_needed' ? '#FF9800' : inv.ajStatus === 'rejected' ? '#BDBDBD' : '#F59E0B'
                     }} />
                     <span style={{ fontSize: '12px', fontWeight: 500, color: 'rgba(26,43,74,0.75)' }}>
-                      {approvingId === inv.id ? '处理中...' : inv.ajStatus === 'approved' ? '审批通过' : inv.ajStatus === 'support_needed' ? '补充材料' : inv.ajStatus === 'rejected' ? '已拒绝' : '待审核'}
+                      {inv.ajStatus === 'approved' ? '审批通过' : inv.ajStatus === 'support_needed' ? '补充材料' : inv.ajStatus === 'rejected' ? '已拒绝' : '待审核'}
                     </span>
                     <span style={{ fontSize: '10px', color: 'rgba(26,43,74,0.35)', marginLeft: '1px' }}>▾</span>
                   </button>
@@ -1052,13 +1058,18 @@ function InvoiceListInline({
                 { action: 'support_needed', label: '补充材料', dot: '#FF9800', desc: '需要补充相关证明材料' },
                 { action: 'pending', label: '待审核', dot: '#F59E0B', desc: '撤回审批，返回待审核状态' },
               ].map(opt => {
-                const isCurrent = confirmApproveInv.ajStatus === opt.action || (confirmApproveInv.ajStatus === null && opt.action === 'pending');
+                // 当前状态判断：null 和 'pending' 都表示待审核
+                const currentStatus = confirmApproveInv.ajStatus || 'pending';
+                const isCurrent = currentStatus === opt.action;
+                const isLoading = approveMutation.isPending && approvingAction === opt.action;
+                const isDisabled = isCurrent || approveMutation.isPending;
                 return (
                   <button
                     key={opt.action}
-                    disabled={isCurrent}
+                    disabled={isDisabled}
                     onClick={() => {
                       setApprovingId(confirmApproveInv.id);
+                      setApprovingAction(opt.action);
                       approveMutation.mutate({ transactionId: confirmApproveInv.id, action: opt.action as any });
                     }}
                     style={{
@@ -1066,17 +1077,19 @@ function InvoiceListInline({
                       background: isCurrent ? 'rgba(26,43,74,0.05)' : '#f7f7f7',
                       border: `1px solid ${isCurrent ? 'rgba(26,43,74,0.2)' : '#e8e8e8'}`,
                       borderRadius: '10px', padding: '12px 14px',
-                      cursor: isCurrent ? 'default' : 'pointer',
-                      opacity: isCurrent ? 0.7 : 1,
+                      cursor: isDisabled ? 'default' : 'pointer',
+                      opacity: isDisabled && !isLoading ? 0.7 : 1,
                       textAlign: 'left', width: '100%',
                     }}
                   >
                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: opt.dot, flexShrink: 0 }} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#1A2B4A' }}>{opt.label}</div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#1A2B4A' }}>
+                        {isLoading ? '处理中...' : opt.label}
+                      </div>
                       <div style={{ fontSize: '11px', color: 'rgba(26,43,74,0.45)', marginTop: '1px' }}>{opt.desc}</div>
                     </div>
-                    {isCurrent && (
+                    {isCurrent && !isLoading && (
                       <span style={{ fontSize: '12px', color: 'rgba(26,43,74,0.5)', fontWeight: 500 }}>当前</span>
                     )}
                   </button>
