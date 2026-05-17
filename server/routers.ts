@@ -9399,7 +9399,7 @@ ${klinesSummary}
         );
       }),
 
-    // AJ审批状态直接设置（独立接口，不依赖旧审批流程）
+    // AJ审批状态直接设置（独立接口，使用drizzle ORM）
     ajSetStatus: protectedProcedure
       .input(z.object({
         transactionId: z.number(),
@@ -9408,38 +9408,60 @@ ${klinesSummary}
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-        // 查询记录并验证权限
-        const [record] = await db.execute(
-          sql`SELECT lr.id, lr.ledgerId, lr.aj_status, lr.createdBy, lr.amount, lr.reimbursement_amount FROM ledger_records lr WHERE lr.id = ${input.transactionId} LIMIT 1`
-        ) as any[];
-        const row = Array.isArray(record) ? record[0] : null;
-        if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: '记录不存在' });
-        // 验证是账本管理员或owner
-        const [memberRows] = await db.execute(
-          sql`SELECT role FROM ledger_members WHERE ledgerId = ${row.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
-        ) as any[];
-        const member = Array.isArray(memberRows) ? memberRows[0] : null;
-        if (!member || !['owner', 'admin'].includes(member.role)) {
+
+        // 1. 查询记录（drizzle ORM）
+        const recordInfo = await db
+          .select({
+            id: ledgerRecords.id,
+            ledgerId: ledgerRecords.ledgerId,
+            ajStatus: ledgerRecords.ajStatus,
+            createdBy: ledgerRecords.createdBy,
+            amount: ledgerRecords.amount,
+            reimbursementAmount: ledgerRecords.reimbursementAmount,
+          })
+          .from(ledgerRecords)
+          .where(eq(ledgerRecords.id, input.transactionId))
+          .limit(1);
+
+        if (recordInfo.length === 0) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '记录不存在' });
+        }
+        const row = recordInfo[0];
+
+        // 2. 验证权限：账本管理员或owner
+        const membership = await db
+          .select({ role: ledgerMembers.role })
+          .from(ledgerMembers)
+          .where(and(eq(ledgerMembers.ledgerId, row.ledgerId), eq(ledgerMembers.userId, ctx.user.id)))
+          .limit(1);
+
+        if (membership.length === 0 || !['owner', 'admin'].includes(membership[0].role)) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '只有账本管理员可以操作审批状态' });
         }
 
-        const oldStatus = row.aj_status || 'pending';
+        const oldStatus = row.ajStatus || 'pending';
         const newStatus = input.status;
 
-        // 直接更新 aj_status
-        await db.execute(
-          sql`UPDATE ledger_records SET aj_status = ${newStatus}, aj_approved_by = ${ctx.user.id}, aj_approved_at = NOW() WHERE id = ${input.transactionId}`
-        );
+        // 3. 更新 aj_status（drizzle ORM）
+        await db
+          .update(ledgerRecords)
+          .set({
+            ajStatus: newStatus,
+            ajApprovedBy: ctx.user.id,
+            ajApprovedAt: sql`NOW()`,
+          } as any)
+          .where(eq(ledgerRecords.id, input.transactionId));
 
-        // USDT 奖励逻辑
+        console.log(`[ajSetStatus] 记录${input.transactionId}: ${oldStatus} -> ${newStatus}, 操作人: ${ctx.user.id}`);
+
+        // 4. USDT 奖励逻辑
         const rewardNote = `成本津贴 #${input.transactionId}`;
-        const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
         if (oldStatus !== 'approved' && newStatus === 'approved') {
           // 切换到审批通过：发放 USDT 奖励
           try {
             const submitterId = row.createdBy;
-            const reimbursementAmount = parseFloat(row.reimbursement_amount || row.amount || '0');
+            const reimbursementAmount = parseFloat(row.reimbursementAmount || row.amount || '0');
             if (reimbursementAmount > 0 && submitterId) {
               let usdCnyRate = 7.2;
               try {
@@ -9451,11 +9473,11 @@ ${klinesSummary}
               const usdtRewarded = parseFloat((rewardCny / usdCnyRate).toFixed(6));
               if (usdtRewarded > 0) {
                 await db.execute(
-                  sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${row.ledgerId}, ${submitterId}, ${usdtRewarded}, ${rewardNote}, ${nowStr}, ${nowStr})`
+                  sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${row.ledgerId}, ${submitterId}, ${usdtRewarded}, ${rewardNote}, NOW(), NOW())`
                 );
                 try {
                   await db.execute(
-                    sql`INSERT INTO balance_history (user_id, amount, type, related_id, balance, description, created_at) VALUES (${submitterId}, ${usdtRewarded}, 'reward', ${input.transactionId}, 0, ${rewardNote}, ${nowStr})`
+                    sql`INSERT INTO balance_history (user_id, amount, type, related_id, balance, description, created_at) VALUES (${submitterId}, ${usdtRewarded}, 'reward', ${input.transactionId}, 0, ${rewardNote}, NOW())`
                   );
                 } catch (_) {}
                 console.log(`[ajSetStatus] 发放 ${usdtRewarded} USDT 给用户 ${submitterId}`);
