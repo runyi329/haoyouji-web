@@ -1048,36 +1048,40 @@ function InvoiceListInline({
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
               {[
-                { action: 'approved', label: '审批通过', dot: '#4CAF50', textColor: '#2E7D32', bg: 'rgba(76,175,80,0.08)', border: 'rgba(76,175,80,0.3)', desc: '确认通过该报销申请' },
-                { action: 'support_needed', label: '补充材料', dot: '#FF9800', textColor: '#E65100', bg: 'rgba(255,152,0,0.08)', border: 'rgba(255,152,0,0.3)', desc: '需要补充相关证明材料' },
-                { action: 'pending', label: '待审核', dot: '#F59E0B', textColor: '#B45309', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.3)', desc: '撤回审批，返回待审核状态' },
-              ].map(opt => (
-                <button
-                  key={opt.action}
-                  disabled={confirmApproveInv.ajStatus === opt.action || (confirmApproveInv.ajStatus === null && opt.action === 'pending')}
-                  onClick={() => {
-                    setApprovingId(confirmApproveInv.id);
-                    approveMutation.mutate({ transactionId: confirmApproveInv.id, action: opt.action as any });
-                  }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '10px',
-                    background: (confirmApproveInv.ajStatus === opt.action || (confirmApproveInv.ajStatus === null && opt.action === 'pending')) ? opt.bg : '#f7f7f7',
-                    border: `1px solid ${(confirmApproveInv.ajStatus === opt.action || (confirmApproveInv.ajStatus === null && opt.action === 'pending')) ? opt.border : '#e8e8e8'}`,
-                    borderRadius: '10px', padding: '12px 14px', cursor: (confirmApproveInv.ajStatus === opt.action || (confirmApproveInv.ajStatus === null && opt.action === 'pending')) ? 'default' : 'pointer',
-                    opacity: (confirmApproveInv.ajStatus === opt.action || (confirmApproveInv.ajStatus === null && opt.action === 'pending')) ? 0.6 : 1,
-                    textAlign: 'left', width: '100%',
-                  }}
-                >
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: opt.dot, flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: opt.textColor }}>{opt.label}</div>
-                    <div style={{ fontSize: '11px', color: '#999', marginTop: '1px' }}>{opt.desc}</div>
-                  </div>
-                  {(confirmApproveInv.ajStatus === opt.action || (confirmApproveInv.ajStatus === null && opt.action === 'pending')) && (
-                    <span style={{ fontSize: '12px', color: opt.textColor, fontWeight: 600 }}>当前</span>
-                  )}
-                </button>
-              ))}
+                { action: 'approved', label: '审批通过', dot: '#4CAF50', desc: '确认通过该报销申请' },
+                { action: 'support_needed', label: '补充材料', dot: '#FF9800', desc: '需要补充相关证明材料' },
+                { action: 'pending', label: '待审核', dot: '#F59E0B', desc: '撤回审批，返回待审核状态' },
+              ].map(opt => {
+                const isCurrent = confirmApproveInv.ajStatus === opt.action || (confirmApproveInv.ajStatus === null && opt.action === 'pending');
+                return (
+                  <button
+                    key={opt.action}
+                    disabled={isCurrent}
+                    onClick={() => {
+                      setApprovingId(confirmApproveInv.id);
+                      approveMutation.mutate({ transactionId: confirmApproveInv.id, action: opt.action as any });
+                    }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px',
+                      background: isCurrent ? 'rgba(26,43,74,0.05)' : '#f7f7f7',
+                      border: `1px solid ${isCurrent ? 'rgba(26,43,74,0.2)' : '#e8e8e8'}`,
+                      borderRadius: '10px', padding: '12px 14px',
+                      cursor: isCurrent ? 'default' : 'pointer',
+                      opacity: isCurrent ? 0.7 : 1,
+                      textAlign: 'left', width: '100%',
+                    }}
+                  >
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: opt.dot, flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#1A2B4A' }}>{opt.label}</div>
+                      <div style={{ fontSize: '11px', color: 'rgba(26,43,74,0.45)', marginTop: '1px' }}>{opt.desc}</div>
+                    </div>
+                    {isCurrent && (
+                      <span style={{ fontSize: '12px', color: 'rgba(26,43,74,0.5)', fontWeight: 500 }}>当前</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
             <button
               onClick={() => setConfirmApproveInv(null)}
