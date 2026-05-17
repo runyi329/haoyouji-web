@@ -4,7 +4,7 @@ import taxCategoriesRaw from "@/data/tax_categories.json";
 import taxAccountingMap from "@/data/tax_accounting_map.json";
 import {
   Building2, Pencil, Trash2, Clock, CheckCircle, XCircle,
-  ChevronRight, List, X, Receipt, ChevronDown, Search, Archive
+  ChevronRight, List, X, Receipt, ChevronDown, Search, Archive, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -798,15 +798,21 @@ function InvoiceListInline({
   const [statusPopupInv, setStatusPopupInv] = useState<any | null>(null);
   // 本地乐观更新：key=transactionId, value=新状态
   const [localStatusMap, setLocalStatusMap] = useState<Record<number, string>>({});
+  // 按钮按下状态（触摸反馈）
+  const [pressedStatus, setPressedStatus] = useState<string | null>(null);
+  // 正在处理的状态（点击后显示loading直到成功/失败）
+  const [processingStatus, setProcessingStatus] = useState<string | null>(null);
   const ajSetStatusMutation = (trpc as any).ledger.ajSetStatus.useMutation({
     onSuccess: (data: any) => {
-      const labelMap: Record<string, string> = { approved: '审批通过', support_needed: '已标记补充材料', pending: '已设为待审核' };
+      const labelMap: Record<string, string> = { approved: '✅ 审批通过', support_needed: '📋 已标记补充材料', pending: '⏳ 已设为待审核' };
       toast.show(labelMap[data.status] || '状态已更新', 'success');
+      setProcessingStatus(null);
       setStatusPopupInv(null);
       utils.ledger.ajOwnerGetCompanyInvoices.invalidate();
     },
     onError: (err: any) => {
       toast.show(err?.message || '操作失败，请重试', 'error');
+      setProcessingStatus(null);
       // 回滚乐观更新
       if (statusPopupInv) {
         setLocalStatusMap(prev => { const n = { ...prev }; delete n[statusPopupInv.id]; return n; });
@@ -1053,38 +1059,64 @@ function InvoiceListInline({
             <div style={{ fontSize: '12px', color: '#999', textAlign: 'center', marginBottom: '16px' }}>选择后立即生效</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {([
-                { status: 'approved', label: '审批通过', dot: '#4CAF50', desc: '确认通过该报销申请' },
-                { status: 'support_needed', label: '补充材料', dot: '#FF9800', desc: '需要补充相关证明材料' },
-                { status: 'pending', label: '待审核', dot: '#F59E0B', desc: '撤回审批，返回待审核状态' },
+                { status: 'approved', label: '审批通过', dot: '#4CAF50', activeBg: '#E8F5E9', activeBorder: '#4CAF50', desc: '确认通过该报销申请' },
+                { status: 'support_needed', label: '补充材料', dot: '#FF9800', activeBg: '#FFF3E0', activeBorder: '#FF9800', desc: '需要补充相关证明材料' },
+                { status: 'pending', label: '待审核', dot: '#F59E0B', activeBg: '#FFF8E1', activeBorder: '#F59E0B', desc: '撤回审批，返回待审核状态' },
               ] as const).map(opt => {
                 const isCurrent = statusPopupInv._curStatus === opt.status;
-                const isLoading = ajSetStatusMutation.isPending;
+                const isThisProcessing = processingStatus === opt.status;
+                const isAnyProcessing = processingStatus !== null;
+                const isPressed = pressedStatus === opt.status;
+                const isDisabled = isCurrent || isAnyProcessing;
                 return (
                   <button
                     key={opt.status}
-                    disabled={isCurrent || isLoading}
+                    disabled={isDisabled}
+                    onTouchStart={() => { if (!isDisabled) setPressedStatus(opt.status); }}
+                    onTouchEnd={() => setPressedStatus(null)}
+                    onTouchCancel={() => setPressedStatus(null)}
+                    onMouseDown={() => { if (!isDisabled) setPressedStatus(opt.status); }}
+                    onMouseUp={() => setPressedStatus(null)}
+                    onMouseLeave={() => setPressedStatus(null)}
                     onClick={() => {
-                      console.log('[ajSetStatus] 按钮被点击:', opt.status, 'transactionId:', statusPopupInv.id, 'isCurrent:', isCurrent, 'isLoading:', isLoading);
-                      // 乐观更新本地状态
+                      if (isDisabled) return;
+                      console.log('[ajSetStatus] 按钮被点击:', opt.status, 'transactionId:', statusPopupInv.id);
+                      setProcessingStatus(opt.status);
                       setLocalStatusMap(prev => ({ ...prev, [statusPopupInv.id]: opt.status }));
                       ajSetStatusMutation.mutate({ transactionId: statusPopupInv.id, status: opt.status });
                     }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '10px',
-                      background: isCurrent ? 'rgba(26,43,74,0.05)' : '#f7f7f7',
-                      border: `1px solid ${isCurrent ? 'rgba(26,43,74,0.2)' : '#e8e8e8'}`,
+                      background: isThisProcessing ? opt.activeBg
+                        : isCurrent ? 'rgba(26,43,74,0.05)'
+                        : isPressed ? opt.activeBg
+                        : '#f7f7f7',
+                      border: `2px solid ${isThisProcessing ? opt.activeBorder
+                        : isCurrent ? 'rgba(26,43,74,0.2)'
+                        : isPressed ? opt.activeBorder
+                        : '#e8e8e8'}`,
                       borderRadius: '10px', padding: '12px 14px',
-                      cursor: isCurrent || isLoading ? 'default' : 'pointer',
-                      opacity: isCurrent ? 0.6 : 1,
+                      cursor: isDisabled ? 'default' : 'pointer',
+                      opacity: isCurrent ? 0.5 : (isAnyProcessing && !isThisProcessing) ? 0.4 : 1,
                       textAlign: 'left', width: '100%',
+                      transition: 'all 0.15s ease',
+                      transform: isPressed ? 'scale(0.97)' : 'scale(1)',
+                      boxShadow: isThisProcessing ? `0 0 0 3px ${opt.activeBorder}33` : 'none',
                     }}
                   >
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: opt.dot, flexShrink: 0 }} />
+                    {isThisProcessing ? (
+                      <Loader2 style={{ width: '16px', height: '16px', color: opt.dot, flexShrink: 0, animation: 'spin 1s linear infinite' }} />
+                    ) : (
+                      <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: opt.dot, flexShrink: 0, boxShadow: isPressed ? `0 0 6px ${opt.dot}88` : 'none', transition: 'box-shadow 0.15s ease' }} />
+                    )}
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#1A2B4A' }}>{opt.label}</div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: isThisProcessing ? opt.activeBorder : '#1A2B4A' }}>
+                        {isThisProcessing ? `${opt.label} 处理中...` : opt.label}
+                      </div>
                       <div style={{ fontSize: '11px', color: 'rgba(26,43,74,0.45)', marginTop: '1px' }}>{opt.desc}</div>
                     </div>
                     {isCurrent && <span style={{ fontSize: '12px', color: 'rgba(26,43,74,0.45)', fontWeight: 500 }}>当前</span>}
+                    {isThisProcessing && <span style={{ fontSize: '11px', color: opt.activeBorder, fontWeight: 600 }}>处理中</span>}
                   </button>
                 );
               })}
