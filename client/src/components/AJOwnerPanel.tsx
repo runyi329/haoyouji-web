@@ -803,12 +803,16 @@ function InvoiceListInline({
   // 正在处理的状态（点击后显示loading直到成功/失败）
   const [processingStatus, setProcessingStatus] = useState<string | null>(null);
   const ajSetStatusMutation = (trpc as any).ledger.ajSetStatus.useMutation({
-    onSuccess: (data: any) => {
+    onSuccess: (data: any, variables: any) => {
       const labelMap: Record<string, string> = { approved: '✅ 审批通过', support_needed: '📋 已标记补充材料', pending: '⏳ 已设为待审核' };
       toast.show(labelMap[data.status] || '状态已更新', 'success');
+      // 更新本地乐观状态
+      setLocalStatusMap(prev => ({ ...prev, [variables.transactionId]: variables.status }));
       setProcessingStatus(null);
       setStatusPopupInv(null);
-      utils.ledger.ajOwnerGetCompanyInvoices.invalidate();
+      // 带正确参数刷新列表
+      utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId, companyId });
+      utils.ledger.getTransactions.invalidate();
     },
     onError: (err: any) => {
       toast.show(err?.message || '操作失败，请重试', 'error');
@@ -818,6 +822,10 @@ function InvoiceListInline({
         setLocalStatusMap(prev => { const n = { ...prev }; delete n[statusPopupInv.id]; return n; });
       }
       setStatusPopupInv(null);
+    },
+    onSettled: () => {
+      // 无论成功还是失败，确保重置处理中状态（防止卡住）
+      setProcessingStatus(null);
     },
   });
 
