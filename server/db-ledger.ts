@@ -4342,7 +4342,7 @@ export async function createApprovalRecords(
 export async function approveTransaction(
   transactionId: number,
   userId: number,
-  action: 'approved' | 'rejected',
+  action: 'approved' | 'rejected' | 'support_needed' | 'pending',
   comment?: string
 ) {
   const db = await getLedgerDb();

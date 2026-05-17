@@ -794,15 +794,19 @@ function InvoiceListInline({
     updateExpenseReasonMutation.mutate({ ledgerId, recordId: invoiceId, expenseReason: reason });
   }, [reasonPickerInvoiceId, ledgerId]);
   const [approvingId, setApprovingId] = useState<number | null>(null);
+  // 审批确认弹窗状态
+  const [confirmApproveInv, setConfirmApproveInv] = useState<any | null>(null);
   const approveMutation = (trpc as any).ledger.approveTransaction.useMutation({
-    onSuccess: () => {
-      toast.show('审批通过', 'success');
+    onSuccess: (_data: any, variables: any) => {
+      const actionMap: Record<string, string> = { approved: '审批通过', support_needed: '已标记补充材料', pending: '已撤回审批', rejected: '已拒绝' };
+      toast.show(actionMap[variables.action] || '操作成功', 'success');
       setApprovingId(null);
+      setConfirmApproveInv(null);
       // 不带参数全量 invalidate，确保所有 period 的缓存都刷新
       utils.ledger.ajOwnerGetCompanyInvoices.invalidate();
       utils.ledger.getTransactions.invalidate();
     },
-    onError: () => { toast.show('审批失败，请重试', 'error'); setApprovingId(null); },
+    onError: () => { toast.show('操作失败，请重试', 'error'); setApprovingId(null); setConfirmApproveInv(null); },
   });
 
   // 搜索过滤
@@ -997,41 +1001,104 @@ function InvoiceListInline({
                 </div>
                 {/* 虚线分隔 */}
                 <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
-                {/* 底部：状态 + 审批通过按钮 */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                {/* 底部：审批状态区域（可点击切换） */}
+                <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
+                  <button
+                    onClick={e => { e.stopPropagation(); setConfirmApproveInv(inv); }}
+                    disabled={approvingId === inv.id}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center', gap: '6px',
+                      background: (() => {
+                        if (inv.ajStatus === 'approved') return 'rgba(76,175,80,0.12)';
+                        if (inv.ajStatus === 'support_needed') return 'rgba(255,152,0,0.12)';
+                        if (inv.ajStatus === 'rejected') return 'rgba(189,189,189,0.15)';
+                        return 'rgba(245,158,11,0.12)'; // pending
+                      })(),
+                      border: (() => {
+                        if (inv.ajStatus === 'approved') return '1px solid rgba(76,175,80,0.35)';
+                        if (inv.ajStatus === 'support_needed') return '1px solid rgba(255,152,0,0.35)';
+                        if (inv.ajStatus === 'rejected') return '1px solid rgba(189,189,189,0.35)';
+                        return '1px solid rgba(245,158,11,0.35)';
+                      })(),
+                      borderRadius: '6px', padding: '4px 10px',
+                      cursor: approvingId === inv.id ? 'not-allowed' : 'pointer',
+                      opacity: approvingId === inv.id ? 0.6 : 1,
+                    }}
+                  >
                     <span style={{
                       width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0, display: 'inline-block',
-                      backgroundColor: inv.ajStatus === 'approved' ? '#4CAF50' : inv.ajStatus === 'rejected' ? '#BDBDBD' : '#F59E0B'
+                      backgroundColor: inv.ajStatus === 'approved' ? '#4CAF50' : inv.ajStatus === 'support_needed' ? '#FF9800' : inv.ajStatus === 'rejected' ? '#BDBDBD' : '#F59E0B'
                     }} />
                     <span style={{
-                      fontSize: '12px', fontWeight: 500,
-                      color: inv.ajStatus === 'approved' ? '#2E7D32' : inv.ajStatus === 'rejected' ? '#757575' : '#B45309'
+                      fontSize: '12px', fontWeight: 600,
+                      color: inv.ajStatus === 'approved' ? '#2E7D32' : inv.ajStatus === 'support_needed' ? '#E65100' : inv.ajStatus === 'rejected' ? '#757575' : '#B45309'
                     }}>
-                      {inv.ajStatus === 'approved' ? '已审核' : inv.ajStatus === 'rejected' ? '已拒绝' : '待审核'}
+                      {approvingId === inv.id ? '处理中...' : inv.ajStatus === 'approved' ? '审批通过' : inv.ajStatus === 'support_needed' ? '补充材料' : inv.ajStatus === 'rejected' ? '已拒绝' : '待审核'}
                     </span>
-                  </div>
-                  {(!inv.ajStatus || inv.ajStatus === 'pending') && (
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        setApprovingId(inv.id);
-                        approveMutation.mutate({ transactionId: inv.id, action: 'approved' });
-                      }}
-                      disabled={approvingId === inv.id}
-                      style={{
-                        background: '#1A2B4A', color: '#fff', border: 'none', borderRadius: '4px',
-                        padding: '4px 12px', fontSize: '12px', fontWeight: 600, cursor: approvingId === inv.id ? 'not-allowed' : 'pointer',
-                        opacity: approvingId === inv.id ? 0.6 : 1, letterSpacing: '0.5px'
-                      }}
-                    >
-                      {approvingId === inv.id ? '处理中...' : '审批通过'}
-                    </button>
-                  )}
+                    <span style={{ fontSize: '10px', color: '#999', marginLeft: '2px' }}>▾</span>
+                  </button>
                 </div>
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 审批状态切换确认弹窗 */}
+      {confirmApproveInv && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+          onClick={() => setConfirmApproveInv(null)}
+        >
+          <div
+            style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: '480px', padding: '20px 16px 32px', boxShadow: '0 -4px 24px rgba(0,0,0,0.15)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '6px' }}>
+              <div style={{ width: '36px', height: '4px', borderRadius: '2px', background: '#e0e0e0', margin: '0 auto 16px' }} />
+              <div style={{ fontSize: '15px', fontWeight: 700, color: '#1A2B4A', marginBottom: '4px' }}>审批状态</div>
+              <div style={{ fontSize: '12px', color: '#999' }}>请选择该申请单的审批状态</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
+              {[
+                { action: 'approved', label: '审批通过', dot: '#4CAF50', textColor: '#2E7D32', bg: 'rgba(76,175,80,0.08)', border: 'rgba(76,175,80,0.3)', desc: '确认通过该报销申请' },
+                { action: 'support_needed', label: '补充材料', dot: '#FF9800', textColor: '#E65100', bg: 'rgba(255,152,0,0.08)', border: 'rgba(255,152,0,0.3)', desc: '需要补充相关证明材料' },
+                { action: 'pending', label: '待审核', dot: '#F59E0B', textColor: '#B45309', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.3)', desc: '撤回审批，返回待审核状态' },
+              ].map(opt => (
+                <button
+                  key={opt.action}
+                  disabled={confirmApproveInv.ajStatus === opt.action || (confirmApproveInv.ajStatus === null && opt.action === 'pending')}
+                  onClick={() => {
+                    setApprovingId(confirmApproveInv.id);
+                    approveMutation.mutate({ transactionId: confirmApproveInv.id, action: opt.action as any });
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '10px',
+                    background: (confirmApproveInv.ajStatus === opt.action || (confirmApproveInv.ajStatus === null && opt.action === 'pending')) ? opt.bg : '#f7f7f7',
+                    border: `1px solid ${(confirmApproveInv.ajStatus === opt.action || (confirmApproveInv.ajStatus === null && opt.action === 'pending')) ? opt.border : '#e8e8e8'}`,
+                    borderRadius: '10px', padding: '12px 14px', cursor: (confirmApproveInv.ajStatus === opt.action || (confirmApproveInv.ajStatus === null && opt.action === 'pending')) ? 'default' : 'pointer',
+                    opacity: (confirmApproveInv.ajStatus === opt.action || (confirmApproveInv.ajStatus === null && opt.action === 'pending')) ? 0.6 : 1,
+                    textAlign: 'left', width: '100%',
+                  }}
+                >
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: opt.dot, flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: opt.textColor }}>{opt.label}</div>
+                    <div style={{ fontSize: '11px', color: '#999', marginTop: '1px' }}>{opt.desc}</div>
+                  </div>
+                  {(confirmApproveInv.ajStatus === opt.action || (confirmApproveInv.ajStatus === null && opt.action === 'pending')) && (
+                    <span style={{ fontSize: '12px', color: opt.textColor, fontWeight: 600 }}>当前</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setConfirmApproveInv(null)}
+              style={{ width: '100%', marginTop: '14px', padding: '12px', background: 'transparent', border: '1px solid #e8e8e8', borderRadius: '10px', fontSize: '14px', color: '#999', cursor: 'pointer' }}
+            >
+              取消
+            </button>
+          </div>
         </div>
       )}
     </div>

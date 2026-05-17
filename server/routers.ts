@@ -9387,7 +9387,7 @@ ${klinesSummary}
     approveTransaction: protectedProcedure
       .input(z.object({
         transactionId: z.number(),
-        action: z.enum(['approved', 'rejected']),
+        action: z.enum(['approved', 'rejected', 'support_needed', 'pending']),
         comment: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
