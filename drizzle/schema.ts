@@ -552,7 +552,7 @@ export const ledgerRecords = mysqlTable("ledger_records", {
 	isRead: tinyint('is_read').default(0),                        // 是否已读
 	images: json(),                                                // 多图JSON数组
 	// AJ账本专用字段（其他账本类型为null）
-	ajStatus: mysqlEnum('aj_status', ['pending', 'approved', 'rejected']),  // 发票申请状态（申请中/通过/拒绝）
+	ajStatus: mysqlEnum('aj_status', ['pending', 'approved', 'rejected', 'support_needed']),  // 发票申请状态（申请中/通过/拒绝/补充材料）
 	ajCompanyId: int('aj_company_id'),                             // 开票企业ID
 	ajCompanyName: varchar('aj_company_name', { length: 100 }),   // 开票企业名称（冗余存储，防止企业被删除后丢失）
 	ajApprovedBy: int('aj_approved_by'),                          // 审批人ID
