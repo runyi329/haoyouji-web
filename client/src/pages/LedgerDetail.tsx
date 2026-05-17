@@ -2535,10 +2535,13 @@ export default function LedgerDetail() {
   // AJ账本专用独立统计周期，不影响普通账本的statsPeriod
   const [ajStatsPeriod, setAjStatsPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>('month');
   // AJ账本视角切换：企业负责人 / 业务负责人（仅isAdmin角色有此切换）
-  // funder（企业主）角色或owner（创建者）角色默认停在「资」（owner）视角
-  const [ajViewMode, setAjViewMode] = useState<'owner' | 'salesman'>(
-    ((ledgerData as any)?.userRole === 'funder' || (ledgerData as any)?.userRole === 'owner') ? 'owner' : 'salesman'
-  );
+  // 优先读取 localStorage 中上次的选择，没有缓存时 funder/owner 默认资方，member 默认劳方
+  const [ajViewMode, setAjViewMode] = useState<'owner' | 'salesman'>(() => {
+    const cacheKey = `ajViewMode_ledger_${ledgerId}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached === 'owner' || cached === 'salesman') return cached;
+    return ((ledgerData as any)?.userRole === 'funder' || (ledgerData as any)?.userRole === 'owner') ? 'owner' : 'salesman';
+  });
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
   const [aiProductDetail, setAiProductDetail] = useState<string | null>(null);
   const [aiProductQty, setAiProductQty] = useState(1);
@@ -2625,13 +2628,18 @@ export default function LedgerDetail() {
     }
   }, [ledgerId]);
 
-  // AJ账本：admin（企业主/资方）或owner（创建者）角色加载完成后，自动切换到「资」（owner）视角
+  // AJ账本：如果 localStorage 中没有缓存，待角色加载完成后设置默认值
   // AJ账本角色：owner=创始人, admin=企业主(资方), member=业务员(劳方)，不存在funder角色
   useEffect(() => {
     if (isCustomAJ && (isAdmin || isOwner)) {
-      setAjViewMode('owner');
+      const cacheKey = `ajViewMode_ledger_${ledgerId}`;
+      const cached = localStorage.getItem(cacheKey);
+      // 只有当 localStorage 中没有缓存时，才设置默认资方视角
+      if (!cached) {
+        setAjViewMode('owner');
+      }
     }
-  }, [isCustomAJ, isAdmin, isOwner]);
+  }, [isCustomAJ, isAdmin, isOwner, ledgerId]);
 
   // 定制账本(AD)：永忆
   const isCustomAD = (ledgerData as any)?.type === 'custom_ad';
@@ -3080,7 +3088,11 @@ export default function LedgerDetail() {
                 {/* AJ账本：劳/资视角切换（圆形滑动开关，admin、funder或owner可见） */}
                 {isCustomAJ && (isAdmin || isFunder || isOwner) && !viewAsUserId && (
                   <button
-                    onClick={() => setAjViewMode(ajViewMode === 'salesman' ? 'owner' : 'salesman')}
+                    onClick={() => {
+                      const newMode = ajViewMode === 'salesman' ? 'owner' : 'salesman';
+                      setAjViewMode(newMode);
+                      localStorage.setItem(`ajViewMode_ledger_${ledgerId}`, newMode);
+                    }}
                     className="relative flex items-center flex-shrink-0"
                     style={{
                       width: 56,
