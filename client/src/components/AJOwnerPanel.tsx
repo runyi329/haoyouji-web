@@ -798,7 +798,9 @@ function InvoiceListInline({
     onSuccess: () => {
       toast.show('审批通过', 'success');
       setApprovingId(null);
-      utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId, companyId });
+      // 不带参数全量 invalidate，确保所有 period 的缓存都刷新
+      utils.ledger.ajOwnerGetCompanyInvoices.invalidate();
+      utils.ledger.getTransactions.invalidate();
     },
     onError: () => { toast.show('审批失败，请重试', 'error'); setApprovingId(null); },
   });
