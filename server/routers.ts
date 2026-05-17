@@ -9399,6 +9399,36 @@ ${klinesSummary}
         );
       }),
 
+    // AJ审批状态直接设置（独立接口，不依赖旧审批流程）
+    ajSetStatus: protectedProcedure
+      .input(z.object({
+        transactionId: z.number(),
+        status: z.enum(['pending', 'approved', 'support_needed']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        // 查询记录并验证权限
+        const [record] = await db.execute(
+          sql`SELECT lr.id, lr.ledger_id, lr.aj_status FROM ledger_records lr WHERE lr.id = ${input.transactionId} LIMIT 1`
+        ) as any[];
+        const row = Array.isArray(record) ? record[0] : null;
+        if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: '记录不存在' });
+        // 验证是账本管理员或owner
+        const [memberRows] = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledger_id = ${row.ledger_id} AND user_id = ${ctx.user.id} LIMIT 1`
+        ) as any[];
+        const member = Array.isArray(memberRows) ? memberRows[0] : null;
+        if (!member || !['owner', 'admin'].includes(member.role)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只有账本管理员可以操作审批状态' });
+        }
+        // 直接更新 aj_status
+        await db.execute(
+          sql`UPDATE ledger_records SET aj_status = ${input.status}, aj_approved_by = ${ctx.user.id}, aj_approved_at = NOW() WHERE id = ${input.transactionId}`
+        );
+        return { success: true, transactionId: input.transactionId, status: input.status };
+      }),
+
     // 获取单条记账详情
     getTransactionDetail: protectedProcedure
       .input(z.object({
