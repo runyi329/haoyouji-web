@@ -1002,24 +1002,14 @@ function InvoiceListInline({
                 {/* 虚线分隔 */}
                 <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
                 {/* 底部：审批状态区域（可点击切换） */}
-                <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
                   <button
                     onClick={e => { e.stopPropagation(); setConfirmApproveInv(inv); }}
                     disabled={approvingId === inv.id}
                     style={{
                       display: 'inline-flex', alignItems: 'center', gap: '6px',
-                      background: (() => {
-                        if (inv.ajStatus === 'approved') return 'rgba(76,175,80,0.12)';
-                        if (inv.ajStatus === 'support_needed') return 'rgba(255,152,0,0.12)';
-                        if (inv.ajStatus === 'rejected') return 'rgba(189,189,189,0.15)';
-                        return 'rgba(245,158,11,0.12)'; // pending
-                      })(),
-                      border: (() => {
-                        if (inv.ajStatus === 'approved') return '1px solid rgba(76,175,80,0.35)';
-                        if (inv.ajStatus === 'support_needed') return '1px solid rgba(255,152,0,0.35)';
-                        if (inv.ajStatus === 'rejected') return '1px solid rgba(189,189,189,0.35)';
-                        return '1px solid rgba(245,158,11,0.35)';
-                      })(),
+                      background: 'transparent',
+                      border: '1px solid rgba(26,43,74,0.2)',
                       borderRadius: '6px', padding: '4px 10px',
                       cursor: approvingId === inv.id ? 'not-allowed' : 'pointer',
                       opacity: approvingId === inv.id ? 0.6 : 1,
@@ -1029,13 +1019,10 @@ function InvoiceListInline({
                       width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0, display: 'inline-block',
                       backgroundColor: inv.ajStatus === 'approved' ? '#4CAF50' : inv.ajStatus === 'support_needed' ? '#FF9800' : inv.ajStatus === 'rejected' ? '#BDBDBD' : '#F59E0B'
                     }} />
-                    <span style={{
-                      fontSize: '12px', fontWeight: 600,
-                      color: inv.ajStatus === 'approved' ? '#2E7D32' : inv.ajStatus === 'support_needed' ? '#E65100' : inv.ajStatus === 'rejected' ? '#757575' : '#B45309'
-                    }}>
+                    <span style={{ fontSize: '12px', fontWeight: 500, color: 'rgba(26,43,74,0.75)' }}>
                       {approvingId === inv.id ? '处理中...' : inv.ajStatus === 'approved' ? '审批通过' : inv.ajStatus === 'support_needed' ? '补充材料' : inv.ajStatus === 'rejected' ? '已拒绝' : '待审核'}
                     </span>
-                    <span style={{ fontSize: '10px', color: '#999', marginLeft: '2px' }}>▾</span>
+                    <span style={{ fontSize: '10px', color: 'rgba(26,43,74,0.35)', marginLeft: '1px' }}>▾</span>
                   </button>
                 </div>
               </div>
