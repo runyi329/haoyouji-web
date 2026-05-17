@@ -9406,62 +9406,53 @@ ${klinesSummary}
         status: z.enum(['pending', 'approved', 'support_needed']),
       }))
       .mutation(async ({ ctx, input }) => {
-        console.log(`[ajSetStatus] ===== 接口被调用 =====`);
-        console.log(`[ajSetStatus] 操作人: ctx.user.id=${ctx.user.id}, openId=${ctx.user.openId}`);
-        console.log(`[ajSetStatus] 参数: transactionId=${input.transactionId}, status=${input.status}`);
-        
-        const conn = await getDbConnection();
-        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const db = await getLedgerDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
 
-        // 1. 查询记录（原始SQL，避免drizzle列名映射问题）
-        let row: any;
-        try {
-          const [rows] = await (conn as any).execute(
-            `SELECT id, ledgerId, aj_status as ajStatus, createdBy, amount, reimbursement_amount as reimbursementAmount FROM ledger_records WHERE id=? LIMIT 1`,
-            [input.transactionId]
-          );
-          console.log(`[ajSetStatus] 查询记录结果:`, JSON.stringify((rows as any[])[0]));
-          if ((rows as any[]).length === 0) {
-            throw new TRPCError({ code: 'NOT_FOUND', message: '记录不存在' });
-          }
-          row = (rows as any[])[0];
-        } catch (e: any) {
-          if (e instanceof TRPCError) throw e;
-          console.error(`[ajSetStatus] 查询记录失败:`, e?.message);
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `查询记录失败: ${e?.message}` });
+        // 1. 查询记录（drizzle ORM）
+        const recordInfo = await db
+          .select({
+            id: ledgerRecords.id,
+            ledgerId: ledgerRecords.ledgerId,
+            ajStatus: ledgerRecords.ajStatus,
+            createdBy: ledgerRecords.createdBy,
+            amount: ledgerRecords.amount,
+            reimbursementAmount: ledgerRecords.reimbursementAmount,
+          })
+          .from(ledgerRecords)
+          .where(eq(ledgerRecords.id, input.transactionId))
+          .limit(1);
+
+        if (recordInfo.length === 0) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: '记录不存在' });
         }
+        const row = recordInfo[0];
 
-        // 2. 验证权限：账本管理员或owner（原始SQL）
-        try {
-          const [memberRows] = await (conn as any).execute(
-            `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=? LIMIT 1`,
-            [row.ledgerId, ctx.user.id]
-          );
-          const memberRole = (memberRows as any[])[0]?.role || null;
-          console.log(`[ajSetStatus] 权限校验: ledgerId=${row.ledgerId}, userId=${ctx.user.id}, role=${memberRole}`);
-          if (!memberRole || !['owner', 'admin', 'funder'].includes(memberRole)) {
-            throw new TRPCError({ code: 'FORBIDDEN', message: `权限不足: 您的角色是${memberRole || '未知'}，需要owner/admin/funder` });
-          }
-        } catch (e: any) {
-          if (e instanceof TRPCError) throw e;
-          console.error(`[ajSetStatus] 权限校验失败:`, e?.message);
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `权限校验失败: ${e?.message}` });
+        // 2. 验证权限：账本管理员或owner
+        const membership = await db
+          .select({ role: ledgerMembers.role })
+          .from(ledgerMembers)
+          .where(and(eq(ledgerMembers.ledgerId, row.ledgerId), eq(ledgerMembers.userId, ctx.user.id)))
+          .limit(1);
+
+        if (membership.length === 0 || !['owner', 'admin'].includes(membership[0].role)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只有账本管理员可以操作审批状态' });
         }
 
         const oldStatus = row.ajStatus || 'pending';
         const newStatus = input.status;
 
-        // 3. 更新 aj_status（原始SQL，避免drizzle列名映射问题）
-        try {
-          await (conn as any).execute(
-            `UPDATE ledger_records SET aj_status=?, aj_approved_by=?, aj_approved_at=NOW() WHERE id=?`,
-            [newStatus, ctx.user.id, input.transactionId]
-          );
-          console.log(`[ajSetStatus] 更新成功: 记录${input.transactionId}: ${oldStatus} -> ${newStatus}, 操作人: ${ctx.user.id}`);
-        } catch (e: any) {
-          console.error(`[ajSetStatus] 更新失败:`, e?.message);
-          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `更新状态失败: ${e?.message}` });
-        }
+        // 3. 更新 aj_status（drizzle ORM）
+        await db
+          .update(ledgerRecords)
+          .set({
+            ajStatus: newStatus,
+            ajApprovedBy: ctx.user.id,
+            ajApprovedAt: sql`NOW()`,
+          } as any)
+          .where(eq(ledgerRecords.id, input.transactionId));
+
+        console.log(`[ajSetStatus] 记录${input.transactionId}: ${oldStatus} -> ${newStatus}, 操作人: ${ctx.user.id}`);
 
         // 4. USDT 奖励逻辑
         const rewardNote = `成本津贴 #${input.transactionId}`;
@@ -9481,14 +9472,12 @@ ${klinesSummary}
               const rewardCny = reimbursementAmount * 0.01;
               const usdtRewarded = parseFloat((rewardCny / usdCnyRate).toFixed(6));
               if (usdtRewarded > 0) {
-                await (conn as any).execute(
-                  `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
-                  [row.ledgerId, submitterId, usdtRewarded, rewardNote]
+                await db.execute(
+                  sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${row.ledgerId}, ${submitterId}, ${usdtRewarded}, ${rewardNote}, NOW(), NOW())`
                 );
                 try {
-                  await (conn as any).execute(
-                    `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description, created_at) VALUES (?, ?, 'reward', ?, 0, ?, NOW())`,
-                    [submitterId, usdtRewarded, input.transactionId, rewardNote]
+                  await db.execute(
+                    sql`INSERT INTO balance_history (user_id, amount, type, related_id, balance, description, created_at) VALUES (${submitterId}, ${usdtRewarded}, 'reward', ${input.transactionId}, 0, ${rewardNote}, NOW())`
                   );
                 } catch (_) {}
                 console.log(`[ajSetStatus] 发放 ${usdtRewarded} USDT 给用户 ${submitterId}`);
@@ -9500,13 +9489,11 @@ ${klinesSummary}
         } else if (oldStatus === 'approved' && newStatus !== 'approved') {
           // 从审批通过切换回其他状态：扣回之前发放的 USDT
           try {
-            await (conn as any).execute(
-              `DELETE FROM af_manual_balances WHERE note = ? LIMIT 1`,
-              [rewardNote]
+            await db.execute(
+              sql`DELETE FROM af_manual_balances WHERE note = ${rewardNote} LIMIT 1`
             );
-            await (conn as any).execute(
-              `DELETE FROM balance_history WHERE description = ? AND type = 'reward' LIMIT 1`,
-              [rewardNote]
+            await db.execute(
+              sql`DELETE FROM balance_history WHERE description = ${rewardNote} AND type = 'reward' LIMIT 1`
             );
             console.log(`[ajSetStatus] 已扣回奖励: ${rewardNote}`);
           } catch (e: any) {

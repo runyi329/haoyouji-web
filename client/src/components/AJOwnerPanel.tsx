@@ -1064,6 +1064,7 @@ function InvoiceListInline({
                     key={opt.status}
                     disabled={isCurrent || isLoading}
                     onClick={() => {
+                      console.log('[ajSetStatus] 按钮被点击:', opt.status, 'transactionId:', statusPopupInv.id, 'isCurrent:', isCurrent, 'isLoading:', isLoading);
                       // 乐观更新本地状态
                       setLocalStatusMap(prev => ({ ...prev, [statusPopupInv.id]: opt.status }));
                       ajSetStatusMutation.mutate({ transactionId: statusPopupInv.id, status: opt.status });
