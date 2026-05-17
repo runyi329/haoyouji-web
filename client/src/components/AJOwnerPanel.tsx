@@ -793,27 +793,25 @@ function InvoiceListInline({
     setLocalExpenseReasons(prev => ({ ...prev, [invoiceId]: reason }));
     updateExpenseReasonMutation.mutate({ ledgerId, recordId: invoiceId, expenseReason: reason });
   }, [reasonPickerInvoiceId, ledgerId]);
-  const [approvingId, setApprovingId] = useState<number | null>(null);
-  // 审批确认弹窗状态
-  const [confirmApproveInv, setConfirmApproveInv] = useState<any | null>(null);
-  // 当前弹窗内正在处理的 action
-  const [approvingAction, setApprovingAction] = useState<string | null>(null);
-  const approveMutation = (trpc as any).ledger.approveTransaction.useMutation({
-    onSuccess: (_data: any, variables: any) => {
-      const actionMap: Record<string, string> = { approved: '审批通过', support_needed: '已标记补充材料', pending: '已撤回审批', rejected: '已拒绝' };
-      toast.show(actionMap[variables.action] || '操作成功', 'success');
-      setApprovingId(null);
-      setApprovingAction(null);
-      setConfirmApproveInv(null);
-      // 不带参数全量 invalidate，确保所有 period 的缓存都刷新
+  // ===== 审批状态切换（全新实现）=====
+  // 当前弹窗对应的发票对象
+  const [statusPopupInv, setStatusPopupInv] = useState<any | null>(null);
+  // 本地乐观更新：key=transactionId, value=新状态
+  const [localStatusMap, setLocalStatusMap] = useState<Record<number, string>>({});
+  const ajSetStatusMutation = (trpc as any).ledger.ajSetStatus.useMutation({
+    onSuccess: (data: any) => {
+      const labelMap: Record<string, string> = { approved: '审批通过', support_needed: '已标记补充材料', pending: '已设为待审核' };
+      toast.show(labelMap[data.status] || '状态已更新', 'success');
+      setStatusPopupInv(null);
       utils.ledger.ajOwnerGetCompanyInvoices.invalidate();
-      utils.ledger.getTransactions.invalidate();
     },
-    onError: () => {
-      toast.show('操作失败，请重试', 'error');
-      setApprovingId(null);
-      setApprovingAction(null);
-      setConfirmApproveInv(null);
+    onError: (err: any) => {
+      toast.show(err?.message || '操作失败，请重试', 'error');
+      // 回滚乐观更新
+      if (statusPopupInv) {
+        setLocalStatusMap(prev => { const n = { ...prev }; delete n[statusPopupInv.id]; return n; });
+      }
+      setStatusPopupInv(null);
     },
   });
 
@@ -1011,25 +1009,27 @@ function InvoiceListInline({
                 <div style={{ borderTop: '1px dashed rgba(26,43,74,0.15)', margin: '8px 0' }} />
                 {/* 底部：审批状态区域（可点击切换） */}
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
-                  <button
-                    onClick={e => { e.stopPropagation(); setConfirmApproveInv(inv); }}
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: '6px',
-                      background: 'transparent',
-                      border: '1px solid rgba(26,43,74,0.2)',
-                      borderRadius: '6px', padding: '4px 10px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <span style={{
-                      width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0, display: 'inline-block',
-                      backgroundColor: inv.ajStatus === 'approved' ? '#4CAF50' : inv.ajStatus === 'support_needed' ? '#FF9800' : inv.ajStatus === 'rejected' ? '#BDBDBD' : '#F59E0B'
-                    }} />
-                    <span style={{ fontSize: '12px', fontWeight: 500, color: 'rgba(26,43,74,0.75)' }}>
-                      {inv.ajStatus === 'approved' ? '审批通过' : inv.ajStatus === 'support_needed' ? '补充材料' : inv.ajStatus === 'rejected' ? '已拒绝' : '待审核'}
-                    </span>
-                    <span style={{ fontSize: '10px', color: 'rgba(26,43,74,0.35)', marginLeft: '1px' }}>▾</span>
-                  </button>
+                  {(() => {
+                    const curStatus = localStatusMap[inv.id] ?? (inv.ajStatus || 'pending');
+                    const dotColor = curStatus === 'approved' ? '#4CAF50' : curStatus === 'support_needed' ? '#FF9800' : '#F59E0B';
+                    const label = curStatus === 'approved' ? '审批通过' : curStatus === 'support_needed' ? '补充材料' : '待审核';
+                    return (
+                      <button
+                        onClick={e => { e.stopPropagation(); setStatusPopupInv({ ...inv, _curStatus: curStatus }); }}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: '6px',
+                          background: 'transparent',
+                          border: '1px solid rgba(26,43,74,0.2)',
+                          borderRadius: '6px', padding: '4px 10px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0, display: 'inline-block', backgroundColor: dotColor }} />
+                        <span style={{ fontSize: '12px', fontWeight: 500, color: 'rgba(26,43,74,0.75)' }}>{label}</span>
+                        <span style={{ fontSize: '10px', color: 'rgba(26,43,74,0.35)', marginLeft: '1px' }}>▾</span>
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -1038,66 +1038,58 @@ function InvoiceListInline({
       )}
 
       {/* 审批状态切换确认弹窗 */}
-      {confirmApproveInv && (
+      {/* 审批状态切换弹窗（全新实现） */}
+      {statusPopupInv && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
-          onClick={() => setConfirmApproveInv(null)}
+          onClick={() => setStatusPopupInv(null)}
         >
           <div
             style={{ background: '#fff', borderRadius: '16px 16px 0 0', width: '100%', maxWidth: '480px', padding: '20px 16px 32px', boxShadow: '0 -4px 24px rgba(0,0,0,0.15)' }}
             onClick={e => e.stopPropagation()}
           >
-            <div style={{ textAlign: 'center', marginBottom: '6px' }}>
-              <div style={{ width: '36px', height: '4px', borderRadius: '2px', background: '#e0e0e0', margin: '0 auto 16px' }} />
-              <div style={{ fontSize: '15px', fontWeight: 700, color: '#1A2B4A', marginBottom: '4px' }}>审批状态</div>
-              <div style={{ fontSize: '12px', color: '#999' }}>请选择该申请单的审批状态</div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
-              {[
-                { action: 'approved', label: '审批通过', dot: '#4CAF50', desc: '确认通过该报销申请' },
-                { action: 'support_needed', label: '补充材料', dot: '#FF9800', desc: '需要补充相关证明材料' },
-                { action: 'pending', label: '待审核', dot: '#F59E0B', desc: '撤回审批，返回待审核状态' },
-              ].map(opt => {
-                // 当前状态判断：null 和 'pending' 都表示待审核
-                const currentStatus = confirmApproveInv.ajStatus || 'pending';
-                const isCurrent = currentStatus === opt.action;
-                const isLoading = approveMutation.isPending && approvingAction === opt.action;
-                const isDisabled = isCurrent || approveMutation.isPending;
+            <div style={{ width: '36px', height: '4px', borderRadius: '2px', background: '#e0e0e0', margin: '0 auto 14px' }} />
+            <div style={{ fontSize: '15px', fontWeight: 700, color: '#1A2B4A', textAlign: 'center', marginBottom: '4px' }}>审批状态</div>
+            <div style={{ fontSize: '12px', color: '#999', textAlign: 'center', marginBottom: '16px' }}>选择后立即生效</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {([
+                { status: 'approved', label: '审批通过', dot: '#4CAF50', desc: '确认通过该报销申请' },
+                { status: 'support_needed', label: '补充材料', dot: '#FF9800', desc: '需要补充相关证明材料' },
+                { status: 'pending', label: '待审核', dot: '#F59E0B', desc: '撤回审批，返回待审核状态' },
+              ] as const).map(opt => {
+                const isCurrent = statusPopupInv._curStatus === opt.status;
+                const isLoading = ajSetStatusMutation.isPending;
                 return (
                   <button
-                    key={opt.action}
-                    disabled={isDisabled}
+                    key={opt.status}
+                    disabled={isCurrent || isLoading}
                     onClick={() => {
-                      setApprovingId(confirmApproveInv.id);
-                      setApprovingAction(opt.action);
-                      approveMutation.mutate({ transactionId: confirmApproveInv.id, action: opt.action as any });
+                      // 乐观更新本地状态
+                      setLocalStatusMap(prev => ({ ...prev, [statusPopupInv.id]: opt.status }));
+                      ajSetStatusMutation.mutate({ transactionId: statusPopupInv.id, status: opt.status });
                     }}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '10px',
                       background: isCurrent ? 'rgba(26,43,74,0.05)' : '#f7f7f7',
                       border: `1px solid ${isCurrent ? 'rgba(26,43,74,0.2)' : '#e8e8e8'}`,
                       borderRadius: '10px', padding: '12px 14px',
-                      cursor: isDisabled ? 'default' : 'pointer',
-                      opacity: isDisabled && !isLoading ? 0.7 : 1,
+                      cursor: isCurrent || isLoading ? 'default' : 'pointer',
+                      opacity: isCurrent ? 0.6 : 1,
                       textAlign: 'left', width: '100%',
                     }}
                   >
                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: opt.dot, flexShrink: 0 }} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#1A2B4A' }}>
-                        {isLoading ? '处理中...' : opt.label}
-                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#1A2B4A' }}>{opt.label}</div>
                       <div style={{ fontSize: '11px', color: 'rgba(26,43,74,0.45)', marginTop: '1px' }}>{opt.desc}</div>
                     </div>
-                    {isCurrent && !isLoading && (
-                      <span style={{ fontSize: '12px', color: 'rgba(26,43,74,0.5)', fontWeight: 500 }}>当前</span>
-                    )}
+                    {isCurrent && <span style={{ fontSize: '12px', color: 'rgba(26,43,74,0.45)', fontWeight: 500 }}>当前</span>}
                   </button>
                 );
               })}
             </div>
             <button
-              onClick={() => setConfirmApproveInv(null)}
+              onClick={() => setStatusPopupInv(null)}
               style={{ width: '100%', marginTop: '14px', padding: '12px', background: 'transparent', border: '1px solid #e8e8e8', borderRadius: '10px', fontSize: '14px', color: '#999', cursor: 'pointer' }}
             >
               取消
