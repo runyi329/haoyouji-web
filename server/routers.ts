@@ -1791,16 +1791,14 @@ ${klinesSummary}
                   .limit(1);
                 
                 if (existing.length === 0) {
-                  await dbConn.insert(ledgerMembers).values({
-                    ledgerId: afLedger.id,
-                    userId: user.id,
-                    role: 'member',
-                    memberType: 'real',
-                    permissionView: 'all',
-                    permissionAdd: 'all',
-                    permissionEdit: 'own',
-                    permissionDelete: 'own',
-                  });
+                  // 使用原始 SQL 避免 Drizzle 驼峰列名问题
+                  const rawConnAF = await getDbConnection();
+                  if (rawConnAF) {
+                    await (rawConnAF as any).execute(
+                      `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite) VALUES (?, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0)`,
+                      [afLedger.id, user.id]
+                    );
+                  }
                   console.log(`[邀请注册] 新用户 ${user.id} 自动加入 AF 账本 ${afLedger.id}`);
                 }
               }

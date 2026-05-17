@@ -592,44 +592,25 @@ export async function createLedger(data: {
     throw error;
   }
 
-  // 将创建者添加为账本所有者
-  await db.insert(ledgerMembers).values({
-    ledgerId: newLedgerId,
-    userId: data.createdBy,
-    role: "owner",
-    memberType: "real",
-    nickname: finalNickname,
-    permissionView: "all",
-    permissionAdd: "all",
-    permissionEdit: "all",
-    permissionDelete: "all",
-    canEdit: 1,
-    canDelete: 1,
-    canInvite: 1,
-  });
-
+   // 将创建者添加为账本所有者 - 使用原始 SQL 避免 Drizzle 驼峰列名问题
+  const connCreate = await getDbConnection();
+  if (!connCreate) throw new Error("Database connection failed");
+  await connCreate.execute(
+    `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, nickname, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite) VALUES (?, ?, 'owner', 'real', ?, 'all', 'all', 'all', 'all', 1, 1, 1)`,
+    [newLedgerId, data.createdBy, finalNickname || null]
+  );
   // 定制账本（AA/AB类型）自动将管理员 jiang（userId:870413）加入成员列表
   // 这样不管是谁创建的定制账本，jiang 都能在账本列表中看到并管理
   const ADMIN_JIANG_ID = 870413;
   const isCustomType = ['custom_aa', 'custom_ac', 'custom_ad', 'custom_aj', 'opinion_book', 'opinion_book_demo'].includes(data.type ?? '');
   if (isCustomType && data.createdBy !== ADMIN_JIANG_ID) {
     try {
-      await db.insert(ledgerMembers).values({
-        ledgerId: newLedgerId,
-        userId: ADMIN_JIANG_ID,
-        role: 'owner',
-        memberType: 'real',
-        nickname: 'jiang',
-        permissionView: 'all',
-        permissionAdd: 'all',
-        permissionEdit: 'all',
-        permissionDelete: 'all',
-        canEdit: 1,
-        canDelete: 1,
-        canInvite: 1,
-      });
+      await connCreate.execute(
+        `INSERT IGNORE INTO ledger_members (ledger_id, user_id, role, member_type, nickname, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite) VALUES (?, ?, 'owner', 'real', 'jiang', 'all', 'all', 'all', 'all', 1, 1, 1)`,
+        [newLedgerId, ADMIN_JIANG_ID]
+      );
     } catch (e) {
-      // 忽略重复插入错误（INSERT IGNORE 效果）
+      // 忽略重复插入错误
       console.warn('[createLedger] 添加jiang为成员时出错（可忽略）:', e);
     }
   }
@@ -684,21 +665,13 @@ export async function copyLedger(sourceLedgerId: number, userId: number) {
   
   const newLedgerId = Number((result as any)[0]?.insertId || result.insertId);
   
-  // 将创建者添加为账本所有者
-  await db.insert(ledgerMembers).values({
-    ledgerId: newLedgerId,
-    userId: userId,
-    role: "owner",
-    memberType: "real",
-    nickname: null,
-    permissionView: "all",
-    permissionAdd: "all",
-    permissionEdit: "all",
-    permissionDelete: "all",
-    canEdit: 1,
-    canDelete: 1,
-    canInvite: 1,
-  });
+  // 将创建者添加为账本所有者 - 使用原始 SQL 避免 Drizzle 驼峰列名问题
+  const connCopy = await getDbConnection();
+  if (!connCopy) throw new Error("Database connection failed");
+  await connCopy.execute(
+    `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite) VALUES (?, ?, 'owner', 'real', 'all', 'all', 'all', 'all', 1, 1, 1)`,
+    [newLedgerId, userId]
+  );
   
   // 复制分类
   const categories = await db
@@ -947,21 +920,17 @@ export async function inviteMemberByUsername(ledgerId: number, inviterUserId: nu
   );
   const defRowA = (Array.isArray((defaultPermsA as any)[0]) ? (defaultPermsA as any)[0][0] : (defaultPermsA as any)[0]) || {};
 
-  // 添加为成员（使用账本默认权限）
-  await db.insert(ledgerMembers).values({
-    ledgerId,
-    userId: inviteeUser.id,
-    role: "member",
-    memberType: "real",
-    permissionView: (defRowA.default_permission_view || "all") as any,
-    permissionAdd: (defRowA.default_permission_add || "all") as any,
-    permissionEdit: (defRowA.default_permission_edit || "own") as any,
-    permissionDelete: (defRowA.default_permission_delete || "own") as any,
-    canEdit: true,
-    canDelete: false,
-    canInvite: false,
-    invitedBy: inviterUserId,
-  });
+  // 添加为成员（使用账本默认权限）- 使用原始 SQL 避免 Drizzle 驼峰列名问题
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
+  const permView = defRowA.default_permission_view || "all";
+  const permAdd = defRowA.default_permission_add || "all";
+  const permEdit = defRowA.default_permission_edit || "own";
+  const permDel = defRowA.default_permission_delete || "own";
+  await conn.execute(
+    `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite, invited_by) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0, ?)`,
+    [ledgerId, inviteeUser.id, permView, permAdd, permEdit, permDel, inviterUserId]
+  );
 
   return {
     success: true,
@@ -1026,20 +995,20 @@ export async function inviteMemberByUsernameWithRole(
     defDelR = defRowR.default_permission_delete || "own";
   }
 
-  await db.insert(ledgerMembers).values({
-    ledgerId,
-    userId: inviteeUser.id,
-    role: role as any,
-    memberType: "real",
-    permissionView: isAdmin ? "all" : defViewR,
-    permissionAdd: isAdmin ? "all" : defAddR,
-    permissionEdit: isAdmin ? "all" : defEditR,
-    permissionDelete: isAdmin ? "all" : defDelR,
-    canEdit: isAdmin,
-    canDelete: isAdmin,
-    canInvite: isAdmin,
-    invitedBy: inviterUserId,
-  });
+  // 使用原始 SQL 避免 Drizzle 驼峰列名问题
+  const connR = await getDbConnection();
+  if (!connR) throw new Error("Database connection failed");
+  const pView = isAdmin ? "all" : defViewR;
+  const pAdd = isAdmin ? "all" : defAddR;
+  const pEdit = isAdmin ? "all" : defEditR;
+  const pDel = isAdmin ? "all" : defDelR;
+  const canEditVal = isAdmin ? 1 : 0;
+  const canDeleteVal = isAdmin ? 1 : 0;
+  const canInviteVal = isAdmin ? 1 : 0;
+  await connR.execute(
+    `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite, invited_by) VALUES (?, ?, ?, 'real', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [ledgerId, inviteeUser.id, role, pView, pAdd, pEdit, pDel, canEditVal, canDeleteVal, canInviteVal, inviterUserId]
+  );
 
   return {
     success: true,
@@ -1092,22 +1061,17 @@ export async function joinLedger(ledgerId: number, userId: number, invitedBy: nu
   );
   const defRow = (Array.isArray((defaultPerms as any)[0]) ? (defaultPerms as any)[0][0] : (defaultPerms as any)[0]) || {};
 
-  // 添加为成员（使用账本默认权限）
-  await db.insert(ledgerMembers).values({
-    ledgerId,
-    userId,
-    role: "member",
-    memberType: "real",
-    permissionView: (defRow.default_permission_view || "all") as any,
-    permissionAdd: (defRow.default_permission_add || "all") as any,
-    permissionEdit: (defRow.default_permission_edit || "own") as any,
-    permissionDelete: (defRow.default_permission_delete || "own") as any,
-    canEdit: true,
-    canDelete: false,
-    canInvite: false,
-    invitedBy,
-  });
-
+  // 添加为成员（使用账本默认权限）- 使用原始 SQL 避免 Drizzle 驼峰列名问题
+  const connJ = await getDbConnection();
+  if (!connJ) throw new Error("Database connection failed");
+  const jPermView = defRow.default_permission_view || "all";
+  const jPermAdd = defRow.default_permission_add || "all";
+  const jPermEdit = defRow.default_permission_edit || "own";
+  const jPermDel = defRow.default_permission_delete || "own";
+  await connJ.execute(
+    `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite, invited_by) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0, ?)`,
+    [ledgerId, userId, jPermView, jPermAdd, jPermEdit, jPermDel, invitedBy]
+  );
   return true;
 }
 
@@ -1732,17 +1696,17 @@ export async function joinLedgerByToken(token: string, userId: number) {
   );
   const defRowT = (Array.isArray((defaultPermsT as any)[0]) ? (defaultPermsT as any)[0][0] : (defaultPermsT as any)[0]) || {};
 
-  // 添加用户为账本成员（使用账本默认权限）
-  await db.insert(ledgerMembers).values({
-    ledgerId,
-    userId,
-    role: "member",
-    memberType: "real",
-    permissionView: (defRowT.default_permission_view || "all") as any,
-    permissionAdd: (defRowT.default_permission_add || "all") as any,
-    permissionEdit: (defRowT.default_permission_edit || "own") as any,
-    permissionDelete: (defRowT.default_permission_delete || "own") as any,
-  });
+  // 添加用户为账本成员（使用账本默认权限）- 使用原始 SQL 避免 Drizzle 驼峰列名问题
+  const connT = await getDbConnection();
+  if (!connT) throw new Error("Database connection failed");
+  const tPermView = defRowT.default_permission_view || "all";
+  const tPermAdd = defRowT.default_permission_add || "all";
+  const tPermEdit = defRowT.default_permission_edit || "own";
+  const tPermDel = defRowT.default_permission_delete || "own";
+  await connT.execute(
+    `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0)`,
+    [ledgerId, userId, tPermView, tPermAdd, tPermEdit, tPermDel]
+  );
 
   // 自动初始化默认拨比：YJH 33.4%，自己 0%
   try {
@@ -5354,17 +5318,17 @@ export async function joinLedgerBySecretKey(secretKey: string, userId: number) {
   );
   const defRowS = (Array.isArray((defaultPermsS as any)[0]) ? (defaultPermsS as any)[0][0] : (defaultPermsS as any)[0]) || {};
 
-  // 添加用户为账本成员（使用账本默认权限）
-  await db.insert(ledgerMembers).values({
-    ledgerId,
-    userId,
-    role: "member",
-    memberType: "real",
-    permissionView: (defRowS.default_permission_view || "all") as any,
-    permissionAdd: (defRowS.default_permission_add || "all") as any,
-    permissionEdit: (defRowS.default_permission_edit || "own") as any,
-    permissionDelete: (defRowS.default_permission_delete || "own") as any,
-  });
+  // 添加用户为账本成员（使用账本默认权限）- 使用原始 SQL 避免 Drizzle 驼峰列名问题
+  const connS = await getDbConnection();
+  if (!connS) throw new Error("Database connection failed");
+  const sPermView = defRowS.default_permission_view || "all";
+  const sPermAdd = defRowS.default_permission_add || "all";
+  const sPermEdit = defRowS.default_permission_edit || "own";
+  const sPermDel = defRowS.default_permission_delete || "own";
+  await connS.execute(
+    `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0)`,
+    [ledgerId, userId, sPermView, sPermAdd, sPermEdit, sPermDel]
+  );
   // 自动初始化默认拨比：YJH 33.4%，自己 0%
   try {
     const YJH_USER_ID = 4957151;
