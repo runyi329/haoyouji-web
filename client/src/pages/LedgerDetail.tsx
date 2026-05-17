@@ -2530,7 +2530,7 @@ export default function LedgerDetail() {
   // 统计周期状态（从 localStorage 读取上次的选择，默认为 'month'）
   const [statsPeriod, setStatsPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>(() => {
     const saved = localStorage.getItem('statsPeriod');
-    return (saved as 'day' | 'week' | 'month' | 'year') || 'month';
+    return (saved as 'all' | 'day' | 'week' | 'month' | 'quarter' | 'year') || 'month';
   });
   // AJ账本专用独立统计周期，不影响普通账本的statsPeriod
   const [ajStatsPeriod, setAjStatsPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>('month');
@@ -4134,6 +4134,7 @@ export default function LedgerDetail() {
                     {!hasDateFilter && statsPeriod === 'week' && '本周'}
                     {!hasDateFilter && statsPeriod === 'month' && `${now.getMonth() + 1}月`}
                     {!hasDateFilter && statsPeriod === 'year' && '今年'}
+                    {!hasDateFilter && statsPeriod === 'all' && '全部'}
                     总收入
                   </span>
                   <button
@@ -4148,13 +4149,13 @@ export default function LedgerDetail() {
                 <div className="text-lg font-medium">{monthlyStats.income.toFixed(2)}</div>
                 {showPeriodMenu && (
                   <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden z-50 w-[5.5rem]">
-                    {(['day', 'week', 'month', 'year'] as const).map((p, i) => (
+                    {(['day', 'week', 'month', 'year', 'all'] as const).map((p, i) => (
                       <button
                         key={p}
                         onClick={() => { setStatsPeriod(p); setShowPeriodMenu(false); }}
                         className="w-full px-2 py-2.5 text-sm text-[#222222] active:bg-gray-100 text-center border-b border-gray-100 last:border-b-0"
                       >
-                        {['按天', '按自然周', '按自然月', '按自然年'][i]}
+                        {['按天', '按自然周', '按自然月', '按自然年', '总计'][i]}
                       </button>
                     ))}
                   </div>
@@ -4166,6 +4167,7 @@ export default function LedgerDetail() {
                   {!hasDateFilter && statsPeriod === 'week' && '本周'}
                   {!hasDateFilter && statsPeriod === 'month' && `${now.getMonth() + 1}月`}
                   {!hasDateFilter && statsPeriod === 'year' && '今年'}
+                  {!hasDateFilter && statsPeriod === 'all' && '全部'}
                   总结余
                 </div>
                 <div className="text-lg font-medium">{monthlyStats.balance.toFixed(2)}</div>
@@ -4176,6 +4178,7 @@ export default function LedgerDetail() {
                   {!hasDateFilter && statsPeriod === 'week' && '本周'}
                   {!hasDateFilter && statsPeriod === 'month' && `${now.getMonth() + 1}月`}
                   {!hasDateFilter && statsPeriod === 'year' && '今年'}
+                  {!hasDateFilter && statsPeriod === 'all' && '全部'}
                   总支出
                 </div>
                 <div className="text-lg font-medium">{monthlyStats.expense.toFixed(2)}</div>
