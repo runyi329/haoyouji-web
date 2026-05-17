@@ -2641,6 +2641,32 @@ export default function LedgerDetail() {
     }
   }, [isCustomAJ, isAdmin, isOwner, ledgerId]);
 
+  // AJ账本（76号）：禁止左滑返回手势（iOS swipe-back / 浏览器手势导航）
+  useEffect(() => {
+    if (!isCustomAJ) return;
+    let startX = 0;
+    let startY = 0;
+    const onTouchStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      // 判断是否为从左边缘（0-30px）向右滑动，且水平分量大于垂直分量
+      if (startX < 30 && dx > 0 && Math.abs(dx) > Math.abs(dy)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    document.addEventListener('touchstart', onTouchStart, { passive: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    return () => {
+      document.removeEventListener('touchstart', onTouchStart);
+      document.removeEventListener('touchmove', onTouchMove);
+    };
+  }, [isCustomAJ]);
+
   // 定制账本(AD)：永忆
   const isCustomAD = (ledgerData as any)?.type === 'custom_ad';
   if (!isLoading && !error && isCustomAD && ledgerData) {
