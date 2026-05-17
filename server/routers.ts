@@ -9410,23 +9410,76 @@ ${klinesSummary}
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         // 查询记录并验证权限
         const [record] = await db.execute(
-          sql`SELECT lr.id, lr.ledger_id, lr.aj_status FROM ledger_records lr WHERE lr.id = ${input.transactionId} LIMIT 1`
+          sql`SELECT lr.id, lr.ledgerId, lr.aj_status, lr.createdBy, lr.amount, lr.reimbursement_amount FROM ledger_records lr WHERE lr.id = ${input.transactionId} LIMIT 1`
         ) as any[];
         const row = Array.isArray(record) ? record[0] : null;
         if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: '记录不存在' });
         // 验证是账本管理员或owner
         const [memberRows] = await db.execute(
-          sql`SELECT role FROM ledger_members WHERE ledger_id = ${row.ledger_id} AND user_id = ${ctx.user.id} LIMIT 1`
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${row.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any[];
         const member = Array.isArray(memberRows) ? memberRows[0] : null;
         if (!member || !['owner', 'admin'].includes(member.role)) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '只有账本管理员可以操作审批状态' });
         }
+
+        const oldStatus = row.aj_status || 'pending';
+        const newStatus = input.status;
+
         // 直接更新 aj_status
         await db.execute(
-          sql`UPDATE ledger_records SET aj_status = ${input.status}, aj_approved_by = ${ctx.user.id}, aj_approved_at = NOW() WHERE id = ${input.transactionId}`
+          sql`UPDATE ledger_records SET aj_status = ${newStatus}, aj_approved_by = ${ctx.user.id}, aj_approved_at = NOW() WHERE id = ${input.transactionId}`
         );
-        return { success: true, transactionId: input.transactionId, status: input.status };
+
+        // USDT 奖励逻辑
+        const rewardNote = `成本津贴 #${input.transactionId}`;
+        const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+        if (oldStatus !== 'approved' && newStatus === 'approved') {
+          // 切换到审批通过：发放 USDT 奖励
+          try {
+            const submitterId = row.createdBy;
+            const reimbursementAmount = parseFloat(row.reimbursement_amount || row.amount || '0');
+            if (reimbursementAmount > 0 && submitterId) {
+              let usdCnyRate = 7.2;
+              try {
+                const res = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(5000) });
+                const d = await res.json() as any;
+                if (d.result === 'success' && d.rates?.['CNY']) usdCnyRate = d.rates['CNY'];
+              } catch (_) {}
+              const rewardCny = reimbursementAmount * 0.01;
+              const usdtRewarded = parseFloat((rewardCny / usdCnyRate).toFixed(6));
+              if (usdtRewarded > 0) {
+                await db.execute(
+                  sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${row.ledgerId}, ${submitterId}, ${usdtRewarded}, ${rewardNote}, ${nowStr}, ${nowStr})`
+                );
+                try {
+                  await db.execute(
+                    sql`INSERT INTO balance_history (user_id, amount, type, related_id, balance, description, created_at) VALUES (${submitterId}, ${usdtRewarded}, 'reward', ${input.transactionId}, 0, ${rewardNote}, ${nowStr})`
+                  );
+                } catch (_) {}
+                console.log(`[ajSetStatus] 发放 ${usdtRewarded} USDT 给用户 ${submitterId}`);
+              }
+            }
+          } catch (e: any) {
+            console.error('[ajSetStatus] USDT奖励发放失败:', e?.message);
+          }
+        } else if (oldStatus === 'approved' && newStatus !== 'approved') {
+          // 从审批通过切换回其他状态：扣回之前发放的 USDT
+          try {
+            await db.execute(
+              sql`DELETE FROM af_manual_balances WHERE note = ${rewardNote} LIMIT 1`
+            );
+            await db.execute(
+              sql`DELETE FROM balance_history WHERE description = ${rewardNote} AND type = 'reward' LIMIT 1`
+            );
+            console.log(`[ajSetStatus] 已扣回奖励: ${rewardNote}`);
+          } catch (e: any) {
+            console.error('[ajSetStatus] 扣回USDT失败:', e?.message);
+          }
+        }
+
+        return { success: true, transactionId: input.transactionId, status: newStatus };
       }),
 
     // 获取单条记账详情
