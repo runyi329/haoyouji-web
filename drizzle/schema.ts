@@ -505,8 +505,8 @@ export const ledgerCategories = mysqlTable("ledger_categories", {
 
 export const ledgerMembers = mysqlTable("ledger_members", {
 	id: int().autoincrement().notNull(),
-	ledgerId: int().notNull(),
-	userId: int().notNull(),
+	ledgerId: int('ledger_id').notNull(),
+	userId: int('user_id').notNull(),
 	role: mysqlEnum(['owner','admin','member','funder','client','employee']).default('member').notNull(),
 	nickname: varchar({ length: 50 }),
 	memberType: mysqlEnum("member_type", ['real','ai']).default('real').notNull(),
@@ -516,14 +516,14 @@ export const ledgerMembers = mysqlTable("ledger_members", {
 	permissionEdit: mysqlEnum("permission_edit", ['all','own','none']).default('own').notNull(),
 	permissionDelete: mysqlEnum("permission_delete", ['all','own','none']).default('own').notNull(),
 	permissionBackup: mysqlEnum("permission_backup", ['allow','none']).default('allow').notNull(),
-	canEdit: tinyint().default(1).notNull(),
-	canDelete: tinyint().default(0).notNull(),
-	canInvite: tinyint().default(0).notNull(),
-	invitedBy: int(),
+	canEdit: tinyint('can_edit').default(1).notNull(),
+	canDelete: tinyint('can_delete').default(0).notNull(),
+	canInvite: tinyint('can_invite').default(0).notNull(),
+	invitedBy: int('invited_by'),
 	initialBalances: text("initial_balances"),
 	shortcutButtons: json("shortcut_buttons"),
-	createdAt: timestamp({ mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
-	updatedAt: timestamp({ mode: 'string' }).defaultNow().onUpdateNow().notNull(),
+	createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+	updatedAt: timestamp('updated_at', { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
 export const ledgerRecords = mysqlTable("ledger_records", {
