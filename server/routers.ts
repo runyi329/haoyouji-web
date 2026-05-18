@@ -895,21 +895,24 @@ ${klinesSummary}
     getMyManualBalances: protectedProcedure
       .input(z.object({ limit: z.number().optional() }))
       .query(async ({ ctx, input }) => {
-        const conn = await getDbConnection();
-        const limit = input.limit ?? 50;
-        if (!conn) return [];
-        const [rows] = await (conn as any).execute(
-          `SELECT id, ledger_id, user_id, amount, note, created_at, updated_at
-           FROM af_manual_balances
-           WHERE user_id = ?
-             AND amount != 0
-             AND (note IS NULL OR note NOT LIKE '%[ERROR]%')
-           ORDER BY created_at DESC
-           LIMIT ?`,
-          [ctx.user.id, limit]
-        );
-        console.log('[getMyManualBalances] userId:', ctx.user.id, 'rowCount:', Array.isArray(rows) ? rows.length : 'NOT_ARRAY');
-        return Array.isArray(rows) ? rows : [];
+        try {
+          const db = await getLedgerDb();
+          const limit = input.limit ?? 200;
+          const rows = await db.execute(
+            sql`SELECT id, ledger_id, user_id, amount, note, created_at, updated_at
+                FROM af_manual_balances
+                WHERE user_id = ${ctx.user.id}
+                  AND amount != 0
+                  AND (note IS NULL OR note NOT LIKE '%[ERROR]%')
+                ORDER BY created_at DESC
+                LIMIT ${limit}`
+          ) as any;
+          const data = (rows[0] || rows) as any[];
+          return Array.isArray(data) ? data : [];
+        } catch (e) {
+          console.error('[getMyManualBalances] error:', e);
+          return [];
+        }
       }),
 
     // 用户申请提现
