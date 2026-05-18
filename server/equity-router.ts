@@ -1044,10 +1044,10 @@ export const equityRouter = router({
       `);
       // 查询该账本所有成员
       const [members] = await (db as any).execute(
-        'SELECT userId FROM ledger_members WHERE ledgerId = ?',
+        'SELECT user_id FROM ledger_members WHERE ledger_id = ?',
         [input.ledgerId]
       ) as any;
-      const memberIds = (members as any[]).map((m: any) => Number(m.userId));
+      const memberIds = (members as any[]).map((m: any) => Number(m.user_id));
       if (memberIds.length === 0) return { imported: 0, skipped: 0 };
       // 查询这些成员在 contacts 表中的推荐关系（referrer_id 不为空）
       const placeholders = memberIds.map(() => '?').join(',');

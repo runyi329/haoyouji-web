@@ -596,7 +596,7 @@ export async function createLedger(data: {
   const connCreate = await getDbConnection();
   if (!connCreate) throw new Error("Database connection failed");
   await connCreate.execute(
-    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, nickname, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite) VALUES (?, ?, 'owner', 'real', ?, 'all', 'all', 'all', 'all', 1, 1, 1)`,
+    `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, nickname, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite) VALUES (?, ?, 'owner', 'real', ?, 'all', 'all', 'all', 'all', 1, 1, 1)`,
     [newLedgerId, data.createdBy, finalNickname || null]
   );
   // 定制账本（AA/AB类型）自动将管理员 jiang（userId:870413）加入成员列表
@@ -606,7 +606,7 @@ export async function createLedger(data: {
   if (isCustomType && data.createdBy !== ADMIN_JIANG_ID) {
     try {
       await connCreate.execute(
-        `INSERT IGNORE INTO ledger_members (ledgerId, userId, role, member_type, nickname, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite) VALUES (?, ?, 'owner', 'real', 'jiang', 'all', 'all', 'all', 'all', 1, 1, 1)`,
+        `INSERT IGNORE INTO ledger_members (ledger_id, user_id, role, member_type, nickname, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite) VALUES (?, ?, 'owner', 'real', 'jiang', 'all', 'all', 'all', 'all', 1, 1, 1)`,
         [newLedgerId, ADMIN_JIANG_ID]
       );
     } catch (e) {
@@ -669,7 +669,7 @@ export async function copyLedger(sourceLedgerId: number, userId: number) {
   const connCopy = await getDbConnection();
   if (!connCopy) throw new Error("Database connection failed");
   await connCopy.execute(
-    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite) VALUES (?, ?, 'owner', 'real', 'all', 'all', 'all', 'all', 1, 1, 1)`,
+    `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite) VALUES (?, ?, 'owner', 'real', 'all', 'all', 'all', 'all', 1, 1, 1)`,
     [newLedgerId, userId]
   );
   
@@ -933,7 +933,7 @@ export async function inviteMemberByUsername(ledgerId: number, inviterUserId: nu
   const permEdit = sanitizePerm(defRowA.default_permission_edit, "own");
   const permDel = sanitizePerm(defRowA.default_permission_delete, "own");
   await conn.execute(
-    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, invitedBy) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0, ?)`,
+    `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite, invited_by) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0, ?)`,
     [ledgerId, inviteeUser.id, permView, permAdd, permEdit, permDel, inviterUserId]
   );
 
@@ -1016,7 +1016,7 @@ export async function inviteMemberByUsernameWithRole(
   const canDeleteVal = isAdmin ? 1 : 0;
   const canInviteVal = isAdmin ? 1 : 0;
   await connR.execute(
-    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, invitedBy) VALUES (?, ?, ?, 'real', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite, invited_by) VALUES (?, ?, ?, 'real', ?, ?, ?, ?, ?, ?, ?, ?)`,
     [ledgerId, inviteeUser.id, role, pView, pAdd, pEdit, pDel, canEditVal, canDeleteVal, canInviteVal, inviterUserId]
   );
 
@@ -1079,7 +1079,7 @@ export async function joinLedger(ledgerId: number, userId: number, invitedBy: nu
   const jPermEdit = defRow.default_permission_edit || "own";
   const jPermDel = defRow.default_permission_delete || "own";
   await connJ.execute(
-    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, invitedBy) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0, ?)`,
+    `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite, invited_by) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0, ?)`,
     [ledgerId, userId, jPermView, jPermAdd, jPermEdit, jPermDel, invitedBy]
   );
   return true;
@@ -1714,7 +1714,7 @@ export async function joinLedgerByToken(token: string, userId: number) {
   const tPermEdit = defRowT.default_permission_edit || "own";
   const tPermDel = defRowT.default_permission_delete || "own";
   await connT.execute(
-    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0)`,
+    `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0)`,
     [ledgerId, userId, tPermView, tPermAdd, tPermEdit, tPermDel]
   );
 
@@ -5336,7 +5336,7 @@ export async function joinLedgerBySecretKey(secretKey: string, userId: number) {
   const sPermEdit = defRowS.default_permission_edit || "own";
   const sPermDel = defRowS.default_permission_delete || "own";
   await connS.execute(
-    `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0)`,
+    `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0)`,
     [ledgerId, userId, sPermView, sPermAdd, sPermEdit, sPermDel]
   );
   // 自动初始化默认拨比：YJH 33.4%，自己 0%

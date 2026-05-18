@@ -1842,7 +1842,7 @@ ${klinesSummary}
                   const rawConnAF = await getDbConnection();
                   if (rawConnAF) {
                     await (rawConnAF as any).execute(
-                      `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite) VALUES (?, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0)`,
+                      `INSERT INTO ledger_members (ledger_id, user_id, role, member_type, permission_view, permission_add, permission_edit, permission_delete, can_edit, can_delete, can_invite) VALUES (?, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0)`,
                       [afLedger.id, user.id]
                     );
                   }
@@ -12479,7 +12479,7 @@ ${klinesSummary}
         let targetUserId = ctx.user.id;
         if (input.viewAsUserId) {
           const memberCheck = await db.execute(
-            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+            sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
           ) as any;
           const myRole = (memberCheck as any)[0]?.[0]?.role || (memberCheck as any)[0]?.role;
           if (myRole === 'owner' || myRole === 'admin') {
@@ -23371,7 +23371,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         const dbConn = await getDbConnection();
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         const [memberRows] = await dbConn.execute(
-          `SELECT role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1`,
+          `SELECT role FROM ledger_members WHERE ledger_id = ? AND user_id = ? LIMIT 1`,
           [input.ledgerId, ctx.user.id]
         ) as any[];
         const role = (memberRows as any[])[0]?.role;
