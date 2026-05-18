@@ -9,10 +9,10 @@ export default function WalletTransactions() {
   const [, setLocation] = useLocation();
   const [activeType, setActiveType] = useState<TransactionType>("all");
 
-  // 只用两个接口：充值订单 + balance_history（含 withdraw/reward）
-  // 去掉了 getMyManualBalances，避免重复请求和重复数据
+  // 三个接口：充值订单 + balance_history（含 withdraw/reward）+ AF 手动调账
   const rechargeQuery = trpc.recharge.getMyOrders.useQuery({ limit: 100 });
   const balanceHistoryQuery = trpc.recharge.getBalanceHistory.useQuery({ limit: 200 });
+  const manualBalancesQuery = trpc.recharge.getMyManualBalances.useQuery({ limit: 200 });
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -87,6 +87,22 @@ export default function WalletTransactions() {
       });
     }
 
+    // 来源3：AF 手动调账（af_manual_balances 表，含所有账本的手动调账/奖励）
+    if (manualBalancesQuery.data) {
+      (manualBalancesQuery.data as any[]).forEach((m: any) => {
+        const amt = Number(m.amount);
+        if (amt === 0) return;
+        transactions.push({
+          id: `manual-${m.id}`,
+          type: amt > 0 ? 'reward' : 'deduct',
+          amount: Math.abs(amt),
+          status: 'completed',
+          description: m.note || '',
+          createdAt: m.created_at || m.createdAt,
+        });
+      });
+    }
+
     return transactions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   };
 
@@ -97,7 +113,7 @@ export default function WalletTransactions() {
     return all.filter(t => t.type === activeType);
   })();
 
-  const isLoading = rechargeQuery.isLoading || balanceHistoryQuery.isLoading;
+  const isLoading = rechargeQuery.isLoading || balanceHistoryQuery.isLoading || manualBalancesQuery.isLoading;
 
   return (
     <div className="min-h-screen pb-20" style={{ background: 'linear-gradient(160deg,#111111 0%,#1a1a1a 100%)' }}>
