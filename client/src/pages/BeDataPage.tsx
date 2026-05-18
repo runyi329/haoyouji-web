@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { MarketBetPanelWithTabs } from "./CryptoPrediction";
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft } from "lucide-react";
@@ -1571,6 +1572,22 @@ export default function BeDataPage() {
   const [minuteCounter, setMinuteCounter] = useState(0);
   // isSyncing已不再使用，保留占位避免引用错误
   const isSyncing = false;
+  const { user } = useAuth();
+  const isAdminUser = user?.role === 'admin' || user?.role === 'super_admin';
+  const [syncingAll, setSyncingAll] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+  const syncHourlyAllMutation = trpc.cryptoData.syncHourlyAll.useMutation({
+    onMutate: () => { setSyncingAll(true); setSyncResult(null); },
+    onSuccess: (data) => {
+      setSyncingAll(false);
+      const btcAdded = (data as any)?.BTCUSDT_hourly?.added ?? 0;
+      const ethAdded = (data as any)?.ETHUSDT_hourly?.added ?? 0;
+      const solAdded = (data as any)?.SOLUSDT_hourly?.added ?? 0;
+      setSyncResult(`同步完成：BTC+${btcAdded} ETH+${ethAdded} SOL+${solAdded}`);
+      setTimeout(() => setSyncResult(null), 5000);
+    },
+    onError: (e) => { setSyncingAll(false); setSyncResult('同步失败: ' + e.message); },
+  });
 
   // 各币种上市时间（毫秒），用于推算理论分钟K线条数
   const CRYPTO_LISTING_TIME: Record<string, number> = {
@@ -1906,6 +1923,18 @@ export default function BeDataPage() {
             >
               更新
             </button>
+            {isAdminUser && (
+              <button
+                onClick={() => syncHourlyAllMutation.mutate()}
+                disabled={syncingAll}
+                style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: syncingAll ? "rgba(255,165,0,0.5)" : "rgba(255,165,0,0.8)", border: "1px solid rgba(255,200,0,0.5)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: syncingAll ? "not-allowed" : "pointer", flexShrink: 0 }}
+              >
+                {syncingAll ? "同步中..." : "补齐数据"}
+              </button>
+            )}
+            {syncResult && (
+              <span style={{ fontSize: 10, color: '#FFE082', marginLeft: 4 }}>{syncResult}</span>
+            )}
           </div>
 
 
