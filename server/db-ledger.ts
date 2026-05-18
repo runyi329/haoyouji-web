@@ -924,9 +924,10 @@ export async function inviteMemberByUsername(ledgerId: number, inviterUserId: nu
   const conn = await getDbConnection();
   if (!conn) throw new Error("Database connection failed");
   // ledger_members 表的 permission_* 列只允许 'all' 和 'own'，不允许 'none'
+  const VALID_PERMS = ['all', 'own', 'none'];
   const sanitizePerm = (val: string | undefined, fallback: string) => {
     const v = val || fallback;
-    return (v === 'none') ? 'own' : v;
+    return VALID_PERMS.includes(v) ? v : 'own';
   };
   const permView = sanitizePerm(defRowA.default_permission_view, "all");
   const permAdd = sanitizePerm(defRowA.default_permission_add, "all");
@@ -995,10 +996,11 @@ export async function inviteMemberByUsernameWithRole(
     );
     const defRowR = (Array.isArray((defaultPermsR as any)[0]) ? (defaultPermsR as any)[0][0] : (defaultPermsR as any)[0]) || {};
     // ledger_members 表的 permission_* 列可能只允许 'all' 和 'own'（旧表结构未升级时）
-    const sanitizePermR = (val: string | undefined, fallback: string) => {
-      const v = val || fallback;
-      return (v === 'none') ? 'own' : v;
-    };
+  const VALID_PERMS_R = ['all', 'own', 'none'];
+  const sanitizePermR = (val: string | undefined, fallback: string) => {
+    const v = val || fallback;
+    return VALID_PERMS_R.includes(v) ? v : 'own';
+  };
     defViewR = sanitizePermR(defRowR.default_permission_view, "all");
     defAddR = sanitizePermR(defRowR.default_permission_add, "own");
     defEditR = sanitizePermR(defRowR.default_permission_edit, "own");
@@ -1074,10 +1076,12 @@ export async function joinLedger(ledgerId: number, userId: number, invitedBy: nu
   // 添加为成员（使用账本默认权限）- 使用原始 SQL 避免 Drizzle 驼峰列名问题
   const connJ = await getDbConnection();
   if (!connJ) throw new Error("Database connection failed");
-  const jPermView = defRow.default_permission_view || "all";
-  const jPermAdd = defRow.default_permission_add || "all";
-  const jPermEdit = defRow.default_permission_edit || "own";
-  const jPermDel = defRow.default_permission_delete || "own";
+  const VALID_PERMS_J = ['all', 'own', 'none'];
+  const jSanitize = (v: string | undefined, fb: string) => { const x = v || fb; return VALID_PERMS_J.includes(x) ? x : fb; };
+  const jPermView = jSanitize(defRow.default_permission_view, "all");
+  const jPermAdd = jSanitize(defRow.default_permission_add, "all");
+  const jPermEdit = jSanitize(defRow.default_permission_edit, "own");
+  const jPermDel = jSanitize(defRow.default_permission_delete, "own");
   await connJ.execute(
     `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, invitedBy) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0, ?)`,
     [ledgerId, userId, jPermView, jPermAdd, jPermEdit, jPermDel, invitedBy]
@@ -1709,10 +1713,12 @@ export async function joinLedgerByToken(token: string, userId: number) {
   // 添加用户为账本成员（使用账本默认权限）- 使用原始 SQL 避免 Drizzle 驼峰列名问题
   const connT = await getDbConnection();
   if (!connT) throw new Error("Database connection failed");
-  const tPermView = defRowT.default_permission_view || "all";
-  const tPermAdd = defRowT.default_permission_add || "all";
-  const tPermEdit = defRowT.default_permission_edit || "own";
-  const tPermDel = defRowT.default_permission_delete || "own";
+  const VALID_PERMS_T = ['all', 'own', 'none'];
+  const tSanitize = (v: string | undefined, fb: string) => { const x = v || fb; return VALID_PERMS_T.includes(x) ? x : fb; };
+  const tPermView = tSanitize(defRowT.default_permission_view, "all");
+  const tPermAdd = tSanitize(defRowT.default_permission_add, "all");
+  const tPermEdit = tSanitize(defRowT.default_permission_edit, "own");
+  const tPermDel = tSanitize(defRowT.default_permission_delete, "own");
   await connT.execute(
     `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0)`,
     [ledgerId, userId, tPermView, tPermAdd, tPermEdit, tPermDel]
