@@ -256,6 +256,50 @@ export const appRouter = router({
         const result = await dbCrypto.syncLatestFromBinance(input.symbol);
         return result;
       }),
+    syncHourlyAll: protectedProcedure
+      .mutation(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        const {
+          syncHourlyFromBinance,
+          syncFundingRatesFromBinance,
+          syncYahooFinance,
+          syncGoldFromYahoo,
+        } = await import('./db-crypto');
+        const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+        const results: Record<string, any> = {};
+        for (const sym of SYMBOLS) {
+          let totalAdded = 0;
+          let hasMore = true;
+          let iterations = 0;
+          while (hasMore && iterations < 50) {
+            const r = await syncHourlyFromBinance(sym);
+            totalAdded += r.added;
+            hasMore = r.hasMore;
+            iterations++;
+          }
+          results[sym + '_hourly'] = { added: totalAdded, iterations };
+          let frAdded = 0;
+          hasMore = true;
+          iterations = 0;
+          while (hasMore && iterations < 50) {
+            const r = await syncFundingRatesFromBinance(sym);
+            frAdded += r.added;
+            hasMore = r.hasMore;
+            iterations++;
+          }
+          results[sym + '_funding'] = { added: frAdded };
+        }
+        const YAHOO = ['WTI', 'BRENT', 'CNY', 'CNH', 'DXY'];
+        for (const sym of YAHOO) {
+          try { results[sym] = await syncYahooFinance(sym); }
+          catch (e: any) { results[sym] = { error: e.message }; }
+        }
+        try { results['GOLD'] = await syncGoldFromYahoo(); }
+        catch (e: any) { results['GOLD'] = { error: e.message }; }
+        return results;
+      }),
 
     // 批量获取多个标的最新日线价格（用于美股/数字币首页展示）
     getLatestPrices: publicProcedure
