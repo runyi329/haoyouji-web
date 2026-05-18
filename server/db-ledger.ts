@@ -923,10 +923,15 @@ export async function inviteMemberByUsername(ledgerId: number, inviterUserId: nu
   // 添加为成员（使用账本默认权限）- 使用原始 SQL 避免 Drizzle 驼峰列名问题
   const conn = await getDbConnection();
   if (!conn) throw new Error("Database connection failed");
-  const permView = defRowA.default_permission_view || "all";
-  const permAdd = defRowA.default_permission_add || "all";
-  const permEdit = defRowA.default_permission_edit || "own";
-  const permDel = defRowA.default_permission_delete || "own";
+  // ledger_members 表的 permission_* 列只允许 'all' 和 'own'，不允许 'none'
+  const sanitizePerm = (val: string | undefined, fallback: string) => {
+    const v = val || fallback;
+    return (v === 'none') ? 'own' : v;
+  };
+  const permView = sanitizePerm(defRowA.default_permission_view, "all");
+  const permAdd = sanitizePerm(defRowA.default_permission_add, "all");
+  const permEdit = sanitizePerm(defRowA.default_permission_edit, "own");
+  const permDel = sanitizePerm(defRowA.default_permission_delete, "own");
   await conn.execute(
     `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite, invitedBy) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0, ?)`,
     [ledgerId, inviteeUser.id, permView, permAdd, permEdit, permDel, inviterUserId]
@@ -989,10 +994,15 @@ export async function inviteMemberByUsernameWithRole(
       sql`SELECT default_permission_view, default_permission_add, default_permission_edit, default_permission_delete FROM ledgers WHERE id = ${ledgerId}`
     );
     const defRowR = (Array.isArray((defaultPermsR as any)[0]) ? (defaultPermsR as any)[0][0] : (defaultPermsR as any)[0]) || {};
-    defViewR = defRowR.default_permission_view || "all";
-    defAddR = defRowR.default_permission_add || "own";
-    defEditR = defRowR.default_permission_edit || "own";
-    defDelR = defRowR.default_permission_delete || "own";
+    // ledger_members 表的 permission_* 列可能只允许 'all' 和 'own'（旧表结构未升级时）
+    const sanitizePermR = (val: string | undefined, fallback: string) => {
+      const v = val || fallback;
+      return (v === 'none') ? 'own' : v;
+    };
+    defViewR = sanitizePermR(defRowR.default_permission_view, "all");
+    defAddR = sanitizePermR(defRowR.default_permission_add, "own");
+    defEditR = sanitizePermR(defRowR.default_permission_edit, "own");
+    defDelR = sanitizePermR(defRowR.default_permission_delete, "own");
   }
 
   // 使用原始 SQL 避免 Drizzle 驼峰列名问题
