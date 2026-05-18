@@ -711,6 +711,135 @@ async function startServer() {
     setTimeout(runUSStockSync, 8000);
     console.log('[美股同步] 已注册，每小时检查一次，美股收盘后自动拉取数据并结算');
     // ──────────────────────────────────────────────────────
+    // ─── 数字币小时K线 + 资金费率：每小时自动增量同步 ─────────────────────────────
+    const HOURLY_CRYPTO_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
+    const syncHourlyAndFunding = async () => {
+      const {
+        syncHourlyFromBinance,
+        syncFundingRatesFromBinance,
+      } = require('../db-crypto');
+      for (const sym of HOURLY_CRYPTO_SYMBOLS) {
+        // 小时K线：可能有多批，循环直到补齐
+        try {
+          let hasMore = true;
+          let totalAdded = 0;
+          let iterations = 0;
+          while (hasMore && iterations < 20) {
+            const r = await syncHourlyFromBinance(sym);
+            totalAdded += r.added;
+            hasMore = r.hasMore;
+            iterations++;
+          }
+          if (totalAdded > 0) console.log(`[小时线同步] ${sym} 新增 ${totalAdded} 条`);
+        } catch (e: any) {
+          console.error(`[小时线同步] ${sym} 失败:`, e.message);
+        }
+        // 资金费率：可能有多批，循环直到补齐
+        try {
+          let hasMore = true;
+          let totalAdded = 0;
+          let iterations = 0;
+          while (hasMore && iterations < 20) {
+            const r = await syncFundingRatesFromBinance(sym);
+            totalAdded += r.added;
+            hasMore = r.hasMore;
+            iterations++;
+          }
+          if (totalAdded > 0) console.log(`[资金费率同步] ${sym} 新增 ${totalAdded} 条`);
+        } catch (e: any) {
+          console.error(`[资金费率同步] ${sym} 失败:`, e.message);
+        }
+      }
+    };
+    // 每小时同步一次
+    setInterval(syncHourlyAndFunding, 60 * 60 * 1000);
+    // 启动时立即补齐（延迟 12 秒，避免与其他启动任务冲突）
+    setTimeout(syncHourlyAndFunding, 12000);
+    console.log('[小时线/资金费率同步] 已注册，每小时自动增量同步 BTC/ETH/SOL');
+    // ──────────────────────────────────────────────────────
+    // ─── Yahoo Finance 品种（WTI/BRENT/CNY/CNH/DXY）：每天 UTC 02:00 同步 ────────
+    const YAHOO_SYMBOLS = ['WTI', 'BRENT', 'CNY', 'CNH', 'DXY'];
+    const scheduleYahooSync = () => {
+      const now = new Date();
+      // 每天 UTC 02:00 触发（各市场收盘后）
+      const target = new Date(Date.UTC(
+        now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+        2, 0, 0, 0
+      ));
+      if (target.getTime() <= now.getTime()) target.setUTCDate(target.getUTCDate() + 1);
+      const ms = target.getTime() - now.getTime();
+      const nextStr = target.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+      console.log(`[Yahoo同步] 下次触发时间: ${nextStr}`);
+      setTimeout(async () => {
+        try {
+          const { syncYahooFinance } = require('../db-crypto');
+          for (const sym of YAHOO_SYMBOLS) {
+            try {
+              const r = await syncYahooFinance(sym);
+              console.log(`[Yahoo同步] ${sym} 新增 ${r.added} 条，最新日期 ${r.latestDate}`);
+            } catch (e: any) {
+              console.error(`[Yahoo同步] ${sym} 失败:`, e.message);
+            }
+          }
+        } finally {
+          scheduleYahooSync();
+        }
+      }, ms);
+    };
+    scheduleYahooSync();
+    // 启动时立即补齐（延迟 20 秒）
+    setTimeout(async () => {
+      const { syncYahooFinance } = require('../db-crypto');
+      console.log('[Yahoo启动补齐] 开始补齐 WTI/BRENT/CNY/CNH/DXY...');
+      for (const sym of YAHOO_SYMBOLS) {
+        try {
+          const r = await syncYahooFinance(sym);
+          console.log(`[Yahoo启动补齐] ${sym} 新增 ${r.added} 条，最新日期 ${r.latestDate}`);
+        } catch (e: any) {
+          console.error(`[Yahoo启动补齐] ${sym} 失败:`, e.message);
+        }
+      }
+      console.log('[Yahoo启动补齐] 完成');
+    }, 20000);
+    console.log('[Yahoo同步] 已注册，每天 UTC 02:00 自动同步 WTI/BRENT/CNY/CNH/DXY');
+    // ──────────────────────────────────────────────────────
+    // ─── 黄金日线（gold_daily_kline）：每天 UTC 02:30 从 Yahoo Finance 同步 ────────
+    const scheduleGoldSync = () => {
+      const now = new Date();
+      const target = new Date(Date.UTC(
+        now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+        2, 30, 0, 0
+      ));
+      if (target.getTime() <= now.getTime()) target.setUTCDate(target.getUTCDate() + 1);
+      const ms = target.getTime() - now.getTime();
+      const nextStr = target.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+      console.log(`[黄金同步] 下次触发时间: ${nextStr}`);
+      setTimeout(async () => {
+        try {
+          const { syncGoldFromYahoo } = require('../db-crypto');
+          const r = await syncGoldFromYahoo();
+          console.log(`[黄金同步] 新增 ${r.added} 条，最新日期 ${r.latestDate}`);
+        } catch (e: any) {
+          console.error('[黄金同步] 失败:', e.message);
+        } finally {
+          scheduleGoldSync();
+        }
+      }, ms);
+    };
+    scheduleGoldSync();
+    // 启动时立即补齐（延迟 30 秒）
+    setTimeout(async () => {
+      const { syncGoldFromYahoo } = require('../db-crypto');
+      console.log('[黄金启动补齐] 开始补齐黄金日线...');
+      try {
+        const r = await syncGoldFromYahoo();
+        console.log(`[黄金启动补齐] 新增 ${r.added} 条，最新日期 ${r.latestDate}`);
+      } catch (e: any) {
+        console.error('[黄金启动补齐] 失败:', e.message);
+      }
+    }, 30000);
+    console.log('[黄金同步] 已注册，每天 UTC 02:30 自动同步黄金日线到 gold_daily_kline');
+    // ──────────────────────────────────────────────────────
   });
 }
 
