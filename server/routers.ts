@@ -12476,7 +12476,7 @@ ${klinesSummary}
         let targetUserId = ctx.user.id;
         if (input.viewAsUserId) {
           const memberCheck = await db.execute(
-            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+            sql`SELECT role FROM ledger_members WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
           ) as any;
           const myRole = (memberCheck as any)[0]?.[0]?.role || (memberCheck as any)[0]?.role;
           if (myRole === 'owner' || myRole === 'admin') {
