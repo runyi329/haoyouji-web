@@ -874,7 +874,7 @@ export default function LedgerSettings() {
  </div>
  )}
 
- {/* */}
+ {/* 关闭邀请弹框 */}
  <Button
  variant="outline"
  className="w-full"
@@ -883,7 +883,7 @@ export default function LedgerSettings() {
  setSearchUsername("");
  }}
  >
- 
+ 关闭
  </Button>
  </div>
  </DialogContent>
@@ -892,7 +892,7 @@ export default function LedgerSettings() {
  {/* */}
  <Dialog open={showRemovePicker} onOpenChange={setShowRemovePicker}>
  <DialogContent className="w-[90%] max-w-md rounded-lg" showCloseButton={false}>
- <DialogTitle className="text-lg font-semibold mb-4"></DialogTitle>
+ <DialogTitle className="text-lg font-semibold mb-4">选择要移除的成员</DialogTitle>
  <div className="space-y-2 max-h-60 overflow-y-auto">
  {members?.filter((m: any) => m.role !== 'owner').map((member: any) => (
  <div
@@ -910,7 +910,7 @@ export default function LedgerSettings() {
  <div>
  <div className="font-medium text-gray-900">{member.nickname || member.username}</div>
  <div className="text-xs text-gray-400">
- {member.role === 'admin' ? (ledgerData?.type === 'diet' ? '' : '') : ''}
+ {member.role === 'admin' ? (ledgerData?.type === 'diet' ? '负责人' : '管理员') : '成员'}
  </div>
  </div>
  </div>
@@ -923,7 +923,7 @@ export default function LedgerSettings() {
  className="px-3 py-1.5 text-white text-sm rounded-lg hover:opacity-90 transition-colors"
  style={{ backgroundColor: 'var(--brand-red)' }}
  >
- 
+ 移除
  </button>
  </div>
  ))}
@@ -933,7 +933,7 @@ export default function LedgerSettings() {
  className="w-full mt-3"
  onClick={() => setShowRemovePicker(false)}
  >
- 
+ 取消
  </Button>
  </DialogContent>
  </Dialog>
@@ -1239,7 +1239,7 @@ export default function LedgerSettings() {
  <div className="flex-1">
  <div className="font-medium text-sm">{member.nickname || member.username}</div>
  <div className="text-xs text-gray-400">
- {member.role === 'admin' ? (ledgerData?.type === 'diet' ? '' : '') : ''}
+ {member.role === 'admin' ? (ledgerData?.type === 'diet' ? '负责人' : '管理员') : '成员'}
  </div>
  </div>
  {transferTarget?.userId === member.userId && (
