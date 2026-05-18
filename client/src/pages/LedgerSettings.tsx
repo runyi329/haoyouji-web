@@ -942,19 +942,19 @@ export default function LedgerSettings() {
  <AlertDialog open={showRemoveDialog} onOpenChange={setShowRemoveDialog}>
  <AlertDialogContent>
  <AlertDialogHeader>
- <AlertDialogTitle></AlertDialogTitle>
+ <AlertDialogTitle>移除成员</AlertDialogTitle>
  <AlertDialogDescription>
- "{memberToRemove?.nickname || ""}" TA 
+ 确定要移除成员 "{memberToRemove?.nickname || "用户"}" 吗？移除后，TA 将无法查看和编辑该账本。
  </AlertDialogDescription>
  </AlertDialogHeader>
  <AlertDialogFooter>
- <AlertDialogCancel></AlertDialogCancel>
+ <AlertDialogCancel>取消</AlertDialogCancel>
  <AlertDialogAction
  onClick={handleRemoveMember}
  className="hover:opacity-90 text-white"
  style={{ backgroundColor: 'var(--brand-red)' }}
  >
- 
+ 确认移除
  </AlertDialogAction>
  </AlertDialogFooter>
  </AlertDialogContent>
