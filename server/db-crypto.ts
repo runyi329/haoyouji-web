@@ -1408,3 +1408,383 @@ export async function getHourlyKlinesMeta(symbol: string): Promise<{ total: numb
     latest: r?.latest ?? null,
   };
 }
+
+// ============================================================
+// 小时 K 线同步（从 Binance 增量拉取）
+// ============================================================
+
+/** 获取数据库中某币种最新的小时K线时间戳（毫秒） */
+export async function getLatestHourlyTime(symbol: string): Promise<number> {
+  const conn = await getDbConnection();
+  if (!conn) return 0;
+  const [[row]] = await conn.execute(
+    'SELECT MAX(open_time) as latest FROM crypto_klines_1h WHERE symbol = ?',
+    [symbol]
+  ) as any;
+  return row?.latest ? Number(row.latest) : 0;
+}
+
+/** 批量 upsert 小时K线数据 */
+export async function batchUpsertHourlyKlines(records: CryptoKline1h[]): Promise<number> {
+  const conn = await getDbConnection();
+  if (!conn || records.length === 0) return 0;
+  // 确保表存在
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS \`crypto_klines_1h\` (
+      \`id\`            INT AUTO_INCREMENT PRIMARY KEY,
+      \`symbol\`        VARCHAR(20) NOT NULL,
+      \`open_time\`     BIGINT NOT NULL COMMENT '开盘时间戳（毫秒）',
+      \`datetime\`      DATETIME NOT NULL COMMENT '开盘时间（UTC）',
+      \`open\`          DECIMAL(20,8) NOT NULL,
+      \`high\`          DECIMAL(20,8) NOT NULL,
+      \`low\`           DECIMAL(20,8) NOT NULL,
+      \`close\`         DECIMAL(20,8) NOT NULL,
+      \`volume\`        DECIMAL(30,8) NOT NULL,
+      \`quote_volume\`  DECIMAL(30,8) NOT NULL,
+      \`change_pct\`    DECIMAL(10,4),
+      \`amplitude_pct\` DECIMAL(10,4),
+      UNIQUE KEY \`uk_symbol_time\` (\`symbol\`, \`open_time\`),
+      INDEX \`idx_symbol\` (\`symbol\`),
+      INDEX \`idx_open_time\` (\`open_time\`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='加密货币1小时K线'
+  `);
+  const BATCH = 500;
+  let total = 0;
+  for (let i = 0; i < records.length; i += BATCH) {
+    const chunk = records.slice(i, i + BATCH);
+    const values = chunk.map(r => [
+      r.symbol, r.openTime,
+      new Date(r.openTime).toISOString().replace('T', ' ').slice(0, 19),
+      r.open, r.high, r.low, r.close, r.volume, r.quoteVolume,
+      r.changePct ?? null, r.amplitudePct ?? null,
+    ]);
+    const placeholders = values.map(() => '(?,?,?,?,?,?,?,?,?,?,?)').join(',');
+    const flat = values.flat();
+    const [result] = await conn.execute(
+      `INSERT INTO crypto_klines_1h
+         (symbol, open_time, datetime, open, high, low, close, volume, quote_volume, change_pct, amplitude_pct)
+       VALUES ${placeholders}
+       ON DUPLICATE KEY UPDATE
+         open          = VALUES(open),
+         high          = VALUES(high),
+         low           = VALUES(low),
+         close         = VALUES(close),
+         volume        = VALUES(volume),
+         quote_volume  = VALUES(quote_volume),
+         change_pct    = VALUES(change_pct),
+         amplitude_pct = VALUES(amplitude_pct)`,
+      flat
+    ) as any;
+    total += result.affectedRows ?? 0;
+  }
+  return total;
+}
+
+/**
+ * 从 Binance 增量同步小时K线（每次最多1000条，自动补齐到当前小时前）
+ * 支持多次调用直到补齐所有缺失数据
+ */
+export async function syncHourlyFromBinance(symbol: string): Promise<{ added: number; latestDatetime: string | null; hasMore: boolean }> {
+  const latestTime = await getLatestHourlyTime(symbol);
+  let startTime: number;
+  if (latestTime > 0) {
+    startTime = latestTime + 60 * 60 * 1000; // 下一小时
+  } else {
+    startTime = new Date('2021-01-01').getTime();
+  }
+  const now = Date.now();
+  const currentHourStart = now - (now % (60 * 60 * 1000));
+  if (startTime >= currentHourStart) {
+    return { added: 0, latestDatetime: null, hasMore: false };
+  }
+
+  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1h&startTime=${startTime}&limit=1000`;
+  let klines: any[] = [];
+  try {
+    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (resp.ok) klines = await resp.json();
+  } catch {
+    try {
+      const url2 = `https://api1.binance.com/api/v3/klines?symbol=${symbol}&interval=1h&startTime=${startTime}&limit=1000`;
+      const resp2 = await fetch(url2, { signal: AbortSignal.timeout(15000) });
+      if (resp2.ok) klines = await resp2.json();
+    } catch { /* ignore */ }
+  }
+  if (!klines || klines.length === 0) return { added: 0, latestDatetime: null, hasMore: false };
+
+  const records: CryptoKline1h[] = klines
+    .filter((k: any) => Number(k[0]) < currentHourStart)
+    .map((k: any) => {
+      const openTime = Number(k[0]);
+      const open = parseFloat(k[1]);
+      const high = parseFloat(k[2]);
+      const low = parseFloat(k[3]);
+      const close = parseFloat(k[4]);
+      const volume = parseFloat(k[5]);
+      const quoteVolume = parseFloat(k[7]);
+      const changePct = open > 0 ? parseFloat(((close - open) / open * 100).toFixed(4)) : null;
+      const amplitudePct = open > 0 ? parseFloat(((high - low) / open * 100).toFixed(4)) : null;
+      const dt = new Date(openTime);
+      const datetime = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')} ${String(dt.getUTCHours()).padStart(2,'0')}:00:00`;
+      return { symbol, openTime, datetime, open, high, low, close, volume, quoteVolume, changePct, amplitudePct };
+    });
+
+  if (records.length === 0) return { added: 0, latestDatetime: null, hasMore: false };
+  const added = await batchUpsertHourlyKlines(records);
+  const latestDatetime = records[records.length - 1].datetime;
+  // 如果拉了1000条，可能还有更多
+  const hasMore = klines.length >= 1000;
+  return { added, latestDatetime, hasMore };
+}
+
+// ============================================================
+// 资金费率同步（从 Binance 增量拉取）
+// ============================================================
+
+/**
+ * 从 Binance 增量同步资金费率（每8小时结算一次，每次最多1000条）
+ */
+export async function syncFundingRatesFromBinance(symbol: string): Promise<{ added: number; latestTime: number | null; hasMore: boolean }> {
+  const latestTime = await getLatestFundingTime(symbol);
+  const startTime = latestTime > 0 ? latestTime + 1 : new Date('2019-09-01').getTime();
+  const now = Date.now();
+  if (startTime >= now) return { added: 0, latestTime: null, hasMore: false };
+
+  const url = `https://fapi.binance.com/fapi/v1/fundingRate?symbol=${symbol}&startTime=${startTime}&limit=1000`;
+  let data: any[] = [];
+  try {
+    const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (resp.ok) data = await resp.json();
+  } catch {
+    try {
+      const url2 = `https://fapi1.binance.com/fapi/v1/fundingRate?symbol=${symbol}&startTime=${startTime}&limit=1000`;
+      const resp2 = await fetch(url2, { signal: AbortSignal.timeout(15000) });
+      if (resp2.ok) data = await resp2.json();
+    } catch { /* ignore */ }
+  }
+  if (!data || !Array.isArray(data) || data.length === 0) return { added: 0, latestTime: null, hasMore: false };
+
+  const records: FundingRate[] = data.map((d: any) => ({
+    symbol: d.symbol,
+    fundingTime: Number(d.fundingTime),
+    fundingRate: parseFloat(d.fundingRate),
+    markPrice: d.markPrice != null ? parseFloat(d.markPrice) : null,
+  }));
+
+  const added = await batchUpsertFundingRates(records);
+  const newLatestTime = records[records.length - 1].fundingTime;
+  const hasMore = data.length >= 1000;
+  return { added, latestTime: newLatestTime, hasMore };
+}
+
+// ============================================================
+// Yahoo Finance 通用同步（WTI/BRENT/CNY/CNH/DXY/GOLD）
+// ============================================================
+
+/**
+ * Yahoo Finance symbol 映射
+ * 数据库 symbol -> Yahoo Finance ticker
+ */
+const YAHOO_SYMBOL_MAP: Record<string, string> = {
+  'WTI':    'CL=F',      // WTI 原油期货
+  'BRENT':  'BZ=F',      // 布伦特原油期货
+  'CNY':    'CNY=X',     // USD/CNY 在岸人民币
+  'CNH':    'CNHUSD=X',  // USD/CNH 离岸人民币（Yahoo 格式）
+  'DXY':    'DX-Y.NYB',  // 美元指数
+  'GOLD':   'GC=F',      // 黄金期货（用于补充 gold_daily_kline 之外的数据）
+};
+
+/**
+ * 从 Yahoo Finance 增量同步日线数据到 crypto_klines 表
+ * 适用于 WTI/BRENT/CNY/CNH/DXY 等品种
+ */
+export async function syncYahooFinance(dbSymbol: string): Promise<{ added: number; latestDate: string | null }> {
+  const yahooTicker = YAHOO_SYMBOL_MAP[dbSymbol];
+  if (!yahooTicker) throw new Error(`未配置 Yahoo Finance ticker: ${dbSymbol}`);
+
+  const latestDate = await getLatestCryptoDate(dbSymbol);
+  let startDate: string;
+  if (latestDate) {
+    const d = new Date(latestDate + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + 1);
+    startDate = d.toISOString().slice(0, 10);
+  } else {
+    // 默认起始日期
+    const defaults: Record<string, string> = {
+      'WTI': '1983-03-30', 'BRENT': '1988-05-20',
+      'CNY': '2004-01-01', 'CNH': '2010-09-01',
+      'DXY': '1971-01-01', 'GOLD': '1975-01-02',
+    };
+    startDate = defaults[dbSymbol] || '2010-01-01';
+  }
+
+  const now = new Date();
+  if (new Date(startDate) > now) return { added: 0, latestDate };
+
+  const period1 = Math.floor(new Date(startDate).getTime() / 1000);
+  const period2 = Math.floor(now.getTime() / 1000);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?interval=1d&period1=${period1}&period2=${period2}&events=history`;
+
+  let chartData: any;
+  const headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' };
+  try {
+    const resp = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+    if (!resp.ok) throw new Error(`Yahoo ${resp.status}`);
+    const json = await resp.json();
+    chartData = json?.chart?.result?.[0];
+    if (!chartData) throw new Error('Yahoo 返回数据为空');
+  } catch {
+    try {
+      const url2 = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooTicker)}?interval=1d&period1=${period1}&period2=${period2}&events=history`;
+      const resp2 = await fetch(url2, { headers, signal: AbortSignal.timeout(20000) });
+      if (!resp2.ok) throw new Error(`Yahoo backup ${resp2.status}`);
+      const json2 = await resp2.json();
+      chartData = json2?.chart?.result?.[0];
+      if (!chartData) throw new Error('Yahoo 备用返回数据为空');
+    } catch (e2: any) {
+      throw new Error(`Yahoo Finance 不可用 (${dbSymbol}): ${e2.message}`);
+    }
+  }
+
+  const timestamps: number[] = chartData.timestamp || [];
+  const ohlcv = chartData.indicators?.quote?.[0] || {};
+  const opens: number[] = ohlcv.open || [];
+  const highs: number[] = ohlcv.high || [];
+  const lows: number[] = ohlcv.low || [];
+  const closes: number[] = ohlcv.close || [];
+  const volumes: number[] = ohlcv.volume || [];
+
+  const todayUTC = new Date();
+  todayUTC.setUTCHours(0, 0, 0, 0);
+
+  const records: CryptoKline[] = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    const open = opens[i], high = highs[i], low = lows[i], close = closes[i];
+    if (!close || isNaN(close)) continue;
+    const dateObj = new Date(timestamps[i] * 1000);
+    dateObj.setUTCHours(0, 0, 0, 0);
+    if (dateObj >= todayUTC) continue;
+    const dateStr = dateObj.toISOString().slice(0, 10);
+    const safeOpen = open || close;
+    const changePct = safeOpen > 0 ? parseFloat(((close - safeOpen) / safeOpen * 100).toFixed(6)) : null;
+    const amplitudePct = (safeOpen > 0 && high && low) ? parseFloat(((high - low) / safeOpen * 100).toFixed(6)) : null;
+    records.push({
+      symbol: dbSymbol,
+      date: dateStr,
+      open: safeOpen,
+      high: high || safeOpen,
+      low: low || safeOpen,
+      close,
+      volume: volumes[i] || 0,
+      quoteVolume: 0,
+      changePct,
+      amplitudePct,
+    });
+  }
+  if (records.length === 0) return { added: 0, latestDate };
+  await batchUpsertCryptoKlines(records);
+  return { added: records.length, latestDate: records[records.length - 1].date };
+}
+
+// ============================================================
+// 黄金历史K线同步（从 Yahoo Finance 同步到 gold_daily_kline 表）
+// ============================================================
+
+/**
+ * 从 Yahoo Finance 增量同步黄金日线到 gold_daily_kline 表
+ */
+export async function syncGoldFromYahoo(): Promise<{ added: number; latestDate: string | null }> {
+  const conn = await getDbConnection();
+  if (!conn) return { added: 0, latestDate: null };
+
+  // 查最新日期
+  const [[latestRow]] = await conn.execute(
+    `SELECT MAX(trade_date) as latest FROM gold_daily_kline`
+  ) as any;
+  const latestDate: string | null = latestRow?.latest ?? null;
+
+  let startDate: string;
+  if (latestDate) {
+    const d = new Date(latestDate + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + 1);
+    startDate = d.toISOString().slice(0, 10);
+  } else {
+    startDate = '1975-01-02';
+  }
+
+  const now = new Date();
+  if (new Date(startDate) > now) return { added: 0, latestDate };
+
+  const period1 = Math.floor(new Date(startDate).getTime() / 1000);
+  const period2 = Math.floor(now.getTime() / 1000);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1d&period1=${period1}&period2=${period2}&events=history`;
+  const headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' };
+
+  let chartData: any;
+  try {
+    const resp = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+    if (!resp.ok) throw new Error(`Yahoo gold ${resp.status}`);
+    const json = await resp.json();
+    chartData = json?.chart?.result?.[0];
+  } catch {
+    try {
+      const url2 = `https://query2.finance.yahoo.com/v8/finance/chart/GC%3DF?interval=1d&period1=${period1}&period2=${period2}&events=history`;
+      const resp2 = await fetch(url2, { headers, signal: AbortSignal.timeout(20000) });
+      if (!resp2.ok) throw new Error(`Yahoo gold backup ${resp2.status}`);
+      const json2 = await resp2.json();
+      chartData = json2?.chart?.result?.[0];
+    } catch (e2: any) {
+      throw new Error(`Yahoo Finance 黄金数据不可用: ${e2.message}`);
+    }
+  }
+  if (!chartData) return { added: 0, latestDate };
+
+  const timestamps: number[] = chartData.timestamp || [];
+  const ohlcv = chartData.indicators?.quote?.[0] || {};
+  const opens: number[] = ohlcv.open || [];
+  const highs: number[] = ohlcv.high || [];
+  const lows: number[] = ohlcv.low || [];
+  const closes: number[] = ohlcv.close || [];
+  const volumes: number[] = ohlcv.volume || [];
+
+  const todayUTC = new Date();
+  todayUTC.setUTCHours(0, 0, 0, 0);
+
+  const records: Array<{ tradeDate: string; open: number; high: number; low: number; close: number; volume: number }> = [];
+  for (let i = 0; i < timestamps.length; i++) {
+    const close = closes[i];
+    if (!close || isNaN(close)) continue;
+    const dateObj = new Date(timestamps[i] * 1000);
+    dateObj.setUTCHours(0, 0, 0, 0);
+    if (dateObj >= todayUTC) continue;
+    const tradeDate = dateObj.toISOString().slice(0, 10);
+    records.push({
+      tradeDate,
+      open: opens[i] || close,
+      high: highs[i] || close,
+      low: lows[i] || close,
+      close,
+      volume: volumes[i] || 0,
+    });
+  }
+  if (records.length === 0) return { added: 0, latestDate };
+
+  // 批量 upsert
+  const BATCH = 500;
+  let totalAdded = 0;
+  for (let i = 0; i < records.length; i += BATCH) {
+    const chunk = records.slice(i, i + BATCH);
+    const placeholders = chunk.map(() => '(?,?,?,?,?,?,?)').join(',');
+    const flat = chunk.flatMap(r => [r.tradeDate, r.open, r.high, r.low, r.close, r.volume, 'YAHOO']);
+    const [result] = await conn.execute(
+      `INSERT INTO gold_daily_kline (trade_date, open, high, low, close, volume, source)
+       VALUES ${placeholders}
+       ON DUPLICATE KEY UPDATE
+         open=VALUES(open), high=VALUES(high), low=VALUES(low),
+         close=VALUES(close), volume=VALUES(volume), source=VALUES(source)`,
+      flat
+    ) as any;
+    totalAdded += result.affectedRows ?? 0;
+  }
+  return { added: totalAdded, latestDate: records[records.length - 1].tradeDate };
+}
