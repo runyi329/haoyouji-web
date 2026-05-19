@@ -21150,15 +21150,40 @@ insights 数组每项包含：
         const belowN = Number(latestRow.below);
         const equalN = Number(latestRow.equal_cnt);
         const totalN = aboveN + belowN + equalN;
+        // 从 ts_bunching_stats 获取最新交易日的涨停/跌停数和最大涨跌幅
+        let limitUp: number | null = null;
+        let limitDown: number | null = null;
+        let maxRise: number | null = null;
+        let maxFall: number | null = null;
+        try {
+          const [bsRows] = await dbConn.execute(
+            `SELECT at10, at_minus10, buckets_json FROM ts_bunching_stats WHERE market = ? AND trade_date = ? LIMIT 1`,
+            [marketKey, latestDate]
+          ) as any[];
+          const bsRow = (bsRows as any[])[0];
+          if (bsRow) {
+            limitUp = Number(bsRow.at10) || 0;
+            limitDown = Number(bsRow.at_minus10) || 0;
+            // 从 buckets_json 解析最大涨幅/跌幅（取有数据的最大/最小区间）
+            try {
+              const buckets: { bucket: number; count: number }[] = JSON.parse(bsRow.buckets_json || '[]');
+              const withData = buckets.filter((b: { bucket: number; count: number }) => b.count > 0);
+              if (withData.length > 0) {
+                maxRise = Math.max(...withData.map((b: { bucket: number; count: number }) => b.bucket));
+                maxFall = Math.min(...withData.map((b: { bucket: number; count: number }) => b.bucket));
+              }
+            } catch {}
+          }
+        } catch {}
         const today = {
           total: totalN,
           up: aboveN,
           down: belowN,
           flat: equalN,
-          limit_up: null,
-          limit_down: null,
-          max_rise: null,
-          max_fall: null,
+          limit_up: limitUp,
+          limit_down: limitDown,
+          max_rise: maxRise,
+          max_fall: maxFall,
         };
         // 近5/20/60日分布：统计每天 above 比例，分成6个桶
         const periodDefs = [{ label: '近5日', days: 5 }, { label: '近20日', days: 20 }, { label: '近60日', days: 60 }];
