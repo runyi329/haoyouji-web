@@ -21150,29 +21150,37 @@ insights 数组每项包含：
         const belowN = Number(latestRow.below);
         const equalN = Number(latestRow.equal_cnt);
         const totalN = aboveN + belowN + equalN;
-        // 从 ts_bunching_stats 获取最新交易日的涨停/跌停数和最大涨跌幅
+        // 从 ts_daily 表查询真实涨停/跌停数和最大涨跌幅（支持创业板/科创板20%涨停）
         let limitUp: number | null = null;
         let limitDown: number | null = null;
         let maxRise: number | null = null;
         let maxFall: number | null = null;
         try {
-          const [bsRows] = await dbConn.execute(
-            `SELECT at10, at_minus10, buckets_json FROM ts_bunching_stats WHERE market = ? AND trade_date = ? LIMIT 1`,
-            [marketKey, latestDate]
+          // 市场过滤条件（ts_daily 用 ts_code 前缀区分板块）
+          const marketFilterMap: Record<string, string> = {
+            all:  '',
+            SH:   "AND ts_code LIKE '6%' AND ts_code NOT LIKE '688%'",
+            SZ:   "AND ts_code LIKE '0%'",
+            GEM:  "AND ts_code LIKE '3%'",
+            STAR: "AND ts_code LIKE '688%'",
+          };
+          const mf = marketFilterMap[marketKey] ?? '';
+          const [dailyRows] = await dbConn.execute(
+            `SELECT
+               MAX(pct_chg) AS max_rise,
+               MIN(pct_chg) AS max_fall,
+               SUM(CASE WHEN pct_chg >= 9.9 THEN 1 ELSE 0 END) AS limit_up,
+               SUM(CASE WHEN pct_chg <= -9.9 THEN 1 ELSE 0 END) AS limit_down
+             FROM ts_daily
+             WHERE trade_date = ? ${mf}`,
+            [latestDate]
           ) as any[];
-          const bsRow = (bsRows as any[])[0];
-          if (bsRow) {
-            limitUp = Number(bsRow.at10) || 0;
-            limitDown = Number(bsRow.at_minus10) || 0;
-            // 从 buckets_json 解析最大涨幅/跌幅（取有数据的最大/最小区间）
-            try {
-              const buckets: { bucket: number; count: number }[] = JSON.parse(bsRow.buckets_json || '[]');
-              const withData = buckets.filter((b: { bucket: number; count: number }) => b.count > 0);
-              if (withData.length > 0) {
-                maxRise = Math.max(...withData.map((b: { bucket: number; count: number }) => b.bucket));
-                maxFall = Math.min(...withData.map((b: { bucket: number; count: number }) => b.bucket));
-              }
-            } catch {}
+          const dr = (dailyRows as any[])[0];
+          if (dr) {
+            limitUp = dr.limit_up != null ? Number(dr.limit_up) : null;
+            limitDown = dr.limit_down != null ? Number(dr.limit_down) : null;
+            maxRise = dr.max_rise != null ? parseFloat(Number(dr.max_rise).toFixed(2)) : null;
+            maxFall = dr.max_fall != null ? parseFloat(Number(dr.max_fall).toFixed(2)) : null;
           }
         } catch {}
         const today = {
