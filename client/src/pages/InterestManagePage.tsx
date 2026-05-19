@@ -129,7 +129,7 @@ export default function InterestManagePage() {
   const addManualMutation = trpc.ledger.addTagInterestManualLog.useMutation({
     onSuccess: () => {
       toast.success('手工调息已记录');
-      setShowManualForm(null);
+      setManualSheetTag(null);
       setManualForm({ amount: '', remark: '', isPlus: true });
       refetchPeriods();
       refetchLogs();
