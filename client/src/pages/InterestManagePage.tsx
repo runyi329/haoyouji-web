@@ -6,6 +6,12 @@ import {
   TrendingUp, FileText, Edit2, Check, X, PlusCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 
 // 计算某一分段的天数（北京时间，过0点算一天）
 function calcPeriodDays(startDateStr: string, endDateStr?: string | null): number {
@@ -53,8 +59,8 @@ export default function InterestManagePage() {
   const [editingManualId, setEditingManualId] = useState<number | null>(null);
   const [editManualForm, setEditManualForm] = useState({ amount: '', remark: '', isPlus: true });
   const [editForm, setEditForm] = useState(EMPTY_PERIOD_FORM);
-  // 手工调息
-  const [showManualForm, setShowManualForm] = useState<string | null>(null);
+  // 手工调息（Sheet 弹出层）
+  const [manualSheetTag, setManualSheetTag] = useState<string | null>(null);
   const [manualForm, setManualForm] = useState({ amount: '', remark: '', isPlus: true });
   // 日志
   const [showLogs, setShowLogs] = useState<string | null>(null);
@@ -479,7 +485,7 @@ export default function InterestManagePage() {
                       </button>
                       <button
                         onClick={() => {
-                          setShowManualForm(showManualForm === tag.tagName ? null : tag.tagName);
+                          setManualSheetTag(tag.tagName);
                           setManualForm({ amount: '', remark: '', isPlus: true });
                         }}
                         className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-orange-50 text-orange-600 text-xs font-medium"
@@ -497,47 +503,7 @@ export default function InterestManagePage() {
                     </div>
                   )}
 
-                  {/* 手工调息表单 */}
-                  {showManualForm === tag.tagName && (
-                    <div className="px-4 pb-4 space-y-2.5 border-t border-gray-100 pt-3">
-                      <div className="text-xs font-semibold text-gray-600">手工调息</div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setManualForm(f => ({ ...f, isPlus: true }))}
-                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium border transition-colors ${manualForm.isPlus ? 'bg-green-500 text-white border-green-500' : 'bg-white text-gray-500 border-gray-200'}`}
-                        >
-                          <Plus className="w-4 h-4" /> 加息
-                        </button>
-                        <button
-                          onClick={() => setManualForm(f => ({ ...f, isPlus: false }))}
-                          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-sm font-medium border transition-colors ${!manualForm.isPlus ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-500 border-gray-200'}`}
-                        >
-                          <Minus className="w-4 h-4" /> 减息
-                        </button>
-                      </div>
-                      <input
-                        type="number"
-                        value={manualForm.amount}
-                        onChange={(e) => setManualForm(f => ({ ...f, amount: e.target.value }))}
-                        placeholder="金额（元）"
-                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
-                      />
-                      <input
-                        type="text"
-                        value={manualForm.remark}
-                        onChange={(e) => setManualForm(f => ({ ...f, remark: e.target.value }))}
-                        placeholder="备注说明"
-                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
-                      />
-                      <button
-                        onClick={() => handleAddManual(tag.tagName)}
-                        disabled={addManualMutation.isPending || !manualForm.amount}
-                        className={`w-full py-2.5 text-white text-sm font-semibold rounded-xl disabled:opacity-50 ${manualForm.isPlus ? 'bg-green-500' : 'bg-red-500'}`}
-                      >
-                        {addManualMutation.isPending ? '提交中...' : `确认${manualForm.isPlus ? '加息' : '减息'}${manualForm.amount ? ` ¥${manualForm.amount}` : ''}`}
-                      </button>
-                    </div>
-                  )}
+                  {/* 手工调息：已移至底部 Sheet 弹出层 */}
 
                   {/* 手工调息日志 */}
                   {showLogs === tag.tagName && (
@@ -583,6 +549,55 @@ export default function InterestManagePage() {
           ))
         )}
       </div>
+
+      {/* 手工调息 Sheet 弹出层 */}
+      <Sheet open={manualSheetTag !== null} onOpenChange={(open) => { if (!open) setManualSheetTag(null); }}>
+        <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8 pt-4">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="text-base font-bold text-gray-900">
+              手工调息 · {manualSheetTag}
+            </SheetTitle>
+          </SheetHeader>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setManualForm(f => ({ ...f, isPlus: true }))}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium border transition-colors ${manualForm.isPlus ? 'bg-green-500 text-white border-green-500' : 'bg-white text-gray-500 border-gray-200'}`}
+              >
+                <Plus className="w-4 h-4" /> 加息
+              </button>
+              <button
+                onClick={() => setManualForm(f => ({ ...f, isPlus: false }))}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-medium border transition-colors ${!manualForm.isPlus ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-500 border-gray-200'}`}
+              >
+                <Minus className="w-4 h-4" /> 减息
+              </button>
+            </div>
+            <input
+              type="number"
+              value={manualForm.amount}
+              onChange={(e) => setManualForm(f => ({ ...f, amount: e.target.value }))}
+              placeholder="金额（元）"
+              className="w-full px-3 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
+              autoFocus
+            />
+            <input
+              type="text"
+              value={manualForm.remark}
+              onChange={(e) => setManualForm(f => ({ ...f, remark: e.target.value }))}
+              placeholder="备注说明（选填）"
+              className="w-full px-3 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-blue-400 bg-gray-50"
+            />
+            <button
+              onClick={() => manualSheetTag && handleAddManual(manualSheetTag)}
+              disabled={addManualMutation.isPending || !manualForm.amount}
+              className={`w-full py-3 text-white text-sm font-semibold rounded-xl disabled:opacity-50 ${manualForm.isPlus ? 'bg-green-500' : 'bg-red-500'}`}
+            >
+              {addManualMutation.isPending ? '提交中...' : `确认${manualForm.isPlus ? '加息' : '减息'}${manualForm.amount ? ` ¥${manualForm.amount}` : ''}`}
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
