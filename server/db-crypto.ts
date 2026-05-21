@@ -1500,17 +1500,44 @@ export async function syncHourlyFromBinance(symbol: string): Promise<{ added: nu
 
   const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1h&startTime=${startTime}&limit=1000`;
   let klines: any[] = [];
+  let fetchSuccess = false;
+  // 尝试 Binance 主域名
   try {
     const resp = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    if (resp.ok) klines = await resp.json();
-  } catch {
+    if (resp.ok) { klines = await resp.json(); fetchSuccess = true; }
+  } catch { /* fallthrough */ }
+  // 尝试 Binance 备用域名
+  if (!fetchSuccess) {
     try {
       const url2 = `https://api1.binance.com/api/v3/klines?symbol=${symbol}&interval=1h&startTime=${startTime}&limit=1000`;
       const resp2 = await fetch(url2, { signal: AbortSignal.timeout(15000) });
-      if (resp2.ok) klines = await resp2.json();
+      if (resp2.ok) { klines = await resp2.json(); fetchSuccess = true; }
+    } catch { /* fallthrough */ }
+  }
+  // 尝试 Gate.io 备用（支持 1h 间隔）
+  if (!fetchSuccess) {
+    try {
+      const gateSymbol = symbol.replace('USDT', '_USDT');
+      const gateUrl = `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${gateSymbol}&interval=1h&from=${Math.floor(startTime / 1000)}&limit=1000`;
+      const resp3 = await fetch(gateUrl, { signal: AbortSignal.timeout(15000) });
+      if (resp3.ok) {
+        const gateData: any[] = await resp3.json();
+        // Gate.io 格式: [timestamp, volume, close, high, low, open, quote_volume]
+        klines = gateData.map((g: any) => [
+          parseInt(g[0]) * 1000, // open_time ms
+          g[5],  // open
+          g[3],  // high
+          g[4],  // low
+          g[2],  // close
+          g[1],  // volume
+          0,     // placeholder
+          g[6] ?? g[1], // quote_volume
+        ]);
+        fetchSuccess = true;
+      }
     } catch { /* ignore */ }
   }
-  if (!klines || klines.length === 0) return { added: 0, latestDatetime: null, hasMore: false };
+  if (!fetchSuccess || !klines || klines.length === 0) return { added: 0, latestDatetime: null, hasMore: false };
 
   const records: CryptoKline1h[] = klines
     .filter((k: any) => Number(k[0]) < currentHourStart)
