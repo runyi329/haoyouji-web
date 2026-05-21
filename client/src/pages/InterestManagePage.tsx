@@ -327,6 +327,7 @@ export default function InterestManagePage() {
                                               startDate: period.start_date || new Date().toISOString().slice(0, 10),
                                               endDate: period.start_date || new Date().toISOString().slice(0, 10),
                                               periodLabel: finalAmt > 0 ? '手工加息' : '手工减息',
+                                              remark: editManualForm.remark || undefined,
                                             });
                                           }}
                                           className="flex-1 bg-green-500 text-white text-xs py-1.5 rounded-lg"
