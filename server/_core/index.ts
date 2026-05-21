@@ -711,30 +711,36 @@ async function startServer() {
     setTimeout(runUSStockSync, 8000);
     console.log('[美股同步] 已注册，每小时检查一次，美股收盘后自动拉取数据并结算');
     // ──────────────────────────────────────────────────────
-    // ─── 数字币小时K线 + 资金费率：每小时自动增量同步 ─────────────────────────────
+    // ─── 数字币小时K线：每天 UTC 00:10 与日线同步（一次性补齐24小时数据）─────────
+    // ─── 资金费率：每小时同步（8小时结算一次，需要及时更新）────────────────────────
     const HOURLY_CRYPTO_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
-    const syncHourlyAndFunding = async () => {
-      const {
-        syncHourlyFromBinance,
-        syncFundingRatesFromBinance,
-      } = require('../db-crypto');
+
+    // 小时K线同步函数（一次性补齐所有缺失数据，循环直到无更多数据）
+    const syncHourlyKlines = async () => {
+      const { syncHourlyFromBinance } = require('../db-crypto');
       for (const sym of HOURLY_CRYPTO_SYMBOLS) {
-        // 小时K线：可能有多批，循环直到补齐
         try {
           let hasMore = true;
           let totalAdded = 0;
           let iterations = 0;
-          while (hasMore && iterations < 20) {
+          while (hasMore && iterations < 50) {
             const r = await syncHourlyFromBinance(sym);
             totalAdded += r.added;
             hasMore = r.hasMore;
             iterations++;
           }
           if (totalAdded > 0) console.log(`[小时线同步] ${sym} 新增 ${totalAdded} 条`);
+          else console.log(`[小时线同步] ${sym} 已是最新，无需更新`);
         } catch (e: any) {
           console.error(`[小时线同步] ${sym} 失败:`, e.message);
         }
-        // 资金费率：可能有多批，循环直到补齐
+      }
+    };
+
+    // 资金费率同步函数（每小时执行）
+    const syncFunding = async () => {
+      const { syncFundingRatesFromBinance } = require('../db-crypto');
+      for (const sym of HOURLY_CRYPTO_SYMBOLS) {
         try {
           let hasMore = true;
           let totalAdded = 0;
@@ -751,11 +757,35 @@ async function startServer() {
         }
       }
     };
-    // 每小时同步一次
-    setInterval(syncHourlyAndFunding, 60 * 60 * 1000);
-    // 启动时立即补齐（延迟 12 秒，避免与其他启动任务冲突）
-    setTimeout(syncHourlyAndFunding, 12000);
-    console.log('[小时线/资金费率同步] 已注册，每小时自动增量同步 BTC/ETH/SOL');
+
+    // 小时K线：每天 UTC 00:10 触发（与日线同步时间一致，一次性补齐前一天24小时数据）
+    const scheduleHourlyKlineSync = () => {
+      const now = new Date();
+      const target = new Date(Date.UTC(
+        now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+        0, 10, 0, 0
+      ));
+      if (target.getTime() <= now.getTime()) target.setUTCDate(target.getUTCDate() + 1);
+      const ms = target.getTime() - now.getTime();
+      const nextStr = target.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+      console.log(`[小时线同步] 下次触发时间: ${nextStr}`);
+      setTimeout(async () => {
+        await syncHourlyKlines();
+        scheduleHourlyKlineSync(); // 递归调度下一天
+      }, ms);
+    };
+    scheduleHourlyKlineSync();
+
+    // 资金费率：每小时同步一次（8小时结算，需及时更新）
+    setInterval(syncFunding, 60 * 60 * 1000);
+
+    // 启动时立即补齐小时K线和资金费率（延迟 12 秒，避免与其他启动任务冲突）
+    setTimeout(async () => {
+      await syncHourlyKlines();
+      await syncFunding();
+    }, 12000);
+    console.log('[小时线同步] 已注册，每天 UTC 00:10 与日线同步（一次性补齐24小时数据）');
+    console.log('[资金费率同步] 已注册，每小时自动增量同步 BTC/ETH/SOL');
     // ──────────────────────────────────────────────────────
     // ─── Yahoo Finance 品种（WTI/BRENT/CNY/CNH/DXY）：每天 UTC 02:00 同步 ────────
     const YAHOO_SYMBOLS = ['WTI', 'BRENT', 'CNY', 'CNH', 'DXY'];
