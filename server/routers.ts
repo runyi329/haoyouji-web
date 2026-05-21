@@ -11754,6 +11754,7 @@ ${klinesSummary}
         annualRate: z.number(),
         startDate: z.string(),
         endDate: z.string().optional(),
+        remark: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const dbLedger = await import('./db-ledger');
@@ -11768,7 +11769,8 @@ ${klinesSummary}
               principal = ${input.principal},
               annual_rate = ${input.annualRate},
               start_date = ${input.startDate},
-              end_date = ${input.endDate ?? null}
+              end_date = ${input.endDate ?? null},
+              manual_remark = ${input.remark ?? null}
               WHERE id = ${input.periodId} AND ledger_id = ${input.ledgerId}`
         );
         return { success: true };
