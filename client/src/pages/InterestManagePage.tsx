@@ -106,11 +106,12 @@ export default function InterestManagePage() {
   });
 
   // 删除分段
+  const utils = trpc.useUtils();
   const updateManualMutation = trpc.ledger.updateTagInterestPeriod.useMutation({
-    onSuccess: () => {
-      toast.success('手工调息已更新');
+    onSuccess: async () => {
+      await utils.ledger.getTagInterestPeriods.invalidate({ ledgerId: lid });
       setEditingManualId(null);
-      refetchPeriods();
+      toast.success('手工调息已更新');
     },
     onError: (e) => toast.error(e.message),
   });
@@ -125,7 +126,6 @@ export default function InterestManagePage() {
   });
 
   // 新增手工调息
-  const utils = trpc.useUtils();
   const addManualMutation = trpc.ledger.addTagInterestManualLog.useMutation({
     onSuccess: () => {
       toast.success('手工调息已记录');
