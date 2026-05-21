@@ -1589,12 +1589,39 @@ export async function syncFundingRatesFromBinance(symbol: string): Promise<{ add
       if (resp2.ok) data = await resp2.json();
     } catch { /* ignore */ }
   }
+
+  // Gate.io 备用（Binance 两个域名均失败时）
+  if (!data || !Array.isArray(data) || data.length === 0) {
+    try {
+      // Gate.io 资金费率接口：settle=usdt, contract=BTC_USDT 格式
+      const gateSymbol = symbol.replace('USDT', '_USDT'); // BTCUSDT -> BTC_USDT
+      const gateStartSec = Math.floor(startTime / 1000);
+      const gateUrl = `https://api.gateio.ws/api/v4/futures/usdt/funding_rate?contract=${gateSymbol}&from=${gateStartSec}&limit=1000`;
+      const gateResp = await fetch(gateUrl, { signal: AbortSignal.timeout(15000) });
+      if (gateResp.ok) {
+        const gateData = await gateResp.json();
+        if (Array.isArray(gateData) && gateData.length > 0) {
+          // Gate.io 返回格式：{ t: unix_sec, r: '0.0001', contract: 'BTC_USDT' }
+          data = gateData
+            .filter((d: any) => d.t * 1000 >= startTime)
+            .map((d: any) => ({
+              symbol: symbol,
+              fundingTime: d.t * 1000,
+              fundingRate: d.r,
+              markPrice: null,
+            }));
+          console.log(`[资金费率] ${symbol} 使用 Gate.io 备用，获取 ${data.length} 条`);
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
   if (!data || !Array.isArray(data) || data.length === 0) return { added: 0, latestTime: null, hasMore: false };
 
   const records: FundingRate[] = data.map((d: any) => ({
-    symbol: d.symbol,
-    fundingTime: Number(d.fundingTime),
-    fundingRate: parseFloat(d.fundingRate),
+    symbol: d.symbol ?? symbol,
+    fundingTime: Number(d.fundingTime ?? d.t * 1000),
+    fundingRate: parseFloat(d.fundingRate ?? d.r),
     markPrice: d.markPrice != null ? parseFloat(d.markPrice) : null,
   }));
 
