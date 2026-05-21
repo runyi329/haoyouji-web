@@ -29,8 +29,8 @@ function calcPeriodDays(startDateStr: string, endDateStr?: string | null): numbe
   }
 
   const diff = endMs - startMs;
-  if (diff <= 0) return 0;
-  return Math.floor(diff / 86400000) + 1; // 当天算1天
+  if (diff < 0) return 0;
+  return Math.floor(diff / 86400000) + 1; // 首尾都算：同一天=1天，相差1天=2天
 }
 
 // 计算单段利息
