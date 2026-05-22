@@ -23541,15 +23541,43 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
     // 计算逻辑与 PositionCalc.tsx 完全一致：
     //   目标均价 = Σ(计划数量×价格) / Σ计划数量
     //   目标止盈 = 目标均价 + 目标利润(USDT) / targetEthQty（用户设置的目标总持仓量）
+    //   注意：cnyRate 必须使用实时汇率（与 PositionCalc 中 exchange.getRate 一致），不能用数据库历史值
     getDefaultTakeProfit: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         if (!db) return { targetExitPrice: null, targetProfitCny: 0, cnyRate: 7.28 };
-        // 获取设置（目标利润、汇率、目标持仓量）
+        // 获取设置（目标利润、目标持仓量）
         const settings = await dbEthPosition.getEthPositionSettings(input.ledgerId, ctx.user.id);
-        const { targetProfitCny, cnyRate, targetEthQty } = settings;
-        if (!targetProfitCny || targetProfitCny <= 0) return { targetExitPrice: null, targetProfitCny, cnyRate };
+        const { targetProfitCny, targetEthQty } = settings;
+        if (!targetProfitCny || targetProfitCny <= 0) return { targetExitPrice: null, targetProfitCny, cnyRate: 7.28 };
+        // 获取实时汇率（与 PositionCalc 中 exchange.getRate 完全一致，多源降级）
+        let cnyRate = 7.28;
+        try {
+          const apis = [
+            async () => {
+              const r = await fetch('https://apis.tianapi.com/fxrate/index?key=3878a89bed4728b65cc7d8dc0a644c07&fromcoin=USD&tocoin=CNY&money=1', { signal: AbortSignal.timeout(5000) });
+              const d = await r.json() as { code: number; result?: { money: string } };
+              return (d.code === 200 && d.result?.money) ? parseFloat(d.result.money) : null;
+            },
+            async () => {
+              const r = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(5000) });
+              const d = await r.json() as { result: string; rates?: Record<string, number> };
+              return (d.result === 'success' && d.rates?.CNY) ? d.rates.CNY : null;
+            },
+            async () => {
+              const r = await fetch('https://api.frankfurter.app/latest?from=USD&to=CNY', { signal: AbortSignal.timeout(5000) });
+              const d = await r.json() as { rates?: Record<string, number> };
+              return d.rates?.CNY ?? null;
+            },
+          ];
+          for (const api of apis) {
+            try {
+              const rate = await api();
+              if (rate && rate > 0) { cnyRate = rate; break; }
+            } catch { /* 继续下一个 */ }
+          }
+        } catch { /* 使用默认汇率 */ }
         // 获取计划档位数据，计算目标均价（与 PositionCalc 一致：按 plannedQty 加权）
         const levels = await dbEthPosition.getEthPositionLevels(input.ledgerId, ctx.user.id);
         let planCost = 0, planQty = 0;
