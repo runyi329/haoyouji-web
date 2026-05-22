@@ -573,11 +573,22 @@ export default function OrderFlowPage() {
                   <div className="px-3 py-1.5 space-y-1" style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
                     {tpPrice && (() => {
                       const net = calcNetPnl(tpPrice);
+                      const isDefaultTp = defaultTakeProfit && Math.round(tpPrice) === defaultTakeProfit;
                       return (
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5">
                             <TrendingUp className="w-3 h-3" style={{ color: OKX_GREEN }} />
                             <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>止盈 {fmt(tpPrice, 1)} u</span>
+                            {isDefaultTp ? (
+                              <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.08)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}`, lineHeight: 1 }}>默认</span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); openEdit(order); }}
+                                className="text-xs px-1.5 py-0.5 rounded-full"
+                                style={{ background: "rgba(240,185,11,0.15)", color: OKX_YELLOW, border: `1px solid ${OKX_YELLOW}`, lineHeight: 1, cursor: "pointer" }}
+                              >恢复默认</button>
+                            )}
                           </div>
                           <span className="text-xs font-medium" style={{ color: net >= 0 ? OKX_GREEN : OKX_RED, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
                             预计净利润 {net >= 0 ? "+" : ""}{fmt(net, 2)} u
