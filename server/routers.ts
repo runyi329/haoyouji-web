@@ -24236,6 +24236,9 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         ledgerId: z.number(),
         symbol: z.string().default('ETHUSDT'),
         direction: z.enum(['long', 'short']).default('long'),
+        marketType: z.enum(['spot', 'perp']).default('perp'),
+        orderType: z.enum(['maker', 'taker']).default('taker'),
+        vipLevel: z.string().default('普通'),
         entryPrice: z.number(),
         quantity: z.number(),
         leverage: z.number().min(1).max(200).default(1),
@@ -24249,8 +24252,9 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
         await db.execute(
           sql`INSERT INTO order_flow_trades
-              (ledger_id, user_id, symbol, direction, entry_price, quantity, leverage, take_profit, stop_loss, entry_date, note, created_by)
+              (ledger_id, user_id, symbol, direction, market_type, order_type, vip_level, entry_price, quantity, leverage, take_profit, stop_loss, entry_date, note, created_by)
               VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.symbol}, ${input.direction},
+                      ${input.marketType}, ${input.orderType}, ${input.vipLevel},
                       ${input.entryPrice}, ${input.quantity}, ${input.leverage},
                       ${input.takeProfit ?? null}, ${input.stopLoss ?? null},
                       ${input.entryDate}, ${input.note ?? null}, ${ctx.user.id})`
@@ -24262,6 +24266,11 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
       .input(z.object({
         id: z.number(),
         ledgerId: z.number(),
+        symbol: z.string().optional(),
+        direction: z.enum(['long', 'short']).optional(),
+        marketType: z.enum(['spot', 'perp']).optional(),
+        orderType: z.enum(['maker', 'taker']).optional(),
+        vipLevel: z.string().optional(),
         entryPrice: z.number().optional(),
         exitPrice: z.number().optional(),
         quantity: z.number().optional(),
@@ -24278,6 +24287,11 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
         await db.execute(
           sql`UPDATE order_flow_trades SET
+              symbol = COALESCE(${input.symbol ?? null}, symbol),
+              direction = COALESCE(${input.direction ?? null}, direction),
+              market_type = COALESCE(${input.marketType ?? null}, market_type),
+              order_type = COALESCE(${input.orderType ?? null}, order_type),
+              vip_level = COALESCE(${input.vipLevel ?? null}, vip_level),
               entry_price = COALESCE(${input.entryPrice ?? null}, entry_price),
               exit_price = CASE WHEN ${input.exitPrice !== undefined} THEN ${input.exitPrice ?? null} ELSE exit_price END,
               quantity = COALESCE(${input.quantity ?? null}, quantity),
