@@ -448,10 +448,27 @@ export default function OrderFlowPage() {
     }
   }, [defaultTakeProfit, showForm]);
 
-  const filteredOrders = useMemo(() => {
+    const filteredOrders = useMemo(() => {
     if (filterStatus === "all") return orders as any[];
     return (orders as any[]).filter((o: any) => o.status === filterStatus);
   }, [orders, filterStatus]);
+
+  // 汇总计算（基于当前筛选结果）
+  const summary = useMemo(() => {
+    let totalCost = 0;      // 总成本（保证金）
+    let totalPnl = 0;       // 总浮动盈亏
+    let pnlCount = 0;       // 有有效盈亏的订单数
+    for (const order of filteredOrders as any[]) {
+      const calc = calcOrder(order, currentPrice, fundingRate);
+      totalCost += calc.margin;
+      if (calc.pnl != null) {
+        totalPnl += calc.pnl;
+        pnlCount++;
+      }
+    }
+    const pnlPct = totalCost > 0 ? totalPnl / totalCost : null;
+    return { totalCost, totalPnl, pnlPct, count: filteredOrders.length, pnlCount };
+  }, [filteredOrders, currentPrice, fundingRate]);
 
   function openEdit(order: any) {
     setForm({
@@ -596,6 +613,49 @@ export default function OrderFlowPage() {
           {filteredOrders.length} 笔
         </span>
       </div>
+
+      {/* ===== 汇总栏 ===== */}
+      {!isLoading && summary.count > 0 && (
+        <div
+          className="mx-3 mb-3 rounded-xl px-4 py-3"
+          style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${OKX_BORDER}` }}
+        >
+          <div className="flex items-center justify-between">
+            {/* 左：订单数 + 总成本 */}
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>共 {summary.count} 笔</span>
+                <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>| 成本 {fmt(summary.totalCost, 2)} u</span>
+              </div>
+            </div>
+            {/* 右：总浮动盈亏 */}
+            <div className="text-right">
+              <div
+                className="text-base font-bold"
+                style={{
+                  color: summary.totalPnl >= 0 ? OKX_RED : OKX_GREEN,
+                  fontFamily: "Inter, -apple-system, sans-serif",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {summary.totalPnl >= 0 ? "+" : ""}{fmt(summary.totalPnl, 2)} u
+              </div>
+              {summary.pnlPct != null && (
+                <div
+                  className="text-xs"
+                  style={{
+                    color: summary.totalPnl >= 0 ? OKX_RED : OKX_GREEN,
+                    fontFamily: "Inter, -apple-system, sans-serif",
+                    fontVariantNumeric: "tabular-nums",
+                  }}
+                >
+                  {summary.totalPnl >= 0 ? "+" : ""}{(summary.pnlPct * 100).toFixed(2)}%
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== 订单卡片列表 ===== */}
       <div className="px-3 space-y-3 pb-4">
