@@ -532,29 +532,57 @@ export default function OrderFlowPage() {
                 </div>
               </div>
 
-              {/* 行4：止盈止损 */}
-              {(order.take_profit || order.stop_loss) && (
-                <div className="flex gap-4 px-3 py-1.5" style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
-                  {order.take_profit && (
-                    <div className="flex items-center gap-1.5">
-                      <TrendingUp className="w-3 h-3" style={{ color: OKX_GREEN }} />
-                      <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>止盈</span>
-                      <span className="text-xs" style={{ color: OKX_GREEN, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                        {fmt(parseFloat(order.take_profit), 1)} u
-                      </span>
-                    </div>
-                  )}
-                  {order.stop_loss && (
-                    <div className="flex items-center gap-1.5">
-                      <TrendingDown className="w-3 h-3" style={{ color: OKX_RED }} />
-                      <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>止损</span>
-                      <span className="text-xs" style={{ color: OKX_RED, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                        {fmt(parseFloat(order.stop_loss), 1)} u
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* 行4：止盈止损 + 预计净利润/净亏损 */}
+              {(order.take_profit || order.stop_loss) && (() => {
+                const entry = parseFloat(order.entry_price);
+                const qty = parseFloat(order.quantity);
+                const feeRate = Math.max(0, calc.feeRate);
+                const isLongDir = order.direction === "long";
+                // 资金费率估算（当前周期费率 xd7 预计持仓天数，暂用当前费率估算）
+                const estimatedFundingPerPeriod = fundingRate != null ? fundingRate * entry * qty : 0;
+                const tpPrice = order.take_profit ? parseFloat(order.take_profit) : null;
+                const slPrice = order.stop_loss ? parseFloat(order.stop_loss) : null;
+                const calcNetPnl = (targetPrice: number) => {
+                  const rawPnl = isLongDir ? (targetPrice - entry) * qty : (entry - targetPrice) * qty;
+                  const openFee = entry * qty * feeRate;
+                  const closeFee = targetPrice * qty * feeRate;
+                  // 资金费估算：当前已累计（已有数据）+ 未来估算（用当前费率估算）
+                  const fundingEst = calc.fundingCost != null ? Math.abs(calc.fundingCost) : 0;
+                  return rawPnl - openFee - closeFee - fundingEst;
+                };
+                return (
+                  <div className="px-3 py-1.5 space-y-1" style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
+                    {tpPrice && (() => {
+                      const net = calcNetPnl(tpPrice);
+                      return (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <TrendingUp className="w-3 h-3" style={{ color: OKX_GREEN }} />
+                            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>止盈 {fmt(tpPrice, 1)} u</span>
+                          </div>
+                          <span className="text-xs font-medium" style={{ color: net >= 0 ? OKX_GREEN : OKX_RED, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
+                            预计净利润 {net >= 0 ? "+" : ""}{fmt(net, 2)} u
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    {slPrice && (() => {
+                      const net = calcNetPnl(slPrice);
+                      return (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <TrendingDown className="w-3 h-3" style={{ color: OKX_RED }} />
+                            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>止损 {fmt(slPrice, 1)} u</span>
+                          </div>
+                          <span className="text-xs font-medium" style={{ color: net >= 0 ? OKX_GREEN : OKX_RED, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
+                            预计净亏损 {net >= 0 ? "+" : ""}{fmt(net, 2)} u
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })()}
 
               {/* 行5：辅助数据 - 单列布局，每行一个数据 */}
               <div
@@ -697,7 +725,7 @@ export default function OrderFlowPage() {
                         : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
                     }
                   >
-                    {d === "long" ? "做多 Long" : "做空 Short"}
+                    {d === "long" ? "做多" : "做空"}
                   </button>
                 ))}
               </div>
