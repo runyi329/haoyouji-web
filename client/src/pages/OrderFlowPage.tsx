@@ -483,6 +483,15 @@ export default function OrderFlowPage() {
                 <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(240,185,11,0.08)", color: OKX_TEXT_SEC }}>
                   {isPerp ? "永续" : "现货"}
                 </span>
+                {/* 开仓日期（持仓中）或开仓+平仓日期（已平仓） */}
+                {isOpen ? (
+                  <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>{order.entry_date}</span>
+                ) : (
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontSize: "0.65rem" }}>{order.entry_date}</span>
+                    {order.exit_date && <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontSize: "0.65rem" }}>{order.exit_date}</span>}
+                  </div>
+                )}
 
                 <span
                   className="text-xs px-1.5 py-0.5 rounded ml-auto"
@@ -617,16 +626,15 @@ export default function OrderFlowPage() {
                 );
               })()}
 
-              {/* 行5：辅助数据 - 单列布局，每行一个数据 */}
+              {/* 行5：辅助数据 */}
               <div
                 className="flex flex-col gap-y-1 px-3 py-2"
                 style={{ borderTop: `1px solid ${OKX_BORDER}`, background: "rgba(0,0,0,0.25)" }}
               >
+                {/* 盈亏平衡 + 手续费 合并一行 */}
                 <div className="flex items-center justify-between">
-                  <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>手续费</span>
-                  <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {(calc.feeRate * 100).toFixed(4)}% &nbsp;—&nbsp; -{fmt(calc.totalFee, 4)} u
-                  </span>
+                  <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>盈亏平衡 {fmt(calc.breakEven, 2)} u</span>
+                  <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>-{fmt(calc.totalFee, 4)} u</span>
                 </div>
                 {isPerp && (
                   <div className="flex items-center justify-between">
@@ -639,16 +647,6 @@ export default function OrderFlowPage() {
                     </span>
                   </div>
                 )}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>盈亏平衡</span>
-                  <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(calc.breakEven, 2)} u
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>开仓日期</span>
-                  <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>{order.entry_date}</span>
-                </div>
                 {order.note && (
                   <div className="flex items-start gap-1 mt-0.5">
                     <span className="text-xs flex-shrink-0" style={{ color: OKX_TEXT_SEC }}>备注</span>
