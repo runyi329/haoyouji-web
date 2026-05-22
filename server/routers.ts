@@ -23538,6 +23538,9 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         return { success: true };
       }),
     // 获取默认止盈价（来自智能仓位管理的目标止盈价）
+    // 计算逻辑与 PositionCalc.tsx 完全一致：
+    //   目标均价 = Σ(计划数量×价格) / Σ计划数量
+    //   目标止盈 = 目标均价 + 目标利润(USDT) / targetEthQty（用户设置的目标总持仓量）
     getDefaultTakeProfit: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
@@ -23547,7 +23550,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         const settings = await dbEthPosition.getEthPositionSettings(input.ledgerId, ctx.user.id);
         const { targetProfitCny, cnyRate, targetEthQty } = settings;
         if (!targetProfitCny || targetProfitCny <= 0) return { targetExitPrice: null, targetProfitCny, cnyRate };
-        // 获取计划档位数据，计算目标均价
+        // 获取计划档位数据，计算目标均价（与 PositionCalc 一致：按 plannedQty 加权）
         const levels = await dbEthPosition.getEthPositionLevels(input.ledgerId, ctx.user.id);
         let planCost = 0, planQty = 0;
         for (const lv of levels) {
@@ -23556,9 +23559,11 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
           if (qty > 0 && price > 0) { planCost += qty * price; planQty += qty; }
         }
         const targetAvgPrice = planQty > 0 ? planCost / planQty : 0;
+        // 关键：用 targetEthQty（用户设置的目标总持仓量），与 PositionCalc 一致
         const targetQty = targetEthQty > 0 ? targetEthQty : planQty;
         if (targetAvgPrice <= 0 || targetQty <= 0) return { targetExitPrice: null, targetProfitCny, cnyRate };
         const profitUsdt = cnyRate > 0 ? targetProfitCny / cnyRate : 0;
+        // 止盈价 = 目标均价 + 目标利润(USDT) / 目标持仓总量
         const targetExitPrice = Math.round(targetAvgPrice + profitUsdt / targetQty);
         return { targetExitPrice, targetProfitCny, cnyRate };
       }),
