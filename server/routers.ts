@@ -23431,6 +23431,130 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         }));
       }),
   }),
+  // ===== 订单流管理 =====
+  orderFlow: {
+    // 获取订单列表
+    getOrders: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        status: z.enum(['open', 'closed', 'all']).default('all'),
+      }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        if (!db) return [];
+        const rows = await db.execute(
+          sql`SELECT * FROM order_flow_trades
+              WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}
+              ${input.status !== 'all' ? sql`AND status = ${input.status}` : sql``}
+              ORDER BY created_at DESC`
+        );
+        return (rows as any)[0] as any[];
+      }),
+    // 新增订单
+    addOrder: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        symbol: z.string().default('ETHUSDT'),
+        direction: z.enum(['long', 'short']).default('long'),
+        marketType: z.enum(['spot', 'perp']).default('perp'),
+        orderType: z.enum(['maker', 'taker']).default('taker'),
+        vipLevel: z.string().default('普通'),
+        entryPrice: z.number(),
+        quantity: z.number(),
+        leverage: z.number().min(1).max(200).default(1),
+        takeProfit: z.number().optional(),
+        stopLoss: z.number().optional(),
+        entryDate: z.string(),
+        note: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        await db.execute(
+          sql`INSERT INTO order_flow_trades
+              (ledger_id, user_id, symbol, direction, market_type, order_type, vip_level, entry_price, quantity, leverage, take_profit, stop_loss, entry_date, note, created_by)
+              VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.symbol}, ${input.direction},
+                      ${input.marketType}, ${input.orderType}, ${input.vipLevel},
+                      ${input.entryPrice}, ${input.quantity}, ${input.leverage},
+                      ${input.takeProfit ?? null}, ${input.stopLoss ?? null},
+                      ${input.entryDate}, ${input.note ?? null}, ${ctx.user.id})`
+        );
+        return { success: true };
+      }),
+    // 更新订单
+    updateOrder: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        ledgerId: z.number(),
+        symbol: z.string().optional(),
+        direction: z.enum(['long', 'short']).optional(),
+        marketType: z.enum(['spot', 'perp']).optional(),
+        orderType: z.enum(['maker', 'taker']).optional(),
+        vipLevel: z.string().optional(),
+        entryPrice: z.number().optional(),
+        exitPrice: z.number().optional(),
+        quantity: z.number().optional(),
+        leverage: z.number().min(1).max(200).optional(),
+        takeProfit: z.number().nullable().optional(),
+        stopLoss: z.number().nullable().optional(),
+        entryDate: z.string().optional(),
+        exitDate: z.string().nullable().optional(),
+        status: z.enum(['open', 'closed']).optional(),
+        note: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        await db.execute(
+          sql`UPDATE order_flow_trades SET
+              symbol = COALESCE(${input.symbol ?? null}, symbol),
+              direction = COALESCE(${input.direction ?? null}, direction),
+              market_type = COALESCE(${input.marketType ?? null}, market_type),
+              order_type = COALESCE(${input.orderType ?? null}, order_type),
+              vip_level = COALESCE(${input.vipLevel ?? null}, vip_level),
+              entry_price = COALESCE(${input.entryPrice ?? null}, entry_price),
+              exit_price = CASE WHEN ${input.exitPrice !== undefined} THEN ${input.exitPrice ?? null} ELSE exit_price END,
+              quantity = COALESCE(${input.quantity ?? null}, quantity),
+              leverage = COALESCE(${input.leverage ?? null}, leverage),
+              take_profit = CASE WHEN ${input.takeProfit !== undefined} THEN ${input.takeProfit ?? null} ELSE take_profit END,
+              stop_loss = CASE WHEN ${input.stopLoss !== undefined} THEN ${input.stopLoss ?? null} ELSE stop_loss END,
+              entry_date = COALESCE(${input.entryDate ?? null}, entry_date),
+              exit_date = CASE WHEN ${input.exitDate !== undefined} THEN ${input.exitDate ?? null} ELSE exit_date END,
+              status = COALESCE(${input.status ?? null}, status),
+              note = CASE WHEN ${input.note !== undefined} THEN ${input.note ?? null} ELSE note END
+              WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}`
+        );
+        return { success: true };
+      }),
+    // 删除订单
+    deleteOrder: protectedProcedure
+      .input(z.object({ id: z.number(), ledgerId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        await db.execute(
+          sql`DELETE FROM order_flow_trades WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}`
+        );
+        return { success: true };
+      }),
+    // 获取最新资金费率（从数据库）
+    getLatestFundingRate: publicProcedure
+      .input(z.object({ symbol: z.string().default('ETHUSDT') }))
+      .query(async ({ input }) => {
+        const db = await getLedgerDb();
+        if (!db) return null;
+        const rows = await db.execute(
+          sql`SELECT funding_rate, funding_time FROM crypto_funding_rates
+              WHERE symbol = ${input.symbol} ORDER BY funding_time DESC LIMIT 1`
+        );
+        const row = ((rows as any)[0] as any[])[0];
+        if (!row) return null;
+        return {
+          rate: parseFloat(row.funding_rate),
+          time: row.funding_time,
+        };
+      }),
+  },
 });
 
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
@@ -24211,130 +24335,6 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
     }),
 
 
-  // ===== 订单流管理 =====
-  orderFlow: {
-    // 获取订单列表
-    getOrders: protectedProcedure
-      .input(z.object({
-        ledgerId: z.number(),
-        status: z.enum(['open', 'closed', 'all']).default('all'),
-      }))
-      .query(async ({ ctx, input }) => {
-        const db = await getLedgerDb();
-        if (!db) return [];
-        const rows = await db.execute(
-          sql`SELECT * FROM order_flow_trades
-              WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}
-              ${input.status !== 'all' ? sql`AND status = ${input.status}` : sql``}
-              ORDER BY created_at DESC`
-        );
-        return (rows as any)[0] as any[];
-      }),
-    // 新增订单
-    addOrder: protectedProcedure
-      .input(z.object({
-        ledgerId: z.number(),
-        symbol: z.string().default('ETHUSDT'),
-        direction: z.enum(['long', 'short']).default('long'),
-        marketType: z.enum(['spot', 'perp']).default('perp'),
-        orderType: z.enum(['maker', 'taker']).default('taker'),
-        vipLevel: z.string().default('普通'),
-        entryPrice: z.number(),
-        quantity: z.number(),
-        leverage: z.number().min(1).max(200).default(1),
-        takeProfit: z.number().optional(),
-        stopLoss: z.number().optional(),
-        entryDate: z.string(),
-        note: z.string().optional(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        const db = await getLedgerDb();
-        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
-        await db.execute(
-          sql`INSERT INTO order_flow_trades
-              (ledger_id, user_id, symbol, direction, market_type, order_type, vip_level, entry_price, quantity, leverage, take_profit, stop_loss, entry_date, note, created_by)
-              VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.symbol}, ${input.direction},
-                      ${input.marketType}, ${input.orderType}, ${input.vipLevel},
-                      ${input.entryPrice}, ${input.quantity}, ${input.leverage},
-                      ${input.takeProfit ?? null}, ${input.stopLoss ?? null},
-                      ${input.entryDate}, ${input.note ?? null}, ${ctx.user.id})`
-        );
-        return { success: true };
-      }),
-    // 更新订单
-    updateOrder: protectedProcedure
-      .input(z.object({
-        id: z.number(),
-        ledgerId: z.number(),
-        symbol: z.string().optional(),
-        direction: z.enum(['long', 'short']).optional(),
-        marketType: z.enum(['spot', 'perp']).optional(),
-        orderType: z.enum(['maker', 'taker']).optional(),
-        vipLevel: z.string().optional(),
-        entryPrice: z.number().optional(),
-        exitPrice: z.number().optional(),
-        quantity: z.number().optional(),
-        leverage: z.number().min(1).max(200).optional(),
-        takeProfit: z.number().nullable().optional(),
-        stopLoss: z.number().nullable().optional(),
-        entryDate: z.string().optional(),
-        exitDate: z.string().nullable().optional(),
-        status: z.enum(['open', 'closed']).optional(),
-        note: z.string().nullable().optional(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        const db = await getLedgerDb();
-        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
-        await db.execute(
-          sql`UPDATE order_flow_trades SET
-              symbol = COALESCE(${input.symbol ?? null}, symbol),
-              direction = COALESCE(${input.direction ?? null}, direction),
-              market_type = COALESCE(${input.marketType ?? null}, market_type),
-              order_type = COALESCE(${input.orderType ?? null}, order_type),
-              vip_level = COALESCE(${input.vipLevel ?? null}, vip_level),
-              entry_price = COALESCE(${input.entryPrice ?? null}, entry_price),
-              exit_price = CASE WHEN ${input.exitPrice !== undefined} THEN ${input.exitPrice ?? null} ELSE exit_price END,
-              quantity = COALESCE(${input.quantity ?? null}, quantity),
-              leverage = COALESCE(${input.leverage ?? null}, leverage),
-              take_profit = CASE WHEN ${input.takeProfit !== undefined} THEN ${input.takeProfit ?? null} ELSE take_profit END,
-              stop_loss = CASE WHEN ${input.stopLoss !== undefined} THEN ${input.stopLoss ?? null} ELSE stop_loss END,
-              entry_date = COALESCE(${input.entryDate ?? null}, entry_date),
-              exit_date = CASE WHEN ${input.exitDate !== undefined} THEN ${input.exitDate ?? null} ELSE exit_date END,
-              status = COALESCE(${input.status ?? null}, status),
-              note = CASE WHEN ${input.note !== undefined} THEN ${input.note ?? null} ELSE note END
-              WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}`
-        );
-        return { success: true };
-      }),
-    // 删除订单
-    deleteOrder: protectedProcedure
-      .input(z.object({ id: z.number(), ledgerId: z.number() }))
-      .mutation(async ({ ctx, input }) => {
-        const db = await getLedgerDb();
-        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
-        await db.execute(
-          sql`DELETE FROM order_flow_trades WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}`
-        );
-        return { success: true };
-      }),
-    // 获取最新资金费率（从数据库）
-    getLatestFundingRate: publicProcedure
-      .input(z.object({ symbol: z.string().default('ETHUSDT') }))
-      .query(async ({ input }) => {
-        const db = await getLedgerDb();
-        if (!db) return null;
-        const rows = await db.execute(
-          sql`SELECT funding_rate, funding_time FROM crypto_funding_rates
-              WHERE symbol = ${input.symbol} ORDER BY funding_time DESC LIMIT 1`
-        );
-        const row = ((rows as any)[0] as any[])[0];
-        if (!row) return null;
-        return {
-          rate: parseFloat(row.funding_rate),
-          time: row.funding_time,
-        };
-      }),
-  },
 });
 export type AppRouter = typeof appRouter;
 
