@@ -580,13 +580,13 @@ export default function OrderFlowPage() {
                             <TrendingUp className="w-3 h-3" style={{ color: OKX_GREEN }} />
                             <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>止盈 {fmt(tpPrice, 1)} u</span>
                             {isDefaultTp ? (
-                              <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.08)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}`, lineHeight: 1 }}>默认</span>
+                              <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(255,255,255,0.08)", color: OKX_TEXT_SEC }}>默认</span>
                             ) : (
                               <button
                                 type="button"
                                 onClick={(e) => { e.stopPropagation(); openEdit(order); }}
-                                className="text-xs px-1.5 py-0.5 rounded-full"
-                                style={{ background: "rgba(240,185,11,0.15)", color: OKX_YELLOW, border: `1px solid ${OKX_YELLOW}`, lineHeight: 1, cursor: "pointer" }}
+                                className="text-xs px-1.5 py-0.5 rounded"
+                                style={{ backgroundColor: "rgba(240,185,11,0.12)", color: OKX_YELLOW, cursor: "pointer" }}
                               >恢复默认</button>
                             )}
                           </div>
@@ -860,11 +860,10 @@ export default function OrderFlowPage() {
                       setForm(f => ({ ...f, takeProfit: String(defaultTakeProfit) }));
                       setTakeProfitModified(false);
                     }}
-                    className="text-xs px-2 py-0.5 rounded-full"
+                    className="text-xs px-1.5 py-0.5 rounded"
                     style={{
-                      background: takeProfitModified ? "rgba(240,185,11,0.15)" : "rgba(255,255,255,0.08)",
+                      backgroundColor: takeProfitModified ? "rgba(240,185,11,0.12)" : "rgba(255,255,255,0.08)",
                       color: takeProfitModified ? OKX_YELLOW : OKX_TEXT_SEC,
-                      border: `1px solid ${takeProfitModified ? OKX_YELLOW : OKX_BORDER}`,
                     }}
                   >
                     {takeProfitModified ? "恢复默认" : "默认"}
