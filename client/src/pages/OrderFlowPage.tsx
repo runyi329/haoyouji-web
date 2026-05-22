@@ -1062,64 +1062,45 @@ export default function OrderFlowPage() {
               </div>
             </div>
 
-            {/* VIP等级 + 市价/限价 */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
+                        {/* VIP等级 + 挂单类型 + 手续费率（一行三列） */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {/* VIP等级 */}
               <div>
-                <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>VIP 等级</label>
+                <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>VIP</label>
                 <select
                   value={form.vipLevel}
                   onChange={(e) => setForm((f) => ({ ...f, vipLevel: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-xl text-sm"
-                  style={{
-                    background: "rgba(255,255,255,0.05)",
-                    border: `1px solid ${OKX_BORDER}`,
-                    color: OKX_TEXT_PRI,
-                    outline: "none",
-                    appearance: "none",
-                  }}
+                  className="w-full px-2 py-2 rounded-xl text-sm"
+                  style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${OKX_BORDER}`, color: OKX_TEXT_PRI }}
                 >
                   {VIP_LEVELS.map((v) => (
-                    <option key={v} value={v} style={{ background: "#1a1a1a", color: OKX_TEXT_PRI }}>
-                      {v}
-                    </option>
+                    <option key={v} value={v} style={{ background: "#1a1a1a", color: OKX_TEXT_PRI }}>{v}</option>
                   ))}
                 </select>
               </div>
+              {/* 挂单类型 */}
               <div>
-                <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>挂单类型</label>
-                <div className="flex gap-1.5">
-                  {(["taker", "maker"] as const).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setForm((f) => ({ ...f, orderType: t }))}
-                      className="flex-1 py-2 rounded-xl text-xs font-medium"
-                      style={
-                        form.orderType === t
-                          ? { backgroundColor: "rgba(240,185,11,0.15)", color: OKX_YELLOW, border: "1px solid rgba(240,185,11,0.4)" }
-                          : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
-                      }
-                    >
-                      {t === "taker" ? "市价" : "限价"}
-                    </button>
-                  ))}
+                <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>挂单</label>
+                <select
+                  value={form.orderType}
+                  onChange={(e) => setForm((f) => ({ ...f, orderType: e.target.value as "taker" | "maker" }))}
+                  className="w-full px-2 py-2 rounded-xl text-sm"
+                  style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${OKX_BORDER}`, color: OKX_TEXT_PRI }}
+                >
+                  <option value="taker">市价(Taker)</option>
+                  <option value="maker">限价(Maker)</option>
+                </select>
+              </div>
+              {/* 手续费率预览 */}
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>手续费率</label>
+                <div
+                  className="w-full px-2 py-2 rounded-xl text-sm flex items-center justify-center"
+                  style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${OKX_BORDER}`, color: previewFeeRate < 0 ? OKX_GREEN : OKX_YELLOW, fontWeight: 600 }}
+                >
+                  {previewFeeRate < 0 ? "返" : ""}{(previewFeeRate * 100).toFixed(4)}%
                 </div>
               </div>
-            </div>
-
-            {/* 费率预览 */}
-            <div
-              className="mb-4 px-3 py-2 rounded-xl flex items-center justify-between"
-              style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${OKX_BORDER}` }}
-            >
-              <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
-                {form.marketType === "perp" ? "合约" : "现货"} {form.orderType === "taker" ? "市价(Taker)" : "限价(Maker)"} 手续费
-              </span>
-              <span
-                className="text-xs font-semibold" style={{ fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}
-                style={{ color: previewFeeRate < 0 ? OKX_GREEN : OKX_YELLOW }}
-              >
-                {previewFeeRate < 0 ? "返佣 " : ""}{(previewFeeRate * 100).toFixed(4)}%
-              </span>
             </div>
 
             {/* 数字输入字段 */}
