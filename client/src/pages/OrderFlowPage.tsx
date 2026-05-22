@@ -461,9 +461,7 @@ export default function OrderFlowPage() {
                 <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(240,185,11,0.08)", color: OKX_TEXT_SEC }}>
                   {isPerp ? "永续" : "现货"}
                 </span>
-                <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
-                  {order.vip_level || "普通"} · {order.order_type === "maker" ? "限价" : "市价"}
-                </span>
+
                 <span
                   className="text-xs px-1.5 py-0.5 rounded ml-auto"
                   style={
@@ -484,7 +482,7 @@ export default function OrderFlowPage() {
                 <div>
                   <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>开仓价</div>
                   <div className="text-base font-bold" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(parseFloat(order.entry_price), 1)} U
+                    {fmt(parseFloat(order.entry_price), 1)} u
                   </div>
                 </div>
                 <div className="text-center">
@@ -493,8 +491,8 @@ export default function OrderFlowPage() {
                   </div>
                   <div className="text-base font-bold" style={{ color: isOpen ? OKX_YELLOW : OKX_TEXT_SEC, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
                     {isOpen
-                      ? currentPrice ? `${fmt(currentPrice, 1)} U` : "--"
-                      : order.exit_price ? `${fmt(parseFloat(order.exit_price), 1)} U` : "--"}
+                      ? currentPrice ? `${fmt(currentPrice, 1)} u` : "--"
+                      : order.exit_price ? `${fmt(parseFloat(order.exit_price), 1)} u` : "--"}
                   </div>
                 </div>
                 <div className="text-right">
@@ -502,7 +500,7 @@ export default function OrderFlowPage() {
                     {isOpen ? "浮动盈亏" : "实现盈亏"}
                   </div>
                   <div className="text-base font-bold" style={{ color: pnlColor, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {calc.pnl != null ? `${calc.pnl >= 0 ? "+" : "-"}${fmt(Math.abs(calc.pnl), 2)} U` : "--"}
+                    {calc.pnl != null ? `${calc.pnl >= 0 ? "+" : "-"}${fmt(Math.abs(calc.pnl), 2)} u` : "--"}
                   </div>
                   {calc.pnlPct != null && (
                     <div className="text-xs" style={{ color: pnlColor, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
@@ -523,13 +521,13 @@ export default function OrderFlowPage() {
                 <div className="text-center">
                   <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>{isPerp ? "保证金" : "成本"}</div>
                   <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(calc.margin, 2)} U
+                    {fmt(calc.margin, 2)} u
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>名义价值</div>
                   <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(calc.notional, 0)} U
+                    {fmt(calc.notional, 0)} u
                   </div>
                 </div>
               </div>
@@ -542,7 +540,7 @@ export default function OrderFlowPage() {
                       <TrendingUp className="w-3 h-3" style={{ color: OKX_GREEN }} />
                       <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>止盈</span>
                       <span className="text-xs" style={{ color: OKX_GREEN, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                        {fmt(parseFloat(order.take_profit), 1)} U
+                        {fmt(parseFloat(order.take_profit), 1)} u
                       </span>
                     </div>
                   )}
@@ -551,7 +549,7 @@ export default function OrderFlowPage() {
                       <TrendingDown className="w-3 h-3" style={{ color: OKX_RED }} />
                       <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>止损</span>
                       <span className="text-xs" style={{ color: OKX_RED, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                        {fmt(parseFloat(order.stop_loss), 1)} U
+                        {fmt(parseFloat(order.stop_loss), 1)} u
                       </span>
                     </div>
                   )}
@@ -566,7 +564,7 @@ export default function OrderFlowPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>手续费</span>
                   <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {(calc.feeRate * 100).toFixed(4)}% &nbsp;—&nbsp; -{fmt(calc.totalFee, 4)} U
+                    {(calc.feeRate * 100).toFixed(4)}% &nbsp;—&nbsp; -{fmt(calc.totalFee, 4)} u
                   </span>
                 </div>
                 {isPerp && (
@@ -575,7 +573,7 @@ export default function OrderFlowPage() {
                     <span className="text-xs" style={{ color: fundingRate != null && fundingRate > 0 ? OKX_RED : OKX_GREEN, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
                       {fundingRate != null ? fmtPct(fundingRate) : "--"}
                       {calc.fundingCost != null && (
-                        <span style={{ color: OKX_TEXT_SEC }}> &nbsp;—&nbsp; {calc.fundingCost >= 0 ? "-" : "+"}{fmt(Math.abs(calc.fundingCost), 4)} U</span>
+                        <span style={{ color: OKX_TEXT_SEC }}> &nbsp;—&nbsp; {calc.fundingCost >= 0 ? "-" : "+"}{fmt(Math.abs(calc.fundingCost), 4)} u</span>
                       )}
                     </span>
                   </div>
@@ -583,7 +581,7 @@ export default function OrderFlowPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>盈亏平衡</span>
                   <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(calc.breakEven, 2)} U
+                    {fmt(calc.breakEven, 2)} u
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
