@@ -910,22 +910,18 @@ export default function OrderFlowPage() {
                 className="flex flex-col gap-y-1 px-3 py-2"
                 style={{ borderTop: `1px solid ${OKX_BORDER}`, background: "rgba(0,0,0,0.25)" }}
               >
-                {/* 盈亏平衡 + 手续费 合并一行 */}
+                {/* 盈亏平衡 + 手续费 + 资金费累计 全在一行 */}
                 <div className="flex items-center justify-between">
                   <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>盈亏平衡 {fmt(calc.breakEven, 2)} u</span>
-                  <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>-{fmt(calc.totalFee, 4)} u</span>
-                </div>
-                {isPerp && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>资金费率</span>
-                    <span className="text-xs" style={{ color: fundingRate != null && fundingRate > 0 ? OKX_RED : OKX_GREEN, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                      {fundingRate != null ? fmtPct(fundingRate) : "--"}
-                      {calc.fundingCost != null && (
-                        <span style={{ color: OKX_TEXT_SEC }}> &nbsp;—&nbsp; {calc.fundingCost >= 0 ? "-" : "+"}{fmt(Math.abs(calc.fundingCost), 4)} u</span>
-                      )}
-                    </span>
+                  <div className="flex items-center gap-2">
+                    {isPerp && calc.fundingCost != null && (
+                      <span className="text-xs" style={{ color: calc.fundingCost >= 0 ? OKX_RED : OKX_GREEN, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
+                        {calc.fundingCost >= 0 ? "-" : "+"}{fmt(Math.abs(calc.fundingCost), 4)} u
+                      </span>
+                    )}
+                    <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>-{fmt(calc.totalFee, 4)} u</span>
                   </div>
-                )}
+                </div>
               </div>
 
               {/* 行6：多条备注区域（可折叠） */}
