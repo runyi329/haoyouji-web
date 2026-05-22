@@ -274,6 +274,14 @@ export default function OrderFlowPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<"all" | "open" | "closed">("all");
 
+  // 当默认止盈价加载完成时，若弹窗处于新建状态且止盈价还是空，自动填入
+  useEffect(() => {
+    if (defaultTakeProfit && showForm && editingId === null && !form.takeProfit) {
+      setForm(f => ({ ...f, takeProfit: String(defaultTakeProfit) }));
+      setTakeProfitModified(false);
+    }
+  }, [defaultTakeProfit]);
+
   const filteredOrders = useMemo(() => {
     if (filterStatus === "all") return orders as any[];
     return (orders as any[]).filter((o: any) => o.status === filterStatus);
