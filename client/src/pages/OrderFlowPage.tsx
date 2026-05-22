@@ -388,15 +388,6 @@ export default function OrderFlowPage() {
             <ChevronDown className="w-3.5 h-3.5 opacity-60" style={{ color: OKX_TEXT_SEC }} />
           </button>
         </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {currentPrice && (
-            <span className="text-sm font-mono" style={{ color: OKX_YELLOW }}>
-              ${fmt(currentPrice, 1)}
-            </span>
-          )}
-
-        </div>
       </div>
 
       {/* ===== 状态过滤 Tab ===== */}
@@ -585,31 +576,31 @@ export default function OrderFlowPage() {
                 </div>
               )}
 
-              {/* 行5：辅助数据 */}
+              {/* 行5：辅助数据 - 单列布局，每行一个数据 */}
               <div
-                className="grid grid-cols-2 gap-x-2 gap-y-1 px-3 py-2"
+                className="flex flex-col gap-y-1 px-3 py-2"
                 style={{ borderTop: `1px solid ${OKX_BORDER}`, background: "rgba(0,0,0,0.25)" }}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>手续费</span>
-                  <span className="text-xs font-mono" style={{ color: OKX_TEXT_SEC }}>
-                    {(calc.feeRate * 100).toFixed(4)}% / -${fmt(calc.totalFee, 4)}
+                  <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontFamily: "'DM Mono', 'Roboto Mono', monospace", fontVariantNumeric: "tabular-nums" }}>
+                    {(calc.feeRate * 100).toFixed(4)}% &nbsp;—&nbsp; -${fmt(calc.totalFee, 4)}
                   </span>
                 </div>
                 {isPerp && (
                   <div className="flex items-center justify-between">
                     <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>资金费率</span>
-                    <span className="text-xs font-mono" style={{ color: fundingRate != null && fundingRate > 0 ? OKX_RED : OKX_GREEN }}>
+                    <span className="text-xs" style={{ color: fundingRate != null && fundingRate > 0 ? OKX_RED : OKX_GREEN, fontFamily: "'DM Mono', 'Roboto Mono', monospace", fontVariantNumeric: "tabular-nums" }}>
                       {fundingRate != null ? fmtPct(fundingRate) : "--"}
                       {calc.fundingCost != null && (
-                        <span style={{ color: OKX_TEXT_SEC }}> ({calc.fundingCost >= 0 ? "-" : "+"}${fmt(Math.abs(calc.fundingCost), 4)})</span>
+                        <span style={{ color: OKX_TEXT_SEC }}> &nbsp;—&nbsp; {calc.fundingCost >= 0 ? "-" : "+"}${fmt(Math.abs(calc.fundingCost), 4)}</span>
                       )}
                     </span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">
                   <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>盈亏平衡</span>
-                  <span className="text-xs font-mono" style={{ color: OKX_TEXT_SEC }}>
+                  <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontFamily: "'DM Mono', 'Roboto Mono', monospace", fontVariantNumeric: "tabular-nums" }}>
                     ${fmt(calc.breakEven, 2)}
                   </span>
                 </div>
@@ -618,7 +609,7 @@ export default function OrderFlowPage() {
                   <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>{order.entry_date}</span>
                 </div>
                 {order.note && (
-                  <div className="col-span-2 flex items-start gap-1 mt-0.5">
+                  <div className="flex items-start gap-1 mt-0.5">
                     <span className="text-xs flex-shrink-0" style={{ color: OKX_TEXT_SEC }}>备注</span>
                     <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>{order.note}</span>
                   </div>
