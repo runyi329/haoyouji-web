@@ -228,11 +228,17 @@ export default function OrderFlowPage() {
     { enabled: isAuthenticated && ledgerId > 0 }
   );
 
+  const [formError, setFormError] = useState<string | null>(null);
   const addOrderMutation = trpc.orderFlow.addOrder.useMutation({
     onSuccess: async () => {
       await utils.orderFlow.getOrders.invalidate({ ledgerId });
       setShowForm(false);
       setForm(defaultForm());
+      setFormError(null);
+    },
+    onError: (err) => {
+      console.error('[addOrder error]', err);
+      setFormError(err.message || '保存失败，请重试');
     },
   });
   const updateOrderMutation = trpc.orderFlow.updateOrder.useMutation({
@@ -241,6 +247,11 @@ export default function OrderFlowPage() {
       setEditingId(null);
       setForm(defaultForm());
       setShowForm(false);
+      setFormError(null);
+    },
+    onError: (err) => {
+      console.error('[updateOrder error]', err);
+      setFormError(err.message || '保存失败，请重试');
     },
   });
   const deleteOrderMutation = trpc.orderFlow.deleteOrder.useMutation({
@@ -282,10 +293,19 @@ export default function OrderFlowPage() {
   }
 
   function handleSubmit() {
+    setFormError(null);
     const entryPrice = parseFloat(form.entryPrice);
     const quantity = parseFloat(form.quantity);
     const leverage = parseInt(form.leverage) || 1;
-    if (!entryPrice || !quantity) return;
+    console.log('[handleSubmit]', { entryPrice, quantity, leverage, ledgerId, isAuthenticated });
+    if (!entryPrice || !quantity) {
+      setFormError('请填写开仓价和数量');
+      return;
+    }
+    if (ledgerId <= 0) {
+      setFormError('账本ID无效，请返回重试');
+      return;
+    }
 
     const payload = {
       ledgerId,
@@ -879,6 +899,15 @@ export default function OrderFlowPage() {
               />
             </div>
 
+            {/* 错误提示 */}
+            {formError && (
+              <div
+                className="mb-3 px-3 py-2 rounded-xl text-xs"
+                style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171" }}
+              >
+                {formError}
+              </div>
+            )}
             {/* 提交按钮 */}
             <button
               onClick={handleSubmit}
