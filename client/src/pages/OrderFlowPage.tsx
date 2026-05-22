@@ -385,18 +385,9 @@ export default function OrderFlowPage() {
     { ledgerId },
     { enabled: ledgerId > 0, staleTime: 30000 }
   );
-  const defaultTakeProfit = defaultTpData?.targetExitPrice ?? null;
-  // 最新资金费率（按当前弹窗选择的币种）
+    const defaultTakeProfit = defaultTpData?.targetExitPrice ?? null;
+  // 最新资金费率（在form定义后使用，见下方UI状态块）
   const [fundingRate, setFundingRate] = useState<number | null>(null);
-  const formSymbol = form.symbol || 'ETHUSDT';
-  const { data: fundingRateData } = trpc.orderFlow.getLatestFundingRate.useQuery(
-    { symbol: formSymbol },
-    { refetchInterval: 60000, staleTime: 30000 }
-  );
-  useEffect(() => {
-    if (fundingRateData?.rate != null) setFundingRate(fundingRateData.rate);
-  }, [fundingRateData]);
-
   // 订单列表
   const utils = trpc.useUtils();
   const { data: orders = [], isLoading } = trpc.orderFlow.getOrders.useQuery(
@@ -446,15 +437,23 @@ export default function OrderFlowPage() {
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null); // 正在编辑的备注ID
   const [editingNoteContent, setEditingNoteContent] = useState(""); // 编辑备注的内容
 
-  // 当默认止盈价加载完成时，若弹窗处于新建状态且止盈价还是空，自动填入
+    // 当默认止盈价加载完成时，若弹窗处于新建状态且止盈价还是空，自动填入
   useEffect(() => {
     if (defaultTakeProfit && showForm && editingId === null && !form.takeProfit) {
       setForm(f => ({ ...f, takeProfit: String(defaultTakeProfit) }));
       setTakeProfitModified(false);
     }
   }, [defaultTakeProfit, showForm]);
-
-    const filteredOrders = useMemo(() => {
+  // 资金费率（在form定义后，按当前弹窗选择的币种）
+  const formSymbol = form.symbol || 'ETHUSDT';
+  const { data: fundingRateData } = trpc.orderFlow.getLatestFundingRate.useQuery(
+    { symbol: formSymbol },
+    { refetchInterval: 60000, staleTime: 30000 }
+  );
+  useEffect(() => {
+    if (fundingRateData?.rate != null) setFundingRate(fundingRateData.rate);
+  }, [fundingRateData]);
+  const filteredOrders = useMemo(() => {
     if (filterStatus === "all") return orders as any[];
     return (orders as any[]).filter((o: any) => o.status === filterStatus);
   }, [orders, filterStatus]);
