@@ -344,8 +344,8 @@ export default function OrderFlowPage() {
   const OKX_BORDER = "rgba(255,255,255,0.08)"; // 边框
   const OKX_TEXT_PRI = "#EAECEF";        // 主文字
   const OKX_TEXT_SEC = "#848E9C";        // 次要文字
-  const OKX_GREEN = "#0ECB81";           // 盈利绿
-  const OKX_RED = "#F6465D";             // 亏损红
+  const OKX_GREEN = "#F6465D";           // 多/涨 = 红（中国习惯）
+  const OKX_RED = "#0ECB81";             // 空/跌 = 绿（中国习惯）
   const BTN_STYLE = { backgroundColor: "rgba(255,255,255,0.06)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` };
 
   // 当前费率预览
@@ -429,8 +429,8 @@ export default function OrderFlowPage() {
           const isOpen = order.status === "open";
           const isPerp = order.market_type !== "spot";
           const pnlPositive = (calc.pnl ?? 0) >= 0;
-          const dirColor = isLong ? "#22c55e" : "#ef4444";
-          const pnlColor = pnlPositive ? "#22c55e" : "#ef4444";
+          const dirColor = isLong ? "#F6465D" : "#0ECB81";  // 多=红 空=绿
+          const pnlColor = pnlPositive ? "#F6465D" : "#0ECB81"; // 涨=红 跌=绿
 
           return (
             <div
@@ -446,7 +446,7 @@ export default function OrderFlowPage() {
               <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1.5 flex-wrap">
                 <span
                   className="text-xs font-bold px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: isLong ? "rgba(14,203,129,0.15)" : "rgba(246,70,93,0.15)", color: dirColor }}
+                  style={{ backgroundColor: isLong ? "rgba(246,70,93,0.15)" : "rgba(14,203,129,0.15)", color: dirColor }}
                 >
                   {isLong ? "多" : "空"}
                 </span>
@@ -692,8 +692,8 @@ export default function OrderFlowPage() {
                     style={
                       form.direction === d
                         ? d === "long"
-                          ? { backgroundColor: "rgba(14,203,129,0.15)", color: OKX_GREEN, border: "1px solid rgba(14,203,129,0.4)" }
-                          : { backgroundColor: "rgba(246,70,93,0.15)", color: OKX_RED, border: "1px solid rgba(246,70,93,0.4)" }
+                          ? { backgroundColor: "rgba(246,70,93,0.15)", color: "#F6465D", border: "1px solid rgba(246,70,93,0.4)" }
+                          : { backgroundColor: "rgba(14,203,129,0.15)", color: "#0ECB81", border: "1px solid rgba(14,203,129,0.4)" }
                         : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
                     }
                   >
@@ -926,7 +926,7 @@ export default function OrderFlowPage() {
         </div>
       )}
       {/* ===== 底部 FAB 新增按钮 ===== */}
-      <button
+      {!showForm && <button
         onClick={() => { setEditingId(null); setForm(defaultForm()); setShowForm(true); }}
         className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
         style={{ backgroundColor: OKX_YELLOW, color: "#000" }}
@@ -935,7 +935,7 @@ export default function OrderFlowPage() {
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
-      </button>
+      </button>}
     </div>
   );
 }
