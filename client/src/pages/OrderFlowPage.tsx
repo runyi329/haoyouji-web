@@ -337,23 +337,29 @@ export default function OrderFlowPage() {
     }
   }
 
-  // 颜色常量
-  const GOLD_GRAD = "linear-gradient(180deg, #f0f0f0 0%, #c8c8c8 30%, #a0a0a0 60%, #d0d0d0 100%)";
-  const BORDER_DIM = "rgba(192,192,192,0.18)";
-  const BTN_STYLE = { backgroundColor: "rgba(192,192,192,0.08)", color: "#c0c0c0", border: `1px solid ${BORDER_DIM}` };
+  // OKX 色系常量
+  const OKX_YELLOW = "#F0B90B";          // OKX 主色金黄
+  const OKX_BG = "#0B0E11";              // OKX 背景极深黑
+  const OKX_CARD = "#161A1E";            // 卡片背景
+  const OKX_BORDER = "rgba(255,255,255,0.08)"; // 边框
+  const OKX_TEXT_PRI = "#EAECEF";        // 主文字
+  const OKX_TEXT_SEC = "#848E9C";        // 次要文字
+  const OKX_GREEN = "#0ECB81";           // 盈利绿
+  const OKX_RED = "#F6465D";             // 亏损红
+  const BTN_STYLE = { backgroundColor: "rgba(255,255,255,0.06)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` };
 
   // 当前费率预览
   const previewFeeRate = getFeeRate(form.marketType, form.vipLevel, form.orderType);
 
   return (
     <div
-      className="min-h-screen pb-24 max-w-md mx-auto relative"
-      style={{ background: "#000000", overflowX: "hidden", touchAction: "pan-y" }}
+      className="min-h-screen pb-28 max-w-md mx-auto relative"
+      style={{ background: OKX_BG, overflowX: "hidden", touchAction: "pan-y" }}
     >
       {/* ===== 顶部导航 ===== */}
       <div
         className="sticky top-0 z-20 flex items-center px-4 py-3"
-        style={{ background: "#000000", borderBottom: `1px solid ${BORDER_DIM}` }}
+        style={{ background: OKX_BG, borderBottom: `1px solid ${OKX_BORDER}` }}
       >
         <button
           onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
@@ -368,12 +374,9 @@ export default function OrderFlowPage() {
             onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
             className="flex items-center gap-1 font-semibold text-base"
             style={{
-              letterSpacing: "0.05em",
-              background: GOLD_GRAD,
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              backgroundClip: "text",
-              filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.8))",
+              letterSpacing: "0.02em",
+              color: OKX_TEXT_PRI,
+              fontWeight: 600,
             }}
           >
             <img
@@ -382,23 +385,17 @@ export default function OrderFlowPage() {
               className="w-5 h-5 object-contain rounded-full flex-shrink-0"
             />
             <span>订单流管理</span>
-            <ChevronDown className="w-3.5 h-3.5 opacity-60" style={{ WebkitTextFillColor: "#a0a0a0" }} />
+            <ChevronDown className="w-3.5 h-3.5 opacity-60" style={{ color: OKX_TEXT_SEC }} />
           </button>
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
           {currentPrice && (
-            <span className="text-sm font-mono" style={{ color: "#e0c060" }}>
+            <span className="text-sm font-mono" style={{ color: OKX_YELLOW }}>
               ${fmt(currentPrice, 1)}
             </span>
           )}
-          <button
-            onClick={() => { setEditingId(null); setForm(defaultForm()); setShowForm(true); }}
-            className="w-8 h-8 rounded-full flex items-center justify-center"
-            style={{ backgroundColor: "rgba(59,130,246,0.15)", border: "1px solid rgba(59,130,246,0.4)" }}
-          >
-            <Plus className="w-4 h-4 text-blue-400" />
-          </button>
+
         </div>
       </div>
 
@@ -411,14 +408,14 @@ export default function OrderFlowPage() {
             className="px-3 py-1 rounded-full text-xs font-medium transition-all"
             style={
               filterStatus === s
-                ? { backgroundColor: "rgba(59,130,246,0.25)", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.5)" }
-                : { backgroundColor: "rgba(255,255,255,0.05)", color: "#666", border: "1px solid rgba(255,255,255,0.1)" }
+                ? { backgroundColor: "rgba(240,185,11,0.15)", color: OKX_YELLOW, border: `1px solid rgba(240,185,11,0.4)` }
+                : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
             }
           >
             {s === "all" ? "全部" : s === "open" ? "持仓中" : "已平仓"}
           </button>
         ))}
-        <span className="ml-auto text-xs" style={{ color: "#555" }}>
+        <span className="ml-auto text-xs" style={{ color: OKX_TEXT_SEC }}>
           {filteredOrders.length} 笔
         </span>
       </div>
@@ -426,12 +423,12 @@ export default function OrderFlowPage() {
       {/* ===== 订单卡片列表 ===== */}
       <div className="px-3 space-y-3 pb-4">
         {isLoading && (
-          <div className="text-center py-12 text-sm" style={{ color: "#555" }}>加载中...</div>
+          <div className="text-center py-12 text-sm" style={{ color: OKX_TEXT_SEC }}>加载中...</div>
         )}
         {!isLoading && filteredOrders.length === 0 && (
           <div className="text-center py-16">
-            <AlertCircle className="w-8 h-8 mx-auto mb-3 opacity-20" style={{ color: "#888" }} />
-            <p className="text-sm" style={{ color: "#555" }}>暂无订单，点击右上角 + 新增</p>
+            <AlertCircle className="w-8 h-8 mx-auto mb-3 opacity-20" style={{ color: OKX_TEXT_SEC }} />
+            <p className="text-sm" style={{ color: OKX_TEXT_SEC }}>暂无订单，点击下方 + 新增</p>
           </div>
         )}
 
@@ -449,7 +446,7 @@ export default function OrderFlowPage() {
               key={order.id}
               className="rounded-2xl overflow-hidden"
               style={{
-                background: "linear-gradient(160deg, #0a0a0a 0%, #111 100%)",
+                background: OKX_CARD,
                 border: `1px solid ${isOpen ? "rgba(59,130,246,0.25)" : "rgba(192,192,192,0.12)"}`,
                 boxShadow: isOpen ? "0 0 20px rgba(59,130,246,0.06)" : "none",
               }}
@@ -458,30 +455,30 @@ export default function OrderFlowPage() {
               <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1.5 flex-wrap">
                 <span
                   className="text-xs font-bold px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: isLong ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: dirColor }}
+                  style={{ backgroundColor: isLong ? "rgba(14,203,129,0.15)" : "rgba(246,70,93,0.15)", color: dirColor }}
                 >
                   {isLong ? "多" : "空"}
                 </span>
-                <span className="text-sm font-semibold" style={{ color: "#d0d0d0" }}>
+                <span className="text-sm font-semibold" style={{ color: OKX_TEXT_PRI }}>
                   {order.symbol?.replace("USDT", "")} / USDT
                 </span>
                 {isPerp && (
-                  <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>
+                  <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(240,185,11,0.12)", color: OKX_YELLOW }}>
                     {order.leverage}x
                   </span>
                 )}
-                <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(139,92,246,0.12)", color: "#a78bfa" }}>
+                <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(240,185,11,0.08)", color: OKX_TEXT_SEC }}>
                   {isPerp ? "永续" : "现货"}
                 </span>
-                <span className="text-xs" style={{ color: "#444" }}>
+                <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
                   {order.vip_level || "普通"} · {order.order_type === "maker" ? "限价" : "市价"}
                 </span>
                 <span
                   className="text-xs px-1.5 py-0.5 rounded ml-auto"
                   style={
                     isOpen
-                      ? { backgroundColor: "rgba(59,130,246,0.12)", color: "#60a5fa" }
-                      : { backgroundColor: "rgba(100,100,100,0.15)", color: "#666" }
+                      ? { backgroundColor: "rgba(240,185,11,0.12)", color: OKX_YELLOW }
+                      : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC }
                   }
                 >
                   {isOpen ? "持仓" : "已平"}
@@ -494,7 +491,7 @@ export default function OrderFlowPage() {
                     <button
                       onClick={() => { deleteOrderMutation.mutate({ id: order.id, ledgerId }); setDeleteConfirmId(null); }}
                       className="p-1 rounded"
-                      style={{ color: "#ef4444" }}
+                      style={{ color: OKX_RED }}
                     >
                       <Check className="w-3.5 h-3.5" />
                     </button>
@@ -510,25 +507,25 @@ export default function OrderFlowPage() {
               </div>
 
               {/* 行2：主要数据 - 开仓价 / 最新价 / 盈亏 */}
-              <div className="grid grid-cols-3 gap-0 px-3 py-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+              <div className="grid grid-cols-3 gap-0 px-3 py-2" style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
                 <div>
-                  <div className="text-xs mb-0.5" style={{ color: "#555" }}>开仓价</div>
-                  <div className="text-base font-bold font-mono" style={{ color: "#e0e0e0" }}>
+                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>开仓价</div>
+                  <div className="text-base font-bold font-mono" style={{ color: OKX_TEXT_PRI }}>
                     ${fmt(parseFloat(order.entry_price), 1)}
                   </div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xs mb-0.5" style={{ color: "#555" }}>
+                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>
                     {isOpen ? "最新价" : "平仓价"}
                   </div>
-                  <div className="text-base font-bold font-mono" style={{ color: isOpen ? "#e0c060" : "#a0a0a0" }}>
+                  <div className="text-base font-bold font-mono" style={{ color: isOpen ? OKX_YELLOW : OKX_TEXT_SEC }}>
                     {isOpen
                       ? currentPrice ? `$${fmt(currentPrice, 1)}` : "--"
                       : order.exit_price ? `$${fmt(parseFloat(order.exit_price), 1)}` : "--"}
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs mb-0.5" style={{ color: "#555" }}>
+                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>
                     {isOpen ? "浮动盈亏" : "实现盈亏"}
                   </div>
                   <div className="text-base font-bold font-mono" style={{ color: pnlColor }}>
@@ -543,22 +540,22 @@ export default function OrderFlowPage() {
               </div>
 
               {/* 行3：次要数据 - 数量 / 保证金 / 名义价值 */}
-              <div className="grid grid-cols-3 gap-0 px-3 py-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+              <div className="grid grid-cols-3 gap-0 px-3 py-2" style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
                 <div>
-                  <div className="text-xs mb-0.5" style={{ color: "#555" }}>数量</div>
-                  <div className="text-sm font-mono" style={{ color: "#b0b0b0" }}>
+                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>数量</div>
+                  <div className="text-sm font-mono" style={{ color: OKX_TEXT_PRI }}>
                     {fmt(parseFloat(order.quantity), 4)} ETH
                   </div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xs mb-0.5" style={{ color: "#555" }}>{isPerp ? "保证金" : "成本"}</div>
-                  <div className="text-sm font-mono" style={{ color: "#b0b0b0" }}>
+                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>{isPerp ? "保证金" : "成本"}</div>
+                  <div className="text-sm font-mono" style={{ color: OKX_TEXT_PRI }}>
                     ${fmt(calc.margin, 2)}
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs mb-0.5" style={{ color: "#555" }}>名义价值</div>
-                  <div className="text-sm font-mono" style={{ color: "#b0b0b0" }}>
+                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>名义价值</div>
+                  <div className="text-sm font-mono" style={{ color: OKX_TEXT_PRI }}>
                     ${fmt(calc.notional, 0)}
                   </div>
                 </div>
@@ -566,21 +563,21 @@ export default function OrderFlowPage() {
 
               {/* 行4：止盈止损 */}
               {(order.take_profit || order.stop_loss) && (
-                <div className="flex gap-4 px-3 py-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                <div className="flex gap-4 px-3 py-1.5" style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
                   {order.take_profit && (
                     <div className="flex items-center gap-1.5">
-                      <TrendingUp className="w-3 h-3" style={{ color: "#22c55e" }} />
-                      <span className="text-xs" style={{ color: "#555" }}>止盈</span>
-                      <span className="text-xs font-mono" style={{ color: "#22c55e" }}>
+                      <TrendingUp className="w-3 h-3" style={{ color: OKX_GREEN }} />
+                      <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>止盈</span>
+                      <span className="text-xs font-mono" style={{ color: OKX_GREEN }}>
                         ${fmt(parseFloat(order.take_profit), 1)}
                       </span>
                     </div>
                   )}
                   {order.stop_loss && (
                     <div className="flex items-center gap-1.5">
-                      <TrendingDown className="w-3 h-3" style={{ color: "#ef4444" }} />
-                      <span className="text-xs" style={{ color: "#555" }}>止损</span>
-                      <span className="text-xs font-mono" style={{ color: "#ef4444" }}>
+                      <TrendingDown className="w-3 h-3" style={{ color: OKX_RED }} />
+                      <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>止损</span>
+                      <span className="text-xs font-mono" style={{ color: OKX_RED }}>
                         ${fmt(parseFloat(order.stop_loss), 1)}
                       </span>
                     </div>
@@ -591,39 +588,39 @@ export default function OrderFlowPage() {
               {/* 行5：辅助数据 */}
               <div
                 className="grid grid-cols-2 gap-x-2 gap-y-1 px-3 py-2"
-                style={{ borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(0,0,0,0.3)" }}
+                style={{ borderTop: `1px solid ${OKX_BORDER}`, background: "rgba(0,0,0,0.25)" }}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs" style={{ color: "#444" }}>手续费</span>
-                  <span className="text-xs font-mono" style={{ color: "#666" }}>
+                  <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>手续费</span>
+                  <span className="text-xs font-mono" style={{ color: OKX_TEXT_SEC }}>
                     {(calc.feeRate * 100).toFixed(4)}% / -${fmt(calc.totalFee, 4)}
                   </span>
                 </div>
                 {isPerp && (
                   <div className="flex items-center justify-between">
-                    <span className="text-xs" style={{ color: "#444" }}>资金费率</span>
-                    <span className="text-xs font-mono" style={{ color: fundingRate != null && fundingRate > 0 ? "#ef4444" : "#22c55e" }}>
+                    <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>资金费率</span>
+                    <span className="text-xs font-mono" style={{ color: fundingRate != null && fundingRate > 0 ? OKX_RED : OKX_GREEN }}>
                       {fundingRate != null ? fmtPct(fundingRate) : "--"}
                       {calc.fundingCost != null && (
-                        <span style={{ color: "#555" }}> ({calc.fundingCost >= 0 ? "-" : "+"}${fmt(Math.abs(calc.fundingCost), 4)})</span>
+                        <span style={{ color: OKX_TEXT_SEC }}> ({calc.fundingCost >= 0 ? "-" : "+"}${fmt(Math.abs(calc.fundingCost), 4)})</span>
                       )}
                     </span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">
-                  <span className="text-xs" style={{ color: "#444" }}>盈亏平衡</span>
-                  <span className="text-xs font-mono" style={{ color: "#888" }}>
+                  <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>盈亏平衡</span>
+                  <span className="text-xs font-mono" style={{ color: OKX_TEXT_SEC }}>
                     ${fmt(calc.breakEven, 2)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs" style={{ color: "#444" }}>开仓日期</span>
-                  <span className="text-xs" style={{ color: "#666" }}>{order.entry_date}</span>
+                  <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>开仓日期</span>
+                  <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>{order.entry_date}</span>
                 </div>
                 {order.note && (
                   <div className="col-span-2 flex items-start gap-1 mt-0.5">
-                    <span className="text-xs flex-shrink-0" style={{ color: "#444" }}>备注</span>
-                    <span className="text-xs" style={{ color: "#666" }}>{order.note}</span>
+                    <span className="text-xs flex-shrink-0" style={{ color: OKX_TEXT_SEC }}>备注</span>
+                    <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>{order.note}</span>
                   </div>
                 )}
               </div>
@@ -636,15 +633,15 @@ export default function OrderFlowPage() {
       {showForm && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center"
-          style={{ background: "rgba(0,0,0,0.75)" }}
+          style={{ background: "rgba(0,0,0,0.85)" }}
           onClick={(e) => { if (e.target === e.currentTarget) { setShowForm(false); setEditingId(null); } }}
         >
           {/* 弹窗容器：固定宽度，禁止左右滑动 */}
           <div
             className="w-full max-w-md rounded-t-3xl px-5 pt-5 pb-8"
             style={{
-              background: "#111",
-              border: "1px solid rgba(192,192,192,0.15)",
+              background: "#161A1E",
+              border: `1px solid ${OKX_BORDER}`,
               maxHeight: "88vh",
               overflowY: "auto",
               overflowX: "hidden",
@@ -654,7 +651,7 @@ export default function OrderFlowPage() {
           >
             {/* 弹窗标题 */}
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-base font-semibold" style={{ color: "#d0d0d0" }}>
+              <h3 className="text-base font-semibold" style={{ color: OKX_TEXT_PRI }}>
                 {editingId != null ? "编辑订单" : "新增订单"}
               </h3>
               <button onClick={() => { setShowForm(false); setEditingId(null); }}>
@@ -664,7 +661,7 @@ export default function OrderFlowPage() {
 
             {/* 现货 / 永续合约 */}
             <div className="mb-4">
-              <label className="block text-xs mb-1.5" style={{ color: "#666" }}>交易类型</label>
+              <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>交易类型</label>
               <div className="flex gap-2">
                 {(["perp", "spot"] as const).map((t) => (
                   <button
@@ -673,8 +670,8 @@ export default function OrderFlowPage() {
                     className="flex-1 py-2 rounded-xl text-sm font-medium transition-all"
                     style={
                       form.marketType === t
-                        ? { backgroundColor: "rgba(139,92,246,0.2)", color: "#a78bfa", border: "1px solid rgba(139,92,246,0.4)" }
-                        : { backgroundColor: "rgba(255,255,255,0.05)", color: "#555", border: "1px solid rgba(255,255,255,0.1)" }
+                        ? { backgroundColor: "rgba(240,185,11,0.15)", color: OKX_YELLOW, border: `1px solid rgba(240,185,11,0.4)` }
+                        : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
                     }
                   >
                     {t === "perp" ? "永续合约" : "现货"}
@@ -685,7 +682,7 @@ export default function OrderFlowPage() {
 
             {/* 做多 / 做空 */}
             <div className="mb-4">
-              <label className="block text-xs mb-1.5" style={{ color: "#666" }}>方向</label>
+              <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>方向</label>
               <div className="flex gap-2">
                 {(["long", "short"] as const).map((d) => (
                   <button
@@ -695,9 +692,9 @@ export default function OrderFlowPage() {
                     style={
                       form.direction === d
                         ? d === "long"
-                          ? { backgroundColor: "rgba(34,197,94,0.2)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.4)" }
-                          : { backgroundColor: "rgba(239,68,68,0.2)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.4)" }
-                        : { backgroundColor: "rgba(255,255,255,0.05)", color: "#555", border: "1px solid rgba(255,255,255,0.1)" }
+                          ? { backgroundColor: "rgba(14,203,129,0.15)", color: OKX_GREEN, border: "1px solid rgba(14,203,129,0.4)" }
+                          : { backgroundColor: "rgba(246,70,93,0.15)", color: OKX_RED, border: "1px solid rgba(246,70,93,0.4)" }
+                        : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
                     }
                   >
                     {d === "long" ? "做多 Long" : "做空 Short"}
@@ -709,28 +706,28 @@ export default function OrderFlowPage() {
             {/* VIP等级 + 市价/限价 */}
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>
-                <label className="block text-xs mb-1.5" style={{ color: "#666" }}>VIP 等级</label>
+                <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>VIP 等级</label>
                 <select
                   value={form.vipLevel}
                   onChange={(e) => setForm((f) => ({ ...f, vipLevel: e.target.value }))}
                   className="w-full px-3 py-2 rounded-xl text-sm"
                   style={{
                     background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    color: "#d0d0d0",
+                    border: `1px solid ${OKX_BORDER}`,
+                    color: OKX_TEXT_PRI,
                     outline: "none",
                     appearance: "none",
                   }}
                 >
                   {VIP_LEVELS.map((v) => (
-                    <option key={v} value={v} style={{ background: "#1a1a1a", color: "#d0d0d0" }}>
+                    <option key={v} value={v} style={{ background: "#1a1a1a", color: OKX_TEXT_PRI }}>
                       {v}
                     </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-xs mb-1.5" style={{ color: "#666" }}>挂单类型</label>
+                <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>挂单类型</label>
                 <div className="flex gap-1.5">
                   {(["taker", "maker"] as const).map((t) => (
                     <button
@@ -739,8 +736,8 @@ export default function OrderFlowPage() {
                       className="flex-1 py-2 rounded-xl text-xs font-medium"
                       style={
                         form.orderType === t
-                          ? { backgroundColor: "rgba(245,158,11,0.2)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.4)" }
-                          : { backgroundColor: "rgba(255,255,255,0.05)", color: "#555", border: "1px solid rgba(255,255,255,0.1)" }
+                          ? { backgroundColor: "rgba(240,185,11,0.15)", color: OKX_YELLOW, border: "1px solid rgba(240,185,11,0.4)" }
+                          : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
                       }
                     >
                       {t === "taker" ? "市价" : "限价"}
@@ -753,14 +750,14 @@ export default function OrderFlowPage() {
             {/* 费率预览 */}
             <div
               className="mb-4 px-3 py-2 rounded-xl flex items-center justify-between"
-              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+              style={{ background: "rgba(255,255,255,0.03)", border: `1px solid ${OKX_BORDER}` }}
             >
-              <span className="text-xs" style={{ color: "#555" }}>
+              <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
                 {form.marketType === "perp" ? "合约" : "现货"} {form.orderType === "taker" ? "市价(Taker)" : "限价(Maker)"} 手续费
               </span>
               <span
                 className="text-xs font-mono font-semibold"
-                style={{ color: previewFeeRate < 0 ? "#22c55e" : "#f59e0b" }}
+                style={{ color: previewFeeRate < 0 ? OKX_GREEN : OKX_YELLOW }}
               >
                 {previewFeeRate < 0 ? "返佣 " : ""}{(previewFeeRate * 100).toFixed(4)}%
               </span>
@@ -775,7 +772,7 @@ export default function OrderFlowPage() {
               { label: "止损价 (可选)", key: "stopLoss", placeholder: "如 2200" },
             ].map(({ label, key, placeholder }) => (
               <div key={key} className="mb-3">
-                <label className="block text-xs mb-1" style={{ color: "#666" }}>{label}</label>
+                <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>{label}</label>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -785,8 +782,8 @@ export default function OrderFlowPage() {
                   className="w-full px-3 py-2 rounded-xl text-sm font-mono"
                   style={{
                     background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    color: "#d0d0d0",
+                    border: `1px solid ${OKX_BORDER}`,
+                    color: OKX_TEXT_PRI,
                     outline: "none",
                     boxSizing: "border-box",
                     maxWidth: "100%",
@@ -797,7 +794,7 @@ export default function OrderFlowPage() {
 
             {/* 开仓日期 */}
             <div className="mb-3">
-              <label className="block text-xs mb-1" style={{ color: "#666" }}>开仓日期</label>
+              <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>开仓日期</label>
               <input
                 type="date"
                 value={form.entryDate}
@@ -805,8 +802,8 @@ export default function OrderFlowPage() {
                 className="w-full px-3 py-2 rounded-xl text-sm"
                 style={{
                   background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  color: "#d0d0d0",
+                  border: `1px solid ${OKX_BORDER}`,
+                  color: OKX_TEXT_PRI,
                   outline: "none",
                   boxSizing: "border-box",
                   maxWidth: "100%",
@@ -817,7 +814,7 @@ export default function OrderFlowPage() {
 
             {/* 状态 */}
             <div className="mb-3">
-              <label className="block text-xs mb-1" style={{ color: "#666" }}>状态</label>
+              <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>状态</label>
               <div className="flex gap-2">
                 {(["open", "closed"] as const).map((s) => (
                   <button
@@ -826,8 +823,8 @@ export default function OrderFlowPage() {
                     className="flex-1 py-1.5 rounded-lg text-xs font-medium"
                     style={
                       form.status === s
-                        ? { backgroundColor: "rgba(59,130,246,0.2)", color: "#60a5fa", border: "1px solid rgba(59,130,246,0.4)" }
-                        : { backgroundColor: "rgba(255,255,255,0.05)", color: "#555", border: "1px solid rgba(255,255,255,0.1)" }
+                        ? { backgroundColor: "rgba(240,185,11,0.15)", color: OKX_YELLOW, border: `1px solid rgba(240,185,11,0.4)` }
+                        : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
                     }
                   >
                     {s === "open" ? "持仓中" : "已平仓"}
@@ -840,7 +837,7 @@ export default function OrderFlowPage() {
             {form.status === "closed" && (
               <>
                 <div className="mb-3">
-                  <label className="block text-xs mb-1" style={{ color: "#666" }}>平仓价 (USDT)</label>
+                  <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>平仓价 (USDT)</label>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -850,8 +847,8 @@ export default function OrderFlowPage() {
                     className="w-full px-3 py-2 rounded-xl text-sm font-mono"
                     style={{
                       background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      color: "#d0d0d0",
+                      border: `1px solid ${OKX_BORDER}`,
+                      color: OKX_TEXT_PRI,
                       outline: "none",
                       boxSizing: "border-box",
                       maxWidth: "100%",
@@ -859,7 +856,7 @@ export default function OrderFlowPage() {
                   />
                 </div>
                 <div className="mb-3">
-                  <label className="block text-xs mb-1" style={{ color: "#666" }}>平仓日期</label>
+                  <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>平仓日期</label>
                   <input
                     type="date"
                     value={form.exitDate}
@@ -867,8 +864,8 @@ export default function OrderFlowPage() {
                     className="w-full px-3 py-2 rounded-xl text-sm"
                     style={{
                       background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      color: "#d0d0d0",
+                      border: `1px solid ${OKX_BORDER}`,
+                      color: OKX_TEXT_PRI,
                       outline: "none",
                       boxSizing: "border-box",
                       maxWidth: "100%",
@@ -881,7 +878,7 @@ export default function OrderFlowPage() {
 
             {/* 备注 */}
             <div className="mb-5">
-              <label className="block text-xs mb-1" style={{ color: "#666" }}>备注 (可选)</label>
+              <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>备注 (可选)</label>
               <textarea
                 value={form.note}
                 onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
@@ -890,8 +887,8 @@ export default function OrderFlowPage() {
                 className="w-full px-3 py-2 rounded-xl text-sm resize-none"
                 style={{
                   background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  color: "#d0d0d0",
+                  border: `1px solid ${OKX_BORDER}`,
+                  color: OKX_TEXT_PRI,
                   outline: "none",
                   boxSizing: "border-box",
                   maxWidth: "100%",
@@ -903,7 +900,7 @@ export default function OrderFlowPage() {
             {formError && (
               <div
                 className="mb-3 px-3 py-2 rounded-xl text-xs"
-                style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171" }}
+                style={{ background: "rgba(246,70,93,0.1)", border: "1px solid rgba(246,70,93,0.3)", color: OKX_RED }}
               >
                 {formError}
               </div>
@@ -914,8 +911,8 @@ export default function OrderFlowPage() {
               disabled={addOrderMutation.isPending || updateOrderMutation.isPending}
               className="w-full py-3 rounded-2xl text-sm font-semibold"
               style={{
-                background: "linear-gradient(135deg, #1d4ed8, #2563eb)",
-                color: "#fff",
+                background: `linear-gradient(135deg, ${OKX_YELLOW}, #e6a800)`,
+                color: "#000",
                 opacity: addOrderMutation.isPending || updateOrderMutation.isPending ? 0.6 : 1,
               }}
             >
@@ -928,6 +925,17 @@ export default function OrderFlowPage() {
           </div>
         </div>
       )}
+      {/* ===== 底部 FAB 新增按钮 ===== */}
+      <button
+        onClick={() => { setEditingId(null); setForm(defaultForm()); setShowForm(true); }}
+        className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
+        style={{ backgroundColor: OKX_YELLOW, color: "#000" }}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      </button>
     </div>
   );
 }
