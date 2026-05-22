@@ -1013,72 +1013,52 @@ export default function OrderFlowPage() {
               </div>
             </div>
 
-            {/* 币种选择 */}
-            <div className="mb-4">
-              <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>币种</label>
-              <div className="flex gap-2">
-                {(['ETHUSDT', 'BTCUSDT', 'SOLUSDT', 'SUIUSDT'] as const).map((sym) => {
-                  const coin = sym.replace('USDT', '');
-                  const price = getPriceForSymbol(sym);
-                  return (
-                    <button
-                      key={sym}
-                      onClick={() => setForm((f) => ({ ...f, symbol: sym }))}
-                      className="flex-1 py-2 rounded-xl text-sm font-medium transition-all flex flex-col items-center"
-                      style={
-                        form.symbol === sym
-                          ? { backgroundColor: "rgba(240,185,11,0.15)", color: OKX_YELLOW, border: `1px solid rgba(240,185,11,0.4)` }
-                          : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
-                      }
-                    >
-                      <span className="font-semibold">{coin}</span>
-                      {price && <span className="text-xs opacity-70 mt-0.5">{fmt(price, coin === 'BTC' ? 0 : coin === 'ETH' ? 1 : 3)}</span>}
-                    </button>
-                  );
-                })}
+            {/* 币种 + 交易类型 + 方向（一行三个下拉） */}
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              {/* 币种 */}
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>币种</label>
+                <select
+                  value={form.symbol}
+                  onChange={(e) => setForm((f) => ({ ...f, symbol: e.target.value }))}
+                  className="w-full px-2 py-2 rounded-xl text-sm"
+                  style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${OKX_BORDER}`, color: OKX_TEXT_PRI }}
+                >
+                  <option value="ETHUSDT">ETH</option>
+                  <option value="BTCUSDT">BTC</option>
+                  <option value="SOLUSDT">SOL</option>
+                  <option value="SUIUSDT">SUI</option>
+                </select>
               </div>
-            </div>
-            {/* 现货 / 永续合约 */}
-            <div className="mb-4">
-              <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>交易类型</label>
-              <div className="flex gap-2">
-                {(["perp", "spot"] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setForm((f) => ({ ...f, marketType: t }))}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium transition-all"
-                    style={
-                      form.marketType === t
-                        ? { backgroundColor: "rgba(240,185,11,0.15)", color: OKX_YELLOW, border: `1px solid rgba(240,185,11,0.4)` }
-                        : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
-                    }
-                  >
-                    {t === "perp" ? "永续合约" : "现货"}
-                  </button>
-                ))}
+              {/* 交易类型 */}
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>类型</label>
+                <select
+                  value={form.marketType}
+                  onChange={(e) => setForm((f) => ({ ...f, marketType: e.target.value as "perp" | "spot" }))}
+                  className="w-full px-2 py-2 rounded-xl text-sm"
+                  style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${OKX_BORDER}`, color: OKX_TEXT_PRI }}
+                >
+                  <option value="perp">永续合约</option>
+                  <option value="spot">现货</option>
+                </select>
               </div>
-            </div>
-
-            {/* 做多 / 做空 */}
-            <div className="mb-4">
-              <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>方向</label>
-              <div className="flex gap-2">
-                {(["long", "short"] as const).map((d) => (
-                  <button
-                    key={d}
-                    onClick={() => setForm((f) => ({ ...f, direction: d }))}
-                    className="flex-1 py-2 rounded-xl text-sm font-semibold transition-all"
-                    style={
-                      form.direction === d
-                        ? d === "long"
-                          ? { backgroundColor: "rgba(246,70,93,0.15)", color: "#F6465D", border: "1px solid rgba(246,70,93,0.4)" }
-                          : { backgroundColor: "rgba(14,203,129,0.15)", color: "#0ECB81", border: "1px solid rgba(14,203,129,0.4)" }
-                        : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
-                    }
-                  >
-                    {d === "long" ? "做多" : "做空"}
-                  </button>
-                ))}
+              {/* 方向 */}
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>方向</label>
+                <select
+                  value={form.direction}
+                  onChange={(e) => setForm((f) => ({ ...f, direction: e.target.value as "long" | "short" }))}
+                  className="w-full px-2 py-2 rounded-xl text-sm font-semibold"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: `1px solid ${OKX_BORDER}`,
+                    color: form.direction === "long" ? "#F6465D" : "#0ECB81",
+                  }}
+                >
+                  <option value="long">做多</option>
+                  <option value="short">做空</option>
+                </select>
               </div>
             </div>
 
