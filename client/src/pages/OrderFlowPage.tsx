@@ -5,6 +5,7 @@
  * - 每张订单卡片：主/次/辅三层信息层次
  * - 实时抓取 ETH 最新价（3秒刷新）
  * - 自动计算：交易成本、实时盈亏、资金费率累计
+ * - 支持现货/永续合约、VIP等级、市价/限价挂单
  */
 import React, { useState, useEffect, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
@@ -37,20 +38,59 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-// 计算单笔订单的交易成本（开仓手续费 + 持仓资金费率）
-// OKX 合约手续费：Maker 0.02%，Taker 0.05%，这里用 Taker
-const TAKER_FEE_RATE = 0.0005; // 0.05%
+// ===== OKX 手续费费率表（2026年最新）=====
+// 现货 Spot: [Maker, Taker]
+const SPOT_FEE: Record<string, [number, number]> = {
+  "普通": [0.0008, 0.0010],
+  "VIP1": [0.000675, 0.0008],
+  "VIP2": [0.0006, 0.0007],
+  "VIP3": [0.00055, 0.00065],
+  "VIP4": [0.0003, 0.00045],
+  "VIP5": [0.00025, 0.00035],
+  "VIP6": [0.0000, 0.0003],
+  "VIP7": [-0.00002, 0.00025],
+  "VIP8": [-0.00005, 0.0002],
+  "VIP9": [-0.000075, 0.000175],
+};
 
+// 合约 Perpetual/Futures 分组1: [Maker, Taker]
+const PERP_FEE: Record<string, [number, number]> = {
+  "普通": [0.0002, 0.0005],
+  "VIP1": [0.00016, 0.00045],
+  "VIP2": [0.00015, 0.00036],
+  "VIP3": [0.0001, 0.00028],
+  "VIP4": [0.00008, 0.00027],
+  "VIP5": [0.00005, 0.00026],
+  "VIP6": [0.0000, 0.00025],
+  "VIP7": [-0.00002, 0.0002],
+  "VIP8": [-0.00005, 0.0002],
+  "VIP9": [-0.00005, 0.00015],
+};
+
+const VIP_LEVELS = ["普通", "VIP1", "VIP2", "VIP3", "VIP4", "VIP5", "VIP6", "VIP7", "VIP8", "VIP9"];
+
+function getFeeRate(
+  marketType: "spot" | "perp",
+  vipLevel: string,
+  orderType: "maker" | "taker"
+): number {
+  const table = marketType === "spot" ? SPOT_FEE : PERP_FEE;
+  const rates = table[vipLevel] ?? table["普通"];
+  return orderType === "maker" ? rates[0] : rates[1];
+}
+
+// ===== 计算订单 =====
 interface OrderCalc {
-  notional: number;       // 名义价值 = 数量 × 开仓价
-  margin: number;         // 保证金 = 名义价值 / 杠杆
-  openFee: number;        // 开仓手续费
-  closeFee: number;       // 平仓手续费（已平仓才有）
-  totalFee: number;       // 总手续费
-  pnl: number | null;     // 浮动盈亏（未平仓用最新价，已平仓用平仓价）
-  pnlPct: number | null;  // 盈亏百分比（相对保证金）
-  fundingCost: number | null; // 资金费率成本（每8小时一次，用最新费率估算）
-  breakEven: number;      // 盈亏平衡价
+  notional: number;
+  margin: number;
+  openFee: number;
+  closeFee: number;
+  totalFee: number;
+  pnl: number | null;
+  pnlPct: number | null;
+  fundingCost: number | null;
+  breakEven: number;
+  feeRate: number;
 }
 
 function calcOrder(
@@ -62,12 +102,17 @@ function calcOrder(
   const qty = parseFloat(order.quantity);
   const lev = order.leverage || 1;
   const direction = order.direction as "long" | "short";
+  const marketType: "spot" | "perp" = order.market_type === "spot" ? "spot" : "perp";
+  const vipLevel: string = order.vip_level || "普通";
+  const orderType: "maker" | "taker" = order.order_type === "maker" ? "maker" : "taker";
+
+  const feeRate = getFeeRate(marketType, vipLevel, orderType);
+  const effectiveFeeRate = Math.max(0, feeRate); // 负费率（返佣）视为0成本
 
   const notional = entry * qty;
-  const margin = notional / lev;
-  const openFee = notional * TAKER_FEE_RATE;
+  const margin = marketType === "spot" ? notional : notional / lev;
+  const openFee = notional * effectiveFeeRate;
 
-  // 平仓价：已平仓用 exit_price，未平仓用最新价
   const closePrice = order.exit_price
     ? parseFloat(order.exit_price)
     : currentPrice;
@@ -78,7 +123,8 @@ function calcOrder(
 
   if (closePrice && closePrice > 0) {
     const closeNotional = closePrice * qty;
-    closeFee = closeNotional * TAKER_FEE_RATE;
+    const closeFeeRate = Math.max(0, getFeeRate(marketType, vipLevel, orderType));
+    closeFee = closeNotional * closeFeeRate;
     const rawPnl =
       direction === "long"
         ? (closePrice - entry) * qty
@@ -89,32 +135,34 @@ function calcOrder(
 
   const totalFee = openFee + closeFee;
 
-  // 资金费率成本估算：每8小时结算一次
-  // 持仓天数 × 3次/天 × 资金费率 × 名义价值
+  // 资金费率成本（仅永续合约，每8小时一次）
   let fundingCost: number | null = null;
-  if (fundingRate != null) {
+  if (marketType === "perp" && fundingRate != null) {
     const entryDate = new Date(order.entry_date);
     const now = new Date();
     const diffMs = now.getTime() - entryDate.getTime();
     const diffHours = Math.max(0, diffMs / (1000 * 60 * 60));
     const periods = Math.floor(diffHours / 8);
     fundingCost = periods * fundingRate * notional;
-    if (direction === "short") fundingCost = -fundingCost; // 空头收资金费
+    if (direction === "short") fundingCost = -fundingCost;
   }
 
   // 盈亏平衡价（含手续费）
   const breakEven =
     direction === "long"
-      ? entry * (1 + TAKER_FEE_RATE * 2)
-      : entry * (1 - TAKER_FEE_RATE * 2);
+      ? entry * (1 + effectiveFeeRate * 2)
+      : entry * (1 - effectiveFeeRate * 2);
 
-  return { notional, margin, openFee, closeFee, totalFee, pnl, pnlPct, fundingCost, breakEven };
+  return { notional, margin, openFee, closeFee, totalFee, pnl, pnlPct, fundingCost, breakEven, feeRate };
 }
 
-// ===== 新增/编辑订单弹窗 =====
+// ===== 表单数据类型 =====
 interface OrderFormData {
   symbol: string;
   direction: "long" | "short";
+  marketType: "spot" | "perp";
+  orderType: "maker" | "taker";
+  vipLevel: string;
   entryPrice: string;
   exitPrice: string;
   quantity: string;
@@ -130,6 +178,9 @@ interface OrderFormData {
 const defaultForm = (): OrderFormData => ({
   symbol: "ETHUSDT",
   direction: "long",
+  marketType: "perp",
+  orderType: "taker",
+  vipLevel: "普通",
   entryPrice: "",
   exitPrice: "",
   quantity: "",
@@ -177,19 +228,19 @@ export default function OrderFlowPage() {
     { enabled: isAuthenticated && ledgerId > 0 }
   );
 
-  // mutations
   const addOrderMutation = trpc.orderFlow.addOrder.useMutation({
-    onSuccess: () => {
-      utils.orderFlow.getOrders.invalidate({ ledgerId });
+    onSuccess: async () => {
+      await utils.orderFlow.getOrders.invalidate({ ledgerId });
       setShowForm(false);
       setForm(defaultForm());
     },
   });
   const updateOrderMutation = trpc.orderFlow.updateOrder.useMutation({
-    onSuccess: () => {
-      utils.orderFlow.getOrders.invalidate({ ledgerId });
+    onSuccess: async () => {
+      await utils.orderFlow.getOrders.invalidate({ ledgerId });
       setEditingId(null);
       setForm(defaultForm());
+      setShowForm(false);
     },
   });
   const deleteOrderMutation = trpc.orderFlow.deleteOrder.useMutation({
@@ -203,17 +254,18 @@ export default function OrderFlowPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<"all" | "open" | "closed">("all");
 
-  // 过滤订单
   const filteredOrders = useMemo(() => {
     if (filterStatus === "all") return orders as any[];
     return (orders as any[]).filter((o: any) => o.status === filterStatus);
   }, [orders, filterStatus]);
 
-  // 打开编辑
   function openEdit(order: any) {
     setForm({
       symbol: order.symbol || "ETHUSDT",
       direction: order.direction || "long",
+      marketType: order.market_type || "perp",
+      orderType: order.order_type || "taker",
+      vipLevel: order.vip_level || "普通",
       entryPrice: String(order.entry_price || ""),
       exitPrice: order.exit_price ? String(order.exit_price) : "",
       quantity: String(order.quantity || ""),
@@ -239,6 +291,9 @@ export default function OrderFlowPage() {
       ledgerId,
       symbol: form.symbol,
       direction: form.direction,
+      marketType: form.marketType,
+      orderType: form.orderType,
+      vipLevel: form.vipLevel,
       entryPrice,
       quantity,
       leverage,
@@ -251,7 +306,6 @@ export default function OrderFlowPage() {
     if (editingId != null) {
       updateOrderMutation.mutate({
         id: editingId,
-        ledgerId,
         ...payload,
         exitPrice: form.exitPrice ? parseFloat(form.exitPrice) : undefined,
         exitDate: form.exitDate || undefined,
@@ -266,16 +320,15 @@ export default function OrderFlowPage() {
   // 颜色常量
   const GOLD_GRAD = "linear-gradient(180deg, #f0f0f0 0%, #c8c8c8 30%, #a0a0a0 60%, #d0d0d0 100%)";
   const BORDER_DIM = "rgba(192,192,192,0.18)";
-  const BTN_STYLE = {
-    backgroundColor: "rgba(192,192,192,0.08)",
-    color: "#c0c0c0",
-    border: `1px solid ${BORDER_DIM}`,
-  };
+  const BTN_STYLE = { backgroundColor: "rgba(192,192,192,0.08)", color: "#c0c0c0", border: `1px solid ${BORDER_DIM}` };
+
+  // 当前费率预览
+  const previewFeeRate = getFeeRate(form.marketType, form.vipLevel, form.orderType);
 
   return (
     <div
       className="min-h-screen pb-24 max-w-md mx-auto relative"
-      style={{ background: "#000000", overscrollBehaviorX: "none", touchAction: "pan-y", overflowX: "hidden" }}
+      style={{ background: "#000000", overflowX: "hidden", touchAction: "pan-y" }}
     >
       {/* ===== 顶部导航 ===== */}
       <div
@@ -284,14 +337,13 @@ export default function OrderFlowPage() {
       >
         <button
           onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
-          className="w-8 h-8 rounded-full flex items-center justify-center mr-3"
+          className="w-8 h-8 rounded-full flex items-center justify-center mr-3 flex-shrink-0"
           style={BTN_STYLE}
         >
           <ChevronLeft className="w-5 h-5 text-white" />
         </button>
 
-        {/* 标题：可点击切换回智能仓位管理 */}
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <button
             onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
             className="flex items-center gap-1 font-semibold text-base"
@@ -314,8 +366,7 @@ export default function OrderFlowPage() {
           </button>
         </div>
 
-        {/* 右侧：实时价格 + 新增按钮 */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {currentPrice && (
             <span className="text-sm font-mono" style={{ color: "#e0c060" }}>
               ${fmt(currentPrice, 1)}
@@ -332,7 +383,7 @@ export default function OrderFlowPage() {
       </div>
 
       {/* ===== 状态过滤 Tab ===== */}
-      <div className="flex gap-2 px-4 pt-3 pb-2">
+      <div className="flex gap-2 px-4 pt-3 pb-2 items-center">
         {(["all", "open", "closed"] as const).map((s) => (
           <button
             key={s}
@@ -368,6 +419,7 @@ export default function OrderFlowPage() {
           const calc = calcOrder(order, currentPrice, fundingRate);
           const isLong = order.direction === "long";
           const isOpen = order.status === "open";
+          const isPerp = order.market_type !== "spot";
           const pnlPositive = (calc.pnl ?? 0) >= 0;
           const dirColor = isLong ? "#22c55e" : "#ef4444";
           const pnlColor = pnlPositive ? "#22c55e" : "#ef4444";
@@ -382,19 +434,27 @@ export default function OrderFlowPage() {
                 boxShadow: isOpen ? "0 0 20px rgba(59,130,246,0.06)" : "none",
               }}
             >
-              {/* ── 行1：方向标签 + 币种 + 杠杆 + 状态 + 操作按钮 ── */}
-              <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5">
+              {/* 行1：方向 + 币种 + 杠杆 + 类型标签 + 状态 + 操作 */}
+              <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1.5 flex-wrap">
                 <span
                   className="text-xs font-bold px-1.5 py-0.5 rounded"
                   style={{ backgroundColor: isLong ? "rgba(34,197,94,0.15)" : "rgba(239,68,68,0.15)", color: dirColor }}
                 >
-                  {isLong ? "做多" : "做空"}
+                  {isLong ? "多" : "空"}
                 </span>
                 <span className="text-sm font-semibold" style={{ color: "#d0d0d0" }}>
                   {order.symbol?.replace("USDT", "")} / USDT
                 </span>
-                <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>
-                  {order.leverage}x
+                {isPerp && (
+                  <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>
+                    {order.leverage}x
+                  </span>
+                )}
+                <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(139,92,246,0.12)", color: "#a78bfa" }}>
+                  {isPerp ? "永续" : "现货"}
+                </span>
+                <span className="text-xs" style={{ color: "#444" }}>
+                  {order.vip_level || "普通"} · {order.order_type === "maker" ? "限价" : "市价"}
                 </span>
                 <span
                   className="text-xs px-1.5 py-0.5 rounded ml-auto"
@@ -404,9 +464,8 @@ export default function OrderFlowPage() {
                       : { backgroundColor: "rgba(100,100,100,0.15)", color: "#666" }
                   }
                 >
-                  {isOpen ? "持仓中" : "已平仓"}
+                  {isOpen ? "持仓" : "已平"}
                 </span>
-                {/* 编辑/删除 */}
                 <button onClick={() => openEdit(order)} className="p-1 rounded opacity-50 hover:opacity-100">
                   <Pencil className="w-3.5 h-3.5 text-gray-400" />
                 </button>
@@ -430,7 +489,7 @@ export default function OrderFlowPage() {
                 )}
               </div>
 
-              {/* ── 行2：主要数据 - 开仓价 / 最新价 / 盈亏 ── */}
+              {/* 行2：主要数据 - 开仓价 / 最新价 / 盈亏 */}
               <div className="grid grid-cols-3 gap-0 px-3 py-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
                 <div>
                   <div className="text-xs mb-0.5" style={{ color: "#555" }}>开仓价</div>
@@ -450,7 +509,7 @@ export default function OrderFlowPage() {
                 </div>
                 <div className="text-right">
                   <div className="text-xs mb-0.5" style={{ color: "#555" }}>
-                    {isOpen ? "浮动盈亏" : "已实现盈亏"}
+                    {isOpen ? "浮动盈亏" : "实现盈亏"}
                   </div>
                   <div className="text-base font-bold font-mono" style={{ color: pnlColor }}>
                     {calc.pnl != null ? `${calc.pnl >= 0 ? "+" : ""}$${fmt(Math.abs(calc.pnl), 2)}` : "--"}
@@ -463,7 +522,7 @@ export default function OrderFlowPage() {
                 </div>
               </div>
 
-              {/* ── 行3：次要数据 - 数量 / 保证金 / 名义价值 ── */}
+              {/* 行3：次要数据 - 数量 / 保证金 / 名义价值 */}
               <div className="grid grid-cols-3 gap-0 px-3 py-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
                 <div>
                   <div className="text-xs mb-0.5" style={{ color: "#555" }}>数量</div>
@@ -472,7 +531,7 @@ export default function OrderFlowPage() {
                   </div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xs mb-0.5" style={{ color: "#555" }}>保证金</div>
+                  <div className="text-xs mb-0.5" style={{ color: "#555" }}>{isPerp ? "保证金" : "成本"}</div>
                   <div className="text-sm font-mono" style={{ color: "#b0b0b0" }}>
                     ${fmt(calc.margin, 2)}
                   </div>
@@ -485,7 +544,7 @@ export default function OrderFlowPage() {
                 </div>
               </div>
 
-              {/* ── 行4：止盈止损 ── */}
+              {/* 行4：止盈止损 */}
               {(order.take_profit || order.stop_loss) && (
                 <div className="flex gap-4 px-3 py-1.5" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
                   {order.take_profit && (
@@ -509,7 +568,7 @@ export default function OrderFlowPage() {
                 </div>
               )}
 
-              {/* ── 行5：辅助数据 - 手续费 / 资金费率 / 盈亏平衡 / 日期 ── */}
+              {/* 行5：辅助数据 */}
               <div
                 className="grid grid-cols-2 gap-x-2 gap-y-1 px-3 py-2"
                 style={{ borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(0,0,0,0.3)" }}
@@ -517,18 +576,20 @@ export default function OrderFlowPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs" style={{ color: "#444" }}>手续费</span>
                   <span className="text-xs font-mono" style={{ color: "#666" }}>
-                    -${fmt(calc.totalFee, 4)}
+                    {(calc.feeRate * 100).toFixed(4)}% / -${fmt(calc.totalFee, 4)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs" style={{ color: "#444" }}>资金费率</span>
-                  <span className="text-xs font-mono" style={{ color: fundingRate != null && fundingRate > 0 ? "#ef4444" : "#22c55e" }}>
-                    {fundingRate != null ? fmtPct(fundingRate) : "--"}
-                    {calc.fundingCost != null && (
-                      <span style={{ color: "#555" }}> ({calc.fundingCost >= 0 ? "-" : "+"}${fmt(Math.abs(calc.fundingCost), 4)})</span>
-                    )}
-                  </span>
-                </div>
+                {isPerp && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs" style={{ color: "#444" }}>资金费率</span>
+                    <span className="text-xs font-mono" style={{ color: fundingRate != null && fundingRate > 0 ? "#ef4444" : "#22c55e" }}>
+                      {fundingRate != null ? fmtPct(fundingRate) : "--"}
+                      {calc.fundingCost != null && (
+                        <span style={{ color: "#555" }}> ({calc.fundingCost >= 0 ? "-" : "+"}${fmt(Math.abs(calc.fundingCost), 4)})</span>
+                      )}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-xs" style={{ color: "#444" }}>盈亏平衡</span>
                   <span className="text-xs font-mono" style={{ color: "#888" }}>
@@ -541,7 +602,7 @@ export default function OrderFlowPage() {
                 </div>
                 {order.note && (
                   <div className="col-span-2 flex items-start gap-1 mt-0.5">
-                    <span className="text-xs" style={{ color: "#444" }}>备注</span>
+                    <span className="text-xs flex-shrink-0" style={{ color: "#444" }}>备注</span>
                     <span className="text-xs" style={{ color: "#666" }}>{order.note}</span>
                   </div>
                 )}
@@ -554,13 +615,22 @@ export default function OrderFlowPage() {
       {/* ===== 新增/编辑弹窗 ===== */}
       {showForm && (
         <div
-          className="fixed inset-0 z-50 flex items-end"
-          style={{ background: "rgba(0,0,0,0.7)" }}
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ background: "rgba(0,0,0,0.75)" }}
           onClick={(e) => { if (e.target === e.currentTarget) { setShowForm(false); setEditingId(null); } }}
         >
+          {/* 弹窗容器：固定宽度，禁止左右滑动 */}
           <div
-            className="w-full max-w-md mx-auto rounded-t-3xl px-5 pt-5 pb-8"
-            style={{ background: "#111", border: "1px solid rgba(192,192,192,0.15)", maxHeight: "90vh", overflowY: "auto" }}
+            className="w-full max-w-md rounded-t-3xl px-5 pt-5 pb-8"
+            style={{
+              background: "#111",
+              border: "1px solid rgba(192,192,192,0.15)",
+              maxHeight: "88vh",
+              overflowY: "auto",
+              overflowX: "hidden",
+              touchAction: "pan-y",
+              boxSizing: "border-box",
+            }}
           >
             {/* 弹窗标题 */}
             <div className="flex items-center justify-between mb-4">
@@ -572,39 +642,123 @@ export default function OrderFlowPage() {
               </button>
             </div>
 
-            {/* 方向选择 */}
-            <div className="flex gap-2 mb-4">
-              {(["long", "short"] as const).map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setForm((f) => ({ ...f, direction: d }))}
-                  className="flex-1 py-2 rounded-xl text-sm font-semibold transition-all"
-                  style={
-                    form.direction === d
-                      ? d === "long"
-                        ? { backgroundColor: "rgba(34,197,94,0.2)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.4)" }
-                        : { backgroundColor: "rgba(239,68,68,0.2)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.4)" }
-                      : { backgroundColor: "rgba(255,255,255,0.05)", color: "#555", border: "1px solid rgba(255,255,255,0.1)" }
-                  }
-                >
-                  {d === "long" ? "做多 Long" : "做空 Short"}
-                </button>
-              ))}
+            {/* 现货 / 永续合约 */}
+            <div className="mb-4">
+              <label className="block text-xs mb-1.5" style={{ color: "#666" }}>交易类型</label>
+              <div className="flex gap-2">
+                {(["perp", "spot"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setForm((f) => ({ ...f, marketType: t }))}
+                    className="flex-1 py-2 rounded-xl text-sm font-medium transition-all"
+                    style={
+                      form.marketType === t
+                        ? { backgroundColor: "rgba(139,92,246,0.2)", color: "#a78bfa", border: "1px solid rgba(139,92,246,0.4)" }
+                        : { backgroundColor: "rgba(255,255,255,0.05)", color: "#555", border: "1px solid rgba(255,255,255,0.1)" }
+                    }
+                  >
+                    {t === "perp" ? "永续合约" : "现货"}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* 表单字段 */}
+            {/* 做多 / 做空 */}
+            <div className="mb-4">
+              <label className="block text-xs mb-1.5" style={{ color: "#666" }}>方向</label>
+              <div className="flex gap-2">
+                {(["long", "short"] as const).map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => setForm((f) => ({ ...f, direction: d }))}
+                    className="flex-1 py-2 rounded-xl text-sm font-semibold transition-all"
+                    style={
+                      form.direction === d
+                        ? d === "long"
+                          ? { backgroundColor: "rgba(34,197,94,0.2)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.4)" }
+                          : { backgroundColor: "rgba(239,68,68,0.2)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.4)" }
+                        : { backgroundColor: "rgba(255,255,255,0.05)", color: "#555", border: "1px solid rgba(255,255,255,0.1)" }
+                    }
+                  >
+                    {d === "long" ? "做多 Long" : "做空 Short"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* VIP等级 + 市价/限价 */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: "#666" }}>VIP 等级</label>
+                <select
+                  value={form.vipLevel}
+                  onChange={(e) => setForm((f) => ({ ...f, vipLevel: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl text-sm"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    color: "#d0d0d0",
+                    outline: "none",
+                    appearance: "none",
+                  }}
+                >
+                  {VIP_LEVELS.map((v) => (
+                    <option key={v} value={v} style={{ background: "#1a1a1a", color: "#d0d0d0" }}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs mb-1.5" style={{ color: "#666" }}>挂单类型</label>
+                <div className="flex gap-1.5">
+                  {(["taker", "maker"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setForm((f) => ({ ...f, orderType: t }))}
+                      className="flex-1 py-2 rounded-xl text-xs font-medium"
+                      style={
+                        form.orderType === t
+                          ? { backgroundColor: "rgba(245,158,11,0.2)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.4)" }
+                          : { backgroundColor: "rgba(255,255,255,0.05)", color: "#555", border: "1px solid rgba(255,255,255,0.1)" }
+                      }
+                    >
+                      {t === "taker" ? "市价" : "限价"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* 费率预览 */}
+            <div
+              className="mb-4 px-3 py-2 rounded-xl flex items-center justify-between"
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <span className="text-xs" style={{ color: "#555" }}>
+                {form.marketType === "perp" ? "合约" : "现货"} {form.orderType === "taker" ? "市价(Taker)" : "限价(Maker)"} 手续费
+              </span>
+              <span
+                className="text-xs font-mono font-semibold"
+                style={{ color: previewFeeRate < 0 ? "#22c55e" : "#f59e0b" }}
+              >
+                {previewFeeRate < 0 ? "返佣 " : ""}{(previewFeeRate * 100).toFixed(4)}%
+              </span>
+            </div>
+
+            {/* 数字输入字段 */}
             {[
-              { label: "开仓价 (USDT)", key: "entryPrice", type: "number", placeholder: "如 2500.00" },
-              { label: "数量 (ETH)", key: "quantity", type: "number", placeholder: "如 0.5" },
-              { label: "杠杆倍数", key: "leverage", type: "number", placeholder: "如 5" },
-              { label: "止盈价 (可选)", key: "takeProfit", type: "number", placeholder: "如 3000" },
-              { label: "止损价 (可选)", key: "stopLoss", type: "number", placeholder: "如 2200" },
-              { label: "开仓日期", key: "entryDate", type: "date", placeholder: "" },
-            ].map(({ label, key, type, placeholder }) => (
+              { label: "开仓价 (USDT)", key: "entryPrice", placeholder: "如 2500.00" },
+              { label: "数量 (ETH)", key: "quantity", placeholder: "如 0.5" },
+              ...(form.marketType === "perp" ? [{ label: "杠杆倍数", key: "leverage", placeholder: "如 5" }] : []),
+              { label: "止盈价 (可选)", key: "takeProfit", placeholder: "如 3000" },
+              { label: "止损价 (可选)", key: "stopLoss", placeholder: "如 2200" },
+            ].map(({ label, key, placeholder }) => (
               <div key={key} className="mb-3">
                 <label className="block text-xs mb-1" style={{ color: "#666" }}>{label}</label>
                 <input
-                  type={type}
+                  type="number"
+                  inputMode="decimal"
                   value={(form as any)[key]}
                   onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
                   placeholder={placeholder}
@@ -614,12 +768,34 @@ export default function OrderFlowPage() {
                     border: "1px solid rgba(255,255,255,0.1)",
                     color: "#d0d0d0",
                     outline: "none",
+                    boxSizing: "border-box",
+                    maxWidth: "100%",
                   }}
                 />
               </div>
             ))}
 
-            {/* 已平仓时显示平仓价和平仓日期 */}
+            {/* 开仓日期 */}
+            <div className="mb-3">
+              <label className="block text-xs mb-1" style={{ color: "#666" }}>开仓日期</label>
+              <input
+                type="date"
+                value={form.entryDate}
+                onChange={(e) => setForm((f) => ({ ...f, entryDate: e.target.value }))}
+                className="w-full px-3 py-2 rounded-xl text-sm"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  color: "#d0d0d0",
+                  outline: "none",
+                  boxSizing: "border-box",
+                  maxWidth: "100%",
+                  WebkitAppearance: "none",
+                }}
+              />
+            </div>
+
+            {/* 状态 */}
             <div className="mb-3">
               <label className="block text-xs mb-1" style={{ color: "#666" }}>状态</label>
               <div className="flex gap-2">
@@ -640,17 +816,26 @@ export default function OrderFlowPage() {
               </div>
             </div>
 
+            {/* 平仓信息（已平仓时显示） */}
             {form.status === "closed" && (
               <>
                 <div className="mb-3">
                   <label className="block text-xs mb-1" style={{ color: "#666" }}>平仓价 (USDT)</label>
                   <input
                     type="number"
+                    inputMode="decimal"
                     value={form.exitPrice}
                     onChange={(e) => setForm((f) => ({ ...f, exitPrice: e.target.value }))}
                     placeholder="如 2800.00"
                     className="w-full px-3 py-2 rounded-xl text-sm font-mono"
-                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#d0d0d0", outline: "none" }}
+                    style={{
+                      background: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      color: "#d0d0d0",
+                      outline: "none",
+                      boxSizing: "border-box",
+                      maxWidth: "100%",
+                    }}
                   />
                 </div>
                 <div className="mb-3">
@@ -660,7 +845,15 @@ export default function OrderFlowPage() {
                     value={form.exitDate}
                     onChange={(e) => setForm((f) => ({ ...f, exitDate: e.target.value }))}
                     className="w-full px-3 py-2 rounded-xl text-sm"
-                    style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#d0d0d0", outline: "none" }}
+                    style={{
+                      background: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      color: "#d0d0d0",
+                      outline: "none",
+                      boxSizing: "border-box",
+                      maxWidth: "100%",
+                      WebkitAppearance: "none",
+                    }}
                   />
                 </div>
               </>
@@ -675,7 +868,14 @@ export default function OrderFlowPage() {
                 placeholder="如：趋势突破入场"
                 rows={2}
                 className="w-full px-3 py-2 rounded-xl text-sm resize-none"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#d0d0d0", outline: "none" }}
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  color: "#d0d0d0",
+                  outline: "none",
+                  boxSizing: "border-box",
+                  maxWidth: "100%",
+                }}
               />
             </div>
 
