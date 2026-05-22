@@ -43,7 +43,7 @@ const RANGE_SLIDER_STYLE = `
   }
 `;
 import { useRoute, useLocation } from "wouter";
-import { ChevronLeft, TrendingUp, TrendingDown, X, Check, Pencil, HelpCircle } from "lucide-react";
+import { ChevronLeft, ChevronDown, TrendingUp, TrendingDown, X, Check, Pencil, HelpCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 
@@ -78,6 +78,7 @@ export default function PositionCalc() {
   const [, params] = useRoute("/ledger/:id/position-calc");
   const [, setLocation] = useLocation();
   const ledgerId = params ? parseInt(params.id) : 0;
+  const [showPageMenu, setShowPageMenu] = useState(false);
   const { user } = useAuth();
   // 视角查看：从URL读取viewAs参数
   const urlSearchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -733,11 +734,40 @@ export default function PositionCalc() {
         >
           <ChevronLeft className="w-5 h-5 text-white" />
         </button>
-        <div className="flex-1">
-          <div className="flex items-center gap-1.5 font-semibold text-base" style={{ letterSpacing: '0.05em', background: 'linear-gradient(180deg, #f0f0f0 0%, #c8c8c8 30%, #a0a0a0 60%, #d0d0d0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.8))' }}>
+        <div className="flex-1 relative">
+          <button
+            onClick={() => setShowPageMenu(prev => !prev)}
+            className="flex items-center gap-1.5 font-semibold text-base"
+            style={{ letterSpacing: '0.05em', background: 'linear-gradient(180deg, #f0f0f0 0%, #c8c8c8 30%, #a0a0a0 60%, #d0d0d0 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text', filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.8))' }}
+          >
             <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp" alt="ETH" className="w-5 h-5 object-contain rounded-full flex-shrink-0" />
-            智能仓位管理
-          </div>
+            <span>智能仓位管理</span>
+            <ChevronDown className="w-3.5 h-3.5" style={{ WebkitTextFillColor: '#a0a0a0', filter: 'none' }} />
+          </button>
+          {showPageMenu && (
+            <div
+              className="absolute top-full left-0 mt-1 rounded-xl overflow-hidden z-50"
+              style={{ background: '#1a1a1a', border: '1px solid rgba(192,192,192,0.2)', minWidth: '160px', boxShadow: '0 8px 32px rgba(0,0,0,0.8)' }}
+            >
+              <div className="px-3 py-2 text-xs" style={{ color: '#555', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>切换页面</div>
+              <button
+                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2"
+                style={{ color: '#c0c0c0', backgroundColor: 'rgba(59,130,246,0.08)' }}
+                onClick={() => setShowPageMenu(false)}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+                智能仓位管理
+              </button>
+              <button
+                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2"
+                style={{ color: '#c0c0c0' }}
+                onClick={() => { setShowPageMenu(false); setLocation(`/ledger/${ledgerId}/order-flow`); }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-600 flex-shrink-0" />
+                订单流管理
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button

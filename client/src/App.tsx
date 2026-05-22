@@ -259,6 +259,7 @@ const LotteryCreate = lazy(() => import("./pages/LotteryCreate"));
 const CryptoPrediction = lazy(() => import("./pages/CryptoPrediction"));
 // ETH 持仓计算
 const PositionCalc = lazy(() => import("./pages/PositionCalc"));
+const OrderFlowPage = lazy(() => import("./pages/OrderFlowPage"));
 const PositionLevelEdit = lazy(() => import("./pages/PositionLevelEdit"));
 // 谷间优筹
 const GujianPage = lazy(() => import("./pages/GujianPage"));
@@ -622,6 +623,7 @@ function Router() {
         <Route path="/ledger/:id/crypto-prediction" component={CryptoPrediction} />
         {/* ETH 持仓计算 */}
         <Route path="/ledger/:id/position-calc" component={PositionCalc} />
+        <Route path="/ledger/:id/order-flow" component={OrderFlowPage} />
         <Route path="/ledger/:id/position-calc/:price" component={PositionLevelEdit} />
         {/* 谷间优筹 */}
         <Route path="/ledger/:id/gujian" component={GujianPage} />
