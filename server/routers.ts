@@ -23537,6 +23537,85 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         );
         return { success: true };
       }),
+    // ===== 订单备注 CRUD =====
+    // 获取某订单的所有备注
+    getNotes: protectedProcedure
+      .input(z.object({ orderId: z.number(), ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        if (!db) return [];
+        // 确保表存在
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS order_flow_notes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            order_id INT NOT NULL,
+            ledger_id INT NOT NULL,
+            user_id INT NOT NULL,
+            content TEXT NOT NULL,
+            created_at DATETIME DEFAULT NOW(),
+            updated_at DATETIME DEFAULT NOW() ON UPDATE NOW(),
+            INDEX idx_order (order_id, ledger_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+        const rows = await db.execute(
+          sql`SELECT id, content, created_at, updated_at FROM order_flow_notes
+              WHERE order_id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}
+              ORDER BY created_at ASC`
+        );
+        return ((rows as any)[0] as any[]).map((r: any) => ({
+          id: r.id as number,
+          content: r.content as string,
+          createdAt: r.created_at as string,
+          updatedAt: r.updated_at as string,
+        }));
+      }),
+    // 新增备注
+    addNote: protectedProcedure
+      .input(z.object({ orderId: z.number(), ledgerId: z.number(), content: z.string().min(1).max(1000) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS order_flow_notes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            order_id INT NOT NULL,
+            ledger_id INT NOT NULL,
+            user_id INT NOT NULL,
+            content TEXT NOT NULL,
+            created_at DATETIME DEFAULT NOW(),
+            updated_at DATETIME DEFAULT NOW() ON UPDATE NOW(),
+            INDEX idx_order (order_id, ledger_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+        await db.execute(
+          sql`INSERT INTO order_flow_notes (order_id, ledger_id, user_id, content)
+              VALUES (${input.orderId}, ${input.ledgerId}, ${ctx.user.id}, ${input.content})`
+        );
+        return { success: true };
+      }),
+    // 编辑备注
+    updateNote: protectedProcedure
+      .input(z.object({ id: z.number(), content: z.string().min(1).max(1000) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        await db.execute(
+          sql`UPDATE order_flow_notes SET content = ${input.content}
+              WHERE id = ${input.id} AND user_id = ${ctx.user.id}`
+        );
+        return { success: true };
+      }),
+    // 删除备注
+    deleteNote: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        await db.execute(
+          sql`DELETE FROM order_flow_notes WHERE id = ${input.id} AND user_id = ${ctx.user.id}`
+        );
+        return { success: true };
+      }),
     // 获取默认止盈价（来自智能仓位管理的目标止盈价）
     // 计算逻辑与 PositionCalc.tsx 完全一致：
     //   目标均价 = Σ(计划数量×价格) / Σ计划数量

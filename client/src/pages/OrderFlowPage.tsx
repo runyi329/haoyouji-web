@@ -12,6 +12,7 @@ import { useRoute, useLocation } from "wouter";
 import {
   ChevronLeft,
   ChevronDown,
+  ChevronUp,
   Plus,
   TrendingUp,
   TrendingDown,
@@ -20,6 +21,7 @@ import {
   Pencil,
   Trash2,
   AlertCircle,
+  MessageSquarePlus,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -196,6 +198,163 @@ const defaultForm = (): OrderFormData => ({
   note: "",
 });
 
+// ===== 订单备注子组件 =====
+const OKX_BG_NOTES = "rgba(0,0,0,0.18)";
+const OKX_BORDER_NOTES = "rgba(255,255,255,0.07)";
+
+function OrderNotesSection({
+  orderId, ledgerId, isExpanded, onToggle,
+  noteInput, onNoteInputChange,
+  editingNoteId, editingNoteContent,
+  onStartEdit, onCancelEdit, onEditContentChange,
+}: {
+  orderId: number;
+  ledgerId: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+  noteInput: string;
+  onNoteInputChange: (v: string) => void;
+  editingNoteId: number | null;
+  editingNoteContent: string;
+  onStartEdit: (id: number, content: string) => void;
+  onCancelEdit: () => void;
+  onEditContentChange: (v: string) => void;
+}) {
+  const utils = trpc.useUtils();
+  const { data: notes = [] } = trpc.orderFlow.getNotes.useQuery(
+    { orderId, ledgerId },
+    { enabled: isExpanded, staleTime: 10000 }
+  );
+  const addNote = trpc.orderFlow.addNote.useMutation({
+    onSuccess: () => {
+      onNoteInputChange("");
+      utils.orderFlow.getNotes.invalidate({ orderId, ledgerId });
+    },
+  });
+  const updateNote = trpc.orderFlow.updateNote.useMutation({
+    onSuccess: () => {
+      onCancelEdit();
+      utils.orderFlow.getNotes.invalidate({ orderId, ledgerId });
+    },
+  });
+  const deleteNote = trpc.orderFlow.deleteNote.useMutation({
+    onSuccess: () => utils.orderFlow.getNotes.invalidate({ orderId, ledgerId }),
+  });
+
+  function fmtNoteTime(ts: string) {
+    const d = new Date(ts);
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const h = String(d.getHours()).padStart(2, "0");
+    const m = String(d.getMinutes()).padStart(2, "0");
+    return `${mo}月${day}日 ${h}:${m}`;
+  }
+
+  const OKX_TEXT_SEC = "rgba(255,255,255,0.45)";
+  const OKX_BORDER = "rgba(255,255,255,0.07)";
+  const OKX_YELLOW = "#F0B90B";
+
+  return (
+    <div style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
+      {/* 备注标题行（可点击折叠） */}
+      <button
+        className="w-full flex items-center justify-between px-3 py-2"
+        style={{ background: OKX_BG_NOTES }}
+        onClick={onToggle}
+      >
+        <div className="flex items-center gap-1.5">
+          <MessageSquarePlus className="w-3.5 h-3.5" style={{ color: OKX_TEXT_SEC }} />
+          <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>备注</span>
+          {notes.length > 0 && (
+            <span
+              className="text-xs px-1 rounded"
+              style={{ background: "rgba(240,185,11,0.15)", color: OKX_YELLOW }}
+            >
+              {notes.length}
+            </span>
+          )}
+        </div>
+        {isExpanded
+          ? <ChevronUp className="w-3.5 h-3.5" style={{ color: OKX_TEXT_SEC }} />
+          : <ChevronDown className="w-3.5 h-3.5" style={{ color: OKX_TEXT_SEC }} />}
+      </button>
+
+      {/* 展开内容 */}
+      {isExpanded && (
+        <div className="px-3 pb-3" style={{ background: OKX_BG_NOTES }}>
+          {/* 备注列表 */}
+          {notes.map((note: any) => (
+            <div key={note.id} className="mb-2">
+              {editingNoteId === note.id ? (
+                // 编辑模式
+                <div className="flex flex-col gap-1">
+                  <textarea
+                    className="w-full text-xs rounded px-2 py-1.5 resize-none"
+                    style={{ background: "rgba(255,255,255,0.06)", color: "#fff", border: `1px solid rgba(240,185,11,0.4)`, minHeight: 56, outline: "none" }}
+                    value={editingNoteContent}
+                    onChange={e => onEditContentChange(e.target.value)}
+                    autoFocus
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      className="text-xs px-2 py-0.5 rounded"
+                      style={{ color: OKX_TEXT_SEC, background: "rgba(255,255,255,0.06)" }}
+                      onClick={onCancelEdit}
+                    >取消</button>
+                    <button
+                      className="text-xs px-2 py-0.5 rounded"
+                      style={{ color: OKX_YELLOW, background: "rgba(240,185,11,0.12)" }}
+                      onClick={() => updateNote.mutate({ id: note.id, content: editingNoteContent })}
+                      disabled={!editingNoteContent.trim()}
+                    >保存</button>
+                  </div>
+                </div>
+              ) : (
+                // 显示模式
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-xs flex-1" style={{ color: "rgba(255,255,255,0.75)", lineHeight: 1.5 }}>{note.content}</span>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>{fmtNoteTime(note.createdAt)}</span>
+                    <button onClick={() => onStartEdit(note.id, note.content)} className="opacity-50 hover:opacity-100">
+                      <Pencil className="w-3 h-3" style={{ color: OKX_TEXT_SEC }} />
+                    </button>
+                    <button onClick={() => deleteNote.mutate({ id: note.id })} className="opacity-50 hover:opacity-100">
+                      <X className="w-3 h-3" style={{ color: "#F6465D" }} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* 添加新备注输入框 */}
+          <div className="flex items-center gap-2 mt-1">
+            <input
+              type="text"
+              className="flex-1 text-xs rounded px-2 py-1.5"
+              style={{ background: "rgba(255,255,255,0.06)", color: "#fff", border: `1px solid ${OKX_BORDER}`, outline: "none" }}
+              placeholder="+ 添加备注…"
+              value={noteInput}
+              onChange={e => onNoteInputChange(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && noteInput.trim()) {
+                  addNote.mutate({ orderId, ledgerId, content: noteInput.trim() });
+                }
+              }}
+            />
+            <button
+              className="text-xs px-2.5 py-1.5 rounded flex-shrink-0"
+              style={{ background: noteInput.trim() ? "rgba(240,185,11,0.15)" : "rgba(255,255,255,0.05)", color: noteInput.trim() ? OKX_YELLOW : OKX_TEXT_SEC }}
+              disabled={!noteInput.trim() || addNote.isPending}
+              onClick={() => addNote.mutate({ orderId, ledgerId, content: noteInput.trim() })}
+            >添加</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ===== 主页面 =====
 export default function OrderFlowPage() {
   const [, params] = useRoute("/ledger/:id/order-flow");
@@ -275,6 +434,11 @@ export default function OrderFlowPage() {
   const [form, setForm] = useState<OrderFormData>(defaultForm());
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<"all" | "open" | "closed">("all");
+  // 备注区域状态
+  const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set()); // 已展开备注的订单ID
+  const [noteInputs, setNoteInputs] = useState<Record<number, string>>({}); // 各订单的输入框内容
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null); // 正在编辑的备注ID
+  const [editingNoteContent, setEditingNoteContent] = useState(""); // 编辑备注的内容
 
   // 当默认止盈价加载完成时，若弹窗处于新建状态且止盈价还是空，自动填入
   useEffect(() => {
@@ -451,6 +615,7 @@ export default function OrderFlowPage() {
           const isOpen = order.status === "open";
           const isPerp = order.market_type !== "spot";
           const pnlPositive = (calc.pnl ?? 0) >= 0;
+          const isNotesExpanded = expandedNotes.has(order.id);
           const dirColor = isLong ? "#F6465D" : "#0ECB81";  // 多=红 空=绿
           const pnlColor = pnlPositive ? "#F6465D" : "#0ECB81"; // 涨=红 跌=绿
 
@@ -647,13 +812,29 @@ export default function OrderFlowPage() {
                     </span>
                   </div>
                 )}
-                {order.note && (
-                  <div className="flex items-start gap-1 mt-0.5">
-                    <span className="text-xs flex-shrink-0" style={{ color: OKX_TEXT_SEC }}>备注</span>
-                    <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>{order.note}</span>
-                  </div>
-                )}
               </div>
+
+              {/* 行6：多条备注区域（可折叠） */}
+              <OrderNotesSection
+                orderId={order.id}
+                ledgerId={ledgerId}
+                isExpanded={isNotesExpanded}
+                onToggle={() => {
+                  setExpandedNotes(prev => {
+                    const next = new Set(prev);
+                    if (next.has(order.id)) next.delete(order.id);
+                    else next.add(order.id);
+                    return next;
+                  });
+                }}
+                noteInput={noteInputs[order.id] ?? ""}
+                onNoteInputChange={(v) => setNoteInputs(prev => ({ ...prev, [order.id]: v }))}
+                editingNoteId={editingNoteId}
+                editingNoteContent={editingNoteContent}
+                onStartEdit={(id, content) => { setEditingNoteId(id); setEditingNoteContent(content); }}
+                onCancelEdit={() => { setEditingNoteId(null); setEditingNoteContent(""); }}
+                onEditContentChange={setEditingNoteContent}
+              />
             </div>
           );
         })}
