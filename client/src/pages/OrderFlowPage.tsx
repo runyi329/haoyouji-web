@@ -362,17 +362,23 @@ export default function OrderFlowPage() {
   const ledgerId = params ? parseInt(params.id) : 0;
   const { isAuthenticated } = useAuth();
 
-  // 实时价格（3秒刷新）
-  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
+    // 实时价格（3秒刷新）
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
     refetchInterval: 3000,
     staleTime: 1000,
   });
+  // 从价格缓存中按币种取价格
+  const getPriceForSymbol = (symbol: string): number | null => {
+    const coin = symbol.replace('USDT', '');
+    const p = (cryptoPricesRaw as any)?.prices?.[coin];
+    return (p && p > 0) ? p : null;
+  };
+  // 当前页面整体展示价格（用于汇总计算，取各订单自己的价格）
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   useEffect(() => {
     const ethPrice = (cryptoPricesRaw as any)?.prices?.ETH ?? (cryptoPricesRaw as any)?.ETH;
     if (ethPrice && ethPrice > 0) setCurrentPrice(ethPrice);
   }, [cryptoPricesRaw]);
-
   // 默认止盈价（来自智能仓位管理目标止盈）
   const [takeProfitModified, setTakeProfitModified] = useState(false); // 是否已手动修改止盈价
   const { data: defaultTpData } = trpc.orderFlow.getDefaultTakeProfit.useQuery(
@@ -380,11 +386,11 @@ export default function OrderFlowPage() {
     { enabled: ledgerId > 0, staleTime: 30000 }
   );
   const defaultTakeProfit = defaultTpData?.targetExitPrice ?? null;
-
-  // 最新资金费率
+  // 最新资金费率（按当前弹窗选择的币种）
   const [fundingRate, setFundingRate] = useState<number | null>(null);
+  const formSymbol = form.symbol || 'ETHUSDT';
   const { data: fundingRateData } = trpc.orderFlow.getLatestFundingRate.useQuery(
-    { symbol: "ETHUSDT" },
+    { symbol: formSymbol },
     { refetchInterval: 60000, staleTime: 30000 }
   );
   useEffect(() => {
@@ -460,7 +466,8 @@ export default function OrderFlowPage() {
     let totalPnl = 0;       // 总浮动盈亏
     let pnlCount = 0;       // 有有效盈亏的订单数
     for (const order of filteredOrders as any[]) {
-      const calc = calcOrder(order, currentPrice, fundingRate);
+      const oPrice = getPriceForSymbol(order.symbol || 'ETHUSDT');
+      const calc = calcOrder(order, oPrice, fundingRate);
       totalCost += calc.margin;
       totalNotional += calc.notional;
       if (calc.pnl != null) {
@@ -470,7 +477,7 @@ export default function OrderFlowPage() {
     }
     const pnlPct = totalCost > 0 ? totalPnl / totalCost : null;
     return { totalCost, totalNotional, totalPnl, pnlPct, count: filteredOrders.length, pnlCount };
-  }, [filteredOrders, currentPrice, fundingRate]);
+  }, [filteredOrders, cryptoPricesRaw, fundingRate]);
 
   function openEdit(order: any) {
     setForm({
@@ -717,7 +724,8 @@ export default function OrderFlowPage() {
         )}
 
         {filteredOrders.map((order: any) => {
-          const calc = calcOrder(order, currentPrice, fundingRate);
+          const orderPrice = getPriceForSymbol(order.symbol || 'ETHUSDT');
+          const calc = calcOrder(order, orderPrice, fundingRate);
           const isLong = order.direction === "long";
           const isOpen = order.status === "open";
           const isPerp = order.market_type !== "spot";
@@ -794,7 +802,7 @@ export default function OrderFlowPage() {
                   </div>
                   <div className="text-base font-bold" style={{ color: isOpen ? OKX_YELLOW : OKX_TEXT_SEC, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
                     {isOpen
-                      ? currentPrice ? `${fmt(currentPrice, 1)} u` : "--"
+                      ? orderPrice ? `${fmt(orderPrice, 1)} u` : "--"
                       : order.exit_price ? `${fmt(parseFloat(order.exit_price), 1)} u` : "--"}
                   </div>
                 </div>
@@ -1006,6 +1014,31 @@ export default function OrderFlowPage() {
               </div>
             </div>
 
+            {/* 币种选择 */}
+            <div className="mb-4">
+              <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>币种</label>
+              <div className="flex gap-2">
+                {(['ETHUSDT', 'BTCUSDT', 'SOLUSDT', 'SUIUSDT'] as const).map((sym) => {
+                  const coin = sym.replace('USDT', '');
+                  const price = getPriceForSymbol(sym);
+                  return (
+                    <button
+                      key={sym}
+                      onClick={() => setForm((f) => ({ ...f, symbol: sym }))}
+                      className="flex-1 py-2 rounded-xl text-sm font-medium transition-all flex flex-col items-center"
+                      style={
+                        form.symbol === sym
+                          ? { backgroundColor: "rgba(240,185,11,0.15)", color: OKX_YELLOW, border: `1px solid rgba(240,185,11,0.4)` }
+                          : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
+                      }
+                    >
+                      <span className="font-semibold">{coin}</span>
+                      {price && <span className="text-xs opacity-70 mt-0.5">{fmt(price, coin === 'BTC' ? 0 : coin === 'ETH' ? 1 : 3)}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             {/* 现货 / 永续合约 */}
             <div className="mb-4">
               <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>交易类型</label>
