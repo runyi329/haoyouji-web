@@ -213,7 +213,6 @@ export default function OrderFlowPage() {
 
   // 默认止盈价（来自智能仓位管理目标止盈）
   const [takeProfitModified, setTakeProfitModified] = useState(false); // 是否已手动修改止盈价
-  const [showDefaultTpTip, setShowDefaultTpTip] = useState(false); // 是否显示默认价提示
   const { data: defaultTpData } = trpc.orderFlow.getDefaultTakeProfit.useQuery(
     { ledgerId },
     { enabled: ledgerId > 0, staleTime: 30000 }
@@ -280,7 +279,7 @@ export default function OrderFlowPage() {
       setForm(f => ({ ...f, takeProfit: String(defaultTakeProfit) }));
       setTakeProfitModified(false);
     }
-  }, [defaultTakeProfit]);
+  }, [defaultTakeProfit, showForm]);
 
   const filteredOrders = useMemo(() => {
     if (filterStatus === "all") return orders as any[];
@@ -846,15 +845,9 @@ export default function OrderFlowPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (!takeProfitModified) {
-                        // 当前是默认值，点击显示提示
-                        setShowDefaultTpTip(true);
-                        setTimeout(() => setShowDefaultTpTip(false), 3000);
-                      } else {
-                        // 已修改，点击恢复默认
-                        setForm(f => ({ ...f, takeProfit: String(defaultTakeProfit) }));
-                        setTakeProfitModified(false);
-                      }
+                      // 无论当前状态，点击都填入默认值
+                      setForm(f => ({ ...f, takeProfit: String(defaultTakeProfit) }));
+                      setTakeProfitModified(false);
                     }}
                     className="text-xs px-2 py-0.5 rounded-full"
                     style={{
@@ -867,11 +860,6 @@ export default function OrderFlowPage() {
                   </button>
                 )}
               </div>
-              {showDefaultTpTip && (
-                <div className="text-xs mb-1 px-2 py-1 rounded-lg" style={{ background: "rgba(240,185,11,0.1)", color: OKX_YELLOW }}>
-                  当前默认止盈价：{defaultTakeProfit} u（来自智能仓位管理目标止盈）
-                </div>
-              )}
               <input
                 type="number"
                 inputMode="decimal"
@@ -880,7 +868,7 @@ export default function OrderFlowPage() {
                   setForm(f => ({ ...f, takeProfit: e.target.value }));
                   setTakeProfitModified(e.target.value !== "" && e.target.value !== String(defaultTakeProfit));
                 }}
-                placeholder="如 3000"
+                placeholder={defaultTakeProfit ? `默认 ${defaultTakeProfit}` : "如 3000"}
                 className="w-full px-3 py-2 rounded-xl text-sm font-mono"
                 style={{
                   background: "rgba(255,255,255,0.05)",
