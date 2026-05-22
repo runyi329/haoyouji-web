@@ -23537,7 +23537,32 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         );
         return { success: true };
       }),
-    // 获取最新资金费率（从数据库）
+    // 获取默认止盈价（来自智能仓位管理的目标止盈价）
+    getDefaultTakeProfit: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        if (!db) return { targetExitPrice: null, targetProfitCny: 0, cnyRate: 7.28 };
+        // 获取设置（目标利润、汇率、目标持仓量）
+        const settings = await dbEthPosition.getEthPositionSettings(input.ledgerId, ctx.user.id);
+        const { targetProfitCny, cnyRate, targetEthQty } = settings;
+        if (!targetProfitCny || targetProfitCny <= 0) return { targetExitPrice: null, targetProfitCny, cnyRate };
+        // 获取计划档位数据，计算目标均价
+        const levels = await dbEthPosition.getEthPositionLevels(input.ledgerId, ctx.user.id);
+        let planCost = 0, planQty = 0;
+        for (const lv of levels) {
+          const qty = parseFloat(String(lv.plannedQty || 0));
+          const price = parseFloat(String(lv.price || 0));
+          if (qty > 0 && price > 0) { planCost += qty * price; planQty += qty; }
+        }
+        const targetAvgPrice = planQty > 0 ? planCost / planQty : 0;
+        const targetQty = targetEthQty > 0 ? targetEthQty : planQty;
+        if (targetAvgPrice <= 0 || targetQty <= 0) return { targetExitPrice: null, targetProfitCny, cnyRate };
+        const profitUsdt = cnyRate > 0 ? targetProfitCny / cnyRate : 0;
+        const targetExitPrice = Math.round(targetAvgPrice + profitUsdt / targetQty);
+        return { targetExitPrice, targetProfitCny, cnyRate };
+      }),
+        // 获取最新资金费率（从数据库）
     getLatestFundingRate: publicProcedure
       .input(z.object({ symbol: z.string().default('ETHUSDT') }))
       .query(async ({ input }) => {
