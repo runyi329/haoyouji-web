@@ -211,6 +211,15 @@ export default function OrderFlowPage() {
     if (ethPrice && ethPrice > 0) setCurrentPrice(ethPrice);
   }, [cryptoPricesRaw]);
 
+  // 默认止盈价（来自智能仓位管理目标止盈）
+  const [takeProfitModified, setTakeProfitModified] = useState(false); // 是否已手动修改止盈价
+  const [showDefaultTpTip, setShowDefaultTpTip] = useState(false); // 是否显示默认价提示
+  const { data: defaultTpData } = trpc.orderFlow.getDefaultTakeProfit.useQuery(
+    { ledgerId },
+    { enabled: ledgerId > 0, staleTime: 30000 }
+  );
+  const defaultTakeProfit = defaultTpData?.targetExitPrice ?? null;
+
   // 最新资金费率
   const [fundingRate, setFundingRate] = useState<number | null>(null);
   const { data: fundingRateData } = trpc.orderFlow.getLatestFundingRate.useQuery(
@@ -288,6 +297,9 @@ export default function OrderFlowPage() {
       status: order.status || "open",
       note: order.note || "",
     });
+    const tp = order.take_profit ? String(order.take_profit) : "";
+    const isDefaultTp = defaultTakeProfit && tp === String(defaultTakeProfit);
+    setTakeProfitModified(!isDefaultTp && tp !== "");
     setEditingId(order.id);
     setShowForm(true);
   }
@@ -796,7 +808,6 @@ export default function OrderFlowPage() {
               { label: "开仓价 (USDT)", key: "entryPrice", placeholder: "如 2500.00" },
               { label: "数量 (ETH)", key: "quantity", placeholder: "如 0.5" },
               ...(form.marketType === "perp" ? [{ label: "杠杆倍数", key: "leverage", placeholder: "如 5" }] : []),
-              { label: "止盈价 (可选)", key: "takeProfit", placeholder: "如 3000" },
               { label: "止损价 (可选)", key: "stopLoss", placeholder: "如 2200" },
             ].map(({ label, key, placeholder }) => (
               <div key={key} className="mb-3">
@@ -819,6 +830,60 @@ export default function OrderFlowPage() {
                 />
               </div>
             ))}
+            {/* 止盈价（带默认值跟踪） */}
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs" style={{ color: OKX_TEXT_SEC }}>止盈价 (可选)</label>
+                {defaultTakeProfit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!takeProfitModified) {
+                        // 当前是默认值，点击显示提示
+                        setShowDefaultTpTip(true);
+                        setTimeout(() => setShowDefaultTpTip(false), 3000);
+                      } else {
+                        // 已修改，点击恢复默认
+                        setForm(f => ({ ...f, takeProfit: String(defaultTakeProfit) }));
+                        setTakeProfitModified(false);
+                      }
+                    }}
+                    className="text-xs px-2 py-0.5 rounded-full"
+                    style={{
+                      background: takeProfitModified ? "rgba(240,185,11,0.15)" : "rgba(255,255,255,0.08)",
+                      color: takeProfitModified ? OKX_YELLOW : OKX_TEXT_SEC,
+                      border: `1px solid ${takeProfitModified ? OKX_YELLOW : OKX_BORDER}`,
+                    }}
+                  >
+                    {takeProfitModified ? "恢复默认" : "默认"}
+                  </button>
+                )}
+              </div>
+              {showDefaultTpTip && (
+                <div className="text-xs mb-1 px-2 py-1 rounded-lg" style={{ background: "rgba(240,185,11,0.1)", color: OKX_YELLOW }}>
+                  当前默认止盈价：{defaultTakeProfit} u（来自智能仓位管理目标止盈）
+                </div>
+              )}
+              <input
+                type="number"
+                inputMode="decimal"
+                value={form.takeProfit}
+                onChange={(e) => {
+                  setForm(f => ({ ...f, takeProfit: e.target.value }));
+                  setTakeProfitModified(e.target.value !== "" && e.target.value !== String(defaultTakeProfit));
+                }}
+                placeholder="如 3000"
+                className="w-full px-3 py-2 rounded-xl text-sm font-mono"
+                style={{
+                  background: "rgba(255,255,255,0.05)",
+                  border: `1px solid ${takeProfitModified ? OKX_YELLOW : OKX_BORDER}`,
+                  color: OKX_TEXT_PRI,
+                  outline: "none",
+                  boxSizing: "border-box",
+                  maxWidth: "100%",
+                }}
+              />
+            </div>
 
             {/* 开仓日期 */}
             <div className="mb-3">
@@ -955,7 +1020,14 @@ export default function OrderFlowPage() {
       )}
       {/* ===== 底部 FAB 新增按钮 ===== */}
       {!showForm && <button
-        onClick={() => { setEditingId(null); setForm(defaultForm()); setShowForm(true); }}
+        onClick={() => {
+          setEditingId(null);
+          const f = defaultForm();
+          if (defaultTakeProfit) { f.takeProfit = String(defaultTakeProfit); }
+          setForm(f);
+          setTakeProfitModified(false);
+          setShowForm(true);
+        }}
         className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all inline-flex items-center justify-center"
         style={{ backgroundColor: OKX_YELLOW, color: "#000" }}
       >
