@@ -617,34 +617,61 @@ export default function OrderFlowPage() {
       {/* ===== 汇总栏 ===== */}
       {!isLoading && summary.count > 0 && (
         <div
-          className="mx-3 mb-3 rounded-xl px-4 py-3"
-          style={{ background: "rgba(255,255,255,0.04)", border: `1px solid ${OKX_BORDER}` }}
+          className="mx-3 mb-3 rounded-2xl overflow-hidden"
+          style={{
+            background: "linear-gradient(135deg, rgba(240,185,11,0.08) 0%, rgba(255,255,255,0.03) 60%, rgba(0,0,0,0.2) 100%)",
+            border: "1px solid rgba(240,185,11,0.18)",
+            boxShadow: "0 2px 16px rgba(240,185,11,0.06)",
+          }}
         >
-          <div className="flex items-center justify-between">
-            {/* 左：订单数 + 总成本 */}
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>共 {summary.count} 笔</span>
-                <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>| 成本 {fmt(summary.totalCost, 2)} u</span>
+          {/* 顶部标题行 */}
+          <div
+            className="flex items-center justify-between px-4 pt-2.5 pb-1"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+          >
+            <span className="text-xs font-medium" style={{ color: "rgba(240,185,11,0.7)", letterSpacing: "0.05em" }}>持仓汇总</span>
+            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>{summary.count} 笔订单</span>
+          </div>
+          {/* 主数据行 */}
+          <div className="flex items-stretch px-4 py-3 gap-4">
+            {/* 左：总成本 */}
+            <div className="flex-1">
+              <div className="text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>总成本</div>
+              <div
+                className="text-lg font-bold"
+                style={{
+                  color: "rgba(255,255,255,0.9)",
+                  fontFamily: "Inter, -apple-system, sans-serif",
+                  fontVariantNumeric: "tabular-nums",
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                {fmt(summary.totalCost, 2)}
+                <span className="text-xs font-normal ml-1" style={{ color: OKX_TEXT_SEC }}>u</span>
               </div>
             </div>
+            {/* 分隔线 */}
+            <div style={{ width: 1, background: "rgba(255,255,255,0.07)", flexShrink: 0 }} />
             {/* 右：总浮动盈亏 */}
-            <div className="text-right">
+            <div className="flex-1 text-right">
+              <div className="text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>总浮动盈亏</div>
               <div
-                className="text-base font-bold"
+                className="text-lg font-bold"
                 style={{
                   color: summary.totalPnl >= 0 ? OKX_RED : OKX_GREEN,
                   fontFamily: "Inter, -apple-system, sans-serif",
                   fontVariantNumeric: "tabular-nums",
+                  letterSpacing: "-0.02em",
                 }}
               >
-                {summary.totalPnl >= 0 ? "+" : ""}{fmt(summary.totalPnl, 2)} u
+                {summary.totalPnl >= 0 ? "+" : ""}{fmt(summary.totalPnl, 2)}
+                <span className="text-xs font-normal ml-1" style={{ color: OKX_TEXT_SEC }}>u</span>
               </div>
               {summary.pnlPct != null && (
                 <div
-                  className="text-xs"
+                  className="text-xs mt-0.5"
                   style={{
-                    color: summary.totalPnl >= 0 ? OKX_RED : OKX_GREEN,
+                    color: summary.totalPnl >= 0 ? "rgba(246,70,93,0.7)" : "rgba(14,203,129,0.7)",
                     fontFamily: "Inter, -apple-system, sans-serif",
                     fontVariantNumeric: "tabular-nums",
                   }}
