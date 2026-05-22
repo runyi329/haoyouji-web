@@ -477,24 +477,6 @@ export default function OrderFlowPage() {
                 <button onClick={() => openEdit(order)} className="p-1 rounded opacity-50 hover:opacity-100">
                   <Pencil className="w-3.5 h-3.5 text-gray-400" />
                 </button>
-                {deleteConfirmId === order.id ? (
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => { deleteOrderMutation.mutate({ id: order.id, ledgerId }); setDeleteConfirmId(null); }}
-                      className="p-1 rounded"
-                      style={{ color: OKX_RED }}
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => setDeleteConfirmId(null)} className="p-1 rounded opacity-50">
-                      <X className="w-3.5 h-3.5 text-gray-400" />
-                    </button>
-                  </div>
-                ) : (
-                  <button onClick={() => setDeleteConfirmId(order.id)} className="p-1 rounded opacity-30 hover:opacity-70">
-                    <Trash2 className="w-3.5 h-3.5 text-gray-400" />
-                  </button>
-                )}
               </div>
 
               {/* 行2：主要数据 - 开仓价 / 最新价 / 盈亏 */}
@@ -502,7 +484,7 @@ export default function OrderFlowPage() {
                 <div>
                   <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>开仓价</div>
                   <div className="text-base font-bold" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    ${fmt(parseFloat(order.entry_price), 1)}
+                    {fmt(parseFloat(order.entry_price), 1)} U
                   </div>
                 </div>
                 <div className="text-center">
@@ -511,8 +493,8 @@ export default function OrderFlowPage() {
                   </div>
                   <div className="text-base font-bold" style={{ color: isOpen ? OKX_YELLOW : OKX_TEXT_SEC, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
                     {isOpen
-                      ? currentPrice ? `$${fmt(currentPrice, 1)}` : "--"
-                      : order.exit_price ? `$${fmt(parseFloat(order.exit_price), 1)}` : "--"}
+                      ? currentPrice ? `${fmt(currentPrice, 1)} U` : "--"
+                      : order.exit_price ? `${fmt(parseFloat(order.exit_price), 1)} U` : "--"}
                   </div>
                 </div>
                 <div className="text-right">
@@ -520,7 +502,7 @@ export default function OrderFlowPage() {
                     {isOpen ? "浮动盈亏" : "实现盈亏"}
                   </div>
                   <div className="text-base font-bold" style={{ color: pnlColor, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {calc.pnl != null ? `${calc.pnl >= 0 ? "+" : ""}$${fmt(Math.abs(calc.pnl), 2)}` : "--"}
+                    {calc.pnl != null ? `${calc.pnl >= 0 ? "+" : "-"}${fmt(Math.abs(calc.pnl), 2)} U` : "--"}
                   </div>
                   {calc.pnlPct != null && (
                     <div className="text-xs" style={{ color: pnlColor, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
@@ -541,13 +523,13 @@ export default function OrderFlowPage() {
                 <div className="text-center">
                   <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>{isPerp ? "保证金" : "成本"}</div>
                   <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    ${fmt(calc.margin, 2)}
+                    {fmt(calc.margin, 2)} U
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>名义价值</div>
                   <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    ${fmt(calc.notional, 0)}
+                    {fmt(calc.notional, 0)} U
                   </div>
                 </div>
               </div>
@@ -560,7 +542,7 @@ export default function OrderFlowPage() {
                       <TrendingUp className="w-3 h-3" style={{ color: OKX_GREEN }} />
                       <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>止盈</span>
                       <span className="text-xs" style={{ color: OKX_GREEN, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                        ${fmt(parseFloat(order.take_profit), 1)}
+                        {fmt(parseFloat(order.take_profit), 1)} U
                       </span>
                     </div>
                   )}
@@ -569,7 +551,7 @@ export default function OrderFlowPage() {
                       <TrendingDown className="w-3 h-3" style={{ color: OKX_RED }} />
                       <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>止损</span>
                       <span className="text-xs" style={{ color: OKX_RED, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                        ${fmt(parseFloat(order.stop_loss), 1)}
+                        {fmt(parseFloat(order.stop_loss), 1)} U
                       </span>
                     </div>
                   )}
@@ -584,7 +566,7 @@ export default function OrderFlowPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>手续费</span>
                   <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {(calc.feeRate * 100).toFixed(4)}% &nbsp;—&nbsp; -${fmt(calc.totalFee, 4)}
+                    {(calc.feeRate * 100).toFixed(4)}% &nbsp;—&nbsp; -{fmt(calc.totalFee, 4)} U
                   </span>
                 </div>
                 {isPerp && (
@@ -593,7 +575,7 @@ export default function OrderFlowPage() {
                     <span className="text-xs" style={{ color: fundingRate != null && fundingRate > 0 ? OKX_RED : OKX_GREEN, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
                       {fundingRate != null ? fmtPct(fundingRate) : "--"}
                       {calc.fundingCost != null && (
-                        <span style={{ color: OKX_TEXT_SEC }}> &nbsp;—&nbsp; {calc.fundingCost >= 0 ? "-" : "+"}${fmt(Math.abs(calc.fundingCost), 4)}</span>
+                        <span style={{ color: OKX_TEXT_SEC }}> &nbsp;—&nbsp; {calc.fundingCost >= 0 ? "-" : "+"}{fmt(Math.abs(calc.fundingCost), 4)} U</span>
                       )}
                     </span>
                   </div>
@@ -601,7 +583,7 @@ export default function OrderFlowPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>盈亏平衡</span>
                   <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    ${fmt(calc.breakEven, 2)}
+                    {fmt(calc.breakEven, 2)} U
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -645,9 +627,38 @@ export default function OrderFlowPage() {
               <h3 className="text-base font-semibold" style={{ color: OKX_TEXT_PRI }}>
                 {editingId != null ? "编辑订单" : "新增订单"}
               </h3>
-              <button onClick={() => { setShowForm(false); setEditingId(null); }}>
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
+              <div className="flex items-center gap-2">
+                {/* 编辑模式下显示删除按鈕 */}
+                {editingId != null && (
+                  deleteConfirmId === editingId ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>确认删除?</span>
+                      <button
+                        onClick={() => { deleteOrderMutation.mutate({ id: editingId, ledgerId }); setDeleteConfirmId(null); setShowForm(false); setEditingId(null); }}
+                        className="px-2 py-0.5 rounded text-xs"
+                        style={{ backgroundColor: "rgba(246,70,93,0.15)", color: OKX_RED, border: `1px solid rgba(246,70,93,0.3)` }}
+                      >
+                        删除
+                      </button>
+                      <button onClick={() => setDeleteConfirmId(null)} className="px-2 py-0.5 rounded text-xs" style={{ color: OKX_TEXT_SEC }}>
+                        取消
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setDeleteConfirmId(editingId)}
+                      className="p-1 rounded"
+                      style={{ color: OKX_RED, opacity: 0.6 }}
+                      title="删除订单"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )
+                )}
+                <button onClick={() => { setShowForm(false); setEditingId(null); setDeleteConfirmId(null); }}>
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
             </div>
 
             {/* 现货 / 永续合约 */}
