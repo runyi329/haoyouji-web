@@ -456,18 +456,20 @@ export default function OrderFlowPage() {
   // 汇总计算（基于当前筛选结果）
   const summary = useMemo(() => {
     let totalCost = 0;      // 总成本（保证金）
+    let totalNotional = 0;  // 总名义价值
     let totalPnl = 0;       // 总浮动盈亏
     let pnlCount = 0;       // 有有效盈亏的订单数
     for (const order of filteredOrders as any[]) {
       const calc = calcOrder(order, currentPrice, fundingRate);
       totalCost += calc.margin;
+      totalNotional += calc.notional;
       if (calc.pnl != null) {
         totalPnl += calc.pnl;
         pnlCount++;
       }
     }
     const pnlPct = totalCost > 0 ? totalPnl / totalCost : null;
-    return { totalCost, totalPnl, pnlPct, count: filteredOrders.length, pnlCount };
+    return { totalCost, totalNotional, totalPnl, pnlPct, count: filteredOrders.length, pnlCount };
   }, [filteredOrders, currentPrice, fundingRate]);
 
   function openEdit(order: any) {
@@ -632,13 +634,13 @@ export default function OrderFlowPage() {
             <span className="text-xs font-medium" style={{ color: "rgba(240,185,11,0.7)", letterSpacing: "0.05em" }}>持仓汇总</span>
             <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>{summary.count} 笔订单</span>
           </div>
-          {/* 主数据行 */}
-          <div className="flex items-stretch px-4 py-3 gap-4">
-            {/* 左：总成本 */}
+          {/* 主数据行：三列 */}
+          <div className="flex items-stretch px-4 py-3 gap-3">
+            {/* 左：总名义价值 */}
             <div className="flex-1">
-              <div className="text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>总成本</div>
+              <div className="text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>名义价值</div>
               <div
-                className="text-lg font-bold"
+                className="text-base font-bold"
                 style={{
                   color: "rgba(255,255,255,0.9)",
                   fontFamily: "Inter, -apple-system, sans-serif",
@@ -646,17 +648,35 @@ export default function OrderFlowPage() {
                   letterSpacing: "-0.02em",
                 }}
               >
-                {fmt(summary.totalCost, 2)}
-                <span className="text-xs font-normal ml-1" style={{ color: OKX_TEXT_SEC }}>u</span>
+                {fmt(summary.totalNotional, 0)}
+                <span className="text-xs font-normal ml-0.5" style={{ color: OKX_TEXT_SEC }}>u</span>
+              </div>
+            </div>
+            {/* 分隔线 */}
+            <div style={{ width: 1, background: "rgba(255,255,255,0.07)", flexShrink: 0 }} />
+            {/* 中：总成本 */}
+            <div className="flex-1 text-center">
+              <div className="text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>总成本</div>
+              <div
+                className="text-base font-bold"
+                style={{
+                  color: "rgba(255,255,255,0.9)",
+                  fontFamily: "Inter, -apple-system, sans-serif",
+                  fontVariantNumeric: "tabular-nums",
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                {fmt(summary.totalCost, 0)}
+                <span className="text-xs font-normal ml-0.5" style={{ color: OKX_TEXT_SEC }}>u</span>
               </div>
             </div>
             {/* 分隔线 */}
             <div style={{ width: 1, background: "rgba(255,255,255,0.07)", flexShrink: 0 }} />
             {/* 右：总浮动盈亏 */}
             <div className="flex-1 text-right">
-              <div className="text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>总浮动盈亏</div>
+              <div className="text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>浮动盈亏</div>
               <div
-                className="text-lg font-bold"
+                className="text-base font-bold"
                 style={{
                   color: summary.totalPnl >= 0 ? OKX_RED : OKX_GREEN,
                   fontFamily: "Inter, -apple-system, sans-serif",
@@ -665,7 +685,7 @@ export default function OrderFlowPage() {
                 }}
               >
                 {summary.totalPnl >= 0 ? "+" : ""}{fmt(summary.totalPnl, 2)}
-                <span className="text-xs font-normal ml-1" style={{ color: OKX_TEXT_SEC }}>u</span>
+                <span className="text-xs font-normal ml-0.5" style={{ color: OKX_TEXT_SEC }}>u</span>
               </div>
               {summary.pnlPct != null && (
                 <div
