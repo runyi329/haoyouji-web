@@ -147,11 +147,14 @@ function calcOrder(
     if (direction === "short") fundingCost = -fundingCost;
   }
 
-  // 盈亏平衡价（含手续费）
+  // 盈亏平衡价（含手续费 + 累计资金费）
+  // 多单：需要涨到 entry*(1+2*fee) + fundingCost/qty 才能回本
+  // 空单：需要跌到 entry*(1-2*fee) - fundingCost/qty 才能回本
+  const fundingAdj = (fundingCost != null && qty > 0) ? Math.abs(fundingCost) / qty : 0;
   const breakEven =
     direction === "long"
-      ? entry * (1 + effectiveFeeRate * 2)
-      : entry * (1 - effectiveFeeRate * 2);
+      ? entry * (1 + effectiveFeeRate * 2) + fundingAdj
+      : entry * (1 - effectiveFeeRate * 2) - fundingAdj;
 
   return { notional, margin, openFee, closeFee, totalFee, pnl, pnlPct, fundingCost, breakEven, feeRate };
 }
