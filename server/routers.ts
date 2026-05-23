@@ -23538,6 +23538,39 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         return { success: true };
       }),
     // ===== 订单备注 CRUD =====
+    // 批量获取多个订单的备注数量（用于卡片初始显示徽章）
+    getNotesCountBatch: protectedProcedure
+      .input(z.object({ orderIds: z.array(z.number()), ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        if (!db || input.orderIds.length === 0) return {} as Record<number, number>;
+        // 确保表存在
+        await db.execute(sql`
+          CREATE TABLE IF NOT EXISTS order_flow_notes (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            order_id INT NOT NULL,
+            ledger_id INT NOT NULL,
+            user_id INT NOT NULL,
+            content TEXT NOT NULL,
+            created_at DATETIME DEFAULT NOW(),
+            updated_at DATETIME DEFAULT NOW() ON UPDATE NOW(),
+            INDEX idx_order (order_id, ledger_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+        const idList = input.orderIds.map(id => Number(id)).join(',');
+        const rows = await db.execute(
+          sql`SELECT order_id, COUNT(*) as cnt FROM order_flow_notes
+              WHERE order_id IN (${sql.raw(idList)})
+                AND ledger_id = ${input.ledgerId}
+                AND user_id = ${ctx.user.id}
+              GROUP BY order_id`
+        );
+        const result: Record<number, number> = {};
+        for (const r of (rows as any)[0] as any[]) {
+          result[Number(r.order_id)] = Number(r.cnt);
+        }
+        return result;
+      }),
     // 获取某订单的所有备注
     getNotes: protectedProcedure
       .input(z.object({ orderId: z.number(), ledgerId: z.number() }))
