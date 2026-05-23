@@ -203,13 +203,14 @@ const OKX_BG_NOTES = "rgba(0,0,0,0.18)";
 const OKX_BORDER_NOTES = "rgba(255,255,255,0.07)";
 
 function OrderNotesSection({
-  orderId, ledgerId, isExpanded, onToggle,
+  orderId, ledgerId, initialCount, isExpanded, onToggle,
   noteInput, onNoteInputChange,
   editingNoteId, editingNoteContent,
   onStartEdit, onCancelEdit, onEditContentChange,
 }: {
   orderId: number;
   ledgerId: number;
+  initialCount: number;
   isExpanded: boolean;
   onToggle: () => void;
   noteInput: string;
@@ -225,10 +226,13 @@ function OrderNotesSection({
     { orderId, ledgerId },
     { enabled: isExpanded, staleTime: 10000 }
   );
+  // 展开时用实际notes数量，折叠时用initialCount（批量预加载的数量）
+  const displayCount = isExpanded ? notes.length : initialCount;
   const addNote = trpc.orderFlow.addNote.useMutation({
     onSuccess: () => {
       onNoteInputChange("");
       utils.orderFlow.getNotes.invalidate({ orderId, ledgerId });
+      utils.orderFlow.getNotesCountBatch.invalidate();
     },
   });
   const updateNote = trpc.orderFlow.updateNote.useMutation({
@@ -238,7 +242,10 @@ function OrderNotesSection({
     },
   });
   const deleteNote = trpc.orderFlow.deleteNote.useMutation({
-    onSuccess: () => utils.orderFlow.getNotes.invalidate({ orderId, ledgerId }),
+    onSuccess: () => {
+      utils.orderFlow.getNotes.invalidate({ orderId, ledgerId });
+      utils.orderFlow.getNotesCountBatch.invalidate();
+    },
   });
 
   function fmtNoteTime(ts: string) {
@@ -265,12 +272,12 @@ function OrderNotesSection({
         <div className="flex items-center gap-1.5">
           <MessageSquarePlus className="w-3.5 h-3.5" style={{ color: OKX_TEXT_SEC }} />
           <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>备注</span>
-          {notes.length > 0 && (
+          {displayCount > 0 && (
             <span
               className="text-xs px-1 rounded"
               style={{ background: "rgba(240,185,11,0.15)", color: OKX_YELLOW }}
             >
-              {notes.length}
+              {displayCount}
             </span>
           )}
         </div>
@@ -477,6 +484,13 @@ export default function OrderFlowPage() {
     const pnlPct = totalCost > 0 ? totalPnl / totalCost : null;
     return { totalCost, totalNotional, totalPnl, pnlPct, count: filteredOrders.length, pnlCount };
   }, [filteredOrders, cryptoPricesRaw, fundingRate]);
+
+  // 批量获取所有订单的备注数量（页面加载时就显示徽章）
+  const orderIds = useMemo(() => (orders as any[]).map((o: any) => o.id), [orders]);
+  const { data: notesCountMap = {} } = trpc.orderFlow.getNotesCountBatch.useQuery(
+    { orderIds, ledgerId },
+    { enabled: isAuthenticated && ledgerId > 0 && orderIds.length > 0, staleTime: 30000 }
+  );
 
   function openEdit(order: any) {
     setForm({
@@ -925,6 +939,7 @@ export default function OrderFlowPage() {
               <OrderNotesSection
                 orderId={order.id}
                 ledgerId={ledgerId}
+                initialCount={(notesCountMap as any)[order.id] ?? 0}
                 isExpanded={isNotesExpanded}
                 onToggle={() => {
                   setExpandedNotes(prev => {
