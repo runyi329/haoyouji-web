@@ -3,10 +3,10 @@
  * 谷间优筹 — 美股精选保本增值计划
  * 布局：顶部导航 → 行情选股 → 下单面板 → 我的订单列表
  */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, TrendingUp, TrendingDown, Loader2, RefreshCw, ChevronDown } from "lucide-react";
+import { ChevronLeft, TrendingUp, TrendingDown, Loader2, RefreshCw, ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 
 // ─── 精选股票池配置 ────────────────────────────────────────────────
@@ -429,6 +429,9 @@ export default function GujianPage() {
   const [sliderPct, setSliderPct] = useState(0);
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+  // 排序状态
+  const [sortKey, setSortKey] = useState<'time' | 'coin' | 'amount' | 'price' | 'status'>('time');
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
 
   // 行情
   const { data: priceData, isLoading: priceLoading, refetch: refetchPrice } = trpc.getUsStockPrice.useQuery(
@@ -459,6 +462,33 @@ export default function GujianPage() {
   // - orderType = '谷间优筹' 的是谷间优筹
   // finance_interest_orders 表里全是融资付息订单，不在此显示
   const gujianOrders = afOrders;
+
+  // 排序计算
+  const sortedOrders = useMemo(() => {
+    const arr = [...(gujianOrders as any[])];
+    arr.sort((a, b) => {
+      let va: any, vb: any;
+      if (sortKey === 'time') { va = a.createdAt; vb = b.createdAt; }
+      else if (sortKey === 'coin') { va = a.coin; vb = b.coin; }
+      else if (sortKey === 'amount') { va = parseFloat(a.amount || '0'); vb = parseFloat(b.amount || '0'); }
+      else if (sortKey === 'price') { va = parseFloat(a.limitPrice || '0'); vb = parseFloat(b.limitPrice || '0'); }
+      else if (sortKey === 'status') { va = a.sellStatus || a.status || ''; vb = b.sellStatus || b.status || ''; }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return arr;
+  }, [gujianOrders, sortKey, sortDir]);
+
+  // 切换排序方向的辅助函数
+  const handleSort = (key: typeof sortKey) => {
+    if (sortKey === key) {
+      setSortDir(prev => prev === 'desc' ? 'asc' : 'desc');
+    } else {
+      setSortKey(key);
+      setSortDir('desc');
+    }
+  };
 
   // 下单
   const submitOrderMutation = trpc.ledger.afSubmitOrder.useMutation({
@@ -798,9 +828,39 @@ export default function GujianPage() {
 
           {/* 我的订单列表 */}
           <div className="rounded-2xl bg-white shadow-sm" style={{ border: "1px solid #E0E8FF" }}>
-            <div className="px-4 py-3 border-b" style={{ borderColor: "#E0E8FF" }}>
-              <span className="font-semibold text-sm" style={{ color: "#1A2340" }}>我的订单</span>
-              <span className="text-xs ml-2" style={{ color: "#9CA3AF" }}>{gujianOrders.length} 笔</span>
+            <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: "#E0E8FF" }}>
+              <div className="flex items-center">
+                <span className="font-semibold text-sm" style={{ color: "#1A2340" }}>我的订单</span>
+                <span className="text-xs ml-2" style={{ color: "#9CA3AF" }}>{gujianOrders.length} 笔</span>
+              </div>
+              {/* 排序按鈕组 */}
+              <div className="flex items-center gap-1">
+                {(['time', 'coin', 'amount', 'price', 'status'] as const).map((key) => {
+                  const labels: Record<string, string> = { time: '时间', coin: '币种', amount: '金额', price: '价格', status: '状态' };
+                  const isActive = sortKey === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => handleSort(key)}
+                      className="flex items-center gap-0.5 px-2 py-1 rounded text-xs transition-colors"
+                      style={{
+                        color: isActive ? '#2563EB' : '#9CA3AF',
+                        background: isActive ? '#EFF6FF' : 'transparent',
+                        fontWeight: isActive ? 600 : 400,
+                      }}
+                    >
+                      {labels[key]}
+                      {isActive ? (
+                        sortDir === 'desc'
+                          ? <ChevronDown className="w-3 h-3" />
+                          : <ChevronUp className="w-3 h-3" />
+                      ) : (
+                        <ChevronsUpDown className="w-3 h-3 opacity-40" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {ordersLoading ? (
@@ -811,7 +871,7 @@ export default function GujianPage() {
               <div className="py-10 text-center text-sm" style={{ color: "#9CA3AF" }}>暂无订单，快去下单吧</div>
             ) : (
               <div className="divide-y" style={{ borderColor: "#F0F4FF" }}>
-                {gujianOrders.map((order: any) => {
+                {sortedOrders.map((order: any) => {
                   const isExpanded = expandedOrderId === order.id;
                   const statusLabel =
                     order.sellStatus === "sold" ? "已卖出" :
