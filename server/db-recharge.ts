@@ -244,8 +244,8 @@ export async function createRechargeOrder(
   const uniqueAmount = generateUniqueAmount(baseAmount);
   const orderNo = generateOrderNo();
   
-  // 30分钟后过期
-  const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
+  // 12小时后过期（覆盖时区差+链上确认延迟）
+  const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000);
   
   await db.insert(rechargeOrders).values({
     userId,
