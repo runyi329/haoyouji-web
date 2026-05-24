@@ -11,7 +11,7 @@ import { trpc } from "@/lib/trpc";
 import {
   ChevronLeft, RefreshCw, TrendingUp, TrendingDown, Bitcoin,
   AlertCircle, WifiOff, CheckCircle2, Circle, Loader2, Users,
-  Wallet, ChevronDown,
+  Wallet, ChevronDown, ChevronUp, ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -2077,6 +2077,9 @@ export default function CryptoPrediction() {
   const [selectedSellOrderIds, setSelectedSellOrderIds] = useState<Set<number>>(new Set());
   // 订单详情展开状态
   const [orderDetailId, setOrderDetailId] = useState<number | null>(null);
+  // 订单列表排序状态
+  const [orderSortKey, setOrderSortKey] = useState<'time' | 'coin' | 'amount' | 'status'>('time');
+  const [orderSortDir, setOrderSortDir] = useState<'desc' | 'asc'>('desc');
   // 账本信息（用于判断类型，定制 Tab 名称）
   const { data: ledgerInfo } = trpc.ledger.getById.useQuery(
     { ledgerId },
@@ -2131,6 +2134,29 @@ export default function CryptoPrediction() {
     { enabled: !!ledgerId, staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: 'always' }
   );
   const orders: any[] = (ordersData as any[]) || [];
+  // 订单列表排序计算
+  const sortedOrders = useMemo(() => {
+    const arr = [...orders];
+    arr.sort((a, b) => {
+      let va: any, vb: any;
+      if (orderSortKey === 'time') { va = a.createdAt; vb = b.createdAt; }
+      else if (orderSortKey === 'coin') { va = a.coin || ''; vb = b.coin || ''; }
+      else if (orderSortKey === 'amount') { va = parseFloat(a.quantity || a.amount || '0'); vb = parseFloat(b.quantity || b.amount || '0'); }
+      else if (orderSortKey === 'status') { va = a.sellStatus || a.status || ''; vb = b.sellStatus || b.status || ''; }
+      if (va < vb) return orderSortDir === 'asc' ? -1 : 1;
+      if (va > vb) return orderSortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    return arr;
+  }, [orders, orderSortKey, orderSortDir]);
+  const handleOrderSort = (key: typeof orderSortKey) => {
+    if (orderSortKey === key) {
+      setOrderSortDir(prev => prev === 'desc' ? 'asc' : 'desc');
+    } else {
+      setOrderSortKey(key);
+      setOrderSortDir('desc');
+    }
+  };
   // 可卖数量（已成交买入 - 已成交卖出）
   const { data: availableSellData } = trpc.ledger.afGetAvailableSell.useQuery(
     { ledgerId, coin: coin.name, ...(viewAsUserId ? { viewAsUserId } : {}) },
@@ -2652,15 +2678,31 @@ export default function CryptoPrediction() {
                 <div className="text-center py-5 text-gray-500 text-xs">暂无委托记录</div>
               ) : (
                 <div>
-                  {/* 表头 */}
-                  <div className="grid text-xs pb-1.5 mb-0.5" style={{gridTemplateColumns:'7fr 2.5fr 3fr 3fr 2fr', color: '#9CA3AF', borderBottom: '1px solid #E0E8FF'}}>
-                    <span>日期</span>
-                    <span className="text-center">币种</span>
-                    <span className="text-right">数量</span>
-                    <span className="text-right">状态</span>
+                  {/* 表头（可点击排序） */}
+                  <div className="grid text-xs pb-1.5 mb-0.5" style={{gridTemplateColumns:'7fr 2.5fr 3fr 3fr 2fr', borderBottom: '1px solid #E0E8FF'}}>
+                    {/* 日期 */}
+                    <button onClick={() => handleOrderSort('time')} className="flex items-center gap-0.5 text-left" style={{ color: orderSortKey === 'time' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'time' ? 600 : 400 }}>
+                      日期
+                      {orderSortKey === 'time' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
+                    </button>
+                    {/* 币种 */}
+                    <button onClick={() => handleOrderSort('coin')} className="flex items-center justify-center gap-0.5" style={{ color: orderSortKey === 'coin' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'coin' ? 600 : 400 }}>
+                      币种
+                      {orderSortKey === 'coin' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
+                    </button>
+                    {/* 数量 */}
+                    <button onClick={() => handleOrderSort('amount')} className="flex items-center justify-end gap-0.5" style={{ color: orderSortKey === 'amount' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'amount' ? 600 : 400 }}>
+                      数量
+                      {orderSortKey === 'amount' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
+                    </button>
+                    {/* 状态 */}
+                    <button onClick={() => handleOrderSort('status')} className="flex items-center justify-end gap-0.5" style={{ color: orderSortKey === 'status' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'status' ? 600 : 400 }}>
+                      状态
+                      {orderSortKey === 'status' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
+                    </button>
                     <span></span>
                   </div>
-                  {orders.map((order) => {
+                  {sortedOrders.map((order) => {
                     const createdAt = order.createdAt ? new Date(order.createdAt) : null;
                     const timeStr = createdAt ? (() => {
                       const y = createdAt.getFullYear();
