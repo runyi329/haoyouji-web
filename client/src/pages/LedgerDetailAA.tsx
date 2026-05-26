@@ -1654,22 +1654,24 @@ export default function LedgerDetailAA({
 
               // 构建ECharts series
               const buildSeries = (startPct: number, endPct: number) => {
-                // 只为激活的线构建 markPoint
-                const activeLine = activeChartLine;
-                const markPoints = activeLine
+                // 计算当前可见线数量（未被隐藏且有数据的线）
+                const visibleLines = allTagsChartData.filter(t => t.points.length > 0 && !hiddenTags.has(t.name));
+                const singleLine = visibleLines.length === 1 ? visibleLines[0] : null;
+                // 只有1条可见线时，自动显示其可视区间内最高/最低点
+                const markPoints = singleLine
                   ? buildMarkPoints(
-                      allTagsChartData.filter(t => t.name === activeLine),
+                      [singleLine],
                       allDates, startPct, endPct, allChartMode, hiddenTags
                     )
                   : [];
                 const mpMap = new Map(markPoints.map(m => [m.name, m.markData]));
-                const hasActive = activeLine !== null;
+                const hasActive = false; // 不再使用长按激活逻辑
                 return allTagsChartData
                   .filter(t => t.points.length > 0)
                   .map(tag => {
                     const isHidden = hiddenTags.has(tag.name);
-                    const isActive = tag.name === activeLine;
-                    // 有激活线时：非激活线变淡；没有激活时：全部正常显示
+                    const isActive = singleLine !== null && tag.name === singleLine.name;
+                    // 单线时其他线不存在，多线时全部正常显示
                     const dimmed = hasActive && !isActive && !isHidden;
                     const datePointMap = new Map(tag.points.map((p: any) => [p.date, p]));
                     const data: (number | null)[] = allDates.map(date => {
@@ -1696,7 +1698,7 @@ export default function LedgerDetailAA({
                       opacity: isHidden ? 0 : dimmed ? 0.2 : 1,
                       connectNulls: true,
                       label: { show: false },
-                      // 默认不显示 markPoint，只有激活的线才显示
+                      // 只有1条可见线时，自动显示该线可视区间内最高/最低点；多线时不显示
                       markPoint: (isHidden || !isActive) ? { data: [] } : {
                         data: mpMap.get(tag.name) ?? [],
                         animation: true,
