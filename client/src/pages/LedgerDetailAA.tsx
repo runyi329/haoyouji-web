@@ -1792,8 +1792,23 @@ export default function LedgerDetailAA({
                 series: initialSeries,
               };
 
+              // 长按计时器引用
+              let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+              let longPressTarget: string | null = null;
+
               return (
-                <div className="px-1 pb-1" style={{ touchAction: 'pan-y', userSelect: 'none' }} onTouchMove={(e) => { e.stopPropagation(); }}>
+                <div
+                  className="px-1 pb-1"
+                  style={{ touchAction: 'pan-y', userSelect: 'none' }}
+                  onTouchMove={(e) => {
+                    // 滑动时取消长按
+                    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+                    e.stopPropagation();
+                  }}
+                  onTouchEnd={() => {
+                    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+                  }}
+                >
                   <ReactECharts
                     option={option}
                     style={{ height: '260px', width: '100%', touchAction: 'pan-y' }}
@@ -1807,15 +1822,26 @@ export default function LedgerDetailAA({
                           setChartZoom({ start, end });
                         }
                       },
-                      click: (params: any) => {
-                        if (params.componentType === 'series') {
-                          // 点击线条：切换激活状态
-                          const clickedName = params.seriesName;
-                          setActiveChartLine(prev => prev === clickedName ? null : clickedName);
-                        } else {
-                          // 点击空白处：取消激活
-                          setActiveChartLine(null);
-                        }
+                      // 长按开始：记录目标线并开始计时
+                      mousedown: (params: any) => {
+                        if (longPressTimer) clearTimeout(longPressTimer);
+                        longPressTarget = params.componentType === 'series' ? params.seriesName : null;
+                        longPressTimer = setTimeout(() => {
+                          longPressTimer = null;
+                          if (longPressTarget) {
+                            setActiveChartLine(prev => prev === longPressTarget ? null : longPressTarget);
+                          } else {
+                            setActiveChartLine(null);
+                          }
+                        }, 500); // 500ms 为长按阈值
+                      },
+                      // 鼠标抖动/移动时取消长按
+                      mousemove: () => {
+                        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+                      },
+                      // 松开时取消长按（如果还没触发）
+                      mouseup: () => {
+                        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
                       },
                     }}
                   />
