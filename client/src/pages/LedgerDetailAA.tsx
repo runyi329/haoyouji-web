@@ -255,6 +255,8 @@ export default function LedgerDetailAA({
   const [allChartMode, setAllChartMode] = useState<'amount' | 'initial' | 'margin'>('amount');
   // 已隐藏的标签集合（点击标签名可切换显隐）
   const [hiddenTags, setHiddenTags] = useState<Set<string>>(new Set());
+  // 走势图标签多选下拉框显隐
+  const [showChartTagDropdown, setShowChartTagDropdown] = useState(false);
 
   // ─── 全部模式：计算每个标签的每日盈亏数据（用于多线图表） ─────────────────
   const allTagsChartData = useMemo(() => {
@@ -1475,33 +1477,111 @@ export default function LedgerDetailAA({
               <div>
                 <div className="text-sm font-bold" style={{ color: '#1A1A1A' }}>走势</div>
               </div>
-              {/* 标签图例（点击可切换显隐） */}
-              <div className="flex flex-wrap gap-1.5 justify-end" style={{ maxWidth: '65%' }}>
-                {allTagsChartData.filter(t => t.points.length > 0).map(tag => {
-                  const hidden = hiddenTags.has(tag.name);
-                  return (
-                    <button
-                      key={tag.name}
-                      onClick={() => setHiddenTags(prev => {
-                        const next = new Set(prev);
-                        if (next.has(tag.name)) next.delete(tag.name);
-                        else next.add(tag.name);
-                        return next;
-                      })}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-all"
-                      style={{
-                        backgroundColor: hidden ? '#F5F5F5' : tag.color + '18',
-                        color: hidden ? '#BDBDBD' : tag.color,
-                        border: `1px solid ${hidden ? '#E0E0E0' : tag.color + '44'}`,
-                        textDecoration: hidden ? 'line-through' : 'none',
-                      }}
-                    >
-                      <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: hidden ? '#BDBDBD' : tag.color }} />
-                      {tag.name}
-                    </button>
-                  );
-                })}
-              </div>
+              {/* 标签多选下拉框 */}
+              {allTagsChartData.filter(t => t.points.length > 0).length > 0 && (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowChartTagDropdown(v => !v)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all"
+                    style={{
+                      backgroundColor: 'rgba(211,47,47,0.08)',
+                      color: '#D32F2F',
+                      border: '1px solid rgba(211,47,47,0.25)',
+                    }}
+                  >
+                    <span>
+                      {hiddenTags.size === 0
+                        ? '全部'
+                        : `${allTagsChartData.filter(t => t.points.length > 0).length - hiddenTags.size}/${allTagsChartData.filter(t => t.points.length > 0).length}`
+                      }
+                    </span>
+                    <ChevronDown className="w-3 h-3 flex-shrink-0" />
+                  </button>
+
+                  {showChartTagDropdown && (
+                    <>
+                      {/* 遇罩 */}
+                      <div className="fixed inset-0 z-40" onClick={() => setShowChartTagDropdown(false)} />
+                      {/* 下拉菜单 */}
+                      <div
+                        className="absolute right-0 top-full mt-1 rounded-xl shadow-lg z-50"
+                        style={{
+                          backgroundColor: '#FFFFFF',
+                          border: '1px solid #E0E0E0',
+                          minWidth: '140px',
+                          maxHeight: 'calc(5 * 41px)',
+                          overflowY: 'scroll',
+                          overflowX: 'hidden',
+                        }}
+                      >
+                        {/* 全选/反选 */}
+                        <button
+                          onClick={() => {
+                            if (hiddenTags.size === 0) {
+                              // 全选 → 全部隐藏
+                              setHiddenTags(new Set(allTagsChartData.filter(t => t.points.length > 0).map(t => t.name)));
+                            } else {
+                              // 有隐藏 → 全部显示
+                              setHiddenTags(new Set());
+                            }
+                          }}
+                          className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#FFEBEE] flex items-center gap-2"
+                          style={{
+                            color: '#D32F2F',
+                            fontWeight: 600,
+                            borderBottom: '1px solid #F5F5F5',
+                          }}
+                        >
+                          <span
+                            className="flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center"
+                            style={{
+                              borderColor: '#D32F2F',
+                              backgroundColor: hiddenTags.size === 0 ? '#D32F2F' : '#FFFFFF',
+                            }}
+                          >
+                            {hiddenTags.size === 0 && <span style={{ color: '#FFFFFF', fontSize: 10, lineHeight: 1 }}>✓</span>}
+                          </span>
+                          全部
+                        </button>
+                        {allTagsChartData.filter(t => t.points.length > 0).map(tag => {
+                          const isVisible = !hiddenTags.has(tag.name);
+                          return (
+                            <button
+                              key={tag.name}
+                              onClick={() => setHiddenTags(prev => {
+                                const next = new Set(prev);
+                                if (next.has(tag.name)) next.delete(tag.name);
+                                else next.add(tag.name);
+                                return next;
+                              })}
+                              className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#FFEBEE] flex items-center gap-2"
+                              style={{
+                                color: '#222222',
+                                borderBottom: '1px solid #F5F5F5',
+                              }}
+                            >
+                              <span
+                                className="flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center"
+                                style={{
+                                  borderColor: isVisible ? tag.color : '#E0E0E0',
+                                  backgroundColor: isVisible ? tag.color : '#FFFFFF',
+                                }}
+                              >
+                                {isVisible && <span style={{ color: '#FFFFFF', fontSize: 10, lineHeight: 1 }}>✓</span>}
+                              </span>
+                              <span
+                                className="flex-shrink-0 w-2 h-2 rounded-full"
+                                style={{ backgroundColor: tag.color }}
+                              />
+                              {tag.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* 图表主体 */}
