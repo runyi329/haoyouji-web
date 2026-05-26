@@ -1982,9 +1982,9 @@ export default function LedgerDetailAA({
                       {(() => {
                         const ratioVal = initialBalancesData?.balances ? initialBalancesData.balances[`${tag.name}__ratio`] : undefined;
                         const ratioNum = ratioVal !== undefined && ratioVal !== null ? Number(ratioVal) : null;
-                        // 总金额：所有有效标签的marginCny之和
-                        const totalMarginForRatio = visibleTags.filter(t => t.marginCny > 0).reduce((s, t) => s + t.marginCny, 0);
-                        const actualAmt = ratioNum !== null ? totalMarginForRatio * (ratioNum / 100) : null;
+                        // 初始金额：该标签在账本设置里配置的起始资金
+                        const tagInitialBalance = tag.initialBalance ?? 0;
+                        const actualAmt = ratioNum !== null && tagInitialBalance > 0 ? tagInitialBalance * (ratioNum / 100) : null;
                         return (
                           <div className={dataCellCls} style={{ borderBottom: rowBorder, position: 'relative' }}>
                             <span
@@ -2007,7 +2007,7 @@ export default function LedgerDetailAA({
                                 padding: '5px 8px', whiteSpace: 'nowrap', fontSize: 10,
                                 boxShadow: '0 2px 8px rgba(0,0,0,0.25)', marginBottom: 4,
                               }}>
-                                {totalMarginForRatio.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} × {ratioNum.toFixed(0)}% = {actualAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                                {tagInitialBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} × {ratioNum.toFixed(0)}% = {actualAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
                               </div>
                             )}
                           </div>
