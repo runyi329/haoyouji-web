@@ -777,7 +777,7 @@ export default function LedgerDetailAA({
               {/* 充值按钮 */}
               <button
                 onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}`)}
-                className="flex-1 flex items-center justify-center h-9 rounded-full text-sm font-medium"
+                className="w-16 flex-shrink-0 flex items-center justify-center h-9 rounded-full text-sm font-medium"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.9)",
                   color: "#D32F2F",
@@ -789,7 +789,7 @@ export default function LedgerDetailAA({
               {/* 刷新按钮 */}
               <button
                 onClick={() => window.location.reload()}
-                className="flex-1 flex items-center justify-center h-9 rounded-full text-sm font-medium"
+                className="w-16 flex-shrink-0 flex items-center justify-center h-9 rounded-full text-sm font-medium"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.9)",
                   color: "#D32F2F",
@@ -801,7 +801,7 @@ export default function LedgerDetailAA({
               {/* 返回按钮 */}
               <button
                 onClick={() => setLocation("/ledger")}
-                className="flex-1 flex items-center justify-center h-9 rounded-full text-sm font-medium"
+                className="w-16 flex-shrink-0 flex items-center justify-center h-9 rounded-full text-sm font-medium"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.9)",
                   color: "#D32F2F",
