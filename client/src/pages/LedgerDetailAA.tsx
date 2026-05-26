@@ -261,6 +261,7 @@ export default function LedgerDetailAA({
   const [chartZoom, setChartZoom] = useState<{ start: number; end: number } | null>(null);
   // 走势图当前激活的线（点击某条线时显示其最高/最低点）
   const [activeChartLine, setActiveChartLine] = useState<string | null>(null);
+  const [tooltipTagName, setTooltipTagName] = useState<string | null>(null);
 
   // ─── 全部模式：计算每个标签的每日盈亏数据（用于多线图表） ─────────────────
   const allTagsChartData = useMemo(() => {
@@ -1932,9 +1933,18 @@ export default function LedgerDetailAA({
                   return (
                     <>
                       {/* 名称 */}
-                      <div key={`${tag.name}-name`} className="px-1 py-2 flex items-center justify-center gap-1" style={{ borderBottom: rowBorder }}>
+                      <div key={`${tag.name}-name`} className="px-1 py-2 flex items-center justify-center gap-1" style={{ borderBottom: rowBorder, position: 'relative' }}>
                         <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
-                        <span className="text-[11px] font-medium" style={{ color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 28 }}>{tag.name.length > 2 ? tag.name.slice(0, 2) + '…' : tag.name}</span>
+                        <span
+                          className="text-[11px] font-medium"
+                          style={{ color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 28, cursor: tag.name.length > 2 ? 'pointer' : 'default', borderBottom: tag.name.length > 2 ? '1px dashed #999' : 'none', paddingBottom: tag.name.length > 2 ? 1 : 0 }}
+                          onClick={() => tag.name.length > 2 ? setTooltipTagName(tooltipTagName === tag.name ? null : tag.name) : undefined}
+                        >{tag.name.length > 2 ? tag.name.slice(0, 2) + '…' : tag.name}</span>
+                        {tooltipTagName === tag.name && (
+                          <div style={{ position: 'absolute', zIndex: 50, background: '#333', color: '#fff', borderRadius: 6, padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', transform: 'translateY(-120%)', pointerEvents: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+                            {tag.name}
+                          </div>
+                        )}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 周期 */}
