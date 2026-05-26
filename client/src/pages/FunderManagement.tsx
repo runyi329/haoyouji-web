@@ -1853,6 +1853,32 @@ export default function FunderManagement() {
                                 </span>
                               </div>
                             )}
+                            {displayConfig.collateralCoin && (() => {
+                              const validAssets = collateralAssets.filter(a => a.coin && a.qty !== '');
+                              if (validAssets.length === 0) return null;
+                              return validAssets.map((a, idx) => (
+                                <div key={idx} className="flex items-center justify-between text-xs">
+                                  <span className="text-gray-400">{validAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
+                                  <span className="font-medium" style={{ color: '#4B5563' }}>{a.qty} {a.coin}</span>
+                                </div>
+                              ));
+                            })()}
+                            {displayConfig.collateralValue && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400">{collateralAssets.filter(a => a.coin && a.qty !== '').length > 1 ? '担保总值' : '担保价值'}</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>
+                                  {computedCollateralValue !== null ? computedCollateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '--- U'}
+                                </span>
+                              </div>
+                            )}
+                            {displayConfig.collateral && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400">担保缺口</span>
+                                <span className="text-xs font-medium" style={{ color: previewExposure !== null && previewExposure >= 0 ? '#4B5563' : '#16A34A' }}>
+                                  {previewExposure === null ? '---' : previewExposure >= 0 ? '100%' : `-${Math.abs(previewExposure).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
+                                </span>
+                              </div>
+                            )}
                         </div>
                       )}
                       {/* 中间分隔线：只在收益分成开启时显示 */}
