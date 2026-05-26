@@ -1946,7 +1946,7 @@ export default function LedgerDetailAA({
                         const ratioNum = ratioVal !== undefined && ratioVal !== null ? Number(ratioVal) : null;
                         return (
                           <div className={dataCellCls} style={{ borderBottom: rowBorder }}>
-                            <span style={{ color: ratioNum !== null ? '#1565C0' : '#BDBDBD' }}>
+                            <span style={{ color: ratioNum !== null ? '#424242' : '#BDBDBD' }}>
                               {ratioNum !== null ? `${ratioNum.toFixed(0)}%` : '--'}
                             </span>
                           </div>
