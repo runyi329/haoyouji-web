@@ -257,6 +257,8 @@ export default function LedgerDetailAA({
   const [hiddenTags, setHiddenTags] = useState<Set<string>>(new Set());
   // 走势图标签多选下拉框显隐
   const [showChartTagDropdown, setShowChartTagDropdown] = useState(false);
+  // 走势图滑块区间（用户拖动后保持位置）
+  const [chartZoom, setChartZoom] = useState<{ start: number; end: number } | null>(null);
 
   // ─── 全部模式：计算每个标签的每日盈亏数据（用于多线图表） ─────────────────
   const allTagsChartData = useMemo(() => {
@@ -1747,8 +1749,8 @@ export default function LedgerDetailAA({
                   // slider滑块：保留缩放功能
                   {
                     type: 'slider',
-                    start: startPercent,
-                    end: 100,
+                    start: chartZoom ? chartZoom.start : startPercent,
+                    end: chartZoom ? chartZoom.end : 100,
                     height: 18,
                     bottom: 4,
                     borderColor: 'transparent',
@@ -1778,6 +1780,16 @@ export default function LedgerDetailAA({
                     option={option}
                     style={{ height: '260px', width: '100%', touchAction: 'pan-y' }}
                     opts={{ renderer: 'canvas' }}
+                    onEvents={{
+                      datazoom: (params: any) => {
+                        // 监听滑块拖动，将区间保存到 state
+                        const start = params.start ?? params.batch?.[0]?.start;
+                        const end = params.end ?? params.batch?.[0]?.end;
+                        if (start !== undefined && end !== undefined) {
+                          setChartZoom({ start, end });
+                        }
+                      },
+                    }}
                   />
                 </div>
               );
