@@ -1103,7 +1103,7 @@ export default function FunderManagement() {
       {/* 创建/编辑弹窗 */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)', touchAction: 'none' }} onTouchMove={e => e.preventDefault()}>
-          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] flex flex-col" style={{ overscrollBehavior: 'contain' }}>
+          <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] flex flex-col overflow-x-hidden" style={{ overscrollBehavior: 'contain' }}>
             <div className="flex-shrink-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl" style={{ zIndex: 10 }}>
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
                 {editingOrder?.participantInfo ? '受邀订单配置' : editingOrder ? '编辑订单' : '添加订单'}
@@ -1116,7 +1116,7 @@ export default function FunderManagement() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5" style={{ overscrollBehavior: 'contain' }}>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 py-4 space-y-5" style={{ overscrollBehavior: 'contain' }}>
               {/* 受邀订单：只读提示 */}
               {editingOrder?.participantInfo && (
                 <div className="rounded-xl px-4 py-3 flex items-start gap-2" style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0' }}>
