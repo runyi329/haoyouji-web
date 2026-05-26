@@ -1906,7 +1906,7 @@ export default function LedgerDetailAA({
             const weightedAnnualized = weightedDenominator > 0 ? (totalPnl / weightedDenominator) * 100 : null;
             const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
             // Grid 列定义：名称固定52px，其他列 minmax 自适应
-            const gridCols = '36px 1px minmax(26px,0.6fr) 1px minmax(28px,0.5fr) 1px minmax(44px,1.1fr) 1px minmax(44px,1.1fr) 1px minmax(46px,0.9fr) 1px minmax(32px,0.7fr)';
+            const gridCols = 'auto 1px auto 1px auto 1px auto 1px auto 1px auto 1px auto';
             const cellCls = 'px-1 py-1.5 text-[10px] font-medium text-center';
             const dataCellCls = 'px-1 py-2 text-right text-[11px]';
             const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
