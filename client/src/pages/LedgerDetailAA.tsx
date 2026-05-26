@@ -262,6 +262,10 @@ export default function LedgerDetailAA({
   // 走势图当前激活的线（点击某条线时显示其最高/最低点）
   const [activeChartLine, setActiveChartLine] = useState<string | null>(null);
   const [tooltipTagName, setTooltipTagName] = useState<string | null>(null);
+  const [overviewSort, setOverviewSort] = useState<{ col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend'; dir: 'asc' | 'desc' } | null>(null);
+  const handleOverviewSort = (col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend') => {
+    setOverviewSort(prev => prev && prev.col === col ? { col, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' });
+  };
 
   // ─── 全部模式：计算每个标签的每日盈亏数据（用于多线图表） ─────────────────
   const allTagsChartData = useMemo(() => {
@@ -1894,6 +1898,21 @@ export default function LedgerDetailAA({
               const divAmt = dividendByTag[tag.name] ?? 0;
               return { tag, days, latestPnl, annualized, divAmt, isLast: idx === visibleTags.length - 1 };
             });
+            // 排序逻辑
+            const sortedTagData = overviewSort ? [...tagData].sort((a, b) => {
+              let va = 0, vb = 0;
+              if (overviewSort.col === 'days') { va = a.days; vb = b.days; }
+              else if (overviewSort.col === 'ratio') {
+                const ra = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${a.tag.name}__ratio`] ?? 0) : 0;
+                const rb = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${b.tag.name}__ratio`] ?? 0) : 0;
+                va = ra; vb = rb;
+              }
+              else if (overviewSort.col === 'amount') { va = a.tag.marginCny; vb = b.tag.marginCny; }
+              else if (overviewSort.col === 'pnl') { va = a.latestPnl; vb = b.latestPnl; }
+              else if (overviewSort.col === 'annualized') { va = a.annualized ?? -Infinity; vb = b.annualized ?? -Infinity; }
+              else if (overviewSort.col === 'dividend') { va = a.divAmt; vb = b.divAmt; }
+              return overviewSort.dir === 'desc' ? vb - va : va - vb;
+            }) : tagData;
             // 汇总行数据
             const totalMargin = validTags.reduce((s, t) => s + t.marginCny, 0);
             const totalPnl = validTags.reduce((s, t) => s + (t.points[t.points.length - 1]?.pnl ?? 0), 0);
@@ -1911,24 +1930,32 @@ export default function LedgerDetailAA({
             const cellCls = 'px-1 py-1.5 text-[10px] font-medium text-center';
             const dataCellCls = 'px-1 py-2 text-right text-[11px]';
             const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
+            // 排序箭头辅助
+            const SortArrow = ({ col }: { col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend' }) => {
+              if (!overviewSort || overviewSort.col !== col) return <span style={{ color: '#BDBDBD', fontSize: 8, marginLeft: 1 }}>⇅</span>;
+              return <span style={{ color: '#1565C0', fontSize: 8, marginLeft: 1 }}>{overviewSort.dir === 'desc' ? '↓' : '↑'}</span>;
+            };
+            const sortHeaderCls = cellCls + ' cursor-pointer select-none';
             return (
               <div style={{ display: 'grid', gridTemplateColumns: gridCols }}>
                 {/* 表头行 */}
                 <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E', fontSize: 10 }}>名称</span></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>周期</span></div>
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>占比</span></div>
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E', fontSize: 10 }}>金额¥</span></div>
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E', fontSize: 10 }}>金额¥</span><SortArrow col="amount" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E', fontSize: 10 }}>回报¥</span></div>
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E', fontSize: 10 }}>回报¥</span><SortArrow col="pnl" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={cellCls + ' cursor-pointer'} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>年化</span></div>
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={cellCls + ' cursor-pointer'} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}><span style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px', fontSize: 10 }}>分红¥</span></div>
+                <div className={cellCls + ' cursor-pointer'} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => { handleOverviewSort('dividend'); }}>
+                  <span style={{ color: overviewSort?.col === 'dividend' ? '#1565C0' : '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px', fontSize: 10 }} onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>分红¥</span><SortArrow col="dividend" />
+                </div>
                 {/* 数据行 */}
-                {tagData.map(({ tag, days, latestPnl, annualized, divAmt, isLast }) => {
+                {sortedTagData.map(({ tag, days, latestPnl, annualized, divAmt, isLast }) => {
                   const rowBorder = isLast ? 'none' : '1px solid #F9F9F9';
                   return (
                     <>
