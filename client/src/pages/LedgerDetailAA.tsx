@@ -2001,7 +2001,7 @@ export default function LedgerDetailAA({
                       <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
-                    {/* 金额：只显示人民币汇总，居中 */
+                    {/* 金额：只显示人民币汇总，居中 */}
                     <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
                       <span className="text-[11px] font-semibold" style={{ color: '#1A1A1A' }}>¥{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
                     </div>
