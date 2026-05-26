@@ -262,6 +262,7 @@ export default function LedgerDetailAA({
   // 走势图当前激活的线（点击某条线时显示其最高/最低点）
   const [activeChartLine, setActiveChartLine] = useState<string | null>(null);
   const [tooltipTagName, setTooltipTagName] = useState<string | null>(null);
+  const [tooltipRatioTag, setTooltipRatioTag] = useState<string | null>(null);
   const [overviewSort, setOverviewSort] = useState<{ col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend'; dir: 'asc' | 'desc' } | null>(null);
   const handleOverviewSort = (col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend') => {
     setOverviewSort(prev => prev && prev.col === col ? { col, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' });
@@ -1981,11 +1982,34 @@ export default function LedgerDetailAA({
                       {(() => {
                         const ratioVal = initialBalancesData?.balances ? initialBalancesData.balances[`${tag.name}__ratio`] : undefined;
                         const ratioNum = ratioVal !== undefined && ratioVal !== null ? Number(ratioVal) : null;
+                        // 总金额：所有有效标签的marginCny之和
+                        const totalMarginForRatio = visibleTags.filter(t => t.marginCny > 0).reduce((s, t) => s + t.marginCny, 0);
+                        const actualAmt = ratioNum !== null ? totalMarginForRatio * (ratioNum / 100) : null;
                         return (
-                          <div className={dataCellCls} style={{ borderBottom: rowBorder }}>
-                            <span style={{ color: ratioNum !== null ? '#424242' : '#BDBDBD' }}>
+                          <div className={dataCellCls} style={{ borderBottom: rowBorder, position: 'relative' }}>
+                            <span
+                              style={{
+                                color: ratioNum !== null ? '#424242' : '#BDBDBD',
+                                cursor: ratioNum !== null ? 'pointer' : 'default',
+                                textDecoration: ratioNum !== null ? 'underline' : 'none',
+                                textDecorationStyle: 'dashed',
+                                textDecorationColor: '#999',
+                                textUnderlineOffset: '2px',
+                              }}
+                              onClick={() => ratioNum !== null ? setTooltipRatioTag(tooltipRatioTag === tag.name ? null : tag.name) : undefined}
+                            >
                               {ratioNum !== null ? `${ratioNum.toFixed(0)}%` : '--'}
                             </span>
+                            {tooltipRatioTag === tag.name && ratioNum !== null && actualAmt !== null && (
+                              <div style={{
+                                position: 'absolute', bottom: '100%', right: 0, zIndex: 50,
+                                background: '#1A1A1A', color: '#FFF', borderRadius: 6,
+                                padding: '5px 8px', whiteSpace: 'nowrap', fontSize: 10,
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.25)', marginBottom: 4,
+                              }}>
+                                {totalMarginForRatio.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} × {ratioNum.toFixed(0)}% = {actualAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                              </div>
+                            )}
                           </div>
                         );
                       })()}
