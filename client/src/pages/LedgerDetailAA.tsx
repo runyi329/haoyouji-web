@@ -1906,26 +1906,26 @@ export default function LedgerDetailAA({
             const weightedAnnualized = weightedDenominator > 0 ? (totalPnl / weightedDenominator) * 100 : null;
             const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
             // Grid 列定义：名称固定52px，其他列 minmax 自适应
-            const gridCols = '52px 1px minmax(28px,0.7fr) 1px minmax(32px,0.6fr) 1px minmax(48px,1.2fr) 1px minmax(48px,1.2fr) 1px minmax(52px,1fr) 1px minmax(36px,0.8fr)';
+            const gridCols = '36px 1px minmax(26px,0.6fr) 1px minmax(28px,0.5fr) 1px minmax(44px,1.1fr) 1px minmax(44px,1.1fr) 1px minmax(46px,0.9fr) 1px minmax(32px,0.7fr)';
             const cellCls = 'px-1 py-1.5 text-[10px] font-medium text-center';
             const dataCellCls = 'px-1 py-2 text-right text-[11px]';
             const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
             return (
               <div style={{ display: 'grid', gridTemplateColumns: gridCols }}>
                 {/* 表头行 */}
-                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>名称</span></div>
+                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E', fontSize: 10 }}>名称</span></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                 <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>周期</span></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                 <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>占比</span></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>金额</span></div>
+                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E', fontSize: 10 }}>金额¥</span></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>回报</span></div>
+                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E', fontSize: 10 }}>回报¥</span></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                 <div className={cellCls + ' cursor-pointer'} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>年化</span></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={cellCls + ' cursor-pointer'} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}><span style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }}>分红</span></div>
+                <div className={cellCls + ' cursor-pointer'} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}><span style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px', fontSize: 10 }}>分红¥</span></div>
                 {/* 数据行 */}
                 {tagData.map(({ tag, days, latestPnl, annualized, divAmt, isLast }) => {
                   const rowBorder = isLast ? 'none' : '1px solid #F9F9F9';
@@ -1934,7 +1934,7 @@ export default function LedgerDetailAA({
                       {/* 名称 */}
                       <div key={`${tag.name}-name`} className="px-1 py-2 flex items-center justify-center gap-1" style={{ borderBottom: rowBorder }}>
                         <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
-                        <span className="text-[11px] font-medium" style={{ color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 44 }}>{tag.name}</span>
+                        <span className="text-[11px] font-medium" style={{ color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 28 }}>{tag.name.length > 2 ? tag.name.slice(0, 2) + '…' : tag.name}</span>
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 周期 */}
@@ -1957,7 +1957,7 @@ export default function LedgerDetailAA({
                       <div className="px-1 py-2 flex flex-col items-end justify-center" style={{ borderBottom: rowBorder }}>
                         {tag.marginCny > 0 ? (
                           <>
-                            <div className="text-[11px] leading-none" style={{ color: '#424242' }}>¥{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
+                            <div className="text-[11px] leading-none" style={{ color: '#424242' }}>{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
                             {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
                               <div className="text-[8px] mt-1 leading-none" style={{ color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
                             )}
@@ -1967,7 +1967,7 @@ export default function LedgerDetailAA({
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 回报 */}
                       <div className={dataCellCls} style={{ borderBottom: rowBorder, color: latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
-                        {latestPnl !== 0 ? `${latestPnl < 0 ? '-' : ''}¥${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                        {latestPnl !== 0 ? `${latestPnl < 0 ? '-' : ''}${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 年化 */}
@@ -1977,7 +1977,7 @@ export default function LedgerDetailAA({
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 分红 */}
                       <div className={dataCellCls} style={{ borderBottom: rowBorder, color: divAmt > 0 ? '#D32F2F' : '#BDBDBD' }}>
-                        {divAmt > 0 ? `¥${divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                        {divAmt > 0 ? `${divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </div>
                     </>
                   );
@@ -2003,13 +2003,13 @@ export default function LedgerDetailAA({
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 金额：只显示人民币汇总，居中 */}
                     <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
-                      <span className="text-[11px] font-semibold" style={{ color: '#1A1A1A' }}>¥{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
+                      <span className="text-[11px] font-semibold" style={{ color: '#1A1A1A' }}>{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 回报 */}
                     <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
                       <span className="text-[11px] font-semibold" style={{ color: totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
-                        {totalPnl !== 0 ? `${totalPnl < 0 ? '-' : ''}¥${Math.abs(totalPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                        {totalPnl !== 0 ? `${totalPnl < 0 ? '-' : ''}${Math.abs(totalPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
@@ -2023,7 +2023,7 @@ export default function LedgerDetailAA({
                     {/* 分红 */}
                     <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 16px 0' }}>
                       <span className="text-[11px] font-semibold" style={{ color: totalDividend > 0 ? '#D32F2F' : '#BDBDBD' }}>
-                        {totalDividend > 0 ? `¥${totalDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                        {totalDividend > 0 ? `${totalDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </span>
                     </div>
                   </>
