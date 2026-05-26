@@ -261,6 +261,8 @@ export default function LedgerDetailAA({
   const [chartZoom, setChartZoom] = useState<{ start: number; end: number } | null>(null);
   // 走势图当前激活的线（点击某条线时显示其最高/最低点）
   const [activeChartLine, setActiveChartLine] = useState<string | null>(null);
+  // ECharts实例ref，用于datazoom时直接setOption更新markPoint（绕过React渲染延迟）
+  const echartsRef = useRef<any>(null);
   const [tooltipTagName, setTooltipTagName] = useState<string | null>(null);
   const [tooltipRatioTag, setTooltipRatioTag] = useState<string | null>(null);
   const [overviewSort, setOverviewSort] = useState<{ col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend'; dir: 'asc' | 'desc' } | null>(null);
@@ -1818,6 +1820,7 @@ export default function LedgerDetailAA({
                   }}
                 >
                   <ReactECharts
+                    ref={echartsRef}
                     option={option}
                     style={{ height: '260px', width: '100%', touchAction: 'pan-y' }}
                     opts={{ renderer: 'canvas' }}
@@ -1828,6 +1831,22 @@ export default function LedgerDetailAA({
                         const end = params.end ?? params.batch?.[0]?.end;
                         if (start !== undefined && end !== undefined) {
                           setChartZoom({ start, end });
+                          // 如果只有1条可见线，直接通过ECharts实例实时更新markPoint，绕过React渲染延迟
+                          const visibleNow = allTagsChartData.filter(t => t.points.length > 0 && !hiddenTags.has(t.name));
+                          if (visibleNow.length === 1 && echartsRef.current) {
+                            const chartInstance = echartsRef.current.getEchartsInstance?.();
+                            if (chartInstance) {
+                              const mps = buildMarkPoints([visibleNow[0]], allDates, start, end, allChartMode, hiddenTags);
+                              const mpData = mps[0]?.markData ?? [];
+                              // 找到该线对应的series索引
+                              const seriesIdx = allTagsChartData.filter(t => t.points.length > 0).findIndex(t => t.name === visibleNow[0].name);
+                              if (seriesIdx >= 0) {
+                                chartInstance.setOption({
+                                  series: [{ dataIndex: seriesIdx, markPoint: { data: mpData, animation: false, silent: true } }]
+                                }, { replaceMerge: [] });
+                              }
+                            }
+                          }
                         }
                       },
                       // 长按开始：记录目标线并开始计时
