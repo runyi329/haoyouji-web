@@ -259,6 +259,8 @@ export default function LedgerDetailAA({
   const [showChartTagDropdown, setShowChartTagDropdown] = useState(false);
   // 走势图滑块区间（用户拖动后保持位置）
   const [chartZoom, setChartZoom] = useState<{ start: number; end: number } | null>(null);
+  // 走势图当前激活的线（点击某条线时显示其最高/最低点）
+  const [activeChartLine, setActiveChartLine] = useState<string | null>(null);
 
   // ─── 全部模式：计算每个标签的每日盈亏数据（用于多线图表） ─────────────────
   const allTagsChartData = useMemo(() => {
@@ -1646,12 +1648,23 @@ export default function LedgerDetailAA({
 
               // 构建ECharts series
               const buildSeries = (startPct: number, endPct: number) => {
-                const markPoints = buildMarkPoints(allTagsChartData, allDates, startPct, endPct, allChartMode, hiddenTags);
+                // 只为激活的线构建 markPoint
+                const activeLine = activeChartLine;
+                const markPoints = activeLine
+                  ? buildMarkPoints(
+                      allTagsChartData.filter(t => t.name === activeLine),
+                      allDates, startPct, endPct, allChartMode, hiddenTags
+                    )
+                  : [];
                 const mpMap = new Map(markPoints.map(m => [m.name, m.markData]));
+                const hasActive = activeLine !== null;
                 return allTagsChartData
                   .filter(t => t.points.length > 0)
                   .map(tag => {
                     const isHidden = hiddenTags.has(tag.name);
+                    const isActive = tag.name === activeLine;
+                    // 有激活线时：非激活线变淡；没有激活时：全部正常显示
+                    const dimmed = hasActive && !isActive && !isHidden;
                     const datePointMap = new Map(tag.points.map((p: any) => [p.date, p]));
                     const data: (number | null)[] = allDates.map(date => {
                       const p = datePointMap.get(date);
@@ -1666,16 +1679,21 @@ export default function LedgerDetailAA({
                       data,
                       smooth: true,
                       symbol: 'circle',
-                      symbolSize: 4,
+                      symbolSize: isActive ? 5 : 4,
                       showSymbol: false,
-                      lineStyle: { color: isHidden ? 'transparent' : tag.color, width: 2 },
+                      lineStyle: {
+                        color: isHidden ? 'transparent' : tag.color,
+                        width: isActive ? 2.5 : dimmed ? 1 : 2,
+                        opacity: isHidden ? 0 : dimmed ? 0.2 : 1,
+                      },
                       itemStyle: { color: tag.color },
-                      opacity: isHidden ? 0 : 1,
+                      opacity: isHidden ? 0 : dimmed ? 0.2 : 1,
                       connectNulls: true,
                       label: { show: false },
-                      markPoint: isHidden ? { data: [] } : {
+                      // 默认不显示 markPoint，只有激活的线才显示
+                      markPoint: (isHidden || !isActive) ? { data: [] } : {
                         data: mpMap.get(tag.name) ?? [],
-                        animation: false,
+                        animation: true,
                         silent: true,
                       },
                     };
@@ -1787,6 +1805,16 @@ export default function LedgerDetailAA({
                         const end = params.end ?? params.batch?.[0]?.end;
                         if (start !== undefined && end !== undefined) {
                           setChartZoom({ start, end });
+                        }
+                      },
+                      click: (params: any) => {
+                        if (params.componentType === 'series') {
+                          // 点击线条：切换激活状态
+                          const clickedName = params.seriesName;
+                          setActiveChartLine(prev => prev === clickedName ? null : clickedName);
+                        } else {
+                          // 点击空白处：取消激活
+                          setActiveChartLine(null);
                         }
                       },
                     }}
