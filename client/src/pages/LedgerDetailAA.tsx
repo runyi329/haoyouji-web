@@ -1932,8 +1932,8 @@ export default function LedgerDetailAA({
             const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
             // 排序箭头辅助
             const SortArrow = ({ col }: { col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend' }) => {
-              if (!overviewSort || overviewSort.col !== col) return <span style={{ color: '#BDBDBD', fontSize: 8, marginLeft: 1 }}>⇅</span>;
-              return <span style={{ color: '#1565C0', fontSize: 8, marginLeft: 1 }}>{overviewSort.dir === 'desc' ? '↓' : '↑'}</span>;
+              if (!overviewSort || overviewSort.col !== col) return <span style={{ color: '#D0D0D0', fontSize: 7, marginLeft: 1 }}>▼</span>;
+              return <span style={{ color: '#1565C0', fontSize: 7, marginLeft: 1 }}>{overviewSort.dir === 'desc' ? '▼' : '▲'}</span>;
             };
             const sortHeaderCls = cellCls + ' cursor-pointer select-none';
             return (
