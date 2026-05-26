@@ -842,7 +842,7 @@ export default function LedgerDetailAA({
                         border: "1px solid #E0E0E0",
                         minWidth: "140px",
                         maxHeight: "calc(5 * 41px)",
-                        overflowY: "auto",
+                        overflowY: "scroll",
                         overflowX: "hidden",
                       }}
                     >
