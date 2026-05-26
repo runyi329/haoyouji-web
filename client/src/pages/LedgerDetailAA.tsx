@@ -1906,7 +1906,7 @@ export default function LedgerDetailAA({
             const weightedAnnualized = weightedDenominator > 0 ? (totalPnl / weightedDenominator) * 100 : null;
             const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
             // Grid 列定义：名称固定52px，其他列 minmax 自适应
-            const gridCols = '52px 1px minmax(28px,0.7fr) 1px minmax(48px,1.2fr) 1px minmax(48px,1.2fr) 1px minmax(52px,1fr) 1px minmax(36px,0.8fr)';
+            const gridCols = '52px 1px minmax(28px,0.7fr) 1px minmax(32px,0.6fr) 1px minmax(48px,1.2fr) 1px minmax(48px,1.2fr) 1px minmax(52px,1fr) 1px minmax(36px,0.8fr)';
             const cellCls = 'px-1 py-1.5 text-[10px] font-medium text-center';
             const dataCellCls = 'px-1 py-2 text-right text-[11px]';
             const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
@@ -1916,6 +1916,8 @@ export default function LedgerDetailAA({
                 <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>名称</span></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                 <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>周期</span></div>
+                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>占比</span></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                 <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E' }}>金额</span></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
@@ -1937,6 +1939,19 @@ export default function LedgerDetailAA({
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 周期 */}
                       <div className={dataCellCls} style={{ borderBottom: rowBorder }}><span style={{ color: '#424242' }}>{days > 0 ? `${days}天` : '--'}</span></div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 占比 */}
+                      {(() => {
+                        const ratioVal = initialBalancesData?.balances ? initialBalancesData.balances[`${tag.name}__ratio`] : undefined;
+                        const ratioNum = ratioVal !== undefined && ratioVal !== null ? Number(ratioVal) : null;
+                        return (
+                          <div className={dataCellCls} style={{ borderBottom: rowBorder }}>
+                            <span style={{ color: ratioNum !== null ? '#1565C0' : '#BDBDBD' }}>
+                              {ratioNum !== null ? `${ratioNum.toFixed(0)}%` : '--'}
+                            </span>
+                          </div>
+                        );
+                      })()}
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 金额 */}
                       <div className="px-1 py-2 flex flex-col items-end justify-center" style={{ borderBottom: rowBorder }}>
@@ -1981,7 +1996,12 @@ export default function LedgerDetailAA({
                       <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
-                    {/* 金额：只显示人民币汇总，居中 */}
+                    {/* 占比 -- */}
+                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                      <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>
+                    </div>
+                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
+                    {/* 金额：只显示人民币汇总，居中 */
                     <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
                       <span className="text-[11px] font-semibold" style={{ color: '#1A1A1A' }}>¥{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
                     </div>
