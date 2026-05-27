@@ -411,7 +411,7 @@ export default function Wallet() {
         {subLine && <div className="mb-4">{subLine}</div>}
 
         {/* 操作按钮 */}
-        <div className="grid grid-cols-3 gap-2 mb-1">
+        <div className="grid grid-cols-2 gap-2.5 mb-1">
           <button
             onClick={onRecharge}
             className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-transform"
@@ -435,21 +435,6 @@ export default function Wallet() {
           >
             <ArrowUpCircle className="w-4 h-4" />
             <span>提现</span>
-          </button>
-          <button
-            onClick={() => {
-              sessionStorage.setItem("payment_accounts_back", "/wallet");
-              setLocation("/payment-accounts");
-            }}
-            className="flex items-center justify-center space-x-1 py-2.5 rounded-xl text-xs font-bold active:scale-[0.97] transition-transform"
-            style={{
-              background: "transparent",
-              border: `1px solid ${G.cardBorder}`,
-              color: G.goldDim,
-            }}
-          >
-            <WalletIcon className="w-3.5 h-3.5" />
-            <span>钱包</span>
           </button>
         </div>
 
