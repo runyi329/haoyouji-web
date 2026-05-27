@@ -2064,8 +2064,8 @@ export default function CryptoPrediction() {
 
   const urlParams = new URLSearchParams(window.location.search);
   const viewAsUserId = urlParams.get("viewAs") ? parseInt(urlParams.get("viewAs")!) : undefined;
-  const initialCoin = (urlParams.get("coin") || "BTC").toUpperCase();
-  const [coinKey, setCoinKey] = useState<string>(COIN_CONFIG[initialCoin] ? initialCoin : "BTC");
+  const initialCoin = (urlParams.get("coin") || "ETH").toUpperCase();
+  const [coinKey, setCoinKey] = useState<string>(COIN_CONFIG[initialCoin] ? initialCoin : "ETH");
   const coin = COIN_CONFIG[coinKey];
 
   const [interval, setIntervalVal] = useState("1h");
@@ -2370,23 +2370,21 @@ export default function CryptoPrediction() {
 
             {/* 币种选择下拉 */}
             <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
-              <span className="text-sm w-14 flex-shrink-0" style={{ color: '#6B7A9A' }}>币种</span>
-              <div className="flex-1 flex items-center gap-2">
-                {Object.values(COIN_CONFIG).map((c) => (
-                  <button
-                    key={c.name}
-                    onClick={() => { setCoinKey(c.name); setOrderPrice(""); setOrderAmount(""); setSliderPct(0); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all"
-                    style={coinKey === c.name
-                      ? { backgroundColor: c.color, color: '#fff', boxShadow: `0 2px 8px ${c.color}55` }
-                      : { backgroundColor: '#F0F4FF', color: '#6B7A9A' }
-                    }
-                  >
-                    <img src={c.imgUrl} alt={c.name} className="w-4 h-4 rounded-full" />
-                    {c.name}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <img src={coin.imgUrl} alt={coin.name} className="w-4 h-4 rounded-full" />
+                <span className="text-sm font-semibold" style={{ color: coin.color }}>{coin.fullName}</span>
               </div>
+              <select
+                value={coinKey}
+                onChange={(e) => { setCoinKey(e.target.value); setOrderPrice(""); setOrderAmount(""); setSliderPct(0); }}
+                className="flex-1 bg-transparent text-sm outline-none"
+                style={{ color: '#1A2340', appearance: 'none', WebkitAppearance: 'none' }}
+              >
+                <option value="ETH">以太坊 (ETH)</option>
+                <option value="BTC">比特币 (BTC)</option>
+                <option value="SOL">索拉纳 (SOL)</option>
+              </select>
+              <svg className="w-4 h-4 flex-shrink-0" style={{ color: '#9CA3AF' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </div>
 
             {/* 限价委托价格下拉选择器 */}
