@@ -4653,9 +4653,9 @@ export default function LedgerDetail() {
               >
                 {/* 三币图标靠左，25%重叠 */}
                 <div className="flex items-center flex-shrink-0">
-                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png" alt="BTC" className="w-12 h-12 object-contain rounded-full" style={{ position: 'relative', zIndex: 3 }} />
-                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-12 h-12 object-contain rounded-full" style={{ position: 'relative', zIndex: 2, marginLeft: '-12px', border: '2px solid #fff' }} />
-                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png" alt="SOL" className="w-12 h-12 object-contain rounded-full" style={{ position: 'relative', zIndex: 1, marginLeft: '-12px', border: '2px solid #fff' }} />
+                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png" alt="BTC" className="w-12 h-12 object-cover rounded-full flex-shrink-0" style={{ position: 'relative', zIndex: 3 }} />
+                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-12 h-12 object-cover rounded-full flex-shrink-0" style={{ position: 'relative', zIndex: 2, marginLeft: '-12px', border: '2px solid #fff' }} />
+                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png" alt="SOL" className="w-12 h-12 object-cover rounded-full flex-shrink-0" style={{ position: 'relative', zIndex: 1, marginLeft: '-12px', border: '2px solid #fff' }} />
                 </div>
                 {/* 中间留白 */}
                 <div className="flex-1" />
