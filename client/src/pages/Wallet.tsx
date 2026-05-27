@@ -544,7 +544,7 @@ export default function Wallet() {
           balance={mask(cnyBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
           unit="CNY"
           subLine={!hideBalance && (
-            <div className="text-xs mt-0.5" style={{ color: G.goldDim }}>人民币本位，无需折算</div>
+            <span className="text-xs" style={{ color: G.goldDim }}>≈ {(cnyBalance / 7.25).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT</span>
           )}
           txPath="/wallet/cny-transactions"
           onRefresh={() => cnyBalanceQuery.refetch()}
