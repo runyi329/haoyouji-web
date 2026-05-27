@@ -411,7 +411,7 @@ export default function Wallet() {
         {subLine && <div className="mb-4">{subLine}</div>}
 
         {/* 操作按钮 */}
-        <div className="grid grid-cols-2 gap-2.5 mb-1">
+        <div className="grid grid-cols-3 gap-2 mb-1">
           <button
             onClick={onRecharge}
             className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-transform"
@@ -422,7 +422,7 @@ export default function Wallet() {
             }}
           >
             <ArrowDownCircle className="w-4 h-4" />
-            <span>充值</span>
+            <span>充値</span>
           </button>
           <button
             onClick={onWithdraw}
@@ -435,6 +435,21 @@ export default function Wallet() {
           >
             <ArrowUpCircle className="w-4 h-4" />
             <span>提现</span>
+          </button>
+          <button
+            onClick={() => {
+              sessionStorage.setItem("payment_accounts_back", "/wallet");
+              setLocation("/payment-accounts");
+            }}
+            className="flex items-center justify-center space-x-1 py-2.5 rounded-xl text-xs font-bold active:scale-[0.97] transition-transform"
+            style={{
+              background: "transparent",
+              border: `1px solid ${G.cardBorder}`,
+              color: G.goldDim,
+            }}
+          >
+            <WalletIcon className="w-3.5 h-3.5" />
+            <span>钱包</span>
           </button>
         </div>
 
@@ -584,34 +599,6 @@ export default function Wallet() {
             )
           }
         />}
-
-        {/* 钱包绑定管理入口 */}
-        <button
-          onClick={() => {
-            sessionStorage.setItem("payment_accounts_back", "/wallet");
-            setLocation("/payment-accounts");
-          }}
-          className="w-full flex items-center justify-between rounded-2xl px-5 py-4 active:scale-[0.98] transition-transform"
-          style={{
-            background: G.card,
-            border: `1px solid ${G.cardBorder}`,
-            boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
-          }}
-        >
-          <div className="flex items-center space-x-3">
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center"
-              style={{
-                background: `radial-gradient(circle at 35% 35%, ${G.goldLight} 0%, ${G.gold} 50%, #6b4e0a 100%)`,
-                boxShadow: "0 2px 8px rgba(201,168,76,0.4)",
-              }}
-            >
-              <WalletIcon className="w-4 h-4" style={{ color: "#000" }} />
-            </div>
-            <span className="text-sm font-semibold tracking-wide" style={{ color: G.goldLight }}>钱包绑定管理</span>
-          </div>
-          <ChevronRight className="w-4 h-4" style={{ color: G.goldDim }} />
-        </button>
 
       </div>
 
