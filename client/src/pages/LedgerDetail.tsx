@@ -4645,15 +4645,21 @@ export default function LedgerDetail() {
       {isCustomAF && !effectiveIsFunder && (
         <div className="flex-1 px-4 pb-20">
           <div className="space-y-3 mt-2">
-              {/* 谷底增籹入口：BTC / ETH / SOL 三币大图标，不带文字 */}
+              {/* 谷底增籹入口：BTC / ETH / SOL 三币大图标靠左重叠，箭头靠右 */}
               <button
                 onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
-                className="w-full rounded-2xl p-4 flex items-center justify-center gap-6 shadow-sm active:opacity-90"
+                className="w-full rounded-2xl p-4 flex items-center shadow-sm active:opacity-90"
                 style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
               >
-                <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png" alt="BTC" className="w-12 h-12 object-contain rounded-full" />
-                <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-12 h-12 object-contain rounded-full" />
-                <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png" alt="SOL" className="w-12 h-12 object-contain rounded-full" />
+                {/* 三币图标靠左，25%重叠 */}
+                <div className="flex items-center flex-shrink-0">
+                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png" alt="BTC" className="w-12 h-12 object-contain rounded-full" style={{ position: 'relative', zIndex: 3 }} />
+                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-12 h-12 object-contain rounded-full" style={{ position: 'relative', zIndex: 2, marginLeft: '-12px', border: '2px solid #fff' }} />
+                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png" alt="SOL" className="w-12 h-12 object-contain rounded-full" style={{ position: 'relative', zIndex: 1, marginLeft: '-12px', border: '2px solid #fff' }} />
+                </div>
+                {/* 中间留白 */}
+                <div className="flex-1" />
+                {/* 箭头靠右对齐 */}
                 <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#3B5BDB' }}>
                   <ChevronRight className="w-4 h-4 text-white" />
                 </div>
