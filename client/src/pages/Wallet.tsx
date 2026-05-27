@@ -275,6 +275,7 @@ export default function Wallet() {
   const [, setLocation] = useLocation();
   const [modal, setModal] = useState<ModalType>(null);
   const [hideBalance, setHideBalance] = useState(false);
+  const [activeTab, setActiveTab] = useState<"usdt" | "cny">("usdt");
 
   const balanceQuery = trpc.recharge.getBalance.useQuery();
   const recentRechargeQuery = trpc.recharge.getMyOrders.useQuery({ limit: 3 });
@@ -286,7 +287,6 @@ export default function Wallet() {
   const balance = typeof balanceQuery.data === "number" ? balanceQuery.data : 0;
   const cnyBalance = typeof cnyBalanceQuery.data === "number" ? cnyBalanceQuery.data : 0;
   const usdtToCny = balance * 7.25;
-  const totalCny = usdtToCny + cnyBalance;
 
   const recentUsdtTx = (() => {
     const recharges = (recentRechargeQuery.data ?? []).map((r: any) => ({
@@ -432,16 +432,16 @@ export default function Wallet() {
   return (
     <div className="min-h-screen" style={{ background: G.bg }}>
 
-      {/* ── Hero 顶部（深黑金渐变） ── */}
+      {/* ── 顶部导航栏 ── */}
       <div
-        className="relative px-5 pt-12 pb-10"
+        className="relative px-5 pt-12 pb-3"
         style={{
           background: "linear-gradient(160deg, #0d0d0d 0%, #1a1500 60%, #0d0d0d 100%)",
           borderBottom: `1px solid ${G.cardBorder}`,
         }}
       >
-        {/* 导航行 */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between">
+          {/* 返回 */}
           <button
             onClick={() => setLocation("/")}
             className="w-9 h-9 rounded-full flex items-center justify-center"
@@ -449,9 +449,31 @@ export default function Wallet() {
           >
             <ArrowLeft className="w-5 h-5" style={{ color: G.goldLight }} />
           </button>
-          <span className="text-base font-semibold tracking-widest" style={{ color: G.goldLight }}>
-            我的钱包
-          </span>
+
+          {/* USDT / CNY 切换胶囊 */}
+          <div
+            className="flex items-center rounded-full p-0.5"
+            style={{ background: G.whiteFaint, border: `1px solid ${G.cardBorder}` }}
+          >
+            {(["usdt", "cny"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className="px-4 h-7 rounded-full text-xs font-bold transition-all"
+                style={{
+                  background: activeTab === tab
+                    ? `linear-gradient(135deg, ${G.gold} 0%, ${G.goldLight} 100%)`
+                    : "transparent",
+                  color: activeTab === tab ? "#000" : G.goldDim,
+                  boxShadow: activeTab === tab ? "0 2px 8px rgba(201,168,76,0.4)" : "none",
+                }}
+              >
+                {tab === "usdt" ? "USDT" : "人民币"}
+              </button>
+            ))}
+          </div>
+
+          {/* 隐藏余额 */}
           <button
             onClick={() => setHideBalance((v) => !v)}
             className="w-9 h-9 rounded-full flex items-center justify-center"
@@ -463,46 +485,13 @@ export default function Wallet() {
             }
           </button>
         </div>
-
-        {/* 总资产 */}
-        <div className="text-center">
-          <div className="text-xs mb-2 tracking-widest" style={{ color: G.goldDim }}>
-            总资产（折合人民币）
-          </div>
-          <div className="flex items-baseline justify-center space-x-1 mb-1">
-            <span className="text-2xl font-light" style={{ color: G.goldDim }}>¥</span>
-            <span
-              className="tabular-nums font-bold tracking-tight"
-              style={{ fontSize: "2.8rem", lineHeight: 1, color: G.goldLight }}
-            >
-              {mask(totalCny.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
-            </span>
-          </div>
-          {!hideBalance && (
-            <div className="flex items-center justify-center space-x-3 mt-3">
-              <div className="flex items-center space-x-1.5">
-                <div className="w-1.5 h-1.5 rounded-full" style={{ background: G.gold }} />
-                <span className="text-xs" style={{ color: G.goldDim }}>
-                  USDT ≈ ¥{usdtToCny.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-              <div className="w-px h-3" style={{ background: G.cardBorder }} />
-              <div className="flex items-center space-x-1.5">
-                <div className="w-1.5 h-1.5 rounded-full" style={{ background: G.goldLight }} />
-                <span className="text-xs" style={{ color: G.goldDim }}>
-                  CNY ¥{cnyBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
 
       {/* ── 账户卡片 ── */}
       <div className="px-4 pt-4 pb-24 space-y-3">
 
-        {/* USDT */}
-        <AccountCard
+        {/* USDT（仅 activeTab === usdt 时显示） */}
+        {activeTab === "usdt" && <AccountCard
           icon="$"
           label="USDT 账户"
           balance={mask(balance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
@@ -549,10 +538,10 @@ export default function Wallet() {
               </div>
             ) : null
           }
-        />
+        />}
 
-        {/* CNY */}
-        <AccountCard
+        {/* CNY（仅 activeTab === cny 时显示） */}
+        {activeTab === "cny" && <AccountCard
           icon="¥"
           label="人民币账户"
           balance={mask(cnyBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
@@ -595,7 +584,7 @@ export default function Wallet() {
               </div>
             )
           }
-        />
+        />}
 
         {/* 钱包绑定管理入口 */}
         <button
