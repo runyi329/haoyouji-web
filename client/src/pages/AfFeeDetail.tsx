@@ -206,21 +206,21 @@ export default function AfFeeDetail() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="text-right space-y-0.5">
-                      <div className="flex items-baseline gap-1 justify-end">
-                        <span className="text-[10px] text-gray-400">总计</span>
-                        <span className="text-sm font-bold text-gray-900">{displayTotal.toFixed(2)}</span>
-                        <span className="text-[10px] text-gray-400">U</span>
+                    {/* 右侧三行数字，标签固定宽度，数字右对齐 */}
+                    <div className="text-right" style={{ minWidth: 90 }}>
+                      <div className="flex justify-between items-baseline gap-1">
+                        <span className="text-[10px] text-gray-400 w-10 text-left">总计</span>
+                        <span className="text-sm font-bold text-gray-900">{displayTotal.toFixed(2)} U</span>
                       </div>
                       {displayOngoing > 0 && (
-                        <div className="flex items-baseline gap-1 justify-end">
-                          <span className="text-[10px] text-amber-400">进行中</span>
+                        <div className="flex justify-between items-baseline gap-1 mt-0.5">
+                          <span className="text-[10px] text-amber-400 w-10 text-left">进行中</span>
                           <span className="text-xs font-medium text-amber-500">{displayOngoing.toFixed(2)}</span>
                         </div>
                       )}
                       {displaySettled > 0 && (
-                        <div className="flex items-baseline gap-1 justify-end">
-                          <span className="text-[10px] text-green-400">已结清</span>
+                        <div className="flex justify-between items-baseline gap-1 mt-0.5">
+                          <span className="text-[10px] text-green-400 w-10 text-left">已结清</span>
                           <span className="text-xs font-medium text-green-500">{displaySettled.toFixed(2)}</span>
                         </div>
                       )}
