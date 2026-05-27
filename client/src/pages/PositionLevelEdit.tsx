@@ -96,7 +96,7 @@ const ChipRow: React.FC<ChipRowProps> = ({ item, index, color, accentRgb, onChan
   >
     {/* 第一行：序号 + 数量 + 止盈价 + 删除 */}
     <div className="flex items-center gap-2 px-3 pt-2 pb-1">
-      <span className="text-xs shrink-0 w-4 text-center" style={{ color: `rgba(${accentRgb},0.5)` }}>#{index + 1}</span>
+      <span className="text-xs shrink-0 w-4 text-center" style={{ color: item.pending ? 'rgba(176,106,255,0.6)' : `rgba(${accentRgb},0.5)` }}>#{index + 1}</span>
 
       {/* 数量 */}
       <div className="flex items-center gap-1 flex-1">
@@ -110,19 +110,19 @@ const ChipRow: React.FC<ChipRowProps> = ({ item, index, color, accentRgb, onChan
           step="1"
           min="0"
         />
-        <span className="text-xs shrink-0" style={{ color: `rgba(${accentRgb},0.5)` }}>ETH</span>
+        <span className="text-xs shrink-0" style={{ color: item.pending ? 'rgba(176,106,255,0.6)' : `rgba(${accentRgb},0.5)` }}>ETH</span>
       </div>
 
       {/* 止盈价 */}
       <div className="flex items-center gap-1 flex-1">
-        <span className="text-xs shrink-0" style={{ color: `rgba(${accentRgb},0.5)` }}>止盈$</span>
+        <span className="text-xs shrink-0" style={{ color: item.pending ? 'rgba(176,106,255,0.6)' : `rgba(${accentRgb},0.5)` }}>止盈$</span>
         <input
           type="number"
           value={item.takeProfit}
           onChange={e => onChange('takeProfit', e.target.value)}
           placeholder="—"
           className="flex-1 text-center text-base font-bold outline-none bg-transparent min-w-0"
-          style={{ color: '#f0d060', fontVariantNumeric: 'tabular-nums' }}
+          style={{ color: item.pending ? '#b06aff' : '#f0d060', fontVariantNumeric: 'tabular-nums' }}
           step="100"
           min="0"
         />
@@ -139,7 +139,7 @@ const ChipRow: React.FC<ChipRowProps> = ({ item, index, color, accentRgb, onChan
     </div>
 
     {/* 第二行：备注 + 挂单勾选 */}
-    <div className="flex items-center gap-2 px-3 pb-2" style={{ borderTop: `1px solid rgba(${accentRgb},0.15)`, paddingTop: '4px' }}>
+    <div className="flex items-center gap-2 px-3 pb-2" style={{ borderTop: `1px solid ${item.pending ? 'rgba(176,106,255,0.2)' : `rgba(${accentRgb},0.15)`}`, paddingTop: '4px' }}>
       <input
         type="text"
         value={item.note}
@@ -277,13 +277,21 @@ export default function PositionLevelEdit() {
     });
   };
 
-  // 计算预览进度条
+  // 计算预览进度条（挂单筹码单独为紫色段）
   const bqCur = sumQty(baseItems);
   const tqCur = sumQty(tacticalItems);
   const totalCur = bqCur + tqCur;
   const planCur = parseFloat(plannedValue) || plannedQty;
-  const baseWidth = planCur > 0 ? Math.min(100, (bqCur / planCur) * 100) : 0;
-  const tacticalWidth = planCur > 0 ? Math.min(100 - baseWidth, (tqCur / planCur) * 100) : 0;
+  // 挂单数量（底仓+战术中所有pending=true的记录）
+  const pendingQty = [...baseItems, ...tacticalItems]
+    .filter(x => x.pending && parseFloat(x.qty) > 0)
+    .reduce((s, x) => s + (parseFloat(x.qty) || 0), 0);
+  // 已成交的底仓/战术（排除挂单部分）
+  const bqConfirmed = baseItems.filter(x => !x.pending).reduce((s, x) => s + (parseFloat(x.qty) || 0), 0);
+  const tqConfirmed = tacticalItems.filter(x => !x.pending).reduce((s, x) => s + (parseFloat(x.qty) || 0), 0);
+  const baseWidth = planCur > 0 ? Math.min(100, (bqConfirmed / planCur) * 100) : 0;
+  const tacticalWidth = planCur > 0 ? Math.min(100 - baseWidth, (tqConfirmed / planCur) * 100) : 0;
+  const pendingWidth = planCur > 0 ? Math.min(100 - baseWidth - tacticalWidth, (pendingQty / planCur) * 100) : 0;
 
   // 加权平均止盈价
   const baseAvgTP = weightedAvgTakeProfit(baseItems);
@@ -435,11 +443,14 @@ export default function PositionLevelEdit() {
               <span className="text-xs" style={{ color: 'rgba(192,192,192,0.5)' }}>持仓汇总</span>
               <span className="text-xs font-mono" style={{ color: 'rgba(192,192,192,0.7)' }}>{totalCur.toFixed(2)} / {planCur.toFixed(0)} ETH</span>
             </div>
-            {/* 进度条 */}
+            {/* 进度条：蓝色(已成交底仓) + 橙色(已成交战术) + 紫色(挂单) */}
             <div className="h-3 rounded-full overflow-hidden mb-3" style={{ background: 'rgba(255,255,255,0.06)' }}>
               <div className="h-full flex">
                 <div style={{ width: `${baseWidth}%`, background: 'linear-gradient(90deg, #2a6aaa, #4aa8ff)', transition: 'width 0.3s' }} />
                 <div style={{ width: `${tacticalWidth}%`, background: 'linear-gradient(90deg, #a04010, #e87020)', transition: 'width 0.3s' }} />
+                {pendingWidth > 0 && (
+                  <div style={{ width: `${pendingWidth}%`, background: 'linear-gradient(90deg, #7030cc, #b06aff)', transition: 'width 0.3s' }} />
+                )}
               </div>
             </div>
             {/* 两列卡片 */}
@@ -450,9 +461,9 @@ export default function PositionLevelEdit() {
                   <div className="w-2 h-2 rounded-sm" style={{ background: '#4aa8ff' }} />
                   <span className="text-xs" style={{ color: 'rgba(74,168,255,0.7)' }}>战略筹码</span>
                 </div>
-                <div className="text-base font-bold font-mono" style={{ color: '#4aa8ff' }}>{bqCur.toFixed(2)}</div>
+                <div className="text-base font-bold font-mono" style={{ color: '#4aa8ff' }}>{bqConfirmed.toFixed(2)}</div>
                 <div className="text-xs mt-0.5" style={{ color: 'rgba(74,168,255,0.5)' }}>
-                  {baseItems.filter(x => parseFloat(x.qty) > 0).length} 条记录
+                  {baseItems.filter(x => !x.pending && parseFloat(x.qty) > 0).length} 条已成交
                 </div>
                 {baseAvgTP > 0 && (
                   <div className="text-xs mt-0.5 font-mono" style={{ color: '#f0d060' }}>
@@ -466,9 +477,9 @@ export default function PositionLevelEdit() {
                   <div className="w-2 h-2 rounded-sm" style={{ background: '#e87020' }} />
                   <span className="text-xs" style={{ color: 'rgba(232,112,32,0.7)' }}>战术筹码</span>
                 </div>
-                <div className="text-base font-bold font-mono" style={{ color: '#e87020' }}>{tqCur.toFixed(2)}</div>
+                <div className="text-base font-bold font-mono" style={{ color: '#e87020' }}>{tqConfirmed.toFixed(2)}</div>
                 <div className="text-xs mt-0.5" style={{ color: 'rgba(232,112,32,0.5)' }}>
-                  {tacticalItems.filter(x => parseFloat(x.qty) > 0).length} 条记录
+                  {tacticalItems.filter(x => !x.pending && parseFloat(x.qty) > 0).length} 条已成交
                 </div>
                 {tacticalAvgTP > 0 && (
                   <div className="text-xs mt-0.5 font-mono" style={{ color: '#f0d060' }}>
@@ -477,6 +488,21 @@ export default function PositionLevelEdit() {
                 )}
               </div>
             </div>
+            {/* 挂单筹码汇总卡片（有挂单时才显示） */}
+            {pendingQty > 0 && (
+              <div className="mt-2 rounded-lg px-3 py-2" style={{ background: 'rgba(176,106,255,0.08)', border: '1px solid rgba(176,106,255,0.3)' }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-sm" style={{ background: '#b06aff' }} />
+                    <span className="text-xs" style={{ color: 'rgba(176,106,255,0.8)' }}>挂单中（待成交）</span>
+                  </div>
+                  <div className="text-sm font-bold font-mono" style={{ color: '#b06aff' }}>{pendingQty.toFixed(2)} ETH</div>
+                </div>
+                <div className="text-xs mt-0.5" style={{ color: 'rgba(176,106,255,0.5)' }}>
+                  {[...baseItems, ...tacticalItems].filter(x => x.pending && parseFloat(x.qty) > 0).length} 条挂单记录 · 成交后自动计入持仓
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 修改日志 */}
