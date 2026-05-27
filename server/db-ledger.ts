@@ -6084,8 +6084,10 @@ async function ensureCommissionShareColumn() {
 ensureCommissionShareColumn().catch(console.error);
 
 // ========== 一次性修复：恢复2026-05-27因跨账本bug被误删的账目 ==========
-// 背景：删除37号账本的「购物」默认分类时，因缺少ledgerId过滤，导致其他账本中
-//       使用相同categoryId的账目也被软删除。此脚本在启动时执行一次恢复。
+// 背景：删除37号账本的分类时，因缺少ledgerId过滤，导致其他账本中
+//       使用相同categoryId的账目也被软删除。
+// 修复逻辑：37号账本以外的所有账本，5月27日被软删的账目全部恢复。
+//           lomg分类只存在于37号账本，其他账本不受影响。
 let _may27RestoreDone = false;
 async function restoreMay27MisDeletedRecords() {
   if (_may27RestoreDone) return;
@@ -6093,46 +6095,32 @@ async function restoreMay27MisDeletedRecords() {
     const conn = await getDbConnection();
     if (!conn) return;
 
-    // 1. 找出37号账本在2026-05-27被软删除的分类ID（排除lomg）
-    const [cats] = await conn.execute(`
-      SELECT DISTINCT r.category_id, c.name as cat_name
-      FROM ledger_records r
-      LEFT JOIN ledger_categories c ON c.id = r.category_id
-      WHERE r.deleted_at IS NOT NULL
-        AND DATE(r.deleted_at) = '2026-05-27'
-        AND r.ledger_id = 37
+    // 先检查是否有需要恢复的数据
+    const [preview] = await conn.execute(`
+      SELECT COUNT(*) as cnt
+      FROM ledger_records
+      WHERE deleted_at IS NOT NULL
+        AND DATE(deleted_at) = '2026-05-27'
+        AND ledger_id != 37
     `) as any[];
 
-    if (!cats || cats.length === 0) {
-      console.log('[restoreMay27] 未找到37号账本5月27日被删记录，跳过');
+    const count = preview?.[0]?.cnt || 0;
+    if (count === 0) {
+      console.log('[restoreMay27] 无需恢复的账目，跳过');
       _may27RestoreDone = true;
       return;
     }
 
-    // 排除lomg分类，只恢复「购物」等默认分类
-    const targetCatIds = cats
-      .filter((r: any) => !(r.cat_name || '').toLowerCase().includes('lomg'))
-      .map((r: any) => r.category_id)
-      .filter(Boolean);
+    console.log(`[restoreMay27] 发现 ${count} 条被误删账目（37号账本以外），开始恢复...`);
 
-    if (targetCatIds.length === 0) {
-      console.log('[restoreMay27] 无需恢复的分类（全是lomg），跳过');
-      _may27RestoreDone = true;
-      return;
-    }
-
-    console.log(`[restoreMay27] 准备恢复分类ID: ${targetCatIds.join(',')} 在其他账本中被误删的账目...`);
-
-    // 2. 恢复：把37号账本以外、使用这些分类ID、5月27日被软删的账目全部恢复
-    const placeholders = targetCatIds.map(() => '?').join(',');
+    // 恢复：37号账本以外所有5月27日被软删的账目（全部是误删）
     const [result] = await conn.execute(`
       UPDATE ledger_records
       SET deleted_at = NULL, deleted_by = NULL
       WHERE deleted_at IS NOT NULL
         AND DATE(deleted_at) = '2026-05-27'
         AND ledger_id != 37
-        AND category_id IN (${placeholders})
-    `, targetCatIds) as any[];
+    `) as any[];
 
     console.log(`[restoreMay27] ✅ 恢复完成，共恢复 ${result?.affectedRows || 0} 条被误删账目`);
   } catch (e: any) {
