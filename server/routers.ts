@@ -12490,9 +12490,9 @@ ${klinesSummary}
             targetUserId = input.viewAsUserId;
           }
         }
-        // 1. 充値订单（recharge_orders，全状态显示，按 ledger_id 隔离）
+        // 1. 充値订单（recharge_orders，全状态显示，全局不限账本）
         const rechargeRows = await db.execute(
-          sql`SELECT id, amount, status, created_at FROM recharge_orders WHERE user_id = ${targetUserId} AND ledger_id = ${input.ledgerId} AND status NOT IN ('expired', 'cancelled') ORDER BY created_at DESC LIMIT 100`
+          sql`SELECT id, amount, status, created_at FROM recharge_orders WHERE user_id = ${targetUserId} AND status NOT IN ('expired', 'cancelled') ORDER BY created_at DESC LIMIT 100`
         ) as any;
         const statusLabelMap: Record<string, string> = {
           completed: '充值到账',
@@ -12519,7 +12519,7 @@ ${klinesSummary}
                 LEFT JOIN af_orders o ON (
                   m.note REGEXP CONCAT('#', o.id, '$') AND o.ledger_id = m.ledger_id
                 )
-                WHERE m.ledger_id = ${input.ledgerId} AND m.user_id = ${targetUserId}
+                WHERE m.user_id = ${targetUserId}
                 ORDER BY m.created_at DESC`
           ) as any;
           manualList = ((manualRows[0] || manualRows) as any[]).map((r: any) => {
@@ -12548,9 +12548,13 @@ ${klinesSummary}
         const combined = [...rechargeList, ...manualList].sort(
           (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
-        // 4. 计算每条记录后的余额快照（从最早到最新累加）
+        // 4. 计算每条记录后的余额快照（从 users.balance 开始累加）
+        const userBalRow = await db.execute(
+          sql`SELECT COALESCE(balance, 0) as bal FROM users WHERE id = ${targetUserId} LIMIT 1`
+        ) as any;
+        const initBalance = parseFloat(((userBalRow[0] || userBalRow) as any[])[0]?.bal?.toString() || '0');
         const chronological = [...combined].reverse();
-        let runningBalance = 0;
+        let runningBalance = initBalance;
         const balanceMap = new Map<string, number>();
         for (const item of chronological) {
           const amt = parseFloat(String((item as any).amount));
