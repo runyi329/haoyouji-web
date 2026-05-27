@@ -4645,6 +4645,20 @@ export default function LedgerDetail() {
       {isCustomAF && !effectiveIsFunder && (
         <div className="flex-1 px-4 pb-20">
           <div className="space-y-3 mt-2">
+              {/* 谷底增籹入口：BTC / ETH / SOL 三币大图标，不带文字 */}
+              <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+                className="w-full rounded-2xl p-4 flex items-center justify-center gap-6 shadow-sm active:opacity-90"
+                style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
+              >
+                <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png" alt="BTC" className="w-12 h-12 object-contain rounded-full" />
+                <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-12 h-12 object-contain rounded-full" />
+                <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png" alt="SOL" className="w-12 h-12 object-contain rounded-full" />
+                <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#3B5BDB' }}>
+                  <ChevronRight className="w-4 h-4 text-white" />
+                </div>
+              </button>
+
               {/* ETH 智能仓位管理（全宽） */}
               <button
                 onClick={() => setLocation(`/ledger/${ledgerId}/position-calc${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
@@ -4687,27 +4701,6 @@ export default function LedgerDetail() {
                       {Math.round(ethPositionPct * 100)}%
                     </span>
                   </div>
-                </div>
-              </button>
-
-              {/* 谷底增籹订单（BTC / ETH / SOL 三币合一入口） */}
-              <button
-                onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
-                className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
-                style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
-              >
-                {/* 三个币种图标叠层 */}
-                <div className="flex items-center flex-shrink-0" style={{ width: '52px' }}>
-                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png" alt="BTC" className="w-9 h-9 object-contain rounded-full" style={{ zIndex: 3, position: 'relative' }} />
-                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-9 h-9 object-contain rounded-full" style={{ zIndex: 2, position: 'relative', marginLeft: '-10px', border: '1.5px solid #fff' }} />
-                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png" alt="SOL" className="w-9 h-9 object-contain rounded-full" style={{ zIndex: 1, position: 'relative', marginLeft: '-10px', border: '1.5px solid #fff' }} />
-                </div>
-                <div className="text-left flex-1">
-                  <div className="font-semibold text-base" style={{ color: '#1A2340' }}>谷底增籹</div>
-                  <div className="text-xs mt-0.5" style={{ color: '#6B7280' }}>BTC · ETH · SOL 订单总览</div>
-                </div>
-                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#3B5BDB' }}>
-                  <ChevronRight className="w-4 h-4 text-white" />
                 </div>
               </button>
 
