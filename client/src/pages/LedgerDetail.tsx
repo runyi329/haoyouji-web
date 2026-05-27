@@ -4653,9 +4653,18 @@ export default function LedgerDetail() {
               >
                 {/* 三币图标靠左，25%重叠 */}
                 <div className="flex items-center flex-shrink-0">
-                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png" alt="BTC" className="w-12 h-12 object-cover rounded-full flex-shrink-0" style={{ position: 'relative', zIndex: 3 }} />
-                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-12 h-12 object-cover rounded-full flex-shrink-0" style={{ position: 'relative', zIndex: 2, marginLeft: '-12px', border: '2px solid #fff' }} />
-                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png" alt="SOL" className="w-12 h-12 object-cover rounded-full flex-shrink-0" style={{ position: 'relative', zIndex: 1, marginLeft: '-12px', border: '2px solid #fff' }} />
+                  {/* BTC - 橙色背景兜底 */}
+                  <div className="w-12 h-12 rounded-full flex-shrink-0 overflow-hidden" style={{ position: 'relative', zIndex: 3, backgroundColor: '#F7931A' }}>
+                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/bitcoin.webp" alt="BTC" className="w-full h-full object-cover" />
+                  </div>
+                  {/* ETH - 深蓝色背景兜底 */}
+                  <div className="w-12 h-12 rounded-full flex-shrink-0 overflow-hidden" style={{ position: 'relative', zIndex: 2, marginLeft: '-12px', border: '2px solid #fff', backgroundColor: '#627EEA' }}>
+                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ethereum.webp" alt="ETH" className="w-full h-full object-cover" />
+                  </div>
+                  {/* SOL - 紫色背景兜底 */}
+                  <div className="w-12 h-12 rounded-full flex-shrink-0 overflow-hidden" style={{ position: 'relative', zIndex: 1, marginLeft: '-12px', border: '2px solid #fff', backgroundColor: '#9945FF' }}>
+                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/solana.webp" alt="SOL" className="w-full h-full object-cover" />
+                  </div>
                 </div>
                 {/* 中间留白 */}
                 <div className="flex-1" />
