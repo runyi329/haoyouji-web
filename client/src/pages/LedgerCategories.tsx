@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation, useParams } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Plus, Minus, ChevronRight, ChevronDown, Trash2, Store } from "lucide-react";
@@ -57,6 +58,9 @@ const LedgerCategories = () => {
   const [targetCategoryId, setTargetCategoryId] = useState<number | null>(null);
   const [affectedCount, setAffectedCount] = useState<number>(0);
 
+  // 强制删除状态
+  const [forceDelete, setForceDelete] = useState(false);
+
   // 重命名状态
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [categoryToRename, setCategoryToRename] = useState<Category | null>(null);
@@ -85,6 +89,10 @@ const LedgerCategories = () => {
       return newSet;
     });
   };
+
+  // 获取当前用户信息，判断是否是管理员
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
   // ─── 获取账本信息，判断是否是 opinion_book ─────────────────────────────────
   const { data: ledgerInfo } = trpc.ledger.getLedger.useQuery(
@@ -658,7 +666,7 @@ const LedgerCategories = () => {
       </Dialog>
 
       {/* 删除确认对话框 */}
-      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+      <Dialog open={showDeleteConfirm} onOpenChange={(open) => { setShowDeleteConfirm(open); if (!open) setForceDelete(false); }}>
         <DialogContent className="top-[5%] translate-y-0">
           <DialogHeader>
             <DialogTitle>确认删除</DialogTitle>
@@ -678,6 +686,24 @@ const LedgerCategories = () => {
                 <p className="text-sm text-yellow-800">
                   {label.cascadeWarning}
                 </p>
+              </div>
+            )}
+
+            {/* 管理员专属：强制删除选项 */}
+            {isAdmin && (
+              <div className="bg-red-50 border border-red-200 rounded p-3">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={forceDelete}
+                    onChange={(e) => setForceDelete(e.target.checked)}
+                    className="mt-0.5 accent-red-600"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-red-700">强制删除（仅管理员）</p>
+                    <p className="text-xs text-red-500 mt-0.5">勾选后将同时删除该分类及子分类下的所有账目记录，此操作不可恢复</p>
+                  </div>
+                </label>
               </div>
             )}
             
@@ -702,7 +728,8 @@ const LedgerCategories = () => {
                   
                   await deleteCategoryMutation.mutateAsync({
                     categoryId: categoryToDelete.id,
-                    cascade: needsCascade,
+                    cascade: needsCascade || forceDelete,
+                    force: forceDelete,
                   });
                   
                   setIsDeleteMode(false);
