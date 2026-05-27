@@ -8637,12 +8637,18 @@ ${klinesSummary}
       .input(z.object({
         categoryId: z.number(),
         cascade: z.boolean().optional().default(false),
+        force: z.boolean().optional().default(false),
       }))
       .mutation(async ({ ctx, input }) => {
+        // force强制删除只允许管理员使用
+        if (input.force && ctx.user.role !== 'admin' && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只有管理员才能强制删除分类' });
+        }
         return await dbLedger.deleteLedgerCategory(
           input.categoryId,
           ctx.user.id,
-          input.cascade
+          input.cascade,
+          input.force
         );
       }),
 

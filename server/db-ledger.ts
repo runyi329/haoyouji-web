@@ -1315,7 +1315,7 @@ async function getAllChildCategoryIds(db: any, parentId: number): Promise<number
 /**
  * 删除分类(支持级联删除)
  */
-export async function deleteLedgerCategory(categoryId: number, userId: number, cascade: boolean = false) {
+export async function deleteLedgerCategory(categoryId: number, userId: number, cascade: boolean = false, force: boolean = false) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
   
@@ -1354,8 +1354,18 @@ export async function deleteLedgerCategory(categoryId: number, userId: number, c
       .where(and(eq(ledgerRecords.categoryId, id), isNull(ledgerRecords.deletedAt)))
       .then((rows: any[]) => rows[0]?.count || 0);
     
-    if (hasRecords > 0) {
+    if (hasRecords > 0 && !force) {
       throw new Error("此分类或其子分类下有记录，不能删除");
+    }
+  }
+
+  // 强制删除时，软删除该分类及子分类下的所有记录
+  if (force) {
+    for (const id of allIdsToDelete) {
+      await db
+        .update(ledgerRecords)
+        .set({ deletedAt: new Date() } as any)
+        .where(and(eq(ledgerRecords.categoryId, id), isNull(ledgerRecords.deletedAt)));
     }
   }
   
