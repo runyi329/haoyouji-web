@@ -599,7 +599,10 @@ export default function Wallet() {
 
         {/* 钱包绑定管理入口 */}
         <button
-          onClick={() => setLocation("/payment-accounts")}
+          onClick={() => {
+            sessionStorage.setItem("payment_accounts_back", "/wallet");
+            setLocation("/payment-accounts");
+          }}
           className="w-full flex items-center justify-between rounded-2xl px-5 py-4 active:scale-[0.98] transition-transform"
           style={{
             background: G.card,
