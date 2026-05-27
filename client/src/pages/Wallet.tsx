@@ -496,7 +496,6 @@ export default function Wallet() {
           unit="USDT"
           subLine={!hideBalance && (
             <div className="flex items-center space-x-1 mt-0.5" style={{ color: G.goldDim }}>
-              <TrendingUp className="w-3 h-3" />
               <span className="text-xs">≈ ¥{usdtToCny.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 人民币</span>
             </div>
           )}
