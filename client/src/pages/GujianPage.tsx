@@ -134,13 +134,15 @@ function GudizengchouDetail({ order, ledgerId }: { order: any; ledgerId: number 
   const amount = parseFloat(order.amount);
   const tradeValue = order.isGift ? amount : amount * 5.25;
   const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+  // 已撤单的委买订单：管理费为0（撤单时全额退回本金，未实际收取管理费）
+  const isCancelledBuy = order.status === 'cancelled';
   const startDate = new Date(order.createdAt);
   const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
   const endDate = order.sellStatus === 'sold' && order.sellConfirmedAt ? new Date(order.sellConfirmedAt) : new Date();
   const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
   endDay.setHours(0, 0, 0, 0);
-  const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-  const totalFee = dailyFee * holdDays;
+  const holdDays = isCancelledBuy ? 0 : Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+  const totalFee = isCancelledBuy ? 0 : dailyFee * holdDays;
   const timeStr = new Date(order.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
   return (
@@ -192,7 +194,7 @@ function GudizengchouDetail({ order, ledgerId }: { order: any; ledgerId: number 
           <div className="flex justify-between items-center">
             <span className="text-[#9CA3AF]">管理费</span>
             <span className="text-[#1E293B] font-medium">
-              {dailyFee.toFixed(4)}u × {holdDays}天 = {totalFee.toFixed(4)}u
+              {isCancelledBuy ? '0 u（已撤单）' : `${dailyFee.toFixed(4)}u × ${holdDays}天 = ${totalFee.toFixed(4)}u`}
             </span>
           </div>
           {/* 类型/状态 */}
@@ -402,7 +404,12 @@ function GudizengchouDetail({ order, ledgerId }: { order: any; ledgerId: number 
                   </div>
                   <div className="flex justify-between items-center text-xs mt-1">
                     <span style={labelStyle} className="shrink-0 mr-2">管理费</span>
-                    <span style={dimStyle} className="text-right">{dailyFee.toFixed(4)}u × {holdDays}天 = <span className="font-semibold" style={{ color: '#1A2340' }}>{totalFee.toFixed(4)}u</span></span>
+                    <span style={dimStyle} className="text-right">
+                      {isCancelledBuy
+                        ? <span className="font-semibold" style={{ color: '#1A2340' }}>0 u（已撤单）</span>
+                        : <>{dailyFee.toFixed(4)}u × {holdDays}天 = <span className="font-semibold" style={{ color: '#1A2340' }}>{totalFee.toFixed(4)}u</span></>
+                      }
+                    </span>
                   </div>
                 </>
               );
