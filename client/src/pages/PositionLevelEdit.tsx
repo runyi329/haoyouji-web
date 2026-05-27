@@ -18,20 +18,22 @@ interface ChipItem {
   qty: string;         // 数量（ETH）
   takeProfit: string;  // 止盈价（USD），可选
   note: string;        // 备注，可选
+  pending?: boolean;   // 挂单状态：true=挂单中，false/undefined=已成交
 }
 
-const emptyChip = (): ChipItem => ({ qty: '', takeProfit: '', note: '' });
+const emptyChip = (): ChipItem => ({ qty: '', takeProfit: '', note: '', pending: false });
 
 /** 从旧格式迁移到新格式 */
 function migrateToItems(qty: number, notesJson: string): ChipItem[] {
   try {
     const parsed = JSON.parse(notesJson || '[]');
-    // 新格式：[{qty, takeProfit, note}]
+    // 新格式：[{qty, takeProfit, note, pending?}]
     if (Array.isArray(parsed) && parsed.length > 0 && 'qty' in parsed[0]) {
       return parsed.map((x: any) => ({
         qty: String(x.qty ?? ''),
         takeProfit: String(x.takeProfit ?? ''),
         note: x.note ?? '',
+        pending: x.pending ?? false,
       }));
     }
     // 旧格式：[{text, time}] — 迁移
@@ -51,6 +53,7 @@ function serializeItems(items: ChipItem[]): string {
     qty: parseFloat(x.qty) || 0,
     takeProfit: parseFloat(x.takeProfit) || 0,
     note: x.note,
+    pending: x.pending ?? false,
   })));
 }
 
@@ -79,14 +82,17 @@ interface ChipRowProps {
   index: number;
   color: string;
   accentRgb: string;
-  onChange: (field: keyof ChipItem, val: string) => void;
+  onChange: (field: keyof ChipItem, val: string | boolean) => void;
   onRemove: () => void;
 }
 
 const ChipRow: React.FC<ChipRowProps> = ({ item, index, color, accentRgb, onChange, onRemove }) => (
   <div
     className="rounded-xl overflow-hidden"
-    style={{ background: `rgba(${accentRgb},0.06)`, border: `1px solid rgba(${accentRgb},0.3)` }}
+    style={{
+      background: item.pending ? 'rgba(255,200,50,0.07)' : `rgba(${accentRgb},0.06)`,
+      border: `1px solid ${item.pending ? 'rgba(255,200,50,0.45)' : `rgba(${accentRgb},0.3)`}`,
+    }}
   >
     {/* 第一行：序号 + 数量 + 止盈价 + 删除 */}
     <div className="flex items-center gap-2 px-3 pt-2 pb-1">
@@ -100,7 +106,7 @@ const ChipRow: React.FC<ChipRowProps> = ({ item, index, color, accentRgb, onChan
           onChange={e => onChange('qty', e.target.value)}
           placeholder="0"
           className="w-20 text-center text-base font-bold outline-none bg-transparent"
-          style={{ color, fontVariantNumeric: 'tabular-nums' }}
+          style={{ color: item.pending ? '#ffc832' : color, fontVariantNumeric: 'tabular-nums' }}
           step="1"
           min="0"
         />
@@ -132,16 +138,28 @@ const ChipRow: React.FC<ChipRowProps> = ({ item, index, color, accentRgb, onChan
       </button>
     </div>
 
-    {/* 第二行：备注 */}
-    <div className="px-3 pb-2">
+    {/* 第二行：备注 + 挂单勾选 */}
+    <div className="flex items-center gap-2 px-3 pb-2" style={{ borderTop: `1px solid rgba(${accentRgb},0.15)`, paddingTop: '4px' }}>
       <input
         type="text"
         value={item.note}
         onChange={e => onChange('note', e.target.value)}
         placeholder="备注（可选）"
-        className="w-full text-xs outline-none bg-transparent"
-        style={{ color: 'rgba(255,255,255,0.5)', borderTop: `1px solid rgba(${accentRgb},0.15)`, paddingTop: '4px' }}
+        className="flex-1 text-xs outline-none bg-transparent"
+        style={{ color: item.pending ? 'rgba(255,200,50,0.7)' : 'rgba(255,255,255,0.5)' }}
       />
+      {/* 挂单勾选按钮：勾选=挂单中(黄色)，未勾选=已成交 */}
+      <button
+        title={item.pending ? '挂单中 — 点击标记已成交' : '已成交 — 点击标记为挂单'}
+        className="shrink-0 flex items-center justify-center rounded transition-all"
+        style={{
+          width: '20px', height: '20px', fontSize: '11px',
+          background: item.pending ? 'rgba(255,200,50,0.2)' : 'rgba(255,255,255,0.05)',
+          border: item.pending ? '1px solid rgba(255,200,50,0.6)' : '1px solid rgba(255,255,255,0.15)',
+          color: item.pending ? '#ffc832' : 'rgba(255,255,255,0.25)',
+        }}
+        onClick={() => onChange('pending', !item.pending)}
+      >{item.pending ? '⏳' : '✓'}</button>
     </div>
   </div>
 );
@@ -272,10 +290,10 @@ export default function PositionLevelEdit() {
   const tacticalAvgTP = weightedAvgTakeProfit(tacticalItems);
 
   // ---- 辅助：更新某条记录 ----
-  const updateBase = (i: number, field: keyof ChipItem, val: string) => {
+  const updateBase = (i: number, field: keyof ChipItem, val: string | boolean) => {
     setBaseItems(prev => prev.map((x, j) => j === i ? { ...x, [field]: val } : x));
   };
-  const updateTactical = (i: number, field: keyof ChipItem, val: string) => {
+  const updateTactical = (i: number, field: keyof ChipItem, val: string | boolean) => {
     setTacticalItems(prev => prev.map((x, j) => j === i ? { ...x, [field]: val } : x));
   };
   const addBase = () => setBaseItems(prev => [...prev, emptyChip()]);
