@@ -2764,7 +2764,6 @@ export default function CryptoPrediction() {
                     style={{ borderTop: '1px dashed #CBD5E1' }}
                   >
                     <span className="text-xs" style={{ color: '#9CA3AF' }}>管理费明细</span>
-                    <span className="text-xs font-semibold" style={{ color: '#0EA56A' }}>{totalFee.toFixed(2)}u</span>
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 3L7.5 6L4.5 9" stroke="#9CA3AF" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   </button>
                 );
