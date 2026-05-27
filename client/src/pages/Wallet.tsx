@@ -449,7 +449,7 @@ export default function Wallet() {
 
       {/* ── 顶部导航栏 ── */}
       <div
-        className="relative px-5 pt-12 pb-3"
+        className="relative px-4 pt-10 pb-2"
         style={{
           background: "linear-gradient(160deg, #0d0d0d 0%, #1a1500 60%, #0d0d0d 100%)",
           borderBottom: `1px solid ${G.cardBorder}`,
@@ -459,24 +459,24 @@ export default function Wallet() {
           {/* 返回 */}
           <button
             onClick={() => setLocation("/")}
-            className="w-9 h-9 rounded-full flex items-center justify-center"
+            className="w-7 h-7 rounded-full flex items-center justify-center"
             style={{ background: G.whiteFaint, border: `1px solid ${G.cardBorder}` }}
           >
-            <ArrowLeft className="w-5 h-5" style={{ color: G.goldLight }} />
+            <ArrowLeft className="w-4 h-4" style={{ color: G.goldLight }} />
           </button>
 
-          {/* 右侧：明细 + 刷新（文字）+ 隐藏余额 */}
-          <div className="flex items-center space-x-1.5">
+          {/* 右侧：明细 + 刷新 */}
+          <div className="flex items-center space-x-1">
             <button
               onClick={() => setLocation(activeTab === "usdt" ? "/wallet/transactions" : "/wallet/cny-transactions")}
-              className="px-2.5 h-7 rounded-full text-xs font-medium"
+              className="px-2.5 h-6 rounded-full text-xs font-medium"
               style={{ background: G.whiteFaint, color: G.goldDim }}
             >
               明细
             </button>
             <button
               onClick={() => window.location.reload()}
-              className="px-2.5 h-7 rounded-full text-xs font-medium"
+              className="px-2.5 h-6 rounded-full text-xs font-medium"
               style={{ background: G.whiteFaint, color: G.goldDim }}
             >
               刷新
