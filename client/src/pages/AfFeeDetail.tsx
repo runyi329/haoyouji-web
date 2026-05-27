@@ -45,18 +45,19 @@ export default function AfFeeDetail() {
     { enabled: !!ledgerId }
   );
 
-  // 计算所有买单管理费
+  // 计算所有买单管理费（不含已撤单）
   const feeItems = ((orders as any[]) ?? [])
     .filter((o: any) => o.side === 'buy' && o.status === 'completed')
     .map(calcFeeItem);
 
-  // 按用户分组
-  const userMap = new Map<string, { userId: string; name: string; orders: ReturnType<typeof calcFeeItem>[] }>();
+  // 按用户分组，保存 nickname 和 username
+  const userMap = new Map<string, { userId: string; nickname: string; username: string; orders: ReturnType<typeof calcFeeItem>[] }>();
   for (const item of feeItems) {
     const uid = String(item.userId || item.username || 'unknown');
-    const name = item.nickname || item.username || uid;
+    const nickname = item.nickname || item.username || uid;
+    const username = item.username || '';
     if (!userMap.has(uid)) {
-      userMap.set(uid, { userId: uid, name, orders: [] });
+      userMap.set(uid, { userId: uid, nickname, username, orders: [] });
     }
     userMap.get(uid)!.orders.push(item);
   }
@@ -94,38 +95,52 @@ export default function AfFeeDetail() {
     });
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50 pb-8">
-      {/* 顶部导航 */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="flex items-center px-4 py-3">
-          <button onClick={() => setLocation(`/ledger/${ledgerId}/af-order-manage`)} className="mr-3">
-            <ArrowLeft className="w-6 h-6 text-gray-700" />
-          </button>
-          <h1 className="text-lg font-semibold">管理费明细</h1>
-        </div>
-      </div>
+  // 蓝色主题色（与账本一致）
+  const BLUE = '#1A56DB';
+  const BLUE_DARK = '#1e40af';
 
-      {/* 汇总栏 */}
-      <div className="bg-white border-b px-4 py-4">
-        <p className="text-xs text-gray-400 mb-2">账本管理费总计</p>
-        <p className="text-3xl font-bold text-purple-700 mb-3">{totalAll.toFixed(2)} <span className="text-base font-normal text-gray-400">U</span></p>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-orange-50 rounded-xl px-3 py-2.5">
-            <p className="text-[11px] text-orange-400 mb-0.5">进行中</p>
-            <p className="text-base font-bold text-orange-500">{totalOngoing.toFixed(2)} U</p>
-            <p className="text-[10px] text-orange-300 mt-0.5">{feeItems.filter(f => f.feeType === 'ongoing').length} 笔持仓</p>
+  return (
+    <div className="min-h-screen pb-8" style={{ backgroundColor: '#f0f4ff' }}>
+      {/* 顶部蓝色区域 */}
+      <div style={{ background: `linear-gradient(135deg, ${BLUE_DARK} 0%, ${BLUE} 100%)` }}>
+        {/* 导航栏 */}
+        <div className="flex items-center px-4 pt-4 pb-2">
+          <button
+            onClick={() => setLocation(`/ledger/${ledgerId}`)}
+            className="w-8 h-8 flex items-center justify-center rounded-full mr-3"
+            style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+          >
+            <ArrowLeft className="w-5 h-5 text-white" />
+          </button>
+          <h1 className="text-base font-semibold text-white">管理费明细</h1>
+        </div>
+
+        {/* 汇总卡片 */}
+        <div className="px-4 pb-5 pt-2">
+          <p className="text-xs text-white/60 mb-1">账本管理费总计</p>
+          <div className="flex items-baseline gap-1.5 mb-4">
+            <span className="text-3xl font-bold text-white">{totalAll.toFixed(2)}</span>
+            <span className="text-sm text-white/60">U</span>
           </div>
-          <div className="bg-green-50 rounded-xl px-3 py-2.5">
-            <p className="text-[11px] text-green-500 mb-0.5">已结清</p>
-            <p className="text-base font-bold text-green-600">{totalSettled.toFixed(2)} U</p>
-            <p className="text-[10px] text-green-400 mt-0.5">{feeItems.filter(f => f.feeType === 'settled').length} 笔已卖出</p>
+          <div className="grid grid-cols-2 gap-3">
+            {/* 进行中 */}
+            <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
+              <p className="text-xs text-white/60 mb-1">进行中</p>
+              <p className="text-lg font-bold text-amber-300">{totalOngoing.toFixed(2)} U</p>
+              <p className="text-[10px] text-white/40 mt-0.5">{feeItems.filter(f => f.feeType === 'ongoing').length} 笔持仓</p>
+            </div>
+            {/* 已结清 */}
+            <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
+              <p className="text-xs text-white/60 mb-1">已结清</p>
+              <p className="text-lg font-bold text-green-300">{totalSettled.toFixed(2)} U</p>
+              <p className="text-[10px] text-white/40 mt-0.5">{feeItems.filter(f => f.feeType === 'settled').length} 笔已卖出</p>
+            </div>
           </div>
         </div>
       </div>
 
       {/* 筛选Tab */}
-      <div className="bg-white border-b px-4 py-2 flex gap-2">
+      <div className="px-4 py-3 flex gap-2 bg-white border-b border-gray-100 sticky top-0 z-10">
         {([
           { key: 'all' as const, label: `全部 ${userGroups.length} 人` },
           { key: 'ongoing' as const, label: `进行中` },
@@ -134,11 +149,12 @@ export default function AfFeeDetail() {
           <button
             key={tab.key}
             onClick={() => setFeeFilter(tab.key)}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+            className="px-3 py-1 rounded-full text-xs font-medium transition-colors"
+            style={
               feeFilter === tab.key
-                ? 'bg-gray-800 text-white'
-                : 'bg-gray-100 text-gray-500'
-            }`}
+                ? { backgroundColor: BLUE, color: '#fff' }
+                : { backgroundColor: '#f0f4ff', color: '#6b7280' }
+            }
           >
             {tab.label}
           </button>
@@ -157,25 +173,34 @@ export default function AfFeeDetail() {
             const displayOngoing = group.orders.filter(o => o.feeType === 'ongoing').reduce((s, o) => s + o.totalFee, 0);
             const displaySettled = group.orders.filter(o => o.feeType === 'settled').reduce((s, o) => s + o.totalFee, 0);
             const displayTotal = displayOngoing + displaySettled;
+            // 头像首字母：优先用昵称，否则用用户名
+            const avatarChar = (group.nickname || group.username || '?').charAt(0).toUpperCase();
             return (
-              <div key={group.userId} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
-                {/* 用户行 - 点击展开/收起 */}
+              <div key={group.userId} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-blue-50">
+                {/* 用户行 */}
                 <button
-                  className="w-full px-4 py-3 flex items-center justify-between"
+                  className="w-full px-4 py-3 flex items-center justify-between active:bg-blue-50"
                   onClick={() => toggleUser(group.userId)}
                 >
                   <div className="flex items-center gap-2.5">
                     {/* 头像 */}
-                    <div className="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm font-bold text-purple-600">
-                        {(group.name || '?').charAt(0).toUpperCase()}
-                      </span>
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold text-white"
+                      style={{ background: `linear-gradient(135deg, ${BLUE_DARK}, ${BLUE})` }}
+                    >
+                      {avatarChar}
                     </div>
                     <div className="text-left">
-                      <p className="text-sm font-semibold text-gray-800">{group.name}</p>
+                      {/* 昵称（用户名）格式 */}
+                      <div className="flex items-baseline gap-1 flex-wrap">
+                        <span className="text-sm font-semibold text-gray-800">{group.nickname}</span>
+                        {group.username && group.username !== group.nickname && (
+                          <span className="text-xs text-gray-400">({group.username})</span>
+                        )}
+                      </div>
                       <p className="text-[11px] text-gray-400 mt-0.5">
                         {group.orders.length} 笔订单
-                        {group.ongoingCount > 0 && <span className="text-orange-400 ml-1">· 进行中 {group.ongoingCount}</span>}
+                        {group.ongoingCount > 0 && <span className="text-amber-500 ml-1">· 进行中 {group.ongoingCount}</span>}
                         {group.settledCount > 0 && <span className="text-green-500 ml-1">· 已结清 {group.settledCount}</span>}
                       </p>
                     </div>
@@ -185,7 +210,7 @@ export default function AfFeeDetail() {
                       <p className="text-base font-bold text-gray-900">{displayTotal.toFixed(2)} U</p>
                       {feeFilter === 'all' && (
                         <div className="flex gap-2 text-[11px] justify-end mt-0.5">
-                          {group.ongoingFee > 0 && <span className="text-orange-400">{group.ongoingFee.toFixed(2)}</span>}
+                          {group.ongoingFee > 0 && <span className="text-amber-500">{group.ongoingFee.toFixed(2)}</span>}
                           {group.settledFee > 0 && <span className="text-green-500">{group.settledFee.toFixed(2)}</span>}
                         </div>
                       )}
@@ -199,10 +224,12 @@ export default function AfFeeDetail() {
 
                 {/* 展开的订单明细 */}
                 {isExpanded && (
-                  <div className="border-t border-gray-100">
+                  <div className="border-t border-blue-50">
                     {/* 表头 */}
-                    <div className="grid px-4 py-2 text-[11px] text-gray-400 bg-gray-50"
-                      style={{ gridTemplateColumns: '2.5fr 1fr 1fr 2fr' }}>
+                    <div
+                      className="grid px-4 py-2 text-[11px] text-gray-400"
+                      style={{ gridTemplateColumns: '2.5fr 1fr 1fr 2fr', backgroundColor: '#f8faff' }}
+                    >
                       <span>订单号</span>
                       <span className="text-center">币种</span>
                       <span className="text-center">天数</span>
@@ -229,16 +256,19 @@ export default function AfFeeDetail() {
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-bold text-gray-900">{item.totalFee.toFixed(4)}</p>
-                          <p className={`text-[10px] mt-0.5 ${item.feeType === 'settled' ? 'text-green-500' : 'text-orange-400'}`}>
+                          <p className={`text-[10px] mt-0.5 ${item.feeType === 'settled' ? 'text-green-500' : 'text-amber-500'}`}>
                             {item.feeType === 'settled' ? '已结清' : '进行中'}
                           </p>
                         </div>
                       </div>
                     ))}
                     {/* 该用户小计 */}
-                    <div className="flex justify-between items-center px-4 py-2.5 bg-purple-50 border-t border-purple-100">
-                      <span className="text-xs text-purple-500 font-medium">小计</span>
-                      <span className="text-sm font-bold text-purple-700">{displayTotal.toFixed(4)} U</span>
+                    <div
+                      className="flex justify-between items-center px-4 py-2.5 border-t"
+                      style={{ backgroundColor: '#eef2ff', borderColor: '#c7d2fe' }}
+                    >
+                      <span className="text-xs font-medium" style={{ color: BLUE }}>小计</span>
+                      <span className="text-sm font-bold" style={{ color: BLUE_DARK }}>{displayTotal.toFixed(4)} U</span>
                     </div>
                   </div>
                 )}
