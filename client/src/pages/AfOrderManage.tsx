@@ -446,7 +446,22 @@ export default function AfOrderManage() {
                         {order.nickname || order.username || `用户${order.userId}`}
                       </span>
                       {order.isGift && (
-                        <span className="text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-bold border border-amber-200">
+                        <span
+                          className="inline-flex items-center justify-center font-black select-none"
+                          style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: '50%',
+                            fontSize: 11,
+                            letterSpacing: 0,
+                            color: '#FFD700',
+                            background: 'radial-gradient(circle at 35% 30%, #5a1a1a 0%, #1a0a00 55%, #3d0000 100%)',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,200,50,0.35), inset 0 -1px 2px rgba(0,0,0,0.6)',
+                            border: '1.5px solid #8B4513',
+                            textShadow: '0 1px 3px rgba(255,180,0,0.8), 0 0 6px rgba(255,100,0,0.5)',
+                            flexShrink: 0,
+                          }}
+                        >
                           赠
                         </span>
                       )}
