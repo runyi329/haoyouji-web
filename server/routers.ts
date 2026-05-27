@@ -11899,8 +11899,8 @@ ${klinesSummary}
           // 充値记录按 ledger_id 过滤：只计算该账本的充値（有 ledger_id 的），不包含无 ledger_id 的通用充値
           db.execute(
             sql`SELECT
-              (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${targetUserId} AND ledger_id = ${input.ledgerId} AND status = 'completed') as recharged,
-              (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}) as manual,
+              (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${targetUserId} AND status = 'completed') as recharged,
+              (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${targetUserId}) as manual,
               (SELECT COALESCE(balance, 0) FROM users WHERE id = ${targetUserId} LIMIT 1) as userBalance`
           ).catch(() => [[{ recharged: '0', manual: '0', userBalance: '0' }]]),
 
