@@ -106,11 +106,20 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
       {!hideHeader && (
         <div className="sticky top-0 z-10 border-b border-[#2a2a2a]" style={{ background: '#111111' }}>
           <div style={{ height: '2px', background: 'linear-gradient(90deg,transparent,#CBA471,#e8c98a,#CBA471,transparent)' }} />
-          <div className="flex items-center px-4 py-3">
-            <button onClick={handleBack} className="mr-3">
-              <ArrowLeft className="w-6 h-6 text-[#CBA471]" />
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="flex items-center">
+              <button onClick={handleBack} className="mr-3">
+                <ArrowLeft className="w-6 h-6 text-[#CBA471]" />
+              </button>
+              <h1 className="text-lg font-semibold text-[#CBA471] tracking-widest">提现</h1>
+            </div>
+            <button
+              onClick={() => { sessionStorage.setItem('payment_accounts_back', '/withdraw'); setLocation('/payment-accounts'); }}
+              className="flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs font-medium"
+              style={{ background: 'rgba(203,164,113,0.1)', border: '1px solid rgba(203,164,113,0.3)', color: '#CBA471' }}
+            >
+              <span>钱包管理</span>
             </button>
-            <h1 className="text-lg font-semibold text-[#CBA471] tracking-widest">提现</h1>
           </div>
         </div>
       )}
