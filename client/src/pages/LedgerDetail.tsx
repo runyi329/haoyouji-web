@@ -4653,17 +4653,17 @@ export default function LedgerDetail() {
               >
                 {/* 三币图标靠左，25%重叠 */}
                 <div className="flex items-center flex-shrink-0">
-                  {/* BTC - 橙色背景兜底 */}
-                  <div className="w-12 h-12 rounded-full flex-shrink-0 overflow-hidden" style={{ position: 'relative', zIndex: 3, backgroundColor: '#F7931A' }}>
-                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/bitcoin.webp" alt="BTC" className="w-full h-full object-cover" />
+                  {/* BTC 彼章 */}
+                  <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center" style={{ position: 'relative', zIndex: 3, backgroundColor: '#F7931A' }}>
+                    <span className="text-white font-bold text-xs leading-none">BTC</span>
                   </div>
-                  {/* ETH - 深蓝色背景兜底 */}
-                  <div className="w-12 h-12 rounded-full flex-shrink-0 overflow-hidden" style={{ position: 'relative', zIndex: 2, marginLeft: '-12px', border: '2px solid #fff', backgroundColor: '#627EEA' }}>
-                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ethereum.webp" alt="ETH" className="w-full h-full object-cover" />
+                  {/* ETH 彼章 */}
+                  <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center" style={{ position: 'relative', zIndex: 2, marginLeft: '-12px', border: '2px solid #fff', backgroundColor: '#627EEA' }}>
+                    <span className="text-white font-bold text-xs leading-none">ETH</span>
                   </div>
-                  {/* SOL - 紫色背景兜底 */}
-                  <div className="w-12 h-12 rounded-full flex-shrink-0 overflow-hidden" style={{ position: 'relative', zIndex: 1, marginLeft: '-12px', border: '2px solid #fff', backgroundColor: '#9945FF' }}>
-                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/solana.webp" alt="SOL" className="w-full h-full object-cover" />
+                  {/* SOL 彼章 */}
+                  <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center" style={{ position: 'relative', zIndex: 1, marginLeft: '-12px', border: '2px solid #fff', backgroundColor: '#9945FF' }}>
+                    <span className="text-white font-bold text-xs leading-none">SOL</span>
                   </div>
                 </div>
                 {/* 中间留白 */}
