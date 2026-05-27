@@ -358,6 +358,16 @@ export default function Wallet() {
               }}
             >{icon}</div>
             <span className="text-sm font-semibold tracking-wide" style={{ color: G.goldLight }}>{label}</span>
+            {/* 眼睛按钮：账户名称右边 */}
+            <button
+              onClick={() => setHideBalance((v) => !v)}
+              className="w-6 h-6 flex items-center justify-center"
+            >
+              {hideBalance
+                ? <EyeOff className="w-3.5 h-3.5" style={{ color: G.goldDim }} />
+                : <Eye className="w-3.5 h-3.5" style={{ color: G.goldDim }} />
+              }
+            </button>
           </div>
           {/* 切换胶囊：卡片内右上角 */}
           <div
@@ -459,11 +469,10 @@ export default function Wallet() {
           <div className="flex items-center space-x-1.5">
             <button
               onClick={() => setLocation(activeTab === "usdt" ? "/wallet/transactions" : "/wallet/cny-transactions")}
-              className="flex items-center space-x-0.5 px-2.5 h-7 rounded-full text-xs font-medium"
+              className="px-2.5 h-7 rounded-full text-xs font-medium"
               style={{ background: G.whiteFaint, color: G.goldDim }}
             >
-              <span>明细</span>
-              <ChevronRight className="w-3 h-3" />
+              明细
             </button>
             <button
               onClick={() => window.location.reload()}
@@ -471,16 +480,6 @@ export default function Wallet() {
               style={{ background: G.whiteFaint, color: G.goldDim }}
             >
               刷新
-            </button>
-            <button
-              onClick={() => setHideBalance((v) => !v)}
-              className="w-7 h-7 rounded-full flex items-center justify-center"
-              style={{ background: G.whiteFaint, border: `1px solid ${G.cardBorder}` }}
-            >
-              {hideBalance
-                ? <EyeOff className="w-3.5 h-3.5" style={{ color: G.gold }} />
-                : <Eye className="w-3.5 h-3.5" style={{ color: G.gold }} />
-              }
             </button>
           </div>
         </div>
