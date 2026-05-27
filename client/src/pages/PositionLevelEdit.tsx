@@ -90,8 +90,8 @@ const ChipRow: React.FC<ChipRowProps> = ({ item, index, color, accentRgb, onChan
   <div
     className="rounded-xl overflow-hidden"
     style={{
-      background: item.pending ? 'rgba(255,200,50,0.07)' : `rgba(${accentRgb},0.06)`,
-      border: `1px solid ${item.pending ? 'rgba(255,200,50,0.45)' : `rgba(${accentRgb},0.3)`}`,
+      background: item.pending ? 'rgba(176,106,255,0.08)' : `rgba(${accentRgb},0.06)`,
+      border: `1px solid ${item.pending ? 'rgba(176,106,255,0.5)' : `rgba(${accentRgb},0.3)`}`,
     }}
   >
     {/* 第一行：序号 + 数量 + 止盈价 + 删除 */}
@@ -106,7 +106,7 @@ const ChipRow: React.FC<ChipRowProps> = ({ item, index, color, accentRgb, onChan
           onChange={e => onChange('qty', e.target.value)}
           placeholder="0"
           className="w-20 text-center text-base font-bold outline-none bg-transparent"
-          style={{ color: item.pending ? '#ffc832' : color, fontVariantNumeric: 'tabular-nums' }}
+          style={{ color: item.pending ? '#b06aff' : color, fontVariantNumeric: 'tabular-nums' }}
           step="1"
           min="0"
         />
@@ -146,7 +146,7 @@ const ChipRow: React.FC<ChipRowProps> = ({ item, index, color, accentRgb, onChan
         onChange={e => onChange('note', e.target.value)}
         placeholder="备注（可选）"
         className="flex-1 text-xs outline-none bg-transparent"
-        style={{ color: item.pending ? 'rgba(255,200,50,0.7)' : 'rgba(255,255,255,0.5)' }}
+        style={{ color: item.pending ? 'rgba(176,106,255,0.8)' : 'rgba(255,255,255,0.5)' }}
       />
       {/* 挂单勾选按钮：勾选=挂单中(黄色)，未勾选=已成交 */}
       <button
@@ -154,9 +154,9 @@ const ChipRow: React.FC<ChipRowProps> = ({ item, index, color, accentRgb, onChan
         className="shrink-0 flex items-center justify-center rounded transition-all"
         style={{
           width: '20px', height: '20px', fontSize: '11px',
-          background: item.pending ? 'rgba(255,200,50,0.2)' : 'rgba(255,255,255,0.05)',
-          border: item.pending ? '1px solid rgba(255,200,50,0.6)' : '1px solid rgba(255,255,255,0.15)',
-          color: item.pending ? '#ffc832' : 'rgba(255,255,255,0.25)',
+          background: item.pending ? 'rgba(176,106,255,0.2)' : 'rgba(255,255,255,0.05)',
+          border: item.pending ? '1px solid rgba(176,106,255,0.6)' : '1px solid rgba(255,255,255,0.15)',
+          color: item.pending ? '#b06aff' : 'rgba(255,255,255,0.25)',
         }}
         onClick={() => onChange('pending', !item.pending)}
       >{item.pending ? '⏳' : '✓'}</button>
