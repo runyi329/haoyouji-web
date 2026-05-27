@@ -4653,18 +4653,9 @@ export default function LedgerDetail() {
               >
                 {/* 三币图标靠左，25%重叠 */}
                 <div className="flex items-center flex-shrink-0">
-                  {/* BTC 彼章 */}
-                  <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center" style={{ position: 'relative', zIndex: 3, backgroundColor: '#F7931A' }}>
-                    <span className="text-white font-bold text-xs leading-none">BTC</span>
-                  </div>
-                  {/* ETH 彼章 */}
-                  <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center" style={{ position: 'relative', zIndex: 2, marginLeft: '-12px', border: '2px solid #fff', backgroundColor: '#627EEA' }}>
-                    <span className="text-white font-bold text-xs leading-none">ETH</span>
-                  </div>
-                  {/* SOL 彼章 */}
-                  <div className="w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center" style={{ position: 'relative', zIndex: 1, marginLeft: '-12px', border: '2px solid #fff', backgroundColor: '#9945FF' }}>
-                    <span className="text-white font-bold text-xs leading-none">SOL</span>
-                  </div>
+                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png" alt="BTC" className="w-10 h-10 object-contain rounded-full flex-shrink-0" style={{ position: 'relative', zIndex: 3 }} />
+                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-10 h-10 object-contain rounded-full flex-shrink-0" style={{ position: 'relative', zIndex: 2, marginLeft: '-8px', outline: '2px solid #fff' }} />
+                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png" alt="SOL" className="w-10 h-10 object-contain rounded-full flex-shrink-0" style={{ position: 'relative', zIndex: 1, marginLeft: '-8px', outline: '2px solid #fff' }} />
                 </div>
                 {/* 中间留白 */}
                 <div className="flex-1" />
