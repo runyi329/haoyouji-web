@@ -1330,8 +1330,8 @@ export async function deleteLedgerCategory(categoryId: number, userId: number, c
     throw new Error("分类不存在");
   }
   
-  // 检查是否为默认分类
-  if (category.isDefault) {
+  // 检查是否为默认分类（管理员强制删除时可跳过此限制）
+  if (category.isDefault && !force) {
     throw new Error("默认分类不能删除");
   }
   
