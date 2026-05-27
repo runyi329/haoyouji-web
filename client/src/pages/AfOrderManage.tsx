@@ -310,80 +310,95 @@ export default function AfOrderManage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {/* 顶部导航 */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="flex items-center px-4 py-3">
-          <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="mr-3">
-            <ArrowLeft className="w-6 h-6 text-gray-700" />
-          </button>
-          <h1 className="text-lg font-semibold">订单管理</h1>
-        </div>
-      </div>
+    <div className="min-h-screen pb-10" style={{ background: '#f5f7fa' }}>
 
-      <div className="p-4">
-        {/* 统计容器 */}
+      {/* ── 顶部蓝色区域 ── */}
+      <div style={{ background: 'linear-gradient(135deg,#1e3a8a 0%,#2563eb 100%)' }}>
+        {/* 导航栏 */}
+        <div className="flex items-center px-4 pt-5 pb-1">
+          <button
+            onClick={() => setLocation(`/ledger/${ledgerId}`)}
+            className="w-8 h-8 flex items-center justify-center rounded-full mr-3"
+            style={{ background: 'rgba(255,255,255,0.18)' }}
+          >
+            <ArrowLeft className="w-5 h-5 text-white" />
+          </button>
+          <span className="text-white font-semibold text-base">订单管理</span>
+        </div>
+
+        {/* 统计汇总 */}
         {stats && (
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-blue-100">
-              <p className="text-xs text-gray-400 mb-2">累计订单</p>
-              <p className="text-2xl font-bold text-gray-800">{stats.orders.totalCount}</p>
-              <div className="mt-2 space-y-1">
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">普通订单</span>
-                  <span className="font-medium text-blue-600">{stats.orders.normalCount} 笔</span>
+          <div className="grid grid-cols-2 gap-3 px-4 pb-5 pt-3">
+            {/* 累计订单 */}
+            <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+              <p className="text-white/55 text-xs mb-1">累计订单</p>
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-extrabold text-white">{stats.orders.totalCount}</span>
+                <span className="text-xs text-white/50">笔</span>
+              </div>
+              <div className="mt-1.5 space-y-0.5">
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-white/50">普通</span>
+                  <span className="text-white/80 font-medium">{stats.orders.normalCount} 笔</span>
                 </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">赠送订单</span>
-                  <span className="font-medium text-red-500">{stats.orders.giftCount} 笔</span>
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-white/50">赠送</span>
+                  <span className="text-amber-300 font-medium">{stats.orders.giftCount} 笔</span>
                 </div>
               </div>
             </div>
+            {/* 管理费 → 跳转 */}
             <button
-              className="bg-white rounded-xl p-4 shadow-sm border border-purple-100 text-left w-full"
+              className="rounded-2xl px-4 py-3 text-left active:opacity-75"
+              style={{ background: 'rgba(255,255,255,0.14)' }}
               onClick={() => setLocation(`/ledger/${ledgerId}/af-fee-detail`)}
             >
               <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-400 mb-2">管理费</p>
-                <ChevronRight className="w-4 h-4 text-purple-300 -mt-2" />
+                <p className="text-white/55 text-xs mb-1">管理费</p>
+                <ChevronRight className="w-3.5 h-3.5 text-white/30 -mt-1" />
               </div>
-              <p className="text-2xl font-bold text-purple-700">{stats.fees.totalFee.toFixed(2)}</p>
-              <div className="mt-2 space-y-1">
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">进行中</span>
-                  <span className="font-medium text-orange-500">{stats.fees.ongoingFee.toFixed(2)} U</span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-2xl font-extrabold text-white">{stats.fees.totalFee.toFixed(2)}</span>
+                <span className="text-xs text-white/50">U</span>
+              </div>
+              <div className="mt-1.5 space-y-0.5">
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-white/50">进行中</span>
+                  <span className="text-amber-300 font-medium">{stats.fees.ongoingFee.toFixed(2)} U</span>
                 </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-400">已结清</span>
-                  <span className="font-medium text-green-600">{stats.fees.settledFee.toFixed(2)} U</span>
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-white/50">已结清</span>
+                  <span className="text-emerald-300 font-medium">{stats.fees.settledFee.toFixed(2)} U</span>
                 </div>
               </div>
             </button>
           </div>
         )}
+      </div>
 
-        {/* 状态筛选Tab */}
-        <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
-          {([
-            { key: 'all' as const, label: '全部', count: orders?.length ?? 0 },
-            { key: 'pending' as const, label: '委买中', count: (orders as any[])?.filter((o: any) => o.status === 'pending').length ?? 0 },
-            { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && !o.sellStatus).length ?? 0 },
-            { key: 'selling' as const, label: '委卖中', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0 },
-            { key: 'sold' as const, label: '已卖出', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0 },
-          ]).map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setStatusFilter(tab.key)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                statusFilter === tab.key
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-500 border border-gray-200'
-              }`}
-            >
-              {tab.label}{tab.count > 0 && <span className="ml-1 opacity-70">{tab.count}</span>}
-            </button>
-          ))}
-        </div>
+      {/* ── 状态筛选Tab ── */}
+      <div className="bg-white border-b border-gray-100 px-4 py-2.5 flex gap-2 sticky top-0 z-10">
+        {([
+          { key: 'all' as const, label: '全部', count: orders?.length ?? 0 },
+          { key: 'pending' as const, label: '委买中', count: (orders as any[])?.filter((o: any) => o.status === 'pending').length ?? 0 },
+          { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && !o.sellStatus).length ?? 0 },
+          { key: 'selling' as const, label: '委卖中', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0 },
+          { key: 'sold' as const, label: '已卖出', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0 },
+        ]).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setStatusFilter(tab.key)}
+            className="flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all"
+            style={statusFilter === tab.key
+              ? { background: '#2563eb', color: '#fff' }
+              : { background: '#eff2f9', color: '#6b7280' }}
+          >
+            {tab.label}{tab.count > 0 && <span className="ml-1 opacity-70">{tab.count}</span>}
+          </button>
+        ))}
+      </div>
+
+      <div className="px-3 pt-3">
 
         {isLoading ? (
           <div className="text-center py-12 text-gray-400">加载中...</div>
@@ -392,7 +407,7 @@ export default function AfOrderManage() {
         ) : filteredOrders.length === 0 ? (
           <div className="text-center py-12 text-gray-400">该状态下暂无订单</div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2.5 pb-6">
             {filteredOrders.map((order: any) => {
               const isEditing = editingId === order.id;
               const statusDisplay = getStatusDisplay(order);
@@ -414,7 +429,7 @@ export default function AfOrderManage() {
               const orderNo = `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
 
               return (
-                <div key={order.id} className="bg-white rounded-xl p-4 shadow-sm">
+                <div key={order.id} className="bg-white rounded-2xl p-4 shadow-sm">
                   {/* 订单编号行 */}
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
