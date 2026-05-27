@@ -4654,8 +4654,8 @@ export default function LedgerDetail() {
                 {/* 三币图标靠左，25%重叠 */}
                 <div className="flex items-center flex-shrink-0">
                   <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png" alt="BTC" className="w-10 h-10 object-contain rounded-full flex-shrink-0" style={{ position: 'relative', zIndex: 3 }} />
-                  <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center" style={{ position: 'relative', zIndex: 2, marginLeft: '-8px', outline: '2px solid #fff', backgroundColor: '#627EEA' }}>
-                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-full h-full object-contain" />
+                  <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center" style={{ position: 'relative', zIndex: 2, marginLeft: '-8px', outline: '2px solid #fff' }}>
+                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" style={{ width: '140%', height: '140%', objectFit: 'contain', transform: 'scale(1.4)' }} />
                   </div>
                   <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png" alt="SOL" className="w-10 h-10 object-contain rounded-full flex-shrink-0" style={{ position: 'relative', zIndex: 1, marginLeft: '-8px', outline: '2px solid #fff' }} />
                 </div>
@@ -4676,8 +4676,8 @@ export default function LedgerDetail() {
                 {/* 标题行 */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center" style={{ backgroundColor: '#627EEA' }}>
-                      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" className="w-full h-full object-contain" />
+                    <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center">
+                      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" style={{ width: '140%', height: '140%', objectFit: 'contain', transform: 'scale(1.4)' }} />
                     </div>
                     <div className="text-left">
                       <div className="font-semibold text-base" style={{ color: '#1A2340' }}>ETH 智能仓位</div>
