@@ -2709,7 +2709,7 @@ export default function PositionCalc() {
                               const editKey = `base-${price}-${i}`;
                               const isEditing = (modal as any)._editingNoteKey === editKey;
                               return (
-                              <div key={i} className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(74,168,255,0.06)', border: `1px solid ${isEditing ? 'rgba(74,168,255,0.5)' : 'rgba(74,168,255,0.15)'}` }}>
+                              <div key={i} className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg" style={{ background: n.pending ? 'rgba(255,200,50,0.08)' : 'rgba(74,168,255,0.06)', border: `1px solid ${isEditing ? 'rgba(74,168,255,0.5)' : n.pending ? 'rgba(255,200,50,0.4)' : 'rgba(74,168,255,0.15)'}` }}>
                                 {isEditing ? (
                                   <input
                                     autoFocus
@@ -2742,11 +2742,27 @@ export default function PositionCalc() {
                                 ) : (
                                   <span
                                     className="flex-1 text-xs break-all cursor-pointer"
-                                    style={{ color: 'rgba(255,255,255,0.7)' }}
+                                    style={{ color: n.pending ? '#ffc832' : 'rgba(255,255,255,0.7)' }}
                                     onClick={() => setModal(prev => prev ? { ...prev, _editingNoteKey: editKey } as any : null)}
                                   >{n.text}</span>
                                 )}
                                 <span className="text-xs shrink-0" style={{ color: 'rgba(255,255,255,0.25)' }}>{n.time?.slice(5,16)}</span>
+                                {/* 挂单勾选：勾选=挂单中(黄色)，未勾选=已成交 */}
+                                <button
+                                  title={n.pending ? '挂单中 — 点击标记已成交' : '已成交 — 点击标记为挂单'}
+                                  className="shrink-0 flex items-center justify-center rounded transition-all"
+                                  style={{
+                                    width: '16px', height: '16px', fontSize: '10px',
+                                    background: n.pending ? 'rgba(255,200,50,0.2)' : 'rgba(255,255,255,0.05)',
+                                    border: n.pending ? '1px solid rgba(255,200,50,0.55)' : '1px solid rgba(255,255,255,0.12)',
+                                    color: n.pending ? '#ffc832' : 'rgba(255,255,255,0.2)',
+                                  }}
+                                  onClick={() => {
+                                    const newNotes = notes.map((x: any, j: number) => j === i ? { ...x, pending: !x.pending } : x);
+                                    setBaseNotes(prev => ({ ...prev, [price]: newNotes }));
+                                    updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(newNotes), tacticalNotes: JSON.stringify(tacticalNotes[price] || []) });
+                                  }}
+                                >{n.pending ? '⏳' : '✓'}</button>
                                 <button
                                   className="shrink-0 text-xs px-1"
                                   style={{ color: 'rgba(255,80,80,0.6)' }}
@@ -2842,7 +2858,7 @@ export default function PositionCalc() {
                               const editKey = `tactical-${price}-${i}`;
                               const isEditing = (modal as any)._editingNoteKey === editKey;
                               return (
-                              <div key={i} className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,144,64,0.06)', border: `1px solid ${isEditing ? 'rgba(255,144,64,0.5)' : 'rgba(255,144,64,0.15)'}` }}>
+                              <div key={i} className="flex items-start gap-1.5 px-2 py-1.5 rounded-lg" style={{ background: n.pending ? 'rgba(255,200,50,0.08)' : 'rgba(255,144,64,0.06)', border: `1px solid ${isEditing ? 'rgba(255,144,64,0.5)' : n.pending ? 'rgba(255,200,50,0.4)' : 'rgba(255,144,64,0.15)'}` }}>
                                 {isEditing ? (
                                   <input
                                     autoFocus
@@ -2875,11 +2891,27 @@ export default function PositionCalc() {
                                 ) : (
                                   <span
                                     className="flex-1 text-xs break-all cursor-pointer"
-                                    style={{ color: 'rgba(255,255,255,0.7)' }}
+                                    style={{ color: n.pending ? '#ffc832' : 'rgba(255,255,255,0.7)' }}
                                     onClick={() => setModal(prev => prev ? { ...prev, _editingNoteKey: editKey } as any : null)}
                                   >{n.text}</span>
                                 )}
                                 <span className="text-xs shrink-0" style={{ color: 'rgba(255,255,255,0.25)' }}>{n.time?.slice(5,16)}</span>
+                                {/* 挂单勾选：勾选=挂单中(黄色)，未勾选=已成交 */}
+                                <button
+                                  title={n.pending ? '挂单中 — 点击标记已成交' : '已成交 — 点击标记为挂单'}
+                                  className="shrink-0 flex items-center justify-center rounded transition-all"
+                                  style={{
+                                    width: '16px', height: '16px', fontSize: '10px',
+                                    background: n.pending ? 'rgba(255,200,50,0.2)' : 'rgba(255,255,255,0.05)',
+                                    border: n.pending ? '1px solid rgba(255,200,50,0.55)' : '1px solid rgba(255,255,255,0.12)',
+                                    color: n.pending ? '#ffc832' : 'rgba(255,255,255,0.2)',
+                                  }}
+                                  onClick={() => {
+                                    const newNotes = notes.map((x: any, j: number) => j === i ? { ...x, pending: !x.pending } : x);
+                                    setTacticalNotes(prev => ({ ...prev, [price]: newNotes }));
+                                    updateNotesMutation.mutate({ ledgerId, price, baseNotes: JSON.stringify(baseNotes[price] || []), tacticalNotes: JSON.stringify(newNotes) });
+                                  }}
+                                >{n.pending ? '⏳' : '✓'}</button>
                                 <button
                                   className="shrink-0 text-xs px-1"
                                   style={{ color: 'rgba(255,80,80,0.6)' }}
