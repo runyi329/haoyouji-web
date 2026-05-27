@@ -784,18 +784,20 @@ export async function getUserBalance(userId: number, ledgerId?: number): Promise
   const db = await getDb();
   
   if (ledgerId !== undefined) {
-    // 账本隔离模式：只计算该账本的充値和手动调账
+    // 统一口径：与首页钱包一致，使用全局充值+全局手动调账+users.balance
     const result = await db.execute(
       sql`SELECT
-        (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${userId} AND ledger_id = ${ledgerId} AND status = 'completed') as recharged,
-        (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${userId} AND ledger_id = ${ledgerId}) as manual`
+        (SELECT COALESCE(balance, 0) FROM users WHERE id = ${userId}) as userBalance,
+        (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${userId} AND status = 'completed') as recharged,
+        (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${userId}) as manual`
     ) as any;
     
     const row = result[0]?.[0] ?? result[0];
+    const userBalance = parseFloat(row?.userBalance?.toString() || '0');
     const recharged = parseFloat(row?.recharged?.toString() || '0');
     const manual = parseFloat(row?.manual?.toString() || '0');
     
-    return recharged + manual;
+    return userBalance + recharged + manual;
   }
   
   // 兼容旧模式：三合一
