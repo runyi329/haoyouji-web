@@ -12751,7 +12751,7 @@ ${klinesSummary}
               FROM af_orders o
               LEFT JOIN users u ON u.id = o.user_id
               LEFT JOIN users su ON su.id = o.source_user_id
-              WHERE o.ledger_id = ${input.ledgerId}
+              WHERE o.ledger_id = ${input.ledgerId} AND o.side = 'buy'
               ORDER BY o.created_at DESC
               LIMIT 500`
         ) as any;
