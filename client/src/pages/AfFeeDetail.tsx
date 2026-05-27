@@ -192,29 +192,25 @@ export default function AfFeeDetail() {
                     : <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />}
                 </div>
 
-                {/* 第二行：三列数字横排 */}
-                <div className="grid grid-cols-3 border-t border-gray-50 pb-3.5">
+                {/* 第二行：三列数字横排，标题+金额+单位同行 */}
+                <div className="grid grid-cols-3 border-t border-gray-50 py-2.5">
                   {/* 总计 */}
-                  <div className="flex flex-col items-center pt-2.5 px-2">
-                    <span className="text-[10px] text-gray-400 mb-0.5">总计</span>
-                    <span className="text-sm font-bold text-gray-900 leading-tight">{dispTotal.toFixed(2)}</span>
-                    <span className="text-[10px] text-gray-400">U</span>
+                  <div className="flex items-center justify-center gap-1 px-1">
+                    <span className="text-[10px] text-gray-400 whitespace-nowrap">总计</span>
+                    <span className="text-xs font-bold text-gray-900 whitespace-nowrap">{dispTotal.toFixed(2)}</span>
+                    <span className="text-[10px] text-gray-400 whitespace-nowrap">U</span>
                   </div>
                   {/* 进行中 */}
-                  <div className="flex flex-col items-center pt-2.5 px-2 border-l border-r border-gray-50">
-                    <span className="text-[10px] text-amber-400 mb-0.5">进行中</span>
-                    <span className="text-sm font-bold text-amber-500 leading-tight">
-                      {dispOngoing > 0 ? dispOngoing.toFixed(2) : '—'}
-                    </span>
-                    <span className="text-[10px] text-amber-300">{dispOngoing > 0 ? 'U' : ''}</span>
+                  <div className="flex items-center justify-center gap-1 px-1 border-l border-r border-gray-100">
+                    <span className="text-[10px] text-amber-400 whitespace-nowrap">进行中</span>
+                    <span className="text-xs font-bold text-amber-500 whitespace-nowrap">{dispOngoing > 0 ? dispOngoing.toFixed(2) : '—'}</span>
+                    {dispOngoing > 0 && <span className="text-[10px] text-amber-300 whitespace-nowrap">U</span>}
                   </div>
                   {/* 已结清 */}
-                  <div className="flex flex-col items-center pt-2.5 px-2">
-                    <span className="text-[10px] text-emerald-400 mb-0.5">已结清</span>
-                    <span className="text-sm font-bold text-emerald-500 leading-tight">
-                      {dispSettled > 0 ? dispSettled.toFixed(2) : '—'}
-                    </span>
-                    <span className="text-[10px] text-emerald-300">{dispSettled > 0 ? 'U' : ''}</span>
+                  <div className="flex items-center justify-center gap-1 px-1">
+                    <span className="text-[10px] text-emerald-400 whitespace-nowrap">已结清</span>
+                    <span className="text-xs font-bold text-emerald-500 whitespace-nowrap">{dispSettled > 0 ? dispSettled.toFixed(2) : '—'}</span>
+                    {dispSettled > 0 && <span className="text-[10px] text-emerald-300 whitespace-nowrap">U</span>}
                   </div>
                 </div>
               </button>
