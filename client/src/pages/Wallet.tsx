@@ -346,17 +346,41 @@ export default function Wallet() {
         }}
       />
       <div className="p-5">
-        {/* 标题行：切换按钮在左，图标+名称居中，无右侧按钮（已移到顶部导航） */}
-        <div className="flex items-center space-x-2.5 mb-4">
+        {/* 标题行：左侧图标+名称，右侧切换胶囊 */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-2.5">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+              style={{
+                background: `radial-gradient(circle at 35% 35%, ${G.goldLight} 0%, ${G.gold} 50%, #6b4e0a 100%)`,
+                boxShadow: `0 2px 8px rgba(201,168,76,0.4)`,
+                color: "#000",
+              }}
+            >{icon}</div>
+            <span className="text-sm font-semibold tracking-wide" style={{ color: G.goldLight }}>{label}</span>
+          </div>
+          {/* 切换胶囊：卡片内右上角 */}
           <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-            style={{
-              background: `radial-gradient(circle at 35% 35%, ${G.goldLight} 0%, ${G.gold} 50%, #6b4e0a 100%)`,
-              boxShadow: `0 2px 8px rgba(201,168,76,0.4)`,
-              color: "#000",
-            }}
-          >{icon}</div>
-          <span className="text-sm font-semibold tracking-wide" style={{ color: G.goldLight }}>{label}</span>
+            className="flex items-center rounded-full p-0.5"
+            style={{ background: G.whiteFaint, border: `1px solid ${G.cardBorder}` }}
+          >
+            {(["usdt", "cny"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className="px-3 h-6 rounded-full text-xs font-bold transition-all"
+                style={{
+                  background: activeTab === tab
+                    ? `linear-gradient(135deg, ${G.gold} 0%, ${G.goldLight} 100%)`
+                    : "transparent",
+                  color: activeTab === tab ? "#000" : G.goldDim,
+                  boxShadow: activeTab === tab ? "0 2px 6px rgba(201,168,76,0.4)" : "none",
+                }}
+              >
+                {tab === "usdt" ? "USDT" : "CNY"}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* 余额 */}
@@ -464,29 +488,6 @@ export default function Wallet() {
 
       {/* ── 账户卡片 ── */}
       <div className="px-4 pt-4 pb-24 space-y-3">
-
-        {/* 切换胶囊：容器内左上角 */}
-        <div
-          className="flex items-center rounded-full p-0.5 self-start"
-          style={{ background: G.whiteFaint, border: `1px solid ${G.cardBorder}`, display: "inline-flex" }}
-        >
-          {(["usdt", "cny"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className="px-4 h-7 rounded-full text-xs font-bold transition-all"
-              style={{
-                background: activeTab === tab
-                  ? `linear-gradient(135deg, ${G.gold} 0%, ${G.goldLight} 100%)`
-                  : "transparent",
-                color: activeTab === tab ? "#000" : G.goldDim,
-                boxShadow: activeTab === tab ? "0 2px 8px rgba(201,168,76,0.4)" : "none",
-              }}
-            >
-              {tab === "usdt" ? "USDT" : "CNY"}
-            </button>
-          ))}
-        </div>
 
         {/* USDT（仅 activeTab === usdt 时显示） */}
         {activeTab === "usdt" && <AccountCard
