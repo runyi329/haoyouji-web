@@ -70,16 +70,15 @@ export default function LedgerSettings() {
  const utils = trpc.useUtils();
  const removeMemberMutation = trpc.ledger.removeMember.useMutation({
  onSuccess: () => {
- toast.success("");
+ toast.success("移除成功");
  utils.ledger.getMembers.invalidate({ ledgerId });
  setShowRemoveDialog(false);
  setMemberToRemove(null);
  },
  onError: (error) => {
- toast.error(error.message || "");
+  toast.error(error.message || "移除失败");
  },
  });
-
  // 
  const handleRemoveMember = () => {
  if (memberToRemove) {
@@ -144,18 +143,17 @@ export default function LedgerSettings() {
  // mutation
  const transferOwnershipMutation = trpc.ledger.transferOwnership.useMutation({
  onSuccess: () => {
- toast.success('');
+ toast.success('转移成功');
  setShowTransferWarning(false);
  setShowTransferDialog(false);
  setTransferTarget(null);
  utils.ledger.getMembers.invalidate({ ledgerId });
  utils.ledger.getById.invalidate({ ledgerId });
  },
- onError: (error) => {
- toast.error(error.message || '');
+  onError: (error) => {
+ toast.error(error.message || '转移失败');
  },
  });
-
  // 
  const handleTransferConfirm = () => {
  if (transferTarget) {
@@ -181,30 +179,29 @@ export default function LedgerSettings() {
  // mutation
  const saveBackupMutation = trpc.ledger.saveBackupSettings.useMutation({
  onSuccess: () => {
- toast.success('');
+ toast.success('备份设置已保存');
  setBackupEditMode(false);
  refetchBackupSettings();
  },
  onError: (error) => {
- toast.error(': ' + error.message);
+  toast.error('保存失败: ' + error.message);
  },
  });
-
  // mutation
  const sendTestBackupMutation = trpc.ledger.sendTestBackup.useMutation({
  onSuccess: () => {
- toast.success('');
+ toast.success('备份邮件已发送');
  refetchBackupSettings();
  },
  onError: (error) => {
- toast.error(': ' + error.message);
+ toast.error('发送失败: ' + error.message);
  },
  });
 
  // 
  const handleSendTestBackup = () => {
  if (!user?.email) {
- toast.error('');
+ toast.error('请先设置邮箱');
  return;
  }
  sendTestBackupMutation.mutate({ ledgerId });
@@ -303,15 +300,15 @@ export default function LedgerSettings() {
  toast.dismiss(loadingToast);
  toast.success(
  <div className="flex flex-col gap-1">
- <div className="font-semibold"></div>
+ <div className="font-semibold">导出成功</div>
  <div className="text-xs text-[#757575]">{filename}</div>
- <div className="text-xs text-gray-500"></div>
+ <div className="text-xs text-gray-500">文件已下载到本地</div>
  </div>,
  { duration: 4000 }
  );
  } catch (error: any) {
  toast.dismiss(loadingToast);
- toast.error(`: ${error.message || ''}`);
+ toast.error(`导出失败: ${error.message || ''}`);
  }
  };
 
@@ -326,7 +323,7 @@ export default function LedgerSettings() {
  if (!ledgerData) {
  return (
  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
- <div className="text-gray-500"></div>
+ <div className="text-gray-500">加载失败</div>
  </div>
  );
  }
@@ -723,7 +720,7 @@ export default function LedgerSettings() {
  // owner
  const currentMember = members?.find(m => m.userId === user?.id);
  if (currentMember?.role !== 'owner') {
- toast.error('');
+ toast.error('只有创建人可以转移账本');
  return;
  }
  setShowTransferDialog(true);
@@ -752,9 +749,9 @@ export default function LedgerSettings() {
  valueColor={!canBackup ? "text-red-500" : "text-gray-500"}
  onClick={canBackup ? () => {
  if (!user?.email) {
- toast.error("", {
+ toast.error("请先设置邮箱", {
  action: {
- label: "",
+ label: "去设置",
  onClick: () => setLocation("/profile/edit"),
  },
  });
@@ -962,51 +959,51 @@ export default function LedgerSettings() {
 
  {/* */}
  <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
- <DialogContent className="w-[90%] max-w-md rounded-2xl p-0" showCloseButton={false}>
- <DialogTitle className="sr-only"></DialogTitle>
+ <DialogContent className="w-[90%] max-w-md rounded-2xl p-0 bg-white" showCloseButton={false}>
+ <DialogTitle className="sr-only">导出账本</DialogTitle>
  
  {exportStats ? (
  <div className="p-6">
- {/* */}
+ {/* 标题 */}
  <div className="text-center mb-6">
- <h3 className="text-xl font-semibold text-gray-900 mb-2"></h3>
+ <h3 className="text-xl font-semibold text-gray-900 mb-2">导出预览</h3>
  <p className="text-sm text-gray-600">{exportStats.ledgerName}</p>
  </div>
 
- {/* */}
+ {/* 统计信息 */}
  <div className="space-y-3 mb-6">
- {/* */}
+ {/* 账目数 */}
  <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
- <span className="text-sm text-gray-600"></span>
- <span className="text-base font-semibold text-gray-900">{exportStats.totalRecords} </span>
+ <span className="text-sm text-gray-600">账目数</span>
+ <span className="text-base font-semibold text-gray-900">{exportStats.totalRecords} 条</span>
  </div>
 
- {/* */}
+ {/* 时间范围 */}
  {exportStats.earliestDate && exportStats.latestDate && (
  <div className="p-3 bg-white border border-gray-200 rounded-lg">
- <div className="text-sm text-gray-600 mb-1"></div>
+ <div className="text-sm text-gray-600 mb-1">时间范围</div>
  <div className="text-sm font-medium text-gray-900">
- {exportStats.earliestDate} {exportStats.latestDate}
+ {exportStats.earliestDate} ~ {exportStats.latestDate}
  </div>
  </div>
  )}
 
- {/* */}
+ {/* 收支 */}
  <div className="grid grid-cols-2 gap-3">
  <div className="p-3 bg-white border border-gray-200 rounded-lg">
- <div className="text-xs text-gray-500 mb-1"></div>
+ <div className="text-xs text-gray-500 mb-1">收入</div>
  <div className="text-base font-semibold text-green-600">¥{exportStats.totalIncome}</div>
  </div>
  <div className="p-3 bg-white border border-gray-200 rounded-lg">
- <div className="text-xs text-gray-500 mb-1"></div>
+ <div className="text-xs text-gray-500 mb-1">支出</div>
  <div className="text-base font-semibold text-red-600">¥{exportStats.totalExpense}</div>
  </div>
  </div>
 
- {/* */}
+ {/* 净额 */}
  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
  <div className="flex items-center justify-between">
- <span className="text-sm text-gray-600"></span>
+ <span className="text-sm text-gray-600">净额</span>
  <span className={`text-lg font-bold ${
  parseFloat(exportStats.balance) >= 0 ? 'text-green-600' : 'text-red-600'
  }`}>
@@ -1016,28 +1013,28 @@ export default function LedgerSettings() {
  </div>
  </div>
 
- {/* */}
+ {/* 操作按钮 */}
  <div className="space-y-2">
  <Button
  onClick={handleExport}
  className="w-full h-12 text-base font-medium text-white rounded-lg"
  style={{ backgroundColor: '#D32F2F' }}
  >
- Excel 
+ 导出 Excel
  </Button>
  <Button
  onClick={() => setShowExportDialog(false)}
  variant="outline"
- className="w-full h-12 text-base font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50"
+ className="w-full h-12 text-base font-medium rounded-lg border-gray-300 text-gray-700 hover:bg-gray-50 bg-white"
  >
- 
+ 取消
  </Button>
  </div>
  </div>
  ) : (
  <div className="p-6 text-center">
  <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-blue-500 mx-auto mb-4"></div>
- <p className="text-gray-500">...</p>
+ <p className="text-gray-500">加载中...</p>
  </div>
  )}
  </DialogContent>
@@ -1045,7 +1042,7 @@ export default function LedgerSettings() {
 
  {/* */}
  <Dialog open={showBackupDialog} onOpenChange={setShowBackupDialog}>
- <DialogContent className="max-w-md mx-auto">
+ <DialogContent className="max-w-md mx-auto bg-white text-gray-900">
  <DialogTitle className="text-xl font-bold text-center mb-4">
  {backupEditMode ? '编辑备份设置' : '账本备份管理'}
  </DialogTitle>
@@ -1215,10 +1212,10 @@ export default function LedgerSettings() {
 
  {/* - */}
  <Dialog open={showTransferDialog} onOpenChange={setShowTransferDialog}>
- <DialogContent className="sm:max-w-md">
- <DialogTitle></DialogTitle>
+ <DialogContent className="sm:max-w-md bg-white text-gray-900">
+ <DialogTitle>转移账本所有权</DialogTitle>
  <div className="mt-2">
- <p className="text-sm text-gray-500 mb-4"></p>
+ <p className="text-sm text-gray-500 mb-4">选择要转移给的成员</p>
  <div className="max-h-64 overflow-y-auto space-y-2">
  {members?.filter(m => m.userId !== user?.id).map((member) => (
  <div
@@ -1243,25 +1240,24 @@ export default function LedgerSettings() {
  </div>
  </div>
  {transferTarget?.userId === member.userId && (
- <span className="text-[#D32F2F] text-lg"></span>
+ <span className="text-[#D32F2F] text-lg">✓</span>
  )}
  </div>
  ))}
  {members?.filter(m => m.userId !== user?.id).length === 0 && (
- <div className="text-center text-gray-400 py-6 text-sm"></div>
+ <div className="text-center text-gray-400 py-6 text-sm">暂无其他成员</div>
  )}
  </div>
  <div className="flex gap-3 mt-4">
  <Button
- variant="outline"
+  variant="outline"
  className="flex-1 h-11 rounded-lg border-gray-300"
  onClick={() => {
  setShowTransferDialog(false);
  setTransferTarget(null);
  }}
  >
- 
- </Button>
+ 取消</Button>
  <Button
  className="flex-1 h-11 rounded-lg bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
  disabled={!transferTarget}
@@ -1270,8 +1266,7 @@ export default function LedgerSettings() {
  setShowTransferWarning(true);
  }}
  >
- 
- </Button>
+ 下一步</Button>
  </div>
  </div>
  </DialogContent>
@@ -1279,29 +1274,29 @@ export default function LedgerSettings() {
 
  {/* - */}
  <AlertDialog open={showTransferWarning} onOpenChange={setShowTransferWarning}>
- <AlertDialogContent>
+ <AlertDialogContent className="bg-white text-gray-900">
  <AlertDialogHeader>
  <AlertDialogTitle className="text-[#D32F2F] flex items-center gap-2">
- <span className="text-xl"></span> 
+ <span className="text-xl">⚠️</span> 转移确认
  </AlertDialogTitle>
  <AlertDialogDescription asChild>
  <div className="space-y-3">
- <p className="text-sm text-gray-700 font-medium">
- <span className="text-[#D32F2F] font-bold">{transferTarget?.nickname || transferTarget?.username}</span>
+ <p className="text-sm text-gray-700 font-medium">确认将账本转移给
+ <span className="text-[#D32F2F] font-bold">{transferTarget?.nickname || transferTarget?.username}</span>？
  </p>
  <div className="bg-red-50 rounded-lg p-3 space-y-2">
- <p className="text-sm text-[#D32F2F] font-medium"></p>
+ <p className="text-sm text-[#D32F2F] font-medium">转移后你将失去以下权限：</p>
  <ul className="text-sm text-gray-600 space-y-1 list-disc list-inside">
- <li></li>
- <li></li>
- <li></li>
- <li></li>
- <li>/</li>
+ <li>账本所有权</li>
+ <li>删除账本</li>
+ <li>移除成员</li>
+ <li>修改账本设置</li>
+ <li>转移所有权/设置管理员</li>
  </ul>
  </div>
  <div className="bg-orange-50 rounded-lg p-3">
- <p className="text-sm text-orange-700 font-medium"> </p>
- <p className="text-xs text-orange-600 mt-1"></p>
+ <p className="text-sm text-orange-700 font-medium">此操作不可撤销！</p>
+ <p className="text-xs text-orange-600 mt-1">转移后需要对方同意才能再次转回</p>
  </div>
  </div>
  </AlertDialogDescription>
@@ -1314,14 +1309,14 @@ export default function LedgerSettings() {
  setShowTransferDialog(true);
  }}
  >
- 
+ 取消
  </AlertDialogCancel>
  <AlertDialogAction
  className="flex-1 h-11 rounded-lg bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
  onClick={handleTransferConfirm}
  disabled={transferOwnershipMutation.isPending}
  >
- {transferOwnershipMutation.isPending ? '...' : ''}
+ {transferOwnershipMutation.isPending ? '转移中...' : '确认转移'}
  </AlertDialogAction>
  </AlertDialogFooter>
  </AlertDialogContent>
@@ -1394,7 +1389,7 @@ function SecretKeyItem({ ledgerId, showSecretKey, setShowSecretKey }: { ledgerId
  if (secretKeyData?.secretKey) {
  try {
  await navigator.clipboard.writeText(secretKeyData.secretKey);
- toast.success('');
+ toast.success('已复制到剪贴板');
  } catch {
  // fallback
  const textarea = document.createElement('textarea');
@@ -1403,14 +1398,13 @@ function SecretKeyItem({ ledgerId, showSecretKey, setShowSecretKey }: { ledgerId
  textarea.select();
  document.execCommand('copy');
  document.body.removeChild(textarea);
- toast.success('');
+  toast.success('已复制到剪贴板');
  }
  }
  };
-
  return (
  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
- <span className="text-[15px] text-gray-900 shrink-0"></span>
+ <span className="text-[15px] text-gray-900 shrink-0">账本密钥</span>
  <div className="flex items-center gap-2 ml-3 min-w-0">
  {showSecretKey && secretKeyData?.secretKey ? (
  <>
