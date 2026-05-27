@@ -108,9 +108,13 @@ export default function Ledger() {
     setLastClickedLedgerId(null);
     try { localStorage.removeItem('lastClickedLedgerId'); } catch (e) {}
   };
-  const handleLedgerClick = (ledgerId: number) => {
+  const handleLedgerClick = (ledgerId: number, ledgerType?: string) => {
     setLastClickedLedgerId(ledgerId);
     try { localStorage.setItem('lastClickedLedgerId', ledgerId.toString()); } catch (e) {}
+    // 缓存账本类型，供骨架屏使用，避免进入时闪红色
+    if (ledgerType) {
+      try { localStorage.setItem(`ledger_type_${ledgerId}`, ledgerType); } catch (e) {}
+    }
     // 重新进入账本时清除上次的标签选择，让其默认第一个标签
     try { sessionStorage.removeItem(`ledger_${ledgerId}_selectedTagId`); } catch (e) {}
   };
@@ -739,7 +743,7 @@ export default function Ledger() {
                   setLocation(`/opinion/${ledger.id}`);
                   return;
                 }
-                handleLedgerClick(ledger.id);
+                handleLedgerClick(ledger.id, (ledger as any).type);
                 setLocation(`/ledger/${ledger.id}`);
               }}
             >
@@ -979,7 +983,7 @@ export default function Ledger() {
                       {groupLedgers.map(ledger => {
                         const isPinned = pinnedLedgerIds.has(ledger.id);
                         return (
-                        <div key={ledger.id} className="cursor-pointer" onClick={() => { if ((ledger as any).type === 'opinion_book_demo') { setLocation(`/demo/opinion/${ledger.id}`); return; } if ((ledger as any).type === 'opinion_book') { setLocation(`/opinion/${ledger.id}`); return; } handleLedgerClick(ledger.id); setLocation(`/ledger/${ledger.id}`); }}>
+                        <div key={ledger.id} className="cursor-pointer" onClick={() => { if ((ledger as any).type === 'opinion_book_demo') { setLocation(`/demo/opinion/${ledger.id}`); return; } if ((ledger as any).type === 'opinion_book') { setLocation(`/opinion/${ledger.id}`); return; } handleLedgerClick(ledger.id, (ledger as any).type); setLocation(`/ledger/${ledger.id}`); }}>
                           <div className="rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow border-l-4 border-[#D32F2F]" style={{ backgroundColor: isPinned ? '#FFFBF0' : '#FFFFFF', outline: isPinned ? '1px solid #F5E6C0' : 'none' }}>
                             <div className="px-4 py-4">
                               <div className="mb-3">
@@ -1055,7 +1059,7 @@ export default function Ledger() {
                     {ungrouped.map(ledger => {
                       const isPinned = pinnedLedgerIds.has(ledger.id);
                       return (
-                      <div key={ledger.id} className="cursor-pointer" onClick={() => { if ((ledger as any).type === 'opinion_book_demo') { setLocation(`/demo/opinion/${ledger.id}`); return; } if ((ledger as any).type === 'opinion_book') { setLocation(`/opinion/${ledger.id}`); return; } handleLedgerClick(ledger.id); setLocation(`/ledger/${ledger.id}`); }}>
+                      <div key={ledger.id} className="cursor-pointer" onClick={() => { if ((ledger as any).type === 'opinion_book_demo') { setLocation(`/demo/opinion/${ledger.id}`); return; } if ((ledger as any).type === 'opinion_book') { setLocation(`/opinion/${ledger.id}`); return; } handleLedgerClick(ledger.id, (ledger as any).type); setLocation(`/ledger/${ledger.id}`); }}>
                         <div className="rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow" style={{ backgroundColor: isPinned ? '#FFFBF0' : '#FFFFFF', border: isPinned ? '1px solid #F5E6C0' : 'none' }}>
                           <div className="px-4 py-4">
                             <div className="mb-3">

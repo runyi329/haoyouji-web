@@ -2710,14 +2710,21 @@ export default function LedgerDetail() {
   }
 
   if (isLoading) {
-    // 59号账本(ledgerId===59)用黑金色骨架屏，避免红色闪烁
-    const skeletonBg = Number(ledgerId) === 59
+    // 读取缓存的账本类型，决定骨架屏背景色，避免闪红色
+    let cachedType = '';
+    try { cachedType = localStorage.getItem(`ledger_type_${ledgerId}`) || ''; } catch (e) {}
+    const isBlueTheme = cachedType === 'custom_af' || cachedType === 'custom_ah' || cachedType === 'custom_aj';
+    const isDarkGold = Number(ledgerId) === 59 || cachedType === 'custom_ai';
+    const skeletonBg = isDarkGold
       ? 'linear-gradient(135deg, #0A0A0A 0%, #1A1A1A 100%)'
-      : '#D32F2F';
+      : isBlueTheme
+        ? 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)'
+        : '#D32F2F';
+    const skeletonBodyBg = isDarkGold ? '#FAF3ED' : isBlueTheme ? '#f5f7fa' : '#FAF3ED';
     return (
       <div className="min-h-screen flex flex-col" style={{ background: skeletonBg }}>
         <div className="h-32 flex-shrink-0"></div>
-        <div className="flex-1 rounded-t-2xl flex items-center justify-center" style={{ backgroundColor: '#FAF3ED' }}>
+        <div className="flex-1 rounded-t-2xl flex items-center justify-center" style={{ backgroundColor: skeletonBodyBg }}>
           <div style={{ color: '#888' }} className="text-base">加载中...</div>
         </div>
       </div>
