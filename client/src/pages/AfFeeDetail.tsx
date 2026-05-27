@@ -10,7 +10,7 @@ function calcFeeItem(o: any) {
   const amount = parseFloat(o.amount || '0');
   const tradeValue = o.isGift ? amount : amount * 5.25;
   const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-  const confirmedDate = new Date(o.updatedAt || o.createdAt);
+  const confirmedDate = new Date(o.createdAt);
   const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
   let holdDays: number;
   let feeType: 'ongoing' | 'settled';
