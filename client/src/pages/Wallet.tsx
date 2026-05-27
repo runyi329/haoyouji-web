@@ -540,7 +540,7 @@ export default function Wallet() {
         {/* CNY（仅 activeTab === cny 时显示） */}
         {activeTab === "cny" && <AccountCard
           icon="¥"
-          label="人民币账户"
+          label="CNY 账户"
           balance={mask(cnyBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
           unit="CNY"
           subLine={!hideBalance && (
