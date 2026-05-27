@@ -11901,8 +11901,8 @@ ${klinesSummary}
             sql`SELECT
               (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${targetUserId} AND ledger_id = ${input.ledgerId} AND status = 'completed') as recharged,
               (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}) as manual,
-              (SELECT COALESCE(SUM(amount), 0) FROM balance_history WHERE user_id = ${targetUserId}) as reward`
-          ).catch(() => [[{ recharged: '0', manual: '0', reward: '0' }]]),
+              (SELECT COALESCE(balance, 0) FROM users WHERE id = ${targetUserId} LIMIT 1) as userBalance`
+          ).catch(() => [[{ recharged: '0', manual: '0', userBalance: '0' }]]),
 
           // 查询2：仓位（按订单逐条查询，应用权益折扣档位系数）
           db.execute(
@@ -11926,7 +11926,7 @@ ${klinesSummary}
         const balRow = (balanceResult as any)[0]?.[0] ?? (balanceResult as any)[0];
         const recharged = parseFloat(balRow?.recharged ?? '0');
         const manual = parseFloat(balRow?.manual ?? '0');
-        const reward = parseFloat(balRow?.reward ?? '0');
+        const userBalance = parseFloat(balRow?.userBalance ?? '0');
 
         // 解析仓位（应用权益折扣档位系数）
         const EQUITY_DISCOUNT_RATES: Record<number, number> = {
@@ -11991,7 +11991,7 @@ ${klinesSummary}
           }
         }
 
-        return { total: recharged + manual + reward, inviteCount, directReferralCount, indirectReferralCount, positions };
+        return { total: recharged + manual + userBalance, inviteCount, directReferralCount, indirectReferralCount, positions };
       }),
     // AF 邀请树：递归查询所有被邀请用户并标注层数（仅YJH本人可调用）
     afGetInviteTree: protectedProcedure
