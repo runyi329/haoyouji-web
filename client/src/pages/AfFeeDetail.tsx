@@ -192,25 +192,46 @@ export default function AfFeeDetail() {
                     : <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />}
                 </div>
 
-                {/* 第二行：三列数字横排，标题+金额+单位同行 */}
-                <div className="grid grid-cols-3 border-t border-gray-50 py-2.5">
-                  {/* 总计 */}
-                  <div className="flex items-center justify-center gap-1 px-1">
-                    <span className="text-[10px] text-gray-400 whitespace-nowrap">总计</span>
-                    <span className="text-xs font-bold text-gray-900 whitespace-nowrap">{dispTotal.toFixed(2)}</span>
-                    <span className="text-[10px] text-gray-400 whitespace-nowrap">U</span>
+                {/* 第二行： Excel 表格样式，三列带横竖线 */}
+                <div className="border-t border-gray-100 mx-4 mb-3 rounded-lg overflow-hidden" style={{ border: '1px solid #e5e7eb' }}>
+                  {/* 表头行 */}
+                  <div className="grid grid-cols-3" style={{ background: '#f8faff', borderBottom: '1px solid #e5e7eb' }}>
+                    <div className="py-1.5 text-center">
+                      <span className="text-[10px] text-gray-500 font-medium">总计</span>
+                    </div>
+                    <div className="py-1.5 text-center" style={{ borderLeft: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb' }}>
+                      <span className="text-[10px] text-amber-500 font-medium">进行中</span>
+                    </div>
+                    <div className="py-1.5 text-center">
+                      <span className="text-[10px] text-emerald-500 font-medium">已结清</span>
+                    </div>
                   </div>
-                  {/* 进行中 */}
-                  <div className="flex items-center justify-center gap-1 px-1 border-l border-r border-gray-100">
-                    <span className="text-[10px] text-amber-400 whitespace-nowrap">进行中</span>
-                    <span className="text-xs font-bold text-amber-500 whitespace-nowrap">{dispOngoing > 0 ? dispOngoing.toFixed(2) : '—'}</span>
-                    {dispOngoing > 0 && <span className="text-[10px] text-amber-300 whitespace-nowrap">U</span>}
+                  {/* 金额行 */}
+                  <div className="grid grid-cols-3" style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <div className="py-2 text-center">
+                      <span className="text-xs font-bold text-gray-900 whitespace-nowrap">{dispTotal.toFixed(2)}</span>
+                      <span className="text-[10px] text-gray-400 ml-0.5">U</span>
+                    </div>
+                    <div className="py-2 text-center" style={{ borderLeft: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb' }}>
+                      <span className="text-xs font-bold text-amber-500 whitespace-nowrap">{dispOngoing > 0 ? dispOngoing.toFixed(2) : '—'}</span>
+                      {dispOngoing > 0 && <span className="text-[10px] text-amber-300 ml-0.5">U</span>}
+                    </div>
+                    <div className="py-2 text-center">
+                      <span className="text-xs font-bold text-emerald-500 whitespace-nowrap">{dispSettled > 0 ? dispSettled.toFixed(2) : '—'}</span>
+                      {dispSettled > 0 && <span className="text-[10px] text-emerald-300 ml-0.5">U</span>}
+                    </div>
                   </div>
-                  {/* 已结清 */}
-                  <div className="flex items-center justify-center gap-1 px-1">
-                    <span className="text-[10px] text-emerald-400 whitespace-nowrap">已结清</span>
-                    <span className="text-xs font-bold text-emerald-500 whitespace-nowrap">{dispSettled > 0 ? dispSettled.toFixed(2) : '—'}</span>
-                    {dispSettled > 0 && <span className="text-[10px] text-emerald-300 whitespace-nowrap">U</span>}
+                  {/* 笔数行 */}
+                  <div className="grid grid-cols-3" style={{ background: '#fafafa' }}>
+                    <div className="py-1.5 text-center">
+                      <span className="text-[10px] text-gray-400">{group.orders.length} 笔</span>
+                    </div>
+                    <div className="py-1.5 text-center" style={{ borderLeft: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb' }}>
+                      <span className="text-[10px] text-amber-400">{group.ongoingCount} 笔</span>
+                    </div>
+                    <div className="py-1.5 text-center">
+                      <span className="text-[10px] text-emerald-400">{group.settledCount} 笔</span>
+                    </div>
                   </div>
                 </div>
               </button>
