@@ -2370,19 +2370,16 @@ export default function CryptoPrediction() {
 
             {/* 币种选择下拉 */}
             <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <img src={coin.imgUrl} alt={coin.name} className="w-4 h-4 rounded-full" />
-                <span className="text-sm font-semibold" style={{ color: coin.color }}>{coin.fullName}</span>
-              </div>
+              <img src={coin.imgUrl} alt={coin.name} className="w-5 h-5 rounded-full flex-shrink-0" />
               <select
                 value={coinKey}
                 onChange={(e) => { setCoinKey(e.target.value); setOrderPrice(""); setOrderAmount(""); setSliderPct(0); }}
                 className="flex-1 bg-transparent text-sm outline-none"
                 style={{ color: '#1A2340', appearance: 'none', WebkitAppearance: 'none' }}
               >
-                <option value="ETH">以太坊 (ETH)</option>
-                <option value="BTC">比特币 (BTC)</option>
-                <option value="SOL">索拉纳 (SOL)</option>
+                <option value="ETH">ETH</option>
+                <option value="BTC">BTC</option>
+                <option value="SOL">SOL</option>
               </select>
               <svg className="w-4 h-4 flex-shrink-0" style={{ color: '#9CA3AF' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </div>
