@@ -1,0 +1,99 @@
+name: 查询并恢复5月27日误删账目
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: '操作类型: query=仅查询, restore=查询并恢复'
+        required: true
+        default: 'query'
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH执行
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 124.223.54.69
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            pip3 install pymysql -q 2>/dev/null || true
+            ACTION="${{ github.event.inputs.action }}"
+            python3 << 'PYEOF'
+import re, pymysql, os
+
+raw = open('/root/haoyouji-web/.env').read()
+m = re.search(r'DATABASE_URL="?([^"\n]+)"?', raw)
+url = m.group(1)
+m2 = re.match(r'mysql://([^:]+):([^@]+)@([^:/]+):?([0-9]*)/([^?]+)', url)
+user, pwd, host, port, db = m2.groups()
+conn = pymysql.connect(host=host, port=int(port or 4000), user=user, password=pwd, database=db, ssl={'ssl': True}, charset='utf8mb4')
+
+with conn.cursor() as cur:
+    # 查37号账本的分类
+    cur.execute("SELECT id, name, type, is_default FROM ledger_categories WHERE ledger_id = 37 ORDER BY id")
+    cats = cur.fetchall()
+    print("=== 37号账本分类 ===")
+    for c in cats:
+        print(f"  id={c[0]} name={c[1]} type={c[2]} is_default={c[3]}")
+
+    # 查5月27日被删除的账目，按账本分组统计
+    cur.execute("""
+        SELECT r.ledger_id, l.name as ledger_name, COUNT(*) as cnt,
+               GROUP_CONCAT(DISTINCT r.category_id ORDER BY r.category_id) as cat_ids
+        FROM ledger_records r
+        LEFT JOIN ledgers l ON l.id = r.ledger_id
+        WHERE r.deleted_at IS NOT NULL
+          AND DATE(r.deleted_at) = '2026-05-27'
+        GROUP BY r.ledger_id, l.name
+        ORDER BY r.ledger_id
+    """)
+    rows = cur.fetchall()
+    print(f"\n=== 5月27日被删除账目汇总（共{len(rows)}个账本）===")
+    for r in rows:
+        flag = " ← 37号（操作源）" if r[0] == 37 else " ← 疑似误删"
+        print(f"  账本{r[0]}({r[1]}): {r[2]}条, 分类ID: {r[3]}{flag}")
+
+    # 查37号账本被删除时涉及的分类ID
+    cur.execute("""
+        SELECT DISTINCT r.category_id, c.name as cat_name
+        FROM ledger_records r
+        LEFT JOIN ledger_categories c ON c.id = r.category_id
+        WHERE r.deleted_at IS NOT NULL
+          AND DATE(r.deleted_at) = '2026-05-27'
+          AND r.ledger_id = 37
+    """)
+    cats37 = cur.fetchall()
+    affected_cat_ids = [str(r[0]) for r in cats37]
+    print(f"\n=== 37号账本被删分类（共{len(cats37)}个）===")
+    for r in cats37:
+        print(f"  category_id={r[0]} name={r[1]}")
+
+    if os.environ.get('ACTION', 'query') == 'restore' and affected_cat_ids:
+        cat_ids_str = ','.join(affected_cat_ids)
+        # 恢复：把37号账本以外、使用这些分类ID、5月27日被删的账目全部恢复
+        cur.execute(f"""
+            UPDATE ledger_records
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE deleted_at IS NOT NULL
+              AND DATE(deleted_at) = '2026-05-27'
+              AND ledger_id != 37
+              AND category_id IN ({cat_ids_str})
+        """)
+        conn.commit()
+        print(f"\n✅ 已恢复 {cur.rowcount} 条被误删账目（37号账本以外）")
+    elif affected_cat_ids:
+        # 仅查询，预览恢复数量
+        cat_ids_str = ','.join(affected_cat_ids)
+        cur.execute(f"""
+            SELECT COUNT(*) as cnt FROM ledger_records
+            WHERE deleted_at IS NOT NULL
+              AND DATE(deleted_at) = '2026-05-27'
+              AND ledger_id != 37
+              AND category_id IN ({cat_ids_str})
+        """)
+        preview = cur.fetchone()
+        print(f"\n📋 预览：如执行restore，将恢复 {preview[0]} 条账目（37号账本以外）")
+
+conn.close()
+PYEOF
