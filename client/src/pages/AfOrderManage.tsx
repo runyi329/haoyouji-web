@@ -377,25 +377,29 @@ export default function AfOrderManage() {
       </div>
 
       {/* ── 状态筛选Tab ── */}
-      <div className="bg-white border-b border-gray-100 px-4 py-2.5 flex gap-2 sticky top-0 z-10">
-        {([
-          { key: 'all' as const, label: '全部', count: orders?.length ?? 0 },
-          { key: 'pending' as const, label: '委买中', count: (orders as any[])?.filter((o: any) => o.status === 'pending').length ?? 0 },
-          { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && !o.sellStatus).length ?? 0 },
-          { key: 'selling' as const, label: '委卖中', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0 },
-          { key: 'sold' as const, label: '已卖出', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0 },
-        ]).map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setStatusFilter(tab.key)}
-            className="flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all"
-            style={statusFilter === tab.key
-              ? { background: '#2563eb', color: '#fff' }
-              : { background: '#eff2f9', color: '#6b7280' }}
-          >
-            {tab.label}{tab.count > 0 && <span className="ml-1 opacity-70">{tab.count}</span>}
-          </button>
-        ))}
+      <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
+        <div className="flex">
+          {([
+            { key: 'all' as const, label: '全部', count: orders?.length ?? 0 },
+            { key: 'pending' as const, label: '委买中', count: (orders as any[])?.filter((o: any) => o.status === 'pending').length ?? 0 },
+            { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && !o.sellStatus).length ?? 0 },
+            { key: 'selling' as const, label: '委卖中', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0 },
+            { key: 'sold' as const, label: '已卖出', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0 },
+          ]).map((tab, idx, arr) => (
+            <button
+              key={tab.key}
+              onClick={() => setStatusFilter(tab.key)}
+              className="flex-1 py-2.5 text-xs font-medium transition-all relative"
+              style={statusFilter === tab.key
+                ? { color: '#2563eb', borderBottom: '2px solid #2563eb' }
+                : { color: '#6b7280', borderBottom: '2px solid transparent' }}
+            >
+              {idx > 0 && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-3 w-px bg-gray-200" />}
+              {tab.label}
+              {tab.count > 0 && <span className="ml-0.5 text-[10px] opacity-60">{tab.count}</span>}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="px-3 pt-3">
