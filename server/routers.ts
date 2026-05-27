@@ -11895,13 +11895,14 @@ ${klinesSummary}
 
         // ★ 并行执行所有查询，从 9 个串行压缩为 3 个并行
         const [balanceResult, positionResult, userResult] = await Promise.all([
-          // 查询1：充値总额 + 手动调账（按账本隔离）
-          // 充値记录按 ledger_id 过滤：只计算该账本的充値（有 ledger_id 的），小包含无 ledger_id 的通用充値
+          // 查询1：充値总额 + 手动调账（按账本隔离）+ balance_history奖励
+          // 充値记录按 ledger_id 过滤：只计算该账本的充値（有 ledger_id 的），不包含无 ledger_id 的通用充値
           db.execute(
             sql`SELECT
               (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${targetUserId} AND ledger_id = ${input.ledgerId} AND status = 'completed') as recharged,
-              (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}) as manual`
-          ).catch(() => [[{ recharged: '0', manual: '0' }]]),
+              (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId}) as manual,
+              (SELECT COALESCE(SUM(amount), 0) FROM balance_history WHERE user_id = ${targetUserId}) as reward`
+          ).catch(() => [[{ recharged: '0', manual: '0', reward: '0' }]]),
 
           // 查询2：仓位（按订单逐条查询，应用权益折扣档位系数）
           db.execute(
@@ -11925,6 +11926,7 @@ ${klinesSummary}
         const balRow = (balanceResult as any)[0]?.[0] ?? (balanceResult as any)[0];
         const recharged = parseFloat(balRow?.recharged ?? '0');
         const manual = parseFloat(balRow?.manual ?? '0');
+        const reward = parseFloat(balRow?.reward ?? '0');
 
         // 解析仓位（应用权益折扣档位系数）
         const EQUITY_DISCOUNT_RATES: Record<number, number> = {
@@ -11989,7 +11991,7 @@ ${klinesSummary}
           }
         }
 
-        return { total: recharged + manual, inviteCount, directReferralCount, indirectReferralCount, positions };
+        return { total: recharged + manual + reward, inviteCount, directReferralCount, indirectReferralCount, positions };
       }),
     // AF 邀请树：递归查询所有被邀请用户并标注层数（仅YJH本人可调用）
     afGetInviteTree: protectedProcedure
