@@ -4653,11 +4653,15 @@ export default function LedgerDetail() {
               >
                 {/* 三币图标靠左，25%重叠 */}
                 <div className="flex items-center flex-shrink-0">
-                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png" alt="BTC" className="w-10 h-10 object-contain rounded-full flex-shrink-0" style={{ position: 'relative', zIndex: 3 }} />
+                  <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center" style={{ position: 'relative', zIndex: 3 }}>
+                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png" alt="BTC" style={{ width: '140%', height: '140%', objectFit: 'contain', transform: 'scale(1.4)' }} />
+                  </div>
                   <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center" style={{ position: 'relative', zIndex: 2, marginLeft: '-8px', outline: '2px solid #fff' }}>
                     <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" style={{ width: '140%', height: '140%', objectFit: 'contain', transform: 'scale(1.4)' }} />
                   </div>
-                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png" alt="SOL" className="w-10 h-10 object-contain rounded-full flex-shrink-0" style={{ position: 'relative', zIndex: 1, marginLeft: '-8px', outline: '2px solid #fff' }} />
+                  <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center" style={{ position: 'relative', zIndex: 1, marginLeft: '-8px', outline: '2px solid #fff' }}>
+                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png" alt="SOL" style={{ width: '140%', height: '140%', objectFit: 'contain', transform: 'scale(1.4)' }} />
+                  </div>
                 </div>
                 {/* 中间留白 */}
                 <div className="flex-1" />
