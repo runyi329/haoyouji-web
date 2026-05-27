@@ -466,7 +466,7 @@ export default function Wallet() {
               <ChevronRight className="w-3 h-3" />
             </button>
             <button
-              onClick={() => activeTab === "usdt" ? balanceQuery.refetch() : cnyBalanceQuery.refetch()}
+              onClick={() => window.location.reload()}
               className="px-2.5 h-7 rounded-full text-xs font-medium"
               style={{ background: G.whiteFaint, color: G.goldDim }}
             >
