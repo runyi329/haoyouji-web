@@ -1360,12 +1360,17 @@ export async function deleteLedgerCategory(categoryId: number, userId: number, c
   }
 
   // 强制删除时，软删除该分类及子分类下的所有记录
+  // 注意：必须同时过滤 ledgerId，防止跨账本误删（不同账本可能有相同 categoryId 的记录）
   if (force) {
     for (const id of allIdsToDelete) {
       await db
         .update(ledgerRecords)
         .set({ deletedAt: new Date() } as any)
-        .where(and(eq(ledgerRecords.categoryId, id), isNull(ledgerRecords.deletedAt)));
+        .where(and(
+          eq(ledgerRecords.categoryId, id),
+          eq(ledgerRecords.ledgerId, category.ledgerId),
+          isNull(ledgerRecords.deletedAt)
+        ));
     }
   }
   
