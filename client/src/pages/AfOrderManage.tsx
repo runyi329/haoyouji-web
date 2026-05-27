@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 // 综合状态标签（买入状态 + 卖出状态）
 const getStatusDisplay = (order: any) => {
-  if (order.sellStatus === 'sold') return { label: '已卖出', color: 'text-gray-500' };
+  if (order.sellStatus === 'sold') return { label: '已卖出', color: 'text-blue-600' };
   if (order.sellStatus === 'selling') return { label: '委卖中', color: 'text-red-500' };
   if (order.status === 'completed') return { label: '持仓中', color: 'text-green-500' };
   if (order.status === 'cancelled') return { label: '已撤单', color: 'text-gray-400' };
@@ -446,7 +446,7 @@ export default function AfOrderManage() {
                         {order.nickname || order.username || `用户${order.userId}`}
                       </span>
                       {order.isGift && (
-                        <span className="text-xs bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-bold border border-red-200 animate-pulse">
+                        <span className="text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full font-bold border border-amber-200">
                           赠
                         </span>
                       )}
@@ -454,7 +454,7 @@ export default function AfOrderManage() {
                     {!isEditing ? (
                       <button
                         onClick={() => startEdit(order)}
-                        className="flex items-center gap-1 text-xs text-blue-500 border border-blue-200 rounded-lg px-2 py-1"
+                        className="flex items-center gap-1 text-xs text-gray-700 border border-gray-300 rounded-lg px-2 py-1"
                       >
                         <Pencil className="w-3 h-3" /> 编辑
                       </button>
@@ -554,7 +554,7 @@ export default function AfOrderManage() {
                       return (
                         <div className="flex items-center gap-1">
                           <span className="text-gray-400 text-xs w-10">订单价值</span>
-                          <span className="text-blue-600 font-medium">{tradeValue.toFixed(2)} USDT</span>
+                          <span className="text-gray-900 font-medium">{tradeValue.toFixed(2)} USDT</span>
                         </div>
                       );
                     })()}
@@ -562,7 +562,7 @@ export default function AfOrderManage() {
                     {(order.sellStatus === 'selling' || order.sellStatus === 'sold') && (
                       <div className="flex items-center gap-1">
                         <span className="text-gray-400 text-xs w-10">卖出价</span>
-                        <span className="font-medium text-red-500">
+                        <span className="font-medium text-gray-900">
                           {parseFloat(order.sellPrice).toLocaleString()} USDT
                         </span>
                       </div>
@@ -582,7 +582,7 @@ export default function AfOrderManage() {
                       return (
                         <div className="flex items-center gap-1">
                           <span className="text-gray-400 text-xs w-10">当前权益</span>
-                          <span className="text-amber-600 font-medium">{pct}% <span className="text-xs text-gray-400">({tierLabel})</span></span>
+                          <span className={`font-medium ${rate >= 1.0 ? 'text-gray-900' : 'text-orange-500'}`}>{pct}% <span className="text-xs text-gray-400">({tierLabel})</span></span>
                         </div>
                       );
                     })()}
@@ -607,7 +607,7 @@ export default function AfOrderManage() {
                       return (
                         <div className="flex items-center gap-1 col-span-2">
                           <span className="text-gray-400 text-xs w-10">累计管理费</span>
-                          <span className="text-purple-600 font-medium">{totalFee.toFixed(4)} USDT <span className="text-xs text-gray-400">({holdDays}天 · {dailyFee.toFixed(4)}/天)</span></span>
+                          <span className="text-gray-900 font-medium">{totalFee.toFixed(4)} USDT <span className="text-xs text-gray-400">({holdDays}天 · {dailyFee.toFixed(4)}/天)</span></span>
                         </div>
                       );
                     })()}
@@ -615,8 +615,8 @@ export default function AfOrderManage() {
 
                   {/* 赠送订单来源信息 */}
                   {order.isGift && order.sourceUsername && (
-                    <div className={`mt-2 text-xs rounded-lg px-3 py-1.5 border ${order.giftMultiplier === '1.0' ? 'text-amber-500 bg-amber-50 border-amber-100' : 'text-red-400 bg-red-50 border-red-100'}`}>
-                      {order.giftMultiplier === '1.0' ? '间接推荐奖励订单 (1.0倍)' : '推荐人奖励订单 (1.5倍)'} · 来自 <span className={`font-medium ${order.giftMultiplier === '1.0' ? 'text-amber-600' : 'text-red-500'}`}>{order.sourceUsername}</span>
+                    <div className="mt-2 text-xs rounded-lg px-3 py-1.5 border text-gray-500 bg-gray-50 border-gray-100">
+                      {order.giftMultiplier === '1.0' ? '间接推荐奖励订单 (1.0倍)' : '推荐人奖励订单 (1.5倍)'} · 来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span>
                     </div>
                   )}
 
