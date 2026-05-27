@@ -449,10 +449,12 @@ export default function Wallet() {
 
       {/* ── 顶部导航栏 ── */}
       <div
-        className="relative px-4 pt-10 pb-2"
+        className="relative px-4"
         style={{
           background: "linear-gradient(160deg, #0d0d0d 0%, #1a1500 60%, #0d0d0d 100%)",
           borderBottom: `1px solid ${G.cardBorder}`,
+          paddingTop: "calc(env(safe-area-inset-top, 44px) + 8px)",
+          paddingBottom: "8px",
         }}
       >
         <div className="flex items-center justify-between">
