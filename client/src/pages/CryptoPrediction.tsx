@@ -2095,6 +2095,7 @@ export default function CryptoPrediction() {
   );
   const isCustomAF = (ledgerInfo as any)?.type === 'custom_af';
   const isFunder = (ledgerInfo as any)?.userRole === 'funder';
+  const isOwner = (ledgerInfo as any)?.userRole === 'owner';
 
   // 融资付息：订单列表（仅非资方用户在融资付息Tab时加载）
   const { data: financeOrdersData, refetch: refetchFinanceOrders, isFetching: financeOrdersFetching } = trpc.ledger.financeGetOrders.useQuery(
@@ -2318,10 +2319,10 @@ export default function CryptoPrediction() {
             { key: "contract", label: "谷底增筹" },
             { key: "gujian", label: "谷间优筹" },
             { key: "finance", label: "融资付息" },
-            { key: "market", label: "行情评估" },
+            ...(isOwner ? [{ key: "market", label: "行情评估" }] : []),
           ] : [
             { key: "contract", label: isCustomAF ? "谷底增筹" : "无损合约" },
-            { key: "market", label: "行情评估" },
+            ...(isOwner ? [{ key: "market", label: "行情评估" }] : []),
           ]).map((t) => (
             <button key={t.key} onClick={() => {
               if (t.key === "gujian") {

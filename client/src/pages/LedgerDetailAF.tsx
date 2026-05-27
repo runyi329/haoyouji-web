@@ -402,7 +402,7 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
           {[
             { key: "contract", label: "无损合约" },
             { key: "spot", label: "无损现货" },
-            { key: "market", label: "行情评估" },
+            ...(isOwner ? [{ key: "market", label: "行情评估" }] : []),
           ].map((t) => (
             <button
               key={t.key}
