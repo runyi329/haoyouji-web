@@ -3791,7 +3791,7 @@ export default function LedgerDetail() {
               )}
               {/* 管理员统计：累计订单（后端控制权限，代看模式下隐藏，资金方不显示） */}
               {!effectiveIsFunder && !viewAsUserId && afAdminStats && (afAdminStats as any).authorized === true && (afAdminStats as any).orders && (
-                <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                <div className="rounded-2xl px-4 py-3 cursor-pointer active:opacity-75" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }} onClick={() => setLocation(`/ledger/${ledgerId}/af-order-manage`)}>
                   <div className="text-xs text-white/70 mb-1">累计订单</div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-lg font-bold text-white">{afAdminStats.orders.totalCount}</span>
