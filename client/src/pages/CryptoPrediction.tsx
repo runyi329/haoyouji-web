@@ -2088,6 +2088,7 @@ export default function CryptoPrediction() {
   // 订单列表排序状态
   const [orderSortKey, setOrderSortKey] = useState<'time' | 'coin' | 'amount' | 'status'>('time');
   const [orderSortDir, setOrderSortDir] = useState<'desc' | 'asc'>('desc');
+  const [showFeeModal, setShowFeeModal] = useState(false);
   // 账本信息（用于判断类型，定制 Tab 名称）
   const { data: ledgerInfo } = trpc.ledger.getById.useQuery(
     { ledgerId },
@@ -2650,28 +2651,6 @@ export default function CryptoPrediction() {
                 <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>
                   当前订单{(!ordersLoading && orders.length > 0) ? `（${orders.length}单）` : ''}
                 </span>
-                {(!ordersLoading && orders.length > 0) && (() => {
-                  const feeOrders = orders.filter((o: any) => o.side === 'buy' && o.status === 'completed' && (o.orderType === '无损合约' || !o.orderType || o.orderType === '谷底增筹'));
-                  let unsettledFee = 0;
-                  feeOrders.forEach((o: any) => {
-                    const isSold = o.sellStatus === 'sold';
-                    if (isSold) return;
-                    const amount = parseFloat(o.amount);
-                    const tradeValue = o.isGift ? amount : amount * 5.25;
-                    const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-                    const startDate = new Date(o.createdAt);
-                    const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-                    const endDay = new Date();
-                    endDay.setHours(0,0,0,0);
-                    const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
-                    unsettledFee += dailyFee * holdDays;
-                  });
-                  return (
-                    <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>
-                      管理费 <span style={{ color: '#0EA56A' }}>{unsettledFee.toFixed(2)}u</span>
-                    </span>
-                  );
-                })()}
               </div>
               {ordersLoading ? (
                 <div className="space-y-2 pt-1">
@@ -2762,10 +2741,102 @@ export default function CryptoPrediction() {
                   })}
                 </div>
               )}
+              {/* 管理费虚线触发区 */}
+              {(!ordersLoading && orders.length > 0) && (() => {
+                const feeOrders = orders.filter((o: any) => o.side === 'buy' && o.status === 'completed' && (o.orderType === '无损合约' || !o.orderType || o.orderType === '谷底增筹'));
+                const activeFeeOrders = feeOrders.filter((o: any) => o.sellStatus !== 'sold');
+                if (activeFeeOrders.length === 0) return null;
+                let totalFee = 0;
+                activeFeeOrders.forEach((o: any) => {
+                  const amount = parseFloat(o.amount);
+                  const tradeValue = o.isGift ? amount : amount * 5.25;
+                  const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+                  const startDate = new Date(o.createdAt);
+                  const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+                  const endDay = new Date(); endDay.setHours(0,0,0,0);
+                  const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
+                  totalFee += dailyFee * holdDays;
+                });
+                return (
+                  <button
+                    onClick={() => setShowFeeModal(true)}
+                    className="w-full mt-3 flex items-center justify-center gap-1.5 py-2"
+                    style={{ borderTop: '1px dashed #CBD5E1' }}
+                  >
+                    <span className="text-xs" style={{ color: '#9CA3AF' }}>管理费明细</span>
+                    <span className="text-xs font-semibold" style={{ color: '#0EA56A' }}>{totalFee.toFixed(2)}u</span>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 3L7.5 6L4.5 9" stroke="#9CA3AF" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
+                );
+              })()}
+              {/* 管理费小票弹窗 */}
+              {showFeeModal && (() => {
+                const feeOrders = orders.filter((o: any) => o.side === 'buy' && o.status === 'completed' && (o.orderType === '无损合约' || !o.orderType || o.orderType === '谷底增筹') && o.sellStatus !== 'sold');
+                const feeItems = feeOrders.map((o: any) => {
+                  const amount = parseFloat(o.amount);
+                  const tradeValue = o.isGift ? amount : amount * 5.25;
+                  const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+                  const startDate = new Date(o.createdAt);
+                  const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+                  const endDay = new Date(); endDay.setHours(0,0,0,0);
+                  const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
+                  const fee = dailyFee * holdDays;
+                  const dateStr = (() => {
+                    const d = new Date(o.createdAt);
+                    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                  })();
+                  return { id: o.id, coin: o.coin, amount, dateStr, holdDays, dailyFee, fee };
+                });
+                const totalFee = feeItems.reduce((s: number, i: any) => s + i.fee, 0);
+                return (
+                  <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.45)' }} onClick={() => setShowFeeModal(false)}>
+                    <div className="w-full max-w-md rounded-t-3xl pb-8 pt-5 px-5" style={{ backgroundColor: '#FAFBFF', boxShadow: '0 -4px 32px rgba(26,86,219,0.12)' }} onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                      {/* 拖动条 */}
+                      <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ backgroundColor: '#D1D5DB' }} />
+                      {/* 标题 */}
+                      <div className="text-center mb-4">
+                        <div className="text-base font-bold" style={{ color: '#1A2340' }}>管理费明细</div>
+                        <div className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>持仓中订单 · 年化12%</div>
+                      </div>
+                      {/* 小票内容 */}
+                      <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #E0E8FF', backgroundColor: '#fff' }}>
+                        {/* 表头 */}
+                        <div className="grid text-xs py-2.5 px-4" style={{ gridTemplateColumns: '3fr 2fr 2fr 3fr', backgroundColor: '#F0F4FF', color: '#6B7A9A', borderBottom: '1px dashed #CBD5E1' }}>
+                          <span>日期</span>
+                          <span className="text-center">币种</span>
+                          <span className="text-center">天数</span>
+                          <span className="text-right">管理费</span>
+                        </div>
+                        {/* 明细行 */}
+                        {feeItems.map((item: any, idx: number) => (
+                          <div key={item.id} className="grid text-xs py-2.5 px-4 items-center" style={{ gridTemplateColumns: '3fr 2fr 2fr 3fr', borderBottom: idx < feeItems.length - 1 ? '1px dashed #EEF2FF' : 'none' }}>
+                            <span style={{ color: '#6B7A9A' }}>{item.dateStr}</span>
+                            <span className="text-center font-medium" style={{ color: '#1A2340' }}>{item.coin}</span>
+                            <span className="text-center" style={{ color: '#6B7A9A' }}>{item.holdDays}天</span>
+                            <span className="text-right font-semibold" style={{ color: '#1A2340' }}>{item.fee.toFixed(4)}u</span>
+                          </div>
+                        ))}
+                        {/* 合计行 */}
+                        <div className="flex justify-between items-center py-3 px-4" style={{ borderTop: '1px solid #E0E8FF', backgroundColor: '#F8FAFF' }}>
+                          <span className="text-sm font-bold" style={{ color: '#1A2340' }}>合计</span>
+                          <span className="text-base font-bold" style={{ color: '#0EA56A' }}>{totalFee.toFixed(4)} u</span>
+                        </div>
+                      </div>
+                      {/* 说明 */}
+                      <div className="mt-3 text-center text-xs" style={{ color: '#9CA3AF' }}>
+                        管理费 = 本金 × 5.25 ÷ 0.75 × 12% ÷ 365 × 持有天数
+                      </div>
+                      {/* 关闭按钮 */}
+                      <button onClick={() => setShowFeeModal(false)} className="w-full mt-4 py-3 rounded-2xl text-sm font-semibold" style={{ backgroundColor: '#1A56DB', color: '#fff' }}>
+                        关闭
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}
-
         {/* 无损现货 */}
         {tab === "spot" && (
           <div className="space-y-3">
