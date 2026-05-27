@@ -246,7 +246,7 @@ export default function InterestManagePage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <div className="text-sm font-bold text-green-600">¥ {fmt(tag.totalInterest)}</div>
+                    <div className={`text-sm font-bold ${tag.totalInterest >= 0 ? 'text-green-600' : 'text-red-500'}`}>¥ {fmt(tag.totalInterest)}</div>
                     <div className="text-xs text-gray-400">累计利息</div>
                   </div>
                   {expandedTag === tag.tagName
@@ -387,7 +387,7 @@ export default function InterestManagePage() {
                                       <span className="text-orange-500 font-medium">¥{fmt(period.dailyInterest)}</span>
                                       <span className="mx-2 text-gray-300">|</span>
                                       <span className="text-gray-400">本段利息 </span>
-                                      <span className="text-green-600 font-semibold">¥{fmt(period.interest)}</span>
+                                      <span className={`font-semibold ${period.interest >= 0 ? 'text-green-600' : 'text-red-500'}`}>¥{fmt(period.interest)}</span>
                                     </div>
                                   </div>
                                 )}
@@ -442,7 +442,7 @@ export default function InterestManagePage() {
                     <div className="mx-4 mb-3 px-3 py-2 bg-green-50 rounded-xl">
                       <div className="flex justify-between text-xs">
                         <span className="text-gray-500">自动计息合计</span>
-                        <span className="text-green-600 font-semibold">¥ {fmt(tag.autoInterest)}</span>
+                        <span className={`font-semibold ${tag.autoInterest >= 0 ? 'text-green-600' : 'text-red-500'}`}>¥ {fmt(tag.autoInterest)}</span>
                       </div>
                       {tag.manualAdj !== 0 && (
                         <div className="flex justify-between text-xs mt-0.5">
@@ -454,7 +454,7 @@ export default function InterestManagePage() {
                       )}
                       <div className="flex justify-between text-xs border-t border-green-100 mt-1.5 pt-1.5">
                         <span className="font-semibold text-gray-700">累计利息合计</span>
-                        <span className="text-green-600 font-bold text-sm">¥ {fmt(tag.totalInterest)}</span>
+                        <span className={`font-bold text-sm ${tag.totalInterest >= 0 ? 'text-green-600' : 'text-red-500'}`}>¥ {fmt(tag.totalInterest)}</span>
                       </div>
                     </div>
                   )}
