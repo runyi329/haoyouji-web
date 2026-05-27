@@ -393,6 +393,7 @@ function Router() {
         <Route path="/admin/recharge/manual-confirm" component={RechargeManualConfirm} />
         <Route path="/admin/recharge/unmatched" component={RechargeUnmatched} />
         <Route path="/admin/recharge/orders" component={RechargeOrders} />
+        <Route path="/admin/cny-manage" component={lazy(() => import("./pages/admin/AdminCnyManage"))} />
         <Route path="/admin/migration" component={lazy(() => import("./pages/AdminMigration"))} />
         <Route path="/admin/super-view" component={SuperViewUserList} />
         <Route path="/admin/super-view/contacts" component={SuperViewContacts} />
@@ -417,6 +418,7 @@ function Router() {
         {/* 钱包相关页面 */}
         <Route path="/wallet" component={lazy(() => import("./pages/Wallet"))} />
         <Route path="/wallet/transactions" component={lazy(() => import("./pages/WalletTransactions"))} />
+        <Route path="/wallet/cny-transactions" component={lazy(() => import("./pages/WalletCnyTransactions"))} />
         <Route path="/payment-accounts" component={lazy(() => import("./pages/PaymentAccounts"))} />
         <Route path="/recharge" component={lazy(() => import("./pages/Recharge"))} />
         <Route path="/recharge/history" component={lazy(() => import("./pages/RechargeHistory"))} />
