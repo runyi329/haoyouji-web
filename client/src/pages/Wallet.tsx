@@ -17,61 +17,147 @@ import { trpc } from "../lib/trpc";
 import Recharge from "./Recharge";
 import Withdraw from "./Withdraw";
 
+// ─── 黑金色系 Token ───────────────────────────────────────────
+const G = {
+  bg: "#0d0d0d",          // 页面底色
+  card: "#141414",        // 卡片底色
+  cardBorder: "rgba(201,168,76,0.22)", // 卡片边框
+  gold: "#C9A84C",        // 主金色
+  goldLight: "#F5D78E",   // 亮金色
+  goldDim: "rgba(201,168,76,0.45)",
+  goldFaint: "rgba(201,168,76,0.12)",
+  white: "rgba(255,255,255,0.88)",
+  whiteDim: "rgba(255,255,255,0.45)",
+  whiteFaint: "rgba(255,255,255,0.08)",
+  divider: "rgba(255,255,255,0.06)",
+  green: "#34d399",       // 入账绿
+  red: "#f87171",         // 出账红
+};
+
 type ModalType = "recharge" | "withdraw" | "cny-recharge" | "cny-withdraw" | null;
 
 function StatusIcon({ status }: { status: string }) {
   if (status === "completed" || status === "approved")
-    return <CheckCircle2 className="w-3.5 h-3.5" style={{ color: "#10b981" }} />;
+    return <CheckCircle2 className="w-3.5 h-3.5" style={{ color: G.green }} />;
   if (status === "pending" || status === "processing")
-    return <Clock className="w-3.5 h-3.5" style={{ color: "#f59e0b" }} />;
+    return <Clock className="w-3.5 h-3.5" style={{ color: "#fbbf24" }} />;
   if (status === "rejected" || status === "failed")
-    return <XCircle className="w-3.5 h-3.5" style={{ color: "#ef4444" }} />;
-  return <Clock className="w-3.5 h-3.5" style={{ color: "#9ca3af" }} />;
+    return <XCircle className="w-3.5 h-3.5" style={{ color: G.red }} />;
+  return <Clock className="w-3.5 h-3.5" style={{ color: G.whiteDim }} />;
 }
 
-function statusText(status: string) {
-  const map: Record<string, string> = {
-    completed: "已完成", approved: "已完成",
-    pending: "处理中", processing: "处理中",
-    rejected: "已拒绝", failed: "已失败",
-  };
-  return map[status] ?? status;
+function statusText(s: string) {
+  return ({ completed: "已完成", approved: "已完成", pending: "处理中", processing: "处理中", rejected: "已拒绝", failed: "已失败" } as any)[s] ?? s;
 }
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
-  const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  const days = Math.floor(diff / 86400000);
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
   if (days === 0) return `今天 ${d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
   if (days === 1) return `昨天 ${d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
   if (days < 7) return `${days}天前`;
   return d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
 }
 
-// 底部弹窗
+// 底部弹窗（黑金风）
 function BottomSheet({ title, onClose, children }: {
   title: string; onClose: () => void; children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "rgba(0,0,0,0.5)" }}>
+    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "rgba(0,0,0,0.75)" }}>
       <div
         className="rounded-t-3xl mt-auto overflow-hidden"
         style={{
-          background: "#fff",
+          background: "linear-gradient(160deg, #111 0%, #1c1c1c 100%)",
+          border: `1px solid ${G.cardBorder}`,
+          borderBottom: "none",
           maxHeight: "90vh",
           overflowY: "auto",
         }}
       >
+        {/* 拖拽条 */}
         <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 rounded-full bg-gray-200" />
+          <div className="w-10 h-1 rounded-full" style={{ background: G.goldFaint }} />
         </div>
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-          <span className="text-base font-semibold text-gray-800">{title}</span>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-lg">×</button>
+        {/* 标题行 */}
+        <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: `1px solid ${G.divider}` }}>
+          <span className="text-base font-semibold" style={{ color: G.goldLight }}>{title}</span>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-lg"
+            style={{ background: G.whiteFaint, color: G.whiteDim }}
+          >×</button>
         </div>
         {children}
       </div>
+    </div>
+  );
+}
+
+// 金色输入框
+function GoldInput({ label, value, onChange, placeholder, type = "text" }: {
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder: string; type?: string;
+}) {
+  return (
+    <div>
+      <div className="text-xs mb-1.5" style={{ color: G.whiteDim }}>{label}</div>
+      <div
+        className="flex items-center rounded-xl px-4 py-3"
+        style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.2)` }}
+      >
+        {type === "number" && (
+          <span className="text-lg font-bold mr-2" style={{ color: G.goldDim }}>¥</span>
+        )}
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="flex-1 bg-transparent outline-none tabular-nums"
+          style={{
+            color: G.white,
+            fontSize: type === "number" ? "1.25rem" : "0.875rem",
+            fontWeight: type === "number" ? 700 : 400,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// 金色主按钮
+function GoldBtn({ children, onClick, disabled }: {
+  children: React.ReactNode; onClick: () => void; disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="w-full py-3.5 rounded-xl text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-50"
+      style={{
+        background: `linear-gradient(135deg, ${G.gold} 0%, ${G.goldLight} 50%, ${G.gold} 100%)`,
+        boxShadow: "0 4px 16px rgba(201,168,76,0.35)",
+        color: "#000",
+      }}
+    >{children}</button>
+  );
+}
+
+// 成功状态
+function SuccessState({ msg, sub, onClose }: { msg: string; sub: string; onClose: () => void }) {
+  return (
+    <div className="px-5 py-10 flex flex-col items-center space-y-4">
+      <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: "rgba(52,211,153,0.12)" }}>
+        <CheckCircle2 className="w-9 h-9" style={{ color: G.green }} />
+      </div>
+      <div className="text-base font-semibold" style={{ color: G.white }}>{msg}</div>
+      <div className="text-sm text-center" style={{ color: G.whiteDim }}>{sub}</div>
+      <button
+        onClick={onClose}
+        className="w-full py-3 rounded-xl text-sm font-medium"
+        style={{ background: G.whiteFaint, color: G.whiteDim }}
+      >关闭</button>
     </div>
   );
 }
@@ -82,70 +168,32 @@ function CnyRechargeContent({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  if (submitted) {
-    return (
-      <div className="px-5 py-10 flex flex-col items-center space-y-4">
-        <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center">
-          <CheckCircle2 className="w-9 h-9 text-green-500" />
-        </div>
-        <div className="text-base font-semibold text-gray-800">充值申请已提交</div>
-        <div className="text-sm text-center text-gray-400">请按照收款信息完成转账，到账后将自动更新余额</div>
-        <button onClick={onClose} className="w-full py-3 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium">关闭</button>
-      </div>
-    );
-  }
+  if (submitted) return <SuccessState msg="充值申请已提交" sub="请按照收款信息完成转账，到账后将自动更新余额" onClose={onClose} />;
 
   return (
     <div className="px-5 pb-8 pt-4 space-y-4">
-      <div className="rounded-2xl bg-blue-50 p-4 space-y-2.5">
-        <div className="text-xs font-semibold text-blue-600 mb-1">收款信息</div>
+      {/* 收款信息卡 */}
+      <div className="rounded-2xl p-4 space-y-2.5" style={{ background: G.goldFaint, border: `1px solid rgba(201,168,76,0.25)` }}>
+        <div className="text-xs font-semibold mb-1" style={{ color: G.goldDim }}>收款信息</div>
         {[
           { label: "收款账户", value: "招商银行 6214 **** **** 8888" },
           { label: "收款人", value: "张三" },
           { label: "转账备注", value: "请务必填写您的用户ID" },
         ].map(({ label, value }) => (
           <div key={label} className="flex justify-between text-sm">
-            <span className="text-gray-400">{label}</span>
-            <span className="text-gray-700 font-medium">{value}</span>
+            <span style={{ color: G.whiteDim }}>{label}</span>
+            <span style={{ color: G.white, fontWeight: 500 }}>{value}</span>
           </div>
         ))}
       </div>
 
-      <div>
-        <div className="text-xs text-gray-400 mb-1.5">充值金额（元）</div>
-        <div className="flex items-center rounded-xl border border-gray-200 px-4 py-3 bg-gray-50">
-          <span className="text-lg font-bold text-blue-500 mr-2">¥</span>
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="0.00"
-            className="flex-1 bg-transparent text-xl font-bold outline-none tabular-nums text-gray-800"
-          />
-        </div>
-      </div>
+      <GoldInput label="充值金额（元）" value={amount} onChange={setAmount} placeholder="0.00" type="number" />
+      <GoldInput label="备注（可选）" value={note} onChange={setNote} placeholder="如有特殊说明请填写" />
 
-      <div>
-        <div className="text-xs text-gray-400 mb-1.5">备注（可选）</div>
-        <input
-          type="text"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="如有特殊说明请填写"
-          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none text-gray-700"
-        />
-      </div>
-
-      <button
-        onClick={() => {
-          if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) { alert("请输入有效金额"); return; }
-          setSubmitted(true);
-        }}
-        className="w-full py-3.5 rounded-xl text-sm font-bold text-white active:scale-[0.98] transition-transform"
-        style={{ background: "linear-gradient(135deg, #1677FF 0%, #4096ff 100%)" }}
-      >
-        提交充值申请
-      </button>
+      <GoldBtn onClick={() => {
+        if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) { alert("请输入有效金额"); return; }
+        setSubmitted(true);
+      }}>提交充值申请</GoldBtn>
     </div>
   );
 }
@@ -156,72 +204,72 @@ function CnyWithdrawContent({ cnyBalance, onClose }: { cnyBalance: number; onClo
   const [bankInfo, setBankInfo] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  if (submitted) {
-    return (
-      <div className="px-5 py-10 flex flex-col items-center space-y-4">
-        <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center">
-          <CheckCircle2 className="w-9 h-9 text-green-500" />
-        </div>
-        <div className="text-base font-semibold text-gray-800">提现申请已提交</div>
-        <div className="text-sm text-center text-gray-400">预计 1-3 个工作日到账</div>
-        <button onClick={onClose} className="w-full py-3 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium">关闭</button>
-      </div>
-    );
-  }
+  if (submitted) return <SuccessState msg="提现申请已提交" sub="预计 1-3 个工作日到账" onClose={onClose} />;
 
   return (
     <div className="px-5 pb-8 pt-4 space-y-4">
-      <div className="rounded-2xl bg-gray-50 border border-gray-200 px-4 py-3 flex items-center justify-between">
-        <span className="text-sm text-gray-400">可用余额</span>
-        <span className="text-base font-bold text-gray-800">¥ {cnyBalance.toFixed(2)}</span>
+      {/* 可用余额 */}
+      <div
+        className="rounded-xl px-4 py-3 flex items-center justify-between"
+        style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.15)` }}
+      >
+        <span className="text-sm" style={{ color: G.whiteDim }}>可用余额</span>
+        <span className="text-base font-bold" style={{ color: G.goldLight }}>¥ {cnyBalance.toFixed(2)}</span>
       </div>
 
+      {/* 金额输入 */}
       <div>
-        <div className="text-xs text-gray-400 mb-1.5">提现金额（元）</div>
-        <div className="flex items-center rounded-xl border border-gray-200 px-4 py-3 bg-gray-50">
-          <span className="text-lg font-bold text-blue-500 mr-2">¥</span>
+        <div className="text-xs mb-1.5" style={{ color: G.whiteDim }}>提现金额（元）</div>
+        <div
+          className="flex items-center rounded-xl px-4 py-3"
+          style={{ background: G.whiteFaint, border: `1px solid rgba(201,168,76,0.2)` }}
+        >
+          <span className="text-lg font-bold mr-2" style={{ color: G.goldDim }}>¥</span>
           <input
             type="number"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.00"
-            className="flex-1 bg-transparent text-xl font-bold outline-none tabular-nums text-gray-800"
+            className="flex-1 bg-transparent text-xl font-bold outline-none tabular-nums"
+            style={{ color: G.white }}
           />
           <button
             onClick={() => setAmount(cnyBalance.toFixed(2))}
-            className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-500 font-medium ml-2"
+            className="text-xs px-2.5 py-1 rounded-lg ml-2 font-medium"
+            style={{ background: G.goldFaint, color: G.gold }}
           >全部</button>
         </div>
       </div>
 
+      {/* 收款账户 */}
       <div>
-        <div className="text-xs text-gray-400 mb-1.5">收款账户信息</div>
+        <div className="text-xs mb-1.5" style={{ color: G.whiteDim }}>收款账户信息</div>
         <textarea
           value={bankInfo}
           onChange={(e) => setBankInfo(e.target.value)}
           placeholder="请填写银行卡号、开户行、户名等信息"
           rows={3}
-          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none resize-none text-gray-700"
+          className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
+          style={{
+            background: G.whiteFaint,
+            border: `1px solid rgba(201,168,76,0.2)`,
+            color: G.white,
+          }}
         />
       </div>
 
-      <button
-        onClick={() => {
-          const num = Number(amount);
-          if (!amount || isNaN(num) || num <= 0) { alert("请输入有效金额"); return; }
-          if (num > cnyBalance) { alert("提现金额不能超过可用余额"); return; }
-          if (!bankInfo.trim()) { alert("请填写收款账户信息"); return; }
-          setSubmitted(true);
-        }}
-        className="w-full py-3.5 rounded-xl text-sm font-bold text-white active:scale-[0.98] transition-transform"
-        style={{ background: "linear-gradient(135deg, #1677FF 0%, #4096ff 100%)" }}
-      >
-        提交提现申请
-      </button>
+      <GoldBtn onClick={() => {
+        const num = Number(amount);
+        if (!amount || isNaN(num) || num <= 0) { alert("请输入有效金额"); return; }
+        if (num > cnyBalance) { alert("提现金额不能超过可用余额"); return; }
+        if (!bankInfo.trim()) { alert("请填写收款账户信息"); return; }
+        setSubmitted(true);
+      }}>提交提现申请</GoldBtn>
     </div>
   );
 }
 
+// ─── 主页面 ──────────────────────────────────────────────────
 export default function Wallet() {
   const [, setLocation] = useLocation();
   const [modal, setModal] = useState<ModalType>(null);
@@ -271,14 +319,124 @@ export default function Wallet() {
 
   const mask = (v: string) => hideBalance ? "••••••" : v;
 
-  return (
-    <div className="min-h-screen" style={{ background: "#F5F7FA" }}>
-
-      {/* ── 顶部 Hero（深蓝渐变） ── */}
+  // 账户卡片通用渲染
+  const AccountCard = ({
+    icon, label, balance: bal, unit, subLine,
+    txPath, onRefresh, onRecharge, onWithdraw,
+    txList, isUsdt,
+  }: {
+    icon: string; label: string; balance: string; unit: string; subLine?: React.ReactNode;
+    txPath: string; onRefresh: () => void; onRecharge: () => void; onWithdraw: () => void;
+    txList: React.ReactNode; isUsdt: boolean;
+  }) => (
+    <div
+      className="rounded-2xl overflow-hidden"
+      style={{
+        background: G.card,
+        border: `1px solid ${G.cardBorder}`,
+        boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
+      }}
+    >
+      {/* 顶部金线 */}
       <div
-        className="relative px-5 pt-12 pb-8"
+        className="h-px"
         style={{
-          background: "linear-gradient(145deg, #0f2460 0%, #1a3a8f 50%, #1e4fd8 100%)",
+          background: `linear-gradient(90deg, transparent 5%, ${G.gold} 40%, ${G.goldLight} 60%, transparent 95%)`,
+        }}
+      />
+      <div className="p-5">
+        {/* 标题行 */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-2.5">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
+              style={{
+                background: `radial-gradient(circle at 35% 35%, ${G.goldLight} 0%, ${G.gold} 50%, #6b4e0a 100%)`,
+                boxShadow: `0 2px 8px rgba(201,168,76,0.4)`,
+                color: "#000",
+              }}
+            >{icon}</div>
+            <span className="text-sm font-semibold tracking-wide" style={{ color: G.goldLight }}>{label}</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <button
+              onClick={() => setLocation(txPath)}
+              className="flex items-center space-x-0.5 px-2.5 h-7 rounded-full text-xs font-medium"
+              style={{ background: G.whiteFaint, color: G.goldDim }}
+            >
+              <span>明细</span>
+              <ChevronRight className="w-3 h-3" />
+            </button>
+            <button
+              onClick={onRefresh}
+              className="w-7 h-7 rounded-full flex items-center justify-center"
+              style={{ background: G.whiteFaint }}
+            >
+              <RefreshCw className="w-3.5 h-3.5" style={{ color: G.gold }} />
+            </button>
+          </div>
+        </div>
+
+        {/* 余额 */}
+        <div className="mb-1">
+          <div className="flex items-baseline space-x-2">
+            <span
+              className="tabular-nums font-bold"
+              style={{
+                fontSize: "2rem",
+                lineHeight: 1.1,
+                color: G.goldLight,
+                textShadow: "0 0 20px rgba(245,215,142,0.25)",
+              }}
+            >{bal}</span>
+            <span className="text-sm font-medium" style={{ color: G.goldDim }}>{unit}</span>
+          </div>
+        </div>
+        {subLine && <div className="mb-4">{subLine}</div>}
+
+        {/* 操作按钮 */}
+        <div className="grid grid-cols-2 gap-2.5 mb-1">
+          <button
+            onClick={onRecharge}
+            className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-transform"
+            style={{
+              background: `linear-gradient(135deg, ${G.gold} 0%, ${G.goldLight} 50%, ${G.gold} 100%)`,
+              boxShadow: "0 4px 14px rgba(201,168,76,0.35)",
+              color: "#000",
+            }}
+          >
+            <ArrowDownCircle className="w-4 h-4" />
+            <span>充值</span>
+          </button>
+          <button
+            onClick={onWithdraw}
+            className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-transform"
+            style={{
+              background: "transparent",
+              border: `1px solid ${G.gold}`,
+              color: G.goldLight,
+            }}
+          >
+            <ArrowUpCircle className="w-4 h-4" />
+            <span>提现</span>
+          </button>
+        </div>
+
+        {/* 流水 */}
+        {txList}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen" style={{ background: G.bg }}>
+
+      {/* ── Hero 顶部（深黑金渐变） ── */}
+      <div
+        className="relative px-5 pt-12 pb-10"
+        style={{
+          background: "linear-gradient(160deg, #0d0d0d 0%, #1a1500 60%, #0d0d0d 100%)",
+          borderBottom: `1px solid ${G.cardBorder}`,
         }}
       >
         {/* 导航行 */}
@@ -286,261 +444,157 @@ export default function Wallet() {
           <button
             onClick={() => setLocation("/")}
             className="w-9 h-9 rounded-full flex items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.12)" }}
+            style={{ background: G.whiteFaint, border: `1px solid ${G.cardBorder}` }}
           >
-            <ArrowLeft className="w-5 h-5 text-white" />
+            <ArrowLeft className="w-5 h-5" style={{ color: G.goldLight }} />
           </button>
-          <span className="text-base font-semibold text-white tracking-wide">我的钱包</span>
+          <span className="text-base font-semibold tracking-widest" style={{ color: G.goldLight }}>
+            我的钱包
+          </span>
           <button
             onClick={() => setHideBalance((v) => !v)}
             className="w-9 h-9 rounded-full flex items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.12)" }}
+            style={{ background: G.whiteFaint, border: `1px solid ${G.cardBorder}` }}
           >
             {hideBalance
-              ? <EyeOff className="w-4 h-4 text-white opacity-70" />
-              : <Eye className="w-4 h-4 text-white opacity-70" />
+              ? <EyeOff className="w-4 h-4" style={{ color: G.gold }} />
+              : <Eye className="w-4 h-4" style={{ color: G.gold }} />
             }
           </button>
         </div>
 
         {/* 总资产 */}
         <div className="text-center">
-          <div className="text-sm text-white/50 mb-2">总资产（折合人民币）</div>
+          <div className="text-xs mb-2 tracking-widest" style={{ color: G.goldDim }}>
+            总资产（折合人民币）
+          </div>
           <div className="flex items-baseline justify-center space-x-1 mb-1">
-            <span className="text-2xl font-light text-white/80">¥</span>
-            <span className="text-5xl font-bold text-white tabular-nums tracking-tight">
+            <span className="text-2xl font-light" style={{ color: G.goldDim }}>¥</span>
+            <span
+              className="tabular-nums font-bold tracking-tight"
+              style={{ fontSize: "2.8rem", lineHeight: 1, color: G.goldLight }}
+            >
               {mask(totalCny.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
             </span>
           </div>
           {!hideBalance && (
             <div className="flex items-center justify-center space-x-3 mt-3">
               <div className="flex items-center space-x-1.5">
-                <div className="w-2 h-2 rounded-full" style={{ background: "#F0B90B" }} />
-                <span className="text-xs text-white/50">USDT ≈ ¥{usdtToCny.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: G.gold }} />
+                <span className="text-xs" style={{ color: G.goldDim }}>
+                  USDT ≈ ¥{usdtToCny.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
               </div>
-              <div className="w-px h-3 bg-white/20" />
+              <div className="w-px h-3" style={{ background: G.cardBorder }} />
               <div className="flex items-center space-x-1.5">
-                <div className="w-2 h-2 rounded-full" style={{ background: "#1677FF" }} />
-                <span className="text-xs text-white/50">CNY ¥{cnyBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: G.goldLight }} />
+                <span className="text-xs" style={{ color: G.goldDim }}>
+                  CNY ¥{cnyBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
               </div>
             </div>
           )}
         </div>
-
-        {/* 底部圆角过渡 */}
-        <div
-          className="absolute bottom-0 left-0 right-0 h-6 rounded-t-none"
-          style={{ background: "#F5F7FA", borderRadius: "24px 24px 0 0", marginBottom: "-1px" }}
-        />
       </div>
 
-      {/* ── 账户卡片区 ── */}
-      <div className="px-4 pb-24 space-y-3 -mt-1">
+      {/* ── 账户卡片 ── */}
+      <div className="px-4 pt-4 pb-24 space-y-3">
 
-        {/* USDT 账户卡片 */}
-        <div
-          className="bg-white rounded-2xl overflow-hidden"
-          style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.06)" }}
-        >
-          {/* 左侧色条 */}
-          <div className="flex">
-            <div className="w-1 flex-shrink-0 rounded-l-2xl" style={{ background: "#F0B90B" }} />
-            <div className="flex-1 p-4">
-              {/* 标题行 */}
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-2.5">
+        {/* USDT */}
+        <AccountCard
+          icon="$"
+          label="USDT 账户"
+          balance={mask(balance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
+          unit="USDT"
+          subLine={!hideBalance && (
+            <div className="flex items-center space-x-1 mt-0.5" style={{ color: G.goldDim }}>
+              <TrendingUp className="w-3 h-3" />
+              <span className="text-xs">≈ ¥{usdtToCny.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 人民币</span>
+            </div>
+          )}
+          txPath="/wallet/transactions"
+          onRefresh={() => balanceQuery.refetch()}
+          onRecharge={() => setModal("recharge")}
+          onWithdraw={() => setModal("withdraw")}
+          isUsdt={true}
+          txList={
+            recentUsdtTx.length > 0 ? (
+              <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${G.divider}` }}>
+                {recentUsdtTx.map((tx, idx) => (
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                    style={{ background: "#FFF8E1", color: "#F0B90B", border: "1.5px solid #F0B90B" }}
-                  >$</div>
-                  <span className="text-sm font-semibold text-gray-700">USDT 账户</span>
-                </div>
-                <div className="flex items-center space-x-1.5">
-                  <button
-                    onClick={() => setLocation("/wallet/transactions")}
-                    className="flex items-center space-x-0.5 px-2.5 h-7 rounded-full text-xs font-medium text-gray-500 bg-gray-100"
+                    key={tx.id}
+                    className="flex items-center justify-between py-2"
+                    style={{ borderBottom: idx < recentUsdtTx.length - 1 ? `1px solid ${G.divider}` : "none" }}
                   >
-                    <span>明细</span>
-                    <ChevronRight className="w-3 h-3" />
-                  </button>
-                  <button
-                    onClick={() => balanceQuery.refetch()}
-                    className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5 text-gray-400" />
-                  </button>
-                </div>
-              </div>
-
-              {/* 余额 */}
-              <div className="mb-3">
-                <div className="flex items-baseline space-x-1.5">
-                  <span className="text-3xl font-bold tabular-nums text-gray-800">
-                    {mask(balance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
-                  </span>
-                  <span className="text-sm text-gray-400 font-medium">USDT</span>
-                </div>
-                {!hideBalance && (
-                  <div className="text-xs text-gray-400 mt-0.5 flex items-center space-x-1">
-                    <TrendingUp className="w-3 h-3" />
-                    <span>≈ ¥{usdtToCny.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 人民币</span>
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: G.white }}>
+                        {tx.type === "recharge" ? "充值" : tx.type === "withdraw" ? "提现" : tx.type === "reward" ? "奖励" : "扣费"}
+                      </div>
+                      <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(tx.createdAt)}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-xs font-bold tabular-nums"
+                        style={{ color: (tx.type === "recharge" || tx.type === "reward") ? G.green : G.red }}>
+                        {(tx.type === "recharge" || tx.type === "reward") ? "+" : "-"}
+                        {mask(tx.amount.toFixed(2))} USDT
+                      </div>
+                      <div className="flex items-center justify-end space-x-0.5 mt-0.5">
+                        <StatusIcon status={tx.status} />
+                        <span className="text-xs" style={{ color: G.whiteDim }}>{statusText(tx.status)}</span>
+                      </div>
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
+            ) : null
+          }
+        />
 
-              {/* 操作按钮 */}
-              <div className="grid grid-cols-2 gap-2.5 mb-3">
-                <button
-                  onClick={() => setModal("recharge")}
-                  className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-semibold active:scale-[0.97] transition-transform"
-                  style={{ background: "#F0B90B", color: "#000" }}
-                >
-                  <ArrowDownCircle className="w-4 h-4" />
-                  <span>充值</span>
-                </button>
-                <button
-                  onClick={() => setModal("withdraw")}
-                  className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-semibold border active:scale-[0.97] transition-transform"
-                  style={{ borderColor: "#F0B90B", color: "#d4a017", background: "#FFFDE7" }}
-                >
-                  <ArrowUpCircle className="w-4 h-4" />
-                  <span>提现</span>
-                </button>
-              </div>
-
-              {/* 最近流水 */}
-              {recentUsdtTx.length > 0 && (
-                <div className="border-t border-gray-100 pt-3 space-y-0">
-                  {recentUsdtTx.map((tx, idx) => (
-                    <div
-                      key={tx.id}
-                      className="flex items-center justify-between py-2"
-                      style={{ borderBottom: idx < recentUsdtTx.length - 1 ? "1px solid #f3f4f6" : "none" }}
-                    >
-                      <div>
-                        <div className="text-xs font-medium text-gray-600">
-                          {tx.type === "recharge" ? "充值" : tx.type === "withdraw" ? "提现" : tx.type === "reward" ? "奖励" : "扣费"}
-                        </div>
-                        <div className="text-xs text-gray-400">{formatTime(tx.createdAt)}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs font-bold tabular-nums"
-                          style={{ color: (tx.type === "recharge" || tx.type === "reward") ? "#10b981" : "#ef4444" }}>
-                          {(tx.type === "recharge" || tx.type === "reward") ? "+" : "-"}
-                          {mask(tx.amount.toFixed(2))} USDT
-                        </div>
-                        <div className="flex items-center justify-end space-x-0.5 mt-0.5">
-                          <StatusIcon status={tx.status} />
-                          <span className="text-xs text-gray-400">{statusText(tx.status)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* CNY 账户卡片 */}
-        <div
-          className="bg-white rounded-2xl overflow-hidden"
-          style={{ boxShadow: "0 2px 16px rgba(0,0,0,0.06)" }}
-        >
-          <div className="flex">
-            <div className="w-1 flex-shrink-0 rounded-l-2xl" style={{ background: "#1677FF" }} />
-            <div className="flex-1 p-4">
-              {/* 标题行 */}
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-2.5">
+        {/* CNY */}
+        <AccountCard
+          icon="¥"
+          label="人民币账户"
+          balance={mask(cnyBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
+          unit="CNY"
+          subLine={!hideBalance && (
+            <div className="text-xs mt-0.5" style={{ color: G.goldDim }}>人民币本位，无需折算</div>
+          )}
+          txPath="/wallet/cny-transactions"
+          onRefresh={() => cnyBalanceQuery.refetch()}
+          onRecharge={() => setModal("cny-recharge")}
+          onWithdraw={() => setModal("cny-withdraw")}
+          isUsdt={false}
+          txList={
+            recentCnyTx.length > 0 ? (
+              <div className="mt-4 pt-3" style={{ borderTop: `1px solid ${G.divider}` }}>
+                {recentCnyTx.map((tx, idx) => (
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                    style={{ background: "#E6F4FF", color: "#1677FF", border: "1.5px solid #1677FF" }}
-                  >¥</div>
-                  <span className="text-sm font-semibold text-gray-700">人民币账户</span>
-                </div>
-                <div className="flex items-center space-x-1.5">
-                  <button
-                    onClick={() => setLocation("/wallet/cny-transactions")}
-                    className="flex items-center space-x-0.5 px-2.5 h-7 rounded-full text-xs font-medium text-gray-500 bg-gray-100"
+                    key={tx.id}
+                    className="flex items-center justify-between py-2"
+                    style={{ borderBottom: idx < recentCnyTx.length - 1 ? `1px solid ${G.divider}` : "none" }}
                   >
-                    <span>明细</span>
-                    <ChevronRight className="w-3 h-3" />
-                  </button>
-                  <button
-                    onClick={() => cnyBalanceQuery.refetch()}
-                    className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5 text-gray-400" />
-                  </button>
-                </div>
-              </div>
-
-              {/* 余额 */}
-              <div className="mb-3">
-                <div className="flex items-baseline space-x-1.5">
-                  <span className="text-3xl font-bold tabular-nums text-gray-800">
-                    {mask(cnyBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
-                  </span>
-                  <span className="text-sm text-gray-400 font-medium">CNY</span>
-                </div>
-                {!hideBalance && (
-                  <div className="text-xs text-gray-400 mt-0.5">人民币本位，无需折算</div>
-                )}
-              </div>
-
-              {/* 操作按钮 */}
-              <div className="grid grid-cols-2 gap-2.5 mb-3">
-                <button
-                  onClick={() => setModal("cny-recharge")}
-                  className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-semibold text-white active:scale-[0.97] transition-transform"
-                  style={{ background: "#1677FF" }}
-                >
-                  <ArrowDownCircle className="w-4 h-4" />
-                  <span>充值</span>
-                </button>
-                <button
-                  onClick={() => setModal("cny-withdraw")}
-                  className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-semibold border active:scale-[0.97] transition-transform"
-                  style={{ borderColor: "#1677FF", color: "#1677FF", background: "#E6F4FF" }}
-                >
-                  <ArrowUpCircle className="w-4 h-4" />
-                  <span>提现</span>
-                </button>
-              </div>
-
-              {/* CNY 最近流水 */}
-              {recentCnyTx.length > 0 ? (
-                <div className="border-t border-gray-100 pt-3 space-y-0">
-                  {recentCnyTx.map((tx, idx) => (
-                    <div
-                      key={tx.id}
-                      className="flex items-center justify-between py-2"
-                      style={{ borderBottom: idx < recentCnyTx.length - 1 ? "1px solid #f3f4f6" : "none" }}
-                    >
-                      <div>
-                        <div className="text-xs font-medium text-gray-600">
-                          {tx.note || (tx.isIn ? "充值" : "提现")}
-                        </div>
-                        <div className="text-xs text-gray-400">{formatTime(tx.createdAt)}</div>
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: G.white }}>
+                        {tx.note || (tx.isIn ? "充值" : "提现")}
                       </div>
-                      <div
-                        className="text-xs font-bold tabular-nums"
-                        style={{ color: tx.isIn ? "#10b981" : "#ef4444" }}
-                      >
-                        {tx.isIn ? "+" : "-"}{mask(tx.amount.toFixed(2))} CNY
-                      </div>
+                      <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(tx.createdAt)}</div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="border-t border-gray-100 pt-3 text-center text-xs text-gray-300 py-3">
-                  暂无交易记录
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+                    <div
+                      className="text-xs font-bold tabular-nums"
+                      style={{ color: tx.isIn ? G.green : G.red }}
+                    >
+                      {tx.isIn ? "+" : "-"}{mask(tx.amount.toFixed(2))} CNY
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 pt-3 text-center text-xs" style={{ borderTop: `1px solid ${G.divider}`, color: G.whiteDim }}>
+                暂无交易记录
+              </div>
+            )
+          }
+        />
 
       </div>
 
