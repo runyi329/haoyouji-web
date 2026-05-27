@@ -45,12 +45,10 @@ export default function AfFeeDetail() {
     { enabled: !!ledgerId }
   );
 
-  // 计算所有买单管理费（不含已撤单）
   const feeItems = ((orders as any[]) ?? [])
     .filter((o: any) => o.side === 'buy' && o.status === 'completed')
     .map(calcFeeItem);
 
-  // 按用户分组，保存 nickname 和 username
   const userMap = new Map<string, { userId: string; nickname: string; username: string; orders: ReturnType<typeof calcFeeItem>[] }>();
   for (const item of feeItems) {
     const uid = String(item.userId || item.username || 'unknown');
@@ -62,7 +60,6 @@ export default function AfFeeDetail() {
     userMap.get(uid)!.orders.push(item);
   }
 
-  // 每个用户汇总
   const userGroups = Array.from(userMap.values()).map(u => {
     const ongoingFee = u.orders.filter(o => o.feeType === 'ongoing').reduce((s, o) => s + o.totalFee, 0);
     const settledFee = u.orders.filter(o => o.feeType === 'settled').reduce((s, o) => s + o.totalFee, 0);
@@ -72,16 +69,11 @@ export default function AfFeeDetail() {
     return { ...u, ongoingFee, settledFee, totalFee, ongoingCount, settledCount };
   }).sort((a, b) => b.totalFee - a.totalFee);
 
-  // 筛选后的用户组
   const filteredGroups = userGroups.map(g => ({
     ...g,
-    orders: g.orders.filter(o => {
-      if (feeFilter === 'all') return true;
-      return o.feeType === feeFilter;
-    }),
+    orders: g.orders.filter(o => feeFilter === 'all' || o.feeType === feeFilter),
   })).filter(g => g.orders.length > 0);
 
-  // 总计
   const totalOngoing = feeItems.filter(f => f.feeType === 'ongoing').reduce((s, f) => s + f.totalFee, 0);
   const totalSettled = feeItems.filter(f => f.feeType === 'settled').reduce((s, f) => s + f.totalFee, 0);
   const totalAll = totalOngoing + totalSettled;
@@ -89,203 +81,193 @@ export default function AfFeeDetail() {
   const toggleUser = (uid: string) => {
     setExpandedUsers(prev => {
       const next = new Set(prev);
-      if (next.has(uid)) next.delete(uid);
-      else next.add(uid);
+      if (next.has(uid)) next.delete(uid); else next.add(uid);
       return next;
     });
   };
 
-  // 蓝色主题色（与账本一致）
-  const BLUE = '#1A56DB';
-  const BLUE_DARK = '#1e40af';
-
   return (
-    <div className="min-h-screen pb-8" style={{ backgroundColor: '#f0f4ff' }}>
-      {/* 顶部蓝色区域 */}
-      <div style={{ background: `linear-gradient(135deg, ${BLUE_DARK} 0%, ${BLUE} 100%)` }}>
+    <div className="min-h-screen pb-10" style={{ background: '#f5f7fa' }}>
+
+      {/* ── 顶部蓝色区域 ── */}
+      <div style={{ background: 'linear-gradient(135deg,#1e3a8a 0%,#2563eb 100%)' }}>
         {/* 导航栏 */}
-        <div className="flex items-center px-4 pt-4 pb-2">
+        <div className="flex items-center px-4 pt-5 pb-1">
           <button
             onClick={() => setLocation(`/ledger/${ledgerId}`)}
             className="w-8 h-8 flex items-center justify-center rounded-full mr-3"
-            style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+            style={{ background: 'rgba(255,255,255,0.18)' }}
           >
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
-          <h1 className="text-base font-semibold text-white">管理费明细</h1>
+          <span className="text-white font-semibold text-base">管理费明细</span>
         </div>
 
-        {/* 汇总卡片 */}
-        <div className="px-4 pb-5 pt-2">
-          <p className="text-xs text-white/60 mb-1">账本管理费总计</p>
-          <div className="flex items-baseline gap-1.5 mb-4">
-            <span className="text-3xl font-bold text-white">{totalAll.toFixed(2)}</span>
-            <span className="text-sm text-white/60">U</span>
+        {/* 总计大数字 */}
+        <div className="px-5 pt-4 pb-2">
+          <p className="text-white/60 text-xs mb-1">账本管理费总计</p>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-4xl font-extrabold text-white tracking-tight">{totalAll.toFixed(2)}</span>
+            <span className="text-sm text-white/50 font-normal">U</span>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            {/* 进行中 */}
-            <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-              <p className="text-xs text-white/60 mb-1">进行中</p>
-              <p className="text-lg font-bold text-amber-300">{totalOngoing.toFixed(2)} U</p>
-              <p className="text-[10px] text-white/40 mt-0.5">{feeItems.filter(f => f.feeType === 'ongoing').length} 笔持仓</p>
-            </div>
-            {/* 已结清 */}
-            <div className="rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)' }}>
-              <p className="text-xs text-white/60 mb-1">已结清</p>
-              <p className="text-lg font-bold text-green-300">{totalSettled.toFixed(2)} U</p>
-              <p className="text-[10px] text-white/40 mt-0.5">{feeItems.filter(f => f.feeType === 'settled').length} 笔已卖出</p>
-            </div>
+        </div>
+
+        {/* 进行中 / 已结清 两列 */}
+        <div className="grid grid-cols-2 gap-3 px-4 pb-5 pt-3">
+          <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+            <p className="text-white/55 text-xs mb-1">进行中</p>
+            <p className="text-xl font-bold text-amber-300 leading-tight">{totalOngoing.toFixed(2)}<span className="text-sm font-normal ml-1">U</span></p>
+            <p className="text-white/35 text-[10px] mt-1">{feeItems.filter(f => f.feeType === 'ongoing').length} 笔持仓</p>
+          </div>
+          <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+            <p className="text-white/55 text-xs mb-1">已结清</p>
+            <p className="text-xl font-bold text-emerald-300 leading-tight">{totalSettled.toFixed(2)}<span className="text-sm font-normal ml-1">U</span></p>
+            <p className="text-white/35 text-[10px] mt-1">{feeItems.filter(f => f.feeType === 'settled').length} 笔已卖出</p>
           </div>
         </div>
       </div>
 
-      {/* 筛选Tab */}
-      <div className="px-4 py-3 flex gap-2 bg-white border-b border-gray-100 sticky top-0 z-10">
+      {/* ── 筛选 Tab ── */}
+      <div className="bg-white border-b border-gray-100 px-4 py-2.5 flex gap-2 sticky top-0 z-10">
         {([
           { key: 'all' as const, label: `全部 ${userGroups.length} 人` },
-          { key: 'ongoing' as const, label: `进行中` },
-          { key: 'settled' as const, label: `已结清` },
+          { key: 'ongoing' as const, label: '进行中' },
+          { key: 'settled' as const, label: '已结清' },
         ]).map(tab => (
           <button
             key={tab.key}
             onClick={() => setFeeFilter(tab.key)}
-            className="px-3 py-1 rounded-full text-xs font-medium transition-colors"
-            style={
-              feeFilter === tab.key
-                ? { backgroundColor: BLUE, color: '#fff' }
-                : { backgroundColor: '#f0f4ff', color: '#6b7280' }
-            }
+            className="px-3 py-1 rounded-full text-xs font-medium transition-all"
+            style={feeFilter === tab.key
+              ? { background: '#2563eb', color: '#fff' }
+              : { background: '#eff2f9', color: '#6b7280' }}
           >
             {tab.label}
           </button>
         ))}
       </div>
 
-      {/* 用户分组列表 */}
-      <div className="px-3 pt-3 space-y-2">
+      {/* ── 用户列表 ── */}
+      <div className="px-3 pt-3 space-y-2.5">
         {isLoading ? (
-          <div className="text-center py-12 text-gray-400 text-sm">加载中...</div>
+          <div className="text-center py-16 text-gray-400 text-sm">加载中…</div>
         ) : filteredGroups.length === 0 ? (
-          <div className="text-center py-12 text-gray-400 text-sm">暂无记录</div>
-        ) : (
-          filteredGroups.map(group => {
-            const isExpanded = expandedUsers.has(group.userId);
-            const displayOngoing = group.orders.filter(o => o.feeType === 'ongoing').reduce((s, o) => s + o.totalFee, 0);
-            const displaySettled = group.orders.filter(o => o.feeType === 'settled').reduce((s, o) => s + o.totalFee, 0);
-            const displayTotal = displayOngoing + displaySettled;
-            // 头像首字母：优先用昵称，否则用用户名
-            const avatarChar = (group.nickname || group.username || '?').charAt(0).toUpperCase();
-            return (
-              <div key={group.userId} className="bg-white rounded-2xl overflow-hidden shadow-sm border border-blue-50">
-                {/* 用户行 */}
-                <button
-                  className="w-full px-4 py-3 flex items-center justify-between active:bg-blue-50"
-                  onClick={() => toggleUser(group.userId)}
-                >
-                  <div className="flex items-center gap-2.5">
-                    {/* 头像 */}
-                    <div
-                      className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold text-white"
-                      style={{ background: `linear-gradient(135deg, ${BLUE_DARK}, ${BLUE})` }}
-                    >
-                      {avatarChar}
-                    </div>
-                    <div className="text-left">
-                      {/* 昵称（用户名）格式 */}
-                      <div className="flex items-baseline gap-1 flex-wrap">
-                        <span className="text-sm font-semibold text-gray-800">{group.nickname}</span>
-                        {group.username && group.username !== group.nickname && (
-                          <span className="text-xs text-gray-400">({group.username})</span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-gray-400 mt-0.5">
-                        {group.orders.length} 笔订单
-                        {group.ongoingCount > 0 && <span className="text-amber-500 ml-1">· 进行中 {group.ongoingCount}</span>}
-                        {group.settledCount > 0 && <span className="text-green-500 ml-1">· 已结清 {group.settledCount}</span>}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {/* 右侧三行数字，标签固定宽度，数字右对齐 */}
-                    <div className="text-right" style={{ minWidth: 90 }}>
-                      <div className="flex justify-between items-baseline gap-1">
-                        <span className="text-[10px] text-gray-400 w-10 text-left">总计</span>
-                        <span className="text-sm font-bold text-gray-900">{displayTotal.toFixed(2)} U</span>
-                      </div>
-                      {displayOngoing > 0 && (
-                        <div className="flex justify-between items-baseline gap-1 mt-0.5">
-                          <span className="text-[10px] text-amber-400 w-10 text-left">进行中</span>
-                          <span className="text-xs font-medium text-amber-500">{displayOngoing.toFixed(2)}</span>
-                        </div>
-                      )}
-                      {displaySettled > 0 && (
-                        <div className="flex justify-between items-baseline gap-1 mt-0.5">
-                          <span className="text-[10px] text-green-400 w-10 text-left">已结清</span>
-                          <span className="text-xs font-medium text-green-500">{displaySettled.toFixed(2)}</span>
-                        </div>
-                      )}
-                    </div>
-                    {isExpanded
-                      ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                    }
-                  </div>
-                </button>
+          <div className="text-center py-16 text-gray-400 text-sm">暂无记录</div>
+        ) : filteredGroups.map(group => {
+          const isExpanded = expandedUsers.has(group.userId);
+          const dispOngoing = group.orders.filter(o => o.feeType === 'ongoing').reduce((s, o) => s + o.totalFee, 0);
+          const dispSettled = group.orders.filter(o => o.feeType === 'settled').reduce((s, o) => s + o.totalFee, 0);
+          const dispTotal = dispOngoing + dispSettled;
+          const avatarChar = (group.nickname || group.username || '?').charAt(0).toUpperCase();
 
-                {/* 展开的订单明细 */}
-                {isExpanded && (
-                  <div className="border-t border-blue-50">
-                    {/* 表头 */}
-                    <div
-                      className="grid px-4 py-2 text-[11px] text-gray-400"
-                      style={{ gridTemplateColumns: '2.5fr 1fr 1fr 2fr', backgroundColor: '#f8faff' }}
-                    >
-                      <span>订单号</span>
-                      <span className="text-center">币种</span>
-                      <span className="text-center">天数</span>
-                      <span className="text-right">管理费</span>
-                    </div>
-                    {group.orders.map((item, idx) => (
-                      <div
-                        key={item.id}
-                        className={`grid px-4 py-2.5 items-center ${idx < group.orders.length - 1 ? 'border-b border-gray-50' : ''}`}
-                        style={{ gridTemplateColumns: '2.5fr 1fr 1fr 2fr' }}
-                      >
-                        <div>
-                          <p className="text-[11px] font-mono text-gray-500 leading-tight">{item.orderNo}</p>
-                          <p className="text-[10px] text-gray-400 mt-0.5">
-                            {item.amount} U
-                            {item.isGift && <span className="text-red-400 ml-1">赠</span>}
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <span className="text-xs font-medium text-gray-700">{item.coin}</span>
-                        </div>
-                        <div className="text-center">
-                          <span className="text-xs text-gray-600">{item.holdDays}天</span>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-bold text-gray-900">{item.totalFee.toFixed(4)}</p>
-                          <p className={`text-[10px] mt-0.5 ${item.feeType === 'settled' ? 'text-green-500' : 'text-amber-500'}`}>
-                            {item.feeType === 'settled' ? '已结清' : '进行中'}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                    {/* 该用户小计 */}
-                    <div
-                      className="flex justify-between items-center px-4 py-2.5 border-t"
-                      style={{ backgroundColor: '#eef2ff', borderColor: '#c7d2fe' }}
-                    >
-                      <span className="text-xs font-medium" style={{ color: BLUE }}>小计</span>
-                      <span className="text-sm font-bold" style={{ color: BLUE_DARK }}>{displayTotal.toFixed(4)} U</span>
-                    </div>
+          return (
+            <div key={group.userId} className="bg-white rounded-2xl overflow-hidden shadow-sm">
+
+              {/* ── 用户卡片主体（可点击展开） ── */}
+              <button className="w-full text-left" onClick={() => toggleUser(group.userId)}>
+
+                {/* 第一行：头像 + 姓名 + 箭头 */}
+                <div className="flex items-center px-4 pt-3.5 pb-2">
+                  <div
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0 mr-3"
+                    style={{ background: 'linear-gradient(135deg,#1e3a8a,#2563eb)' }}
+                  >
+                    {avatarChar}
                   </div>
-                )}
-              </div>
-            );
-          })
-        )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-sm font-semibold text-gray-900 leading-tight">{group.nickname}</span>
+                      {group.username && group.username !== group.nickname && (
+                        <span className="text-xs text-gray-400">({group.username})</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      共 {group.orders.length} 笔
+                      {group.ongoingCount > 0 && <span className="text-amber-500 ml-1">· 进行中 {group.ongoingCount}</span>}
+                      {group.settledCount > 0 && <span className="text-emerald-500 ml-1">· 已结清 {group.settledCount}</span>}
+                    </p>
+                  </div>
+                  {isExpanded
+                    ? <ChevronDown className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                    : <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />}
+                </div>
+
+                {/* 第二行：三列数字横排 */}
+                <div className="grid grid-cols-3 border-t border-gray-50 pb-3.5">
+                  {/* 总计 */}
+                  <div className="flex flex-col items-center pt-2.5 px-2">
+                    <span className="text-[10px] text-gray-400 mb-0.5">总计</span>
+                    <span className="text-sm font-bold text-gray-900 leading-tight">{dispTotal.toFixed(2)}</span>
+                    <span className="text-[10px] text-gray-400">U</span>
+                  </div>
+                  {/* 进行中 */}
+                  <div className="flex flex-col items-center pt-2.5 px-2 border-l border-r border-gray-50">
+                    <span className="text-[10px] text-amber-400 mb-0.5">进行中</span>
+                    <span className="text-sm font-bold text-amber-500 leading-tight">
+                      {dispOngoing > 0 ? dispOngoing.toFixed(2) : '—'}
+                    </span>
+                    <span className="text-[10px] text-amber-300">{dispOngoing > 0 ? 'U' : ''}</span>
+                  </div>
+                  {/* 已结清 */}
+                  <div className="flex flex-col items-center pt-2.5 px-2">
+                    <span className="text-[10px] text-emerald-400 mb-0.5">已结清</span>
+                    <span className="text-sm font-bold text-emerald-500 leading-tight">
+                      {dispSettled > 0 ? dispSettled.toFixed(2) : '—'}
+                    </span>
+                    <span className="text-[10px] text-emerald-300">{dispSettled > 0 ? 'U' : ''}</span>
+                  </div>
+                </div>
+              </button>
+
+              {/* ── 展开的订单明细 ── */}
+              {isExpanded && (
+                <div className="border-t border-blue-50">
+                  {/* 表头 */}
+                  <div
+                    className="grid px-4 py-2 text-[11px] text-gray-400"
+                    style={{ gridTemplateColumns: '2.6fr 0.8fr 0.8fr 1.8fr', background: '#f8faff' }}
+                  >
+                    <span>订单号</span>
+                    <span className="text-center">币种</span>
+                    <span className="text-center">天数</span>
+                    <span className="text-right">管理费</span>
+                  </div>
+                  {group.orders.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      className={`grid px-4 py-2.5 items-center ${idx < group.orders.length - 1 ? 'border-b border-gray-50' : ''}`}
+                      style={{ gridTemplateColumns: '2.6fr 0.8fr 0.8fr 1.8fr' }}
+                    >
+                      <div>
+                        <p className="text-[11px] font-mono text-gray-500 leading-tight">{item.orderNo}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">
+                          {item.amount} U{item.isGift && <span className="text-red-400 ml-1">赠</span>}
+                        </p>
+                      </div>
+                      <div className="text-center">
+                        <span className="text-xs font-medium text-gray-700">{item.coin}</span>
+                      </div>
+                      <div className="text-center">
+                        <span className="text-xs text-gray-600">{item.holdDays}天</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-gray-900">{item.totalFee.toFixed(4)}</p>
+                        <p className={`text-[10px] mt-0.5 ${item.feeType === 'settled' ? 'text-emerald-500' : 'text-amber-500'}`}>
+                          {item.feeType === 'settled' ? '已结清' : '进行中'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {/* 小计 */}
+                  <div className="flex justify-between items-center px-4 py-2.5 border-t border-blue-100" style={{ background: '#eff6ff' }}>
+                    <span className="text-xs font-medium text-blue-500">小计</span>
+                    <span className="text-sm font-bold text-blue-700">{dispTotal.toFixed(4)} U</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
