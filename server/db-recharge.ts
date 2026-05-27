@@ -1601,3 +1601,81 @@ export async function deleteFeeRule(id: number): Promise<{ success: boolean }> {
   await conn.execute(`DELETE FROM snt_withdrawal_fee_rules WHERE id = ?`, [id]);
   return { success: true };
 }
+
+// ─────────────────────────────────────────────
+// CNY 子账户：余额查询 & 调账
+// ─────────────────────────────────────────────
+
+/** 获取用户 CNY 余额（users.balance_cny + af_manual_balances 中 [CNY] 标记的记录） */
+export async function getUserCnyBalance(userId: number): Promise<number> {
+  const conn = await getDbConnection();
+  if (!conn) return 0;
+  const [rows] = await conn.execute(
+    `SELECT
+       (SELECT COALESCE(balance_cny, 0) FROM users WHERE id = ?) AS baseCny,
+       (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ? AND note LIKE '[CNY]%') AS manualCny`,
+    [userId, userId]
+  ) as any;
+  const row = Array.isArray(rows) ? rows[0] : rows;
+  const base = parseFloat(row?.baseCny?.toString() || '0');
+  const manual = parseFloat(row?.manualCny?.toString() || '0');
+  return base + manual;
+}
+
+/** 获取用户 CNY 流水记录（af_manual_balances WHERE note LIKE '[CNY]%'） */
+export async function getUserCnyHistory(userId: number, limit = 50): Promise<any[]> {
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  const [rows] = await conn.execute(
+    `SELECT id, user_id, amount, note, created_at FROM af_manual_balances
+     WHERE user_id = ? AND note LIKE '[CNY]%'
+     ORDER BY created_at DESC LIMIT ?`,
+    [userId, limit]
+  ) as any;
+  return Array.isArray(rows) ? rows : [];
+}
+
+/** 管理员手动调整 CNY 余额（写入 af_manual_balances，note 以 [CNY] 开头） */
+export async function adminAdjustCnyBalance(params: {
+  userId: number;
+  amount: number;       // 正数=入账，负数=出账
+  note: string;
+  operatorId: number;
+}): Promise<{ success: boolean }> {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  // 获取最近一个 ledger_id（复用现有逻辑，CNY 调账也挂在账本下）
+  const [ledgerRows] = await conn.execute(
+    `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
+    [params.userId]
+  ) as any;
+  const ledgerId = (Array.isArray(ledgerRows) ? ledgerRows[0]?.ledger_id : null) ?? 37;
+  const noteText = `[CNY]${params.note || (params.amount > 0 ? '充值' : '提现')}`;
+  await conn.execute(
+    `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
+    [ledgerId, params.userId, params.amount, noteText]
+  );
+  return { success: true };
+}
+
+/** 管理员：获取所有用户的 CNY 余额列表 */
+export async function getAllUsersCnyBalance(): Promise<any[]> {
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  const [rows] = await conn.execute(
+    `SELECT
+       u.id,
+       u.name,
+       u.username,
+       COALESCE(u.balance_cny, 0) + COALESCE(m.manualCny, 0) AS cnyBalance
+     FROM users u
+     LEFT JOIN (
+       SELECT user_id, SUM(amount) AS manualCny
+       FROM af_manual_balances
+       WHERE note LIKE '[CNY]%'
+       GROUP BY user_id
+     ) m ON m.user_id = u.id
+     ORDER BY cnyBalance DESC`
+  ) as any;
+  return Array.isArray(rows) ? rows : [];
+}

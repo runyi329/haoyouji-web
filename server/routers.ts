@@ -1559,6 +1559,55 @@ ${klinesSummary}
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') throw new Error('无权限');
         return await dbRecharge.deleteFeeRule(input.id);
       }),
+
+    // ─── CNY 子账户 ───
+    // 获取当前用户 CNY 余额
+    getCnyBalance: protectedProcedure
+      .input(z.object({ viewAsUserId: z.number().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        const targetUserId = input?.viewAsUserId || ctx.user.id;
+        return await dbRecharge.getUserCnyBalance(targetUserId);
+      }),
+
+    // 获取 CNY 流水记录
+    getCnyHistory: protectedProcedure
+      .input(z.object({ limit: z.number().optional(), viewAsUserId: z.number().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        const targetUserId = input?.viewAsUserId || ctx.user.id;
+        return await dbRecharge.getUserCnyHistory(targetUserId, input?.limit ?? 50);
+      }),
+
+    // 管理员手动调整 CNY 余额（充値/提现）
+    adminAdjustCny: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        amount: z.number(),   // 正数=入账，负数=出账
+        note: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') throw new Error('无权限');
+        return await dbRecharge.adminAdjustCnyBalance({
+          userId: input.userId,
+          amount: input.amount,
+          note: input.note || '',
+          operatorId: ctx.user.id,
+        });
+      }),
+
+    // 管理员：获取所有用户CNY余额列表
+    adminGetAllUsersCnyBalance: protectedProcedure
+      .query(async ({ ctx }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') throw new Error('无权限');
+        return await dbRecharge.getAllUsersCnyBalance();
+      }),
+
+    // 管理员：获取指定用户CNY流水
+    adminGetUserCnyHistory: protectedProcedure
+      .input(z.object({ userId: z.number(), limit: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') throw new Error('无权限');
+        return await dbRecharge.getUserCnyHistory(input.userId, input.limit ?? 20);
+      }),
   }),
 
   // 卡券系统
