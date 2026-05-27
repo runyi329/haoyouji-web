@@ -314,7 +314,7 @@ export default function AfOrderManage() {
       {/* 顶部导航 */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center px-4 py-3">
-          <button onClick={() => setLocation(`/ledger/${ledgerId}/settings`)} className="mr-3">
+          <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="mr-3">
             <ArrowLeft className="w-6 h-6 text-gray-700" />
           </button>
           <h1 className="text-lg font-semibold">订单管理</h1>
