@@ -1540,13 +1540,13 @@ export default function PositionCalc() {
                     </svg>
                   </div>
                 )}
-                {/* 右侧数量标注：有挂单时显示紫色，否则白色 */}
+                {/* 右侧数量标注：始终白色，不随挂单状态变色 */}
                 <div className="absolute top-0 h-full flex items-center pointer-events-none" style={{ zIndex: 10, right: isNearCurrent ? '22px' : '12px' }}>
                     <span
                       className="text-[11px] font-bold tabular-nums"
                       style={{
-                        color: hasPending ? '#b06aff' : 'rgba(255,255,255,0.75)',
-                        textShadow: hasPending ? '0 1px 4px rgba(0,0,0,0.8)' : '0 1px 4px rgba(0,0,0,1)',
+                        color: 'rgba(255,255,255,0.75)',
+                        textShadow: '0 1px 4px rgba(0,0,0,1)',
                       }}
                     >
                       <span>
