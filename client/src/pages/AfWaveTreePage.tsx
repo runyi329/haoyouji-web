@@ -11,6 +11,9 @@ type TreeUser = {
   name: string;
   invitedByUserId: number | null;
   payoutRatio: number; // 邀请名单里的本人拨比（source=self, beneficiary=self）
+  holdingBTC: number;
+  holdingETH: number;
+  holdingSOL: number;
 };
 
 function getDirectEdgeRatio(
@@ -28,19 +31,50 @@ type PayoutRelation = {
   ratio: number;
 };
 
+// 递归累计某节点及其所有下级的持仓之和
+function getSubtreeHolding(
+  userId: number,
+  allUsers: TreeUser[],
+): { BTC: number; ETH: number; SOL: number } {
+  const user = allUsers.find((u) => u.id === userId);
+  if (!user) return { BTC: 0, ETH: 0, SOL: 0 };
+  const children = allUsers.filter((u) => u.invitedByUserId === userId);
+  let btc = user.holdingBTC;
+  let eth = user.holdingETH;
+  let sol = user.holdingSOL;
+  for (const child of children) {
+    const sub = getSubtreeHolding(child.id, allUsers);
+    btc += sub.BTC;
+    eth += sub.ETH;
+    sol += sub.SOL;
+  }
+  return { BTC: btc, ETH: eth, SOL: sol };
+}
+
 // ===== 紧凑节点卡片 =====
 function FamilyCard({
   user,
+  allUsers,
   yjhUserId,
   ledgerId,
   onNavigate,
 }: {
   user: TreeUser;
+  allUsers: TreeUser[];
   yjhUserId: number;
   ledgerId: number;
   onNavigate: (path: string) => void;
 }) {
   const isYJH = user.id === yjhUserId;
+
+  // 子树累计持仓（含本人）
+  const subtree = useMemo(
+    () => getSubtreeHolding(user.id, allUsers),
+    [user.id, allUsers],
+  );
+
+  const hasCoin = subtree.BTC > 0 || subtree.ETH > 0 || subtree.SOL > 0;
+
   return (
     <div
       style={{
@@ -53,7 +87,7 @@ function FamilyCard({
         borderRadius: 4,
         padding: "2px 4px",
         minWidth: 36,
-        maxWidth: 56,
+        maxWidth: 64,
         cursor: "pointer",
         boxShadow: isYJH
           ? "0 1px 3px rgba(198,40,40,0.18)"
@@ -62,12 +96,13 @@ function FamilyCard({
       }}
       onClick={() => onNavigate(`/ledger/${ledgerId}/af-ratio/${user.id}`)}
     >
+      {/* 名字 */}
       <span
         style={{
           fontSize: 9,
           fontWeight: 600,
           color: isYJH ? "#C62828" : "#333",
-          maxWidth: 52,
+          maxWidth: 60,
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -76,7 +111,39 @@ function FamilyCard({
       >
         {isYJH ? "YJH" : user.name || "未知"}
       </span>
-      {/* 名字下方：邀请名单里的本人拨比 */}
+
+      {/* 币种持仓行（名字下方、百分比上方） */}
+      {hasCoin && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 2,
+            flexWrap: "wrap",
+            justifyContent: "center",
+            lineHeight: "11px",
+          }}
+        >
+          {subtree.ETH > 0 && (
+            <span style={{ fontSize: 7, fontWeight: 700, color: "#1565C0", whiteSpace: "nowrap" }}>
+              E:{subtree.ETH.toFixed(2)}
+            </span>
+          )}
+          {subtree.BTC > 0 && (
+            <span style={{ fontSize: 7, fontWeight: 700, color: "#E65100", whiteSpace: "nowrap" }}>
+              B:{subtree.BTC.toFixed(3)}
+            </span>
+          )}
+          {subtree.SOL > 0 && (
+            <span style={{ fontSize: 7, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }}>
+              S:{Math.round(subtree.SOL)}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* 自留拨比 */}
       <span
         style={{
           fontSize: 8,
@@ -160,6 +227,7 @@ function FamilyNode({
       <div style={{ position: "relative", paddingBottom: hasChildren ? 6 : 0 }}>
         <FamilyCard
           user={node}
+          allUsers={allUsers}
           yjhUserId={yjhUserId}
           ledgerId={ledgerId}
           onNavigate={onNavigate}
@@ -312,13 +380,16 @@ export default function AfWaveTreePage() {
     return map;
   }, [inviteTreeData]);
 
-  // 构建树用户数据：直接复用邀请名单里的本人拨比
+  // 构建树用户数据：带入持仓数据
   const treeUsers: TreeUser[] = useMemo(() => {
     return (inviteTreeData?.users ?? []).map((u: any) => ({
       id: u.id,
       name: u.name,
       invitedByUserId: u.invitedByUserId ?? null,
       payoutRatio: Number(u.payoutRatio ?? 0),
+      holdingBTC: Number(u.holdingBTC ?? 0),
+      holdingETH: Number(u.holdingETH ?? 0),
+      holdingSOL: Number(u.holdingSOL ?? 0),
     }));
   }, [inviteTreeData]);
 
@@ -422,6 +493,7 @@ export default function AfWaveTreePage() {
         <p className="text-xs text-gray-400 leading-relaxed">
           · 名字下方绿色数字 = 该成员自留比例<br />
           · 连接线上橙色 ↑ 数字 = 上级从该成员拿的抽成<br />
+          · E蓝/B橙/S绿 = 本人+下级团队已成交持仓总量<br />
           · 新注册成员默认 0%，需手动分配<br />
           · 点击节点跳转到波比编辑页
         </p>
