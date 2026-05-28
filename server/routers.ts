@@ -12761,7 +12761,7 @@ ${klinesSummary}
                      COALESCE(o.original_limit_price, o.limit_price) as original_limit_price,
                      COALESCE(o.source_amount, '') as source_amount,
                      COALESCE(su.username, '') as source_username,
-                     o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status
+                     o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status, o.confirmed_at
               FROM af_orders o
               LEFT JOIN users su ON su.id = o.source_user_id
               WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
@@ -12781,6 +12781,7 @@ ${klinesSummary}
         ) as any;
         const allOrders = ((rows[0] || rows) as any[]);
         
+        if (allOrders.length > 0) console.log('[afGetOrders debug] first row confirmed_at:', allOrders[0]?.confirmed_at, 'type:', typeof allOrders[0]?.confirmed_at);
         const list = allOrders.map((r: any) => ({
           id: r.id,
           coin: r.coin,
@@ -12804,6 +12805,7 @@ ${klinesSummary}
           sellAt: r.sell_at || null,
           sellConfirmedAt: toBeijingTimeStr(r.sell_confirmed_at),
           sellStatus: r.sell_status || null,
+          confirmedAt: toBeijingTimeStr(r.confirmed_at),
           // 兼容旧字段：是否已在委托卖中
           hasPendingSell: r.sell_status === 'selling',
         }));
@@ -13376,6 +13378,10 @@ ${klinesSummary}
           updates.push(`quantity = '${input.quantity.replace(/'/g, '')}'`);
         }
         if (input.status !== undefined) updates.push(`status = '${input.status}'`);
+        // 管理员将订单改为 completed 时，记录登记时间
+        if (newStatus === 'completed' && oldStatus !== 'completed') {
+          updates.push(`confirmed_at = NOW()`);
+        }
         if (updates.length > 0) {
           await db.execute(
             sql`UPDATE af_orders SET ${sql.raw(updates.join(', '))}, updated_at = NOW() WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
@@ -13501,15 +13507,15 @@ ${klinesSummary}
                 if (existGift) {
                   // 更新已有的 pending 赠予订单为 completed，并更新实际金额
                   await (conn2 as any).execute(
-                    `UPDATE af_orders SET status = 'completed', amount = ?, quantity = ?, limit_price = ?, source_amount = ?, updated_at = NOW() WHERE id = ?`,
+                    `UPDATE af_orders SET status = 'completed', amount = ?, quantity = ?, limit_price = ?, source_amount = ?, confirmed_at = NOW(), updated_at = NOW() WHERE id = ?`,
                     [giftAmount, giftQuantity, updatedOrder.limit_price, actualSpend.toFixed(8), existGift.id]
                   );
                   console.log(`[AF拨比赠送] 订单#${input.orderId} 更新已有赠予订单#${existGift.id} → completed 金额:${giftAmount}`);
                 } else {
                   // 不存在时新建（兴起时没有拨比配置的订单兼容）
                   await giftDb.execute(
-                    sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, created_at, updated_at)
-                        VALUES (${input.ledgerId}, ${r.beneficiary_user_id}, ${updatedOrder.coin}, 'buy', ${updatedOrder.limit_price}, ${giftAmount}, ${giftQuantity}, 'completed', 1, ${String(ratio.toFixed(4))}, ${input.orderId}, ${userId}, ${actualSpend.toFixed(8)}, NOW(), NOW())`
+                    sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, confirmed_at, created_at, updated_at)
+                        VALUES (${input.ledgerId}, ${r.beneficiary_user_id}, ${updatedOrder.coin}, 'buy', ${updatedOrder.limit_price}, ${giftAmount}, ${giftQuantity}, 'completed', 1, ${String(ratio.toFixed(4))}, ${input.orderId}, ${userId}, ${actualSpend.toFixed(8)}, NOW(), NOW(), NOW())`
                   );
                   console.log(`[AF拨比赠送] 订单#${input.orderId} 新建赠予订单 受益人(${r.beneficiary_user_id}) 拨比${r.ratio}% 金额:${giftAmount}`);
                 }
