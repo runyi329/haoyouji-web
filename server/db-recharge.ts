@@ -776,44 +776,23 @@ export async function addUserBalance(
   return newBalance;
 }
 
-// 获取用户统一余额（三个来源合计：users.balance + recharge_orders已完成充值 + af_manual_balances手动调账）
-// 获取用户余额
-// 如果传入 ledgerId，则按账本隔离计算：充値(recharge_orders WHERE ledger_id=X) + 手动调账(af_manual_balances WHERE ledger_id=X)
-// 如果不传 ledgerId，则使用旧的三合一逻辑（兼容旧代码）
+// 获取用户统一余额
+// 正确公式：users.balance（充值到账累计）+ af_manual_balances合计（委买扣款/撤单退款/手动调账，不写users.balance）
+// 注意：recharge_orders充值已经写进users.balance，不能重复叠加
 export async function getUserBalance(userId: number, ledgerId?: number): Promise<number> {
   const db = await getDb();
   
-  if (ledgerId !== undefined) {
-    // 统一口径：与首页钱包一致，使用全局充值+全局手动调账+users.balance
-    const result = await db.execute(
-      sql`SELECT
-        (SELECT COALESCE(balance, 0) FROM users WHERE id = ${userId}) as userBalance,
-        (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${userId} AND status = 'completed') as recharged,
-        (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${userId}) as manual`
-    ) as any;
-    
-    const row = result[0]?.[0] ?? result[0];
-    const userBalance = parseFloat(row?.userBalance?.toString() || '0');
-    const recharged = parseFloat(row?.recharged?.toString() || '0');
-    const manual = parseFloat(row?.manual?.toString() || '0');
-    
-    return userBalance + recharged + manual;
-  }
-  
-  // 兼容旧模式：三合一
   const result = await db.execute(
     sql`SELECT
       (SELECT COALESCE(balance, 0) FROM users WHERE id = ${userId}) as userBalance,
-      (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${userId} AND status = 'completed') as recharged,
       (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${userId}) as manual`
   ) as any;
   
   const row = result[0]?.[0] ?? result[0];
   const userBalance = parseFloat(row?.userBalance?.toString() || '0');
-  const recharged = parseFloat(row?.recharged?.toString() || '0');
   const manual = parseFloat(row?.manual?.toString() || '0');
   
-  return userBalance + recharged + manual;
+  return userBalance + manual;
 }
 
 // 获取用户余额变动记录
