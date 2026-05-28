@@ -12754,7 +12754,7 @@ ${klinesSummary}
             targetUserId = input.viewAsUserId;
           }
         }
-        const rows = await db.execute(
+        const [rows] = await db.execute(
           sql`SELECT o.id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at,
                      COALESCE(o.is_gift, 0) as is_gift, COALESCE(o.gift_multiplier, '') as gift_multiplier,
                      o.source_order_id, o.source_user_id,
@@ -12780,9 +12780,9 @@ ${klinesSummary}
               LIMIT 100`
         ) as any;
         // drizzle db.execute返回[ResultSetHeader, RowDataPacket[]]，rows[1]是数据行
-        const allOrders = (Array.isArray(rows[1]) ? rows[1] : (Array.isArray(rows[0]) ? rows[0] : rows)) as any[];
+        const allOrders = (Array.isArray(rows) ? rows : []) as any[];
         
-        if (allOrders.length > 0) console.log('[afGetOrders debug] first row confirmed_at:', allOrders[0]?.confirmed_at, 'type:', typeof allOrders[0]?.confirmed_at);
+
         const list = allOrders.map((r: any) => ({
           id: r.id,
           coin: r.coin,
