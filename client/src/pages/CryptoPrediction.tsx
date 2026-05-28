@@ -2685,28 +2685,29 @@ export default function CryptoPrediction() {
               ) : (
                 <div>
                   {/* 表头（可点击排序） */}
-                  <div className="grid text-xs pb-1.5 mb-0.5" style={{gridTemplateColumns:'4fr 2.5fr 3fr 3fr 2fr', borderBottom: '1px solid #E0E8FF'}}>
-                    {/* 日期 */}
-                    <button onClick={() => handleOrderSort('time')} className="flex items-center gap-0.5 text-left" style={{ color: orderSortKey === 'time' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'time' ? 600 : 400 }}>
+                  <div className="flex text-xs pb-1.5 mb-0.5" style={{ borderBottom: '1px solid #E0E8FF' }}>
+                    {/* 日期列 */}
+                    <button onClick={() => handleOrderSort('time')} className="flex items-center gap-0.5 text-left px-2" style={{ width: 64, flexShrink: 0, color: orderSortKey === 'time' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'time' ? 600 : 400 }}>
                       日期
                       {orderSortKey === 'time' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
                     </button>
-                    {/* 币种 */}
-                    <button onClick={() => handleOrderSort('coin')} className="flex items-center justify-center gap-0.5" style={{ color: orderSortKey === 'coin' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'coin' ? 600 : 400 }}>
+                    {/* 币种列 */}
+                    <button onClick={() => handleOrderSort('coin')} className="flex items-center justify-center gap-0.5 px-1" style={{ width: 52, flexShrink: 0, borderLeft: '1px solid #E8EEFF', color: orderSortKey === 'coin' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'coin' ? 600 : 400 }}>
                       币种
                       {orderSortKey === 'coin' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
                     </button>
-                    {/* 数量 */}
-                    <button onClick={() => handleOrderSort('amount')} className="flex items-center justify-end gap-0.5" style={{ color: orderSortKey === 'amount' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'amount' ? 600 : 400 }}>
+                    {/* 数量列 */}
+                    <button onClick={() => handleOrderSort('amount')} className="flex items-center justify-end gap-0.5 px-1 flex-1" style={{ borderLeft: '1px solid #E8EEFF', color: orderSortKey === 'amount' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'amount' ? 600 : 400 }}>
                       数量
                       {orderSortKey === 'amount' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
                     </button>
-                    {/* 状态 */}
-                    <button onClick={() => handleOrderSort('status')} className="flex items-center justify-end gap-0.5" style={{ color: orderSortKey === 'status' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'status' ? 600 : 400 }}>
+                    {/* 状态列 */}
+                    <button onClick={() => handleOrderSort('status')} className="flex items-center justify-end gap-0.5 px-1" style={{ width: 44, flexShrink: 0, borderLeft: '1px solid #E8EEFF', color: orderSortKey === 'status' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'status' ? 600 : 400 }}>
                       状态
                       {orderSortKey === 'status' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
                     </button>
-                    <span></span>
+                    {/* 详情列 */}
+                    <span className="px-1" style={{ width: 32, flexShrink: 0, borderLeft: '1px solid #E8EEFF' }}></span>
                   </div>
                   {sortedOrders.map((order) => {
                     const createdAt = order.createdAt ? new Date(order.createdAt) : null;
@@ -2729,10 +2730,10 @@ export default function CryptoPrediction() {
                     })() : '--';
                     const isDateOpen = expandedDateId === order.id;
                     return (
-                      <div key={order.id} className="py-2" style={{ borderBottom: '1px solid #EEF2FF' }}>
-                        <div className="grid text-xs items-center" style={{gridTemplateColumns:'4fr 2.5fr 3fr 3fr 2fr'}}>
-                          {/* 日期列：只显示YY-MM-DD，点击弹出气泡 */}
-                          <div className="relative">
+                      <div key={order.id} style={{ borderBottom: '1px solid #EEF2FF' }}>
+                        <div className="flex text-xs items-center" style={{ minHeight: 36 }}>
+                          {/* 日期列 */}
+                          <div className="relative flex items-center px-2" style={{ width: 64, flexShrink: 0 }}>
                             <button
                               onClick={(e) => { e.stopPropagation(); setExpandedDateId(isDateOpen ? null : order.id); }}
                               className="whitespace-nowrap text-left"
@@ -2747,32 +2748,42 @@ export default function CryptoPrediction() {
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {timeStr}
-                                {/* 小三角（左上角） */}
                                 <div className="absolute -top-1.5 left-3 w-0 h-0" style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #E5E7EB' }} />
                                 <div className="absolute -top-[5px] left-3 w-0 h-0" style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #F9FAFB' }} />
                               </div>
                             )}
                           </div>
-                          <span className="font-medium text-center" style={{ color: '#1A2340' }}>
-                            {order.coin}
-                            {(order as any).isGift && <span className="ml-0.5 text-[#ef5350] font-bold">赠</span>}
-                          </span>
-                          <span className="text-right" style={{ color: '#1A2340' }}>{(() => { const q = parseFloat(order.quantity); return q % 1 === 0 ? q.toString() : q.toFixed(8).replace(/0+$/, '').replace(/\.$/, ''); })()}</span>
-                          <span className={`text-right ${
-                            (order as any).sellStatus === 'sold' ? 'text-[#6B7280]' :
-                            (order as any).sellStatus === 'selling' ? 'text-[#EF4444]' :
-                            order.status === 'completed' ? 'text-[#0EA56A]' :
-                            order.status === 'cancelled' ? 'text-gray-400' :
-                            'text-[#F59E0B]'
-                          }`}>
-                            {(order as any).sellStatus === 'sold' ? '已卖出' :
-                             (order as any).sellStatus === 'selling' ? '委卖中' :
-                             order.status === 'completed' ? '持仓中' :
-                             order.status === 'cancelled' ? '已撒' :
-                             '委买中'}
-                          </span>
-                          <div className="flex flex-col items-end gap-0.5">
-                            {/* 所有状态都显示详情按鈕，撒单移入详情内 */}
+                          {/* 币种列 */}
+                          <div className="flex items-center justify-center px-1" style={{ width: 52, flexShrink: 0, borderLeft: '1px solid #E8EEFF' }}>
+                            <span className="font-medium text-center" style={{ color: '#1A2340' }}>
+                              {order.coin}
+                              {(order as any).isGift && <span className="ml-0.5 text-[#ef5350] font-bold">赠</span>}
+                            </span>
+                          </div>
+                          {/* 数量列（占剩余宽度，靠右） */}
+                          <div className="flex items-center justify-end px-1 flex-1" style={{ borderLeft: '1px solid #E8EEFF' }}>
+                            <span className="text-right tabular-nums" style={{ color: '#1A2340' }}>
+                              {(() => { const q = parseFloat(order.quantity); return q % 1 === 0 ? q.toString() : q.toFixed(8).replace(/0+$/, '').replace(/\.$/, ''); })()}
+                            </span>
+                          </div>
+                          {/* 状态列 */}
+                          <div className="flex items-center justify-end px-1" style={{ width: 44, flexShrink: 0, borderLeft: '1px solid #E8EEFF' }}>
+                            <span className={`text-right ${
+                              (order as any).sellStatus === 'sold' ? 'text-[#6B7280]' :
+                              (order as any).sellStatus === 'selling' ? 'text-[#EF4444]' :
+                              order.status === 'completed' ? 'text-[#0EA56A]' :
+                              order.status === 'cancelled' ? 'text-gray-400' :
+                              'text-[#F59E0B]'
+                            }`}>
+                              {(order as any).sellStatus === 'sold' ? '已卖出' :
+                               (order as any).sellStatus === 'selling' ? '委卖中' :
+                               order.status === 'completed' ? '持仓中' :
+                               order.status === 'cancelled' ? '已撒' :
+                               '委买中'}
+                            </span>
+                          </div>
+                          {/* 详情列 */}
+                          <div className="flex items-center justify-center" style={{ width: 32, flexShrink: 0, borderLeft: '1px solid #E8EEFF' }}>
                             <button
                               onClick={() => setOrderDetailId(order.id === orderDetailId ? null : order.id)}
                               className="text-xs font-medium" style={{ color: '#1A56DB' }}>
