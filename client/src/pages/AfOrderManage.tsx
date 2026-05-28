@@ -162,6 +162,9 @@ export default function AfOrderManage() {
   const [editState, setEditState] = useState<EditState | null>(null);
   // 状态筛选：all / pending(委买中) / holding(持仓中) / selling(委卖中) / sold(已卖出)
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'holding' | 'selling' | 'sold'>('all');
+  // 赠予订单折叠展开状态：key = 委买订单ID
+  const [expandedGiftOrders, setExpandedGiftOrders] = useState<Record<number, boolean>>({});
+  const toggleGiftOrders = (orderId: number) => setExpandedGiftOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
   // 管理费明细：跳转到独立页面
 
   const utils = trpc.useUtils();
@@ -634,6 +637,82 @@ export default function AfOrderManage() {
                       {order.giftMultiplier === '1.0' ? '间接推荐奖励订单 (1.0倍)' : '推荐人奖励订单 (1.5倍)'} · 来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span>
                     </div>
                   )}
+
+                  {/* 赠予订单折叠区块（仅对非赠予的委买订单显示） */}
+                  {!order.isGift && (() => {
+                    const giftOrders: any[] = (order as any).giftOrders || [];
+                    if (giftOrders.length === 0) return null;
+                    const isExpanded = !!expandedGiftOrders[order.id];
+                    const totalQty = giftOrders.reduce((s: number, g: any) => s + parseFloat(g.quantity || '0'), 0);
+                    return (
+                      <div className="mt-2">
+                        {/* 折叠头部：汇总行 */}
+                        <button
+                          onClick={() => toggleGiftOrders(order.id)}
+                          className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-purple-50 border border-purple-100 text-xs text-purple-700 hover:bg-purple-100 transition-colors"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-purple-200 text-purple-800 font-bold text-[10px]">赠</span>
+                            <span className="font-medium">已触发赠予订单</span>
+                            <span className="text-purple-500">共 {giftOrders.length} 笔 · 合计 {totalQty.toFixed(4)} {order.coin}</span>
+                          </div>
+                          <span className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>▾</span>
+                        </button>
+                        {/* 展开内容 */}
+                        {isExpanded && (
+                          <div className="mt-1 border border-purple-100 rounded-lg overflow-hidden">
+                            {giftOrders.map((g: any, idx: number) => {
+                              const giftQty = parseFloat(g.quantity || '0');
+                              const giftAmt = parseFloat(g.amount || '0');
+                              const giftTier = g.equityTier || 0;
+                              const giftRate = EQUITY_DISCOUNT_RATES[giftTier] || 1.0;
+                              const effectiveQty = giftQty * giftRate;
+                              const ratioLabel = parseFloat(g.giftMultiplier || '0') > 0
+                                ? `${(parseFloat(g.giftMultiplier) * 100).toFixed(0)}%拨比`
+                                : '';
+                              // 状态显示
+                              let statusLabel = '委买中';
+                              let statusColor = 'text-yellow-500';
+                              if (g.sellStatus === 'sold') { statusLabel = '已卖出'; statusColor = 'text-blue-500'; }
+                              else if (g.sellStatus === 'selling') { statusLabel = '委卖中'; statusColor = 'text-red-500'; }
+                              else if (g.status === 'completed') { statusLabel = '持仓中'; statusColor = 'text-green-500'; }
+                              else if (g.status === 'cancelled') { statusLabel = '已撤单'; statusColor = 'text-gray-400'; }
+                              return (
+                                <div key={g.id} className={`px-3 py-2.5 text-xs ${idx > 0 ? 'border-t border-purple-50' : ''} bg-white`}>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-medium text-gray-800">{g.nickname || g.username}</span>
+                                      {ratioLabel && <span className="text-purple-500 bg-purple-50 px-1.5 py-0.5 rounded">{ratioLabel}</span>}
+                                    </div>
+                                    <span className={`font-medium ${statusColor}`}>{statusLabel}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-gray-500">
+                                    <span>赠予金额 <span className="text-gray-700 font-medium">{giftAmt.toFixed(4)} USDT</span></span>
+                                    <span>赠予数量 <span className="text-gray-700 font-medium">{giftQty.toFixed(4)} {g.coin}</span></span>
+                                  </div>
+                                  {/* 权益档位信息 */}
+                                  <div className="mt-1 flex items-center gap-2">
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                      giftTier === 0 ? 'bg-green-50 text-green-600' :
+                                      giftTier <= 3 ? 'bg-blue-50 text-blue-600' :
+                                      giftTier <= 6 ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'
+                                    }`}>
+                                      D{giftTier}档 · 权益{(giftRate * 100).toFixed(1)}%
+                                    </span>
+                                    <span className="text-gray-400">实际有效数量</span>
+                                    <span className={`font-medium ${giftTier > 0 ? 'text-orange-500' : 'text-gray-700'}`}>
+                                      {effectiveQty.toFixed(4)} {g.coin}
+                                    </span>
+                                    {giftTier > 0 && <span className="text-gray-400 text-[10px]">(已折扣{((1 - giftRate) * 100).toFixed(1)}%)</span>}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* 编辑时：确认卖出成交 → 输入实际卖出价 + 实时利润计算 */}
                   {isEditing && editState?.sellStatus === 'sold' && (
