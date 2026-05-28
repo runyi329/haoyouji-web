@@ -2912,7 +2912,7 @@ export default function LedgerDetail() {
           <div className="px-4 pt-3 pb-2">
             {/* 第一行：头像 + 名字 + 设置齿轮 */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
                 {(() => {
                   const viewTarget = viewAsUserId ? (membersData as any[])?.find((m: any) => m.userId === viewAsUserId) : null;
                   return (
