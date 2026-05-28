@@ -472,18 +472,35 @@ export default function AfOrderManage() {
                 return (
                   <div key={dateKey}>
                     {/* 日期分组标题行 */}
-                    <button
-                      onClick={() => toggleDate(dateKey)}
-                      className="w-full flex items-center justify-between px-3 py-2 mb-1.5 rounded-xl bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-blue-700">{dateKey}</span>
-                        <span className="text-xs text-blue-400">{groupOrders.length} 单</span>
-                        <span className="text-xs text-gray-500">投入 <span className="font-medium text-gray-700">{totalAmount.toFixed(2)}</span> USDT</span>
-                        {qtyStr && <span className="text-xs text-blue-500 font-medium">{qtyStr}</span>}
-                      </div>
-                      <span className={`text-blue-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
-                    </button>
+                    {(() => {
+                      // 月-日简写
+                      const shortDate = dateKey.slice(5); // "05-28"
+                      // 正单数量（非赠单）
+                      const normalCount = groupOrders.filter((o: any) => !o.isGift).length;
+                      // 各币种数量简写：BTC→币 ETH→E SOL→S
+                      const COIN_SHORT: Record<string, string> = { BTC: '币', ETH: 'E', SOL: 'S' };
+                      const coinParts = Object.entries(coinQty).map(([c, q]) => {
+                        const short = COIN_SHORT[c] || c;
+                        const qNum = q as number;
+                        const qStr = qNum >= 100 ? qNum.toFixed(2) : qNum >= 1 ? qNum.toFixed(3) : qNum.toFixed(4);
+                        return `${short}:${qStr}`;
+                      }).join(' ');
+                      return (
+                        <button
+                          onClick={() => toggleDate(dateKey)}
+                          className="w-full flex items-center justify-between px-3 py-2 mb-1.5 rounded-xl bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors"
+                        >
+                          <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
+                            <span className="text-sm font-bold text-blue-700 shrink-0">{shortDate}</span>
+                            <span className="text-[11px] text-blue-400 shrink-0">{groupOrders.length}单</span>
+                            {normalCount > 0 && <span className="text-[11px] text-gray-500 shrink-0">{normalCount}正</span>}
+                            <span className="text-[11px] text-gray-600 shrink-0">{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
+                            {coinParts && <span className="text-[11px] text-blue-500 truncate">{coinParts}</span>}
+                          </div>
+                          <span className={`text-blue-400 transition-transform duration-200 shrink-0 ml-1 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                        </button>
+                      );
+                    })()}
                     {/* 该日期下的订单列表 */}
                     {isOpen && groupOrders.map((order: any) => {
               const isEditing = editingId === order.id;
