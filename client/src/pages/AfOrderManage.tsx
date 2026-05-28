@@ -474,17 +474,15 @@ export default function AfOrderManage() {
                     {/* 日期分组标题行 */}
                     <button
                       onClick={() => toggleDate(dateKey)}
-                      className="w-full flex items-center justify-between px-3 py-2 mb-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors"
+                      className="w-full flex items-center justify-between px-3 py-2 mb-1.5 rounded-xl bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-400 transition-transform" style={{ display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
-                        <span className="text-sm font-semibold text-gray-700">{dateKey}</span>
-                        <span className="text-xs text-gray-400">{groupOrders.length} 单</span>
+                        <span className="text-sm font-semibold text-blue-700">{dateKey}</span>
+                        <span className="text-xs text-blue-400">{groupOrders.length} 单</span>
+                        <span className="text-xs text-gray-500">投入 <span className="font-medium text-gray-700">{totalAmount.toFixed(2)}</span> USDT</span>
+                        {qtyStr && <span className="text-xs text-blue-500 font-medium">{qtyStr}</span>}
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-500">
-                        <span>投入 <span className="font-medium text-gray-700">{totalAmount.toFixed(2)}</span> USDT</span>
-                        {qtyStr && <span className="text-blue-500 font-medium">{qtyStr}</span>}
-                      </div>
+                      <span className={`text-blue-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                     </button>
                     {/* 该日期下的订单列表 */}
                     {isOpen && groupOrders.map((order: any) => {
