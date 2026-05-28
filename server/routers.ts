@@ -12696,6 +12696,44 @@ ${klinesSummary}
                 VALUES (${input.ledgerId}, ${ctx.user.id}, ${-amountNum}, ${buyNote}, NOW(), NOW())`
           );
         }
+        // 同步生成 pending 状态的赠予订单（按拨比配置预生成）
+        const newOrderId2 = (await db.execute(
+          sql`SELECT id FROM af_orders WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} AND side = 'buy' ORDER BY created_at DESC LIMIT 1`
+        ) as any)?.[0]?.[0]?.id ?? (await db.execute(
+          sql`SELECT id FROM af_orders WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} AND side = 'buy' ORDER BY created_at DESC LIMIT 1`
+        ) as any)?.[0]?.id;
+        if (newOrderId2) {
+          setTimeout(async () => {
+            try {
+              const conn = await (await import('./db')).getDbConnection();
+              if (!conn) return;
+              // 查询该用户的拨比配置
+              const [ratioRows] = await (conn as any).execute(
+                `SELECT beneficiary_user_id, ratio FROM af_payout_ratios WHERE ledger_id = ? AND source_user_id = ?`,
+                [input.ledgerId, ctx.user.id]
+              );
+              const ratios = (ratioRows as any[]).filter((r: any) => r && r.beneficiary_user_id);
+              if (ratios.length === 0) return;
+              const actualSpend = parseFloat(input.amount);
+              const actualPrice = parseFloat(input.limitPrice);
+              // 预算赠予基数（D0档权益系数=0.75）
+              const baseGiftAmount = actualSpend * 10 * 0.75 * 0.3;
+              for (const r of ratios) {
+                const ratio = parseFloat(r.ratio) / 100;
+                const giftAmount = (baseGiftAmount * ratio).toFixed(8);
+                const giftQuantity = actualPrice > 0 ? (parseFloat(giftAmount) / actualPrice).toFixed(8) : '0';
+                await (conn as any).execute(
+                  `INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, created_at, updated_at)
+                   VALUES (?, ?, ?, 'buy', ?, ?, ?, 'pending', 1, ?, ?, ?, ?, NOW(), NOW())`,
+                  [input.ledgerId, r.beneficiary_user_id, input.coin, input.limitPrice, giftAmount, giftQuantity, String(ratio.toFixed(4)), newOrderId2, ctx.user.id, actualSpend.toFixed(8)]
+                );
+                console.log(`[拨比预生成] 委买订单#${newOrderId2} 下单人(${ctx.user.id}) → 受益人(${r.beneficiary_user_id}) 拨比${r.ratio}% 赠予金额:${giftAmount}`);
+              }
+            } catch (e) {
+              console.error('[拨比预生成] 生成pending赠予订单失败:', e);
+            }
+          }, 300);
+        }
         return { success: true };
       }),
     // AF 查询委托订单（该账本所有币种）
@@ -13269,6 +13307,38 @@ ${klinesSummary}
             sql`UPDATE af_orders SET ${sql.raw(updates.join(', '))}, updated_at = NOW() WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
           );
         }
+        // 如果是 pending 订单且价格或金额有变化，联动更新关联的 pending 赠予订单
+        if (newStatus === 'pending' && (input.limitPrice !== undefined || input.amount !== undefined)) {
+          const newLimitPrice = input.limitPrice || order.limit_price;
+          const newActualAmount = input.amount ? parseFloat(input.amount) : oldAmount;
+          const newActualPrice = parseFloat(newLimitPrice || '0');
+          // 重新计算赠予金额（D0档权益系数=0.75）
+          const newBaseGiftAmount = newActualAmount * 10 * 0.75 * 0.3;
+          // 查询该订单的拨比配置
+          const ratioRowsForUpdate = await db.execute(
+            sql`SELECT beneficiary_user_id, ratio FROM af_payout_ratios WHERE ledger_id = ${input.ledgerId} AND source_user_id = ${userId}`
+          ) as any;
+          const ratiosForUpdate: Array<{ beneficiary_user_id: number; ratio: string }> =
+            ((ratioRowsForUpdate[0] || ratioRowsForUpdate) as any[]).filter((r: any) => r && r.beneficiary_user_id);
+          for (const r of ratiosForUpdate) {
+            const ratio = parseFloat(r.ratio) / 100;
+            const newGiftAmount = (newBaseGiftAmount * ratio).toFixed(8);
+            const newGiftQty = newActualPrice > 0 ? (parseFloat(newGiftAmount) / newActualPrice).toFixed(8) : '0';
+            await db.execute(
+              sql`UPDATE af_orders SET amount = ${newGiftAmount}, quantity = ${newGiftQty}, limit_price = ${newLimitPrice}, source_amount = ${newActualAmount.toFixed(8)}, updated_at = NOW()
+                  WHERE source_order_id = ${input.orderId} AND user_id = ${r.beneficiary_user_id} AND is_gift = 1 AND status = 'pending'`
+            );
+          }
+          if (ratiosForUpdate.length > 0) console.log(`[拨比联动] 订单#${input.orderId}修改价格/金额，已同步更新${ratiosForUpdate.length}笔pending赠予订单`);
+        }
+        // 如果管理员将订单改为已撤单，联动撤销关联的 pending 赠予订单
+        if (newStatus === 'cancelled' && oldStatus !== 'cancelled') {
+          await db.execute(
+            sql`UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
+                WHERE source_order_id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND is_gift = 1 AND status = 'pending'`
+          );
+          console.log(`[拨比联动] 订单#${input.orderId}被撤单，已联动撤销关联的pending赠予订单`);
+        }
         // 如果订单变为已成交，立即触发一次扫描（不等四小时）
         if (newStatus === 'completed' && oldStatus !== 'completed' && order.side === 'buy') {
           // 异步触发，不阻塞当前请求
@@ -13342,16 +13412,33 @@ ${klinesSummary}
                 console.warn(`[AF拨比赠送] 订单#${input.orderId} 下单人(${userId})拨比总和=${totalRatio}%，不等于100%，仍按比例生成`);
               }
               
-              // 为每个受益人生成赠予订单
+              // 为每个受益人：优先更新已有 pending 赠予订单，不存在时才新建
+              const conn2 = await (await import('./db')).getDbConnection();
               for (const r of ratios) {
                 const ratio = parseFloat(r.ratio) / 100;
                 const giftAmount = (baseGiftAmount * ratio).toFixed(8);
                 const giftQuantity = actualPrice > 0 ? (parseFloat(giftAmount) / actualPrice).toFixed(8) : '0';
-                await giftDb.execute(
-                  sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, created_at, updated_at)
-                      VALUES (${input.ledgerId}, ${r.beneficiary_user_id}, ${updatedOrder.coin}, 'buy', ${updatedOrder.limit_price}, ${giftAmount}, ${giftQuantity}, 'completed', 1, ${String(ratio.toFixed(4))}, ${input.orderId}, ${userId}, ${actualSpend.toFixed(8)}, NOW(), NOW())`
-                );
-                console.log(`[AF拨比赠送] 订单#${input.orderId} 下单人(${userId}) → 受益人(${r.beneficiary_user_id}) 拨比${r.ratio}% 赠予金额:${giftAmount}`);
+                // 查找已有的 pending 赠予订单
+                const [existGiftRows] = conn2 ? await (conn2 as any).execute(
+                  `SELECT id FROM af_orders WHERE source_order_id = ? AND user_id = ? AND is_gift = 1 AND status = 'pending' LIMIT 1`,
+                  [input.orderId, r.beneficiary_user_id]
+                ) : [null];
+                const existGift = (existGiftRows as any[])?.[0];
+                if (existGift) {
+                  // 更新已有的 pending 赠予订单为 completed，并更新实际金额
+                  await (conn2 as any).execute(
+                    `UPDATE af_orders SET status = 'completed', amount = ?, quantity = ?, limit_price = ?, source_amount = ?, updated_at = NOW() WHERE id = ?`,
+                    [giftAmount, giftQuantity, updatedOrder.limit_price, actualSpend.toFixed(8), existGift.id]
+                  );
+                  console.log(`[AF拨比赠送] 订单#${input.orderId} 更新已有赠予订单#${existGift.id} → completed 金额:${giftAmount}`);
+                } else {
+                  // 不存在时新建（兴起时没有拨比配置的订单兼容）
+                  await giftDb.execute(
+                    sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, created_at, updated_at)
+                        VALUES (${input.ledgerId}, ${r.beneficiary_user_id}, ${updatedOrder.coin}, 'buy', ${updatedOrder.limit_price}, ${giftAmount}, ${giftQuantity}, 'completed', 1, ${String(ratio.toFixed(4))}, ${input.orderId}, ${userId}, ${actualSpend.toFixed(8)}, NOW(), NOW())`
+                  );
+                  console.log(`[AF拨比赠送] 订单#${input.orderId} 新建赠予订单 受益人(${r.beneficiary_user_id}) 拨比${r.ratio}% 金额:${giftAmount}`);
+                }
               }
             } catch (e) {
               console.error('[AF拨比赠送] 生成赠送订单失败:', e);
@@ -13404,6 +13491,12 @@ ${klinesSummary}
           sql`UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
               WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}`
         );
+        // 联动撤销所有关联的 pending 赠予订单
+        await db.execute(
+          sql`UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
+              WHERE source_order_id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND is_gift = 1 AND status = 'pending'`
+        );
+        console.log(`[afCancelOrder] 联动撤销订单#${input.orderId}的所有pending赠予订单`);
         return { success: true };
       }),
     // AF 查询订单的收益权档位触发记录 + 扫描状态
