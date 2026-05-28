@@ -477,6 +477,8 @@ export default function AfOrderManage() {
                       const shortDate = dateKey.slice(5); // "05-28"
                       // 正单数量（非赠单）
                       const normalCount = groupOrders.filter((o: any) => !o.isGift).length;
+                      // 赠单数量
+                      const giftCount = groupOrders.length - normalCount;
                       // 各币种数量简写：BTC→币 ETH→E SOL→S
                       const COIN_SHORT: Record<string, string> = { BTC: '币', ETH: 'E', SOL: 'S' };
                       const coinParts = Object.entries(coinQty).map(([c, q]) => {
@@ -492,8 +494,8 @@ export default function AfOrderManage() {
                         >
                           <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
                             <span className="text-sm font-bold text-blue-700 shrink-0">{shortDate}</span>
-                            <span className="text-[11px] text-blue-400 shrink-0">{groupOrders.length}单</span>
-                            {normalCount > 0 && <span className="text-[11px] text-gray-500 shrink-0">{normalCount}正</span>}
+                            <span className="text-[11px] text-blue-400 shrink-0">{normalCount}单</span>
+                            {giftCount > 0 && <span className="text-[11px] text-orange-400 shrink-0">{giftCount}赠</span>}
                             <span className="text-[11px] text-gray-600 shrink-0">{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
                             {coinParts && <span className="text-[11px] text-blue-500 truncate">{coinParts}</span>}
                           </div>
