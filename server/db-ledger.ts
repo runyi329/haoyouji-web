@@ -1296,16 +1296,21 @@ export async function batchUpdateCategorySortOrder(updates: { id: number; sortOr
 /**
  * 递归获取所有子分类ID
  */
-async function getAllChildCategoryIds(db: any, parentId: number): Promise<number[]> {
+async function getAllChildCategoryIds(db: any, parentId: number, ledgerId?: number): Promise<number[]> {
+  const whereConditions: any[] = [eq(ledgerCategories.parentId, parentId)];
+  // 如果提供了ledgerId，加入过滤防止跨账本污染
+  if (ledgerId !== undefined && ledgerId > 0) {
+    whereConditions.push(eq(ledgerCategories.ledgerId, ledgerId));
+  }
   const children = await db
     .select({ id: ledgerCategories.id })
     .from(ledgerCategories)
-    .where(eq(ledgerCategories.parentId, parentId));
+    .where(and(...whereConditions));
   
   let allIds: number[] = [];
   for (const child of children) {
     allIds.push(child.id);
-    const grandChildren = await getAllChildCategoryIds(db, child.id);
+    const grandChildren = await getAllChildCategoryIds(db, child.id, ledgerId);
     allIds = allIds.concat(grandChildren);
   }
   
@@ -1335,8 +1340,13 @@ export async function deleteLedgerCategory(categoryId: number, userId: number, c
     throw new Error("默认分类不能删除");
   }
   
-  // 获取所有子分类ID
-  const childIds = await getAllChildCategoryIds(db, categoryId);
+  // 安全验证：确保 category.ledgerId 有效，防止跨账本误删
+  if (!category.ledgerId || category.ledgerId <= 0) {
+    throw new Error("分类数据异常：无法确定所属账本，拒绝执行删除操作");
+  }
+
+  // 获取所有子分类ID（限制在同一账本内）
+  const childIds = await getAllChildCategoryIds(db, categoryId, category.ledgerId);
   
   // 如果有子分类且不是级联删除,抛出错误
   if (childIds.length > 0 && !cascade) {
@@ -1362,13 +1372,17 @@ export async function deleteLedgerCategory(categoryId: number, userId: number, c
   // 强制删除时，软删除该分类及子分类下的所有记录
   // 注意：必须同时过滤 ledgerId，防止跨账本误删（不同账本可能有相同 categoryId 的记录）
   if (force) {
+    // 再次验证 ledgerId 有效性（双重保险）
+    if (!category.ledgerId || category.ledgerId <= 0) {
+      throw new Error("安全拒绝：分类所属账本无效，无法执行强制删除");
+    }
     for (const id of allIdsToDelete) {
       await db
         .update(ledgerRecords)
-        .set({ deletedAt: new Date() } as any)
+        .set({ deletedAt: new Date(), deletedBy: userId } as any)
         .where(and(
           eq(ledgerRecords.categoryId, id),
-          eq(ledgerRecords.ledgerId, category.ledgerId),
+          eq(ledgerRecords.ledgerId, category.ledgerId),  // 严格限制在同一账本
           isNull(ledgerRecords.deletedAt)
         ));
     }
