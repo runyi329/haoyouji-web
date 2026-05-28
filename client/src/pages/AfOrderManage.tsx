@@ -186,6 +186,14 @@ export default function AfOrderManage() {
   const tierHistory = tierHistoryData?.list;
   const lowestScan = tierHistoryData?.lowestScan;
 
+  const backfillMutation = trpc.ledger.afAdminBackfillGiftOrders.useMutation({
+    onSuccess: (data) => {
+      toast.success(`补生成完成：共扫描 ${data.total} 笔委买订单，新建 ${data.created} 笔赠予订单`);
+      utils.ledger.afAdminGetOrders.invalidate({ ledgerId });
+    },
+    onError: (e) => toast.error('补生成失败：' + e.message),
+  });
+
   const updateMutation = trpc.ledger.afAdminUpdateOrder.useMutation({
     onSuccess: () => {
       toast.success("订单已更新");
@@ -377,6 +385,20 @@ export default function AfOrderManage() {
             </button>
           </div>
         )}
+      </div>
+
+      {/* ── 补生成赠予订单按鈕 ── */}
+      <div className="px-4 pt-3 pb-1">
+        <button
+          onClick={() => {
+            if (backfillMutation.isPending) return;
+            backfillMutation.mutate({ ledgerId });
+          }}
+          disabled={backfillMutation.isPending}
+          className="w-full py-2 rounded-xl text-xs font-medium border border-purple-200 text-purple-600 bg-purple-50 active:opacity-70 disabled:opacity-50"
+        >
+          {backfillMutation.isPending ? '补生成中...' : '补生成当前委买订单的赠予订单'}
+        </button>
       </div>
 
       {/* ── 状态筛选Tab ── */}
