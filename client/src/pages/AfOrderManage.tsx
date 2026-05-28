@@ -471,26 +471,15 @@ export default function AfOrderManage() {
                   {/* 订单编号行 */}
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
-                    {/* 日期气泡：点击展开完整时间 */}
-                    <div className="relative">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setExpandedDateId(expandedDateId === order.id ? null : order.id); }}
-                        className="text-[11px] text-gray-400"
-                        style={{ borderBottom: '1px dashed #D1D5DB' }}
-                      >
-                        {formatDate(order.createdAt)}
-                      </button>
-                      {expandedDateId === order.id && (
-                        <div
-                          className="absolute z-50 right-0 top-full mt-1 px-3 py-2 rounded-lg shadow-md text-[11px] whitespace-nowrap"
-                          style={{ backgroundColor: '#F9FAFB', border: '1px solid #E5E7EB', color: '#374151', minWidth: 148 }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {formatDateFull(order.createdAt)}
-                          {/* 小三角（右上角） */}
-                          <div className="absolute -top-1.5 right-3 w-0 h-0" style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #E5E7EB' }} />
-                          <div className="absolute -top-[5px] right-3 w-0 h-0" style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #F9FAFB' }} />
-                        </div>
+                    {/* 两行时间：开仓时间 + 登记时间 */}
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className="text-[10px] text-gray-400">
+                        <span className="text-gray-300 mr-1">开仓</span>{formatDate(order.createdAt)}
+                      </span>
+                      {order.confirmedAt && (
+                        <span className="text-[10px] text-blue-400">
+                          <span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}
+                        </span>
                       )}
                     </div>
                   </div>
