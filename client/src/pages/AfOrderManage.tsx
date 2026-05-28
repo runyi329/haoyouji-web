@@ -688,11 +688,34 @@ export default function AfOrderManage() {
                         })()}
                       </span>
                     </div>
-                    {/* 实际金额 */}
-                    <div className="flex items-center gap-1">
-                      <span className="text-gray-400 text-xs w-10">实际金额</span>
-                      <span>{parseFloat(order.amount).toFixed(2)} USDT</span>
-                    </div>
+                    {/* 实际投入（正单显示自己amount，赠单显示sourceAmount） */}
+                    {(() => {
+                      const srcAmt = parseFloat(order.sourceAmount || '0');
+                      const selfAmt = parseFloat(order.amount || '0');
+                      const investAmt = order.isGift ? srcAmt : selfAmt;
+                      if (investAmt <= 0) return null;
+                      return (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400 text-xs w-10">实际投入</span>
+                          <span>{investAmt.toFixed(2)} USDT</span>
+                        </div>
+                      );
+                    })()}
+                    {/* 赠送市值（赠单专用，含倍数；正单不显示此行） */}
+                    {order.isGift && (() => {
+                      const srcAmt = parseFloat(order.sourceAmount || '0');
+                      const giftAmt = parseFloat(order.amount || '0');
+                      const ratio = srcAmt > 0 ? (giftAmt / srcAmt) : 0;
+                      return (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400 text-xs w-10">赠送市值</span>
+                          <span>
+                            {giftAmt.toFixed(2)} USDT
+                            {ratio > 0 && <span className="text-xs text-gray-400 ml-1">({ratio.toFixed(4)}倍)</span>}
+                          </span>
+                        </div>
+                      );
+                    })()}
                     {/* 订单价值 */}
                     {(() => {
                       const amount = parseFloat(order.amount);
@@ -797,7 +820,7 @@ export default function AfOrderManage() {
                     const ratioStr = ratio > 0 ? `赠送市值${ratio.toFixed(4)}倍` : '';
                     return (
                       <div className="mt-2 text-xs rounded-lg px-3 py-1.5 border text-gray-500 bg-gray-50 border-gray-100">
-                        推荐人奖励订单{ratioStr ? ` (${ratioStr})` : ''} · 来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span>
+                        推荐人奖励订单 · 来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span>
                       </div>
                     );
                   })()}
