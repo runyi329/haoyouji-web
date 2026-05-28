@@ -13135,7 +13135,12 @@ ${klinesSummary}
 
         let ongoingFee = 0;   // 进行中管理费
         let settledFee = 0;   // 已结清管理费
+        let todayFee = 0;     // 今日管理费（北京时间今天产生的管理费，仅计费中订单）
+        let todayOrderCount = 0; // 今日计费订单数（status=completed 且今天仍在计费）
         const now = new Date();
+        // 北京时间今天起始（UTC+8）
+        const nowBJ = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+        const todayStartBJ = new Date(nowBJ.getFullYear(), nowBJ.getMonth(), nowBJ.getDate());
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
         for (const bo of buyOrders) {
@@ -13145,7 +13150,7 @@ ${klinesSummary}
           const isGift = parseInt(bo.is_gift || '0') === 1;
           const tradeValue = isGift ? amount : amount * 5.25;
           const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-                    // 管理费从下单时间（created_at）开始计算，修改价格等操作不影响管理费
+          // 管理费从下单时间（created_at）开始计算，修改价格等操作不影响管理费
           const confirmedDate = new Date(bo.created_at);
           const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
           if (bo.sell_status_val === 'sold') {
@@ -13154,10 +13159,18 @@ ${klinesSummary}
             const sellDay = new Date(sellConfirmedDate.getFullYear(), sellConfirmedDate.getMonth(), sellConfirmedDate.getDate());
             const holdDays = Math.max(1, Math.floor((sellDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
             settledFee += dailyFee * holdDays;
+            // 已卖出：若卖出日 >= 今天（北京时间），则今天也算一天计费
+            if (sellDay.getTime() >= todayStartBJ.getTime()) {
+              todayFee += dailyFee;
+              todayOrderCount += 1;
+            }
           } else {
-            // 进行中：从下单日到今天
+            // 进行中（持仓中/委卖中）：从下单日到今天
             const holdDays = Math.max(1, Math.floor((todayStart.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
             ongoingFee += dailyFee * holdDays;
+            // 今日管理费：每个进行中订单今天都产生一天管理费
+            todayFee += dailyFee;
+            todayOrderCount += 1;
           }
         }
 
@@ -13166,7 +13179,7 @@ ${klinesSummary}
         return {
           authorized: true,
           orders: { normalCount, giftCount, totalCount },
-          fees: { ongoingFee: +ongoingFee.toFixed(4), settledFee: +settledFee.toFixed(4), totalFee: +totalFee.toFixed(4) },
+          fees: { ongoingFee: +ongoingFee.toFixed(4), settledFee: +settledFee.toFixed(4), totalFee: +totalFee.toFixed(4), todayFee: +todayFee.toFixed(4), todayOrderCount },
         };
       }),
     // 管理员：查询买单的扣档记录（包含触发时间、价格、第几次扫描）
