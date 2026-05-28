@@ -12779,7 +12779,8 @@ ${klinesSummary}
               ORDER BY o.created_at DESC
               LIMIT 100`
         ) as any;
-        const allOrders = ((rows[0] || rows) as any[]);
+        // drizzle db.execute返回[ResultSetHeader, RowDataPacket[]]，rows[1]是数据行
+        const allOrders = (Array.isArray(rows[1]) ? rows[1] : (Array.isArray(rows[0]) ? rows[0] : rows)) as any[];
         
         if (allOrders.length > 0) console.log('[afGetOrders debug] first row confirmed_at:', allOrders[0]?.confirmed_at, 'type:', typeof allOrders[0]?.confirmed_at);
         const list = allOrders.map((r: any) => ({
