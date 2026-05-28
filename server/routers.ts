@@ -12961,8 +12961,40 @@ ${klinesSummary}
           sellStatus: r.sell_status || null,
           confirmedAt: toBeijingTimeStr(r.confirmed_at),
           equityTier: 0,
+          allTimeLowPrice: null as string | null,
+          allTimeLowAt: null as string | null,
         }));
         
+        // 批量查询每笔订单的扫描最低价（af_order_scan_stats）
+        try {
+          const allOrderIds = list.map((o: any) => o.id);
+          if (allOrderIds.length > 0) {
+            const placeholders2 = allOrderIds.map(() => '?').join(',');
+            const conn2 = await (await import('./db')).getDbConnection();
+            if (conn2) {
+              const [scanStatRows] = await (conn2 as any).execute(
+                `SELECT order_id, all_time_low_price, all_time_low_at FROM af_order_scan_stats WHERE order_id IN (${placeholders2})`,
+                allOrderIds
+              );
+              const scanMap: Record<number, { price: string; at: string | null }> = {};
+              for (const s of (scanStatRows as any[])) {
+                scanMap[Number(s.order_id)] = {
+                  price: s.all_time_low_price ? String(s.all_time_low_price) : '',
+                  at: s.all_time_low_at ? toBeijingTimeStr(s.all_time_low_at) : null,
+                };
+              }
+              for (const order of list) {
+                if (scanMap[order.id]) {
+                  order.allTimeLowPrice = scanMap[order.id].price || null;
+                  order.allTimeLowAt = scanMap[order.id].at || null;
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('[afAdminGetOrders] 查询扫描最低价失败:', e);
+        }
+
         // 为每个买单查询权益折扣档位
         for (const order of list) {
           if (order.side === 'buy') {

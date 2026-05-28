@@ -732,6 +732,22 @@ export default function AfOrderManage() {
                         </div>
                       );
                     })()}
+                    {/* 扫描最低价（持仓中/委卖中显示） */}
+                    {order.status === 'completed' && (order as any).allTimeLowPrice && (() => {
+                      const lowPrice = parseFloat((order as any).allTimeLowPrice);
+                      const lowAt = (order as any).allTimeLowAt;
+                      const lowDate = lowAt ? new Date(lowAt) : null;
+                      const fmtLow = lowDate ? `${lowDate.getMonth()+1}月${lowDate.getDate()}日` : '';
+                      return (
+                        <div className="flex items-center gap-1 col-span-2">
+                          <span className="text-gray-400 text-xs w-10">扫描最低价</span>
+                          <span className="font-medium text-blue-600">
+                            {lowPrice.toLocaleString()} USDT
+                            {fmtLow && <span className="text-xs text-gray-400 ml-1">({fmtLow})</span>}
+                          </span>
+                        </div>
+                      );
+                    })()}
                     {/* 累计管理费：从下单时间（createdAt）开始算，撤单则作废，成交/委卖/持仓均累计（含赠单） */}
                     {(order.status === 'completed' || order.status === 'pending') && (() => {
                       const amount = parseFloat(order.amount);
@@ -764,16 +780,9 @@ export default function AfOrderManage() {
                               {isSold && <span className="text-xs text-red-400 ml-1 font-normal">✓ 已停止计费</span>}
                             </span>
                           </div>
-                          {isSold && (
-                            <div className="ml-11 text-[11px] text-gray-400">
-                              计费区间：{fmtDay(startDay)} → {fmtDay(endDay)}（共{holdDays}天，{dailyFee.toFixed(4)} USDT/天）
-                            </div>
-                          )}
-                          {!isSold && (
-                            <div className="ml-11 text-[11px] text-gray-400">
-                              {holdDays}天 · {dailyFee.toFixed(4)} USDT/天
-                            </div>
-                          )}
+                          <div className="ml-11 text-[11px] text-gray-400">
+                            计费区间：{fmtDay(startDay)} → {isSold ? fmtDay(endDay) : '今天'}（共{holdDays}天，{dailyFee.toFixed(4)} USDT/天）
+                          </div>
                         </div>
                       );
                     })()}
