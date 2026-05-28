@@ -785,20 +785,20 @@ export default function AfOrderManage() {
                       // 日期格式化函数
                       const fmtDay = (d: Date) => `${d.getMonth()+1}月${d.getDate()}日`;
                       return (
-                        <div className="flex flex-col gap-0.5 col-span-2">
-                          <div className="flex items-center gap-1">
+                        <>
+                          <div className="flex items-center gap-1 col-span-2">
                             <span className="text-gray-400 w-12 shrink-0">管理费</span>
                             <span className={`font-medium ${isPending ? 'text-gray-400' : isSold ? 'text-gray-500' : 'text-gray-900'}`}>
                               {totalFee.toFixed(4)} USDT
-                              {isPending && <span className="text-xs text-yellow-500 ml-1">撤单则作废</span>}
-                              {isSold && <span className="text-xs text-red-400 ml-1 font-normal">✓ 已停止计费</span>}
+                              {isPending && <span className="text-gray-400 font-normal ml-1">撤单则作废</span>}
+                              {isSold && <span className="text-red-400 font-normal ml-1">✓ 已停止计费</span>}
                             </span>
                           </div>
-                          <div className="flex items-start gap-1">
-                            <span className="text-gray-400 w-12 shrink-0 text-[11px]">计费区间</span>
-                            <span className="text-[11px] text-gray-400">{fmtDay(startDay)} → {fmtDay(endDay)}（共{holdDays}天，{dailyFee.toFixed(4)} USDT/天）</span>
+                          <div className="flex items-center gap-1 col-span-2">
+                            <span className="text-gray-400 w-12 shrink-0">计费区间</span>
+                            <span className="text-gray-500">{fmtDay(startDay)} → {fmtDay(endDay)}（共{holdDays}天，{dailyFee.toFixed(4)}/天）</span>
                           </div>
-                        </div>
+                        </>
                       );
                     })()}
                   </div>
