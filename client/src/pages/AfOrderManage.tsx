@@ -790,11 +790,17 @@ export default function AfOrderManage() {
                   </div>
 
                   {/* 赠送订单来源信息 */}
-                  {order.isGift && order.sourceUsername && (
-                    <div className="mt-2 text-xs rounded-lg px-3 py-1.5 border text-gray-500 bg-gray-50 border-gray-100">
-                      {order.giftMultiplier === '1.0' ? '间接推荐奖励订单 (1.0倍)' : '推荐人奖励订单 (1.5倍)'} · 来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span>
-                    </div>
-                  )}
+                  {order.isGift && order.sourceUsername && (() => {
+                    const srcAmt = parseFloat(order.sourceAmount || '0');
+                    const giftAmt = parseFloat(order.amount || '0');
+                    const ratio = srcAmt > 0 ? (giftAmt / srcAmt) : 0;
+                    const ratioStr = ratio > 0 ? `赠送市值${ratio.toFixed(4)}倍` : '';
+                    return (
+                      <div className="mt-2 text-xs rounded-lg px-3 py-1.5 border text-gray-500 bg-gray-50 border-gray-100">
+                        推荐人奖励订单{ratioStr ? ` (${ratioStr})` : ''} · 来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span>
+                      </div>
+                    );
+                  })()}
 
                   {/* 赠予订单折叠区块（仅对非赠予的委买订单显示） */}
                   {!order.isGift && (() => {
