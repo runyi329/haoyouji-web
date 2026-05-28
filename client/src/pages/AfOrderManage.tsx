@@ -305,9 +305,9 @@ export default function AfOrderManage() {
     const isGift = order.isGift === true || order.isGift === 1;
     if (statusFilter === 'all') return !(isGift && order.status === 'pending');
     if (statusFilter === 'pending') return order.status === 'pending' && !isGift;
-    if (statusFilter === 'holding') return order.status === 'completed' && !order.sellStatus;
-    if (statusFilter === 'selling') return order.sellStatus === 'selling';
-    if (statusFilter === 'sold') return order.sellStatus === 'sold';
+    if (statusFilter === 'holding') return order.status === 'completed' && !order.sellStatus && !isGift;
+    if (statusFilter === 'selling') return order.sellStatus === 'selling' && !isGift;
+    if (statusFilter === 'sold') return order.sellStatus === 'sold' && !isGift;
     return true;
   }) ?? [];
 
@@ -409,9 +409,9 @@ export default function AfOrderManage() {
           {([
             { key: 'all' as const, label: '全部', count: (orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return !(g && o.status === 'pending'); }).length ?? 0 },
             { key: 'pending' as const, label: '委买中', count: (orders as any[])?.filter((o: any) => o.status === 'pending' && o.isGift !== true && o.isGift !== 1).length ?? 0 },
-            { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && !o.sellStatus).length ?? 0 },
-            { key: 'selling' as const, label: '委卖中', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0 },
-            { key: 'sold' as const, label: '已卖出', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0 },
+            { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && !o.sellStatus && o.isGift !== true && o.isGift !== 1).length ?? 0 },
+            { key: 'selling' as const, label: '委卖中', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'selling' && o.isGift !== true && o.isGift !== 1).length ?? 0 },
+            { key: 'sold' as const, label: '已卖出', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'sold' && o.isGift !== true && o.isGift !== 1).length ?? 0 },
           ]).map((tab, idx, arr) => (
             <button
               key={tab.key}
@@ -701,21 +701,33 @@ export default function AfOrderManage() {
                               else if (g.sellStatus === 'selling') { statusLabel = '委卖中'; statusColor = 'text-red-500'; }
                               else if (g.status === 'completed') { statusLabel = '持仓中'; statusColor = 'text-green-500'; }
                               else if (g.status === 'cancelled') { statusLabel = '已撤单'; statusColor = 'text-gray-400'; }
+                              const giftPrice = parseFloat(g.limitPrice || '0');
+                              const orderValue = giftQty * giftPrice;
                               return (
                                 <div key={g.id} className={`px-3 py-2.5 text-xs ${idx > 0 ? 'border-t border-purple-50' : ''} bg-white`}>
-                                  <div className="flex items-center justify-between mb-1">
+                                  {/* 第一行：受益人 + 拨比 + 状态 */}
+                                  <div className="flex items-center justify-between mb-1.5">
                                     <div className="flex items-center gap-1.5">
                                       <span className="font-medium text-gray-800">{g.nickname || g.username}</span>
                                       {ratioLabel && <span className="text-purple-500 bg-purple-50 px-1.5 py-0.5 rounded">{ratioLabel}</span>}
                                     </div>
                                     <span className={`font-medium ${statusColor}`}>{statusLabel}</span>
                                   </div>
-                                  <div className="flex items-center gap-3 text-gray-500">
-                                    <span>赠予金额 <span className="text-gray-700 font-medium">{giftAmt.toFixed(4)} USDT</span></span>
-                                    <span>赠予数量 <span className="text-gray-700 font-medium">{giftQty.toFixed(4)} {g.coin}</span></span>
+                                  {/* 第二行：订单编号 */}
+                                  {g.orderNo && (
+                                    <div className="mb-1 text-gray-400">
+                                      订单号 <span className="text-gray-600 font-mono">{g.orderNo}</span>
+                                      <span className="ml-2 text-gray-500">币种 <span className="text-gray-700 font-medium">{g.coin}</span></span>
+                                    </div>
+                                  )}
+                                  {/* 第三行：买入价 + 赠予数量 + 订单价值 */}
+                                  <div className="grid grid-cols-3 gap-1 text-gray-500 mb-1">
+                                    <div>买入价<br/><span className="text-gray-700 font-medium">{giftPrice > 0 ? giftPrice.toFixed(0) : '-'} USDT</span></div>
+                                    <div>赠予数量<br/><span className="text-gray-700 font-medium">{giftQty.toFixed(4)} {g.coin}</span></div>
+                                    <div>订单价值<br/><span className="text-gray-700 font-medium">{orderValue > 0 ? orderValue.toFixed(2) : giftAmt.toFixed(2)} USDT</span></div>
                                   </div>
-                                  {/* 权益档位信息 */}
-                                  <div className="mt-1 flex items-center gap-2">
+                                  {/* 第四行：权益档位信息 */}
+                                  <div className="flex items-center gap-2">
                                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                                       giftTier === 0 ? 'bg-green-50 text-green-600' :
                                       giftTier <= 3 ? 'bg-blue-50 text-blue-600' :

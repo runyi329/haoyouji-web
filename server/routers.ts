@@ -12958,8 +12958,8 @@ ${klinesSummary}
               const placeholders = normalOrderIds.map(() => '?').join(',');
               // 查询赠予订单基本信息
               const [giftRows] = await (conn as any).execute(
-                `SELECT g.id, g.source_order_id, g.user_id, g.amount, g.quantity, g.coin,
-                        g.status, g.sell_status, g.gift_multiplier,
+                `SELECT g.id, g.order_no, g.source_order_id, g.user_id, g.amount, g.quantity, g.coin,
+                        g.status, g.sell_status, g.gift_multiplier, g.limit_price,
                         u.username, COALESCE(u.name,'') as user_name
                  FROM af_orders g
                  LEFT JOIN users u ON u.id = g.user_id
@@ -12990,12 +12990,14 @@ ${klinesSummary}
                   if (!giftMap[sid]) giftMap[sid] = [];
                   giftMap[sid].push({
                     id: g.id,
+                    orderNo: g.order_no || '',
                     userId: g.user_id,
                     username: g.username || '',
                     nickname: g.user_name || g.username || '',
                     amount: String(g.amount || '0'),
                     quantity: String(g.quantity || '0'),
                     coin: String(g.coin || ''),
+                    limitPrice: String(g.limit_price || '0'),
                     status: String(g.status || ''),
                     sellStatus: g.sell_status ? String(g.sell_status) : null,
                     giftMultiplier: String(g.gift_multiplier || ''),
