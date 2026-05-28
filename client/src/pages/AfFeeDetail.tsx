@@ -128,9 +128,9 @@ export default function AfFeeDetail() {
             }
           }
           return (
-            <div className="grid grid-cols-3 gap-2 px-4 pb-5 pt-3">
+            <div className="grid grid-cols-2 gap-2 px-4 pb-5 pt-3">
               {/* 管理费容器：进行中/已结清/累计 */}
-              <div className="col-span-2 rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
                 <p className="text-white/55 text-xs mb-2">管理费</p>
                 <div className="space-y-1.5">
                   <div className="flex justify-between text-xs">
