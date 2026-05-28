@@ -12826,6 +12826,54 @@ ${klinesSummary}
         const available = parseFloat((buyRows[0]?.[0]?.total ?? buyRows[0]?.total ?? '0').toString());
         return { coin: input.coin, available };
       }),
+    // 管理员：补生成历史pending赠予订单（一次性工具）
+    afAdminBackfillGiftOrders: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 验证是否是 owner 或 admin
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const myRole = (roleRows[0]?.[0]?.role || (roleRows as any)[0]?.role);
+        if (myRole !== 'owner' && myRole !== 'admin') throw new Error('无权限');
+        // 查询所有 pending 委买订单（非赠予）
+        const pendingOrders = await db.execute(
+          sql`SELECT id, user_id, coin, limit_price, amount, quantity FROM af_orders
+              WHERE ledger_id = ${input.ledgerId} AND status = 'pending' AND side = 'buy' AND (is_gift = 0 OR is_gift IS NULL)`
+        ) as any;
+        const orders: any[] = (pendingOrders[0] || pendingOrders) as any[];
+        let created = 0;
+        for (const order of orders) {
+          // 查询该用户的拨比配置
+          const ratioRows2 = await db.execute(
+            sql`SELECT beneficiary_user_id, ratio FROM af_payout_ratios WHERE ledger_id = ${input.ledgerId} AND source_user_id = ${order.user_id}`
+          ) as any;
+          const ratios: any[] = ((ratioRows2[0] || ratioRows2) as any[]).filter((r: any) => r && r.beneficiary_user_id);
+          if (ratios.length === 0) continue;
+          const actualSpend = parseFloat(order.amount || '0');
+          const actualPrice = parseFloat(order.limit_price || '0');
+          const baseGiftAmount = actualSpend * 10 * 0.75 * 0.3;
+          for (const r of ratios) {
+            // 检查是否已有赠予订单
+            const existRows = await db.execute(
+              sql`SELECT id FROM af_orders WHERE source_order_id = ${order.id} AND user_id = ${r.beneficiary_user_id} AND is_gift = 1 LIMIT 1`
+            ) as any;
+            const exist = (existRows[0]?.[0] ?? (existRows as any)[0]);
+            if (exist) continue; // 已有则跳过
+            const ratio = parseFloat(r.ratio) / 100;
+            const giftAmount = (baseGiftAmount * ratio).toFixed(8);
+            const giftQuantity = actualPrice > 0 ? (parseFloat(giftAmount) / actualPrice).toFixed(8) : '0';
+            await db.execute(
+              sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, created_at, updated_at)
+                  VALUES (${input.ledgerId}, ${r.beneficiary_user_id}, ${order.coin}, 'buy', ${order.limit_price}, ${giftAmount}, ${giftQuantity}, 'pending', 1, ${String(ratio.toFixed(4))}, ${order.id}, ${order.user_id}, ${actualSpend.toFixed(8)}, NOW(), NOW())`
+            );
+            created++;
+            console.log(`[补生成] 委买订单#${order.id} → 受益人(${r.beneficiary_user_id}) 拨比${r.ratio}% 金额:${giftAmount}`);
+          }
+        }
+        return { success: true, created, total: orders.length };
+      }),
     // 管理员：查询该账本所有用户的所有订单
     afAdminGetOrders: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
