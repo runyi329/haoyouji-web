@@ -12601,31 +12601,28 @@ ${klinesSummary}
         } catch (_) {
           // 表不存在时忽略
         }
-        // 3. 合并并按时间倒序排列
-        const combined = [...rechargeList, ...manualList].sort(
-          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        // 3. 合并并按时间正序排列（从旧到新正推）
+        const combinedAsc = [...rechargeList, ...manualList].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
-        // 4. 计算每条记录后的余额快照（从当前余额倒推：从新到旧，每条记录的余额 = 当前runningBalance，然后倒减该笔金额）
-        const userBalRow = await db.execute(
-          sql`SELECT COALESCE(balance, 0) as bal FROM users WHERE id = ${targetUserId} LIMIT 1`
-        ) as any;
-        const currentBalance = parseFloat(((userBalRow[0] || userBalRow) as any[])[0]?.bal?.toString() || '0');
-        // combined 已按时间倒序（最新在前），从最新记录开始倒推
-        let runningBalance = currentBalance;
+        // 4. 正推余额：从0开始，每条记录累加，记录发生后的余额
+        let runningBalance = 0;
         const balanceMap = new Map<string, number>();
-        for (const item of combined) {
+        for (const item of combinedAsc) {
           const amt = parseFloat(String((item as any).amount));
           const srcType = (item as any).sourceType;
           const status = (item as any).status;
-          // 当前 runningBalance 就是这条记录发生后的余额
-          balanceMap.set(String((item as any).id), parseFloat(runningBalance.toFixed(2)));
-          // 往前倒推：减去这笔金额（只有实际影响余额的记录才倒减）
+          // 只有实际影响余额的记录才累加
           if (srcType === 'recharge' && status === 'completed') {
-            runningBalance -= amt;
+            runningBalance += amt;
           } else if (srcType === 'manual') {
-            runningBalance -= amt;
+            runningBalance += amt;
           }
+          // 记录这条记录发生后的余额
+          balanceMap.set(String((item as any).id), parseFloat(runningBalance.toFixed(2)));
         }
+        // 返回时按时间倒序（最新在前）展示给前端
+        const combined = [...combinedAsc].reverse();
         return combined.map(item => ({
           ...item,
           balanceAfter: balanceMap.get(String((item as any).id)) ?? null,
