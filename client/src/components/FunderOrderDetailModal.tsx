@@ -259,7 +259,8 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
                 { label: '币种', value: order.coin },
                 { label: '买入价格', value: price > 0 ? `${price.toLocaleString()} USDT` : null },
                 { label: '买入数量', value: qty > 0 ? `${qty} ${order.coin}` : null },
-                { label: '买入日期', value: order.buy_date || null },
+                { label: '开仓时间', value: order.buy_date || null },
+                { label: '登记时间', value: order.created_at ? (typeof order.created_at === 'string' ? order.created_at.replace('T', ' ').slice(0, 16) : new Date(order.created_at).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })) : null },
                 { label: '存放账号', value: order.storage_account || null },
               ].filter(item => item.value !== null).map((item, idx, arr) => (
                 <div
