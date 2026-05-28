@@ -12765,6 +12765,16 @@ ${klinesSummary}
               LEFT JOIN users su ON su.id = o.source_user_id
               WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
                 AND o.side = 'buy'
+                AND (
+                  COALESCE(o.is_gift, 0) = 0
+                  OR (
+                    COALESCE(o.is_gift, 0) = 1
+                    AND EXISTS (
+                      SELECT 1 FROM af_orders src
+                      WHERE src.id = o.source_order_id AND src.status = 'completed'
+                    )
+                  )
+                )
               ORDER BY o.created_at DESC
               LIMIT 100`
         ) as any;
