@@ -12723,6 +12723,11 @@ ${klinesSummary}
                 const ratio = parseFloat(r.ratio) / 100;
                 const giftAmount = (baseGiftAmount * ratio).toFixed(8);
                 const giftQuantity = actualPrice > 0 ? (parseFloat(giftAmount) / actualPrice).toFixed(8) : '0';
+                // 跳过数量为0的赠单
+                if (parseFloat(giftQuantity) <= 0 || parseFloat(giftAmount) <= 0) {
+                  console.log(`[拨比预生成] 跳过0数量赠单 受益人(${r.beneficiary_user_id}) 拨比${r.ratio}% 金额:${giftAmount}`);
+                  continue;
+                }
                 await (conn as any).execute(
                   `INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, created_at, updated_at)
                    VALUES (?, ?, ?, 'buy', ?, ?, ?, 'pending', 1, ?, ?, ?, ?, NOW(), NOW())`,
@@ -12884,6 +12889,11 @@ ${klinesSummary}
             const ratio = parseFloat(r.ratio) / 100;
             const giftAmount = (baseGiftAmount * ratio).toFixed(8);
             const giftQuantity = actualPrice > 0 ? (parseFloat(giftAmount) / actualPrice).toFixed(8) : '0';
+            // 跳过数量为0的赠单
+            if (parseFloat(giftQuantity) <= 0 || parseFloat(giftAmount) <= 0) {
+              console.log(`[补生成] 跳过0数量赠单 受益人(${r.beneficiary_user_id}) 拨比${r.ratio}% 金额:${giftAmount}`);
+              continue;
+            }
             await (conn as any).execute(
               `INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, created_at, updated_at)
                VALUES (?, ?, ?, 'buy', ?, ?, ?, 'pending', 1, ?, ?, ?, ?, NOW(), NOW())`,
@@ -13500,6 +13510,11 @@ ${klinesSummary}
                 const ratio = parseFloat(r.ratio) / 100;
                 const giftAmount = (baseGiftAmount * ratio).toFixed(8);
                 const giftQuantity = actualPrice > 0 ? (parseFloat(giftAmount) / actualPrice).toFixed(8) : '0';
+                // 跳过数量为0的赠单
+                if (parseFloat(giftQuantity) <= 0 || parseFloat(giftAmount) <= 0) {
+                  console.log(`[AF拨比赠送] 跳过0数量赠单 受益人(${r.beneficiary_user_id}) 拨比${r.ratio}% 金额:${giftAmount}`);
+                  continue;
+                }
                 // 查找已有的 pending 赠予订单
                 const [existGiftRows] = conn2 ? await (conn2 as any).execute(
                   `SELECT id FROM af_orders WHERE source_order_id = ? AND user_id = ? AND is_gift = 1 AND status = 'pending' LIMIT 1`,
