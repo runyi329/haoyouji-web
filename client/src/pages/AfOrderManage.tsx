@@ -448,7 +448,7 @@ export default function AfOrderManage() {
         ) : filteredOrders.length === 0 ? (
           <div className="text-center py-12 text-gray-400">该状态下暂无订单</div>
         ) : (
-          <div className="space-y-2.5 pb-6">
+          <div className="space-y-4 pb-6">
             {(() => {
               // 分组逻辑：
               // - 持仓中（status=completed）：按登记时间 confirmedAt 分组
@@ -552,7 +552,7 @@ export default function AfOrderManage() {
               const orderNo = `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
 
               return (
-                <div key={order.id} className="bg-white rounded-2xl p-4 shadow-sm">
+                <div key={order.id} className="bg-white rounded-2xl p-4 shadow-sm mb-3">
                   {/* 订单编号行 */}
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
