@@ -1653,12 +1653,10 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           <span className="text-[#64748B]">{timeStr}</span>
         </div>
         {/* 登记时间（管理员确认成交的时间） */}
-        {order.confirmedAt && (
-          <div className="flex justify-between items-center">
-            <span className="text-[#9CA3AF]">登记时间</span>
-            <span className="text-[#64748B]">{order.confirmedAt}</span>
-          </div>
-        )}
+        <div className="flex justify-between items-center">
+          <span className="text-[#9CA3AF]">登记时间</span>
+          <span className="text-[#64748B]">{order.confirmedAt || '(无数据)'}</span>
+        </div>
         {/* 卖出时间（已卖出时显示） */}
         {order.sellStatus === 'sold' && order.sellConfirmedAt && (
           <div className="flex justify-between items-center">
