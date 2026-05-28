@@ -166,9 +166,9 @@ export default function AfOrderManage() {
   // 赠予订单折叠展开状态：key = 委买订单ID
   const [expandedGiftOrders, setExpandedGiftOrders] = useState<Record<number, boolean>>({});
   const [expandedDateId, setExpandedDateId] = useState<number | null>(null);
-  // 日期分组折叠：key = 日期字符串(YYYY-MM-DD)，value = 是否展开（默认全部展开）
+  // 日期分组折叠：key = 日期字符串(YYYY-MM-DD)，value = 是否展开（默认全部折叠）
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
-  const toggleDate = (dateKey: string) => setExpandedDates(prev => ({ ...prev, [dateKey]: !(prev[dateKey] ?? true) }));
+  const toggleDate = (dateKey: string) => setExpandedDates(prev => ({ ...prev, [dateKey]: !(prev[dateKey] ?? false) }));
   const toggleGiftOrders = (orderId: number) => setExpandedGiftOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
   // 管理费明细：跳转到独立页面
 
@@ -474,7 +474,7 @@ export default function AfOrderManage() {
               const sortedDates = Object.keys(dateGroups).sort((a, b) => b.localeCompare(a));
               return sortedDates.map(dateKey => {
                 const groupOrders = dateGroups[dateKey];
-                const isOpen = expandedDates[dateKey] ?? true;
+                const isOpen = expandedDates[dateKey] ?? false;
                 // 统计：投入总额、各币种持仓数量
                 const totalAmount = groupOrders.reduce((s: number, o: any) => s + (parseFloat(o.amount) || 0), 0);
                 const coinQty: Record<string, number> = {};
@@ -492,14 +492,26 @@ export default function AfOrderManage() {
                       const normalCount = groupOrders.filter((o: any) => !o.isGift).length;
                       // 赠单数量：累加每个正单的 giftOrders 数量
                       const giftCount = groupOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[] || []).length), 0);
-                      // 各币种数量简写：BTC→币 ETH→E SOL→S
-                      const COIN_SHORT: Record<string, string> = { BTC: '币', ETH: 'E', SOL: 'S' };
-                      const coinParts = Object.entries(coinQty).map(([c, q]) => {
-                        const short = COIN_SHORT[c] || c;
-                        const qNum = q as number;
-                        const qStr = qNum >= 100 ? qNum.toFixed(2) : qNum >= 1 ? qNum.toFixed(3) : qNum.toFixed(4);
-                        return `${short}:${qStr}`;
-                      }).join(' ');
+                      // 各币种简写和颜色：ETH→E(蓝色) BTC→B(橙色) SOL→S(绿色)
+                      const COIN_CONFIG: Record<string, { short: string; color: string }> = {
+                        ETH: { short: 'E', color: 'text-blue-500' },
+                        BTC: { short: 'B', color: 'text-orange-400' },
+                        SOL: { short: 'S', color: 'text-green-500' },
+                      };
+                      // 按 ETH→BTC→SOL 顺序排列
+                      const COIN_ORDER = ['ETH', 'BTC', 'SOL'];
+                      const sortedCoinParts = Object.entries(coinQty)
+                        .sort(([a], [b]) => {
+                          const ai = COIN_ORDER.indexOf(a);
+                          const bi = COIN_ORDER.indexOf(b);
+                          return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+                        })
+                        .map(([c, q]) => {
+                          const cfg = COIN_CONFIG[c] || { short: c, color: 'text-gray-500' };
+                          const qNum = q as number;
+                          const qStr = qNum >= 100 ? qNum.toFixed(2) : qNum >= 1 ? qNum.toFixed(3) : qNum.toFixed(4);
+                          return { short: cfg.short, color: cfg.color, qStr };
+                        });
                       return (
                         <button
                           onClick={() => toggleDate(dateKey)}
@@ -510,7 +522,9 @@ export default function AfOrderManage() {
                             <span className="text-[11px] text-blue-400 shrink-0">{normalCount}单</span>
                             {giftCount > 0 && <span className="text-[11px] text-orange-400 shrink-0">{giftCount}赠</span>}
                             <span className="text-[11px] text-gray-600 shrink-0">{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
-                            {coinParts && <span className="text-[11px] text-blue-500 truncate">{coinParts}</span>}
+                            {sortedCoinParts.map(({ short, color, qStr }) => (
+                              <span key={short} className={`text-[11px] ${color} shrink-0`}>{short}:{qStr}</span>
+                            ))}
                           </div>
                           <span className={`text-blue-400 transition-transform duration-200 shrink-0 ml-1 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                         </button>
