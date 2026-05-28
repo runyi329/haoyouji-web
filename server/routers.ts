@@ -13264,8 +13264,8 @@ ${klinesSummary}
           }
           console.log(`[AF卖出成交] 订单#${input.orderId}: 本金=${principal}, 买入价=${buyPrice}, 卖出价=${actualSellPrice}, 原始币数=${originalQty}, 最高档位=${maxTier}, 有效币数=${effectiveQty.toFixed(8)}, 收益=${profit.toFixed(4)}`);
           
-          // 计算累计管理费
-          const confirmedDate = order.updated_at ? new Date(order.updated_at) : new Date(order.created_at);
+          // 计算累计管理费：从下单时间（created_at）开始，修改价格等操作不影响管理费
+          const confirmedDate = new Date(order.created_at);
           const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
           const todayNow = new Date();
           const todayDay = new Date(todayNow.getFullYear(), todayNow.getMonth(), todayNow.getDate());
@@ -13274,7 +13274,7 @@ ${klinesSummary}
           const tradeValue = isGift ? oldAmount : oldAmount * 5.25;
           const dailyFee = tradeValue / 0.75 * 0.12 / 365;
           const managementFee = dailyFee * holdDays;
-          console.log(`[AF卖出成交] 管理费: 本金=${principal}, 成交价值=${tradeValue.toFixed(2)}, 持有天数=${holdDays}, 累计管理费=${managementFee.toFixed(4)}`);
+          console.log(`[AF卖出成交] 管理费: 本金=${principal}, 成交价值=${tradeValue.toFixed(2)}, 下单日=${confirmedDate.toISOString().slice(0,10)}, 持有天数=${holdDays}, 累计管理费=${managementFee.toFixed(4)}`);
           
           // 赠予订单买入时未扣本金，卖出时只结算纯利润，不加回本金
           const grossReturn = isGift ? Math.max(0, profit) : (principal + Math.max(0, profit));

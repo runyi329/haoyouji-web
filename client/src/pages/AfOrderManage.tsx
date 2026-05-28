@@ -65,7 +65,8 @@ function FeeDetailModal({ orders, onClose }: { orders: any[], onClose: () => voi
       const amount = parseFloat(o.amount || '0');
       const tradeValue = o.isGift ? amount : amount * 5.25;
       const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-      const confirmedDate = new Date(o.updatedAt || o.createdAt);
+      // 管理费从下单时间（created_at）开始计算，修改价格等操作不影响管理费
+      const confirmedDate = new Date(o.createdAt);
       const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
       let holdDays: number;
       let feeType: string;
@@ -224,11 +225,11 @@ export default function AfOrderManage() {
     const totalProfit = effectiveQuantity * unitProfit;
     const totalRefund = principal + Math.max(0, totalProfit);
 
-    // 管理费计算
+    // 管理费计算：从下单时间（createdAt）开始，修改价格等操作不影响管理费
     const isGiftOrder = order.isGift === true || order.isGift === 1;
     const tradeValue = isGiftOrder ? principal : principal * 5.25;
     const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-    // 开始日期：用 createdAt（买入成交时间），不用 updatedAt（委卖操作会更新它）
+    // 开始日期：从下单时间（createdAt）算起，撤单则作废，成交后累计不重置
     const confirmedDate = new Date(order.createdAt);
     const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
     // 结束日期：已卖出用 sellConfirmedAt，其他状态用今天
@@ -628,14 +629,14 @@ export default function AfOrderManage() {
                         </div>
                       );
                     })()}
-                    {/* 累计管理费 */}
-                    {order.status === 'completed' && (() => {
+                    {/* 累计管理费：从下单时间（createdAt）开始算，撤单则作废，成交/委卖/持仓均累计 */}
+                    {(order.status === 'completed' || order.status === 'pending') && !order.isGift && (() => {
                       const amount = parseFloat(order.amount);
-                      const tradeValue = order.isGift ? amount : amount * 5.25;
+                      const tradeValue = amount * 5.25;
                       const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-                      // 开始日期：用 createdAt（买入成交时间），不用 updatedAt（委卖操作会更新它）
-                      const confirmedDate = new Date(order.createdAt);
-                      const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+                      // 开始日期：从下单时间（createdAt）算起，修改价格等操作不影响管理费
+                      const startDate = new Date(order.createdAt);
+                      const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
                       // 结束日期：已卖出用 sellConfirmedAt，其他状态用今天
                       let endDay: Date;
                       if (order.sellStatus === 'sold' && order.sellConfirmedAt) {
@@ -644,12 +645,17 @@ export default function AfOrderManage() {
                       } else {
                         endDay = new Date(); endDay.setHours(0,0,0,0);
                       }
-                      const holdDays = Math.max(1, Math.floor((endDay.getTime() - confirmedDay.getTime()) / (1000*60*60*24)) + 1);
+                      const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
                       const totalFee = dailyFee * holdDays;
+                      const isPending = order.status === 'pending';
                       return (
                         <div className="flex items-center gap-1 col-span-2">
                           <span className="text-gray-400 text-xs w-10">累计管理费</span>
-                          <span className="text-gray-900 font-medium">{totalFee.toFixed(4)} USDT <span className="text-xs text-gray-400">({holdDays}天 · {dailyFee.toFixed(4)}/天)</span></span>
+                          <span className={`font-medium ${isPending ? 'text-gray-400' : 'text-gray-900'}`}>
+                            {totalFee.toFixed(4)} USDT
+                            <span className="text-xs text-gray-400 ml-1">({holdDays}天 · {dailyFee.toFixed(4)}/天)</span>
+                            {isPending && <span className="text-xs text-yellow-500 ml-1">撤单则作废</span>}
+                          </span>
                         </div>
                       );
                     })()}
