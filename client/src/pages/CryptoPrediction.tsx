@@ -2684,120 +2684,122 @@ export default function CryptoPrediction() {
                 <div className="text-center py-5 text-gray-500 text-xs">暂无委托记录</div>
               ) : (
                 <div>
-                  {/* 表头（可点击排序） */}
-                  <div className="flex text-xs pb-1.5 mb-0.5" style={{ borderBottom: '1px solid #E0E8FF' }}>
-                    {/* 日期列 */}
-                    <button onClick={() => handleOrderSort('time')} className="flex items-center gap-0.5 text-left px-2" style={{ width: 64, flexShrink: 0, color: orderSortKey === 'time' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'time' ? 600 : 400 }}>
-                      日期
-                      {orderSortKey === 'time' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
-                    </button>
-                    {/* 币种列 */}
-                    <button onClick={() => handleOrderSort('coin')} className="flex items-center justify-center gap-0.5 px-1" style={{ width: 52, flexShrink: 0, borderLeft: '1px solid #E8EEFF', color: orderSortKey === 'coin' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'coin' ? 600 : 400 }}>
-                      币种
-                      {orderSortKey === 'coin' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
-                    </button>
-                    {/* 数量列 */}
-                    <button onClick={() => handleOrderSort('amount')} className="flex items-center justify-end gap-0.5 px-1 flex-1" style={{ borderLeft: '1px solid #E8EEFF', color: orderSortKey === 'amount' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'amount' ? 600 : 400 }}>
-                      数量
-                      {orderSortKey === 'amount' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
-                    </button>
-                    {/* 状态列 */}
-                    <button onClick={() => handleOrderSort('status')} className="flex items-center justify-end gap-0.5 px-1" style={{ width: 44, flexShrink: 0, borderLeft: '1px solid #E8EEFF', color: orderSortKey === 'status' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'status' ? 600 : 400 }}>
-                      状态
-                      {orderSortKey === 'status' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}
-                    </button>
-                    {/* 详情列 */}
-                    <span className="px-1" style={{ width: 32, flexShrink: 0, borderLeft: '1px solid #E8EEFF' }}></span>
-                  </div>
-                  {sortedOrders.map((order) => {
-                    const createdAt = order.createdAt ? new Date(order.createdAt) : null;
-                    // 简短日期：YY-MM-DD
-                    const shortDate = createdAt ? (() => {
-                      const yy = String(createdAt.getFullYear()).slice(2);
-                      const mo = String(createdAt.getMonth()+1).padStart(2,'0');
-                      const d = String(createdAt.getDate()).padStart(2,'0');
-                      return `${yy}-${mo}-${d}`;
-                    })() : '--';
-                    // 完整时间（用于气泡）
-                    const timeStr = createdAt ? (() => {
-                      const y = createdAt.getFullYear();
-                      const mo = String(createdAt.getMonth()+1).padStart(2,'0');
-                      const d = String(createdAt.getDate()).padStart(2,'0');
-                      const h = String(createdAt.getHours()).padStart(2,'0');
-                      const mi = String(createdAt.getMinutes()).padStart(2,'0');
-                      const s = String(createdAt.getSeconds()).padStart(2,'0');
-                      return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
-                    })() : '--';
-                    const isDateOpen = expandedDateId === order.id;
-                    return (
-                      <div key={order.id} style={{ borderBottom: '1px solid #EEF2FF' }}>
-                        <div className="flex text-xs items-center" style={{ minHeight: 36 }}>
-                          {/* 日期列 */}
-                          <div className="relative flex items-center px-2" style={{ width: 64, flexShrink: 0 }}>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setExpandedDateId(isDateOpen ? null : order.id); }}
-                              className="whitespace-nowrap text-left"
-                              style={{ color: '#6B7A9A', borderBottom: '1px dashed #CBD5E1' }}
-                            >
-                              {shortDate}
-                            </button>
-                            {isDateOpen && (
-                              <div
-                                className="absolute z-50 left-0 top-full mt-1 px-2.5 py-1.5 rounded-lg shadow-md text-[11px] whitespace-nowrap"
-                                style={{ backgroundColor: '#F9FAFB', border: '1px solid #E5E7EB', color: '#374151', minWidth: 148 }}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {timeStr}
-                                <div className="absolute -top-1.5 left-3 w-0 h-0" style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #E5E7EB' }} />
-                                <div className="absolute -top-[5px] left-3 w-0 h-0" style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #F9FAFB' }} />
+                  {/* 表头（可点击排序）—— 用 table 布局自动适配内容宽度 */}
+                  <table className="w-full text-xs" style={{ borderCollapse: 'collapse', tableLayout: 'auto' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid #E0E8FF' }}>
+                        <th className="text-left pb-1.5 pr-2" style={{ color: orderSortKey === 'time' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'time' ? 600 : 400, whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', paddingLeft: 0 }}>
+                          <button onClick={() => handleOrderSort('time')} className="flex items-center gap-0.5">日期 {orderSortKey === 'time' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</button>
+                        </th>
+                        <th className="text-center pb-1.5 px-2" style={{ color: orderSortKey === 'coin' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'coin' ? 600 : 400, whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF' }}>
+                          <button onClick={() => handleOrderSort('coin')} className="flex items-center gap-0.5 mx-auto">币种 {orderSortKey === 'coin' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</button>
+                        </th>
+                        <th className="text-right pb-1.5 px-2" style={{ color: orderSortKey === 'amount' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'amount' ? 600 : 400, whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', width: '99%' }}>
+                          <button onClick={() => handleOrderSort('amount')} className="flex items-center gap-0.5 ml-auto">数量 {orderSortKey === 'amount' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</button>
+                        </th>
+                        <th className="text-center pb-1.5 px-2" style={{ color: orderSortKey === 'status' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'status' ? 600 : 400, whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF' }}>
+                          <button onClick={() => handleOrderSort('status')} className="flex items-center gap-0.5">状态 {orderSortKey === 'status' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</button>
+                        </th>
+                        <th className="pb-1.5 pl-2" style={{ whiteSpace: 'nowrap', color: '#9CA3AF' }}></th>
+                      </tr>
+                    </thead>
+                  </table>
+                  {/* 数据行——用同一个 table 包裹，自动对齐表头 */}
+                  <table className="w-full text-xs" style={{ borderCollapse: 'collapse', tableLayout: 'auto' }}>
+                    <tbody>
+                    {sortedOrders.map((order) => {
+                      const createdAt = order.createdAt ? new Date(order.createdAt) : null;
+                      const shortDate = createdAt ? (() => {
+                        const yy = String(createdAt.getFullYear()).slice(2);
+                        const mo = String(createdAt.getMonth()+1).padStart(2,'0');
+                        const d = String(createdAt.getDate()).padStart(2,'0');
+                        return `${yy}-${mo}-${d}`;
+                      })() : '--';
+                      const timeStr = createdAt ? (() => {
+                        const y = createdAt.getFullYear();
+                        const mo = String(createdAt.getMonth()+1).padStart(2,'0');
+                        const d = String(createdAt.getDate()).padStart(2,'0');
+                        const h = String(createdAt.getHours()).padStart(2,'0');
+                        const mi = String(createdAt.getMinutes()).padStart(2,'0');
+                        const s = String(createdAt.getSeconds()).padStart(2,'0');
+                        return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
+                      })() : '--';
+                      const isDateOpen = expandedDateId === order.id;
+                      return (
+                        <>
+                          <tr key={order.id} style={{ borderBottom: '1px solid #EEF2FF' }}>
+                            {/* 日期列 */}
+                            <td className="py-2 pr-2" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', paddingLeft: 0, verticalAlign: 'middle' }}>
+                              <div className="relative inline-block">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setExpandedDateId(isDateOpen ? null : order.id); }}
+                                  style={{ color: '#6B7A9A', borderBottom: '1px dashed #CBD5E1', whiteSpace: 'nowrap' }}
+                                >
+                                  {shortDate}
+                                </button>
+                                {isDateOpen && (
+                                  <div
+                                    className="absolute z-50 left-0 top-full mt-1 px-2.5 py-1.5 rounded-lg shadow-md whitespace-nowrap"
+                                    style={{ fontSize: 11, backgroundColor: '#F9FAFB', border: '1px solid #E5E7EB', color: '#374151', minWidth: 148 }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {timeStr}
+                                    <div className="absolute -top-1.5 left-3 w-0 h-0" style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #E5E7EB' }} />
+                                    <div className="absolute -top-[5px] left-3 w-0 h-0" style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #F9FAFB' }} />
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                          {/* 币种列 */}
-                          <div className="flex items-center justify-center px-1" style={{ width: 52, flexShrink: 0, borderLeft: '1px solid #E8EEFF' }}>
-                            <span className="font-medium text-center" style={{ color: '#1A2340' }}>
-                              {order.coin}
-                              {(order as any).isGift && <span className="ml-0.5 text-[#ef5350] font-bold">赠</span>}
-                            </span>
-                          </div>
-                          {/* 数量列（占剩余宽度，靠右） */}
-                          <div className="flex items-center justify-end px-1 flex-1" style={{ borderLeft: '1px solid #E8EEFF' }}>
-                            <span className="text-right tabular-nums" style={{ color: '#1A2340' }}>
-                              {(() => { const q = parseFloat(order.quantity); return q % 1 === 0 ? q.toString() : q.toFixed(8).replace(/0+$/, '').replace(/\.$/, ''); })()}
-                            </span>
-                          </div>
-                          {/* 状态列 */}
-                          <div className="flex items-center justify-end px-1" style={{ width: 44, flexShrink: 0, borderLeft: '1px solid #E8EEFF' }}>
-                            <span className={`text-right ${
-                              (order as any).sellStatus === 'sold' ? 'text-[#6B7280]' :
-                              (order as any).sellStatus === 'selling' ? 'text-[#EF4444]' :
-                              order.status === 'completed' ? 'text-[#0EA56A]' :
-                              order.status === 'cancelled' ? 'text-gray-400' :
-                              'text-[#F59E0B]'
-                            }`}>
-                              {(order as any).sellStatus === 'sold' ? '已卖出' :
-                               (order as any).sellStatus === 'selling' ? '委卖中' :
-                               order.status === 'completed' ? '持仓中' :
-                               order.status === 'cancelled' ? '已撒' :
-                               '委买中'}
-                            </span>
-                          </div>
-                          {/* 详情列 */}
-                          <div className="flex items-center justify-center" style={{ width: 32, flexShrink: 0, borderLeft: '1px solid #E8EEFF' }}>
-                            <button
-                              onClick={() => setOrderDetailId(order.id === orderDetailId ? null : order.id)}
-                              className="text-xs font-medium" style={{ color: '#1A56DB' }}>
-                              详情
-                            </button>
-                          </div>
-                        </div>
-                        {/* 详情展开 */}
-                        {orderDetailId === order.id && (
-                          <OrderDetail order={order} timeStr={timeStr} ledgerId={ledgerId} viewAsUserId={viewAsUserId} />
-                        )}
-                      </div>
-                    );
-                  })}
+                            </td>
+                            {/* 币种列 */}
+                            <td className="py-2 px-2 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
+                              <span className="font-medium" style={{ color: '#1A2340' }}>
+                                {order.coin}
+                                {(order as any).isGift && <span className="ml-0.5 text-[#ef5350] font-bold">赠</span>}
+                              </span>
+                            </td>
+                            {/* 数量列（占满剩余宽度，靠右） */}
+                            <td className="py-2 px-2 text-right" style={{ width: '99%', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
+                              <span className="tabular-nums" style={{ color: '#1A2340' }}>
+                                {(() => { const q = parseFloat(order.quantity); return q % 1 === 0 ? q.toString() : q.toFixed(8).replace(/0+$/, '').replace(/\.$/, ''); })()}
+                              </span>
+                            </td>
+                            {/* 状态列 */}
+                            <td className="py-2 px-2 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
+                              <span className={`${
+                                (order as any).sellStatus === 'sold' ? 'text-[#6B7280]' :
+                                (order as any).sellStatus === 'selling' ? 'text-[#EF4444]' :
+                                order.status === 'completed' ? 'text-[#0EA56A]' :
+                                order.status === 'cancelled' ? 'text-gray-400' :
+                                'text-[#F59E0B]'
+                              }`}>
+                                {(order as any).sellStatus === 'sold' ? '已卖出' :
+                                 (order as any).sellStatus === 'selling' ? '委卖中' :
+                                 order.status === 'completed' ? '持仓中' :
+                                 order.status === 'cancelled' ? '已撒' :
+                                 '委买中'}
+                              </span>
+                            </td>
+                            {/* 详情列 */}
+                            <td className="py-2 pl-2 text-center" style={{ whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
+                              <button
+                                onClick={() => setOrderDetailId(order.id === orderDetailId ? null : order.id)}
+                                className="font-medium" style={{ color: '#1A56DB' }}>
+                                详情
+                              </button>
+                            </td>
+                          </tr>
+                          {orderDetailId === order.id && (
+                            <tr key={`detail-${order.id}`}>
+                              <td colSpan={5} style={{ padding: 0 }}>
+                                <OrderDetail order={order} timeStr={timeStr} ledgerId={ledgerId} viewAsUserId={viewAsUserId} />
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
+                    })}
+                    </tbody>
+                  </table>
                 </div>
               )}
               {/* 管理费虚线触发区 */}
