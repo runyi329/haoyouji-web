@@ -311,8 +311,8 @@ export default function AfOrderManage() {
     if (statusFilter === 'all') return !(isGift && order.status === 'pending');
     if (statusFilter === 'pending') return order.status === 'pending' && !isGift;
     if (statusFilter === 'holding') return order.status === 'completed' && !order.sellStatus && !isGift;
-    if (statusFilter === 'selling') return order.sellStatus === 'selling' && !isGift;
-    if (statusFilter === 'sold') return order.sellStatus === 'sold' && !isGift;
+    if (statusFilter === 'selling') return order.sellStatus === 'selling'; // 委卖中：赠单也显示
+    if (statusFilter === 'sold') return order.sellStatus === 'sold'; // 已卖出：赠单也显示
     return true;
   }) ?? [];
 
