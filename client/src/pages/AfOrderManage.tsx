@@ -165,6 +165,7 @@ export default function AfOrderManage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'holding' | 'selling' | 'sold'>('all');
   // 赠予订单折叠展开状态：key = 委买订单ID
   const [expandedGiftOrders, setExpandedGiftOrders] = useState<Record<number, boolean>>({});
+  const [expandedDateId, setExpandedDateId] = useState<number | null>(null);
   const toggleGiftOrders = (orderId: number) => setExpandedGiftOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
   // 管理费明细：跳转到独立页面
 
@@ -312,15 +313,20 @@ export default function AfOrderManage() {
     return true;
   }) ?? [];
 
+  // 日期格式化：完整时间（用于气泡）
+  const formatDateFull = (d: any) => {
+    if (!d) return "-";
+    const s = typeof d === 'string' ? d : new Date(d).toISOString();
+    return s.replace('T', ' ').substring(0, 19);
+  };
+  // 日期格式化：只显示 YY-MM-DD（用于卡片标题）
   const formatDate = (d: any) => {
     if (!d) return "-";
-    // 后端已返回北京时间字符串（如 "2026-04-14 06:30:00"），直接截取显示
     const s = typeof d === 'string' ? d : new Date(d).toISOString();
-    // 取 MM-DD HH:mm 格式
-    const parts = s.replace('T', ' ').substring(0, 16); // "2026-04-14 06:30"
-    const [datePart, timePart] = parts.split(' ');
-    const [, mm, dd] = (datePart || '').split('-');
-    return `${mm || ''}-${dd || ''} ${timePart || ''}`;
+    const parts = s.replace('T', ' ').substring(0, 10); // "2026-04-14"
+    const [yyyy, mm, dd] = (parts || '').split('-');
+    const yy = (yyyy || '').slice(2);
+    return `${yy}-${mm || ''}-${dd || ''}`;
   };
 
   return (
@@ -465,7 +471,28 @@ export default function AfOrderManage() {
                   {/* 订单编号行 */}
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
-                    <span className="text-[11px] text-gray-400">{formatDate(order.createdAt)}</span>
+                    {/* 日期气泡：点击展开完整时间 */}
+                    <div className="relative">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setExpandedDateId(expandedDateId === order.id ? null : order.id); }}
+                        className="text-[11px] text-gray-400"
+                        style={{ borderBottom: '1px dashed #D1D5DB' }}
+                      >
+                        {formatDate(order.createdAt)}
+                      </button>
+                      {expandedDateId === order.id && (
+                        <div
+                          className="absolute z-50 right-0 top-full mt-1 px-3 py-2 rounded-lg shadow-md text-[11px] whitespace-nowrap"
+                          style={{ backgroundColor: '#F9FAFB', border: '1px solid #E5E7EB', color: '#374151', minWidth: 148 }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {formatDateFull(order.createdAt)}
+                          {/* 小三角（右上角） */}
+                          <div className="absolute -top-1.5 right-3 w-0 h-0" style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #E5E7EB' }} />
+                          <div className="absolute -top-[5px] right-3 w-0 h-0" style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #F9FAFB' }} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                   {/* 用户信息行 */}
                   <div className="flex items-center justify-between mb-3">
