@@ -420,8 +420,8 @@ export default function AfOrderManage() {
             { key: 'all' as const, label: '全部', count: (orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return !(g && o.status === 'pending'); }).length ?? 0 },
             { key: 'pending' as const, label: '委买中', count: (orders as any[])?.filter((o: any) => o.status === 'pending' && o.isGift !== true && o.isGift !== 1).length ?? 0 },
             { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && !o.sellStatus && o.isGift !== true && o.isGift !== 1).length ?? 0 },
-            { key: 'selling' as const, label: '委卖中', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'selling' && o.isGift !== true && o.isGift !== 1).length ?? 0 },
-            { key: 'sold' as const, label: '已卖出', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'sold' && o.isGift !== true && o.isGift !== 1).length ?? 0 },
+            { key: 'selling' as const, label: '委卖中', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0 },
+            { key: 'sold' as const, label: '已卖出', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0 },
           ]).map((tab, idx, arr) => (
             <button
               key={tab.key}
@@ -490,8 +490,10 @@ export default function AfOrderManage() {
                       const shortDate = dateKey.slice(5); // "05-28"
                       // 正单数量（非赠单）
                       const normalCount = groupOrders.filter((o: any) => !o.isGift).length;
-                      // 赠单数量：累加每个正单的 giftOrders 数量
-                      const giftCount = groupOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[] || []).length), 0);
+                      // 赠单数量：独立显示的赠单行 + 嵌套在正单giftOrders里的赠单
+                      const directGiftCount = groupOrders.filter((o: any) => o.isGift === true || o.isGift === 1).length;
+                      const nestedGiftCount = groupOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[] || []).length), 0);
+                      const giftCount = directGiftCount + nestedGiftCount;
                       // 各币种简写和颜色：ETH→E(蓝色) BTC→B(橙色) SOL→S(绿色)
                       const COIN_CONFIG: Record<string, { short: string; color: string }> = {
                         ETH: { short: 'E', color: 'text-blue-500' },
