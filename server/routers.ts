@@ -12855,7 +12855,75 @@ ${klinesSummary}
             order.equityTier = maxTier;
           }
         }
-        
+
+        // 批量查询每笔委买订单关联的赠予订单（含各自的权益档位）
+        const normalOrderIds = list.filter((o: any) => !o.isGift).map((o: any) => o.id);
+        if (normalOrderIds.length > 0) {
+          try {
+            const conn = await (await import('./db')).getDbConnection();
+            if (conn) {
+              const placeholders = normalOrderIds.map(() => '?').join(',');
+              // 查询赠予订单基本信息
+              const [giftRows] = await (conn as any).execute(
+                `SELECT g.id, g.source_order_id, g.user_id, g.amount, g.quantity, g.coin,
+                        g.status, g.sell_status, g.gift_multiplier,
+                        u.username, COALESCE(u.name,'') as user_name
+                 FROM af_orders g
+                 LEFT JOIN users u ON u.id = g.user_id
+                 WHERE g.source_order_id IN (${placeholders}) AND g.is_gift = 1
+                 ORDER BY g.gift_multiplier DESC, g.amount DESC`,
+                normalOrderIds
+              );
+              const giftList = giftRows as any[];
+              // 批量查询赠予订单的权益档位
+              if (giftList.length > 0) {
+                const giftIds = giftList.map((g: any) => g.id);
+                const giftPlaceholders = giftIds.map(() => '?').join(',');
+                const [tierRows] = await (conn as any).execute(
+                  `SELECT order_id, COALESCE(MAX(tier), 0) as maxTier
+                   FROM af_order_tier_triggers
+                   WHERE order_id IN (${giftPlaceholders})
+                   GROUP BY order_id`,
+                  giftIds
+                );
+                const tierMap: Record<number, number> = {};
+                for (const t of (tierRows as any[])) {
+                  tierMap[Number(t.order_id)] = parseInt(t.maxTier || '0') || 0;
+                }
+                // 按 source_order_id 分组
+                const giftMap: Record<number, any[]> = {};
+                for (const g of giftList) {
+                  const sid = Number(g.source_order_id);
+                  if (!giftMap[sid]) giftMap[sid] = [];
+                  giftMap[sid].push({
+                    id: g.id,
+                    userId: g.user_id,
+                    username: g.username || '',
+                    nickname: g.user_name || g.username || '',
+                    amount: String(g.amount || '0'),
+                    quantity: String(g.quantity || '0'),
+                    coin: String(g.coin || ''),
+                    status: String(g.status || ''),
+                    sellStatus: g.sell_status ? String(g.sell_status) : null,
+                    giftMultiplier: String(g.gift_multiplier || ''),
+                    equityTier: tierMap[Number(g.id)] ?? 0,
+                  });
+                }
+                for (const order of list) {
+                  (order as any).giftOrders = giftMap[order.id] || [];
+                }
+              } else {
+                for (const order of list) {
+                  (order as any).giftOrders = [];
+                }
+              }
+            }
+          } catch (e) {
+            console.error('[afAdminGetOrders] 查询赠予订单失败:', e);
+            for (const order of list) { (order as any).giftOrders = []; }
+          }
+        }
+
         return list;
       }),
     // 管理员：订单和管理费统计
