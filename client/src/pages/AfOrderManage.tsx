@@ -697,7 +697,7 @@ export default function AfOrderManage() {
                       return (
                         <div className="flex items-center gap-1 col-span-2">
                           <span className="text-gray-400 w-12 shrink-0">实际投入</span>
-                          <span>{investAmt.toFixed(2)} USDT</span>
+                          <span className="font-medium text-gray-900">{investAmt.toFixed(2)} USDT</span>
                         </div>
                       );
                     })()}
@@ -709,9 +709,9 @@ export default function AfOrderManage() {
                       return (
                         <div className="flex items-center gap-1 col-span-2">
                           <span className="text-gray-400 w-12 shrink-0">赠送市值</span>
-                          <span>
+                          <span className="font-medium text-gray-900">
                             {giftAmt.toFixed(2)} USDT
-                            {ratio > 0 && <span className="text-gray-400 ml-1">({ratio.toFixed(4)}倍)</span>}
+                            {ratio > 0 && <span className="font-normal text-gray-400 ml-1">({ratio.toFixed(4)}倍)</span>}
                           </span>
                         </div>
                       );
@@ -763,7 +763,7 @@ export default function AfOrderManage() {
                       const fmtLow = lowDate ? `${lowDate.getMonth()+1}月${lowDate.getDate()}日` : '';
                       return (
                         <div className="flex items-center gap-1 col-span-2">
-                          <span className="text-gray-400 w-12 shrink-0">扫描最低价</span>
+                          <span className="text-gray-400 w-12 shrink-0">最低扫描</span>
                           <span className="font-medium text-blue-600">
                             {lowPrice.toLocaleString()} USDT
                             {fmtLow && <span className="text-gray-400 ml-1">({fmtLow})</span>}
@@ -797,7 +797,7 @@ export default function AfOrderManage() {
                       return (
                         <div className="flex flex-col gap-0.5 col-span-2">
                           <div className="flex items-center gap-1">
-                            <span className="text-gray-400 w-12 shrink-0">累计管理费</span>
+                            <span className="text-gray-400 w-12 shrink-0">管理费</span>
                             <span className={`font-medium ${isPending ? 'text-gray-400' : isSold ? 'text-gray-500' : 'text-gray-900'}`}>
                               {totalFee.toFixed(4)} USDT
                               {isPending && <span className="text-xs text-yellow-500 ml-1">撤单则作废</span>}
