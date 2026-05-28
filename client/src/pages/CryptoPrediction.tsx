@@ -2327,7 +2327,7 @@ export default function CryptoPrediction() {
           ]).map((t) => (
             <button key={t.key} onClick={() => {
               if (t.key === "gujian") {
-                setLocation(`/ledger/${ledgerId}/gujian`);
+                setLocation(`/ledger/${ledgerId}/gujian${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`);
                 return;
               }
               setTab(t.key as any);

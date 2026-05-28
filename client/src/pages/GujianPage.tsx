@@ -425,6 +425,11 @@ export default function GujianPage() {
   const [, params] = useRoute("/ledger/:id/gujian");
   const [, setLocation] = useLocation();
   const ledgerId = parseInt(params?.id || "0");
+  // 他人视角支持
+  const viewAsUserId = (() => {
+    const v = new URLSearchParams(window.location.search).get('viewAs');
+    return v ? parseInt(v) : undefined;
+  })();
 
   // 选中的股票
   const [selectedStock, setSelectedStock] = useState(US_STOCKS[0]);
@@ -436,6 +441,7 @@ export default function GujianPage() {
   const [sliderPct, setSliderPct] = useState(0);
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+  const [expandedDateId, setExpandedDateId] = useState<number | null>(null);
   // 排序状态
   const [sortKey, setSortKey] = useState<'time' | 'coin' | 'amount' | 'price' | 'status'>('time');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
@@ -459,7 +465,7 @@ export default function GujianPage() {
   // 订单列表
   const utils = trpc.useUtils();
   const { data: ordersData, isLoading: ordersLoading } = trpc.ledger.afGetOrders.useQuery(
-    { ledgerId },
+    { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: !!ledgerId, staleTime: 30000, refetchOnWindowFocus: false, refetchOnMount: "always" }
   );
   const afOrders: any[] = (ordersData as any[]) || [];
@@ -554,7 +560,7 @@ export default function GujianPage() {
       {/* 顶部导航 */}
       <div className="flex-shrink-0 text-white px-4 pt-safe" style={{ background: "linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)" }}>
         <div className="flex items-center justify-between h-12">
-          <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="flex items-center gap-1 text-white/80 active:text-white">
+          <button onClick={() => setLocation(`/ledger/${ledgerId}${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)} className="flex items-center gap-1 text-white/80 active:text-white">
             <ChevronLeft className="w-5 h-5" />
             <span className="text-sm">返回</span>
           </button>
@@ -670,7 +676,7 @@ export default function GujianPage() {
                       {availableUsdt > 0 ? availableUsdt.toLocaleString("en-US", { maximumFractionDigits: 2 }) : "--"} USDT
                     </span>
                     <button
-                      onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}`)}
+                      onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
                       className="w-5 h-5 rounded-full flex items-center justify-center text-xs"
                       style={{ backgroundColor: "#E8EEFF", color: "#1A56DB" }}
                     >+</button>
@@ -924,39 +930,104 @@ export default function GujianPage() {
                     return qty.toFixed(4).replace(/\.?0+$/, '');
                   }
 
+                  // 日期气泡状态（每行独立，用 order.id 区分）
+                  const isDateBubbleOpen = expandedDateId === order.id;
+                  const shortDate = (() => {
+                    const d = new Date(order.createdAt);
+                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                    const dd2 = String(d.getDate()).padStart(2, '0');
+                    return `${mm}-${dd2}`;
+                  })();
+                  const fullDateTime = new Date(order.createdAt).toLocaleString('zh-CN', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit'
+                  });
+
                   return (
                     <div key={order.id}>
-                      {/* 订单摘要行 */}
-                      <button
-                        onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
-                        className="w-full px-4 py-3 flex items-center gap-3 active:bg-gray-50 text-left"
+                      {/* 订单摘要行 — Excel 表格风格 */}
+                      <div
+                        className="w-full flex items-stretch text-left active:bg-blue-50/30 transition-colors"
+                        style={{ minHeight: 44 }}
                       >
-                        <img
-                          src={US_STOCKS.find(s => s.symbol === order.coin)?.logo || CRYPTO_ICONS[order.coin] || ""}
-                          alt={order.coin}
-                          className="w-8 h-8 rounded-full object-contain border border-gray-100 flex-shrink-0"
-                          onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${order.coin}&background=1A56DB&color=fff&size=32`; }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-semibold text-sm" style={{ color: "#1A2340" }}>{order.coin}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${statusColor}18`, color: statusColor }}>{statusLabel}</span>
-                            {isGudizengchou && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#FFF7ED', color: '#D97706' }}>谷底</span>
-                            )}
-                          </div>
-                          <div className="text-xs mt-0.5" style={{ color: "#9CA3AF" }}>
-                            {isGudizengchou ? '' : '$'}{parseFloat(order.limitPrice).toLocaleString()} · {timeStr}
-                          </div>
+                        {/* 列1：日期（可点击气泡） */}
+                        <div
+                          className="flex flex-col items-center justify-center px-2 flex-shrink-0 relative"
+                          style={{ width: 46, borderRight: '1px solid #E8EEFF' }}
+                        >
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setExpandedDateId(isDateBubbleOpen ? null : order.id); }}
+                            className="flex flex-col items-center gap-0"
+                          >
+                            <span className="text-[11px] font-medium" style={{ color: '#4B6CB7', borderBottom: '1px dashed #93C5FD', lineHeight: '1.4' }}>{shortDate}</span>
+                          </button>
+                          {/* 气泡弹出 */}
+                          {isDateBubbleOpen && (
+                            <div
+                              className="absolute z-50 left-1/2 -translate-x-1/2 top-full mt-1 px-2 py-1.5 rounded-lg shadow-lg text-[11px] whitespace-nowrap"
+                              style={{ backgroundColor: '#1A2340', color: '#fff', minWidth: 140 }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="text-center">{fullDateTime}</div>
+                              {/* 小三角 */}
+                              <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-0 h-0" style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #1A2340' }} />
+                            </div>
+                          )}
                         </div>
-                        <div className="text-right flex-shrink-0">
-                          <div className="text-sm font-semibold" style={{ color: "#1A2340" }}>{parseFloat(order.amount).toFixed(2)} U</div>
-                          <div className="text-xs" style={{ color: "#9CA3AF" }}>
-                            {isGudizengchou ? `×5.25` : `${parseFloat(order.quantity).toFixed(4)} 股`}
+
+                        {/* 列2：图标 + 币种 + 类型标签 */}
+                        <button
+                          onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                          className="flex items-center gap-1.5 flex-1 min-w-0 px-2 py-2"
+                          style={{ borderRight: '1px solid #E8EEFF' }}
+                        >
+                          <img
+                            src={US_STOCKS.find(s => s.symbol === order.coin)?.logo || CRYPTO_ICONS[order.coin] || ""}
+                            alt={order.coin}
+                            className="w-6 h-6 rounded-full object-contain flex-shrink-0"
+                            style={{ border: '1px solid #E8EEFF' }}
+                            onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${order.coin}&background=1A56DB&color=fff&size=24`; }}
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1">
+                              <span className="font-semibold text-[13px] leading-tight" style={{ color: '#1A2340' }}>{order.coin}</span>
+                              {isGudizengchou && (
+                                <span className="text-[9px] px-1 py-0 rounded" style={{ backgroundColor: '#FFF7ED', color: '#D97706', lineHeight: '16px' }}>底</span>
+                              )}
+                            </div>
+                            <div className="text-[10px] leading-tight" style={{ color: statusColor }}>{statusLabel}</div>
                           </div>
-                        </div>
-                        <ChevronDown className={`w-4 h-4 flex-shrink-0 ml-1 transition-transform ${isExpanded ? "rotate-180" : ""}`} style={{ color: "#9CA3AF" }} />
-                      </button>
+                        </button>
+
+                        {/* 列3：价格 */}
+                        <button
+                          onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                          className="flex flex-col items-end justify-center px-2 flex-shrink-0"
+                          style={{ width: 72, borderRight: '1px solid #E8EEFF' }}
+                        >
+                          <span className="text-[11px] font-medium" style={{ color: '#1A2340' }}>
+                            {isGudizengchou ? '' : '$'}{parseFloat(order.limitPrice) >= 1000 ? (parseFloat(order.limitPrice)/1000).toFixed(1)+'k' : parseFloat(order.limitPrice).toLocaleString()}
+                          </span>
+                          <span className="text-[9px]" style={{ color: '#9CA3AF' }}>价格</span>
+                        </button>
+
+                        {/* 列4：数量（靠右） */}
+                        <button
+                          onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                          className="flex flex-col items-end justify-center px-2 flex-shrink-0"
+                          style={{ width: 80 }}
+                        >
+                          <span className="text-[11px] font-medium" style={{ color: '#1A2340' }}>
+                            {isGudizengchou
+                              ? `${parseFloat(order.amount).toFixed(2)}U`
+                              : `${parseFloat(order.quantity).toFixed(4).replace(/\.?0+$/, '')}股`
+                            }
+                          </span>
+                          <span className="text-[9px]" style={{ color: '#9CA3AF' }}>
+                            {isGudizengchou ? `×5.25` : `${parseFloat(order.amount).toFixed(0)}U`}
+                          </span>
+                        </button>
+                      </div>
 
                       {/* 展开详情 */}
                       {isExpanded && (
