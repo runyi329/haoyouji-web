@@ -1363,13 +1363,25 @@ export default function PositionCalc() {
           const actualQty = actual[price] || 0;
           const bq = baseQty[price] || 0;     // 底仓
           const tq = tacticalQty[price] || 0; // 机动仓
+          // 从 baseNotes/tacticalNotes 中解析挂单数量
+          const bNotes: any[] = baseNotes[price] || [];
+          const tNotes: any[] = tacticalNotes[price] || [];
+          const pendingQty = [...bNotes, ...tNotes]
+            .filter((x: any) => x.pending && parseFloat(x.qty) > 0)
+            .reduce((s: number, x: any) => s + (parseFloat(x.qty) || 0), 0);
+          const hasPending = pendingQty > 0;
+          // 已成交的底仓/战术（排除挂单部分）
+          const bqConfirmed = bNotes.filter((x: any) => !x.pending).reduce((s: number, x: any) => s + (parseFloat(x.qty) || 0), 0);
+          const tqConfirmed = tNotes.filter((x: any) => !x.pending).reduce((s: number, x: any) => s + (parseFloat(x.qty) || 0), 0);
           // 计划条宽度：以全局最大值为基准等比例，最小显示8%（有数据时）
           const planPct = planQty > 0 ? Math.max(Math.round(planQty / maxGlobalQty * 100), 8) : 0;
           // 实际条宽度：以全局最大值为基准等比例（不再 cap 到计划量）
           const actualPct = actualQty > 0 ? Math.max(Math.round(actualQty / maxGlobalQty * 100), 4) : 0;
           // 底仓和机动仓的宽度（按各自比例叠加，总宽度=actualPct）
-          const basePct = actualQty > 0 ? Math.round(actualPct * (bq / actualQty)) : 0;
-          const tacticalPct = actualQty > 0 ? Math.round(actualPct * (tq / actualQty)) : 0;
+          // 有挂单时，用已成交数量计算蓝/橙段，剩余部分显示紫色
+          const basePct = actualQty > 0 ? Math.round(actualPct * ((hasPending ? bqConfirmed : bq) / actualQty)) : 0;
+          const tacticalPct = actualQty > 0 ? Math.round(actualPct * ((hasPending ? tqConfirmed : tq) / actualQty)) : 0;
+          const pendingPct = hasPending ? Math.max(actualPct - basePct - tacticalPct, 0) : 0;
           // 是否有子仓位数据
           const hasSubQty = bq > 0 || tq > 0;
           // 文字颜色判断用：实际条是否覆盖到左侧/右侧
@@ -1433,23 +1445,23 @@ export default function PositionCalc() {
                   hasSubQty ? (
                     <>
                       {/* 底仓：蓝色，从左起 */}
-                      {bq > 0 && (
+                      {basePct > 0 && (
                         <div
                           className="absolute left-0 top-0 h-full transition-all duration-300"
                           style={{
                             width: `${basePct}%`,
-                            background: tq > 0
+                            background: (tacticalPct > 0 || pendingPct > 0)
                               ? 'linear-gradient(90deg, #003a7a 0%, #0055b3 50%, #1a6db8 100%)'
                               : 'linear-gradient(90deg, #003a7a 0%, #0055b3 45%, #1a7fd4 80%, #4aa8ff 100%)',
-                            boxShadow: tq > 0 ? 'none' : '0 0 6px rgba(26,127,212,0.5)',
+                            boxShadow: (tacticalPct > 0 || pendingPct > 0) ? 'none' : '0 0 6px rgba(26,127,212,0.5)',
                             minWidth: '4px',
-                            borderRadius: tq > 0 ? '0 0 0 0' : '0 3px 3px 0',
+                            borderRadius: (tacticalPct > 0 || pendingPct > 0) ? '0 0 0 0' : '0 3px 3px 0',
                             zIndex: 2,
                           }}
                         />
                       )}
                       {/* 机动仓：橙色，接在底仓后面 */}
-                      {tq > 0 && (
+                      {tacticalPct > 0 && (
                         <div
                           className="absolute top-0 h-full transition-all duration-300"
                           style={{
@@ -1457,6 +1469,21 @@ export default function PositionCalc() {
                             width: `${tacticalPct}%`,
                             background: 'linear-gradient(90deg, #8a3e00 0%, #c85a0a 45%, #e87020 80%, #ff9040 100%)',
                             boxShadow: 'none',
+                            minWidth: '4px',
+                            borderRadius: pendingPct > 0 ? '0 0 0 0' : '0 3px 3px 0',
+                            zIndex: 2,
+                          }}
+                        />
+                      )}
+                      {/* 挂单：紫色，接在底仓/机动仓后面 */}
+                      {pendingPct > 0 && (
+                        <div
+                          className="absolute top-0 h-full transition-all duration-300"
+                          style={{
+                            left: `${basePct + tacticalPct}%`,
+                            width: `${pendingPct}%`,
+                            background: 'linear-gradient(90deg, #7030cc 0%, #9050e0 50%, #b06aff 100%)',
+                            boxShadow: '0 0 6px rgba(176,106,255,0.5)',
                             minWidth: '4px',
                             borderRadius: '0 3px 3px 0',
                             zIndex: 2,
@@ -1513,13 +1540,13 @@ export default function PositionCalc() {
                     </svg>
                   </div>
                 )}
-                {/* 右侧数量标注：智能颜色——进度条覆盖到右侧时用白色+阴影，否则用深色 */}
+                {/* 右侧数量标注：有挂单时显示紫色，否则白色 */}
                 <div className="absolute top-0 h-full flex items-center pointer-events-none" style={{ zIndex: 10, right: isNearCurrent ? '22px' : '12px' }}>
                     <span
                       className="text-[11px] font-bold tabular-nums"
                       style={{
-                        color: 'rgba(255,255,255,0.75)',
-                        textShadow: '0 1px 4px rgba(0,0,0,1)',
+                        color: hasPending ? '#b06aff' : 'rgba(255,255,255,0.75)',
+                        textShadow: hasPending ? '0 1px 4px rgba(0,0,0,0.8)' : '0 1px 4px rgba(0,0,0,1)',
                       }}
                     >
                       <span>
