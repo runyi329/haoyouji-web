@@ -1335,10 +1335,7 @@ export async function deleteLedgerCategory(categoryId: number, userId: number, c
     throw new Error("分类不存在");
   }
   
-  // 检查是否为默认分类（管理员强制删除时可跳过此限制）
-  if (category.isDefault && !force) {
-    throw new Error("默认分类不能删除");
-  }
+  // 所有分类均可删除（已取消默认分类限制，isDefault字段不再作为删除保护）
   
   // 安全验证：确保 category.ledgerId 有效，防止跨账本误删
   if (!category.ledgerId || category.ledgerId <= 0) {
