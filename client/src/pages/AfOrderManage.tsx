@@ -301,8 +301,10 @@ export default function AfOrderManage() {
 
   // 根据筛选条件过滤订单
   const filteredOrders = (orders as any[] | undefined)?.filter((order: any) => {
-    if (statusFilter === 'all') return true;
-    if (statusFilter === 'pending') return order.status === 'pending';
+    // 赠予订单在 pending 状态时不单独展示（只在对应委买订单卡片的折叠区块里显示）
+    const isGift = order.isGift === true || order.isGift === 1;
+    if (statusFilter === 'all') return !(isGift && order.status === 'pending');
+    if (statusFilter === 'pending') return order.status === 'pending' && !isGift;
     if (statusFilter === 'holding') return order.status === 'completed' && !order.sellStatus;
     if (statusFilter === 'selling') return order.sellStatus === 'selling';
     if (statusFilter === 'sold') return order.sellStatus === 'sold';
@@ -405,8 +407,8 @@ export default function AfOrderManage() {
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="flex">
           {([
-            { key: 'all' as const, label: '全部', count: orders?.length ?? 0 },
-            { key: 'pending' as const, label: '委买中', count: (orders as any[])?.filter((o: any) => o.status === 'pending').length ?? 0 },
+            { key: 'all' as const, label: '全部', count: (orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return !(g && o.status === 'pending'); }).length ?? 0 },
+            { key: 'pending' as const, label: '委买中', count: (orders as any[])?.filter((o: any) => o.status === 'pending' && o.isGift !== true && o.isGift !== 1).length ?? 0 },
             { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && !o.sellStatus).length ?? 0 },
             { key: 'selling' as const, label: '委卖中', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0 },
             { key: 'sold' as const, label: '已卖出', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0 },
