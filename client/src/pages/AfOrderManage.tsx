@@ -794,8 +794,9 @@ export default function AfOrderManage() {
                               {isSold && <span className="text-xs text-red-400 ml-1 font-normal">✓ 已停止计费</span>}
                             </span>
                           </div>
-                          <div className="ml-11 text-[11px] text-gray-400">
-                            计费区间：{fmtDay(startDay)} → {fmtDay(endDay)}（共{holdDays}天，{dailyFee.toFixed(4)} USDT/天）
+                          <div className="flex items-start gap-1">
+                            <span className="text-gray-400 w-12 shrink-0 text-[11px]">计费区间</span>
+                            <span className="text-[11px] text-gray-400">{fmtDay(startDay)} → {fmtDay(endDay)}（共{holdDays}天，{dailyFee.toFixed(4)} USDT/天）</span>
                           </div>
                         </div>
                       );
