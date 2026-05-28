@@ -2684,7 +2684,7 @@ export default function CryptoPrediction() {
                 <div className="text-center py-5 text-gray-500 text-xs">暂无委托记录</div>
               ) : (
                 <div>
-                  {/* 表头（可点击排序）—— 用 table 布局自动适配内容宽度 */}
+                  {/* 表头+数据行合并为同一个 table，列宽自动对齐 */}
                   <table className="w-full text-xs" style={{ borderCollapse: 'collapse', tableLayout: 'auto' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid #E0E8FF' }}>
@@ -2694,6 +2694,7 @@ export default function CryptoPrediction() {
                         <th className="text-center pb-1.5 px-2" style={{ color: orderSortKey === 'coin' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'coin' ? 600 : 400, whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF' }}>
                           <button onClick={() => handleOrderSort('coin')} className="flex items-center gap-0.5 mx-auto">币种 {orderSortKey === 'coin' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</button>
                         </th>
+                        <th className="text-center pb-1.5 px-1" style={{ color: '#9CA3AF', whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF' }}>赠</th>
                         <th className="text-right pb-1.5 px-2" style={{ color: orderSortKey === 'amount' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'amount' ? 600 : 400, whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', width: '99%' }}>
                           <button onClick={() => handleOrderSort('amount')} className="flex items-center gap-0.5 ml-auto">数量 {orderSortKey === 'amount' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</button>
                         </th>
@@ -2703,9 +2704,6 @@ export default function CryptoPrediction() {
                         <th className="pb-1.5 pl-2" style={{ whiteSpace: 'nowrap', color: '#9CA3AF' }}></th>
                       </tr>
                     </thead>
-                  </table>
-                  {/* 数据行——用同一个 table 包裹，自动对齐表头 */}
-                  <table className="w-full text-xs" style={{ borderCollapse: 'collapse', tableLayout: 'auto' }}>
                     <tbody>
                     {sortedOrders.map((order) => {
                       const createdAt = order.createdAt ? new Date(order.createdAt) : null;
@@ -2752,10 +2750,11 @@ export default function CryptoPrediction() {
                             </td>
                             {/* 币种列 */}
                             <td className="py-2 px-2 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
-                              <span className="font-medium" style={{ color: '#1A2340' }}>
-                                {order.coin}
-                                {(order as any).isGift && <span className="ml-0.5 text-[#ef5350] font-bold">赠</span>}
-                              </span>
+                              <span className="font-medium" style={{ color: '#1A2340' }}>{order.coin}</span>
+                            </td>
+                            {/* 赠列 */}
+                            <td className="py-2 px-1 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
+                              {(order as any).isGift ? <span className="text-[#ef5350] font-bold">赠</span> : null}
                             </td>
                             {/* 数量列（占满剩余宽度，靠右） */}
                             <td className="py-2 px-2 text-right" style={{ width: '99%', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
