@@ -12284,7 +12284,7 @@ ${klinesSummary}
                  LEFT JOIN af_order_tier_triggers t ON t.order_id = o.id
                  WHERE o.ledger_id = ? AND o.user_id IN (${placeholders5})
                    AND o.status = 'completed' AND o.side = 'buy'
-                   AND (o.sell_status IS NULL OR o.sell_status = 'pending')
+                   AND (o.sell_status IS NULL OR o.sell_status IN ('pending', 'selling'))
                  GROUP BY o.id, o.user_id, o.coin, o.quantity`,
                 [input.ledgerId, ...userIds4]
               ) as any[];
