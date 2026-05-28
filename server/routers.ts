@@ -12046,7 +12046,9 @@ ${klinesSummary}
           }
         }
 
-        return { total: recharged + manual + userBalance, inviteCount, directReferralCount, indirectReferralCount, positions };
+        // 正确公式：userBalance（充值已写入）+ manual（委买/撤单/手动调账，不写users.balance）
+        // recharged已包含在userBalance中，不能重复叠加
+        return { total: userBalance + manual, inviteCount, directReferralCount, indirectReferralCount, positions };
       }),
     // AF 邀请树：递归查询所有被邀请用户并标注层数（仅YJH本人可调用）
     afGetInviteTree: protectedProcedure
