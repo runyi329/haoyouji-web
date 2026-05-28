@@ -732,8 +732,8 @@ export default function AfOrderManage() {
                         </div>
                       );
                     })()}
-                    {/* 累计管理费：从下单时间（createdAt）开始算，撤单则作废，成交/委卖/持仓均累计 */}
-                    {(order.status === 'completed' || order.status === 'pending') && !order.isGift && (() => {
+                    {/* 累计管理费：从下单时间（createdAt）开始算，撤单则作废，成交/委卖/持仓均累计（含赠单） */}
+                    {(order.status === 'completed' || order.status === 'pending') && (() => {
                       const amount = parseFloat(order.amount);
                       const tradeValue = amount * 5.25;
                       const dailyFee = tradeValue / 0.75 * 0.12 / 365;
