@@ -103,28 +103,67 @@ export default function AfFeeDetail() {
           <span className="text-white font-semibold text-base">管理费明细</span>
         </div>
 
-        {/* 总计大数字 */}
-        <div className="px-5 pt-4 pb-2">
-          <p className="text-white/60 text-xs mb-1">账本管理费总计</p>
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-4xl font-extrabold text-white tracking-tight">{totalAll.toFixed(2)}</span>
-            <span className="text-sm text-white/50 font-normal">U</span>
-          </div>
-        </div>
-
-        {/* 进行中 / 已结清 两列 */}
-        <div className="grid grid-cols-2 gap-3 px-4 pb-5 pt-3">
-          <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-            <p className="text-white/55 text-xs mb-1">进行中</p>
-            <p className="text-xl font-bold text-amber-300 leading-tight">{totalOngoing.toFixed(2)}<span className="text-sm font-normal ml-1">U</span></p>
-            <p className="text-white/35 text-[10px] mt-1">{feeItems.filter(f => f.feeType === 'ongoing').length} 笔持仓</p>
-          </div>
-          <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-            <p className="text-white/55 text-xs mb-1">已结清</p>
-            <p className="text-xl font-bold text-emerald-300 leading-tight">{totalSettled.toFixed(2)}<span className="text-sm font-normal ml-1">U</span></p>
-            <p className="text-white/35 text-[10px] mt-1">{feeItems.filter(f => f.feeType === 'settled').length} 笔已卖出</p>
-          </div>
-        </div>
+        {/* 三列卡片：管理费(进行中/已结清/累计) + 今日(管理费/订单数) */}
+        {(() => {
+          const nowBJ = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+          const todayStartBJ = new Date(nowBJ.getFullYear(), nowBJ.getMonth(), nowBJ.getDate());
+          let todayFee = 0;
+          let todayOrderCount = 0;
+          for (const item of feeItems) {
+            if (item.feeType === 'settled') {
+              // 已卖出：卖出日是今天才计入
+              const sellDate = item.sellConfirmedAt ? new Date(item.sellConfirmedAt) : null;
+              if (sellDate) {
+                const sellBJ = new Date(sellDate.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+                const sellDay = new Date(sellBJ.getFullYear(), sellBJ.getMonth(), sellBJ.getDate());
+                if (sellDay.getTime() >= todayStartBJ.getTime()) {
+                  todayFee += item.dailyFee;
+                  todayOrderCount += 1;
+                }
+              }
+            } else {
+              // 进行中（持仓中/委卖中）：每天都计费
+              todayFee += item.dailyFee;
+              todayOrderCount += 1;
+            }
+          }
+          return (
+            <div className="grid grid-cols-3 gap-2 px-4 pb-5 pt-3">
+              {/* 管理费容器：进行中/已结清/累计 */}
+              <div className="col-span-2 rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+                <p className="text-white/55 text-xs mb-2">管理费</p>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/50">进行中</span>
+                    <span className="text-amber-300 font-semibold">{totalOngoing.toFixed(2)} U</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/50">已结清</span>
+                    <span className="text-emerald-300 font-semibold">{totalSettled.toFixed(2)} U</span>
+                  </div>
+                  <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
+                    <span className="text-white/70">累计</span>
+                    <span className="text-white font-bold">{totalAll.toFixed(2)} U</span>
+                  </div>
+                </div>
+              </div>
+              {/* 今日容器：今日管理费/订单数 */}
+              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+                <p className="text-white/55 text-xs mb-2">今日</p>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/50">管理费</span>
+                    <span className="text-sky-300 font-semibold">{todayFee.toFixed(4)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/50">订单数</span>
+                    <span className="text-white font-bold">{todayOrderCount} 单</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* ── 筛选 Tab ── */}
