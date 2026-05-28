@@ -1574,7 +1574,7 @@ export default function FunderManagement() {
                       { key: 'buyPrice', label: '买入币价' },
                       { key: 'buyValue', label: '买入价值' },
                       { key: 'interestBase', label: '计息基数' },
-                      { key: 'buyDate', label: '买入时间' },
+                      { key: 'buyDate', label: '开仓时间' },
                       { key: 'todayPrice', label: '今日币价' },
                       // 当前价值已移至持有资产括号显示，不再单独作为开关
                       { key: 'holdDuration', label: '持有时长' },
@@ -1691,7 +1691,7 @@ export default function FunderManagement() {
                         )}
                         {displayConfig.buyDate && formData.buyDate && (
                           <div className="flex items-center justify-between text-xs">
-                            <span className="text-gray-400">买入时间</span>
+                            <span className="text-gray-400">开仓时间</span>
                             <span className="font-medium" style={{ color: '#4B5563' }}>{formData.buyDate}</span>
                           </div>
                         )}

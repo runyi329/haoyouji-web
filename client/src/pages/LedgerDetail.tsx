@@ -1412,7 +1412,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
             )}
             {dc.buyDate && order.buy_date && (
               <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
-                <span className="text-gray-400 shrink-0">买入时间</span>
+                <span className="text-gray-400 shrink-0">开仓时间</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
               </div>
             )}

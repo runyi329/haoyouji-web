@@ -219,11 +219,18 @@ function GudizengchouDetail({ order, ledgerId }: { order: any; ledgerId: number 
               <span className="text-[#64748B]">{order.sellConfirmedAt}</span>
             </div>
           )}
-          {/* 买入时间 */}
+          {/* 开仓时间 */}
           <div className="flex justify-between items-center">
-            <span className="text-[#9CA3AF]">买入时间</span>
+            <span className="text-[#9CA3AF]">开仓时间</span>
             <span className="text-[#64748B]">{timeStr}</span>
           </div>
+          {/* 登记时间（管理员确认成交的时间） */}
+          {order.confirmedAt && (
+            <div className="flex justify-between items-center">
+              <span className="text-[#9CA3AF]">登记时间</span>
+              <span className="text-[#64748B]">{order.confirmedAt}</span>
+            </div>
+          )}
           {/* 订单编号 + 撤单 */}
           <div className="flex justify-between items-center">
             <span className="text-[#9CA3AF]">订单编号</span>
@@ -1074,11 +1081,18 @@ export default function GujianPage() {
                               </>
                             )}
 
-                            {/* 买入时间 */}
+                            {/* 开仓时间 */}
                             <div className="flex justify-between items-center text-sm">
-                              <span style={{ color: "#9CA3AF" }}>买入时间</span>
+                              <span style={{ color: "#9CA3AF" }}>开仓时间</span>
                               <span style={{ color: "#6B7280" }}>{new Date(order.createdAt).toLocaleString("zh-CN")}</span>
                             </div>
+                            {/* 登记时间 */}
+                            {order.confirmedAt && (
+                              <div className="flex justify-between items-center text-sm">
+                                <span style={{ color: "#9CA3AF" }}>登记时间</span>
+                                <span style={{ color: "#6B7280" }}>{order.confirmedAt}</span>
+                              </div>
+                            )}
 
                             {/* 撤单按钮 */}
                             {order.status === "pending" && order.sellStatus !== "selling" && (
