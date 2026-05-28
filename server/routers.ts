@@ -12907,7 +12907,7 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
-        const rows = await db.execute(
+        const [rows] = await db.execute(
           sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at,
                      u.username, COALESCE(u.name,'') as user_name,
                      COALESCE(o.is_gift, 0) as is_gift, COALESCE(o.gift_multiplier, '') as gift_multiplier,
@@ -12915,7 +12915,7 @@ ${klinesSummary}
                      COALESCE(o.original_limit_price, o.limit_price) as original_limit_price,
                      COALESCE(o.source_amount, '') as source_amount,
                      COALESCE(su.username, '') as source_username,
-                     o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status
+                     o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status, o.confirmed_at
               FROM af_orders o
               LEFT JOIN users u ON u.id = o.user_id
               LEFT JOIN users su ON su.id = o.source_user_id
@@ -12923,7 +12923,7 @@ ${klinesSummary}
               ORDER BY o.created_at DESC
               LIMIT 500`
         ) as any;
-        const list = ((rows[0] || rows) as any[]).map((r: any) => ({
+        const list = (rows as any[]).map((r: any) => ({
           id: r.id,
           userId: r.user_id,
           username: r.username || '',
@@ -12949,6 +12949,7 @@ ${klinesSummary}
           sellAt: r.sell_at || null,
           sellConfirmedAt: toBeijingTimeStr(r.sell_confirmed_at),
           sellStatus: r.sell_status || null,
+          confirmedAt: toBeijingTimeStr(r.confirmed_at),
           equityTier: 0,
         }));
         
