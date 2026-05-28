@@ -310,7 +310,7 @@ export default function AfOrderManage() {
     const isGift = order.isGift === true || order.isGift === 1;
     if (statusFilter === 'all') return !(isGift && order.status === 'pending');
     if (statusFilter === 'pending') return order.status === 'pending' && !isGift;
-    if (statusFilter === 'holding') return order.status === 'completed' && !order.sellStatus && !isGift;
+    if (statusFilter === 'holding') return order.status === 'completed' && !order.sellStatus; // 持仓中：赠单也显示
     if (statusFilter === 'selling') return order.sellStatus === 'selling'; // 委卖中：赠单也显示
     if (statusFilter === 'sold') return order.sellStatus === 'sold'; // 已卖出：赠单也显示
     return true;
@@ -419,7 +419,7 @@ export default function AfOrderManage() {
           {([
             { key: 'all' as const, label: '全部', count: (orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return !(g && o.status === 'pending'); }).length ?? 0 },
             { key: 'pending' as const, label: '委买中', count: (orders as any[])?.filter((o: any) => o.status === 'pending' && o.isGift !== true && o.isGift !== 1).length ?? 0 },
-            { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && !o.sellStatus && o.isGift !== true && o.isGift !== 1).length ?? 0 },
+            { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && !o.sellStatus).length ?? 0 },
             { key: 'selling' as const, label: '委卖中', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0 },
             { key: 'sold' as const, label: '已卖出', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0 },
           ]).map((tab, idx, arr) => (
