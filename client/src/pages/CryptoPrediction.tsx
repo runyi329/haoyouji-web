@@ -1647,11 +1647,18 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           );
         })()}
 
-        {/* 买入时间 */}
+        {/* 开仓时间 */}
         <div className="flex justify-between items-center">
-          <span className="text-[#9CA3AF]">买入时间</span>
+          <span className="text-[#9CA3AF]">开仓时间</span>
           <span className="text-[#64748B]">{timeStr}</span>
         </div>
+        {/* 登记时间（管理员确认成交的时间） */}
+        {order.confirmedAt && (
+          <div className="flex justify-between items-center">
+            <span className="text-[#9CA3AF]">登记时间</span>
+            <span className="text-[#64748B]">{order.confirmedAt}</span>
+          </div>
+        )}
         {/* 卖出时间（已卖出时显示） */}
         {order.sellStatus === 'sold' && order.sellConfirmedAt && (
           <div className="flex justify-between items-center">
@@ -3139,7 +3146,7 @@ export default function CryptoPrediction() {
                             )}
                             {order.buy_date && (
                               <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-400 shrink-0">买入时间</span>
+                                <span className="text-gray-400 shrink-0">开仓时间</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
                               </div>
                             )}
