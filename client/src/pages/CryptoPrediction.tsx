@@ -2723,7 +2723,7 @@ export default function CryptoPrediction() {
                           <span className="whitespace-nowrap" style={{ color: '#6B7A9A' }}>{timeStr}</span>
                           <span className="font-medium text-center" style={{ color: '#1A2340' }}>
                             {order.coin}
-                            {(order as any).isGift && <span className="ml-0.5 text-[#ef5350] font-bold animate-pulse">赠</span>}
+                            {(order as any).isGift && <span className="ml-0.5 text-[#ef5350] font-bold">赠</span>}
                           </span>
                           <span className="text-right" style={{ color: '#1A2340' }}>{(() => { const q = parseFloat(order.quantity); return q % 1 === 0 ? q.toString() : q.toFixed(8).replace(/0+$/, '').replace(/\.$/, ''); })()}</span>
                           <span className={`text-right ${
