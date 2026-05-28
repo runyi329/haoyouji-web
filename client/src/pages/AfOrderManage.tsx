@@ -166,6 +166,9 @@ export default function AfOrderManage() {
   // 赠予订单折叠展开状态：key = 委买订单ID
   const [expandedGiftOrders, setExpandedGiftOrders] = useState<Record<number, boolean>>({});
   const [expandedDateId, setExpandedDateId] = useState<number | null>(null);
+  // 日期分组折叠：key = 日期字符串(YYYY-MM-DD)，value = 是否展开（默认全部展开）
+  const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
+  const toggleDate = (dateKey: string) => setExpandedDates(prev => ({ ...prev, [dateKey]: !(prev[dateKey] ?? true) }));
   const toggleGiftOrders = (orderId: number) => setExpandedGiftOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
   // 管理费明细：跳转到独立页面
 
@@ -446,7 +449,45 @@ export default function AfOrderManage() {
           <div className="text-center py-12 text-gray-400">该状态下暂无订单</div>
         ) : (
           <div className="space-y-2.5 pb-6">
-            {filteredOrders.map((order: any) => {
+            {(() => {
+              // 按开仓日期分组
+              const dateGroups: Record<string, any[]> = {};
+              (filteredOrders || []).forEach((order: any) => {
+                const d = order.createdAt ? new Date(order.createdAt) : null;
+                const dateKey = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : '未知日期';
+                if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
+                dateGroups[dateKey].push(order);
+              });
+              const sortedDates = Object.keys(dateGroups).sort((a, b) => b.localeCompare(a));
+              return sortedDates.map(dateKey => {
+                const groupOrders = dateGroups[dateKey];
+                const isOpen = expandedDates[dateKey] ?? true;
+                // 统计：投入总额、各币种持仓数量
+                const totalAmount = groupOrders.reduce((s: number, o: any) => s + (parseFloat(o.amount) || 0), 0);
+                const coinQty: Record<string, number> = {};
+                groupOrders.forEach((o: any) => {
+                  if (o.coin) coinQty[o.coin] = (coinQty[o.coin] || 0) + (parseFloat(o.quantity) || 0);
+                });
+                const qtyStr = Object.entries(coinQty).map(([c, q]) => `${q.toFixed(4)} ${c}`).join(' / ');
+                return (
+                  <div key={dateKey}>
+                    {/* 日期分组标题行 */}
+                    <button
+                      onClick={() => toggleDate(dateKey)}
+                      className="w-full flex items-center justify-between px-3 py-2 mb-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-gray-400 transition-transform" style={{ display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+                        <span className="text-sm font-semibold text-gray-700">{dateKey}</span>
+                        <span className="text-xs text-gray-400">{groupOrders.length} 单</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-gray-500">
+                        <span>投入 <span className="font-medium text-gray-700">{totalAmount.toFixed(2)}</span> USDT</span>
+                        {qtyStr && <span className="text-blue-500 font-medium">{qtyStr}</span>}
+                      </div>
+                    </button>
+                    {/* 该日期下的订单列表 */}
+                    {isOpen && groupOrders.map((order: any) => {
               const isEditing = editingId === order.id;
               const statusDisplay = getStatusDisplay(order);
               // 计算编辑时的实时数量（始终用数据库原始买入价 order.limitPrice，避免被卖出价误覆盖）
@@ -909,7 +950,11 @@ export default function AfOrderManage() {
                   )}
                 </div>
               );
-            })}
+                })}
+                  </div>
+                );
+              });
+            })()}
           </div>
         )}
       </div>
