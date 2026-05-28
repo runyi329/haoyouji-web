@@ -624,15 +624,15 @@ export default function AfOrderManage() {
                   </div>
 
                   {/* 订单信息 */}
-                  <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-sm">
+                  <div className="grid grid-cols-2 gap-y-2 gap-x-2 text-xs">
                     {/* 币种 */}
                     <div className="flex items-center gap-1">
-                      <span className="text-gray-400 text-xs w-10">币种</span>
+                      <span className="text-gray-400 w-12 shrink-0">币种</span>
                       <span className="font-medium">{order.coin}</span>
                     </div>
                     {/* 状态（综合买入+卖出状态） */}
                     <div className="flex items-center gap-1">
-                      <span className="text-gray-400 text-xs w-10">状态</span>
+                      <span className="text-gray-400 w-12 shrink-0">状态</span>
                       {isEditing ? (
                         <div className="flex flex-col gap-1">
                           <select
@@ -662,7 +662,7 @@ export default function AfOrderManage() {
                     </div>
                     {/* 买入委托价 */}
                     <div className="flex items-center gap-1">
-                      <span className="text-gray-400 text-xs w-10">买入价</span>
+                      <span className="text-gray-400 w-12 shrink-0">买入价</span>
                       {isEditing && editState!.status === 'pending' ? (
                         <input
                           type="number"
@@ -678,7 +678,7 @@ export default function AfOrderManage() {
                     </div>
                     {/* 数量 */}
                     <div className="flex items-center gap-1">
-                      <span className="text-gray-400 text-xs w-10">数量</span>
+                      <span className="text-gray-400 w-12 shrink-0">数量</span>
                       <span className="font-medium text-gray-900">
                         {(() => {
                           const raw = isEditing ? (previewQuantity || editState!.quantity) : order.quantity;
@@ -695,8 +695,8 @@ export default function AfOrderManage() {
                       const investAmt = order.isGift ? srcAmt : selfAmt;
                       if (investAmt <= 0) return null;
                       return (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400 text-xs w-10">实际投入</span>
+                        <div className="flex items-center gap-1 col-span-2">
+                          <span className="text-gray-400 w-12 shrink-0">实际投入</span>
                           <span>{investAmt.toFixed(2)} USDT</span>
                         </div>
                       );
@@ -707,11 +707,11 @@ export default function AfOrderManage() {
                       const giftAmt = parseFloat(order.amount || '0');
                       const ratio = srcAmt > 0 ? (giftAmt / srcAmt) : 0;
                       return (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400 text-xs w-10">赠送市值</span>
+                        <div className="flex items-center gap-1 col-span-2">
+                          <span className="text-gray-400 w-12 shrink-0">赠送市值</span>
                           <span>
                             {giftAmt.toFixed(2)} USDT
-                            {ratio > 0 && <span className="text-xs text-gray-400 ml-1">({ratio.toFixed(4)}倍)</span>}
+                            {ratio > 0 && <span className="text-gray-400 ml-1">({ratio.toFixed(4)}倍)</span>}
                           </span>
                         </div>
                       );
@@ -721,8 +721,8 @@ export default function AfOrderManage() {
                       const amount = parseFloat(order.amount);
                       const tradeValue = order.isGift ? amount : amount * 5.25;
                       return (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400 text-xs w-10">订单价值</span>
+                        <div className="flex items-center gap-1 col-span-2">
+                          <span className="text-gray-400 w-12 shrink-0">订单价值</span>
                           <span className="text-gray-900 font-medium">{tradeValue.toFixed(2)} USDT</span>
                         </div>
                       );
@@ -730,7 +730,7 @@ export default function AfOrderManage() {
                     {/* 卖出价格（委卖中或已卖出时显示） */}
                     {(order.sellStatus === 'selling' || order.sellStatus === 'sold') && (
                       <div className="flex items-center gap-1">
-                        <span className="text-gray-400 text-xs w-10">卖出价</span>
+                        <span className="text-gray-400 w-12 shrink-0">卖出价</span>
                         <span className="font-medium text-gray-900">
                           {parseFloat(order.sellPrice).toLocaleString()} USDT
                         </span>
@@ -738,9 +738,9 @@ export default function AfOrderManage() {
                     )}
                     {/* 卖出时间（已卖出时显示） */}
                     {order.sellStatus === 'sold' && order.sellConfirmedAt && (
-                      <div className="flex items-center gap-1">
-                        <span className="text-gray-400 text-xs w-10">卖出时间</span>
-                        <span className="text-xs text-gray-500">{formatDate(order.sellConfirmedAt)}</span>
+                      <div className="flex items-center gap-1 col-span-2">
+                        <span className="text-gray-400 w-12 shrink-0">卖出时间</span>
+                        <span className="text-gray-500">{formatDate(order.sellConfirmedAt)}</span>
                       </div>
                     )}
                     {/* 当前权益 */}
@@ -749,9 +749,9 @@ export default function AfOrderManage() {
                       const pct = (rate * 100).toFixed(2);
                       const tierLabel = order.equityTier === 0 ? 'D0档' : `D${order.equityTier}档`;
                       return (
-                        <div className="flex items-center gap-1">
-                          <span className="text-gray-400 text-xs w-10">当前权益</span>
-                          <span className={`font-medium ${rate >= 1.0 ? 'text-gray-900' : 'text-orange-500'}`}>{pct}% <span className="text-xs text-gray-400">({tierLabel})</span></span>
+                        <div className="flex items-center gap-1 col-span-2">
+                          <span className="text-gray-400 w-12 shrink-0">当前权益</span>
+                          <span className={`font-medium ${rate >= 1.0 ? 'text-gray-900' : 'text-orange-500'}`}>{pct}% <span className="text-gray-400">({tierLabel})</span></span>
                         </div>
                       );
                     })()}
@@ -763,10 +763,10 @@ export default function AfOrderManage() {
                       const fmtLow = lowDate ? `${lowDate.getMonth()+1}月${lowDate.getDate()}日` : '';
                       return (
                         <div className="flex items-center gap-1 col-span-2">
-                          <span className="text-gray-400 text-xs w-10">扫描最低价</span>
+                          <span className="text-gray-400 w-12 shrink-0">扫描最低价</span>
                           <span className="font-medium text-blue-600">
                             {lowPrice.toLocaleString()} USDT
-                            {fmtLow && <span className="text-xs text-gray-400 ml-1">({fmtLow})</span>}
+                            {fmtLow && <span className="text-gray-400 ml-1">({fmtLow})</span>}
                           </span>
                         </div>
                       );
@@ -797,7 +797,7 @@ export default function AfOrderManage() {
                       return (
                         <div className="flex flex-col gap-0.5 col-span-2">
                           <div className="flex items-center gap-1">
-                            <span className="text-gray-400 text-xs w-10">累计管理费</span>
+                            <span className="text-gray-400 w-12 shrink-0">累计管理费</span>
                             <span className={`font-medium ${isPending ? 'text-gray-400' : isSold ? 'text-gray-500' : 'text-gray-900'}`}>
                               {totalFee.toFixed(4)} USDT
                               {isPending && <span className="text-xs text-yellow-500 ml-1">撤单则作废</span>}
