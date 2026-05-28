@@ -2085,6 +2085,8 @@ export default function CryptoPrediction() {
   const [selectedSellOrderIds, setSelectedSellOrderIds] = useState<Set<number>>(new Set());
   // 订单详情展开状态
   const [orderDetailId, setOrderDetailId] = useState<number | null>(null);
+  // 日期气泡展开状态
+  const [expandedDateId, setExpandedDateId] = useState<number | null>(null);
   // 订单列表排序状态
   const [orderSortKey, setOrderSortKey] = useState<'time' | 'coin' | 'amount' | 'status'>('time');
   const [orderSortDir, setOrderSortDir] = useState<'desc' | 'asc'>('desc');
@@ -2683,7 +2685,7 @@ export default function CryptoPrediction() {
               ) : (
                 <div>
                   {/* 表头（可点击排序） */}
-                  <div className="grid text-xs pb-1.5 mb-0.5" style={{gridTemplateColumns:'7fr 2.5fr 3fr 3fr 2fr', borderBottom: '1px solid #E0E8FF'}}>
+                  <div className="grid text-xs pb-1.5 mb-0.5" style={{gridTemplateColumns:'4fr 2.5fr 3fr 3fr 2fr', borderBottom: '1px solid #E0E8FF'}}>
                     {/* 日期 */}
                     <button onClick={() => handleOrderSort('time')} className="flex items-center gap-0.5 text-left" style={{ color: orderSortKey === 'time' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'time' ? 600 : 400 }}>
                       日期
@@ -2708,6 +2710,14 @@ export default function CryptoPrediction() {
                   </div>
                   {sortedOrders.map((order) => {
                     const createdAt = order.createdAt ? new Date(order.createdAt) : null;
+                    // 简短日期：YY-MM-DD
+                    const shortDate = createdAt ? (() => {
+                      const yy = String(createdAt.getFullYear()).slice(2);
+                      const mo = String(createdAt.getMonth()+1).padStart(2,'0');
+                      const d = String(createdAt.getDate()).padStart(2,'0');
+                      return `${yy}-${mo}-${d}`;
+                    })() : '--';
+                    // 完整时间（用于气泡）
                     const timeStr = createdAt ? (() => {
                       const y = createdAt.getFullYear();
                       const mo = String(createdAt.getMonth()+1).padStart(2,'0');
@@ -2717,10 +2727,32 @@ export default function CryptoPrediction() {
                       const s = String(createdAt.getSeconds()).padStart(2,'0');
                       return `${y}-${mo}-${d} ${h}:${mi}:${s}`;
                     })() : '--';
+                    const isDateOpen = expandedDateId === order.id;
                     return (
                       <div key={order.id} className="py-2" style={{ borderBottom: '1px solid #EEF2FF' }}>
-                        <div className="grid text-xs items-center" style={{gridTemplateColumns:'7fr 2.5fr 3fr 3fr 2fr'}}>
-                          <span className="whitespace-nowrap" style={{ color: '#6B7A9A' }}>{timeStr}</span>
+                        <div className="grid text-xs items-center" style={{gridTemplateColumns:'4fr 2.5fr 3fr 3fr 2fr'}}>
+                          {/* 日期列：只显示YY-MM-DD，点击弹出气泡 */}
+                          <div className="relative">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setExpandedDateId(isDateOpen ? null : order.id); }}
+                              className="whitespace-nowrap text-left"
+                              style={{ color: '#6B7A9A', borderBottom: '1px dashed #CBD5E1' }}
+                            >
+                              {shortDate}
+                            </button>
+                            {isDateOpen && (
+                              <div
+                                className="absolute z-50 left-0 top-full mt-1 px-2.5 py-1.5 rounded-lg shadow-md text-[11px] whitespace-nowrap"
+                                style={{ backgroundColor: '#F9FAFB', border: '1px solid #E5E7EB', color: '#374151', minWidth: 148 }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {timeStr}
+                                {/* 小三角（左上角） */}
+                                <div className="absolute -top-1.5 left-3 w-0 h-0" style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #E5E7EB' }} />
+                                <div className="absolute -top-[5px] left-3 w-0 h-0" style={{ borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '6px solid #F9FAFB' }} />
+                              </div>
+                            )}
+                          </div>
                           <span className="font-medium text-center" style={{ color: '#1A2340' }}>
                             {order.coin}
                             {(order as any).isGift && <span className="ml-0.5 text-[#ef5350] font-bold">赠</span>}
