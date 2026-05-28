@@ -768,12 +768,15 @@ export default function AfOrderManage() {
                       const startDate = new Date(order.createdAt);
                       const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
                       // 结束日期：已卖出用 sellConfirmedAt，其他状态用今天
+                      // 北京时间（UTC+8）当天日期
+                      const nowBJ = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+                      nowBJ.setHours(0,0,0,0);
                       let endDay: Date;
                       if (order.sellStatus === 'sold' && order.sellConfirmedAt) {
-                        const sellDate = new Date(order.sellConfirmedAt);
+                        const sellDate = new Date(new Date(order.sellConfirmedAt).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
                         endDay = new Date(sellDate.getFullYear(), sellDate.getMonth(), sellDate.getDate());
                       } else {
-                        endDay = new Date(); endDay.setHours(0,0,0,0);
+                        endDay = nowBJ;
                       }
                       const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
                       const totalFee = dailyFee * holdDays;
@@ -792,7 +795,7 @@ export default function AfOrderManage() {
                             </span>
                           </div>
                           <div className="ml-11 text-[11px] text-gray-400">
-                            计费区间：{fmtDay(startDay)} → {isSold ? fmtDay(endDay) : '今天'}（共{holdDays}天，{dailyFee.toFixed(4)} USDT/天）
+                            计费区间：{fmtDay(startDay)} → {fmtDay(endDay)}（共{holdDays}天，{dailyFee.toFixed(4)} USDT/天）
                           </div>
                         </div>
                       );
