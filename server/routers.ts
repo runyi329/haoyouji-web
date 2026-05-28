@@ -13088,17 +13088,17 @@ ${klinesSummary}
           const isGift = parseInt(bo.is_gift || '0') === 1;
           const tradeValue = isGift ? amount : amount * 5.25;
           const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-          const confirmedDate = bo.updated_at ? new Date(bo.updated_at) : new Date(bo.created_at);
+                    // 管理费从下单时间（created_at）开始计算，修改价格等操作不影响管理费
+          const confirmedDate = new Date(bo.created_at);
           const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
-
           if (bo.sell_status_val === 'sold') {
-            // 已结清：从确认日到卖出确认日
+            // 已结清：从下单日到卖出确认日
             const sellConfirmedDate = bo.sell_confirmed_at ? new Date(bo.sell_confirmed_at) : now;
             const sellDay = new Date(sellConfirmedDate.getFullYear(), sellConfirmedDate.getMonth(), sellConfirmedDate.getDate());
             const holdDays = Math.max(1, Math.floor((sellDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
             settledFee += dailyFee * holdDays;
           } else {
-            // 进行中：从确认日到今天
+            // 进行中：从下单日到今天
             const holdDays = Math.max(1, Math.floor((todayStart.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
             ongoingFee += dailyFee * holdDays;
           }
