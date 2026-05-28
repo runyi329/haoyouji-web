@@ -12958,8 +12958,8 @@ ${klinesSummary}
               const placeholders = normalOrderIds.map(() => '?').join(',');
               // 查询赠予订单基本信息
               const [giftRows] = await (conn as any).execute(
-                `SELECT g.id, g.order_no, g.source_order_id, g.user_id, g.amount, g.quantity, g.coin,
-                        g.status, g.sell_status, g.gift_multiplier, g.limit_price,
+                `SELECT g.id, g.source_order_id, g.user_id, g.amount, g.quantity, g.coin,
+                        g.status, g.sell_status, g.gift_multiplier, g.limit_price, g.created_at,
                         u.username, COALESCE(u.name,'') as user_name
                  FROM af_orders g
                  LEFT JOIN users u ON u.id = g.user_id
@@ -12988,9 +12988,15 @@ ${klinesSummary}
                 for (const g of giftList) {
                   const sid = Number(g.source_order_id);
                   if (!giftMap[sid]) giftMap[sid] = [];
+                  // 用 id 和 created_at 生成订单号（af_orders 表无 order_no 字段）
+                  const giftCreatedAt = g.created_at ? new Date(g.created_at) : new Date();
+                  const gyy = String(giftCreatedAt.getFullYear()).slice(2);
+                  const gmm = String(giftCreatedAt.getMonth() + 1).padStart(2, '0');
+                  const gdd = String(giftCreatedAt.getDate()).padStart(2, '0');
+                  const giftOrderNo = `AF${gyy}${gmm}${gdd}${String(g.id).padStart(6, '0')}`;
                   giftMap[sid].push({
                     id: g.id,
-                    orderNo: g.order_no || '',
+                    orderNo: giftOrderNo,
                     userId: g.user_id,
                     username: g.username || '',
                     nickname: g.user_name || g.username || '',
