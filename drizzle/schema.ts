@@ -937,6 +937,7 @@ export const users = mysqlTable("users", {
 	avatar: longtext(),
 	points: int().default(0).notNull(),
 	balance: decimal({ precision: 20, scale: 8 }).default('0').notNull(),
+	balanceCny: decimal('balance_cny', { precision: 20, scale: 2 }).default('0').notNull(),
 	sharingEnabled: tinyint().default(0).notNull(),
 	isLocked: tinyint().default(0).notNull(),
 	failedLoginAttempts: int().default(0).notNull(),

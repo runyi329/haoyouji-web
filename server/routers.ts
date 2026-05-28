@@ -8708,7 +8708,7 @@ ${klinesSummary}
         name: z.string().min(1).max(50),
       }))
       .mutation(async ({ ctx, input }) => {
-        return await dbLedger.updateLedgerCategory(input.categoryId, { name: input.name.trim() });
+        return await dbLedger.updateLedgerCategory(input.categoryId, { name: input.name.trim() }, ctx.user.id);
       }),
 
     // 批量替换分类

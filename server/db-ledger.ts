@@ -1224,6 +1224,20 @@ export async function addLedgerCategory(data: {
 }) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
+  // 权限验证：确认 createdBy 是该账本的成员，防止跨账本越权操作
+  const memberCheck = await db
+    .select({ id: ledgerMembers.id })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, data.ledgerId),
+        eq(ledgerMembers.userId, data.createdBy)
+      )
+    )
+    .limit(1);
+  if (memberCheck.length === 0) {
+    throw new Error("权限不足：您不是此账本的成员，无法添加分类");
+  }
   
   // 如果没有指定排序，获取当前最大排序值+1
   let sortOrder = data.sortOrder;
@@ -1335,13 +1349,25 @@ export async function deleteLedgerCategory(categoryId: number, userId: number, c
     throw new Error("分类不存在");
   }
   
-  // 所有分类均可删除（已取消默认分类限制，isDefault字段不再作为删除保护）
-  
+    // 所有分类均可删除（已取消默认分类限制，isDefault字段不再作为删除保护）
   // 安全验证：确保 category.ledgerId 有效，防止跨账本误删
   if (!category.ledgerId || category.ledgerId <= 0) {
     throw new Error("分类数据异常：无法确定所属账本，拒绝执行删除操作");
   }
-
+  // 权限验证：确认 userId 是该账本的成员，防止跨账本越权操作
+  const memberCheck = await db
+    .select({ id: ledgerMembers.id })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, category.ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  if (memberCheck.length === 0) {
+    throw new Error("权限不足：您不是此账本的成员，无法删除分类");
+  }
   // 获取所有子分类ID（限制在同一账本内）
   const childIds = await getAllChildCategoryIds(db, categoryId, category.ledgerId);
   
@@ -1523,16 +1549,43 @@ export async function updateLedgerCategory(
     name?: string;
     icon?: string;
     color?: string;
-  }
+  },
+  userId?: number
 ) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
-  
+  // 获取分类信息（用于权限验证）
+  if (userId !== undefined) {
+    const category = await db
+      .select({ id: ledgerCategories.id, ledgerId: ledgerCategories.ledgerId })
+      .from(ledgerCategories)
+      .where(eq(ledgerCategories.id, categoryId))
+      .then((rows: any[]) => rows[0]);
+    if (!category) {
+      throw new Error("分类不存在");
+    }
+    if (!category.ledgerId || category.ledgerId <= 0) {
+      throw new Error("分类数据异常：无法确定所属账本");
+    }
+    // 权限验证：确认 userId 是该账本的成员
+    const memberCheck = await db
+      .select({ id: ledgerMembers.id })
+      .from(ledgerMembers)
+      .where(
+        and(
+          eq(ledgerMembers.ledgerId, category.ledgerId),
+          eq(ledgerMembers.userId, userId)
+        )
+      )
+      .limit(1);
+    if (memberCheck.length === 0) {
+      throw new Error("权限不足：您不是此账本的成员，无法修改分类");
+    }
+  }
   await db
     .update(ledgerCategories)
     .set({ ...data, updatedAt: new Date() })
     .where(eq(ledgerCategories.id, categoryId));
-  
   return true;
 }
 
