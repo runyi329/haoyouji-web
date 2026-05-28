@@ -450,11 +450,24 @@ export default function AfOrderManage() {
         ) : (
           <div className="space-y-2.5 pb-6">
             {(() => {
-              // 按开仓日期分组
+              // 分组逻辑：
+              // - 持仓中（status=completed）：按登记时间 confirmedAt 分组
+              // - 委托中（status=pending）：按开仓时间 createdAt 分组
+              // 注：赠单嵌套在正单的 giftOrders 里，不单独分组
+              const toDateKey = (d: Date | null) => d
+                ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+                : '未知日期';
+              const getOrderDateKey = (order: any): string => {
+                // 持仓中（completed）：用登记时间 confirmedAt
+                if (order.status === 'completed' && order.confirmedAt) {
+                  return toDateKey(new Date(order.confirmedAt));
+                }
+                // 委托中（pending）或无登记时间：用开仓时间 createdAt
+                return toDateKey(order.createdAt ? new Date(order.createdAt) : null);
+              };
               const dateGroups: Record<string, any[]> = {};
               (filteredOrders || []).forEach((order: any) => {
-                const d = order.createdAt ? new Date(order.createdAt) : null;
-                const dateKey = d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : '未知日期';
+                const dateKey = getOrderDateKey(order);
                 if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
                 dateGroups[dateKey].push(order);
               });
@@ -477,8 +490,8 @@ export default function AfOrderManage() {
                       const shortDate = dateKey.slice(5); // "05-28"
                       // 正单数量（非赠单）
                       const normalCount = groupOrders.filter((o: any) => !o.isGift).length;
-                      // 赠单数量
-                      const giftCount = groupOrders.length - normalCount;
+                      // 赠单数量：累加每个正单的 giftOrders 数量
+                      const giftCount = groupOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[] || []).length), 0);
                       // 各币种数量简写：BTC→币 ETH→E SOL→S
                       const COIN_SHORT: Record<string, string> = { BTC: '币', ETH: 'E', SOL: 'S' };
                       const coinParts = Object.entries(coinQty).map(([c, q]) => {
