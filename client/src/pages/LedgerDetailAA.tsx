@@ -35,6 +35,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
 
 // 数字币价格查询（用于保证金人民币折算显示）——使用OKX API格式
@@ -1486,33 +1487,38 @@ export default function LedgerDetailAA({
             {selectedTag ? `「${selectedTag.name}」暂无记录` : "暂无数据，点击日历格子添加记录"}
           </div>
         ) : (() => {
-          // 计算Y轴自适应范围：取有效数据的最大最小值，上下各留约5%余量
+          // 计算Y轴自适应范围：取有效数据的最大最小值，上下各留约15%余量
           const validBalances = chartData
             .map((d: any) => d.balance)
             .filter((v: any) => v !== null && v !== undefined) as number[];
+          const costLine = stats.initialBalance > 0 ? stats.initialBalance : undefined;
           let yMin: number | undefined = undefined;
           let yMax: number | undefined = undefined;
           if (validBalances.length > 0) {
-            const dataMin = Math.min(...validBalances);
-            const dataMax = Math.max(...validBalances);
+            const allValues = costLine ? [...validBalances, costLine] : validBalances;
+            const dataMin = Math.min(...allValues);
+            const dataMax = Math.max(...allValues);
             const range = dataMax - dataMin;
-            // 如果波动极小（range < 数据的1%），至少留出数据值的2%作为可视范围
             const padding = range > 0 ? range * 0.15 : dataMax * 0.02;
             yMin = dataMin - padding;
             yMax = dataMax + padding;
           }
+          // 计算成本线在Y轴中的相对位置（用于渐变色分界点）
+          // recharts的linearGradient y1=0是顶部，y1=1是底部
+          const costLineOffset = (costLine !== undefined && yMin !== undefined && yMax !== undefined)
+            ? Math.max(0, Math.min(1, (yMax - costLine) / (yMax - yMin)))
+            : 0.5;
           return (
           <div className="px-1 pb-4" style={{ touchAction: 'pan-y' }} onTouchMove={(e) => { e.stopPropagation(); }}>
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={chartData} margin={{ top: 12, right: 16, left: 0, bottom: 4 }}>
                 <defs>
-                  <linearGradient id="aaBalanceGradientUp" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#D32F2F" stopOpacity={0.18} />
-                    <stop offset="100%" stopColor="#D32F2F" stopOpacity={0.01} />
-                  </linearGradient>
-                  <linearGradient id="aaBalanceGradientDown" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#4CAF50" stopOpacity={0.18} />
-                    <stop offset="100%" stopColor="#4CAF50" stopOpacity={0.01} />
+                  {/* 成本线以上红色渐变，以下绿色渐变 */}
+                  <linearGradient id="aaBalanceSplitGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#D32F2F" stopOpacity={0.35} />
+                    <stop offset={`${(costLineOffset * 100).toFixed(1)}%`} stopColor="#D32F2F" stopOpacity={0.12} />
+                    <stop offset={`${(costLineOffset * 100).toFixed(1)}%`} stopColor="#4CAF50" stopOpacity={0.12} />
+                    <stop offset="100%" stopColor="#4CAF50" stopOpacity={0.35} />
                   </linearGradient>
                   <filter id="chartGlow">
                     <feGaussianBlur stdDeviation="2" result="coloredBlur" />
@@ -1560,23 +1566,39 @@ export default function LedgerDetailAA({
                   ]}
                   cursor={{ stroke: "rgba(211,47,47,0.3)", strokeWidth: 1, strokeDasharray: "4 2" }}
                 />
-                {/* 主线：connectNulls=true 直接平滑连接断点（周末/节假日） */}
+                {/* 成本线（初始金额水平基准线） */}
+                {costLine !== undefined && (
+                  <ReferenceLine
+                    y={costLine}
+                    stroke="#888888"
+                    strokeWidth={1}
+                    strokeDasharray="4 3"
+                    label={{
+                      value: `成本 ${Math.abs(costLine) >= 10000 ? (costLine / 10000).toFixed(0) + '万' : costLine}`,
+                      position: 'insideTopRight',
+                      fontSize: 9,
+                      fill: '#888888',
+                      dy: -4,
+                    }}
+                  />
+                )}
+                {/* 余额走势线：成本线以上红，以下绿 */}
                 <Area
                   type="monotone"
                   dataKey="balance"
-                  stroke="#D32F2F"
+                  stroke={validBalances.length > 0 && validBalances[validBalances.length - 1] >= (costLine ?? 0) ? "#D32F2F" : "#4CAF50"}
                   strokeWidth={2.5}
-                  fill="url(#aaBalanceGradientUp)"
+                  fill="url(#aaBalanceSplitGradient)"
                   connectNulls={true}
                   dot={false}
                   activeDot={{
                     r: 5,
                     fill: "#FFFFFF",
-                    stroke: "#D32F2F",
+                    stroke: validBalances.length > 0 && validBalances[validBalances.length - 1] >= (costLine ?? 0) ? "#D32F2F" : "#4CAF50",
                     strokeWidth: 2.5,
                     filter: "url(#chartGlow)",
                   }}
-                  baseValue={yMin}
+                  baseValue={costLine ?? yMin}
                 />
               </AreaChart>
             </ResponsiveContainer>
