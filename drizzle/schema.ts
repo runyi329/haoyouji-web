@@ -2168,3 +2168,26 @@ export const wcOddsRecords = mysqlTable("wc_odds_records", {
   index("wc_odds_records_team_idx").on(table.teamName),
 ]);
 export type WcOddsRecord = typeof wcOddsRecords.$inferSelect;
+
+// ========== 世界杯投注订单 ==========
+export const wcOrders = mysqlTable("wc_orders", {
+  id: int().autoincrement().notNull(),
+  userId: int('user_id').notNull(),                         // 下单人 ID
+  teamName: varchar('team_name', { length: 50 }).notNull(), // 球队名（中文）
+  teamCode: varchar('team_code', { length: 10 }),           // 国家代码
+  snapshotId: int('snapshot_id').notNull(),                 // 对应赔率快照 ID
+  pinnacleOdds: decimal('pinnacle_odds', { precision: 10, scale: 2 }).notNull(), // 下单时 Pinnacle 赔率
+  amount: decimal('amount', { precision: 15, scale: 2 }).notNull(),              // 投注金额
+  potentialReturn: decimal('potential_return', { precision: 15, scale: 2 }).notNull(), // 潜在回报 = 金额 × 赔率
+  status: mysqlEnum('status', ['pending', 'settled', 'cancelled']).default('pending').notNull(),
+  note: text('note'),                                       // 备注
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  settledAt: timestamp('settled_at', { mode: 'string' }),
+}, (table) => [
+  index("wc_orders_user_id_idx").on(table.userId),
+  index("wc_orders_team_name_idx").on(table.teamName),
+  index("wc_orders_snapshot_id_idx").on(table.snapshotId),
+  index("wc_orders_status_idx").on(table.status),
+  index("wc_orders_created_at_idx").on(table.createdAt),
+]);
+export type WcOrder = typeof wcOrders.$inferSelect;

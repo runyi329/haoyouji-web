@@ -1,15 +1,15 @@
 /**
  * 世界杯赔率追踪 - 管理员页面
- * 功能：查看抓取状态、手动触发抓取、横向时间轴表格展示赔率变化
+ * 功能：查看抓取状态、手动触发抓取、横向时间轴表格展示赔率变化、订单管理
  */
-import { useState, useRef } from "react";
-import { ArrowLeft, RefreshCw, Play, Info } from "lucide-react";
+import { useState, useRef, useCallback } from "react";
+import { ArrowLeft, RefreshCw, Play, Info, PlusCircle, Search, X, ChevronDown } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 
-// 颜色常量（与WorldCup.tsx保持一致）
+// 颜色常量
 const BG = "#0D1B2A";
 const BG2 = "#112236";
 const BG3 = "#162C42";
@@ -17,17 +17,13 @@ const GOLD = "#FFD700";
 const TEXT = "#E8EDF2";
 const TEXT2 = "#8FA3B8";
 const BORDER = "rgba(255,255,255,0.08)";
-
-// 赔率变化颜色：赔率升高（变难）= 绿色，赔率降低（变容易/热门）= 红色
-// 符合金融习惯：红涨绿跌（这里赔率降低=更热门=红色）
-const COLOR_DOWN = "#FF4D4F";  // 赔率降低（更热门）= 红色
-const COLOR_UP = "#52C41A";    // 赔率升高（变冷门）= 绿色
-const COLOR_SAME = "#8FA3B8";  // 无变化 = 灰色
+const COLOR_DOWN = "#FF4D4F";
+const COLOR_UP = "#52C41A";
+const COLOR_SAME = "#8FA3B8";
 
 function formatTime(ts: string | null) {
   if (!ts) return "-";
   const d = new Date(ts);
-  const y = d.getFullYear();
   const mo = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   const h = String(d.getHours()).padStart(2, "0");
@@ -35,12 +31,537 @@ function formatTime(ts: string | null) {
   return `${mo}/${day} ${h}:${mi}`;
 }
 
+function formatAmount(v: string | null) {
+  if (!v) return "-";
+  const n = parseFloat(v);
+  return isNaN(n) ? v : n.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ===================== 新建订单 Dialog =====================
+function CreateOrderDialog({
+  open,
+  onClose,
+  onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [selectedTeam, setSelectedTeam] = useState<{ name: string; code: string | null } | null>(null);
+  const [teamSearch, setTeamSearch] = useState("");
+  const [showTeamDropdown, setShowTeamDropdown] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [userKeyword, setUserKeyword] = useState("");
+  const [selectedUser, setSelectedUser] = useState<{ id: number; name: string | null; username: string | null; phone: string | null } | null>(null);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+
+  const { data: teamList } = trpc.wcOdds.getTeamList.useQuery(undefined, { enabled: open });
+
+  const { data: latestOdds } = trpc.wcOdds.getLatestOddsForTeam.useQuery(
+    { teamName: selectedTeam?.name ?? "" },
+    { enabled: !!selectedTeam }
+  );
+
+  const { data: userResults } = trpc.wcOdds.searchUsers.useQuery(
+    { keyword: userKeyword },
+    { enabled: userKeyword.length >= 1 }
+  );
+
+  const createOrder = trpc.wcOdds.createOrder.useMutation({
+    onSuccess: () => {
+      toast.success("✅ 订单创建成功！");
+      onSuccess();
+      handleClose();
+    },
+    onError: (err) => {
+      toast.error(`❌ 创建失败：${err.message}`);
+    },
+  });
+
+  function handleClose() {
+    setSelectedTeam(null);
+    setTeamSearch("");
+    setShowTeamDropdown(false);
+    setAmount("");
+    setNote("");
+    setUserKeyword("");
+    setSelectedUser(null);
+    setShowUserDropdown(false);
+    onClose();
+  }
+
+  const odds = latestOdds?.pinnacleOdds ? parseFloat(latestOdds.pinnacleOdds) : null;
+  const amtNum = parseFloat(amount);
+  const potentialReturn = odds && !isNaN(amtNum) && amtNum > 0 ? (odds * amtNum).toFixed(2) : null;
+
+  const filteredTeams = (teamList ?? []).filter(t =>
+    !teamSearch || t.teamName.includes(teamSearch)
+  );
+
+  function handleSubmit() {
+    if (!selectedTeam) return toast.error("请选择球队");
+    if (!latestOdds?.snapshotId || !latestOdds?.pinnacleOdds) return toast.error("该球队暂无赔率数据");
+    if (!amount || isNaN(amtNum) || amtNum <= 0) return toast.error("请输入有效金额");
+    if (!selectedUser) return toast.error("请选择下单人");
+
+    createOrder.mutate({
+      userId: selectedUser.id,
+      teamName: selectedTeam.name,
+      teamCode: selectedTeam.code ?? undefined,
+      snapshotId: latestOdds.snapshotId,
+      pinnacleOdds: latestOdds.pinnacleOdds,
+      amount,
+      note: note || undefined,
+    });
+  }
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center"
+      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+    >
+      <div
+        className="w-full max-w-md rounded-t-2xl pb-8"
+        style={{ backgroundColor: BG2, border: `1px solid ${BORDER}`, maxHeight: "90vh", overflowY: "auto" }}
+      >
+        {/* 标题栏 */}
+        <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
+          <span className="font-bold text-base" style={{ color: TEXT }}>新建订单</span>
+          <button onClick={handleClose} className="w-7 h-7 flex items-center justify-center rounded-full" style={{ backgroundColor: "rgba(255,255,255,0.08)" }}>
+            <X className="w-4 h-4 text-white" />
+          </button>
+        </div>
+
+        <div className="px-5 pt-4 space-y-4">
+          {/* 选择球队 */}
+          <div>
+            <label className="text-xs mb-1.5 block" style={{ color: TEXT2 }}>选择球队</label>
+            <div className="relative">
+              <div
+                className="flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer"
+                style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
+                onClick={() => setShowTeamDropdown(!showTeamDropdown)}
+              >
+                {selectedTeam ? (
+                  <>
+                    <span className="text-sm font-medium" style={{ color: TEXT }}>{selectedTeam.name}</span>
+                    {selectedTeam.code && (
+                      <span className="text-xs" style={{ color: TEXT2 }}>({selectedTeam.code})</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-sm" style={{ color: TEXT2 }}>点击选择球队...</span>
+                )}
+                <ChevronDown className="w-4 h-4 ml-auto" style={{ color: TEXT2 }} />
+              </div>
+              {showTeamDropdown && (
+                <div
+                  className="absolute left-0 right-0 top-full mt-1 rounded-lg z-10 overflow-hidden"
+                  style={{ backgroundColor: BG3, border: `1px solid ${BORDER}`, maxHeight: 220, overflowY: "auto" }}
+                >
+                  <div className="px-3 py-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
+                    <input
+                      className="w-full bg-transparent text-sm outline-none"
+                      style={{ color: TEXT }}
+                      placeholder="搜索球队..."
+                      value={teamSearch}
+                      onChange={e => setTeamSearch(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  {filteredTeams.map((t) => (
+                    <div
+                      key={t.teamName}
+                      className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-white/5"
+                      onClick={() => {
+                        setSelectedTeam({ name: t.teamName, code: t.teamCode ?? null });
+                        setShowTeamDropdown(false);
+                        setTeamSearch("");
+                      }}
+                    >
+                      <span className="text-sm" style={{ color: TEXT }}>{t.teamName}</span>
+                      <span className="text-xs" style={{ color: GOLD }}>
+                        {t.pinnacleOdds ? `${parseFloat(t.pinnacleOdds).toFixed(2)}` : "-"}
+                      </span>
+                    </div>
+                  ))}
+                  {filteredTeams.length === 0 && (
+                    <div className="px-3 py-3 text-center text-sm" style={{ color: TEXT2 }}>无匹配球队</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 最新赔率（自动填充） */}
+          {selectedTeam && (
+            <div
+              className="rounded-lg px-4 py-3"
+              style={{ backgroundColor: "rgba(255,215,0,0.06)", border: `1px solid rgba(255,215,0,0.2)` }}
+            >
+              <div className="text-xs mb-1" style={{ color: TEXT2 }}>最新 Pinnacle 赔率（快照 #{latestOdds?.snapshotId ?? "-"}）</div>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl font-bold" style={{ color: GOLD }}>
+                  {odds ? odds.toFixed(2) : "暂无数据"}
+                </span>
+                {odds && (
+                  <span className="text-xs" style={{ color: TEXT2 }}>
+                    隐含概率 {(100 / odds).toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              {latestOdds?.fetchedAt && (
+                <div className="text-xs mt-1" style={{ color: TEXT2 }}>
+                  更新于 {formatTime(latestOdds.fetchedAt)}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 投注金额 */}
+          <div>
+            <label className="text-xs mb-1.5 block" style={{ color: TEXT2 }}>投注金额（元）</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              className="w-full px-3 py-2.5 rounded-lg text-sm outline-none"
+              style={{ backgroundColor: BG3, border: `1px solid ${BORDER}`, color: TEXT }}
+              placeholder="请输入金额..."
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+            />
+          </div>
+
+          {/* 潜在回报预览 */}
+          {potentialReturn && (
+            <div
+              className="rounded-lg px-4 py-3 flex items-center justify-between"
+              style={{ backgroundColor: "rgba(82,196,26,0.06)", border: `1px solid rgba(82,196,26,0.2)` }}
+            >
+              <span className="text-sm" style={{ color: TEXT2 }}>潜在回报</span>
+              <span className="text-xl font-bold" style={{ color: COLOR_UP }}>
+                ¥ {formatAmount(potentialReturn)}
+              </span>
+            </div>
+          )}
+
+          {/* 搜索下单人 */}
+          <div>
+            <label className="text-xs mb-1.5 block" style={{ color: TEXT2 }}>下单人</label>
+            {selectedUser ? (
+              <div
+                className="flex items-center justify-between px-3 py-2.5 rounded-lg"
+                style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
+              >
+                <div>
+                  <span className="text-sm font-medium" style={{ color: TEXT }}>
+                    {selectedUser.name || selectedUser.username || `用户#${selectedUser.id}`}
+                  </span>
+                  {selectedUser.phone && (
+                    <span className="text-xs ml-2" style={{ color: TEXT2 }}>{selectedUser.phone}</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setSelectedUser(null); setUserKeyword(""); }}
+                  className="text-xs px-2 py-0.5 rounded"
+                  style={{ backgroundColor: "rgba(255,255,255,0.08)", color: TEXT2 }}
+                >
+                  更换
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg" style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}>
+                  <Search className="w-4 h-4 flex-shrink-0" style={{ color: TEXT2 }} />
+                  <input
+                    className="flex-1 bg-transparent text-sm outline-none"
+                    style={{ color: TEXT }}
+                    placeholder="输入姓名/用户名/手机号搜索..."
+                    value={userKeyword}
+                    onChange={e => { setUserKeyword(e.target.value); setShowUserDropdown(true); }}
+                    onFocus={() => setShowUserDropdown(true)}
+                  />
+                </div>
+                {showUserDropdown && userKeyword.length >= 1 && (
+                  <div
+                    className="absolute left-0 right-0 top-full mt-1 rounded-lg z-10 overflow-hidden"
+                    style={{ backgroundColor: BG3, border: `1px solid ${BORDER}`, maxHeight: 200, overflowY: "auto" }}
+                  >
+                    {(userResults ?? []).length === 0 ? (
+                      <div className="px-3 py-3 text-center text-sm" style={{ color: TEXT2 }}>未找到用户</div>
+                    ) : (
+                      (userResults ?? []).map(u => (
+                        <div
+                          key={u.id}
+                          className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-white/5"
+                          onClick={() => {
+                            setSelectedUser({ id: u.id, name: u.name, username: u.username, phone: u.phone });
+                            setShowUserDropdown(false);
+                            setUserKeyword("");
+                          }}
+                        >
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                            style={{ backgroundColor: "rgba(255,215,0,0.15)", color: GOLD }}>
+                            {(u.name || u.username || "?").charAt(0)}
+                          </div>
+                          <div>
+                            <div className="text-sm" style={{ color: TEXT }}>
+                              {u.name || u.username || `用户#${u.id}`}
+                            </div>
+                            {u.phone && <div className="text-xs" style={{ color: TEXT2 }}>{u.phone}</div>}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 备注 */}
+          <div>
+            <label className="text-xs mb-1.5 block" style={{ color: TEXT2 }}>备注（可选）</label>
+            <textarea
+              className="w-full px-3 py-2.5 rounded-lg text-sm outline-none resize-none"
+              style={{ backgroundColor: BG3, border: `1px solid ${BORDER}`, color: TEXT }}
+              placeholder="备注信息..."
+              rows={2}
+              value={note}
+              onChange={e => setNote(e.target.value)}
+            />
+          </div>
+
+          {/* 确认按钮 */}
+          <button
+            onClick={handleSubmit}
+            disabled={createOrder.isPending}
+            className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
+            style={{
+              backgroundColor: createOrder.isPending ? "rgba(255,215,0,0.3)" : GOLD,
+              color: "#0D1B2A",
+            }}
+          >
+            {createOrder.isPending ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <PlusCircle className="w-4 h-4" />
+            )}
+            {createOrder.isPending ? "提交中..." : "确认下单"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===================== 订单列表 =====================
+function OrdersTab() {
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "settled" | "cancelled">("all");
+  const [page, setPage] = useState(1);
+
+  const { data, isLoading, refetch } = trpc.wcOdds.getOrders.useQuery({
+    page,
+    pageSize: 20,
+    status: statusFilter,
+  });
+
+  const updateStatus = trpc.wcOdds.updateOrderStatus.useMutation({
+    onSuccess: () => {
+      toast.success("状态已更新");
+      refetch();
+    },
+    onError: (err) => toast.error(`更新失败：${err.message}`),
+  });
+
+  const orders = data?.orders ?? [];
+
+  const statusLabel: Record<string, { text: string; color: string }> = {
+    pending: { text: "待结算", color: "#FFD700" },
+    settled: { text: "已结算", color: "#52C41A" },
+    cancelled: { text: "已取消", color: "#8FA3B8" },
+  };
+
+  return (
+    <div className="px-4 pb-6">
+      {/* 顶部操作栏 */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex gap-2">
+          {(["all", "pending", "settled", "cancelled"] as const).map(s => (
+            <button
+              key={s}
+              onClick={() => { setStatusFilter(s); setPage(1); }}
+              className="px-3 py-1 rounded-full text-xs font-medium"
+              style={{
+                backgroundColor: statusFilter === s ? "rgba(255,215,0,0.15)" : "rgba(255,255,255,0.05)",
+                border: `1px solid ${statusFilter === s ? GOLD : BORDER}`,
+                color: statusFilter === s ? GOLD : TEXT2,
+              }}
+            >
+              {s === "all" ? "全部" : statusLabel[s]?.text}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setShowCreateDialog(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+          style={{ backgroundColor: GOLD, color: "#0D1B2A" }}
+        >
+          <PlusCircle className="w-3.5 h-3.5" />
+          新建订单
+        </button>
+      </div>
+
+      {/* 订单列表 */}
+      {isLoading ? (
+        <div className="text-center py-8" style={{ color: TEXT2 }}>加载中...</div>
+      ) : orders.length === 0 ? (
+        <div
+          className="rounded-xl p-8 text-center"
+          style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
+        >
+          <div style={{ color: TEXT2 }} className="text-sm">暂无订单</div>
+          <div style={{ color: TEXT2 }} className="text-xs mt-1">点击右上角"新建订单"创建第一笔</div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {orders.map((order) => {
+            const sl = statusLabel[order.status] ?? { text: order.status, color: TEXT2 };
+            const displayName = order.userName || order.userUsername || `用户#${order.userId}`;
+            return (
+              <div
+                key={order.id}
+                className="rounded-xl p-4"
+                style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
+              >
+                {/* 顶行：球队 + 状态 */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-base" style={{ color: TEXT }}>{order.teamName}</span>
+                    {order.teamCode && (
+                      <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: TEXT2 }}>
+                        {order.teamCode}
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className="text-xs px-2 py-0.5 rounded-full font-medium"
+                    style={{ backgroundColor: `${sl.color}20`, color: sl.color, border: `1px solid ${sl.color}40` }}
+                  >
+                    {sl.text}
+                  </span>
+                </div>
+
+                {/* 金额行 */}
+                <div className="flex items-center gap-4 mb-2">
+                  <div>
+                    <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>赔率</div>
+                    <div className="font-bold" style={{ color: GOLD }}>
+                      {order.pinnacleOdds ? parseFloat(order.pinnacleOdds).toFixed(2) : "-"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>投注</div>
+                    <div className="font-bold" style={{ color: TEXT }}>¥{formatAmount(order.amount)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>潜在回报</div>
+                    <div className="font-bold" style={{ color: COLOR_UP }}>¥{formatAmount(order.potentialReturn)}</div>
+                  </div>
+                </div>
+
+                {/* 下单人 + 时间 */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                      style={{ backgroundColor: "rgba(255,215,0,0.15)", color: GOLD }}>
+                      {displayName.charAt(0)}
+                    </div>
+                    <span className="text-xs" style={{ color: TEXT2 }}>{displayName}</span>
+                    {order.userPhone && (
+                      <span className="text-xs" style={{ color: TEXT2 }}>· {order.userPhone}</span>
+                    )}
+                  </div>
+                  <span className="text-xs" style={{ color: TEXT2 }}>{formatTime(order.createdAt)}</span>
+                </div>
+
+                {/* 备注 */}
+                {order.note && (
+                  <div className="mt-2 text-xs px-2 py-1 rounded" style={{ backgroundColor: "rgba(255,255,255,0.04)", color: TEXT2 }}>
+                    备注：{order.note}
+                  </div>
+                )}
+
+                {/* 状态操作 */}
+                {order.status === "pending" && (
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => updateStatus.mutate({ orderId: order.id, status: "settled" })}
+                      disabled={updateStatus.isPending}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-medium"
+                      style={{ backgroundColor: "rgba(82,196,26,0.15)", border: "1px solid rgba(82,196,26,0.3)", color: COLOR_UP }}
+                    >
+                      标记结算
+                    </button>
+                    <button
+                      onClick={() => updateStatus.mutate({ orderId: order.id, status: "cancelled" })}
+                      disabled={updateStatus.isPending}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-medium"
+                      style={{ backgroundColor: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, color: TEXT2 }}
+                    >
+                      取消订单
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* 分页 */}
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1.5 rounded-lg text-xs"
+              style={{ backgroundColor: "rgba(255,255,255,0.05)", color: page === 1 ? TEXT2 : TEXT, border: `1px solid ${BORDER}` }}
+            >
+              上一页
+            </button>
+            <span className="text-xs" style={{ color: TEXT2 }}>第 {page} 页</span>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={orders.length < 20}
+              className="px-3 py-1.5 rounded-lg text-xs"
+              style={{ backgroundColor: "rgba(255,255,255,0.05)", color: orders.length < 20 ? TEXT2 : TEXT, border: `1px solid ${BORDER}` }}
+            >
+              下一页
+            </button>
+          </div>
+        </div>
+      )}
+
+      <CreateOrderDialog
+        open={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        onSuccess={() => refetch()}
+      />
+    </div>
+  );
+}
+
+// ===================== 主页面 =====================
 export default function WcOddsAdmin() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const isAdmin = user?.role === "super_admin";
+  const [activeTab, setActiveTab] = useState<"odds" | "orders">("odds");
 
-  // 如果不是管理员，重定向
   if (user && !isAdmin) {
     navigate("/world-cup");
     return null;
@@ -48,7 +569,6 @@ export default function WcOddsAdmin() {
 
   const { data: stats, refetch: refetchStats } = trpc.wcOdds.getStats.useQuery();
   const { data: matrix, isLoading: matrixLoading, refetch: refetchMatrix } = trpc.wcOdds.getOddsMatrix.useQuery({ limit: 30 });
-
   const triggerFetch = trpc.wcOdds.triggerFetch.useMutation({
     onSuccess: (data) => {
       toast.success(`✅ 抓取成功！共 ${data.teamCount} 支球队，快照 #${data.snapshotId}`);
@@ -61,26 +581,24 @@ export default function WcOddsAdmin() {
   });
 
   const tableRef = useRef<HTMLDivElement>(null);
-
-  // 构建表格数据
   const snapshots = matrix?.snapshots ?? [];
   const teams = matrix?.teams ?? [];
   const matrixData = matrix?.matrix ?? {};
 
-  // 计算赔率变化颜色
   function getOddsColor(current: number | null, prev: number | null): string {
     if (!current || !prev) return COLOR_SAME;
-    if (current < prev) return COLOR_DOWN; // 赔率降低=更热门=红色
-    if (current > prev) return COLOR_UP;   // 赔率升高=变冷门=绿色
+    if (current < prev) return COLOR_DOWN;
+    if (current > prev) return COLOR_UP;
     return COLOR_SAME;
   }
-
   function getOddsArrow(current: number | null, prev: number | null): string {
     if (!current || !prev) return "";
     if (current < prev) return "↓";
     if (current > prev) return "↑";
     return "";
   }
+
+  const snapshotsDesc = [...snapshots].reverse();
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: BG, color: TEXT }}>
@@ -97,321 +615,240 @@ export default function WcOddsAdmin() {
           <ArrowLeft className="w-4 h-4 text-white" />
         </button>
         <span className="font-bold text-base" style={{ color: TEXT }}>
-          赔率追踪
+          世界杯管理
         </span>
         <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: "rgba(255,215,0,0.15)", color: GOLD }}>
           管理员
         </span>
       </div>
 
-      {/* 信息卡片 */}
-      <div className="px-4 pt-4 pb-2 space-y-3">
-        <div
-          className="rounded-xl p-4"
-          style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
-        >
-          <div className="flex items-center gap-2 mb-3">
-            <Info className="w-4 h-4" style={{ color: GOLD }} />
-            <span className="text-sm font-semibold" style={{ color: GOLD }}>
-              数据源信息
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <div style={{ color: TEXT2 }} className="text-xs mb-1">数据来源</div>
-              <div style={{ color: TEXT }} className="font-medium">wc-2026.com</div>
-              <div style={{ color: TEXT2 }} className="text-xs">（聚合 Pinnacle + William Hill）</div>
-            </div>
-            <div>
-              <div style={{ color: TEXT2 }} className="text-xs mb-1">抓取频率</div>
-              <div style={{ color: TEXT }} className="font-medium">每4小时一次</div>
-              <div style={{ color: TEXT2 }} className="text-xs">（部署后自动启动）</div>
-            </div>
-            <div>
-              <div style={{ color: TEXT2 }} className="text-xs mb-1">累计运行</div>
-              <div style={{ color: GOLD }} className="font-bold text-lg">
-                {stats?.totalRuns ?? 0} 次
-              </div>
-            </div>
-            <div>
-              <div style={{ color: TEXT2 }} className="text-xs mb-1">最后更新</div>
-              <div style={{ color: TEXT }} className="font-medium text-xs">
-                {stats?.lastFetchedAt ? formatTime(stats.lastFetchedAt) : "尚未抓取"}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 手动触发按钮 */}
-        <button
-          onClick={() => triggerFetch.mutate()}
-          disabled={triggerFetch.isPending}
-          className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
-          style={{
-            backgroundColor: triggerFetch.isPending ? "rgba(255,215,0,0.3)" : "rgba(255,215,0,0.15)",
-            border: `1px solid ${GOLD}`,
-            color: GOLD,
-          }}
-        >
-          {triggerFetch.isPending ? (
-            <RefreshCw className="w-4 h-4 animate-spin" />
-          ) : (
-            <Play className="w-4 h-4" />
-          )}
-          {triggerFetch.isPending ? "正在抓取..." : "立即抓取一次"}
-        </button>
+      {/* Tab 切换 */}
+      <div
+        className="flex px-4 pt-3 pb-0 gap-1"
+        style={{ borderBottom: `1px solid ${BORDER}` }}
+      >
+        {([
+          { key: "odds", label: "赔率追踪" },
+          { key: "orders", label: "订单管理" },
+        ] as const).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className="px-4 py-2 text-sm font-medium rounded-t-lg"
+            style={{
+              backgroundColor: activeTab === tab.key ? BG3 : "transparent",
+              color: activeTab === tab.key ? GOLD : TEXT2,
+              borderBottom: activeTab === tab.key ? `2px solid ${GOLD}` : "2px solid transparent",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* 赔率追踪表格 */}
-      <div className="px-4 pb-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-semibold" style={{ color: TEXT }}>
-            赔率变化追踪
-          </span>
-          <span className="text-xs" style={{ color: TEXT2 }}>
-            {snapshots.length > 0
-              ? `共 ${snapshots.length} 次记录，最新：${formatTime(snapshots[snapshots.length - 1]?.fetchedAt ?? null)}`
-              : "暂无数据"}
-          </span>
-        </div>
-
-        {/* 颜色说明 */}
-        <div className="flex items-center gap-4 mb-3 text-xs" style={{ color: TEXT2 }}>
-          <span>
-            <span style={{ color: COLOR_DOWN }}>↓红</span> = 赔率降低（更热门）
-          </span>
-          <span>
-            <span style={{ color: COLOR_UP }}>↑绿</span> = 赔率升高（变冷门）
-          </span>
-        </div>
-
-        {matrixLoading ? (
-          <div className="text-center py-8" style={{ color: TEXT2 }}>
-            加载中...
-          </div>
-        ) : snapshots.length === 0 ? (
-          <div
-            className="rounded-xl p-8 text-center"
-            style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
-          >
-            <div style={{ color: TEXT2 }} className="text-sm">
-              暂无赔率数据
-            </div>
-            <div style={{ color: TEXT2 }} className="text-xs mt-1">
-              点击"立即抓取一次"获取第一批数据
-            </div>
-          </div>
-        ) : (
-          /* 横向滚动表格：首列冻结，时间列从左（新）到右（旧） */
-          <div
-            className="rounded-xl overflow-hidden"
-            style={{ border: `1px solid ${BORDER}` }}
-          >
+      {/* 赔率追踪 Tab */}
+      {activeTab === "odds" && (
+        <>
+          {/* 信息卡片 */}
+          <div className="px-4 pt-4 pb-2 space-y-3">
             <div
-              ref={tableRef}
+              className="rounded-xl p-4"
+              style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <Info className="w-4 h-4" style={{ color: GOLD }} />
+                <span className="text-sm font-semibold" style={{ color: GOLD }}>数据源信息</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div style={{ color: TEXT2 }} className="text-xs mb-1">数据来源</div>
+                  <div style={{ color: TEXT }} className="font-medium">wc-2026.com</div>
+                  <div style={{ color: TEXT2 }} className="text-xs">（聚合 Pinnacle + William Hill）</div>
+                </div>
+                <div>
+                  <div style={{ color: TEXT2 }} className="text-xs mb-1">抓取频率</div>
+                  <div style={{ color: TEXT }} className="font-medium">手动触发</div>
+                  <div style={{ color: TEXT2 }} className="text-xs">（需要时点击下方按钮）</div>
+                </div>
+                <div>
+                  <div style={{ color: TEXT2 }} className="text-xs mb-1">累计运行</div>
+                  <div style={{ color: GOLD }} className="font-bold text-lg">{stats?.totalRuns ?? 0} 次</div>
+                </div>
+                <div>
+                  <div style={{ color: TEXT2 }} className="text-xs mb-1">最后更新</div>
+                  <div style={{ color: TEXT }} className="font-medium text-xs">
+                    {stats?.lastFetchedAt ? formatTime(stats.lastFetchedAt) : "尚未抓取"}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => triggerFetch.mutate()}
+              disabled={triggerFetch.isPending}
+              className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
               style={{
-                overflowX: "auto",
-                overflowY: "auto",
-                maxHeight: "calc(100vh - 380px)",
-                WebkitOverflowScrolling: "touch",
+                backgroundColor: triggerFetch.isPending ? "rgba(255,215,0,0.3)" : "rgba(255,215,0,0.15)",
+                border: `1px solid ${GOLD}`,
+                color: GOLD,
               }}
             >
-              <table
+              {triggerFetch.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+              {triggerFetch.isPending ? "正在抓取..." : "立即抓取一次"}
+            </button>
+          </div>
+
+          {/* 赔率追踪表格 */}
+          <div className="px-4 pb-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-semibold" style={{ color: TEXT }}>赔率变化追踪</span>
+              <span className="text-xs" style={{ color: TEXT2 }}>
+                {snapshots.length > 0
+                  ? `共 ${snapshots.length} 次记录，最新：${formatTime(snapshots[snapshots.length - 1]?.fetchedAt ?? null)}`
+                  : "暂无数据"}
+              </span>
+            </div>
+            <div className="flex items-center gap-4 mb-3 text-xs" style={{ color: TEXT2 }}>
+              <span><span style={{ color: COLOR_DOWN }}>↓红</span> = 赔率降低（更热门）</span>
+              <span><span style={{ color: COLOR_UP }}>↑绿</span> = 赔率升高（变冷门）</span>
+            </div>
+            {matrixLoading ? (
+              <div className="text-center py-8" style={{ color: TEXT2 }}>加载中...</div>
+            ) : snapshots.length === 0 ? (
+              <div className="rounded-xl p-8 text-center" style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}>
+                <div style={{ color: TEXT2 }} className="text-sm">暂无赔率数据</div>
+                <div style={{ color: TEXT2 }} className="text-xs mt-1">点击上方"立即抓取一次"获取数据</div>
+              </div>
+            ) : (
+              <div
+                ref={tableRef}
                 style={{
-                  borderCollapse: "collapse",
-                  fontSize: 12,
-                  minWidth: "100%",
-                  tableLayout: "fixed",
+                  overflowX: "auto",
+                  overflowY: "auto",
+                  maxHeight: "calc(100vh - 320px)",
+                  borderRadius: 12,
+                  border: `1px solid ${BORDER}`,
                 }}
               >
-                {/* 表头 */}
-                <thead>
-                  <tr style={{ backgroundColor: BG2 }}>
-                    {/* 冻结首列：球队名 */}
-                    <th
-                      style={{
-                        position: "sticky",
-                        left: 0,
-                        zIndex: 10,
-                        backgroundColor: BG2,
-                        padding: "8px 10px",
-                        textAlign: "left",
-                        color: TEXT2,
-                        fontWeight: 600,
-                        borderBottom: `1px solid ${BORDER}`,
-                        borderRight: `1px solid ${BORDER}`,
-                        minWidth: 90,
-                        width: 90,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      球队
-                    </th>
-                    {/* 时间列（新→旧，最新在左） */}
-                    {[...snapshots].reverse().map((snap) => (
-                      <th
-                        key={snap.id}
-                        style={{
-                          padding: "8px 6px",
-                          textAlign: "center",
-                          color: TEXT2,
-                          fontWeight: 500,
-                          borderBottom: `1px solid ${BORDER}`,
-                          borderRight: `1px solid ${BORDER}`,
-                          minWidth: 72,
-                          width: 72,
-                          whiteSpace: "nowrap",
-                          backgroundColor: BG2,
-                        }}
-                      >
-                        {formatTime(snap.fetchedAt)}
+                <table style={{ borderCollapse: "collapse", minWidth: "max-content", width: "100%" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: BG3 }}>
+                      <th style={{
+                        position: "sticky", left: 0, zIndex: 10,
+                        backgroundColor: BG3, padding: "10px 12px",
+                        borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`,
+                        textAlign: "left", whiteSpace: "nowrap", color: TEXT2, fontSize: 11, fontWeight: 600,
+                      }}>
+                        球队
                       </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {teams.map((team: { name: string; code: string }, teamIdx: number) => {
-                    const teamData = matrixData[team.name] ?? {};
-                    // 按时间正序排列的快照（旧→新）
-                    const snapshotsAsc = [...snapshots]; // 已是正序
-                    // 反转用于显示（新→旧）
-                    const snapshotsDesc = [...snapshots].reverse();
-
-                    return (
-                      <tr
-                        key={team.name}
-                        style={{
-                          backgroundColor: teamIdx % 2 === 0 ? BG3 : BG2,
-                        }}
-                      >
-                        {/* 冻结首列：球队名 */}
-                        <td
-                          style={{
-                            position: "sticky",
-                            left: 0,
-                            zIndex: 5,
-                            backgroundColor: teamIdx % 2 === 0 ? BG3 : BG2,
-                            padding: "7px 10px",
+                      {snapshotsDesc.map((snap) => (
+                        <th key={snap.id} style={{
+                          padding: "10px 8px", textAlign: "center",
+                          borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`,
+                          whiteSpace: "nowrap", color: TEXT2, fontSize: 11, fontWeight: 600, minWidth: 70,
+                        }}>
+                          {formatTime(snap.fetchedAt)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {teams.map((team: { name: string; code: string }) => {
+                      const teamData = matrixData[team.name] ?? {};
+                      return (
+                        <tr key={team.name} style={{ borderBottom: `1px solid rgba(255,255,255,0.03)` }}>
+                          <td style={{
+                            position: "sticky", left: 0, zIndex: 5,
+                            backgroundColor: BG2, padding: "8px 12px",
                             borderRight: `1px solid ${BORDER}`,
-                            borderBottom: `1px solid rgba(255,255,255,0.04)`,
-                            whiteSpace: "nowrap",
-                            color: TEXT,
-                            fontWeight: 500,
-                          }}
-                        >
-                          <span className="text-xs">{teamIdx + 1}. {team.name}</span>
-                        </td>
-                        {/* 赔率列（新→旧） */}
-                        {snapshotsDesc.map((snap, colIdx) => {
-                          const current = teamData[snap.id];
-                          // 找前一次快照（时间上更早的那次）
-                          // snapshotsDesc[colIdx+1] 是更旧的快照
-                          const prevSnap = snapshotsDesc[colIdx + 1];
-                          const prev = prevSnap ? teamData[prevSnap.id] : null;
-
-                          const pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
-                          const prevPinnacle = prev?.pinnacle ? parseFloat(prev.pinnacle) : null;
-                          const color = getOddsColor(pinnacle, prevPinnacle);
-                          const arrow = getOddsArrow(pinnacle, prevPinnacle);
-
-                          return (
-                            <td
-                              key={snap.id}
-                              style={{
-                                padding: "7px 6px",
-                                textAlign: "center",
+                            whiteSpace: "nowrap", color: TEXT, fontWeight: 500, fontSize: 13,
+                          }}>
+                            {team.name}
+                            {team.code && (
+                              <span style={{ fontSize: 10, color: TEXT2, marginLeft: 4 }}>{team.code}</span>
+                            )}
+                          </td>
+                          {snapshotsDesc.map((snap, colIdx) => {
+                            const current = teamData[snap.id];
+                            const prevSnap = snapshotsDesc[colIdx + 1];
+                            const prev = prevSnap ? teamData[prevSnap.id] : null;
+                            const pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
+                            const prevPinnacle = prev?.pinnacle ? parseFloat(prev.pinnacle) : null;
+                            const color = getOddsColor(pinnacle, prevPinnacle);
+                            const arrow = getOddsArrow(pinnacle, prevPinnacle);
+                            return (
+                              <td key={snap.id} style={{
+                                padding: "7px 6px", textAlign: "center",
                                 borderRight: `1px solid ${BORDER}`,
                                 borderBottom: `1px solid rgba(255,255,255,0.04)`,
                                 color: pinnacle ? color : "rgba(255,255,255,0.15)",
                                 fontWeight: pinnacle && color !== COLOR_SAME ? 600 : 400,
                                 whiteSpace: "nowrap",
-                              }}
-                            >
-                              {pinnacle ? (
-                                <>
-                                  <div>
-                                    {arrow && (
-                                      <span style={{ fontSize: 10, marginRight: 1 }}>{arrow}</span>
-                                    )}
-                                    {pinnacle.toFixed(2)}
-                                  </div>
-                                  <div style={{ fontSize: 9, opacity: 0.55, marginTop: 1 }}>
-                                    {(100 / pinnacle).toFixed(1)}%
-                                  </div>
-                                </>
-                              ) : (
-                                <span style={{ color: "rgba(255,255,255,0.15)" }}>-</span>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                {/* 隐含概率合计行 */}
-                <tfoot>
-                  <tr style={{ backgroundColor: "rgba(255,215,0,0.08)", borderTop: `2px solid ${BORDER}` }}>
-                    <td
-                      style={{
-                        position: "sticky",
-                        left: 0,
-                        zIndex: 5,
-                        backgroundColor: "rgba(255,215,0,0.12)",
-                        padding: "8px 10px",
-                        borderRight: `1px solid ${BORDER}`,
-                        whiteSpace: "nowrap",
-                        color: "rgba(255,215,0,0.9)",
-                        fontWeight: 700,
-                        fontSize: 11,
-                      }}
-                    >
-                      隐含概率合计
-                    </td>
-                    {[...snapshots].reverse().map((snap) => {
-                      // 计算该列所有球队的隐含概率之和
-                      let total = 0;
-                      let count = 0;
-                      teams.forEach((team: { name: string; code: string }) => {
-                        const teamData = matrixData[team.name] ?? {};
-                        const current = teamData[snap.id];
-                        const pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
-                        if (pinnacle && pinnacle > 0) {
-                          total += (1 / pinnacle) * 100;
-                          count++;
-                        }
-                      });
-                      const overround = total - 100;
-                      const color = total > 120 ? "#ff6b6b" : total > 110 ? "#ffd700" : "#4ade80";
-                      return (
-                        <td
-                          key={snap.id}
-                          style={{
-                            padding: "8px 6px",
-                            textAlign: "center",
-                            borderRight: `1px solid ${BORDER}`,
-                            color,
-                            fontWeight: 700,
-                            fontSize: 11,
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {count > 0 ? (
-                            <>
-                              <div>{total.toFixed(1)}%</div>
-                              <div style={{ fontSize: 9, opacity: 0.7 }}>+{overround.toFixed(1)}%</div>
-                            </>
-                          ) : "-"}
-                        </td>
+                              }}>
+                                {pinnacle ? (
+                                  <>
+                                    <div>
+                                      {arrow && <span style={{ fontSize: 10, marginRight: 1 }}>{arrow}</span>}
+                                      {pinnacle.toFixed(2)}
+                                    </div>
+                                    <div style={{ fontSize: 9, opacity: 0.55, marginTop: 1 }}>
+                                      {(100 / pinnacle).toFixed(1)}%
+                                    </div>
+                                  </>
+                                ) : (
+                                  <span style={{ color: "rgba(255,255,255,0.15)" }}>-</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
                       );
                     })}
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ backgroundColor: "rgba(255,215,0,0.08)", borderTop: `2px solid ${BORDER}` }}>
+                      <td style={{
+                        position: "sticky", left: 0, zIndex: 5,
+                        backgroundColor: "rgba(255,215,0,0.12)", padding: "8px 10px",
+                        borderRight: `1px solid ${BORDER}`, whiteSpace: "nowrap",
+                        color: "rgba(255,215,0,0.9)", fontWeight: 700, fontSize: 11,
+                      }}>
+                        隐含概率合计
+                      </td>
+                      {snapshotsDesc.map((snap) => {
+                        let total = 0, count = 0;
+                        teams.forEach((team: { name: string; code: string }) => {
+                          const current = (matrixData[team.name] ?? {})[snap.id];
+                          const pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
+                          if (pinnacle && pinnacle > 0) { total += (1 / pinnacle) * 100; count++; }
+                        });
+                        const overround = total - 100;
+                        const color = total > 120 ? "#ff6b6b" : total > 110 ? "#ffd700" : "#4ade80";
+                        return (
+                          <td key={snap.id} style={{
+                            padding: "8px 6px", textAlign: "center",
+                            borderRight: `1px solid ${BORDER}`,
+                            color, fontWeight: 700, fontSize: 11, whiteSpace: "nowrap",
+                          }}>
+                            {count > 0 ? (
+                              <>
+                                <div>{total.toFixed(1)}%</div>
+                                <div style={{ fontSize: 9, opacity: 0.7 }}>+{overround.toFixed(1)}%</div>
+                              </>
+                            ) : "-"}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
+
+      {/* 订单管理 Tab */}
+      {activeTab === "orders" && <OrdersTab />}
     </div>
   );
 }

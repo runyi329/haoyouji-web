@@ -159,3 +159,8 @@ echo "✅ wc_odds_snapshots 表确认完成"
 echo "⚽ 确保 wc_odds_records 表存在（世界杯赔率记录）..."
 $DB_CMD -e "CREATE TABLE IF NOT EXISTS wc_odds_records (id INT AUTO_INCREMENT PRIMARY KEY, snapshot_id INT NOT NULL, rank INT NOT NULL, team_name VARCHAR(100) NOT NULL, team_code VARCHAR(20), pinnacle_odds VARCHAR(20), william_hill_odds VARCHAR(20), created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX wc_odds_records_snapshot_id_idx (snapshot_id), INDEX wc_odds_records_team_name_idx (team_name))" || true
 echo "✅ wc_odds_records 表确认完成"
+
+# ===== 世界杯投注订单表 =====
+echo "⚽ 确保 wc_orders 表存在（世界杯投注订单）..."
+$DB_CMD -e "CREATE TABLE IF NOT EXISTS wc_orders (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, team_name VARCHAR(50) NOT NULL, team_code VARCHAR(10), snapshot_id INT NOT NULL, pinnacle_odds DECIMAL(10,2) NOT NULL, amount DECIMAL(15,2) NOT NULL, potential_return DECIMAL(15,2) NOT NULL, status ENUM('pending','settled','cancelled') NOT NULL DEFAULT 'pending', note TEXT, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, settled_at TIMESTAMP NULL, INDEX wc_orders_user_id_idx (user_id), INDEX wc_orders_team_name_idx (team_name), INDEX wc_orders_snapshot_id_idx (snapshot_id), INDEX wc_orders_status_idx (status), INDEX wc_orders_created_at_idx (created_at))" || true
+echo "✅ wc_orders 表确认完成"
