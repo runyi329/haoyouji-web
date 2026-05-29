@@ -12,19 +12,27 @@ const TEXT = "#E8EDF2";      // 主文字
 const TEXT2 = "#8FA3B8";     // 次级文字
 const BORDER = "rgba(255,255,255,0.08)"; // 分隔线
 
-// ===== flagcdn 国旗图片 =====
+// ===== 国旗图片（优先COS，失败回退flagcdn） =====
+const COS_FLAG_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/flags";
 function Flag({ code, size = 28 }: { code: string; size?: number }) {
+  const c = code.toLowerCase();
   // flagcdn 支持的固定宽度档位: 20, 40, 80, 160, 320
   const cdnW = size <= 20 ? 40 : size <= 40 ? 80 : size <= 80 ? 160 : 320;
+  const fallback = `https://flagcdn.com/w${cdnW}/${c}.png`;
   return (
     <img
-      src={`https://flagcdn.com/w${cdnW}/${code.toLowerCase()}.png`}
+      src={`${COS_FLAG_BASE}/${c}.png`}
       width={size}
       height={Math.round(size * 0.67)}
       alt={code}
       style={{ borderRadius: 2, objectFit: "cover", display: "inline-block", flexShrink: 0 }}
       onError={(e) => {
-        (e.target as HTMLImageElement).style.display = "none";
+        const img = e.target as HTMLImageElement;
+        if (!img.src.includes('flagcdn.com')) {
+          img.src = fallback; // 回退到flagcdn
+        } else {
+          img.style.display = "none"; // 两个都失败才隐藏
+        }
       }}
     />
   );

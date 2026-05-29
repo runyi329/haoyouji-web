@@ -112,6 +112,8 @@ jobs:
             cd /root/haoyouji-web && node scripts/upload-exchange-icons.mjs || echo "⚠️ 交易所图标上传失败（非致命）"
             echo "🌍 上传世界杯海报到腾讯云COS..."
             cd /root/haoyouji-web && node scripts/upload-worldcup-banner.mjs || echo "⚠️ 世界杯海报上传失败（非致命）"
+            echo "🏳️ 上传世界杯球队国旗到腾讯云COS..."
+            cd /root/haoyouji-web && node scripts/upload-flags.mjs || echo "⚠️ 国旗上传失败（非致命）"
             echo "📊 预计算数字币相关性统计..."
             cd /root/haoyouji-web && node scripts/compute-correlation.mjs || echo "⚠️ 相关性统计预计算失败（非致命）"
             echo "📊 插入ETH持仓模拟数据（一次性）..."
