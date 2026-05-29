@@ -1925,10 +1925,10 @@ export default function Home() {
         const clonedPages = [socialPages[SOCIAL_PAGES - 1], ...socialPages, socialPages[0]];
         return (
           <div className="px-4 pt-3 flex-shrink-0" style={{ height: "42%" }}>
-            <div className="w-full h-full rounded-2xl overflow-hidden relative bg-white shadow-sm flex flex-col">
+            <div className="w-full h-full rounded-2xl overflow-hidden relative bg-white shadow-sm">
               <div
                 ref={socialContainerRef}
-                className="flex-1 overflow-hidden"
+                className="w-full h-full overflow-hidden"
                 style={{ touchAction: 'pan-y' }}
                 onTouchStart={e => {
                   socialTouchStartX.current = e.touches[0].clientX;
@@ -1971,19 +1971,21 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-              {/* 圆点指示器 */}
-              <div className="flex justify-center items-center space-x-1.5 py-1.5 flex-shrink-0">
+              {/* 圆点指示器 - 绝对定位叠加在图片底部 */}
+              <div className="absolute bottom-2 left-0 right-0 flex justify-center items-center space-x-1.5 pointer-events-none">
                 {Array.from({ length: SOCIAL_PAGES }).map((_, i) => (
                   <div
                     key={i}
-                    onClick={() => { setSocialTransition(true); setSocialPageIndex(i + 1); }}
+                    onClick={(e) => { e.stopPropagation(); setSocialTransition(true); setSocialPageIndex(i + 1); }}
                     style={{
                       width: realDotIndex === i ? '14px' : '6px',
                       height: '6px',
                       borderRadius: '3px',
-                      background: realDotIndex === i ? '#A80000' : 'rgba(168,0,0,0.25)',
+                      background: realDotIndex === i ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.45)',
                       transition: 'all 0.3s ease',
                       cursor: 'pointer',
+                      pointerEvents: 'auto',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
                     }}
                   />
                 ))}
