@@ -477,6 +477,90 @@ async function startServer() {
     }
   });
 
+  // 世界杯赔率外部推送接口（沙箱抓取后POST数据到此接口写入DB）
+  app.post("/api/wc-odds/push", async (req: any, res: any) => {
+    try {
+      // 密钥验证
+      const secret = req.headers["x-wc-odds-secret"] as string;
+      const expectedSecret = process.env.WC_ODDS_PUSH_SECRET || 'wc2026-odds-push-secret';
+      if (secret !== expectedSecret) {
+        return res.status(403).json({ error: "invalid secret" });
+      }
+
+      const { teams } = req.body as { teams: Array<{
+        rank: number;
+        teamName: string;
+        teamCode: string;
+        pinnacleOdds: number | null;
+        williamHillOdds: number | null;
+      }> };
+
+      if (!teams || !Array.isArray(teams) || teams.length === 0) {
+        return res.status(400).json({ error: "teams array required" });
+      }
+
+      const { getDb, getDbConnection } = await import('../db');
+
+      // 确保表存在
+      try {
+        const conn = await getDbConnection();
+        if (conn) {
+          await conn.execute(`CREATE TABLE IF NOT EXISTS wc_odds_snapshots (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            source VARCHAR(100) NOT NULL DEFAULT 'wc-2026.com',
+            team_count INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX wc_odds_snapshots_fetched_at_idx (fetched_at)
+          )`);
+          await conn.execute(`CREATE TABLE IF NOT EXISTS wc_odds_records (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            snapshot_id INT NOT NULL,
+            rank INT NOT NULL,
+            team_name VARCHAR(100) NOT NULL,
+            team_code VARCHAR(20),
+            pinnacle_odds VARCHAR(20),
+            william_hill_odds VARCHAR(20),
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX wc_odds_records_snapshot_id_idx (snapshot_id),
+            INDEX wc_odds_records_team_name_idx (team_name)
+          )`);
+        }
+      } catch (tableErr) {
+        console.warn('[WC Odds Push] 建表检查:', tableErr);
+      }
+
+      const { wcOddsSnapshots, wcOddsRecords } = await import('../../drizzle/schema');
+      const db = await getDb();
+      if (!db) return res.status(500).json({ error: 'DB unavailable' });
+
+      // 创建快照
+      const [snapshot] = await db.insert(wcOddsSnapshots).values({
+        source: 'wc-2026.com',
+        teamCount: teams.length,
+      });
+      const snapshotId = (snapshot as any).insertId as number;
+
+      // 批量插入赔率
+      await db.insert(wcOddsRecords).values(
+        teams.map((t: any) => ({
+          snapshotId,
+          rank: t.rank,
+          teamName: t.teamName,
+          teamCode: t.teamCode || '',
+          pinnacleOdds: t.pinnacleOdds != null ? String(t.pinnacleOdds) : null,
+          williamHillOdds: t.williamHillOdds != null ? String(t.williamHillOdds) : null,
+        }))
+      );
+
+      console.log(`[WC Odds Push] 快照 #${snapshotId} 已保存，共 ${teams.length} 支球队`);
+      return res.json({ ok: true, snapshotId, teamCount: teams.length });
+    } catch (e: any) {
+      console.error('[WC Odds Push] 失败:', e.message);
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
   // 世界杯赔率定时抓取回调（Heartbeat cron）
   app.post("/api/scheduled/wc-odds-fetch", async (req: any, res: any) => {
     try {
