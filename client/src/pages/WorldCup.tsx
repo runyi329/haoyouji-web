@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 // ===== 颜色常量 =====
@@ -488,147 +488,97 @@ const stageStyle = (stage: string): { bg: string; color: string } => {
 
 type TabType = "schedule" | "archive" | "champion";
 
-// ===== 日期行组件 =====
-function DayRow({
+// ===== 日期分组组件（常驻展开，不可折叠） =====
+function DayGroup({
   day,
-  isExpanded,
-  onToggle,
   isToday,
+  onMatchClick,
 }: {
   day: DaySchedule;
-  isExpanded: boolean;
-  onToggle: () => void;
   isToday: boolean;
+  onMatchClick: (match: Match) => void;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const isPast = day.date < today;
 
   return (
-    <div style={{ borderBottom: `1px solid ${BORDER}` }}>
-      {/* 日期行（点击展开/收起） */}
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center px-4 py-2.5 text-left transition-colors"
-        style={{ backgroundColor: isExpanded ? BG3 : BG2 }}
+    <div>
+      {/* 日期标题行（不可点击） */}
+      <div
+        className="flex items-center px-4 py-2"
+        style={{ backgroundColor: BG3, borderBottom: `1px solid ${BORDER}` }}
       >
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {isToday && (
-            <span
-              className="text-xs font-bold px-1.5 py-0.5 rounded"
-              style={{ backgroundColor: GOLD, color: "#000", fontSize: "10px" }}
-            >
-              今天
-            </span>
-          )}
+        {isToday && (
           <span
-            className="text-sm font-semibold"
-            style={{ color: isPast && !isToday ? TEXT2 : TEXT }}
+            className="text-xs font-bold px-1.5 py-0.5 rounded mr-2"
+            style={{ backgroundColor: GOLD, color: "#000", fontSize: "10px" }}
           >
-            {day.dateLabel}
+            今天
           </span>
-          <span className="text-xs" style={{ color: TEXT2, fontSize: "10px" }}>北京时间</span>
-        </div>
-        {/* 右侧：场次 + 箭头 */}
-        <div className="flex items-center gap-1 ml-auto">
-          <span className="text-xs" style={{ color: TEXT2 }}>{day.matches.length}场</span>
-          {isExpanded ? (
-            <ChevronDown className="w-4 h-4" style={{ color: GOLD }} />
-          ) : (
-            <ChevronRight className="w-4 h-4" style={{ color: TEXT2 }} />
-          )}
-        </div>
-      </button>
+        )}
+        <span
+          className="text-sm font-bold"
+          style={{ color: isPast && !isToday ? TEXT2 : TEXT }}
+        >
+          {day.dateLabel}
+        </span>
+        <span className="ml-2 text-xs" style={{ color: TEXT2, fontSize: "10px" }}>
+          {day.matches.length}场
+        </span>
+      </div>
 
-      {/* 默认显示的比赛摘要（始终可见，紧凑行） */}
-      {!isExpanded && (
-        <div style={{ backgroundColor: BG }}>
-          {day.matches.map((match, i) => (
-            <div
-              key={i}
-              className="flex items-center px-3 py-2"
-              style={{ borderTop: `1px solid ${BORDER}` }}
+      {/* 比赛列表（常驻展开，紧凑单行） */}
+      {day.matches.map((match, i) => (
+        <button
+          key={i}
+          onClick={() => onMatchClick(match)}
+          className="w-full flex items-center px-2 text-left transition-colors active:opacity-70"
+          style={{
+            backgroundColor: BG,
+            borderBottom: `1px solid ${BORDER}`,
+            minHeight: 38,
+            paddingTop: 5,
+            paddingBottom: 5,
+            gap: 4,
+          }}
+        >
+          {/* 左侧：阶段标签 + 时间 */}
+          <div className="flex flex-col items-center flex-shrink-0" style={{ width: 38 }}>
+            <span
+              className="text-center rounded w-full"
+              style={{
+                backgroundColor: stageStyle(match.stage).bg,
+                color: stageStyle(match.stage).color,
+                fontSize: "9px",
+                fontWeight: 700,
+                padding: "1px 0",
+                lineHeight: "14px",
+              }}
             >
-              {/* 主队：国旗+名字 */}
-              <div className="flex items-center gap-1 flex-1 justify-end">
-                <span className="text-xs font-medium" style={{ color: TEXT }}>{match.home}</span>
-                <Flag code={match.homeCode} size={18} />
-              </div>
-              {/* 时间 */}
-              <div className="flex flex-col items-center mx-2 flex-shrink-0" style={{ minWidth: 42 }}>
-                {match.time && match.time !== "TBD" ? (
-                  <span className="text-xs font-bold" style={{ color: GOLD }}>{match.time}</span>
-                ) : (
-                  <span className="text-xs" style={{ color: TEXT2 }}>TBD</span>
-                )}
-              </div>
-              {/* 客队：国旗+名字 */}
-              <div className="flex items-center gap-1 flex-1 justify-start">
-                <Flag code={match.awayCode} size={18} />
-                <span className="text-xs font-medium" style={{ color: TEXT }}>{match.away}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+              {match.stage}
+            </span>
+            <span className="font-bold" style={{ color: GOLD, fontSize: "11px", lineHeight: "15px" }}>
+              {match.time && match.time !== "TBD" ? match.time : "TBD"}
+            </span>
+            <span style={{ color: TEXT2, fontSize: "8px", lineHeight: "10px" }}>北京时间</span>
+          </div>
 
-      {/* 展开后的详细比赛列表 */}
-      {isExpanded && (
-        <div style={{ backgroundColor: BG }}>
-          {day.matches.map((match, i) => {
-            const ss = stageStyle(match.stage);
-            return (
-              <div
-                key={i}
-                className="flex items-center px-4 py-3"
-                style={{ borderTop: `1px solid ${BORDER}` }}
-              >
-                {/* 阶段标签 */}
-                <span
-                  className="text-xs font-medium flex-shrink-0 px-1.5 py-0.5 rounded"
-                  style={{
-                    backgroundColor: ss.bg,
-                    color: ss.color,
-                    fontSize: "10px",
-                    minWidth: 44,
-                    textAlign: "center",
-                  }}
-                >
-                  {match.stage}
-                </span>
+          {/* 中间：主队 国旗 名字  VS  国旗 名字 客队 */}
+          <div className="flex items-center flex-1 justify-center" style={{ gap: 3 }}>
+            {/* 主队 */}
+            <Flag code={match.homeCode} size={15} />
+            <span style={{ color: TEXT, fontSize: "11px", fontWeight: 500, whiteSpace: "nowrap" }}>{match.home}</span>
+            {/* VS */}
+            <span style={{ color: GOLD, fontSize: "10px", fontWeight: 900, marginLeft: 2, marginRight: 2 }}>VS</span>
+            {/* 客队 */}
+            <span style={{ color: TEXT, fontSize: "11px", fontWeight: 500, whiteSpace: "nowrap" }}>{match.away}</span>
+            <Flag code={match.awayCode} size={15} />
+          </div>
 
-                {/* 主队 */}
-                <div className="flex items-center gap-1.5 flex-1 justify-end">
-                  <span className="text-sm font-medium" style={{ color: TEXT }}>{match.home}</span>
-                  <Flag code={match.homeCode} size={20} />
-                </div>
-
-                {/* VS + 时间 */}
-                <div className="flex flex-col items-center mx-2 flex-shrink-0" style={{ minWidth: 42 }}>
-                  <span className="text-xs font-black" style={{ color: GOLD }}>VS</span>
-                  {match.time && (
-                    <span className="text-xs" style={{ color: TEXT2, fontSize: "10px" }}>
-                      {match.time !== "TBD" ? match.time : "TBD"}
-                    </span>
-                  )}
-                </div>
-
-                {/* 客队 */}
-                <div className="flex items-center gap-1.5 flex-1 justify-start">
-                  <Flag code={match.awayCode} size={20} />
-                  <span className="text-sm font-medium" style={{ color: TEXT }}>{match.away}</span>
-                </div>
-
-                {/* 场地 */}
-                {match.venue && (
-                  <span className="text-xs ml-2 flex-shrink-0" style={{ color: TEXT2, fontSize: "10px" }}>
-                    {match.venue}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+          {/* 右侧小箭头 */}
+          <ChevronRight className="flex-shrink-0" style={{ color: TEXT2, width: 13, height: 13 }} />
+        </button>
+      ))}
     </div>
   );
 }
@@ -640,14 +590,7 @@ export default function WorldCup() {
   const [sortAsc, setSortAsc] = useState(true);
   const [archiveView, setArchiveView] = useState<"team" | "player">("team");
 
-  const defaultExpanded = (() => {
-    const todayIdx = schedule.findIndex((d) => d.date === today);
-    if (todayIdx >= 0) return today;
-    const future = schedule.find((d) => d.date >= today);
-    return future ? future.date : schedule[0]?.date;
-  })();
-
-  const [expandedDate, setExpandedDate] = useState<string | null>(defaultExpanded || null);
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
 
   const tabs: { key: TabType; label: string }[] = [
     { key: "schedule", label: "赛程" },
@@ -725,14 +668,57 @@ export default function WorldCup() {
         {activeTab === "schedule" && (
           <div>
             {schedule.map((day) => (
-              <DayRow
+              <DayGroup
                 key={day.date}
                 day={day}
-                isExpanded={expandedDate === day.date}
-                onToggle={() => setExpandedDate(expandedDate === day.date ? null : day.date)}
                 isToday={day.date === today}
+                onMatchClick={(m) => setSelectedMatch(m)}
               />
             ))}
+          </div>
+        )}
+
+        {/* 比赛详情弹层 */}
+        {selectedMatch && (
+          <div
+            className="fixed inset-0 z-50 flex flex-col"
+            style={{ backgroundColor: BG }}
+          >
+            <div className="flex items-center px-4 py-3" style={{ backgroundColor: BG2, borderBottom: `1px solid ${BORDER}` }}>
+              <button onClick={() => setSelectedMatch(null)} className="mr-3">
+                <ArrowLeft className="w-5 h-5" style={{ color: TEXT }} />
+              </button>
+              <span className="text-sm font-bold" style={{ color: TEXT }}>比赛详情</span>
+            </div>
+            <div className="flex-1 flex flex-col items-center justify-center px-6 gap-6">
+              {/* 阶段 */}
+              <span
+                className="px-4 py-1 rounded-full text-sm font-bold"
+                style={{ backgroundColor: stageStyle(selectedMatch.stage).bg, color: stageStyle(selectedMatch.stage).color }}
+              >
+                {selectedMatch.stage}
+              </span>
+              {/* 两队 */}
+              <div className="flex items-center w-full justify-center gap-4">
+                <div className="flex flex-col items-center gap-2 flex-1">
+                  <Flag code={selectedMatch.homeCode} size={48} />
+                  <span className="text-base font-bold" style={{ color: TEXT }}>{selectedMatch.home}</span>
+                </div>
+                <span className="text-2xl font-black" style={{ color: GOLD }}>VS</span>
+                <div className="flex flex-col items-center gap-2 flex-1">
+                  <Flag code={selectedMatch.awayCode} size={48} />
+                  <span className="text-base font-bold" style={{ color: TEXT }}>{selectedMatch.away}</span>
+                </div>
+              </div>
+              {/* 时间和场地 */}
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-2xl font-bold" style={{ color: GOLD }}>{selectedMatch.time}</span>
+                <span className="text-xs" style={{ color: TEXT2 }}>北京时间</span>
+                {selectedMatch.venue && (
+                  <span className="text-sm mt-2" style={{ color: TEXT2 }}>{selectedMatch.venue}</span>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
