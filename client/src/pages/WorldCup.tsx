@@ -1,6 +1,7 @@
-import { useLocation } from "wouter";
-import { ArrowLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronRight, Settings } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { Link } from "wouter";
 
 // ===== 颜色常量 =====
 const BG = "#0D1B2A";        // 深藏青主背景
@@ -625,8 +626,9 @@ export default function WorldCup() {
   const [activeTab, setActiveTab] = useState<TabType>("schedule");
   const today = new Date().toISOString().slice(0, 10);
   const [archiveView, setArchiveView] = useState<"team" | "player">("team");
-
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
   const tabs: { key: TabType; label: string }[] = [
     { key: "schedule", label: "赛程" },
@@ -649,14 +651,29 @@ export default function WorldCup() {
           <ArrowLeft className="w-4 h-4 text-white" />
         </button>
 
-        {/* 刷新按鈕 */}
-        <button
-          onClick={() => window.location.reload()}
-          className="absolute top-4 right-4 z-20 px-3 h-8 flex items-center justify-center rounded-full text-xs font-semibold"
-          style={{ backgroundColor: "rgba(0,0,0,0.45)", color: "#fff" }}
-        >
-          刷新
-        </button>
+        {/* 右上角按钮组 */}
+        <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+          {/* 管理员设置入口 */}
+          {isAdmin && (
+            <Link href="/world-cup/admin">
+              <button
+                className="w-8 h-8 flex items-center justify-center rounded-full"
+                style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
+                title="管理设置"
+              >
+                <Settings className="w-4 h-4 text-white" />
+              </button>
+            </Link>
+          )}
+          {/* 刷新按钮 */}
+          <button
+            onClick={() => window.location.reload()}
+            className="px-3 h-8 flex items-center justify-center rounded-full text-xs font-semibold"
+            style={{ backgroundColor: "rgba(0,0,0,0.45)", color: "#fff" }}
+          >
+            刷新
+          </button>
+        </div>
 
         {/* 海报图片 */}
         <div style={{ width: "100%", aspectRatio: "16/9", overflow: "hidden", position: "relative" }}>

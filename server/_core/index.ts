@@ -477,6 +477,23 @@ async function startServer() {
     }
   });
 
+  // 世界杯赔率定时抓取回调（Heartbeat cron）
+  app.post("/api/scheduled/wc-odds-fetch", async (req: any, res: any) => {
+    try {
+      const taskUid = req.headers["x-manus-cron-task-uid"] as string;
+      if (!taskUid) {
+        return res.status(403).json({ error: "cron-only endpoint" });
+      }
+      const { fetchAndSaveOdds } = await import('../wcOddsScraper');
+      const result = await fetchAndSaveOdds();
+      console.log(`[WC Odds Cron] 抓取成功: ${result.teamCount} 支球队, 快照 #${result.snapshotId}`);
+      return res.json({ ok: true, ...result });
+    } catch (e: any) {
+      console.error('[WC Odds Cron] 抓取失败:', e.message);
+      return res.status(500).json({ error: e.message, stack: e.stack, timestamp: new Date().toISOString() });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

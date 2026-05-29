@@ -2139,3 +2139,32 @@ export const ajBackupEmails = mysqlTable("aj_backup_emails", {
   index("aj_backup_emails_ledger_user_idx").on(table.ledgerId, table.userId),
 ]);
 export type AjBackupEmail = typeof ajBackupEmails.$inferSelect;
+
+// ========== 世界杯赔率追踪 ==========
+// 每次抓取记录一条快照，存储48支球队的赔率
+export const wcOddsSnapshots = mysqlTable("wc_odds_snapshots", {
+  id: int().autoincrement().notNull(),
+  fetchedAt: timestamp('fetched_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+  source: varchar('source', { length: 100 }).default('wc-2026.com').notNull(),
+  teamCount: int('team_count').default(0).notNull(),
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+  index("wc_odds_snapshots_fetched_at_idx").on(table.fetchedAt),
+]);
+export type WcOddsSnapshot = typeof wcOddsSnapshots.$inferSelect;
+
+// 每次快照中每支球队的赔率明细
+export const wcOddsRecords = mysqlTable("wc_odds_records", {
+  id: int().autoincrement().notNull(),
+  snapshotId: int('snapshot_id').notNull(),
+  rank: int('rank').notNull(),                          // 排名
+  teamName: varchar('team_name', { length: 50 }).notNull(), // 球队名（中文）
+  teamCode: varchar('team_code', { length: 10 }),       // 国家代码（如 ES, FR）
+  pinnacleOdds: decimal('pinnacle_odds', { precision: 10, scale: 2 }), // Pinnacle赔率
+  williamHillOdds: decimal('william_hill_odds', { precision: 10, scale: 2 }), // WH赔率
+  createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
+}, (table) => [
+  index("wc_odds_records_snapshot_idx").on(table.snapshotId),
+  index("wc_odds_records_team_idx").on(table.teamName),
+]);
+export type WcOddsRecord = typeof wcOddsRecords.$inferSelect;
