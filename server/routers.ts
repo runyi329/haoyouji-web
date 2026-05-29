@@ -9438,6 +9438,7 @@ ${klinesSummary}
         description: z.string().optional(),
         transactionDate: z.string().optional(),
         images: z.array(z.string()).optional(),
+        stockCodes: z.array(z.object({ code: z.string(), name: z.string() })).optional(),
         memberId: z.number().optional(),
         accountId: z.number().optional(),
         reimbursementStatus: z.enum(['none', 'pending', 'completed']).optional(),
@@ -9447,6 +9448,45 @@ ${klinesSummary}
       .mutation(async ({ ctx, input }) => {
         const { recordId, ...data } = input;
         return await dbLedger.updateTransaction(recordId, ctx.user.id, data);
+      }),
+
+    // 查询股票代码名称
+    queryStockName: protectedProcedure
+      .input(z.object({ code: z.string().min(1).max(20) }))
+      .query(async ({ input }) => {
+        const code = input.code.trim().toUpperCase();
+        // 支持A股（sh/sz前缀）、港股、美股
+        try {
+          // 尝试从新浪财经获取股票名称
+          const isAShare = /^(SH|SZ)?\d{6}$/.test(code);
+          const isHKShare = /^\d{4,5}$/.test(code);
+          
+          let searchCode = code;
+          if (isAShare && !code.startsWith('SH') && !code.startsWith('SZ')) {
+            // 自动判断交易所
+            const num = parseInt(code);
+            searchCode = (num >= 600000 ? 'SH' : 'SZ') + code;
+          }
+          
+          const url = `https://suggest3.sinajs.cn/suggest/type=11,12,31,41&key=${encodeURIComponent(code)}&name=suggestdata_${Date.now()}`;
+          const resp = await fetch(url, { signal: AbortSignal.timeout(5000) });
+          const text = await resp.text();
+          // 解析新浪返回格式: suggestdata_xxx="...";
+          const match = text.match(/"([^"]+)"/);
+          if (match && match[1]) {
+            const items = match[1].split(';').filter(Boolean);
+            if (items.length > 0) {
+              const parts = items[0].split(',');
+              // 格式: 类型,代码,名称,...
+              if (parts.length >= 3) {
+                return { code, name: parts[2], found: true };
+              }
+            }
+          }
+          return { code, name: '', found: false };
+        } catch (e) {
+          return { code, name: '', found: false };
+        }
       }),
 
     // ==================== 审批相关 ====================

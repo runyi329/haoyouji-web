@@ -551,6 +551,7 @@ export const ledgerRecords = mysqlTable("ledger_records", {
 	guestIp: varchar('guest_ip', { length: 45 }),                 // 访客IP（防刷）
 	isRead: tinyint('is_read').default(0),                        // 是否已读
 	images: json(),                                                // 多图JSON数组
+	stockCodes: json('stock_codes'),                               // 股票代码JSON数组 [{code, name}]
 	// AJ账本专用字段（其他账本类型为null）
 	ajStatus: mysqlEnum('aj_status', ['pending', 'approved', 'rejected', 'support_needed']),  // 发票申请状态（申请中/通过/拒绝/补充材料）
 	ajCompanyId: int('aj_company_id'),                             // 开票企业ID
