@@ -105,6 +105,11 @@ export default function LedgerDetailAA({
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
 
+  // 图片预览（普通成员点击日历格子时弹出）
+  const [previewImages, setPreviewImages] = useState<string[]>([]);
+  const [previewImageIndex, setPreviewImageIndex] = useState(0);
+  const [showImagePreview, setShowImagePreview] = useState(false);
+
   // ── 视角切换（管理员/创建者可切换到其他成员视角）──
   const [viewAsUserId, setViewAsUserId] = useState<number | null>(null);
   const [showViewAsPicker, setShowViewAsPicker] = useState(false);
@@ -683,9 +688,30 @@ export default function LedgerDetailAA({
 
   // 点击日历格子：已有记录则跳转编辑，否则跳转新增
   const handleDayClick = (day: number) => {
-    if (!canEdit) return; // 普通用户不可操作
     const dateStr = getDateStr(day);
     const existing = dayMap.get(dateStr);
+
+    if (!canEdit) {
+      // 普通成员：不可编辑，但可查看图片
+      if (existing && existing.records.length > 0) {
+        // 收集当天所有记录的图片
+        const allImages: string[] = [];
+        for (const record of existing.records) {
+          if (record.images && Array.isArray(record.images) && record.images.length > 0) {
+            allImages.push(...record.images);
+          } else if (record.imageUrl) {
+            allImages.push(record.imageUrl);
+          }
+        }
+        if (allImages.length > 0) {
+          setPreviewImages(allImages);
+          setPreviewImageIndex(0);
+          setShowImagePreview(true);
+        }
+      }
+      return;
+    }
+
     if (existing && existing.records.length > 0) {
       // 已有记录：跳转编辑第一条记录
       const recordId = existing.records[0].id;
@@ -2207,6 +2233,66 @@ export default function LedgerDetailAA({
           >
             切回我的视角
           </button>
+        </div>
+      )}
+
+      {/* ── 图片预览弹窗（普通成员点击日历格子时弹出） ── */}
+      {showImagePreview && previewImages.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col"
+          style={{ backgroundColor: 'rgba(0,0,0,0.92)' }}
+          onClick={() => setShowImagePreview(false)}
+        >
+          {/* 关闭按鈕 */}
+          <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
+            <span className="text-white text-sm">{previewImageIndex + 1} / {previewImages.length}</span>
+            <button
+              className="w-8 h-8 flex items-center justify-center rounded-full"
+              style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+              onClick={() => setShowImagePreview(false)}
+            >
+              <X className="w-5 h-5 text-white" />
+            </button>
+          </div>
+          {/* 图片显示 */}
+          <div className="flex-1 flex items-center justify-center px-4" onClick={e => e.stopPropagation()}>
+            <img
+              src={previewImages[previewImageIndex]}
+              alt={`图片${previewImageIndex + 1}`}
+              className="max-w-full max-h-full object-contain rounded-lg"
+              style={{ maxHeight: 'calc(100vh - 160px)' }}
+            />
+          </div>
+          {/* 切换按鈕（多张时显示） */}
+          {previewImages.length > 1 && (
+            <div className="flex items-center justify-center gap-6 py-4 flex-shrink-0" onClick={e => e.stopPropagation()}>
+              <button
+                className="w-10 h-10 flex items-center justify-center rounded-full"
+                style={{ backgroundColor: previewImageIndex > 0 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)' }}
+                onClick={() => setPreviewImageIndex(i => Math.max(0, i - 1))}
+                disabled={previewImageIndex === 0}
+              >
+                <ChevronLeft className="w-5 h-5 text-white" />
+              </button>
+              <div className="flex gap-1.5">
+                {previewImages.map((_, i) => (
+                  <div
+                    key={i}
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: i === previewImageIndex ? '#fff' : 'rgba(255,255,255,0.4)' }}
+                  />
+                ))}
+              </div>
+              <button
+                className="w-10 h-10 flex items-center justify-center rounded-full"
+                style={{ backgroundColor: previewImageIndex < previewImages.length - 1 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)' }}
+                onClick={() => setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1))}
+                disabled={previewImageIndex === previewImages.length - 1}
+              >
+                <ChevronRight className="w-5 h-5 text-white" />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
