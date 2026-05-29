@@ -815,8 +815,8 @@ export default function LedgerDetailAA({
                   />
                 </div>
               )}
-              {/* 世界杯快捷按钮（仅52号账本） */}
-              {Number(ledgerId) === 52 && (myShortcuts as any)?.worldCup && (
+              {/* 世界杯快捷按钮（所有账本通用） */}
+              {(myShortcuts as any)?.worldCup && (
                 <div
                   className="w-8 h-8 rounded-full cursor-pointer overflow-hidden flex-shrink-0"
                   style={{ border: '1.5px solid rgba(255,255,255,0.5)', position: 'relative' }}
