@@ -310,7 +310,7 @@ export default function AfOrderManage() {
     const isGift = order.isGift === true || order.isGift === 1;
     if (statusFilter === 'all') return !(isGift && order.status === 'pending');
     if (statusFilter === 'pending') return order.status === 'pending' && !isGift;
-    if (statusFilter === 'holding') return order.status === 'completed' && !order.sellStatus && !isGift; // 持仓中：赠单只嵌套在正单里，不独立显示
+    if (statusFilter === 'holding') return order.status === 'completed' && !isGift; // 持仓中：显示所有 completed 正单（含委卖中/已卖出），赠单只嵌套在正单里
     if (statusFilter === 'selling') return order.sellStatus === 'selling'; // 委卖中：赠单也显示
     if (statusFilter === 'sold') return order.sellStatus === 'sold'; // 已卖出：赠单也显示
     return true;
@@ -423,7 +423,7 @@ export default function AfOrderManage() {
           {([
             { key: 'all' as const, label: '全部', count: (orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return !(g && o.status === 'pending'); }).length ?? 0 },
             { key: 'pending' as const, label: '委买中', count: (orders as any[])?.filter((o: any) => o.status === 'pending' && o.isGift !== true && o.isGift !== 1).length ?? 0 },
-            { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && !o.sellStatus).length ?? 0 },
+            { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && !o.sellStatus && o.isGift !== true && o.isGift !== 1).length ?? 0 },
             { key: 'selling' as const, label: '委卖中', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0 },
             { key: 'sold' as const, label: '已卖出', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0 },
           ]).map((tab, idx, arr) => (
@@ -833,8 +833,8 @@ export default function AfOrderManage() {
                     );
                   })()}
 
-                  {/* 赠予订单折叠区块（仅对非赠予的委买订单显示） */}
-                  {!order.isGift && (() => {
+                  {/* 赠予订单折叠区块（仅对持仓中的非赠予正单显示；委卖中不嵌套，每单独立展示） */}
+                  {!order.isGift && statusFilter !== 'selling' && (() => {
                     const giftOrders: any[] = (order as any).giftOrders || [];
                     if (giftOrders.length === 0) return null;
                     const isExpanded = !!expandedGiftOrders[order.id];
