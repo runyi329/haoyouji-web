@@ -344,6 +344,64 @@ export default function WcOddsAdmin() {
                     );
                   })}
                 </tbody>
+                {/* 隐含概率合计行 */}
+                <tfoot>
+                  <tr style={{ backgroundColor: "rgba(255,215,0,0.08)", borderTop: `2px solid ${BORDER}` }}>
+                    <td
+                      style={{
+                        position: "sticky",
+                        left: 0,
+                        zIndex: 5,
+                        backgroundColor: "rgba(255,215,0,0.12)",
+                        padding: "8px 10px",
+                        borderRight: `1px solid ${BORDER}`,
+                        whiteSpace: "nowrap",
+                        color: "rgba(255,215,0,0.9)",
+                        fontWeight: 700,
+                        fontSize: 11,
+                      }}
+                    >
+                      隐含概率合计
+                    </td>
+                    {[...snapshots].reverse().map((snap) => {
+                      // 计算该列所有球队的隐含概率之和
+                      let total = 0;
+                      let count = 0;
+                      teams.forEach((team: { name: string; code: string }) => {
+                        const teamData = matrixData[team.name] ?? {};
+                        const current = teamData[snap.id];
+                        const pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
+                        if (pinnacle && pinnacle > 0) {
+                          total += (1 / pinnacle) * 100;
+                          count++;
+                        }
+                      });
+                      const overround = total - 100;
+                      const color = total > 120 ? "#ff6b6b" : total > 110 ? "#ffd700" : "#4ade80";
+                      return (
+                        <td
+                          key={snap.id}
+                          style={{
+                            padding: "8px 6px",
+                            textAlign: "center",
+                            borderRight: `1px solid ${BORDER}`,
+                            color,
+                            fontWeight: 700,
+                            fontSize: 11,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {count > 0 ? (
+                            <>
+                              <div>{total.toFixed(1)}%</div>
+                              <div style={{ fontSize: 9, opacity: 0.7 }}>+{overround.toFixed(1)}%</div>
+                            </>
+                          ) : "-"}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
