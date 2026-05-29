@@ -51,6 +51,7 @@ function CreateOrderDialog({
   const [teamSearch, setTeamSearch] = useState("");
   const [showTeamDropdown, setShowTeamDropdown] = useState(false);
   const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState<"CNY" | "USDT">("USDT");
   const [note, setNote] = useState("");
   const [userKeyword, setUserKeyword] = useState("");
   const [selectedUser, setSelectedUser] = useState<{ id: number; name: string | null; username: string | null; phone: string | null } | null>(null);
@@ -68,9 +69,15 @@ function CreateOrderDialog({
     { enabled: userKeyword.length >= 1 }
   );
 
+  // 选中用户后自动拉取其钱包余额
+  const { data: walletData, isLoading: walletLoading } = trpc.wcOdds.getUserWallet.useQuery(
+    { userId: selectedUser?.id ?? 0 },
+    { enabled: !!selectedUser }
+  );
+
   const createOrder = trpc.wcOdds.createOrder.useMutation({
     onSuccess: () => {
-      toast.success("✅ 订单创建成功！");
+      toast.success("✅ 订单创建成功，已从钱包扣款！");
       onSuccess();
       handleClose();
     },
@@ -84,6 +91,7 @@ function CreateOrderDialog({
     setTeamSearch("");
     setShowTeamDropdown(false);
     setAmount("");
+    setCurrency("USDT");
     setNote("");
     setUserKeyword("");
     setSelectedUser(null);
@@ -99,11 +107,18 @@ function CreateOrderDialog({
     !teamSearch || t.teamName.includes(teamSearch)
   );
 
+  // 当前货币可用余额
+  const availableBalance = walletData
+    ? (currency === "USDT" ? walletData.usdt : walletData.cny)
+    : null;
+  const isBalanceInsufficient = availableBalance !== null && !isNaN(amtNum) && amtNum > 0 && amtNum > availableBalance;
+
   function handleSubmit() {
+    if (!selectedUser) return toast.error("请先选择下单人");
     if (!selectedTeam) return toast.error("请选择球队");
     if (!latestOdds?.snapshotId || !latestOdds?.pinnacleOdds) return toast.error("该球队暂无赔率数据");
     if (!amount || isNaN(amtNum) || amtNum <= 0) return toast.error("请输入有效金额");
-    if (!selectedUser) return toast.error("请选择下单人");
+    if (isBalanceInsufficient) return toast.error(`${currency} 余额不足`);
 
     createOrder.mutate({
       userId: selectedUser.id,
@@ -112,6 +127,7 @@ function CreateOrderDialog({
       snapshotId: latestOdds.snapshotId,
       pinnacleOdds: latestOdds.pinnacleOdds,
       amount,
+      currency,
       note: note || undefined,
     });
   }
@@ -137,7 +153,121 @@ function CreateOrderDialog({
         </div>
 
         <div className="px-5 pt-4 space-y-4">
-          {/* 选择球队 */}
+          {/* 第一步：搜索下单人 */}
+          <div>
+            <label className="text-xs mb-1.5 block" style={{ color: TEXT2 }}>下单人 <span style={{ color: "#ff4d4f" }}>*</span></label>
+            {selectedUser ? (
+              <div>
+                <div
+                  className="flex items-center justify-between px-3 py-2.5 rounded-lg"
+                  style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                      style={{ backgroundColor: "rgba(255,215,0,0.15)", color: GOLD }}>
+                      {(selectedUser.name || selectedUser.username || "?").charAt(0)}
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium" style={{ color: TEXT }}>
+                        {selectedUser.name || selectedUser.username || `用户#${selectedUser.id}`}
+                      </span>
+                      {selectedUser.phone && (
+                        <span className="text-xs ml-2" style={{ color: TEXT2 }}>{selectedUser.phone}</span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => { setSelectedUser(null); setUserKeyword(""); setAmount(""); }}
+                    className="text-xs px-2 py-0.5 rounded"
+                    style={{ backgroundColor: "rgba(255,255,255,0.08)", color: TEXT2 }}
+                  >
+                    更换
+                  </button>
+                </div>
+                {/* 钱包余额展示 */}
+                {walletLoading ? (
+                  <div className="mt-2 text-xs" style={{ color: TEXT2 }}>加载钱包余额...</div>
+                ) : walletData ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span className="text-xs" style={{ color: TEXT2 }}>钱包余额:</span>
+                    <span
+                      className="text-xs px-2 py-0.5 rounded cursor-pointer"
+                      style={{
+                        backgroundColor: currency === "USDT" ? "rgba(255,215,0,0.15)" : "rgba(255,255,255,0.06)",
+                        color: currency === "USDT" ? GOLD : TEXT2,
+                        border: currency === "USDT" ? `1px solid rgba(255,215,0,0.4)` : `1px solid ${BORDER}`,
+                        fontWeight: currency === "USDT" ? 600 : 400,
+                      }}
+                      onClick={() => { setCurrency("USDT"); setAmount(""); }}
+                    >
+                      USDT {walletData.usdt.toFixed(2)}
+                    </span>
+                    <span
+                      className="text-xs px-2 py-0.5 rounded cursor-pointer"
+                      style={{
+                        backgroundColor: currency === "CNY" ? "rgba(255,77,79,0.15)" : "rgba(255,255,255,0.06)",
+                        color: currency === "CNY" ? "#ff4d4f" : TEXT2,
+                        border: currency === "CNY" ? `1px solid rgba(255,77,79,0.4)` : `1px solid ${BORDER}`,
+                        fontWeight: currency === "CNY" ? 600 : 400,
+                      }}
+                      onClick={() => { setCurrency("CNY"); setAmount(""); }}
+                    >
+                      CNY {walletData.cny.toFixed(2)}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="relative">
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg" style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}>
+                  <Search className="w-4 h-4 flex-shrink-0" style={{ color: TEXT2 }} />
+                  <input
+                    className="flex-1 bg-transparent text-sm outline-none"
+                    style={{ color: TEXT }}
+                    placeholder="输入姓名/用户名/手机号搜索..."
+                    value={userKeyword}
+                    onChange={e => { setUserKeyword(e.target.value); setShowUserDropdown(true); }}
+                    onFocus={() => setShowUserDropdown(true)}
+                  />
+                </div>
+                {showUserDropdown && userKeyword.length >= 1 && (
+                  <div
+                    className="absolute left-0 right-0 top-full mt-1 rounded-lg z-10 overflow-hidden"
+                    style={{ backgroundColor: BG3, border: `1px solid ${BORDER}`, maxHeight: 200, overflowY: "auto" }}
+                  >
+                    {(userResults ?? []).length === 0 ? (
+                      <div className="px-3 py-3 text-center text-sm" style={{ color: TEXT2 }}>未找到用户</div>
+                    ) : (
+                      (userResults ?? []).map(u => (
+                        <div
+                          key={u.id}
+                          className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-white/5"
+                          onClick={() => {
+                            setSelectedUser({ id: u.id, name: u.name, username: u.username, phone: u.phone });
+                            setShowUserDropdown(false);
+                            setUserKeyword("");
+                          }}
+                        >
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                            style={{ backgroundColor: "rgba(255,215,0,0.15)", color: GOLD }}>
+                            {(u.name || u.username || "?").charAt(0)}
+                          </div>
+                          <div>
+                            <div className="text-sm" style={{ color: TEXT }}>
+                              {u.name || u.username || `用户#${u.id}`}
+                            </div>
+                            {u.phone && <div className="text-xs" style={{ color: TEXT2 }}>{u.phone}</div>}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 第二步：选择球队 */}
           <div>
             <label className="text-xs mb-1.5 block" style={{ color: TEXT2 }}>选择球队</label>
             <div className="relative">
@@ -222,19 +352,50 @@ function CreateOrderDialog({
             </div>
           )}
 
-          {/* 投注金额 */}
+          {/* 第三步：货币选择 + 投注金额 */}
           <div>
-            <label className="text-xs mb-1.5 block" style={{ color: TEXT2 }}>投注金额（元）</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              className="w-full px-3 py-2.5 rounded-lg text-sm outline-none"
-              style={{ backgroundColor: BG3, border: `1px solid ${BORDER}`, color: TEXT }}
-              placeholder="请输入金额..."
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-            />
+            <label className="text-xs mb-1.5 block" style={{ color: TEXT2 }}>投注金额</label>
+            <div className="flex gap-2">
+              {/* 货币切换按鈕 */}
+              <div className="flex rounded-lg overflow-hidden flex-shrink-0" style={{ border: `1px solid ${BORDER}` }}>
+                {(["USDT", "CNY"] as const).map(c => (
+                  <button
+                    key={c}
+                    onClick={() => { setCurrency(c); setAmount(""); }}
+                    className="px-3 py-2 text-xs font-semibold transition-colors"
+                    style={{
+                      backgroundColor: currency === c ? GOLD : BG3,
+                      color: currency === c ? "#0D1B2A" : TEXT2,
+                    }}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+              {/* 金额输入 */}
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className="flex-1 px-3 py-2.5 rounded-lg text-sm outline-none"
+                style={{
+                  backgroundColor: BG3,
+                  border: `1px solid ${isBalanceInsufficient ? "#ff4d4f" : BORDER}`,
+                  color: TEXT,
+                }}
+                placeholder={availableBalance !== null
+                  ? `最多 ${availableBalance.toFixed(2)} ${currency}`
+                  : selectedUser ? "请输入金额..." : "请先选择下单人"}
+                value={amount}
+                disabled={!selectedUser}
+                onChange={e => setAmount(e.target.value)}
+              />
+            </div>
+            {isBalanceInsufficient && (
+              <div className="mt-1.5 text-xs" style={{ color: "#ff4d4f" }}>
+                {currency} 余额不足，当前可用 {availableBalance?.toFixed(2)} {currency}
+              </div>
+            )}
           </div>
 
           {/* 潜在回报预览 */}
@@ -245,84 +406,10 @@ function CreateOrderDialog({
             >
               <span className="text-sm" style={{ color: TEXT2 }}>潜在回报</span>
               <span className="text-xl font-bold" style={{ color: COLOR_UP }}>
-                ¥ {formatAmount(potentialReturn)}
+                {formatAmount(potentialReturn)} {currency}
               </span>
             </div>
           )}
-
-          {/* 搜索下单人 */}
-          <div>
-            <label className="text-xs mb-1.5 block" style={{ color: TEXT2 }}>下单人</label>
-            {selectedUser ? (
-              <div
-                className="flex items-center justify-between px-3 py-2.5 rounded-lg"
-                style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
-              >
-                <div>
-                  <span className="text-sm font-medium" style={{ color: TEXT }}>
-                    {selectedUser.name || selectedUser.username || `用户#${selectedUser.id}`}
-                  </span>
-                  {selectedUser.phone && (
-                    <span className="text-xs ml-2" style={{ color: TEXT2 }}>{selectedUser.phone}</span>
-                  )}
-                </div>
-                <button
-                  onClick={() => { setSelectedUser(null); setUserKeyword(""); }}
-                  className="text-xs px-2 py-0.5 rounded"
-                  style={{ backgroundColor: "rgba(255,255,255,0.08)", color: TEXT2 }}
-                >
-                  更换
-                </button>
-              </div>
-            ) : (
-              <div className="relative">
-                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg" style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}>
-                  <Search className="w-4 h-4 flex-shrink-0" style={{ color: TEXT2 }} />
-                  <input
-                    className="flex-1 bg-transparent text-sm outline-none"
-                    style={{ color: TEXT }}
-                    placeholder="输入姓名/用户名/手机号搜索..."
-                    value={userKeyword}
-                    onChange={e => { setUserKeyword(e.target.value); setShowUserDropdown(true); }}
-                    onFocus={() => setShowUserDropdown(true)}
-                  />
-                </div>
-                {showUserDropdown && userKeyword.length >= 1 && (
-                  <div
-                    className="absolute left-0 right-0 top-full mt-1 rounded-lg z-10 overflow-hidden"
-                    style={{ backgroundColor: BG3, border: `1px solid ${BORDER}`, maxHeight: 200, overflowY: "auto" }}
-                  >
-                    {(userResults ?? []).length === 0 ? (
-                      <div className="px-3 py-3 text-center text-sm" style={{ color: TEXT2 }}>未找到用户</div>
-                    ) : (
-                      (userResults ?? []).map(u => (
-                        <div
-                          key={u.id}
-                          className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-white/5"
-                          onClick={() => {
-                            setSelectedUser({ id: u.id, name: u.name, username: u.username, phone: u.phone });
-                            setShowUserDropdown(false);
-                            setUserKeyword("");
-                          }}
-                        >
-                          <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                            style={{ backgroundColor: "rgba(255,215,0,0.15)", color: GOLD }}>
-                            {(u.name || u.username || "?").charAt(0)}
-                          </div>
-                          <div>
-                            <div className="text-sm" style={{ color: TEXT }}>
-                              {u.name || u.username || `用户#${u.id}`}
-                            </div>
-                            {u.phone && <div className="text-xs" style={{ color: TEXT2 }}>{u.phone}</div>}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
 
           {/* 备注 */}
           <div>
@@ -468,11 +555,17 @@ function OrdersTab() {
                   </div>
                   <div>
                     <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>投注</div>
-                    <div className="font-bold" style={{ color: TEXT }}>¥{formatAmount(order.amount)}</div>
+                    <div className="font-bold" style={{ color: TEXT }}>
+                      {formatAmount(order.amount)}
+                      <span className="text-xs ml-0.5" style={{ color: TEXT2 }}>{(order as any).currency || "USDT"}</span>
+                    </div>
                   </div>
                   <div>
                     <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>潜在回报</div>
-                    <div className="font-bold" style={{ color: COLOR_UP }}>¥{formatAmount(order.potentialReturn)}</div>
+                    <div className="font-bold" style={{ color: COLOR_UP }}>
+                      {formatAmount(order.potentialReturn)}
+                      <span className="text-xs ml-0.5" style={{ color: COLOR_UP }}>{(order as any).currency || "USDT"}</span>
+                    </div>
                   </div>
                 </div>
 

@@ -1,14 +1,15 @@
 /**
  * 世界杯赔率追踪 tRPC 路由
- * 管理员专用：手动触发抓取、查询历史快照、订单管理
+ * 管理员专用：手动触发抓取、查询历史快照、订单管理（含钱包扣款）
  */
 import { z } from 'zod';
 import { router, protectedProcedure } from '../_core/trpc';
 import { TRPCError } from '@trpc/server';
-import { getDb } from '../db';
+import { getDb, getDbConnection } from '../db';
 import { wcOddsSnapshots, wcOddsRecords, wcOrders, users } from '../../drizzle/schema';
-import { desc, eq, asc, inArray, like, or, sql, and } from 'drizzle-orm';
+import { desc, eq, asc, inArray, like, or, and } from 'drizzle-orm';
 import { fetchAndSaveOdds } from '../wcOddsScraper';
+import { getUserBalance, getUserCnyBalance } from '../db-recharge';
 
 // 管理员检查中间件
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
@@ -115,9 +116,7 @@ export const wcOddsRouter = router({
       .orderBy(desc(wcOddsSnapshots.fetchedAt))
       .limit(1);
 
-    const totalCount = await db
-      .select()
-      .from(wcOddsSnapshots);
+    const totalCount = await db.select().from(wcOddsSnapshots);
 
     return {
       totalRuns: totalCount.length,
@@ -234,7 +233,23 @@ export const wcOddsRouter = router({
     }),
 
   /**
-   * 创建订单（管理员手动录入）
+   * 获取指定用户的钱包余额（USDT + CNY）
+   */
+  getUserWallet: adminProcedure
+    .input(z.object({ userId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      const [usdtBalance, cnyBalance] = await Promise.all([
+        getUserBalance(input.userId).catch(() => 0),
+        getUserCnyBalance(input.userId).catch(() => 0),
+      ]);
+      return {
+        usdt: parseFloat(usdtBalance.toString()) || 0,
+        cny: parseFloat(cnyBalance.toString()) || 0,
+      };
+    }),
+
+  /**
+   * 创建订单（管理员手动录入，自动从钱包扣款）
    */
   createOrder: adminProcedure
     .input(z.object({
@@ -244,6 +259,7 @@ export const wcOddsRouter = router({
       snapshotId: z.number().int().positive(),
       pinnacleOdds: z.string(),
       amount: z.string(),
+      currency: z.enum(['CNY', 'USDT']),
       note: z.string().max(500).optional(),
     }))
     .mutation(async ({ input }) => {
@@ -259,8 +275,59 @@ export const wcOddsRouter = router({
         throw new TRPCError({ code: 'BAD_REQUEST', message: '金额无效' });
       }
 
-      const potentialReturn = (odds * amt).toFixed(2);
+      // 检查余额是否充足
+      let currentBalance: number;
+      if (input.currency === 'USDT') {
+        currentBalance = await getUserBalance(input.userId).catch(() => 0);
+      } else {
+        currentBalance = await getUserCnyBalance(input.userId).catch(() => 0);
+      }
 
+      if (currentBalance < amt) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `${input.currency} 余额不足（当前 ${currentBalance.toFixed(2)}，需要 ${amt.toFixed(2)}）`,
+        });
+      }
+
+      const potentialReturn = (odds * amt).toFixed(2);
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+
+      // 扣款：写入 af_manual_balances（负数）
+      const deductNote = input.currency === 'CNY'
+        ? `[CNY]世界杯投注-${input.teamName} -${amt}${input.note ? ' ' + input.note : ''}`
+        : `世界杯投注-${input.teamName} -${amt} USDT${input.note ? ' ' + input.note : ''}`;
+
+      if (input.currency === 'CNY') {
+        // CNY：写 af_manual_balances（note 以 [CNY] 开头）
+        const [ledgerRows] = await (conn as any).execute(
+          `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
+          [input.userId]
+        ) as any[];
+        const ledgerId = (Array.isArray(ledgerRows) ? ledgerRows[0]?.ledger_id : null) ?? 37;
+        await (conn as any).execute(
+          `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
+          [ledgerId, input.userId, -amt, deductNote]
+        );
+      } else {
+        // USDT：更新 users.balance 并写 balance_history
+        await (conn as any).execute(
+          `UPDATE users SET balance = COALESCE(balance, 0) - ? WHERE id = ?`,
+          [amt, input.userId]
+        );
+        const [balRows] = await (conn as any).execute(
+          `SELECT balance FROM users WHERE id = ? LIMIT 1`,
+          [input.userId]
+        ) as any[];
+        const newBalance = parseFloat((Array.isArray(balRows) ? balRows[0] : balRows)?.balance ?? '0') || 0;
+        await (conn as any).execute(
+          `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, 'consume', NULL, ?, ?)`,
+          [input.userId, (-amt).toString(), newBalance.toString(), deductNote]
+        );
+      }
+
+      // 写入订单记录
       await db.insert(wcOrders).values({
         userId: input.userId,
         teamName: input.teamName,
@@ -269,6 +336,7 @@ export const wcOddsRouter = router({
         pinnacleOdds: input.pinnacleOdds,
         amount: input.amount,
         potentialReturn,
+        currency: input.currency,
         status: 'pending',
         note: input.note || null,
       });
@@ -310,6 +378,7 @@ export const wcOddsRouter = router({
           pinnacleOdds: wcOrders.pinnacleOdds,
           amount: wcOrders.amount,
           potentialReturn: wcOrders.potentialReturn,
+          currency: wcOrders.currency,
           status: wcOrders.status,
           note: wcOrders.note,
           createdAt: wcOrders.createdAt,

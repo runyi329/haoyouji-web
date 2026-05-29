@@ -2180,6 +2180,7 @@ export const wcOrders = mysqlTable("wc_orders", {
   amount: decimal('amount', { precision: 15, scale: 2 }).notNull(),              // 投注金额
   potentialReturn: decimal('potential_return', { precision: 15, scale: 2 }).notNull(), // 潜在回报 = 金额 × 赔率
   status: mysqlEnum('status', ['pending', 'settled', 'cancelled']).default('pending').notNull(),
+  currency: mysqlEnum('currency', ['CNY', 'USDT']).default('USDT').notNull(), // 投注货币
   note: text('note'),                                       // 备注
   createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
   settledAt: timestamp('settled_at', { mode: 'string' }),
