@@ -13,6 +13,7 @@ import {
   Plus,
   User,
   X,
+  ZoomIn,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -232,6 +233,8 @@ const AddTransaction = () => {
   // 图片上传相关
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // 图片放大预览
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   // 股票代码相关（custom_aa管理员）
   const [stockInputs, setStockInputs] = useState<Array<{code: string; name: string; loading: boolean}>>(
@@ -950,6 +953,12 @@ const AddTransaction = () => {
                     <button className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#1A2B4A] text-white rounded-full flex items-center justify-center shadow" onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== index))}>
                       <X className="w-3 h-3" />
                     </button>
+                    <button
+                      className="absolute bottom-0.5 right-0.5 w-5 h-5 bg-black/50 text-white rounded flex items-center justify-center"
+                      onClick={() => setPreviewImageUrl(image)}
+                    >
+                      <ZoomIn className="w-3 h-3" />
+                    </button>
                   </div>
                 ))}
                 {uploadedImages.length === 0 ? (
@@ -1311,6 +1320,12 @@ const AddTransaction = () => {
                         onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== index))}
                       >
                         <X className="w-3 h-3" />
+                      </button>
+                      <button
+                        className="absolute bottom-0.5 right-0.5 w-5 h-5 bg-black/50 text-white rounded flex items-center justify-center"
+                        onClick={() => setPreviewImageUrl(image)}
+                      >
+                        <ZoomIn className="w-3 h-3" />
                       </button>
                     </div>
                   ))}
@@ -1709,6 +1724,12 @@ const AddTransaction = () => {
                   >
                     <X className="w-3 h-3" />
                   </button>
+                  <button
+                    className="absolute bottom-0.5 right-0.5 w-5 h-5 bg-black/50 text-white rounded flex items-center justify-center"
+                    onClick={() => setPreviewImageUrl(image)}
+                  >
+                    <ZoomIn className="w-3 h-3" />
+                  </button>
                 </div>
               ))}
             </div>
@@ -2047,6 +2068,28 @@ const AddTransaction = () => {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* 图片放大预览弹窗 */}
+      {previewImageUrl && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.92)' }}
+          onClick={() => setPreviewImageUrl(null)}
+        >
+          <img
+            src={previewImageUrl}
+            alt="预览"
+            className="max-w-[95vw] max-h-[90vh] object-contain rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            className="absolute top-4 right-4 w-9 h-9 bg-white/20 hover:bg-white/30 text-white rounded-full flex items-center justify-center"
+            onClick={() => setPreviewImageUrl(null)}
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
