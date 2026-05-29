@@ -527,56 +527,81 @@ function DayGroup({
         </span>
       </div>
 
-      {/* 比赛列表（常驻展开，紧凑单行） */}
+      {/* 比赛列表（常驻展开，全内容单行自适应屏宽） */}
       {day.matches.map((match, i) => (
         <button
           key={i}
           onClick={() => onMatchClick(match)}
-          className="w-full flex items-center px-2 text-left transition-colors active:opacity-70"
+          className="w-full flex items-center text-left transition-colors active:opacity-70"
           style={{
             backgroundColor: BG,
             borderBottom: `1px solid ${BORDER}`,
-            minHeight: 38,
-            paddingTop: 5,
-            paddingBottom: 5,
-            gap: 4,
+            height: 40,
+            paddingLeft: 8,
+            paddingRight: 6,
+            gap: 0,
+            overflow: "hidden",
           }}
         >
-          {/* 左侧：阶段标签 + 时间 */}
-          <div className="flex flex-col items-center flex-shrink-0" style={{ width: 38 }}>
+          {/* 左区：阶段标签 + 时间 + 北京时间（全在同一行） */}
+          <div
+            className="flex items-center flex-shrink-0"
+            style={{ gap: 4, marginRight: 6 }}
+          >
             <span
-              className="text-center rounded w-full"
               style={{
                 backgroundColor: stageStyle(match.stage).bg,
                 color: stageStyle(match.stage).color,
                 fontSize: "9px",
                 fontWeight: 700,
-                padding: "1px 0",
+                padding: "1px 4px",
+                borderRadius: 3,
+                whiteSpace: "nowrap",
                 lineHeight: "14px",
               }}
             >
               {match.stage}
             </span>
-            <span className="font-bold" style={{ color: GOLD, fontSize: "11px", lineHeight: "15px" }}>
+            <span style={{ color: GOLD, fontSize: "11px", fontWeight: 700, whiteSpace: "nowrap" }}>
               {match.time && match.time !== "TBD" ? match.time : "TBD"}
             </span>
-            <span style={{ color: TEXT2, fontSize: "8px", lineHeight: "10px" }}>北京时间</span>
+            <span style={{ color: TEXT2, fontSize: "9px", whiteSpace: "nowrap" }}>北京时间</span>
           </div>
 
-          {/* 中间：主队 国旗 名字  VS  国旗 名字 客队 */}
-          <div className="flex items-center flex-1 justify-center" style={{ gap: 3 }}>
-            {/* 主队 */}
-            <Flag code={match.homeCode} size={15} />
-            <span style={{ color: TEXT, fontSize: "11px", fontWeight: 500, whiteSpace: "nowrap" }}>{match.home}</span>
-            {/* VS */}
-            <span style={{ color: GOLD, fontSize: "10px", fontWeight: 900, marginLeft: 2, marginRight: 2 }}>VS</span>
-            {/* 客队 */}
-            <span style={{ color: TEXT, fontSize: "11px", fontWeight: 500, whiteSpace: "nowrap" }}>{match.away}</span>
-            <Flag code={match.awayCode} size={15} />
+          {/* 中区：主队名 国旗  VS  国旗 客队名（flex-1自适应） */}
+          <div
+            className="flex items-center flex-1 justify-center"
+            style={{ gap: 3, minWidth: 0, overflow: "hidden" }}
+          >
+            <span
+              style={{
+                color: TEXT,
+                fontSize: "11px",
+                fontWeight: 500,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                maxWidth: "22vw",
+              }}
+            >{match.home}</span>
+            <Flag code={match.homeCode} size={14} />
+            <span style={{ color: GOLD, fontSize: "10px", fontWeight: 900, flexShrink: 0, margin: "0 2px" }}>VS</span>
+            <Flag code={match.awayCode} size={14} />
+            <span
+              style={{
+                color: TEXT,
+                fontSize: "11px",
+                fontWeight: 500,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                maxWidth: "22vw",
+              }}
+            >{match.away}</span>
           </div>
 
           {/* 右侧小箭头 */}
-          <ChevronRight className="flex-shrink-0" style={{ color: TEXT2, width: 13, height: 13 }} />
+          <ChevronRight className="flex-shrink-0" style={{ color: TEXT2, width: 13, height: 13, marginLeft: 4 }} />
         </button>
       ))}
     </div>
