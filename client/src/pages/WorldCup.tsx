@@ -578,36 +578,43 @@ function DayGroup({
             <span style={{ color: TEXT2, fontSize: "9px", whiteSpace: "nowrap" }}>北京时间</span>
           </div>
 
-          {/* 中区：主队名 国旗  VS  国旗 客队名（flex-1自适应） */}
+          {/* 中区：三列固定宽度，VS居中固定对齐 */}
           <div
-            className="flex items-center flex-1 justify-center"
-            style={{ gap: 3, minWidth: 0, overflow: "hidden" }}
+            className="flex items-center flex-1"
+            style={{ minWidth: 0, overflow: "hidden" }}
           >
-            <span
-              style={{
-                color: TEXT,
-                fontSize: "11px",
-                fontWeight: 500,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                maxWidth: "22vw",
-              }}
-            >{match.home}</span>
-            <Flag code={match.homeCode} size={14} />
-            <span style={{ color: GOLD, fontSize: "10px", fontWeight: 900, flexShrink: 0, margin: "0 2px" }}>VS</span>
-            <Flag code={match.awayCode} size={14} />
-            <span
-              style={{
-                color: TEXT,
-                fontSize: "11px",
-                fontWeight: 500,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                maxWidth: "22vw",
-              }}
-            >{match.away}</span>
+            {/* 主队：右对齐 */}
+            <div className="flex items-center justify-end" style={{ flex: "1 1 0", minWidth: 0, gap: 3, overflow: "hidden" }}>
+              <span
+                style={{
+                  color: TEXT,
+                  fontSize: "11px",
+                  fontWeight: 500,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >{match.home}</span>
+              <Flag code={match.homeCode} size={14} />
+            </div>
+            {/* VS：固定宽度居中 */}
+            <div className="flex items-center justify-center flex-shrink-0" style={{ width: 28 }}>
+              <span style={{ color: GOLD, fontSize: "10px", fontWeight: 900 }}>VS</span>
+            </div>
+            {/* 客队：左对齐 */}
+            <div className="flex items-center justify-start" style={{ flex: "1 1 0", minWidth: 0, gap: 3, overflow: "hidden" }}>
+              <Flag code={match.awayCode} size={14} />
+              <span
+                style={{
+                  color: TEXT,
+                  fontSize: "11px",
+                  fontWeight: 500,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >{match.away}</span>
+            </div>
           </div>
 
           {/* 右侧小箭头 */}
