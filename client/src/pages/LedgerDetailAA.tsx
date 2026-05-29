@@ -465,8 +465,7 @@ export default function LedgerDetailAA({
       sorted = sorted.filter(d => d.date >= chartEffectiveStartDate);
     }
     if (calendarMode === "balance" || calendarMode === "daily") {
-      // 余额/日模式：填充当月所有日期，有数据的日期用实际余额，无数据（周末/节假日）用null
-      // 这样折线图可以用灰色虚线连接断点
+      // 余额/日模式：只显示第一条数据到最后一条数据之间的范围，去掉前后空白
       const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       // 建立当月有数据的日期映射
@@ -479,32 +478,41 @@ export default function LedgerDetailAA({
             pnl: d.income - d.expense,
           });
         });
-      // 填充当月所有日期（1~daysInMonth），无数据日期 balance=null，标记 isGap=true
-      return Array.from({ length: daysInMonth }, (_, i) => {
-        const day = i + 1;
+      // 找到当月有数据的第一天和最后一天
+      let firstDataDay = -1;
+      let lastDataDay = -1;
+      for (let i = 1; i <= daysInMonth; i++) {
+        const dateStr = `${monthPrefix}-${String(i).padStart(2, "0")}`;
+        if (monthDataMap.has(dateStr)) {
+          if (firstDataDay === -1) firstDataDay = i;
+          lastDataDay = i;
+        }
+      }
+      // 如果当月没有任何数据，返回空数组
+      if (firstDataDay === -1) return [];
+      // 只填充第一条数据到最后一条数据之间的日期
+      return Array.from({ length: lastDataDay - firstDataDay + 1 }, (_, i) => {
+        const day = firstDataDay + i;
         const dateStr = `${monthPrefix}-${String(day).padStart(2, "0")}`;
         const label = `${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
         const data = monthDataMap.get(dateStr);
         return {
           date: label,
           balance: data ? data.balance : null,
-          balanceGap: null as number | null, // 将在下方填充
+          balanceGap: null as number | null,
           pnl: data ? data.pnl : null,
           isGap: !data,
         };
       }).map((point, idx, arr) => {
-        // balanceGap：对于无数据的点，用线性插值连接前后有数据的点，形成灰色虚线
+        // balanceGap：对于无数据的点，用线性插値连接前后有数据的点
         if (point.balance !== null) {
           return { ...point, balanceGap: point.balance };
         }
-        // 找前一个有数据的点
         let prevIdx = idx - 1;
         while (prevIdx >= 0 && arr[prevIdx].balance === null) prevIdx--;
-        // 找后一个有数据的点
         let nextIdx = idx + 1;
         while (nextIdx < arr.length && arr[nextIdx].balance === null) nextIdx++;
         if (prevIdx < 0 || nextIdx >= arr.length) return { ...point, balanceGap: null };
-        // 线性插值
         const prevVal = arr[prevIdx].balance!;
         const nextVal = arr[nextIdx].balance!;
         const ratio = (idx - prevIdx) / (nextIdx - prevIdx);
