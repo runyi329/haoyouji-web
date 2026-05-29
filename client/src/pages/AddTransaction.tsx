@@ -1234,6 +1234,41 @@ const AddTransaction = () => {
             <div className="mx-3 mt-3 bg-white rounded-2xl overflow-hidden" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #F0E8E0' }}>
               <div className="px-5 py-4">
                 <div className="text-xs text-gray-400 mb-3 font-medium tracking-widest uppercase">图片（选填）</div>
+                {/* custom_aa 专用的隐藏 file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={async (e) => {
+                    const files = e.target.files;
+                    if (!files || files.length === 0) return;
+                    const MAX_IMAGES = 10;
+                    const remaining = MAX_IMAGES - uploadedImages.length;
+                    if (remaining <= 0) { toast.error('最多只能上伐10张图片'); e.target.value = ''; return; }
+                    const filesToProcess = Array.from(files).slice(0, remaining);
+                    const toastId = toast.loading(`上传中...`);
+                    try {
+                      const uploadedUrls: string[] = [];
+                      for (const file of filesToProcess) {
+                        const { base64 } = await autoCompressImage(file, 'normal');
+                        const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
+                        if (result.success && result.imageUrl) uploadedUrls.push(result.imageUrl);
+                      }
+                      if (uploadedUrls.length > 0) {
+                        setUploadedImages(prev => [...prev, ...uploadedUrls].slice(0, MAX_IMAGES));
+                        toast.success(`成功上传 ${uploadedUrls.length} 张图片`, { id: toastId });
+                      } else {
+                        toast.dismiss(toastId);
+                      }
+                    } catch (error) {
+                      console.error('图片上传失败:', error);
+                      toast.error('图片上传失败，请重试', { id: toastId });
+                    }
+                    e.target.value = '';
+                  }}
+                />
                 <div className="flex flex-wrap gap-2">
                   {uploadedImages.map((image, index) => (
                     <div key={index} className="relative w-20 h-20">
