@@ -38,7 +38,7 @@ function formatTime(ts: string | null) {
 export default function WcOddsAdmin() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+  const isAdmin = user?.role === "super_admin";
 
   // 如果不是管理员，重定向
   if (user && !isAdmin) {
@@ -270,7 +270,7 @@ export default function WcOddsAdmin() {
                   </tr>
                 </thead>
                 <tbody>
-                  {teams.map((team, teamIdx) => {
+                  {teams.map((team: { name: string; code: string }, teamIdx: number) => {
                     const teamData = matrixData[team.name] ?? {};
                     // 按时间正序排列的快照（旧→新）
                     const snapshotsAsc = [...snapshots]; // 已是正序

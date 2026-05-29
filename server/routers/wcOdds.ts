@@ -5,14 +5,14 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../_core/trpc';
 import { TRPCError } from '@trpc/server';
-import { db } from '../db';
+import { getDb } from '../db';
 import { wcOddsSnapshots, wcOddsRecords } from '../../drizzle/schema';
 import { desc, eq, asc, inArray } from 'drizzle-orm';
 import { fetchAndSaveOdds } from '../wcOddsScraper';
 
 // 管理员检查中间件
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== 'admin') {
+  if (ctx.user.role !== 'super_admin') {
     throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
   }
   return next({ ctx });
@@ -35,6 +35,8 @@ export const wcOddsRouter = router({
    * 获取所有快照列表（管理员）
    */
   getSnapshots: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
     const snapshots = await db
       .select()
       .from(wcOddsSnapshots)
@@ -50,6 +52,8 @@ export const wcOddsRouter = router({
   getOddsMatrix: adminProcedure
     .input(z.object({ limit: z.number().min(1).max(100).default(30) }))
     .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
       // 获取最近N次快照
       const snapshots = await db
         .select()
@@ -107,6 +111,8 @@ export const wcOddsRouter = router({
    * 获取追踪统计信息
    */
   getStats: adminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
     const snapshots = await db
       .select()
       .from(wcOddsSnapshots)
