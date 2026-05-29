@@ -2359,7 +2359,7 @@ export default function LedgerDetailAA({
           style={{ backgroundColor: 'rgba(0,0,0,0.92)' }}
           onClick={() => setShowImagePreview(false)}
         >
-          {/* 关闭按鈕 */}
+          {/* 顶部计数 + 关闭 */}
           <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
             <span className="text-white text-sm">{previewImageIndex + 1} / {previewImages.length}</span>
             <button
@@ -2370,43 +2370,70 @@ export default function LedgerDetailAA({
               <X className="w-5 h-5 text-white" />
             </button>
           </div>
-          {/* 图片显示 */}
-          <div className="flex-1 flex items-center justify-center px-4" onClick={e => e.stopPropagation()}>
-            <img
-              src={previewImages[previewImageIndex]}
-              alt={`图片${previewImageIndex + 1}`}
-              className="max-w-full max-h-full object-contain rounded-lg"
-              style={{ maxHeight: 'calc(100vh - 160px)' }}
-            />
-          </div>
-          {/* 切换按鈕（多张时显示） */}
-          {previewImages.length > 1 && (
-            <div className="flex items-center justify-center gap-6 py-4 flex-shrink-0" onClick={e => e.stopPropagation()}>
+
+          {/* 图片区域 + 触摸滑动 */}
+          <div
+            className="flex-1 relative overflow-hidden"
+            onClick={e => e.stopPropagation()}
+            onTouchStart={e => {
+              const t = e.touches[0];
+              (e.currentTarget as any)._touchStartX = t.clientX;
+              (e.currentTarget as any)._touchStartY = t.clientY;
+            }}
+            onTouchEnd={e => {
+              const startX = (e.currentTarget as any)._touchStartX ?? 0;
+              const startY = (e.currentTarget as any)._touchStartY ?? 0;
+              const dx = e.changedTouches[0].clientX - startX;
+              const dy = e.changedTouches[0].clientY - startY;
+              if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+                if (dx < 0) setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1));
+                else setPreviewImageIndex(i => Math.max(0, i - 1));
+              }
+            }}
+          >
+            {/* 左箭头（非第一张时显示） */}
+            {previewImages.length > 1 && previewImageIndex > 0 && (
               <button
-                className="w-10 h-10 flex items-center justify-center rounded-full"
-                style={{ backgroundColor: previewImageIndex > 0 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)' }}
+                className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center rounded-full"
+                style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
                 onClick={() => setPreviewImageIndex(i => Math.max(0, i - 1))}
-                disabled={previewImageIndex === 0}
               >
                 <ChevronLeft className="w-5 h-5 text-white" />
               </button>
-              <div className="flex gap-1.5">
-                {previewImages.map((_, i) => (
-                  <div
-                    key={i}
-                    className="w-1.5 h-1.5 rounded-full"
-                    style={{ backgroundColor: i === previewImageIndex ? '#fff' : 'rgba(255,255,255,0.4)' }}
-                  />
-                ))}
-              </div>
+            )}
+            {/* 右箭头（非最后一张时显示） */}
+            {previewImages.length > 1 && previewImageIndex < previewImages.length - 1 && (
               <button
-                className="w-10 h-10 flex items-center justify-center rounded-full"
-                style={{ backgroundColor: previewImageIndex < previewImages.length - 1 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)' }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center rounded-full"
+                style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
                 onClick={() => setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1))}
-                disabled={previewImageIndex === previewImages.length - 1}
               >
                 <ChevronRight className="w-5 h-5 text-white" />
               </button>
+            )}
+            {/* 图片本体 */}
+            <div className="w-full h-full flex items-center justify-center px-12">
+              <img
+                src={previewImages[previewImageIndex]}
+                alt={`图片${previewImageIndex + 1}`}
+                className="max-w-full max-h-full object-contain rounded-lg"
+                style={{ maxHeight: 'calc(100vh - 140px)', userSelect: 'none', WebkitUserSelect: 'none', pointerEvents: 'none' }}
+                onContextMenu={e => e.preventDefault()}
+                draggable={false}
+              />
+            </div>
+          </div>
+
+          {/* 底部圆点指示器 */}
+          {previewImages.length > 1 && (
+            <div className="flex justify-center gap-1.5 py-4 flex-shrink-0" onClick={e => e.stopPropagation()}>
+              {previewImages.map((_, i) => (
+                <div
+                  key={i}
+                  className="w-1.5 h-1.5 rounded-full transition-all"
+                  style={{ backgroundColor: i === previewImageIndex ? '#fff' : 'rgba(255,255,255,0.4)' }}
+                />
+              ))}
             </div>
           )}
         </div>
