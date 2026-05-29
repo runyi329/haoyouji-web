@@ -310,7 +310,7 @@ export default function AfOrderManage() {
     const isGift = order.isGift === true || order.isGift === 1;
     if (statusFilter === 'all') return !(isGift && order.status === 'pending');
     if (statusFilter === 'pending') return order.status === 'pending' && !isGift;
-    if (statusFilter === 'holding') return order.status === 'completed' && !order.sellStatus; // 持仓中：赠单也显示
+    if (statusFilter === 'holding') return order.status === 'completed' && !order.sellStatus && !isGift; // 持仓中：赠单只嵌套在正单里，不独立显示
     if (statusFilter === 'selling') return order.sellStatus === 'selling'; // 委卖中：赠单也显示
     if (statusFilter === 'sold') return order.sellStatus === 'sold'; // 已卖出：赠单也显示
     return true;
