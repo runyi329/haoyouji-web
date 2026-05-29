@@ -235,6 +235,10 @@ const AddTransaction = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   // 图片放大预览
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  // 选图后预览确认
+  const [pendingFiles, setPendingFiles] = useState<{ file: File; previewUrl: string }[]>([]);
+  const [pendingUploadCallback, setPendingUploadCallback] = useState<((files: File[]) => void) | null>(null);
+  const [pendingPreviewIndex, setPendingPreviewIndex] = useState(0);
 
   // 股票代码相关（custom_aa管理员）
   const [stockInputs, setStockInputs] = useState<Array<{code: string; name: string; loading: boolean}>>(
@@ -933,17 +937,23 @@ const AddTransaction = () => {
                 const remaining = MAX_IMAGES - uploadedImages.length;
                 if (remaining <= 0) { toast.error('最多只能上传10张图片'); e.target.value = ''; return; }
                 const filesToProcess = Array.from(files).slice(0, remaining);
-                toast.loading('上传中...', { id: 'upload' });
-                try {
-                  const uploadedUrls: string[] = [];
-                  for (const file of filesToProcess) {
-                    const { base64 } = await autoCompressImage(file, 'normal');
-                    const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
-                    if (result.success && result.imageUrl) uploadedUrls.push(result.imageUrl);
-                  }
-                  if (uploadedUrls.length > 0) { setUploadedImages(prev => [...prev, ...uploadedUrls]); toast.success(`成功上传 ${uploadedUrls.length} 张图片`, { id: 'upload' }); }
-                  else toast.dismiss('upload');
-                } catch (error) { console.error('图片上传失败:', error); toast.error('图片上传失败，请重试', { id: 'upload' }); }
+                // 先生成预览，弹出确认弹窗
+                const previews = filesToProcess.map(f => ({ file: f, previewUrl: URL.createObjectURL(f) }));
+                setPendingPreviewIndex(0);
+                setPendingFiles(previews);
+                setPendingUploadCallback(() => async (confirmedFiles: File[]) => {
+                  toast.loading('上传中...', { id: 'upload' });
+                  try {
+                    const uploadedUrls: string[] = [];
+                    for (const file of confirmedFiles) {
+                      const { base64 } = await autoCompressImage(file, 'normal');
+                      const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
+                      if (result.success && result.imageUrl) uploadedUrls.push(result.imageUrl);
+                    }
+                    if (uploadedUrls.length > 0) { setUploadedImages(prev => [...prev, ...uploadedUrls]); toast.success(`成功上传 ${uploadedUrls.length} 张图片`, { id: 'upload' }); }
+                    else toast.dismiss('upload');
+                  } catch (error) { console.error('图片上传失败:', error); toast.error('图片上传失败，请重试', { id: 'upload' }); }
+                });
                 e.target.value = '';
               }} />
               <div className="flex flex-wrap gap-2">
@@ -1284,26 +1294,32 @@ const AddTransaction = () => {
                     if (!files || files.length === 0) return;
                     const MAX_IMAGES = 10;
                     const remaining = MAX_IMAGES - uploadedImages.length;
-                    if (remaining <= 0) { toast.error('最多只能上伐10张图片'); e.target.value = ''; return; }
+                    if (remaining <= 0) { toast.error('最多只能上传10张图片'); e.target.value = ''; return; }
                     const filesToProcess = Array.from(files).slice(0, remaining);
-                    const toastId = toast.loading(`上传中...`);
-                    try {
-                      const uploadedUrls: string[] = [];
-                      for (const file of filesToProcess) {
-                        const { base64 } = await autoCompressImage(file, 'normal');
-                        const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
-                        if (result.success && result.imageUrl) uploadedUrls.push(result.imageUrl);
+                    // 先生成预览，弹出确认弹窗
+                    const previews = filesToProcess.map(f => ({ file: f, previewUrl: URL.createObjectURL(f) }));
+                    setPendingPreviewIndex(0);
+                    setPendingFiles(previews);
+                    setPendingUploadCallback(() => async (confirmedFiles: File[]) => {
+                      const toastId = toast.loading(`上传中...`);
+                      try {
+                        const uploadedUrls: string[] = [];
+                        for (const file of confirmedFiles) {
+                          const { base64 } = await autoCompressImage(file, 'normal');
+                          const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
+                          if (result.success && result.imageUrl) uploadedUrls.push(result.imageUrl);
+                        }
+                        if (uploadedUrls.length > 0) {
+                          setUploadedImages(prev => [...prev, ...uploadedUrls].slice(0, MAX_IMAGES));
+                          toast.success(`成功上传 ${uploadedUrls.length} 张图片`, { id: toastId });
+                        } else {
+                          toast.dismiss(toastId);
+                        }
+                      } catch (error) {
+                        console.error('图片上传失败:', error);
+                        toast.error('图片上传失败，请重试', { id: toastId });
                       }
-                      if (uploadedUrls.length > 0) {
-                        setUploadedImages(prev => [...prev, ...uploadedUrls].slice(0, MAX_IMAGES));
-                        toast.success(`成功上传 ${uploadedUrls.length} 张图片`, { id: toastId });
-                      } else {
-                        toast.dismiss(toastId);
-                      }
-                    } catch (error) {
-                      console.error('图片上传失败:', error);
-                      toast.error('图片上传失败，请重试', { id: toastId });
-                    }
+                    });
                     e.target.value = '';
                   }}
                 />
@@ -1664,29 +1680,34 @@ const AddTransaction = () => {
               }
 
               const filesToUpload = Array.from(files).slice(0, remaining);
-              const toastId = toast.loading(`正在上传 ${filesToUpload.length} 张图片...`);
-
-              try {
-                const uploadedUrls: string[] = [];
-                for (const file of filesToUpload) {
-                  const { base64 } = await autoCompressImage(file, 'normal');
-                  const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
-                  if (result.success && result.imageUrl) {
-                    uploadedUrls.push(result.imageUrl);
+              // 先生成预览，弹出确认弹窗
+              const previews = filesToUpload.map(f => ({ file: f, previewUrl: URL.createObjectURL(f) }));
+              setPendingPreviewIndex(0);
+              setPendingFiles(previews);
+              setPendingUploadCallback(() => async (confirmedFiles: File[]) => {
+                const toastId = toast.loading(`正在上传 ${confirmedFiles.length} 张图片...`);
+                try {
+                  const uploadedUrls: string[] = [];
+                  for (const file of confirmedFiles) {
+                    const { base64 } = await autoCompressImage(file, 'normal');
+                    const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
+                    if (result.success && result.imageUrl) {
+                      uploadedUrls.push(result.imageUrl);
+                    }
                   }
-                }
-                if (uploadedUrls.length > 0) {
-                  setUploadedImages(prev => [...prev, ...uploadedUrls].slice(0, MAX_IMAGES));
-                  toast.dismiss(toastId);
-                  toast.success(`成功上传 ${uploadedUrls.length} 张图片`);
-                } else {
-                  toast.dismiss(toastId);
-                }
+                  if (uploadedUrls.length > 0) {
+                    setUploadedImages(prev => [...prev, ...uploadedUrls].slice(0, MAX_IMAGES));
+                    toast.dismiss(toastId);
+                    toast.success(`成功上传 ${uploadedUrls.length} 张图片`);
+                  } else {
+                    toast.dismiss(toastId);
+                  }
               } catch (error) {
                 toast.dismiss(toastId);
                 console.error('图片上传失败:', error);
                 toast.error('图片上传失败，请重试');
               }
+              });
               e.target.value = '';
             }}
           />
@@ -2068,6 +2089,90 @@ const AddTransaction = () => {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* 选图后预览确认弹窗 */}
+      {pendingFiles.length > 0 && (
+        <div className="fixed inset-0 z-[10000] flex flex-col" style={{ background: 'rgba(0,0,0,0.95)' }}>
+          {/* 顶部信息栏 */}
+          <div className="flex items-center justify-between px-4 pt-10 pb-3 flex-shrink-0">
+            <div className="text-white text-sm">{pendingPreviewIndex + 1} / {pendingFiles.length}</div>
+            <div className="text-white text-base font-medium">确认图片</div>
+            <button
+              className="text-white/60 text-sm"
+              onClick={() => {
+                pendingFiles.forEach(f => URL.revokeObjectURL(f.previewUrl));
+                setPendingFiles([]);
+                setPendingUploadCallback(null);
+              }}
+            >取消</button>
+          </div>
+          {/* 图片展示区 */}
+          <div className="flex-1 flex items-center justify-center px-4 relative overflow-hidden">
+            <img
+              src={pendingFiles[pendingPreviewIndex]?.previewUrl}
+              alt="预览"
+              className="max-w-full max-h-full object-contain rounded-lg"
+              onContextMenu={(e) => e.preventDefault()}
+              draggable={false}
+            />
+            {/* 左箭头 */}
+            {pendingPreviewIndex > 0 && (
+              <button
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 text-white rounded-full flex items-center justify-center"
+                onClick={() => setPendingPreviewIndex(i => i - 1)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+            )}
+            {/* 右箭头 */}
+            {pendingPreviewIndex < pendingFiles.length - 1 && (
+              <button
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/20 text-white rounded-full flex items-center justify-center"
+                onClick={() => setPendingPreviewIndex(i => i + 1)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            )}
+          </div>
+          {/* 底部圆点和按鈕 */}
+          <div className="flex-shrink-0 pb-10">
+            {pendingFiles.length > 1 && (
+              <div className="flex justify-center gap-1.5 mb-4">
+                {pendingFiles.map((_, i) => (
+                  <button
+                    key={i}
+                    className={`w-1.5 h-1.5 rounded-full transition-all ${i === pendingPreviewIndex ? 'bg-white w-4' : 'bg-white/40'}`}
+                    onClick={() => setPendingPreviewIndex(i)}
+                  />
+                ))}
+              </div>
+            )}
+            <div className="flex gap-3 px-6">
+              <button
+                className="flex-1 py-3 rounded-2xl text-white font-medium"
+                style={{ background: 'rgba(255,255,255,0.15)' }}
+                onClick={() => {
+                  pendingFiles.forEach(f => URL.revokeObjectURL(f.previewUrl));
+                  setPendingFiles([]);
+                  setPendingUploadCallback(null);
+                }}
+              >重新选图</button>
+              <button
+                className="flex-1 py-3 rounded-2xl text-white font-bold"
+                style={{ background: '#D32F2F' }}
+                onClick={() => {
+                  if (pendingUploadCallback) {
+                    pendingUploadCallback(pendingFiles.map(f => f.file));
+                  }
+                  pendingFiles.forEach(f => URL.revokeObjectURL(f.previewUrl));
+                  setPendingFiles([]);
+                  setPendingUploadCallback(null);
+                }}
+              >确认上传 ({pendingFiles.length}张)</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 图片放大预览弹窗 */}
       {previewImageUrl && (
