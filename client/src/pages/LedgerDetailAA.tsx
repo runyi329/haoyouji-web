@@ -2350,52 +2350,35 @@ export default function LedgerDetailAA({
       {/* ── 股票预览弹窗（普通成员点击有蓝点/紫点的日历格子时弹出） ── */}
       {showStockPreview && previewStocks.length > 0 && (
         <div
-          className="fixed inset-0 z-50 flex items-end"
-          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          className="fixed inset-0 z-50 flex items-center justify-center px-8"
+          style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
           onClick={() => setShowStockPreview(false)}
         >
           <div
-            className="w-full rounded-t-2xl overflow-hidden"
-            style={{ backgroundColor: '#fff', maxHeight: '60vh' }}
+            className="w-full rounded-2xl overflow-hidden"
+            style={{ backgroundColor: '#fff', maxWidth: '320px' }}
             onClick={e => e.stopPropagation()}
           >
-            {/* 标题栏 */}
-            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid #F0F0F0' }}>
-              <span className="font-semibold text-base" style={{ color: '#222' }}>股票持仓</span>
+            {/* 关闭按鈕 */}
+            <div className="flex justify-end px-4 pt-3 pb-1">
               <button
-                className="w-8 h-8 flex items-center justify-center rounded-full"
-                style={{ backgroundColor: '#F5F5F5' }}
+                className="w-7 h-7 flex items-center justify-center rounded-full"
+                style={{ backgroundColor: '#F0F0F0' }}
                 onClick={() => setShowStockPreview(false)}
               >
-                <X className="w-4 h-4" style={{ color: '#666' }} />
+                <X className="w-4 h-4" style={{ color: '#888' }} />
               </button>
             </div>
             {/* 股票列表 */}
-            <div className="overflow-y-auto" style={{ maxHeight: 'calc(60vh - 60px)' }}>
+            <div className="px-5 pb-5">
               {previewStocks.map((stock, idx) => (
                 <div
                   key={stock.code}
-                  className="flex items-center justify-between px-5 py-4"
-                  style={{ borderBottom: idx < previewStocks.length - 1 ? '1px solid #F5F5F5' : 'none' }}
+                  className="flex items-center gap-3 py-2.5"
+                  style={{ borderBottom: idx < previewStocks.length - 1 ? '1px solid #F0F0F0' : 'none' }}
                 >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-                      style={{ backgroundColor: '#EEF2FF' }}
-                    >
-                      <span className="text-xs font-bold" style={{ color: '#1565C0' }}>{stock.code.slice(0, 3)}</span>
-                    </div>
-                    <div>
-                      <div className="font-medium text-sm" style={{ color: '#222' }}>{stock.name || '未知名称'}</div>
-                      <div className="text-xs mt-0.5" style={{ color: '#999' }}>{stock.code}</div>
-                    </div>
-                  </div>
-                  <div
-                    className="text-xs px-2 py-1 rounded-full"
-                    style={{ backgroundColor: '#E3F2FD', color: '#1565C0' }}
-                  >
-                    A股
-                  </div>
+                  <span className="text-sm font-medium" style={{ color: '#1565C0', minWidth: '60px' }}>{stock.code}</span>
+                  <span className="text-sm" style={{ color: '#222' }}>{stock.name || '未知名称'}</span>
                 </div>
               ))}
             </div>
