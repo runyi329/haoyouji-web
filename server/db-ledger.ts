@@ -3285,6 +3285,7 @@ export async function getTransactionsList(
       ajAccountingCode: ledgerRecords.ajAccountingCode,
       ajExpenseReason: ledgerRecords.ajExpenseReason,
       ajEmployeeNo: ledgerRecords.ajEmployeeNo,
+      stockCodes: (ledgerRecords as any).stockCodes,
     })
     .from(ledgerRecords)
     .where(and(...conditions, isNull(ledgerRecords.deletedAt)))
@@ -3447,6 +3448,13 @@ export async function getTransactionsList(
       ajAccountingCode: record.ajAccountingCode || null,
       ajExpenseReason: record.ajExpenseReason || null,
       ajEmployeeNo: record.ajEmployeeNo || null,
+      stockCodes: (() => {
+        if ((record as any).stockCodes) {
+          const parsed = typeof (record as any).stockCodes === 'string' ? JSON.parse((record as any).stockCodes) : (record as any).stockCodes;
+          return Array.isArray(parsed) ? parsed : [];
+        }
+        return [];
+      })(),
       member: creator ? {
         id: creator.id,
         username: creator.username,
@@ -3992,6 +4000,7 @@ export async function updateTransaction(
     description?: string;
     transactionDate?: string;
     images?: string[];
+    stockCodes?: Array<{code: string; name: string}>;
     memberId?: number;
     accountId?: number;
     reimbursementStatus?: 'none' | 'pending' | 'completed';
@@ -4156,6 +4165,10 @@ export async function updateTransaction(
     }
   }
   if (data.pendingIncludeStats !== undefined) updateData.pendingIncludeStats = data.pendingIncludeStats;
+
+  if (data.stockCodes !== undefined) {
+    (updateData as any).stockCodes = data.stockCodes && data.stockCodes.length > 0 ? JSON.stringify(data.stockCodes) : null;
+  }
   
   // 加密敏感字段
   const encryptedUpdateData = await encryptFields(db, 'ledger_records', updateData, LEDGER_RECORD_ENCRYPT_FIELDS);

@@ -1233,7 +1233,7 @@ export default function LedgerDetailAA({
                     ? '#BDBDBD'
                     : todayMark ? '#D32F2F' : '#222222';
 
-                  // 检查该日期是否有图片
+                  // 检查该日期是否有图片和股票代码
                   const dayDateStr = getDateStr(day);
                   const dayData = dayMap.get(dayDateStr);
                   const hasImages = !isNonTrading && dayData?.records?.some((r: any) => {
@@ -1241,6 +1241,11 @@ export default function LedgerDetailAA({
                     if (r.imageUrl) return true;
                     return false;
                   });
+                  const hasStocks = !isNonTrading && dayData?.records?.some((r: any) => {
+                    return r.stockCodes && Array.isArray(r.stockCodes) && r.stockCodes.length > 0;
+                  });
+                  // 小点颜色：红=只有图片，蓝=只有股票，紫=两者都有
+                  const dotColor = (hasImages && hasStocks) ? '#7B1FA2' : hasImages ? '#D32F2F' : hasStocks ? '#1565C0' : null;
 
                   return (
                     <button
@@ -1259,14 +1264,14 @@ export default function LedgerDetailAA({
                     >
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', marginBottom: '1px' }}>
                         <span style={{ fontSize: '10px', fontWeight: 500, lineHeight: 1, color: dayNumColor }}>{day}</span>
-                        {/* 图片标识：日期右边小红点 */}
-                        {hasImages && (
+                        {/* 图片/股票标识：日期右边小点（红=图片，蓝=股票，紫=两者） */}
+                        {dotColor && (
                           <span
                             style={{
                               width: '3px',
                               height: '3px',
                               borderRadius: '50%',
-                              backgroundColor: '#D32F2F',
+                              backgroundColor: dotColor,
                               flexShrink: 0,
                               display: 'inline-block',
                             }}

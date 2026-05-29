@@ -232,6 +232,23 @@ const AddTransaction = () => {
   // 图片上传相关
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 股票代码相关（custom_aa管理员）
+  const [stockInputs, setStockInputs] = useState<Array<{code: string; name: string; loading: boolean}>>(
+    [{code: '', name: '', loading: false}, {code: '', name: '', loading: false}, {code: '', name: '', loading: false}]
+  );
+
+  // 股票代码查询函数
+  const handleQueryStock = async (index: number, code: string) => {
+    if (!code.trim()) return;
+    setStockInputs(prev => prev.map((s, i) => i === index ? { ...s, loading: true } : s));
+    try {
+      const result = await utils.ledger.queryStockName.fetch({ code: code.trim() });
+      setStockInputs(prev => prev.map((s, i) => i === index ? { ...s, name: result.found ? result.name : '未找到', loading: false } : s));
+    } catch {
+      setStockInputs(prev => prev.map((s, i) => i === index ? { ...s, name: '查询失败', loading: false } : s));
+    }
+  };
   
   // 加载编辑数据
   // 当账本数据加载后，同步默认统计模式（仅在非编辑模式且未选择待结类型时）
@@ -260,6 +277,17 @@ const AddTransaction = () => {
       // 加载图片
       if (editTransaction.images && editTransaction.images.length > 0) {
         setUploadedImages(editTransaction.images);
+      }
+
+      // 加载股票代码
+      if ((editTransaction as any).stockCodes && (editTransaction as any).stockCodes.length > 0) {
+        const codes = (editTransaction as any).stockCodes as Array<{code: string; name: string}>;
+        const newInputs = [...Array(Math.max(3, codes.length))].map((_, i) => ({
+          code: codes[i]?.code || '',
+          name: codes[i]?.name || '',
+          loading: false,
+        }));
+        setStockInputs(newInputs);
       }
       
       // 加载报销状态
@@ -683,6 +711,7 @@ const AddTransaction = () => {
       transactionDate: formattedDate,
       description: note || undefined,
       images: uploadedImages.length > 0 ? uploadedImages : undefined, // 使用images数组
+      stockCodes: isCustomAA ? stockInputs.filter(s => s.code.trim()).map(s => ({ code: s.code.trim(), name: s.name })) : undefined,
       reimbursementStatus, // 添加报销状态
       pendingType: pendingType || undefined, // 添加待结类型
       pendingIncludeStats: pendingType ? pendingIncludeStats : undefined, // 添加待结统计模式
@@ -1295,6 +1324,54 @@ const AddTransaction = () => {
                     </button>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* 股票代码输入区域（custom_aa管理员可用） */}
+          {isCustomAA && (userRole === 'admin' || userRole === 'owner') && (
+            <div className="mx-3 mt-3 bg-white rounded-2xl overflow-hidden" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #F0E8E0' }}>
+              <div className="px-5 py-4">
+                <div className="text-xs text-gray-400 mb-3 font-medium tracking-widest uppercase">股票代码（选填）</div>
+                <div className="space-y-2">
+                  {stockInputs.map((stock, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+                        <input
+                          type="text"
+                          placeholder={`代码 ${index + 1}`}
+                          value={stock.code}
+                          onChange={(e) => setStockInputs(prev => prev.map((s, i) => i === index ? { ...s, code: e.target.value.toUpperCase(), name: '' } : s))}
+                          onBlur={(e) => handleQueryStock(index, e.target.value)}
+                          className="flex-1 bg-transparent text-sm outline-none text-gray-800 placeholder-gray-300 w-20"
+                          maxLength={10}
+                        />
+                        {stock.loading ? (
+                          <span className="text-xs text-gray-400">查询中...</span>
+                        ) : stock.name ? (
+                          <span className={`text-xs font-medium ${stock.name === '未找到' || stock.name === '查询失败' ? 'text-gray-400' : 'text-blue-600'}`}>{stock.name}</span>
+                        ) : null}
+                      </div>
+                      {stockInputs.length > 3 && (
+                        <button
+                          className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-400"
+                          onClick={() => setStockInputs(prev => prev.filter((_, i) => i !== index))}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {stockInputs.length < 10 && (
+                  <button
+                    className="mt-2 flex items-center gap-1 text-xs text-blue-500 active:text-blue-700"
+                    onClick={() => setStockInputs(prev => [...prev, { code: '', name: '', loading: false }])}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    添加股票
+                  </button>
+                )}
               </div>
             </div>
           )}
