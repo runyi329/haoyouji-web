@@ -12931,7 +12931,7 @@ ${klinesSummary}
               LEFT JOIN users su ON su.id = o.source_user_id
               WHERE o.ledger_id = ${input.ledgerId} AND o.side = 'buy'
               ORDER BY o.created_at DESC
-              LIMIT 500`
+              LIMIT 10000`
         ) as any;
         const list = (rows as any[]).map((r: any) => ({
           id: r.id,
