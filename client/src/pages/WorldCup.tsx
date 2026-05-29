@@ -544,10 +544,10 @@ function DayGroup({
             overflow: "hidden",
           }}
         >
-          {/* 左区：阶段标签 + 时间 + 北京时间（全在同一行） */}
+          {/* 左区：阶段标签 + 时间 + 北京时间（全在同一行，固定宽度确保VS对齐） */}
           <div
             className="flex items-center flex-shrink-0"
-            style={{ gap: 4, marginRight: 6 }}
+            style={{ gap: 3, marginRight: 4, width: 112, overflow: "hidden" }}
           >
             <span
               style={{
@@ -559,6 +559,10 @@ function DayGroup({
                 borderRadius: 3,
                 whiteSpace: "nowrap",
                 lineHeight: "14px",
+                flexShrink: 1,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                maxWidth: 52,
               }}
             >
               {match.stage}
