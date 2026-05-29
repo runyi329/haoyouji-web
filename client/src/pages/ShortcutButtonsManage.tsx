@@ -5,7 +5,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
 
-const SHORTCUT_KEYS = ["gold", "qq", "oil", "stock", "digitalB", "ledger59", "ethPosition"] as const;
+const SHORTCUT_KEYS = ["gold", "qq", "oil", "stock", "digitalB", "ledger59", "ethPosition", "worldCup"] as const;
 const SHORTCUT_LABELS: Record<string, string> = {
   gold: "黄金",
   qq: "QQ",
@@ -14,9 +14,10 @@ const SHORTCUT_LABELS: Record<string, string> = {
   digitalB: "数字B",
   ledger59: "蓄水池",
   ethPosition: "ETH持仓",
+  worldCup: "世界杯",
 };
-const DEFAULT_SHORTCUTS = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false };
-type ShortcutValues = { gold: boolean; qq: boolean; oil: boolean; stock: boolean; digitalB: boolean; ledger59: boolean; ethPosition: boolean };
+const DEFAULT_SHORTCUTS = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false, worldCup: false };
+type ShortcutValues = { gold: boolean; qq: boolean; oil: boolean; stock: boolean; digitalB: boolean; ledger59: boolean; ethPosition: boolean; worldCup: boolean };
 type ShortcutMap = Record<string, ShortcutValues>;
 
 export default function ShortcutButtonsManage() {
@@ -51,6 +52,7 @@ export default function ShortcutButtonsManage() {
           digitalB: !!(val as any)?.digitalB,
           ledger59: !!(val as any)?.ledger59,
           ethPosition: !!(val as any)?.ethPosition,
+          worldCup: !!(val as any)?.worldCup,
         };
       }
       setLocalMap(normalized);
@@ -72,10 +74,11 @@ export default function ShortcutButtonsManage() {
       setLocalMap(prev => ({
         ...prev,
         [uid]: serverVal
-          ? { gold: !!serverVal.gold, qq: !!serverVal.qq, oil: !!serverVal.oil, stock: !!serverVal.stock, digitalB: !!serverVal.digitalB, ledger59: !!serverVal.ledger59, ethPosition: !!serverVal.ethPosition }
+          ? { gold: !!serverVal.gold, qq: !!serverVal.qq, oil: !!serverVal.oil, stock: !!serverVal.stock, digitalB: !!serverVal.digitalB, ledger59: !!serverVal.ledger59, ethPosition: !!serverVal.ethPosition, worldCup: !!(serverVal as any).worldCup }
           : DEFAULT_SHORTCUTS,
       }));
       toast.error(err.message || "保存失败，请重试");
+
     },
     onSettled: (_data: any, _err: any, variables: any) => {
       const uid = String(variables.targetUserId);
@@ -126,7 +129,7 @@ export default function ShortcutButtonsManage() {
           {/* 表头 */}
           <div
             className="border-b border-gray-300 text-sm text-gray-700 font-medium bg-white sticky top-[44px] z-10 shadow-sm"
-            style={{ display: "grid", gridTemplateColumns: "minmax(72px, 1fr) repeat(7, 1fr)" }}
+            style={{ display: "grid", gridTemplateColumns: "minmax(72px, 1fr) repeat(8, 1fr)" }}
           >
             <div className="py-3 px-2 text-center">成员</div>
             {SHORTCUT_KEYS.map((key) => (
@@ -153,7 +156,12 @@ export default function ShortcutButtonsManage() {
                     </svg>
                     <span className="text-[10px] leading-none">ETH持仓</span>
                   </div>
-                ) : SHORTCUT_LABELS[key]}
+                ) : key === 'worldCup' ? (
+                  <div className="flex flex-col items-center gap-0.5">
+                    <img src="/manus-storage/wc2026_logo2_c4e928b2.png" alt="世界杯" className="w-5 h-5 rounded-full object-cover" />
+                    <span className="text-[10px] leading-none">世界杯</span>
+                  </div>
+                ) : SHORTCUT_LABELS[key])}
               </div>
             ))}
           </div>
@@ -167,7 +175,7 @@ export default function ShortcutButtonsManage() {
                 <div
                   key={member.id}
                   className="border-b border-gray-100"
-                  style={{ display: "grid", gridTemplateColumns: "minmax(72px, 1fr) repeat(7, 1fr)" }}
+                  style={{ display: "grid", gridTemplateColumns: "minmax(72px, 1fr) repeat(8, 1fr)" }}
                 >
                   {/* 成员头像+名字 */}
                   <div className="py-3 px-2 flex flex-col items-center justify-center gap-1">
