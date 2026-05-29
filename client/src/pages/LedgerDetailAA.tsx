@@ -689,7 +689,9 @@ export default function LedgerDetailAA({
     if (existing && existing.records.length > 0) {
       // 已有记录：跳转编辑第一条记录
       const recordId = existing.records[0].id;
-      setLocation(`/ledger/${ledgerId}/add?edit=${recordId}`);
+      let editUrl = `/ledger/${ledgerId}/add?edit=${recordId}`;
+      if (selectedTagId) editUrl += `&categoryId=${selectedTagId}`;
+      setLocation(editUrl);
     } else {
       // 无记录：跳转新增
       let url = `/ledger/${ledgerId}/add?date=${dateStr}`;

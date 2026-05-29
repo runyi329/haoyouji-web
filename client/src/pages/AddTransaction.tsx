@@ -119,7 +119,8 @@ const AddTransaction = () => {
   const applicantName = viewAsUserId && viewAsUserInfo
     ? viewAsUserInfo.name
     : ((currentUser as any)?.name || (currentUser as any)?.username || '—');
-  const canManageCategories = !isCustomAA || userRole === 'owner' || userRole === 'admin';
+  // custom_aa账本：只有owner（创建者）才能添加分类标签，管理员不显示加号
+  const canManageCategories = !isCustomAA || userRole === 'owner';
   
   // AJ账本：获取业务员有权限的企业列表（切换视角时传入viewAsUserId）
   const { data: ajCompanies } = trpc.ledger.ajGetMyCompanies.useQuery(
@@ -315,7 +316,7 @@ const AddTransaction = () => {
   // 如果没有分类，使用预设分类
   const displayCategories = topCategories.length > 0 ? topCategories : defaultCategories;
   
-  // 当真实分类加载完成后，更新选中状态（仅在非编辑模式下）
+  // 当真实分类加载完成后，更新选中状态
   useEffect(() => {
     if (!isEditMode && topCategories.length > 0) {
       // 优先使用 URL 中的 categoryId 参数（从详情页传入的当前选中标签）
@@ -329,6 +330,16 @@ const AddTransaction = () => {
         }
       }
       setSelectedCategoryPath([topCategories[0].id]);
+    } else if (isEditMode && topCategories.length > 0) {
+      // 编辑模式下：如果URL中有categoryId参数（管理员从日历进入），用URL的categoryId覆盖
+      const urlCategoryId = urlParams.get('categoryId');
+      if (urlCategoryId) {
+        const catId = parseInt(urlCategoryId);
+        const found = topCategories.find((c: any) => c.id === catId);
+        if (found) {
+          setSelectedCategoryPath([catId]);
+        }
+      }
     }
   }, [isEditMode, topCategories.length > 0 ? topCategories[0]?.id : null]);
 
