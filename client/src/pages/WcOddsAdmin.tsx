@@ -563,19 +563,19 @@ function OrdersTab() {
         { orderId: id, newStatus: "won",     title: "确认中奖？",   desc: "请填写实际奖金金额，确认后记录中奖结果。可随时撤回。", confirmText: "确认中奖", confirmColor: "#52C41A", needBonus: true },
         { orderId: id, newStatus: "lost",    title: "确认未中？",   desc: "标记为未中（赔注），可随时撤回恢复进行中。",           confirmText: "确认未中", confirmColor: "#FF4D4F" },
         { orderId: id, newStatus: "revoked", title: "确认撤销订单？", desc: "撤销后可随时恢复为进行中，不影响钱包余额。",          confirmText: "确认撤销", confirmColor: "#8FA3B8" },
-        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，订单将从默认列表隐藏，可在"已删除"筛选中恢复。", confirmText: "确认删除", confirmColor: "#555" },
+        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，订单将从默认列表隐藏，可在[已删除]筛选中恢复。", confirmText: "确认删除", confirmColor: "#555" },
       ];
       case "won": return [
         { orderId: id, newStatus: "pending", title: "撤回中奖结算？", desc: "将订单恢复为进行中，清除奖金记录。", confirmText: "确认撤回", confirmColor: GOLD },
-        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，可在"已删除"筛选中恢复。",    confirmText: "确认删除", confirmColor: "#555" },
+        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，可在[已删除]筛选中恢复。",    confirmText: "确认删除", confirmColor: "#555" },
       ];
       case "lost": return [
         { orderId: id, newStatus: "pending", title: "撤回未中结算？", desc: "将订单恢复为进行中。",            confirmText: "确认撤回", confirmColor: GOLD },
-        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，可在"已删除"筛选中恢复。", confirmText: "确认删除", confirmColor: "#555" },
+        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，可在[已删除]筛选中恢复。", confirmText: "确认删除", confirmColor: "#555" },
       ];
       case "revoked": return [
         { orderId: id, newStatus: "pending", title: "恢复为进行中？", desc: "将已撤销订单重新激活为进行中。",   confirmText: "确认恢复", confirmColor: GOLD },
-        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，可在"已删除"筛选中恢复。", confirmText: "确认删除", confirmColor: "#555" },
+                { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，可在[已删除]筛选中恢复。", confirmText: "确认删除", confirmColor: "#555" },
       ];
       case "deleted": return [
         { orderId: id, newStatus: "pending", title: "从回收站恢复？", desc: "将订单恢复为进行中状态。", confirmText: "确认恢复", confirmColor: GOLD },

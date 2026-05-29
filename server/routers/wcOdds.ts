@@ -13,7 +13,7 @@ import { getUserBalance, getUserCnyBalance } from '../db-recharge';
 
 // 管理员检查中间件
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== 'super_admin') {
+  if ((ctx.user.role as string) !== 'super_admin') {
     throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
   }
   return next({ ctx });
@@ -92,7 +92,7 @@ export const wcOddsRouter = router({
 
       const teamNames = teamsFromFirst.length > 0
         ? teamsFromFirst.map(r => ({ name: r.teamName, code: r.teamCode || '' }))
-        : [...new Map(allRecords.map(r => [r.teamName, { name: r.teamName, code: r.teamCode || '' }])).values()];
+        : Array.from(new Map(allRecords.map(r => [r.teamName, { name: r.teamName, code: r.teamCode || '' }])).values());
 
       const matrix: Record<string, Record<number, { pinnacle: string | null; wh: string | null; rank: number }>> = {};
       for (const record of allRecords) {
