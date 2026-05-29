@@ -824,7 +824,7 @@ export default function LedgerDetailAA({
                   title="FIFA World Cup 2026"
                 >
                   <img
-                    src="/manus-storage/wc2026_logo2_c4e928b2.png"
+                    src="/wc2026-logo.png"
                     alt="World Cup"
                     style={{ width: '105%', height: '105%', objectFit: 'cover', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
                   />

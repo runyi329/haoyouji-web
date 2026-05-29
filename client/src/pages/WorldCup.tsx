@@ -20,7 +20,7 @@ export default function WorldCup() {
         </button>
         <div className="flex-1 flex items-center justify-center gap-2">
           <img
-            src="/manus-storage/wc2026_logo2_c4e928b2.png"
+            src="/wc2026-logo.png"
             alt="FIFA World Cup 2026"
             className="w-8 h-8 rounded-full object-cover"
           />
@@ -32,7 +32,7 @@ export default function WorldCup() {
       {/* 内容区域（暂时空白） */}
       <div className="flex flex-col items-center justify-center py-24 text-gray-400">
         <img
-          src="/manus-storage/wc2026_logo2_c4e928b2.png"
+          src="/wc2026-logo.png"
           alt="FIFA World Cup 2026"
           className="w-24 h-24 rounded-full object-cover mb-6 opacity-40"
         />
