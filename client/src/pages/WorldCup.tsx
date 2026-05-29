@@ -846,25 +846,8 @@ export default function WorldCup() {
         {/* ---- AI冠军预测 Tab ---- */}
         {activeTab === "champion" && (
           <div>
-            {/* 标题区 */}
-            <div className="px-4 pt-5 pb-3">
-              <div className="flex items-center gap-2 mb-1">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2">
-                  <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-                  <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-                  <path d="M4 22h16" />
-                  <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-                  <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-                  <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-                </svg>
-                <span className="text-base font-bold" style={{ color: TEXT }}>AI 冠军预测</span>
-              </div>
-              <p className="text-xs" style={{ color: TEXT2 }}>基于AI综合分析，数字越小夺冠概率越高</p>
-            </div>
-
-            {/* 排序按钮 */}
-            <div className="px-4 pb-3 flex items-center gap-2">
-              <span className="text-xs" style={{ color: TEXT2 }}>赔率排序</span>
+            {/* 排序按鈕（保留但去掉标题和说明） */}
+            <div className="px-4 pt-4 pb-3 flex items-center gap-2">
               <button
                 onClick={() => setSortAsc(true)}
                 className="px-3 py-1 rounded-full text-xs font-semibold transition-all"
@@ -889,7 +872,7 @@ export default function WorldCup() {
               </button>
             </div>
 
-            {/* 4列国旗网格 */}
+            {/* 4列国旗网格：国旗统一尺寸，国家名在同一高度 */}
             <div
               className="grid grid-cols-4 px-2 pb-6"
               style={{ gap: "1px", backgroundColor: BORDER }}
@@ -897,25 +880,36 @@ export default function WorldCup() {
               {sortedOdds.map((team) => (
                 <div
                   key={team.code + team.name}
-                  className="flex flex-col items-center py-4 px-1"
-                  style={{ backgroundColor: BG, gap: 4 }}
+                  className="flex flex-col items-center py-3 px-1"
+                  style={{ backgroundColor: BG, gap: 0 }}
                 >
-                  <Flag code={team.code} size={36} />
+                  {/* 国旗统一宽高，object-fit:cover拉伸裁切 */}
+                  <div style={{ width: 48, height: 32, flexShrink: 0, overflow: "hidden", borderRadius: 3 }}>
+                    <img
+                      src={`/flags/${team.code.toLowerCase()}.png`}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                      alt={team.name}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  </div>
+                  {/* 中英文名在国旗下方，固定高度展示区域确保对齐 */}
+                  <div style={{ height: 32, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", marginTop: 4 }}>
+                    <span
+                      className="text-xs font-semibold text-center leading-tight"
+                      style={{ color: TEXT }}
+                    >
+                      {team.name}
+                    </span>
+                    <span
+                      className="text-center leading-tight"
+                      style={{ color: TEXT2, fontSize: "9px" }}
+                    >
+                      {team.nameEn}
+                    </span>
+                  </div>
                   <span
-                    className="text-xs font-semibold text-center leading-tight mt-1"
-                    style={{ color: TEXT }}
-                  >
-                    {team.name}
-                  </span>
-                  <span
-                    className="text-xs text-center leading-tight"
-                    style={{ color: TEXT2, fontSize: "10px" }}
-                  >
-                    {team.nameEn}
-                  </span>
-                  <span
-                    className="text-sm font-black mt-0.5"
-                    style={{ color: GOLD }}
+                    className="text-sm font-black"
+                    style={{ color: GOLD, marginTop: 2 }}
                   >
                     {team.odds.toFixed(2)}
                   </span>
