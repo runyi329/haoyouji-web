@@ -1,0 +1,20 @@
+name: 创建世界杯赔率追踪表
+on:
+  push:
+    branches:
+      - create-wc-odds-tables
+jobs:
+  migrate:
+    name: 创建wc_odds_snapshots和wc_odds_records表
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 在服务器上创建世界杯赔率追踪表
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e 'CREATE TABLE IF NOT EXISTS wc_odds_snapshots (id INT AUTO_INCREMENT PRIMARY KEY, fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, source VARCHAR(100) NOT NULL DEFAULT \"wc-2026.com\", team_count INT NOT NULL DEFAULT 0, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX wc_odds_snapshots_fetched_at_idx (fetched_at)); CREATE TABLE IF NOT EXISTS wc_odds_records (id INT AUTO_INCREMENT PRIMARY KEY, snapshot_id INT NOT NULL, rank INT NOT NULL, team_name VARCHAR(100) NOT NULL, team_code VARCHAR(20), pinnacle_odds VARCHAR(20), william_hill_odds VARCHAR(20), created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX wc_odds_records_snapshot_id_idx (snapshot_id), INDEX wc_odds_records_team_name_idx (team_name)); SELECT \"Tables created successfully\" AS result;'"
