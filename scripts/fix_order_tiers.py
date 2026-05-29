@@ -38,33 +38,27 @@ ALL_TIME_LOW = "1748.63"
 ALL_TIME_LOW_AT_STR = "2026-02-06 00:00:00"
 ALL_TIME_LOW_AT_MS = int(datetime(2026, 2, 6, 0, 0, 0, tzinfo=timezone.utc).timestamp() * 1000)
 
+# 直接用数据库 ID 指定订单
+# 订单063 = 数据库 ID 63，买入价 3850，应触发到第5档
+# 订单065 = 数据库 ID 65，买入价 3014，已有第4档（本次只处理063）
 TARGET_ORDERS = [
-    {"buy_price": 3850, "confirmed_from": "2025-10-28", "confirmed_to": "2025-11-05", "label": "订单063"},
-    {"buy_price": 3014, "confirmed_from": "2025-11-25", "confirmed_to": "2025-12-01", "label": "订单065"},
+    {"order_id": 63, "buy_price": 3850, "label": "订单063"},
 ]
 
 with conn.cursor(pymysql.cursors.DictCursor) as cur:
     for target in TARGET_ORDERS:
-        print("\n========== 处理 {} (买入价{}) ==========".format(target["label"], target["buy_price"]))
+        print("\n========== 处理 {} (ID={}, 买入价{}) ==========".format(
+            target["label"], target["order_id"], target["buy_price"]))
 
         cur.execute(
-            "SELECT id, coin, limit_price, confirmed_at FROM af_orders"
-            " WHERE coin='ETH' AND status='completed'"
-            " AND confirmed_at BETWEEN %s AND %s"
-            " AND (is_gift IS NULL OR is_gift=0)"
-            " AND (source_order_id IS NULL OR source_order_id=0)"
-            " ORDER BY ABS(CAST(limit_price AS DECIMAL(20,8)) - %s) ASC LIMIT 3",
-            (target["confirmed_from"], target["confirmed_to"], target["buy_price"])
+            "SELECT id, coin, limit_price, confirmed_at FROM af_orders WHERE id=%s",
+            (target["order_id"],)
         )
-        candidates = cur.fetchall()
-        print("候选正单:", [(o["id"], o["limit_price"], str(o["confirmed_at"])) for o in candidates])
-
-        if not candidates:
-            print("未找到 {}，跳过".format(target["label"]))
+        main_order = cur.fetchone()
+        if not main_order:
+            print("未找到 ID={} 的订单，跳过".format(target["order_id"]))
             continue
-
-        main_order = candidates[0]
-        print("选定正单 #{}，买入价 {}".format(main_order["id"], main_order["limit_price"]))
+        print("找到正单 #{}，买入价 {}".format(main_order["id"], main_order["limit_price"]))
 
         cur.execute(
             "SELECT id FROM af_orders WHERE source_order_id=%s AND coin='ETH'",
