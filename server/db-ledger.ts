@@ -1582,6 +1582,51 @@ export async function updateLedgerCategory(
       throw new Error("权限不足：您不是此账本的成员，无法修改分类");
     }
   }
+  // 如果是改名，需要同步更新所有成员 initial_balances 里的旧标签名 key
+  if (data.name) {
+    // 先获取旧名称和所属账本
+    const oldCategory = await db
+      .select({ id: ledgerCategories.id, ledgerId: ledgerCategories.ledgerId, name: ledgerCategories.name })
+      .from(ledgerCategories)
+      .where(eq(ledgerCategories.id, categoryId))
+      .then((rows: any[]) => rows[0]);
+
+    if (oldCategory && oldCategory.name !== data.name) {
+      const oldName = oldCategory.name;
+      const newName = data.name;
+      const ledgerId = oldCategory.ledgerId;
+
+      // 获取该账本所有有 initial_balances 的成员
+      const members = await db
+        .select({ id: ledgerMembers.id, initialBalances: ledgerMembers.initialBalances })
+        .from(ledgerMembers)
+        .where(eq(ledgerMembers.ledgerId, ledgerId));
+
+      for (const member of members) {
+        if (!member.initialBalances) continue;
+        try {
+          const balances: Record<string, any> = typeof member.initialBalances === 'string'
+            ? JSON.parse(member.initialBalances)
+            : { ...(member.initialBalances as Record<string, any>) };
+
+          if (!(oldName in balances)) continue;
+
+          const newBalances: Record<string, any> = {};
+          for (const [k, v] of Object.entries(balances)) {
+            newBalances[k === oldName ? newName : k] = v;
+          }
+
+          await db
+            .update(ledgerMembers)
+            .set({ initialBalances: JSON.stringify(newBalances) })
+            .where(eq(ledgerMembers.id, member.id));
+        } catch (e) {
+          // 解析失败则跳过，不影响主流程
+        }
+      }
+    }
+  }
+
   await db
     .update(ledgerCategories)
     .set({ ...data, updatedAt: new Date() })
