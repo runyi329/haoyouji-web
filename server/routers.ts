@@ -17845,20 +17845,20 @@ ${klinesSummary}
           .select({ userId: ledgerMembers.userId, shortcutButtons: ledgerMembers.shortcutButtons })
           .from(ledgerMembers)
           .where(eq(ledgerMembers.ledgerId, input.ledgerId));
-        const shortcutMap: Record<number, { gold: boolean; qq: boolean; oil: boolean; stock: boolean; digitalB: boolean; ledger59: boolean; ethPosition: boolean }> = {};
+        const shortcutMap: Record<number, { gold: boolean; qq: boolean; oil: boolean; stock: boolean; digitalB: boolean; ledger59: boolean; ethPosition: boolean; worldCup: boolean }> = {};
         for (const row of rows) {
           try {
             const raw = row.shortcutButtons;
             if (raw && typeof raw === 'object') {
-              shortcutMap[row.userId] = { ethPosition: false, ...(raw as any) };
+              shortcutMap[row.userId] = { ethPosition: false, worldCup: false, ...(raw as any) };
             } else if (raw && typeof raw === 'string') {
               const parsed = JSON.parse(raw);
-              shortcutMap[row.userId] = { ethPosition: false, ...parsed };
+              shortcutMap[row.userId] = { ethPosition: false, worldCup: false, ...parsed };
             } else {
-              shortcutMap[row.userId] = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false };
+              shortcutMap[row.userId] = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false, worldCup: false };
             }
           } catch {
-            shortcutMap[row.userId] = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false };
+            shortcutMap[row.userId] = { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false, worldCup: false };
           }
         }
         return shortcutMap;
@@ -17875,6 +17875,7 @@ ${klinesSummary}
           digitalB: z.boolean().optional().default(false),
           ledger59: z.boolean().optional().default(false),
           ethPosition: z.boolean().optional().default(false),
+          worldCup: z.boolean().optional().default(false),
         }),
       }))
       .mutation(async ({ input, ctx }) => {
@@ -17918,14 +17919,14 @@ ${klinesSummary}
             )
           )
           .limit(1);
-        if (!row || !row.shortcutButtons) return { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false };
+        if (!row || !row.shortcutButtons) return { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false, worldCup: false };
         try {
           const raw = row.shortcutButtons;
-          if (typeof raw === 'object') return { ethPosition: false, ledger59: false, ...(raw as any) };
-          if (typeof raw === 'string') { const p = JSON.parse(raw); return { ethPosition: false, ledger59: false, ...p }; }
-          return { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false };
+          if (typeof raw === 'object') return { ethPosition: false, ledger59: false, worldCup: false, ...(raw as any) };
+          if (typeof raw === 'string') { const p = JSON.parse(raw); return { ethPosition: false, ledger59: false, worldCup: false, ...p }; }
+          return { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false, worldCup: false };
         } catch {
-          return { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false };
+          return { gold: false, qq: false, oil: false, stock: false, digitalB: false, ledger59: false, ethPosition: false, worldCup: false };
         }
       }),
 

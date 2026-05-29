@@ -815,6 +815,21 @@ export default function LedgerDetailAA({
                   />
                 </div>
               )}
+              {/* 世界杯快捷按钮（仅52号账本） */}
+              {Number(ledgerId) === 52 && (myShortcuts as any)?.worldCup && (
+                <div
+                  className="w-8 h-8 rounded-full cursor-pointer overflow-hidden flex-shrink-0"
+                  style={{ border: '1.5px solid rgba(255,255,255,0.5)', position: 'relative' }}
+                  onClick={() => setLocation('/world-cup')}
+                  title="FIFA World Cup 2026"
+                >
+                  <img
+                    src="/manus-storage/wc2026_logo2_c4e928b2.png"
+                    alt="World Cup"
+                    style={{ width: '105%', height: '105%', objectFit: 'cover', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
+                  />
+                </div>
+              )}
               {/* 59号账本快捷按钮（蓄水池股东）*/}
               {myShortcuts?.ledger59 && (
                 <div
