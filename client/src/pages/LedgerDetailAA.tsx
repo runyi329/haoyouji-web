@@ -110,6 +110,10 @@ export default function LedgerDetailAA({
   const [previewImageIndex, setPreviewImageIndex] = useState(0);
   const [showImagePreview, setShowImagePreview] = useState(false);
 
+  // 股票预览（普通成员点击有蓝点/紫点的日历格子时弹出）
+  const [previewStocks, setPreviewStocks] = useState<Array<{code: string; name: string}>>([]);
+  const [showStockPreview, setShowStockPreview] = useState(false);
+
   // ── 视角切换（管理员/创建者可切换到其他成员视角）──
   const [viewAsUserId, setViewAsUserId] = useState<number | null>(null);
   const [showViewAsPicker, setShowViewAsPicker] = useState(false);
@@ -692,7 +696,7 @@ export default function LedgerDetailAA({
     const existing = dayMap.get(dateStr);
 
     if (!canEdit) {
-      // 普通成员：不可编辑，但可查看图片
+      // 普通成员：不可编辑，但可查看图片和股票
       if (existing && existing.records.length > 0) {
         // 收集当天所有记录的图片
         const allImages: string[] = [];
@@ -703,10 +707,27 @@ export default function LedgerDetailAA({
             allImages.push(record.imageUrl);
           }
         }
+        // 收集当天所有记录的股票代码（去重）
+        const allStocks: Array<{code: string; name: string}> = [];
+        const seenCodes = new Set<string>();
+        for (const record of existing.records) {
+          if (record.stockCodes && Array.isArray(record.stockCodes)) {
+            for (const s of record.stockCodes) {
+              if (s.code && !seenCodes.has(s.code)) {
+                seenCodes.add(s.code);
+                allStocks.push(s);
+              }
+            }
+          }
+        }
+        // 优先显示图片，若只有股票则显示股票弹窗
         if (allImages.length > 0) {
           setPreviewImages(allImages);
           setPreviewImageIndex(0);
           setShowImagePreview(true);
+        } else if (allStocks.length > 0) {
+          setPreviewStocks(allStocks);
+          setShowStockPreview(true);
         }
       }
       return;
@@ -2323,6 +2344,62 @@ export default function LedgerDetailAA({
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── 股票预览弹窗（普通成员点击有蓝点/紫点的日历格子时弹出） ── */}
+      {showStockPreview && previewStocks.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 flex items-end"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setShowStockPreview(false)}
+        >
+          <div
+            className="w-full rounded-t-2xl overflow-hidden"
+            style={{ backgroundColor: '#fff', maxHeight: '60vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 标题栏 */}
+            <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid #F0F0F0' }}>
+              <span className="font-semibold text-base" style={{ color: '#222' }}>股票持仓</span>
+              <button
+                className="w-8 h-8 flex items-center justify-center rounded-full"
+                style={{ backgroundColor: '#F5F5F5' }}
+                onClick={() => setShowStockPreview(false)}
+              >
+                <X className="w-4 h-4" style={{ color: '#666' }} />
+              </button>
+            </div>
+            {/* 股票列表 */}
+            <div className="overflow-y-auto" style={{ maxHeight: 'calc(60vh - 60px)' }}>
+              {previewStocks.map((stock, idx) => (
+                <div
+                  key={stock.code}
+                  className="flex items-center justify-between px-5 py-4"
+                  style={{ borderBottom: idx < previewStocks.length - 1 ? '1px solid #F5F5F5' : 'none' }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: '#EEF2FF' }}
+                    >
+                      <span className="text-xs font-bold" style={{ color: '#1565C0' }}>{stock.code.slice(0, 3)}</span>
+                    </div>
+                    <div>
+                      <div className="font-medium text-sm" style={{ color: '#222' }}>{stock.name || '未知名称'}</div>
+                      <div className="text-xs mt-0.5" style={{ color: '#999' }}>{stock.code}</div>
+                    </div>
+                  </div>
+                  <div
+                    className="text-xs px-2 py-1 rounded-full"
+                    style={{ backgroundColor: '#E3F2FD', color: '#1565C0' }}
+                  >
+                    A股
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
