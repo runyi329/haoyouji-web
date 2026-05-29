@@ -1257,22 +1257,22 @@ export default function LedgerDetailAA({
                         position: 'relative',
                       }}
                     >
-                      {/* 图片标识：右上角小圆点 */}
-                      {hasImages && (
-                        <span
-                          style={{
-                            position: 'absolute',
-                            top: '2px',
-                            right: '2px',
-                            width: '4px',
-                            height: '4px',
-                            borderRadius: '50%',
-                            backgroundColor: '#90A4AE',
-                            flexShrink: 0,
-                          }}
-                        />
-                      )}
-                      <span style={{ fontSize: '10px', fontWeight: 500, lineHeight: 1, marginBottom: '1px', color: dayNumColor }}>{day}</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', marginBottom: '1px' }}>
+                        <span style={{ fontSize: '10px', fontWeight: 500, lineHeight: 1, color: dayNumColor }}>{day}</span>
+                        {/* 图片标识：日期右边小红点 */}
+                        {hasImages && (
+                          <span
+                            style={{
+                              width: '3px',
+                              height: '3px',
+                              borderRadius: '50%',
+                              backgroundColor: '#D32F2F',
+                              flexShrink: 0,
+                              display: 'inline-block',
+                            }}
+                          />
+                        )}
+                      </span>
                       {isNonTrading ? (
                         <span style={{ fontSize: '7px', fontWeight: 400, lineHeight: 1.1, color: '#BDBDBD', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
                           {nonTradingLabel}
