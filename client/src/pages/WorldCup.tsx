@@ -14,13 +14,15 @@ const BORDER = "rgba(255,255,255,0.08)"; // 分隔线
 
 // ===== flagcdn 国旗图片 =====
 function Flag({ code, size = 28 }: { code: string; size?: number }) {
+  // flagcdn 支持的固定宽度档位: 20, 40, 80, 160, 320
+  const cdnW = size <= 20 ? 40 : size <= 40 ? 80 : size <= 80 ? 160 : 320;
   return (
     <img
-      src={`https://flagcdn.com/w${size * 2}/${code.toLowerCase()}.png`}
+      src={`https://flagcdn.com/w${cdnW}/${code.toLowerCase()}.png`}
       width={size}
-      height={size * 0.67}
+      height={Math.round(size * 0.67)}
       alt={code}
-      style={{ borderRadius: 3, objectFit: "cover", display: "inline-block" }}
+      style={{ borderRadius: 2, objectFit: "cover", display: "inline-block", flexShrink: 0 }}
       onError={(e) => {
         (e.target as HTMLImageElement).style.display = "none";
       }}
