@@ -1167,8 +1167,13 @@ const AddTransaction = () => {
             <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
               <div className="text-xs text-gray-400 mb-3 font-medium tracking-widest uppercase">分类</div>
               {categoryLevels.map((cats, level) => {
+                // custom_aa管理员模式：URL中有categoryId时，只显示该单个标签（不显示其他用户标签）
+                const urlCategoryId = urlParams.get('categoryId') ? parseInt(urlParams.get('categoryId')!) : null;
+                const isAdminViewMode = isCustomAA && userRole === 'admin' && !!urlCategoryId;
                 const filteredCats = (isCustomAA && level === 0)
-                  ? cats.filter((c: any) => !c.isDefault && c.id > 10)
+                  ? (isAdminViewMode
+                    ? cats.filter((c: any) => c.id === urlCategoryId)
+                    : cats.filter((c: any) => !c.isDefault && c.id > 10))
                   : cats;
                 if (filteredCats.length === 0) return null;
                 if (isCustomAA && level > 0) return null;
