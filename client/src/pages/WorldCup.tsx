@@ -624,7 +624,6 @@ function DayGroup({
 export default function WorldCup() {
   const [activeTab, setActiveTab] = useState<TabType>("schedule");
   const today = new Date().toISOString().slice(0, 10);
-  const [sortAsc, setSortAsc] = useState(true);
   const [archiveView, setArchiveView] = useState<"team" | "player">("team");
 
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
@@ -635,9 +634,7 @@ export default function WorldCup() {
     { key: "champion", label: "AI冠军预测" },
   ];
 
-  const sortedOdds = [...championOdds].sort((a, b) =>
-    sortAsc ? a.odds - b.odds : b.odds - a.odds
-  );
+  const sortedOdds = [...championOdds].sort((a, b) => a.odds - b.odds);
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: BG }}>
@@ -846,32 +843,6 @@ export default function WorldCup() {
         {/* ---- AI冠军预测 Tab ---- */}
         {activeTab === "champion" && (
           <div>
-            {/* 排序按鈕（保留但去掉标题和说明） */}
-            <div className="px-4 pt-4 pb-3 flex items-center gap-2">
-              <button
-                onClick={() => setSortAsc(true)}
-                className="px-3 py-1 rounded-full text-xs font-semibold transition-all"
-                style={{
-                  backgroundColor: sortAsc ? GOLD : BG3,
-                  color: sortAsc ? "#000" : TEXT2,
-                  border: sortAsc ? "none" : `1px solid ${BORDER}`,
-                }}
-              >
-                低 → 高
-              </button>
-              <button
-                onClick={() => setSortAsc(false)}
-                className="px-3 py-1 rounded-full text-xs font-semibold transition-all"
-                style={{
-                  backgroundColor: !sortAsc ? GOLD : BG3,
-                  color: !sortAsc ? "#000" : TEXT2,
-                  border: !sortAsc ? "none" : `1px solid ${BORDER}`,
-                }}
-              >
-                高 → 低
-              </button>
-            </div>
-
             {/* 4列国旗网格：国旗统一尺寸，国家名在同一高度 */}
             <div
               className="grid grid-cols-4 px-2 pb-6"
