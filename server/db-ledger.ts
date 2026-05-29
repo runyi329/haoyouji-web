@@ -3097,8 +3097,8 @@ export async function addTransaction(data: {
     reimbursementStatus: data.reimbursementStatus || 'none',
     pendingType: data.pendingType || null,
     pendingIncludeStats: data.pendingType ? (data.pendingIncludeStats ?? 1) : null,
-    // 股票代码（直接传对象，Drizzle json() 字段会自动序列化）
-    ...(data.stockCodes && data.stockCodes.length > 0 ? { stockCodes: data.stockCodes } : {}),
+    // 股票代码（必须手动JSON.stringify，Drizzle json()字段不会自动序列化）
+    ...(data.stockCodes && data.stockCodes.length > 0 ? { stockCodes: JSON.stringify(data.stockCodes) } : {}),
     // AJ账本开票申请字段
     ...(isAJRecord ? {
       ajStatus: 'pending' as const,  // 提交后自动设为「申请中」
@@ -4170,8 +4170,8 @@ export async function updateTransaction(
   if (data.pendingIncludeStats !== undefined) updateData.pendingIncludeStats = data.pendingIncludeStats;
 
   if (data.stockCodes !== undefined) {
-    // 直接传对象，Drizzle json() 字段会自动序列化
-    (updateData as any).stockCodes = data.stockCodes && data.stockCodes.length > 0 ? data.stockCodes : null;
+    // 必须手动JSON.stringify，Drizzle json()字段不会自动序列化
+    (updateData as any).stockCodes = data.stockCodes && data.stockCodes.length > 0 ? JSON.stringify(data.stockCodes) : null;
   }
   
   // 加密敏感字段
