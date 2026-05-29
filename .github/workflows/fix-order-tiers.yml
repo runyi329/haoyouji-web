@@ -26,26 +26,11 @@ jobs:
         run: |
           scp -i ~/.ssh/deploy_key -P ${{ secrets.DEPLOY_PORT }} \
             scripts/fix_order_tiers.py \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/fix_order_tiers.py
+            scripts/run_fix.sh \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/
 
       - name: 🔄 在服务器上执行回填
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            'bash -c "
-              set -e
-              ENV_FILE=""
-              if [ -f /root/haoyouji-web/.env ]; then
-                ENV_FILE=/root/haoyouji-web/.env
-              elif [ -f /home/ubuntu/haoyouji-web/.env ]; then
-                ENV_FILE=/home/ubuntu/haoyouji-web/.env
-              fi
-              echo \"使用env文件: \$ENV_FILE\"
-              DB_URL=\$(grep \"^ORIGINAL_DATABASE_URL=\" \"\$ENV_FILE\" 2>/dev/null | head -1 | cut -d= -f2- | tr -d \x27\"\x27 || true)
-              if [ -z \"\$DB_URL\" ]; then
-                DB_URL=\$(grep \"^DATABASE_URL=\" \"\$ENV_FILE\" 2>/dev/null | head -1 | cut -d= -f2- | tr -d \x27\"\x27 || true)
-              fi
-              echo \"DB_URL前40字符: \${DB_URL:0:40}\"
-              pip3 install pymysql -q 2>/dev/null || true
-              python3 /tmp/fix_order_tiers.py \"\$DB_URL\"
-            "'
+            'bash /tmp/run_fix.sh'
