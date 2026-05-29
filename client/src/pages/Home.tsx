@@ -1842,8 +1842,24 @@ export default function Home() {
       {(() => {
         const realDotIndex = ((socialPageIndex - 1 + SOCIAL_PAGES) % SOCIAL_PAGES);
         const socialPages = [
-          // 页1：蓄水池动画（水滴）
-          <div key="p1" className="w-full h-full flex flex-col px-3 py-2">
+          // 页1：AI球伴世界杯海报（点击跳转世界杯页面）
+          <div
+            key="p1"
+            className="w-full h-full cursor-pointer active:opacity-90 transition-opacity"
+            onClick={() => navigate('/world-cup')}
+          >
+            <img
+              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ai-companion-banner-worldcup2026.png"
+              alt="AI球伴·世界杯同行"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                // 图片加载失败时回退到CDN备用地址
+                (e.target as HTMLImageElement).src = 'https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/ai-companion-banner-iXFfNP3mVNQj6sgUr4f9bG.png';
+              }}
+            />
+          </div>,
+          // 页2：蓄水池动画（水滴）
+          <div key="p2" className="w-full h-full flex flex-col px-3 py-2">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 社交</span>
               <div onClick={handleRefresh} className="flex flex-col items-center cursor-pointer">
@@ -1856,27 +1872,6 @@ export default function Home() {
             <div className="flex-1 flex items-center justify-center">
               <div style={{ width: '100%', aspectRatio: '4/3' }}>
                 <XushuchiLottie />
-              </div>
-            </div>
-          </div>,
-          // 页2：装修升级中
-          <div key="p2" className="w-full h-full flex flex-col px-3 py-2">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 社交</span>
-              <div onClick={handleRefresh} className="flex flex-col items-center cursor-pointer">
-                <div className={`w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors ${isFetching ? 'animate-spin' : ''}`}>
-                  <RefreshCw className="w-3.5 h-3.5 text-[#A80000]" />
-                </div>
-                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>刷新</span>
-              </div>
-            </div>
-            <div className="flex-1 relative overflow-hidden rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 flex flex-col items-center justify-center">
-              <div className="flex flex-col items-center space-y-3">
-                <div className="w-12 h-12 rounded-full bg-white/60 flex items-center justify-center">
-                  <span className="text-2xl">🔧</span>
-                </div>
-                <span className="text-sm text-gray-500 font-medium">装修升级中</span>
-                <span className="text-xs text-gray-400">敬请期待</span>
               </div>
             </div>
           </div>,
