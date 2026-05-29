@@ -329,10 +329,15 @@ export default function WcOddsAdmin() {
                             >
                               {pinnacle ? (
                                 <>
-                                  {arrow && (
-                                    <span style={{ fontSize: 10, marginRight: 1 }}>{arrow}</span>
-                                  )}
-                                  {pinnacle.toFixed(2)}
+                                  <div>
+                                    {arrow && (
+                                      <span style={{ fontSize: 10, marginRight: 1 }}>{arrow}</span>
+                                    )}
+                                    {pinnacle.toFixed(2)}
+                                  </div>
+                                  <div style={{ fontSize: 9, opacity: 0.55, marginTop: 1 }}>
+                                    {(100 / pinnacle).toFixed(1)}%
+                                  </div>
                                 </>
                               ) : (
                                 <span style={{ color: "rgba(255,255,255,0.15)" }}>-</span>
