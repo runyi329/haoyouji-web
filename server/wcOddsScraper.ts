@@ -5,7 +5,7 @@
  */
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { getDb } from './db';
+import { getDb, getDbConnection } from './db';
 import { wcOddsSnapshots, wcOddsRecords } from '../drizzle/schema';
 
 // 48支球队的国家代码映射
@@ -84,9 +84,45 @@ export async function scrapeWcOdds(): Promise<OddsTeam[]> {
 }
 
 /**
+ * 确保世界杯赔率追踪表存在（幂等建表）
+ */
+async function ensureTablesExist(): Promise<void> {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    await conn.execute(`CREATE TABLE IF NOT EXISTS wc_odds_snapshots (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      source VARCHAR(100) NOT NULL DEFAULT 'wc-2026.com',
+      team_count INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX wc_odds_snapshots_fetched_at_idx (fetched_at)
+    )`);
+    await conn.execute(`CREATE TABLE IF NOT EXISTS wc_odds_records (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      snapshot_id INT NOT NULL,
+      rank INT NOT NULL,
+      team_name VARCHAR(100) NOT NULL,
+      team_code VARCHAR(20),
+      pinnacle_odds VARCHAR(20),
+      william_hill_odds VARCHAR(20),
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX wc_odds_records_snapshot_id_idx (snapshot_id),
+      INDEX wc_odds_records_team_name_idx (team_name)
+    )`);
+    console.log('[WC Odds] 表结构确认完成');
+  } catch (e) {
+    console.warn('[WC Odds] ensureTablesExist 失败（可能表已存在）:', e);
+  }
+}
+
+/**
  * 抓取并保存到数据库
  */
 export async function fetchAndSaveOdds(): Promise<{ snapshotId: number; teamCount: number }> {
+  // 确保表存在
+  await ensureTablesExist();
+
   const teams = await scrapeWcOdds();
   if (teams.length === 0) throw new Error('未抓取到任何球队数据');
 
