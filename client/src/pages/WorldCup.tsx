@@ -649,6 +649,15 @@ export default function WorldCup() {
           <ArrowLeft className="w-4 h-4 text-white" />
         </button>
 
+        {/* 刷新按鈕 */}
+        <button
+          onClick={() => window.location.reload()}
+          className="absolute top-4 right-4 z-20 px-3 h-8 flex items-center justify-center rounded-full text-xs font-semibold"
+          style={{ backgroundColor: "rgba(0,0,0,0.45)", color: "#fff" }}
+        >
+          刷新
+        </button>
+
         {/* 海报图片 */}
         <div style={{ width: "100%", aspectRatio: "16/9", overflow: "hidden", position: "relative" }}>
           <img
