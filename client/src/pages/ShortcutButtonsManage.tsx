@@ -161,7 +161,8 @@ export default function ShortcutButtonsManage() {
                     <img src="/manus-storage/wc2026_logo2_c4e928b2.png" alt="世界杯" className="w-5 h-5 rounded-full object-cover" />
                     <span className="text-[10px] leading-none">世界杯</span>
                   </div>
-                ) : SHORTCUT_LABELS[key])}
+                ) : <span>{SHORTCUT_LABELS[key]}</span>
+                }
               </div>
             ))}
           </div>
