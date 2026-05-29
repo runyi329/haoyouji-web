@@ -3010,6 +3010,7 @@ export async function addTransaction(data: {
   pendingIncludeStats?: number; // 待结账目是否计入统计（0=仅显示不计入，1=显示并计入）
   ajCompanyId?: number; // AJ账本开票企业ID
   ajCompanyName?: string; // AJ账本开票企业名称
+  stockCodes?: Array<{code: string; name: string}>; // 股票代码
 }) {
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
@@ -3096,6 +3097,8 @@ export async function addTransaction(data: {
     reimbursementStatus: data.reimbursementStatus || 'none',
     pendingType: data.pendingType || null,
     pendingIncludeStats: data.pendingType ? (data.pendingIncludeStats ?? 1) : null,
+    // 股票代码
+    ...(data.stockCodes && data.stockCodes.length > 0 ? { stockCodes: JSON.stringify(data.stockCodes) } : {}),
     // AJ账本开票申请字段
     ...(isAJRecord ? {
       ajStatus: 'pending' as const,  // 提交后自动设为「申请中」

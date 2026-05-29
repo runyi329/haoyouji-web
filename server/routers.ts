@@ -9073,6 +9073,7 @@ ${klinesSummary}
         viewAsUserId: z.number().optional(), // 管理员以业务员视角提交时，用此ID作createdBy
         ajCompanyId: z.number().optional(), // AJ账本开票企业ID
         ajCompanyName: z.string().optional(), // AJ账本开票企业名称
+        stockCodes: z.array(z.object({ code: z.string(), name: z.string() })).optional(), // 股票代码
       }))
       .mutation(async ({ ctx, input }) => {
         const { viewAsUserId, ...rest } = input;

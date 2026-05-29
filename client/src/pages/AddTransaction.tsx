@@ -1336,25 +1336,31 @@ const AddTransaction = () => {
                 <div className="space-y-2">
                   {stockInputs.map((stock, index) => (
                     <div key={index} className="flex items-center gap-2">
-                      <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+                      {/* 左半：输入框 */}
+                      <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2" style={{ width: '45%' }}>
                         <input
                           type="text"
                           placeholder={`代码 ${index + 1}`}
                           value={stock.code}
                           onChange={(e) => setStockInputs(prev => prev.map((s, i) => i === index ? { ...s, code: e.target.value.toUpperCase(), name: '' } : s))}
                           onBlur={(e) => handleQueryStock(index, e.target.value)}
-                          className="flex-1 bg-transparent text-sm outline-none text-gray-800 placeholder-gray-300 w-20"
+                          className="w-full bg-transparent text-sm outline-none text-gray-800 placeholder-gray-300"
                           maxLength={10}
                         />
+                      </div>
+                      {/* 右半：股票名称 */}
+                      <div className="flex-1 flex items-center px-2">
                         {stock.loading ? (
                           <span className="text-xs text-gray-400">查询中...</span>
                         ) : stock.name ? (
-                          <span className={`text-xs font-medium ${stock.name === '未找到' || stock.name === '查询失败' ? 'text-gray-400' : 'text-blue-600'}`}>{stock.name}</span>
-                        ) : null}
+                          <span className={`text-sm font-medium truncate ${stock.name === '未找到' || stock.name === '查询失败' ? 'text-gray-400' : 'text-blue-600'}`}>{stock.name}</span>
+                        ) : (
+                          <span className="text-xs text-gray-300">失焦点自动查询</span>
+                        )}
                       </div>
                       {stockInputs.length > 3 && (
                         <button
-                          className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-400"
+                          className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 flex-shrink-0"
                           onClick={() => setStockInputs(prev => prev.filter((_, i) => i !== index))}
                         >
                           <X className="w-3.5 h-3.5" />
