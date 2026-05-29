@@ -5,7 +5,7 @@
  */
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { db } from './db';
+import { getDb } from './db';
 import { wcOddsSnapshots, wcOddsRecords } from '../drizzle/schema';
 
 // 48支球队的国家代码映射
@@ -91,6 +91,8 @@ export async function fetchAndSaveOdds(): Promise<{ snapshotId: number; teamCoun
   if (teams.length === 0) throw new Error('未抓取到任何球队数据');
 
   // 创建快照记录
+  const db = await getDb();
+  if (!db) throw new Error('DB unavailable');
   const [snapshot] = await db.insert(wcOddsSnapshots).values({
     source: 'wc-2026.com',
     teamCount: teams.length,

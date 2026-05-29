@@ -628,7 +628,7 @@ export default function WorldCup() {
   const [archiveView, setArchiveView] = useState<"team" | "player">("team");
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const isAdmin = user?.role === 'super_admin';
 
   const tabs: { key: TabType; label: string }[] = [
     { key: "schedule", label: "赛程" },
