@@ -505,13 +505,13 @@ function DayRow({
 
   return (
     <div style={{ borderBottom: `1px solid ${BORDER}` }}>
-      {/* 日期行 */}
+      {/* 日期行（点击展开/收起） */}
       <button
         onClick={onToggle}
-        className="w-full flex items-center px-4 py-3 text-left transition-colors"
+        className="w-full flex items-center px-4 py-2.5 text-left transition-colors"
         style={{ backgroundColor: isExpanded ? BG3 : BG2 }}
       >
-        <div className="flex-1 flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           {isToday && (
             <span
               className="text-xs font-bold px-1.5 py-0.5 rounded"
@@ -526,29 +526,52 @@ function DayRow({
           >
             {day.dateLabel}
           </span>
+          <span className="text-xs" style={{ color: TEXT2, fontSize: "10px" }}>北京时间</span>
         </div>
-        {/* 右侧：小国旗预览 + 场次 + 箭头 */}
-        <div className="flex items-center gap-1.5">
-          <div className="flex items-center gap-0.5">
-            {day.matches.slice(0, 4).map((m, i) => (
-              <span key={i} style={{ display: "inline-block" }}>
-                <Flag code={m.homeCode} size={14} />
-              </span>
-            ))}
-            {day.matches.length > 4 && (
-              <span className="text-xs ml-0.5" style={{ color: TEXT2 }}>+{day.matches.length - 4}</span>
-            )}
-          </div>
-          <span className="text-xs ml-1" style={{ color: TEXT2 }}>{day.matches.length}场</span>
+        {/* 右侧：场次 + 箭头 */}
+        <div className="flex items-center gap-1 ml-auto">
+          <span className="text-xs" style={{ color: TEXT2 }}>{day.matches.length}场</span>
           {isExpanded ? (
-            <ChevronDown className="w-4 h-4 ml-1" style={{ color: GOLD }} />
+            <ChevronDown className="w-4 h-4" style={{ color: GOLD }} />
           ) : (
-            <ChevronRight className="w-4 h-4 ml-1" style={{ color: TEXT2 }} />
+            <ChevronRight className="w-4 h-4" style={{ color: TEXT2 }} />
           )}
         </div>
       </button>
 
-      {/* 展开的比赛列表 */}
+      {/* 默认显示的比赛摘要（始终可见，紧凑行） */}
+      {!isExpanded && (
+        <div style={{ backgroundColor: BG }}>
+          {day.matches.map((match, i) => (
+            <div
+              key={i}
+              className="flex items-center px-3 py-2"
+              style={{ borderTop: `1px solid ${BORDER}` }}
+            >
+              {/* 主队：国旗+名字 */}
+              <div className="flex items-center gap-1 flex-1 justify-end">
+                <span className="text-xs font-medium" style={{ color: TEXT }}>{match.home}</span>
+                <Flag code={match.homeCode} size={18} />
+              </div>
+              {/* 时间 */}
+              <div className="flex flex-col items-center mx-2 flex-shrink-0" style={{ minWidth: 42 }}>
+                {match.time && match.time !== "TBD" ? (
+                  <span className="text-xs font-bold" style={{ color: GOLD }}>{match.time}</span>
+                ) : (
+                  <span className="text-xs" style={{ color: TEXT2 }}>TBD</span>
+                )}
+              </div>
+              {/* 客队：国旗+名字 */}
+              <div className="flex items-center gap-1 flex-1 justify-start">
+                <Flag code={match.awayCode} size={18} />
+                <span className="text-xs font-medium" style={{ color: TEXT }}>{match.away}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 展开后的详细比赛列表 */}
       {isExpanded && (
         <div style={{ backgroundColor: BG }}>
           {day.matches.map((match, i) => {
@@ -557,9 +580,7 @@ function DayRow({
               <div
                 key={i}
                 className="flex items-center px-4 py-3"
-                style={{
-                  borderTop: `1px solid ${BORDER}`,
-                }}
+                style={{ borderTop: `1px solid ${BORDER}` }}
               >
                 {/* 阶段标签 */}
                 <span
@@ -582,10 +603,12 @@ function DayRow({
                 </div>
 
                 {/* VS + 时间 */}
-                <div className="flex flex-col items-center mx-2 flex-shrink-0" style={{ minWidth: 38 }}>
+                <div className="flex flex-col items-center mx-2 flex-shrink-0" style={{ minWidth: 42 }}>
                   <span className="text-xs font-black" style={{ color: GOLD }}>VS</span>
                   {match.time && (
-                    <span className="text-xs" style={{ color: TEXT2, fontSize: "10px" }}>{match.time}</span>
+                    <span className="text-xs" style={{ color: TEXT2, fontSize: "10px" }}>
+                      {match.time !== "TBD" ? match.time : "TBD"}
+                    </span>
                   )}
                 </div>
 
@@ -594,6 +617,13 @@ function DayRow({
                   <Flag code={match.awayCode} size={20} />
                   <span className="text-sm font-medium" style={{ color: TEXT }}>{match.away}</span>
                 </div>
+
+                {/* 场地 */}
+                {match.venue && (
+                  <span className="text-xs ml-2 flex-shrink-0" style={{ color: TEXT2, fontSize: "10px" }}>
+                    {match.venue}
+                  </span>
+                )}
               </div>
             );
           })}
