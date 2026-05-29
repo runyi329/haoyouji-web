@@ -1269,7 +1269,7 @@ const AddTransaction = () => {
 
           {/* 图片上传区域（custom_aa管理员可用） */}
           {isCustomAA && (userRole === 'admin' || userRole === 'owner') && (
-            <div className="mx-3 mt-3 bg-white rounded-2xl overflow-hidden" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #F0E8E0' }}>
+            <div className="mx-3 mt-3 bg-white rounded-2xl" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #F0E8E0' }}>
               <div className="px-5 py-4">
                 <div className="text-xs text-gray-400 mb-3 font-medium tracking-widest uppercase">图片（选填）</div>
                 {/* custom_aa 专用的隐藏 file input */}
