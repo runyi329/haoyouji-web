@@ -351,28 +351,10 @@ export default function AfOrderManage() {
 
         {/* 统计汇总 */}
         {stats && (
-          <div className="grid grid-cols-3 gap-2 px-4 pb-5 pt-3">
-            {/* 累计订单 */}
-            <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-              <p className="text-white/55 text-xs mb-2">累计订单</p>
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/50">普通</span>
-                  <span className="text-white/80 font-semibold">{stats.orders.normalCount} 笔</span>
-                </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/50">赠送</span>
-                  <span className="text-amber-300 font-semibold">{stats.orders.giftCount} 笔</span>
-                </div>
-                <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
-                  <span className="text-white/70">合计</span>
-                  <span className="text-white font-bold">{stats.orders.totalCount} 笔</span>
-                </div>
-              </div>
-            </div>
-            {/* 管理费 → 跳转（左容器：进行中/已结清/累计） */}
+          <div className="px-4 pb-5 pt-3 space-y-2">
+            {/* 第一行：管理费（单独占满宽） */}
             <button
-              className="rounded-2xl px-4 py-3 text-left active:opacity-75"
+              className="w-full rounded-2xl px-4 py-3 text-left active:opacity-75"
               style={{ background: 'rgba(255,255,255,0.14)' }}
               onClick={() => setLocation(`/ledger/${ledgerId}/af-fee-detail`)}
             >
@@ -380,35 +362,53 @@ export default function AfOrderManage() {
                 <p className="text-white/55 text-xs">管理费</p>
                 <ChevronRight className="w-3.5 h-3.5 text-white/30" />
               </div>
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs">
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="flex flex-col gap-0.5">
                   <span className="text-white/50">进行中</span>
                   <span className="text-amber-300 font-semibold">{stats.fees.ongoingFee.toFixed(2)} U</span>
                 </div>
-                <div className="flex justify-between text-xs">
+                <div className="flex flex-col gap-0.5">
                   <span className="text-white/50">已结清</span>
                   <span className="text-emerald-300 font-semibold">{stats.fees.settledFee.toFixed(2)} U</span>
                 </div>
-                <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
+                <div className="flex flex-col gap-0.5">
                   <span className="text-white/70">累计</span>
                   <span className="text-white font-bold">{stats.fees.totalFee.toFixed(2)} U</span>
                 </div>
               </div>
             </button>
-            {/* 右容器：今日管理费 + 今日计费订单数 */}
-            <div
-              className="rounded-2xl px-4 py-3"
-              style={{ background: 'rgba(255,255,255,0.14)' }}
-            >
-              <p className="text-white/55 text-xs mb-2">今日</p>
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/50">管理费</span>
-                  <span className="text-sky-300 font-semibold">{(stats.fees as any).todayFee?.toFixed(4) ?? '0.0000'} U</span>
+            {/* 第二行：累计订单 + 今日（各占一半） */}
+            <div className="grid grid-cols-2 gap-2">
+              {/* 累计订单 */}
+              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+                <p className="text-white/55 text-xs mb-2">累计订单</p>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/50">普通</span>
+                    <span className="text-white/80 font-semibold">{stats.orders.normalCount} 笔</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/50">赠送</span>
+                    <span className="text-amber-300 font-semibold">{stats.orders.giftCount} 笔</span>
+                  </div>
+                  <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
+                    <span className="text-white/70">合计</span>
+                    <span className="text-white font-bold">{stats.orders.totalCount} 笔</span>
+                  </div>
                 </div>
-                <div className="flex justify-between text-xs">
-                  <span className="text-white/50">订单数</span>
-                  <span className="text-white font-bold">{(stats.fees as any).todayOrderCount ?? 0} 单</span>
+              </div>
+              {/* 今日 */}
+              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+                <p className="text-white/55 text-xs mb-2">今日</p>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/50">管理费</span>
+                    <span className="text-sky-300 font-semibold">{(stats.fees as any).todayFee?.toFixed(4) ?? '0.0000'} U</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/50">订单数</span>
+                    <span className="text-white font-bold">{(stats.fees as any).todayOrderCount ?? 0} 单</span>
+                  </div>
                 </div>
               </div>
             </div>
