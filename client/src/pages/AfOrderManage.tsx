@@ -701,21 +701,23 @@ export default function AfOrderManage() {
                           return `${trimmed} ${order.coin}`;
                         })()}
                       </span>
-                      {/* 有效持仓备注：仅当权益有折扣（档位>0）时显示 */}
-                      {order.status === 'completed' && order.equityTier > 0 && (() => {
-                        const raw = order.quantity;
-                        const num = parseFloat(raw);
-                        const rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
-                        const effectiveNum = num * rate;
-                        const pct = (rate * 100).toFixed(2);
-                        const tierColor = 'text-orange-500';
-                        return (
-                          <span className={`text-xs ml-1 ${tierColor}`}>
-                            → 实际 {effectiveNum.toFixed(8).replace(/\.?0+$/, '')} ({pct}%)
-                          </span>
-                        );
-                      })()}
                     </div>
+                    {/* 实际有效持仓（单独一行，仅当权益有折扣档位>0时显示） */}
+                    {order.status === 'completed' && order.equityTier > 0 && (() => {
+                      const raw = order.quantity;
+                      const num = parseFloat(raw);
+                      const rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
+                      const effectiveNum = num * rate;
+                      const pct = (rate * 100).toFixed(2);
+                      return (
+                        <div className="flex items-center gap-1 col-span-2">
+                          <span className="text-gray-400 w-12 shrink-0">实际持仓</span>
+                          <span className="text-xs text-orange-500">
+                            {effectiveNum.toFixed(8).replace(/\.?0+$/, '')} {order.coin} ({pct}%)
+                          </span>
+                        </div>
+                      );
+                    })()}
                     {/* 实际投入（正单显示自己amount，赠单显示sourceAmount） */}
                     {(() => {
                       const srcAmt = parseFloat(order.sourceAmount || '0');
