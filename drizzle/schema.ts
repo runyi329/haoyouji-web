@@ -2179,11 +2179,14 @@ export const wcOrders = mysqlTable("wc_orders", {
   pinnacleOdds: decimal('pinnacle_odds', { precision: 10, scale: 2 }).notNull(), // 下单时 Pinnacle 赔率
   amount: decimal('amount', { precision: 15, scale: 2 }).notNull(),              // 投注金额
   potentialReturn: decimal('potential_return', { precision: 15, scale: 2 }).notNull(), // 潜在回报 = 金额 × 赔率
-  status: mysqlEnum('status', ['pending', 'settled', 'cancelled']).default('pending').notNull(),
+  // status: pending=进行中, won=中奖, lost=未中, revoked=已撤销, deleted=已删除
+  status: mysqlEnum('status', ['pending', 'won', 'lost', 'revoked', 'deleted']).default('pending').notNull(),
   currency: mysqlEnum('currency', ['CNY', 'USDT']).default('USDT').notNull(), // 投注货币
+  bonusAmount: decimal('bonus_amount', { precision: 15, scale: 2 }), // 实际奖金（won 时填入）
   note: text('note'),                                       // 备注
   createdAt: timestamp('created_at', { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
   settledAt: timestamp('settled_at', { mode: 'string' }),
+  deletedAt: timestamp('deleted_at', { mode: 'string' }), // 软删除时间戳
 }, (table) => [
   index("wc_orders_user_id_idx").on(table.userId),
   index("wc_orders_team_name_idx").on(table.teamName),

@@ -7,7 +7,7 @@ import { router, protectedProcedure } from '../_core/trpc';
 import { TRPCError } from '@trpc/server';
 import { getDb, getDbConnection } from '../db';
 import { wcOddsSnapshots, wcOddsRecords, wcOrders, users } from '../../drizzle/schema';
-import { desc, eq, asc, inArray, like, or, and } from 'drizzle-orm';
+import { desc, eq, asc, inArray, like, or, and, ne } from 'drizzle-orm';
 import { fetchAndSaveOdds } from '../wcOddsScraper';
 import { getUserBalance, getUserCnyBalance } from '../db-recharge';
 
@@ -18,6 +18,14 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   }
   return next({ ctx });
 });
+
+// 订单状态类型
+// pending  = 进行中（默认）
+// won      = 中奖（需填奖金）
+// lost     = 未中（赔注）
+// revoked  = 已撤销（可恢复为 pending）
+// deleted  = 软删除（列表默认不展示，可恢复）
+type OrderStatus = 'pending' | 'won' | 'lost' | 'revoked' | 'deleted';
 
 export const wcOddsRouter = router({
   /**
@@ -300,7 +308,6 @@ export const wcOddsRouter = router({
         : `世界杯投注-${input.teamName} -${amt} USDT${input.note ? ' ' + input.note : ''}`;
 
       if (input.currency === 'CNY') {
-        // CNY：写 af_manual_balances（note 以 [CNY] 开头）
         const [ledgerRows] = await (conn as any).execute(
           `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
           [input.userId]
@@ -311,7 +318,6 @@ export const wcOddsRouter = router({
           [ledgerId, input.userId, -amt, deductNote]
         );
       } else {
-        // USDT：更新 users.balance 并写 balance_history
         await (conn as any).execute(
           `UPDATE users SET balance = COALESCE(balance, 0) - ? WHERE id = ?`,
           [amt, input.userId]
@@ -327,7 +333,6 @@ export const wcOddsRouter = router({
         );
       }
 
-      // 写入订单记录
       await db.insert(wcOrders).values({
         userId: input.userId,
         teamName: input.teamName,
@@ -346,12 +351,13 @@ export const wcOddsRouter = router({
 
   /**
    * 获取订单列表（管理员，支持分页和筛选）
+   * 默认不展示 deleted 状态的订单，除非明确筛选 deleted
    */
   getOrders: adminProcedure
     .input(z.object({
       page: z.number().int().min(1).default(1),
       pageSize: z.number().int().min(1).max(100).default(20),
-      status: z.enum(['pending', 'settled', 'cancelled', 'all']).default('all'),
+      status: z.enum(['pending', 'won', 'lost', 'revoked', 'deleted', 'all']).default('all'),
       teamName: z.string().optional(),
     }))
     .query(async ({ input }) => {
@@ -362,7 +368,10 @@ export const wcOddsRouter = router({
 
       const conditions = [];
       if (input.status !== 'all') {
-        conditions.push(eq(wcOrders.status, input.status));
+        conditions.push(eq(wcOrders.status, input.status as OrderStatus));
+      } else {
+        // 默认隐藏软删除的订单
+        conditions.push(ne(wcOrders.status, 'deleted' as OrderStatus));
       }
       if (input.teamName) {
         conditions.push(like(wcOrders.teamName, `%${input.teamName}%`));
@@ -380,9 +389,11 @@ export const wcOddsRouter = router({
           potentialReturn: wcOrders.potentialReturn,
           currency: wcOrders.currency,
           status: wcOrders.status,
+          bonusAmount: wcOrders.bonusAmount,
           note: wcOrders.note,
           createdAt: wcOrders.createdAt,
           settledAt: wcOrders.settledAt,
+          deletedAt: wcOrders.deletedAt,
           userName: users.name,
           userUsername: users.username,
           userPhone: users.phone,
@@ -395,9 +406,7 @@ export const wcOddsRouter = router({
         .offset(offset);
 
       let rows;
-      if (conditions.length === 0) {
-        rows = await baseQuery;
-      } else if (conditions.length === 1) {
+      if (conditions.length === 1) {
         rows = await baseQuery.where(conditions[0]);
       } else {
         rows = await baseQuery.where(and(...conditions));
@@ -407,23 +416,55 @@ export const wcOddsRouter = router({
     }),
 
   /**
-   * 更新订单状态（管理员）
+   * 更新订单状态（管理员，全部可逆）
+   *
+   * 状态流转规则（所有流转均可逆，无不可逆操作）：
+   *   pending  → won（中奖，需填 bonusAmount）
+   *   pending  → lost（未中）
+   *   pending  → revoked（撤销）
+   *   pending  → deleted（软删除）
+   *   won      → pending（撤回中奖结算）
+   *   lost     → pending（撤回未中结算）
+   *   revoked  → pending（恢复进行中）
+   *   deleted  → pending（从回收站恢复）
+   *   任意状态 → deleted（软删除，可恢复）
    */
   updateOrderStatus: adminProcedure
     .input(z.object({
       orderId: z.number().int().positive(),
-      status: z.enum(['pending', 'settled', 'cancelled']),
+      status: z.enum(['pending', 'won', 'lost', 'revoked', 'deleted']),
+      bonusAmount: z.string().optional(), // 中奖时必填实际奖金
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
 
+      if (input.status === 'won' && !input.bonusAmount) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: '中奖时必须填写实际奖金' });
+      }
+
+      const bonus = input.bonusAmount ? parseFloat(input.bonusAmount) : null;
+      if (input.status === 'won' && (bonus === null || isNaN(bonus) || bonus < 0)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: '奖金金额无效' });
+      }
+
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
       await db
         .update(wcOrders)
         .set({
-          status: input.status,
-          settledAt: input.status === 'settled'
-            ? new Date().toISOString().slice(0, 19).replace('T', ' ')
+          status: input.status as OrderStatus,
+          // 结算时间：won/lost 时记录，恢复 pending 时清空
+          settledAt: (input.status === 'won' || input.status === 'lost') ? now
+            : input.status === 'pending' ? null
+            : undefined,
+          // 奖金：won 时写入，恢复 pending 时清空
+          bonusAmount: input.status === 'won' ? input.bonusAmount!
+            : input.status === 'pending' ? null
+            : undefined,
+          // 软删除时间戳
+          deletedAt: input.status === 'deleted' ? now
+            : input.status === 'pending' ? null
             : undefined,
         })
         .where(eq(wcOrders.id, input.orderId));

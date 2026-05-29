@@ -170,3 +170,19 @@ echo "💰 给 wc_orders 添加 currency 字段（如不存在）..."
 $DB_CMD -e "ALTER TABLE wc_orders ADD COLUMN IF NOT EXISTS currency ENUM('CNY','USDT') NOT NULL DEFAULT 'USDT'" 2>/dev/null || \
 $DB_CMD -e "ALTER TABLE wc_orders ADD COLUMN currency ENUM('CNY','USDT') NOT NULL DEFAULT 'USDT'" 2>/dev/null || true
 echo "✅ wc_orders.currency 字段确认完成"
+
+# ===== wc_orders 状态体系升级（v2: pending/won/lost/revoked/deleted）=====
+echo "⚽ 升级 wc_orders 状态枚举..."
+$DB_CMD -e "ALTER TABLE wc_orders MODIFY COLUMN status ENUM('pending','won','lost','revoked','deleted','settled','cancelled') NOT NULL DEFAULT 'pending'" 2>/dev/null || true
+$DB_CMD -e "UPDATE wc_orders SET status='won' WHERE status='settled'" 2>/dev/null || true
+$DB_CMD -e "UPDATE wc_orders SET status='revoked' WHERE status='cancelled'" 2>/dev/null || true
+$DB_CMD -e "ALTER TABLE wc_orders MODIFY COLUMN status ENUM('pending','won','lost','revoked','deleted') NOT NULL DEFAULT 'pending'" 2>/dev/null || true
+echo "✅ wc_orders.status 枚举升级完成"
+
+echo "💰 给 wc_orders 添加 bonus_amount 字段（如不存在）..."
+$DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='wc_orders' AND COLUMN_NAME='bonus_amount'; SET @s = IF(@c=0, 'ALTER TABLE wc_orders ADD COLUMN bonus_amount DECIMAL(15,2) NULL COMMENT \"实际奖金（中奖时填入）\"', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
+echo "✅ wc_orders.bonus_amount 字段确认完成"
+
+echo "🗑️ 给 wc_orders 添加 deleted_at 字段（软删除，如不存在）..."
+$DB_CMD -e "SELECT COUNT(*) INTO @c FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='wc_orders' AND COLUMN_NAME='deleted_at'; SET @s = IF(@c=0, 'ALTER TABLE wc_orders ADD COLUMN deleted_at TIMESTAMP NULL COMMENT \"软删除时间戳\"', 'SELECT 1'); PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;" || true
+echo "✅ wc_orders.deleted_at 字段确认完成"

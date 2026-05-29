@@ -447,11 +447,86 @@ function CreateOrderDialog({
   );
 }
 
+// ===================== 二次确认 Dialog =====================
+type ConfirmAction = {
+  orderId: number;
+  newStatus: "pending" | "won" | "lost" | "revoked" | "deleted";
+  title: string;
+  desc: string;
+  confirmText: string;
+  confirmColor: string;
+  needBonus?: boolean; // won 时需要填奖金
+};
+
+function ConfirmDialog({
+  action,
+  onConfirm,
+  onCancel,
+  isPending,
+}: {
+  action: ConfirmAction | null;
+  onConfirm: (bonusAmount?: string) => void;
+  onCancel: () => void;
+  isPending: boolean;
+}) {
+  const [bonusInput, setBonusInput] = useState("");
+  if (!action) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center px-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.75)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl p-5"
+        style={{ backgroundColor: BG2, border: `1px solid ${BORDER}` }}
+      >
+        <div className="text-base font-bold mb-1" style={{ color: TEXT }}>{action.title}</div>
+        <div className="text-sm mb-4" style={{ color: TEXT2 }}>{action.desc}</div>
+        {action.needBonus && (
+          <div className="mb-4">
+            <label className="text-xs mb-1.5 block" style={{ color: TEXT2 }}>实际奖金金额 <span style={{ color: "#ff4d4f" }}>*</span></label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              className="w-full px-3 py-2.5 rounded-lg text-sm outline-none"
+              style={{ backgroundColor: BG3, border: `1px solid ${BORDER}`, color: TEXT }}
+              placeholder="请输入实际到账奖金..."
+              value={bonusInput}
+              onChange={e => setBonusInput(e.target.value)}
+              autoFocus
+            />
+          </div>
+        )}
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2.5 rounded-xl text-sm font-medium"
+            style={{ backgroundColor: "rgba(255,255,255,0.06)", border: `1px solid ${BORDER}`, color: TEXT2 }}
+          >
+            取消
+          </button>
+          <button
+            onClick={() => onConfirm(action.needBonus ? bonusInput : undefined)}
+            disabled={isPending || (action.needBonus ? !bonusInput || isNaN(parseFloat(bonusInput)) : false)}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
+            style={{ backgroundColor: action.confirmColor, color: "#0D1B2A", opacity: isPending ? 0.6 : 1 }}
+          >
+            {isPending ? "处理中..." : action.confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ===================== 订单列表 =====================
 function OrdersTab() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "settled" | "cancelled">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "won" | "lost" | "revoked" | "deleted">("all");
   const [page, setPage] = useState(1);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 
   const { data, isLoading, refetch } = trpc.wcOdds.getOrders.useQuery({
     page,
@@ -461,37 +536,81 @@ function OrdersTab() {
 
   const updateStatus = trpc.wcOdds.updateOrderStatus.useMutation({
     onSuccess: () => {
-      toast.success("状态已更新");
+      toast.success("✅ 状态已更新");
+      setConfirmAction(null);
       refetch();
     },
-    onError: (err) => toast.error(`更新失败：${err.message}`),
+    onError: (err) => {
+      toast.error(`❌ 更新失败：${err.message}`);
+    },
   });
 
   const orders = data?.orders ?? [];
 
-  const statusLabel: Record<string, { text: string; color: string }> = {
-    pending: { text: "待结算", color: "#FFD700" },
-    settled: { text: "已结算", color: "#52C41A" },
-    cancelled: { text: "已取消", color: "#8FA3B8" },
+  const statusLabel: Record<string, { text: string; color: string; emoji: string }> = {
+    pending:  { text: "进行中",  color: "#FFD700", emoji: "⏳" },
+    won:      { text: "中奖",    color: "#52C41A", emoji: "🏆" },
+    lost:     { text: "未中",    color: "#FF4D4F", emoji: "❌" },
+    revoked:  { text: "已撤销",  color: "#8FA3B8", emoji: "↩️" },
+    deleted:  { text: "已删除",  color: "#555",    emoji: "🗑️" },
   };
+
+  // 根据当前状态决定可用操作
+  function getActions(status: string): ConfirmAction[] {
+    const id = 0; // placeholder, will be replaced
+    switch (status) {
+      case "pending": return [
+        { orderId: id, newStatus: "won",     title: "确认中奖？",   desc: "请填写实际奖金金额，确认后记录中奖结果。可随时撤回。", confirmText: "确认中奖", confirmColor: "#52C41A", needBonus: true },
+        { orderId: id, newStatus: "lost",    title: "确认未中？",   desc: "标记为未中（赔注），可随时撤回恢复进行中。",           confirmText: "确认未中", confirmColor: "#FF4D4F" },
+        { orderId: id, newStatus: "revoked", title: "确认撤销订单？", desc: "撤销后可随时恢复为进行中，不影响钱包余额。",          confirmText: "确认撤销", confirmColor: "#8FA3B8" },
+        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，订单将从默认列表隐藏，可在"已删除"筛选中恢复。", confirmText: "确认删除", confirmColor: "#555" },
+      ];
+      case "won": return [
+        { orderId: id, newStatus: "pending", title: "撤回中奖结算？", desc: "将订单恢复为进行中，清除奖金记录。", confirmText: "确认撤回", confirmColor: GOLD },
+        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，可在"已删除"筛选中恢复。",    confirmText: "确认删除", confirmColor: "#555" },
+      ];
+      case "lost": return [
+        { orderId: id, newStatus: "pending", title: "撤回未中结算？", desc: "将订单恢复为进行中。",            confirmText: "确认撤回", confirmColor: GOLD },
+        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，可在"已删除"筛选中恢复。", confirmText: "确认删除", confirmColor: "#555" },
+      ];
+      case "revoked": return [
+        { orderId: id, newStatus: "pending", title: "恢复为进行中？", desc: "将已撤销订单重新激活为进行中。",   confirmText: "确认恢复", confirmColor: GOLD },
+        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，可在"已删除"筛选中恢复。", confirmText: "确认删除", confirmColor: "#555" },
+      ];
+      case "deleted": return [
+        { orderId: id, newStatus: "pending", title: "从回收站恢复？", desc: "将订单恢复为进行中状态。", confirmText: "确认恢复", confirmColor: GOLD },
+      ];
+      default: return [];
+    }
+  }
 
   return (
     <div className="px-4 pb-6">
+      {/* 二次确认 Dialog */}
+      <ConfirmDialog
+        action={confirmAction}
+        onConfirm={(bonus) => {
+          if (!confirmAction) return;
+          updateStatus.mutate({ orderId: confirmAction.orderId, status: confirmAction.newStatus, bonusAmount: bonus });
+        }}
+        onCancel={() => setConfirmAction(null)}
+        isPending={updateStatus.isPending}
+      />
       {/* 顶部操作栏 */}
       <div className="flex items-center justify-between mb-3">
-        <div className="flex gap-2">
-          {(["all", "pending", "settled", "cancelled"] as const).map(s => (
+        <div className="flex gap-1.5 flex-wrap">
+          {(["all", "pending", "won", "lost", "revoked", "deleted"] as const).map(s => (
             <button
               key={s}
               onClick={() => { setStatusFilter(s); setPage(1); }}
-              className="px-3 py-1 rounded-full text-xs font-medium"
+              className="px-2.5 py-1 rounded-full text-xs font-medium"
               style={{
                 backgroundColor: statusFilter === s ? "rgba(255,215,0,0.15)" : "rgba(255,255,255,0.05)",
                 border: `1px solid ${statusFilter === s ? GOLD : BORDER}`,
                 color: statusFilter === s ? GOLD : TEXT2,
               }}
             >
-              {s === "all" ? "全部" : statusLabel[s]?.text}
+              {s === "all" ? "全部" : (statusLabel[s]?.emoji + " " + statusLabel[s]?.text)}
             </button>
           ))}
         </div>
@@ -591,27 +710,50 @@ function OrdersTab() {
                   </div>
                 )}
 
-                {/* 状态操作 */}
-                {order.status === "pending" && (
-                  <div className="flex gap-2 mt-3">
-                    <button
-                      onClick={() => updateStatus.mutate({ orderId: order.id, status: "settled" })}
-                      disabled={updateStatus.isPending}
-                      className="flex-1 py-1.5 rounded-lg text-xs font-medium"
-                      style={{ backgroundColor: "rgba(82,196,26,0.15)", border: "1px solid rgba(82,196,26,0.3)", color: COLOR_UP }}
-                    >
-                      标记结算
-                    </button>
-                    <button
-                      onClick={() => updateStatus.mutate({ orderId: order.id, status: "cancelled" })}
-                      disabled={updateStatus.isPending}
-                      className="flex-1 py-1.5 rounded-lg text-xs font-medium"
-                      style={{ backgroundColor: "rgba(255,255,255,0.05)", border: `1px solid ${BORDER}`, color: TEXT2 }}
-                    >
-                      取消订单
-                    </button>
+                {/* 中奖奖金显示 */}
+                {order.status === "won" && (order as any).bonusAmount && (
+                  <div
+                    className="mt-2 flex items-center justify-between px-3 py-2 rounded-lg"
+                    style={{ backgroundColor: "rgba(82,196,26,0.08)", border: "1px solid rgba(82,196,26,0.25)" }}
+                  >
+                    <span className="text-xs" style={{ color: COLOR_UP }}>🏆 实际奖金</span>
+                    <span className="font-bold text-sm" style={{ color: COLOR_UP }}>
+                      {formatAmount((order as any).bonusAmount)}
+                      <span className="text-xs ml-0.5">{(order as any).currency || "USDT"}</span>
+                    </span>
                   </div>
                 )}
+
+                {/* 结算时间 */}
+                {(order.status === "won" || order.status === "lost") && order.settledAt && (
+                  <div className="mt-1 text-xs" style={{ color: TEXT2 }}>
+                    结算于 {formatTime(order.settledAt)}
+                  </div>
+                )}
+
+                {/* 状态操作按钮（全部通过二次确认） */}
+                {(() => {
+                  const actions = getActions(order.status).map(a => ({ ...a, orderId: order.id }));
+                  if (actions.length === 0) return null;
+                  return (
+                    <div className="flex gap-2 mt-3 flex-wrap">
+                      {actions.map((action, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setConfirmAction(action)}
+                          className="flex-1 min-w-[60px] py-1.5 rounded-lg text-xs font-medium"
+                          style={{
+                            backgroundColor: `${action.confirmColor}18`,
+                            border: `1px solid ${action.confirmColor}40`,
+                            color: action.confirmColor === "#555" ? TEXT2 : action.confirmColor,
+                          }}
+                        >
+                          {action.confirmText}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}
