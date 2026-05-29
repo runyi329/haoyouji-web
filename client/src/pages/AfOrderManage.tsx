@@ -479,6 +479,12 @@ export default function AfOrderManage() {
               return sortedDates.map(dateKey => {
                 const groupOrders = dateGroups[dateKey];
                 const isOpen = expandedDates[dateKey] ?? false;
+                // 是否该日期所有正单（含其嵌套赠与单）已全部卖出
+                const allSold = groupOrders.every((o: any) => {
+                  if (o.sellStatus !== 'sold') return false;
+                  const gifts: any[] = (o.giftOrders as any[]) || [];
+                  return gifts.every((g: any) => g.sellStatus === 'sold');
+                });
                 // 统计：投入总额、各币种持仓数量
                 const totalAmount = groupOrders.reduce((s: number, o: any) => s + (parseFloat(o.amount) || 0), 0);
                 const coinQty: Record<string, number> = {};
@@ -521,18 +527,22 @@ export default function AfOrderManage() {
                       return (
                         <button
                           onClick={() => toggleDate(dateKey)}
-                          className="w-full flex items-center justify-between px-3 py-2 mb-1.5 rounded-xl bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors"
+                          className={`w-full flex items-center justify-between px-3 py-2 mb-1.5 rounded-xl transition-colors ${
+                            allSold
+                              ? 'bg-gray-100 border border-gray-200 hover:bg-gray-150'
+                              : 'bg-blue-50 border border-blue-100 hover:bg-blue-100'
+                          }`}
                         >
                           <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
-                            <span className="text-sm font-bold text-blue-700 shrink-0">{shortDate}</span>
-                            <span className="text-[11px] text-blue-400 shrink-0">{normalCount}单</span>
-                            {giftCount > 0 && <span className="text-[11px] text-orange-400 shrink-0">{giftCount}赠</span>}
-                            <span className="text-[11px] text-gray-600 shrink-0">{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
+                            <span className={`text-sm font-bold shrink-0 ${allSold ? 'text-gray-400' : 'text-blue-700'}`}>{shortDate}</span>
+                            <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-blue-400'}`}>{normalCount}单</span>
+                            {giftCount > 0 && <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-orange-400'}`}>{giftCount}赠</span>}
+                            <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-gray-600'}`}>{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
                             {sortedCoinParts.map(({ short, color, qStr }) => (
-                              <span key={short} className={`text-[11px] ${color} shrink-0`}>{short}:{qStr}</span>
+                              <span key={short} className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : color}`}>{short}:{qStr}</span>
                             ))}
                           </div>
-                          <span className={`text-blue-400 transition-transform duration-200 shrink-0 ml-1 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                          <span className={`transition-transform duration-200 shrink-0 ml-1 ${allSold ? 'text-gray-400' : 'text-blue-400'} ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                         </button>
                       );
                     })()}
@@ -558,7 +568,7 @@ export default function AfOrderManage() {
               const orderNo = `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
 
               return (
-                <div key={order.id} className="bg-white rounded-2xl p-4 shadow-sm mb-3">
+                <div key={order.id} className={`rounded-2xl p-4 shadow-sm mb-3 ${allSold ? 'bg-gray-50' : 'bg-white'}`}>
                   {/* 订单编号行 */}
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
