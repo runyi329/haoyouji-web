@@ -149,3 +149,13 @@ echo "👤 开始批量补全员工编号（公司拼音缩写格式）..."
 if [ -f "scripts/backfill-employee-no.mjs" ]; then
   node scripts/backfill-employee-no.mjs && echo "✅ 员工编号批量补全完成" || echo "⚠️ 员工编号补全脚本执行失败（可能已全部补全或无需补全）"
 fi
+
+
+# ===== 世界杯赔率追踪表 =====
+echo "⚽ 确保 wc_odds_snapshots 表存在（世界杯赔率快照）..."
+$DB_CMD -e "CREATE TABLE IF NOT EXISTS wc_odds_snapshots (id INT AUTO_INCREMENT PRIMARY KEY, fetched_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, source VARCHAR(100) NOT NULL DEFAULT 'wc-2026.com', team_count INT NOT NULL DEFAULT 0, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX wc_odds_snapshots_fetched_at_idx (fetched_at))" || true
+echo "✅ wc_odds_snapshots 表确认完成"
+
+echo "⚽ 确保 wc_odds_records 表存在（世界杯赔率记录）..."
+$DB_CMD -e "CREATE TABLE IF NOT EXISTS wc_odds_records (id INT AUTO_INCREMENT PRIMARY KEY, snapshot_id INT NOT NULL, rank INT NOT NULL, team_name VARCHAR(100) NOT NULL, team_code VARCHAR(20), pinnacle_odds VARCHAR(20), william_hill_odds VARCHAR(20), created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX wc_odds_records_snapshot_id_idx (snapshot_id), INDEX wc_odds_records_team_name_idx (team_name))" || true
+echo "✅ wc_odds_records 表确认完成"
