@@ -872,8 +872,9 @@ export default function AfOrderManage() {
                               const giftTier = g.equityTier || 0;
                               const giftRate = EQUITY_DISCOUNT_RATES[giftTier] || 1.0;
                               const effectiveQty = giftQty * giftRate;
-                              const ratioLabel = parseFloat(g.giftMultiplier || '0') > 0
-                                ? `${(parseFloat(g.giftMultiplier) * 100).toFixed(0)}%拨比`
+                              // 优先用 payoutRatio（真实拨比%），fallback 不显示
+                              const ratioLabel = g.payoutRatio != null
+                                ? `${parseFloat(g.payoutRatio).toFixed(1)}%拨比`
                                 : '';
                               // 状态显示
                               let statusLabel = '委买中';

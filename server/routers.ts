@@ -13017,9 +13017,13 @@ ${klinesSummary}
               const [giftRows] = await (conn as any).execute(
                 `SELECT g.id, g.source_order_id, g.user_id, g.amount, g.quantity, g.coin,
                         g.status, g.sell_status, g.gift_multiplier, g.limit_price, g.created_at,
-                        u.username, COALESCE(u.name,'') as user_name
+                        u.username, COALESCE(u.name,'') as user_name,
+                        COALESCE(pr.ratio, NULL) as payout_ratio
                  FROM af_orders g
                  LEFT JOIN users u ON u.id = g.user_id
+                 LEFT JOIN af_payout_ratios pr ON pr.ledger_id = g.ledger_id
+                   AND pr.source_user_id = g.source_user_id
+                   AND pr.beneficiary_user_id = g.user_id
                  WHERE g.source_order_id IN (${placeholders}) AND g.is_gift = 1
                  ORDER BY g.gift_multiplier DESC, g.amount DESC`,
                 normalOrderIds
@@ -13064,6 +13068,7 @@ ${klinesSummary}
                     status: String(g.status || ''),
                     sellStatus: g.sell_status ? String(g.sell_status) : null,
                     giftMultiplier: String(g.gift_multiplier || ''),
+                    payoutRatio: g.payout_ratio != null ? String(g.payout_ratio) : null,
                     equityTier: tierMap[Number(g.id)] ?? 0,
                   });
                 }
