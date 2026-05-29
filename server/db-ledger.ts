@@ -3549,6 +3549,7 @@ export async function getTransactionDetail(
       ajAccountingCode: ledgerRecords.ajAccountingCode,
       ajExpenseReason: ledgerRecords.ajExpenseReason,
       ajEmployeeNo: ledgerRecords.ajEmployeeNo,
+      stockCodes: (ledgerRecords as any).stockCodes,
     })
     .from(ledgerRecords)
     .where(
@@ -3681,6 +3682,16 @@ export async function getTransactionDetail(
     pendingType: transaction.pendingType || null,
     pendingIncludeStats: transaction.pendingIncludeStats ?? null,
     userPermissionDelete: userPermissionDelete as 'all' | 'own' | 'none',
+    stockCodes: (() => {
+      const raw = (transaction as any).stockCodes;
+      if (!raw) return [];
+      try {
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    })(),
   };
   
   console.log('[getTransactionDetail] 返回结果:', result);
