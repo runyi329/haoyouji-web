@@ -6,18 +6,24 @@
 订单065：买入价3014，开仓2025-11-28，应触发到第4档（跌40%=1808.4，1748.63<1808.4）
 """
 import sys
-import re
 import pymysql
 from datetime import datetime, timezone
+from urllib.parse import urlparse, unquote
 
 DATABASE_URL = sys.argv[1]
 
 def parse_url(url):
-    m = re.match(r'mysql://([^:]+):([^@]+)@([^:/]+):?([0-9]*)/([^?]+)', url)
-    if not m:
-        raise ValueError("无法解析 DATABASE_URL: " + url[:40])
-    user, pwd, host, port, db = m.groups()
-    return host, int(port or 3306), user, pwd, db
+    # 支持 mysql:// 和 mysql+pymysql:// 前缀
+    url = url.strip()
+    if url.startswith('mysql+pymysql://'):
+        url = 'mysql://' + url[len('mysql+pymysql://'):]
+    parsed = urlparse(url)
+    host = parsed.hostname
+    port = parsed.port or 3306
+    user = unquote(parsed.username or '')
+    pwd = unquote(parsed.password or '')
+    db = parsed.path.lstrip('/').split('?')[0]
+    return host, port, user, pwd, db
 
 DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME = parse_url(DATABASE_URL)
 print("连接: {}:{}/{}".format(DB_HOST, DB_PORT, DB_NAME))
