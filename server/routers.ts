@@ -9459,8 +9459,9 @@ ${klinesSummary}
         // 去掉 SH/SZ 前缀，只保留6位数字
         const code = rawCode.replace(/^(SH|SZ)/i, '').replace(/\s+/g, '').padStart(6, '0');
         try {
-          const db = await getDb();
-          const [rows] = await db.execute(
+          const conn = await getDbConnection();
+          if (!conn) return { code, name: '', found: false };
+          const [rows] = await conn.execute(
             'SELECT name FROM stock_list WHERE code = ? LIMIT 1',
             [code]
           ) as any;
@@ -9468,7 +9469,7 @@ ${klinesSummary}
             return { code, name: rows[0].name, found: true };
           }
           // 模糊匹配（支持输入股票名称）
-          const [fuzzy] = await db.execute(
+          const [fuzzy] = await conn.execute(
             'SELECT code, name FROM stock_list WHERE name LIKE ? LIMIT 1',
             [`%${rawCode}%`]
           ) as any;
@@ -9477,6 +9478,7 @@ ${klinesSummary}
           }
           return { code, name: '', found: false };
         } catch (e) {
+          console.error('[queryStockName] error:', e);
           return { code, name: '', found: false };
         }
       }),
