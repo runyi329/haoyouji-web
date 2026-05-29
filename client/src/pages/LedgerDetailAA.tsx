@@ -1233,6 +1233,15 @@ export default function LedgerDetailAA({
                     ? '#BDBDBD'
                     : todayMark ? '#D32F2F' : '#222222';
 
+                  // 检查该日期是否有图片
+                  const dayDateStr = getDateStr(day);
+                  const dayData = dayMap.get(dayDateStr);
+                  const hasImages = !isNonTrading && dayData?.records?.some((r: any) => {
+                    if (r.images && Array.isArray(r.images) && r.images.length > 0) return true;
+                    if (r.imageUrl) return true;
+                    return false;
+                  });
+
                   return (
                     <button
                       key={day}
@@ -1245,8 +1254,24 @@ export default function LedgerDetailAA({
                         border: cellBorder,
                         padding: '2px 1px',
                         cursor: isNonTrading ? 'default' : 'pointer',
+                        position: 'relative',
                       }}
                     >
+                      {/* 图片标识：右上角小圆点 */}
+                      {hasImages && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            top: '2px',
+                            right: '2px',
+                            width: '4px',
+                            height: '4px',
+                            borderRadius: '50%',
+                            backgroundColor: '#90A4AE',
+                            flexShrink: 0,
+                          }}
+                        />
+                      )}
                       <span style={{ fontSize: '10px', fontWeight: 500, lineHeight: 1, marginBottom: '1px', color: dayNumColor }}>{day}</span>
                       {isNonTrading ? (
                         <span style={{ fontSize: '7px', fontWeight: 400, lineHeight: 1.1, color: '#BDBDBD', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
