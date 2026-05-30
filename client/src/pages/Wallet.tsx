@@ -17,6 +17,7 @@ import {
 import { trpc } from "../lib/trpc";
 import Recharge from "./Recharge";
 import Withdraw from "./Withdraw";
+import { PageTag } from "@/components/PageTag";
 
 // ─── 黑金色系 Token ───────────────────────────────────────────
 const G = {
@@ -446,6 +447,7 @@ export default function Wallet() {
 
   return (
     <div className="min-h-screen" style={{ background: G.bg }}>
+      <PageTag code="P008" />
 
       {/* ── 顶部导航栏 ── */}
       <div

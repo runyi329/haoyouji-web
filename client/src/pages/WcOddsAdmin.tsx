@@ -8,6 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 // 颜色常量
 const BG = "#0D1B2A";
@@ -871,6 +872,7 @@ export default function WcOddsAdmin() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: BG, color: TEXT }}>
+      <PageTag code="P012" />
       {/* 顶部导航 */}
       <div
         className="flex items-center gap-3 px-4 py-3 sticky top-0 z-30"

@@ -3,6 +3,7 @@ import { trpc } from "../lib/trpc";
 import { toast } from "sonner";
 import { Loader2, AlertCircle, ArrowLeft, CheckCircle2, Clock, XCircle, ArrowUpCircle, ChevronRight } from "lucide-react";
 import { useLocation, useSearch } from "wouter";
+import { PageTag } from "@/components/PageTag";
 
 interface WithdrawProps {
   hideHeader?: boolean;
@@ -102,6 +103,7 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
 
   return (
     <div className="min-h-screen pb-20" style={{ background: 'linear-gradient(160deg,#111111 0%,#1a1a1a 100%)' }}>
+      <PageTag code="P010" />
       {/* 顶部导航 */}
       {!hideHeader && (
         <div className="sticky top-0 z-10 border-b border-[#2a2a2a]" style={{ background: '#111111' }}>

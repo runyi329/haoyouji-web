@@ -2,6 +2,7 @@ import { ArrowLeft, ChevronRight, Settings } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link } from "wouter";
+import { PageTag } from "@/components/PageTag";
 
 // ===== 颜色常量 =====
 const BG = "#0D1B2A";        // 深藏青主背景
@@ -640,6 +641,7 @@ export default function WorldCup() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: BG }}>
+      <PageTag code="P011" />
       {/* ===== 顶部海报 ===== */}
       <div style={{ position: "relative", flexShrink: 0 }}>
         {/* 返回按钮 */}

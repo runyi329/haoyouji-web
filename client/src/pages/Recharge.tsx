@@ -3,6 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, Copy, Check, Clock, AlertCircle, CheckCircle2, History, ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import QRCode from "qrcode";
+import { PageTag } from "@/components/PageTag";
 
 interface RechargeProps {
   hideHeader?: boolean;
@@ -284,6 +285,7 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
 
   return (
     <>
+      <PageTag code="P009" />
     <div className={darkBg} style={{background:'linear-gradient(160deg,#111111 0%,#1a1a1a 100%)'}}>
       {/* 顶部导航 */}
       {!hideHeader && (

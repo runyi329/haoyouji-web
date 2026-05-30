@@ -31,6 +31,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useLocation } from "wouter";
 import "@/styles/level-text.css";
 import BottomNav from "@/components/BottomNav";
+import { PageTag } from "@/components/PageTag";
 
 // 翻牌卡片单个数字组件
 // 原理：数字元素高度固定为 h，用 overflow:hidden 裁切上半 / 下半
@@ -1808,6 +1809,7 @@ export default function Home() {
 
   return (
     <div className="bg-[#FAF3ED] max-w-md mx-auto relative shadow-2xl flex flex-col" style={{ height: '100dvh', overflow: 'hidden' }}>
+      <PageTag code="P001" />
       {/* 跳动动画的CSS */}
       <style>{`
         @keyframes bellShake {

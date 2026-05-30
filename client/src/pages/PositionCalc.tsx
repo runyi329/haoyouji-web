@@ -46,6 +46,7 @@ import { useRoute, useLocation } from "wouter";
 import { ChevronLeft, ChevronDown, TrendingUp, TrendingDown, X, Check, Pencil, HelpCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { PageTag } from "@/components/PageTag";
 
 const MIN_PRICE = 1000;
 const MAX_PRICE = 3500;
@@ -722,6 +723,7 @@ export default function PositionCalc() {
 
   return (
     <div className="min-h-screen pb-20 max-w-md mx-auto relative" style={{ background: '#000000', overscrollBehaviorX: 'none', touchAction: 'pan-y', overflowX: 'hidden' }}>
+      <PageTag code="D001" />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-20 flex items-center px-4 py-3"

@@ -36,6 +36,7 @@ import { trpc } from "@/lib/trpc";
 import { EXPENSE_CATEGORIES, getDefaultExpenseConfig } from "@/pages/AJCompanyManager";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { autoCompressImage } from "@/utils/imageUtils";
+import { PageTag } from "@/components/PageTag";
 
 type TransactionType = "expense" | "income";
 
@@ -768,6 +769,7 @@ const AddTransaction = () => {
 
   return (
     <div className={`h-screen flex flex-col ${isCustomAJ ? 'bg-[#F4F6F9]' : 'bg-[#FAF3ED]'}`}>
+      <PageTag code="P004" />
       {/* 顶部导航 */}
       <div className={`${isCustomAJ ? 'bg-[#1A2B4A]' : 'bg-[#D32F2F]'} text-white p-3 flex items-center justify-between flex-shrink-0`}>
         <button onClick={() => setLocation(fromPage === 'home' ? '/' : `/ledger/${id}`)}>

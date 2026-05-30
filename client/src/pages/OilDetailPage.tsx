@@ -9,6 +9,7 @@ import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { PageTag } from "@/components/PageTag";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, Tooltip,
   ResponsiveContainer, ReferenceLine
@@ -434,6 +435,7 @@ export default function OilDetailPage() {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#EEF2F8" }}>
+      <PageTag code="D003" />
 
       {/* ── 头部 ── */}
       <div style={{
