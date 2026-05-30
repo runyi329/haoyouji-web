@@ -21,6 +21,74 @@ const COLOR_DOWN = "#FF4D4F";
 const COLOR_UP = "#52C41A";
 const COLOR_SAME = "#8FA3B8";
 
+// 国旗 + 中文名映射（ISO 3166-1 alpha-2 / 常见代码）
+const TEAM_FLAG_MAP: Record<string, { flag: string; zh: string }> = {
+  ES: { flag: "🇪🇸", zh: "西班牙" },
+  FR: { flag: "🇫🇷", zh: "法国" },
+  "GB-ENG": { flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", zh: "英格兰" },
+  BR: { flag: "🇧🇷", zh: "巴西" },
+  AR: { flag: "🇦🇷", zh: "阿根廷" },
+  DE: { flag: "🇩🇪", zh: "德国" },
+  PT: { flag: "🇵🇹", zh: "葡萄牙" },
+  NL: { flag: "🇳🇱", zh: "荷兰" },
+  IT: { flag: "🇮🇹", zh: "意大利" },
+  BE: { flag: "🇧🇪", zh: "比利时" },
+  HR: { flag: "🇭🇷", zh: "克罗地亚" },
+  DK: { flag: "🇩🇰", zh: "丹麦" },
+  US: { flag: "🇺🇸", zh: "美国" },
+  MX: { flag: "🇲🇽", zh: "墨西哥" },
+  CA: { flag: "🇨🇦", zh: "加拿大" },
+  UY: { flag: "🇺🇾", zh: "乌拉圭" },
+  CO: { flag: "🇨🇴", zh: "哥伦比亚" },
+  EC: { flag: "🇪🇨", zh: "厄瓜多尔" },
+  PE: { flag: "🇵🇪", zh: "秘鲁" },
+  CL: { flag: "🇨🇱", zh: "智利" },
+  PY: { flag: "🇵🇾", zh: "巴拉圭" },
+  VE: { flag: "🇻🇪", zh: "委内瑞拉" },
+  BO: { flag: "🇧🇴", zh: "玻利维亚" },
+  JP: { flag: "🇯🇵", zh: "日本" },
+  KR: { flag: "🇰🇷", zh: "韩国" },
+  AU: { flag: "🇦🇺", zh: "澳大利亚" },
+  IR: { flag: "🇮🇷", zh: "伊朗" },
+  SA: { flag: "🇸🇦", zh: "沙特阿拉伯" },
+  MA: { flag: "🇲🇦", zh: "摩洛哥" },
+  SN: { flag: "🇸🇳", zh: "塞内加尔" },
+  NG: { flag: "🇳🇬", zh: "尼日利亚" },
+  GH: { flag: "🇬🇭", zh: "加纳" },
+  CM: { flag: "🇨🇲", zh: "喀麦隆" },
+  EG: { flag: "🇪🇬", zh: "埃及" },
+  TN: { flag: "🇹🇳", zh: "突尼斯" },
+  CI: { flag: "🇨🇮", zh: "科特迪瓦" },
+  ML: { flag: "🇲🇱", zh: "马里" },
+  TR: { flag: "🇹🇷", zh: "土耳其" },
+  PL: { flag: "🇵🇱", zh: "波兰" },
+  CH: { flag: "🇨🇭", zh: "瑞士" },
+  AT: { flag: "🇦🇹", zh: "奥地利" },
+  SE: { flag: "🇸🇪", zh: "瑞典" },
+  NO: { flag: "🇳🇴", zh: "挪威" },
+  CZ: { flag: "🇨🇿", zh: "捷克" },
+  HU: { flag: "🇭🇺", zh: "匈牙利" },
+  RO: { flag: "🇷🇴", zh: "罗马尼亚" },
+  RS: { flag: "🇷🇸", zh: "塞尔维亚" },
+  UA: { flag: "🇺🇦", zh: "乌克兰" },
+  SK: { flag: "🇸🇰", zh: "斯洛伐克" },
+  GR: { flag: "🇬🇷", zh: "希腊" },
+  "GB-SCT": { flag: "🏴󠁧󠁢󠁳󠁣󠁴󠁿", zh: "苏格兰" },
+  "GB-WLS": { flag: "🏴󠁧󠁢󠁷󠁬󠁳󠁿", zh: "威尔士" },
+  IE: { flag: "🇮🇪", zh: "爱尔兰" },
+  QA: { flag: "🇶🇦", zh: "卡塔尔" },
+  CN: { flag: "🇨🇳", zh: "中国" },
+};
+
+function getTeamDisplay(name: string, code: string): { flag: string; zh: string } {
+  const key = code?.toUpperCase();
+  if (key && TEAM_FLAG_MAP[key]) return TEAM_FLAG_MAP[key];
+  // 尝试从名字反查
+  const found = Object.values(TEAM_FLAG_MAP).find(v => v.zh === name);
+  if (found) return found;
+  return { flag: "🏳️", zh: name };
+}
+
 function formatTime(ts: string | null) {
   if (!ts) return "-";
   const d = new Date(ts);
@@ -955,127 +1023,157 @@ export default function WcOddsAdmin() {
               </div>
             ) : (
               <div
-                ref={tableRef}
                 style={{
-                  overflowX: "auto",
-                  overflowY: "auto",
-                  maxHeight: "calc(100vh - 320px)",
+                  display: "flex",
                   borderRadius: 12,
                   border: `1px solid ${BORDER}`,
+                  overflow: "hidden",
+                  maxHeight: "calc(100vh - 320px)",
                 }}
               >
-                <table style={{ borderCollapse: "collapse", minWidth: "max-content", width: "100%" }}>
-                  <thead>
-                    <tr style={{ backgroundColor: BG3 }}>
-                      <th style={{
-                        position: "sticky", left: 0, zIndex: 10,
-                        backgroundColor: BG3, padding: "10px 12px",
-                        borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`,
-                        textAlign: "left", whiteSpace: "nowrap", color: TEXT2, fontSize: 11, fontWeight: 600,
-                      }}>
-                        球队
-                      </th>
-                      {snapshotsDesc.map((snap) => (
-                        <th key={snap.id} style={{
-                          padding: "10px 8px", textAlign: "center",
-                          borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`,
-                          whiteSpace: "nowrap", color: TEXT2, fontSize: 11, fontWeight: 600, minWidth: 70,
+                {/* ===== 左侧：固定球队列（不可滑动）===== */}
+                <div style={{ flexShrink: 0, overflowY: "hidden", zIndex: 10 }}>
+                  <table style={{ borderCollapse: "collapse", tableLayout: "fixed" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: BG3 }}>
+                        <th style={{
+                          backgroundColor: BG3, padding: "10px 12px",
+                          borderRight: `2px solid ${GOLD}`, borderBottom: `1px solid ${BORDER}`,
+                          textAlign: "left", whiteSpace: "nowrap", color: TEXT2, fontSize: 11, fontWeight: 600,
+                          width: 110,
                         }}>
-                          {formatTime(snap.fetchedAt)}
+                          球队
                         </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {teams.map((team: { name: string; code: string }) => {
-                      const teamData = matrixData[team.name] ?? {};
-                      return (
-                        <tr key={team.name} style={{ borderBottom: `1px solid rgba(255,255,255,0.03)` }}>
-                          <td style={{
-                            position: "sticky", left: 0, zIndex: 5,
-                            backgroundColor: BG2, padding: "8px 12px",
-                            borderRight: `1px solid ${BORDER}`,
-                            whiteSpace: "nowrap", color: TEXT, fontWeight: 500, fontSize: 13,
-                          }}>
-                            {team.name}
-                            {team.code && (
-                              <span style={{ fontSize: 10, color: TEXT2, marginLeft: 4 }}>{team.code}</span>
-                            )}
-                          </td>
-                          {snapshotsDesc.map((snap, colIdx) => {
-                            const current = teamData[snap.id];
-                            const prevSnap = snapshotsDesc[colIdx + 1];
-                            const prev = prevSnap ? teamData[prevSnap.id] : null;
-                            const pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
-                            const prevPinnacle = prev?.pinnacle ? parseFloat(prev.pinnacle) : null;
-                            const color = getOddsColor(pinnacle, prevPinnacle);
-                            const arrow = getOddsArrow(pinnacle, prevPinnacle);
-                            return (
-                              <td key={snap.id} style={{
-                                padding: "7px 6px", textAlign: "center",
-                                borderRight: `1px solid ${BORDER}`,
-                                borderBottom: `1px solid rgba(255,255,255,0.04)`,
-                                color: pinnacle ? color : "rgba(255,255,255,0.15)",
-                                fontWeight: pinnacle && color !== COLOR_SAME ? 600 : 400,
-                                whiteSpace: "nowrap",
-                              }}>
-                                {pinnacle ? (
-                                  <>
-                                    <div>
-                                      {arrow && <span style={{ fontSize: 10, marginRight: 1 }}>{arrow}</span>}
-                                      {pinnacle.toFixed(2)}
-                                    </div>
-                                    <div style={{ fontSize: 9, opacity: 0.55, marginTop: 1 }}>
-                                      {(100 / pinnacle).toFixed(1)}%
-                                    </div>
-                                  </>
-                                ) : (
-                                  <span style={{ color: "rgba(255,255,255,0.15)" }}>-</span>
-                                )}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr style={{ backgroundColor: "rgba(255,215,0,0.08)", borderTop: `2px solid ${BORDER}` }}>
-                      <td style={{
-                        position: "sticky", left: 0, zIndex: 5,
-                        backgroundColor: "rgba(255,215,0,0.12)", padding: "8px 10px",
-                        borderRight: `1px solid ${BORDER}`, whiteSpace: "nowrap",
-                        color: "rgba(255,215,0,0.9)", fontWeight: 700, fontSize: 11,
-                      }}>
-                        隐含概率合计
-                      </td>
-                      {snapshotsDesc.map((snap) => {
-                        let total = 0, count = 0;
-                        teams.forEach((team: { name: string; code: string }) => {
-                          const current = (matrixData[team.name] ?? {})[snap.id];
-                          const pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
-                          if (pinnacle && pinnacle > 0) { total += (1 / pinnacle) * 100; count++; }
-                        });
-                        const overround = total - 100;
-                        const color = total > 120 ? "#ff6b6b" : total > 110 ? "#ffd700" : "#4ade80";
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {teams.map((team: { name: string; code: string }) => {
+                        const { flag, zh } = getTeamDisplay(team.name, team.code);
                         return (
-                          <td key={snap.id} style={{
-                            padding: "8px 6px", textAlign: "center",
-                            borderRight: `1px solid ${BORDER}`,
-                            color, fontWeight: 700, fontSize: 11, whiteSpace: "nowrap",
-                          }}>
-                            {count > 0 ? (
-                              <>
-                                <div>{total.toFixed(1)}%</div>
-                                <div style={{ fontSize: 9, opacity: 0.7 }}>+{overround.toFixed(1)}%</div>
-                              </>
-                            ) : "-"}
-                          </td>
+                          <tr key={team.name} style={{ borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
+                            <td style={{
+                              backgroundColor: BG2, padding: "8px 10px",
+                              borderRight: `2px solid ${GOLD}`,
+                              whiteSpace: "nowrap", width: 110,
+                            }}>
+                              <div style={{ fontSize: 18, lineHeight: 1 }}>{flag}</div>
+                              <div style={{ fontSize: 11, color: TEXT, fontWeight: 600, marginTop: 2 }}>{zh}</div>
+                            </td>
+                          </tr>
                         );
                       })}
-                    </tr>
-                  </tfoot>
-                </table>
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ backgroundColor: "rgba(255,215,0,0.08)", borderTop: `2px solid ${BORDER}` }}>
+                        <td style={{
+                          backgroundColor: "rgba(255,215,0,0.12)", padding: "8px 10px",
+                          borderRight: `2px solid ${GOLD}`, whiteSpace: "nowrap",
+                          color: "rgba(255,215,0,0.9)", fontWeight: 700, fontSize: 10, width: 110,
+                        }}>
+                          隐含概率<br/>合计
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* ===== 右侧：赔率列（可横向滑动）===== */}
+                <div
+                  ref={tableRef}
+                  style={{
+                    flex: 1,
+                    overflowX: "auto",
+                    overflowY: "hidden",
+                    WebkitOverflowScrolling: "touch",
+                  }}
+                >
+                  <table style={{ borderCollapse: "collapse", minWidth: "max-content" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: BG3 }}>
+                        {snapshotsDesc.map((snap) => (
+                          <th key={snap.id} style={{
+                            padding: "10px 8px", textAlign: "center",
+                            borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`,
+                            whiteSpace: "nowrap", color: TEXT2, fontSize: 11, fontWeight: 600, minWidth: 72,
+                          }}>
+                            {formatTime(snap.fetchedAt)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {teams.map((team: { name: string; code: string }) => {
+                        const teamData = matrixData[team.name] ?? {};
+                        return (
+                          <tr key={team.name} style={{ borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
+                            {snapshotsDesc.map((snap, colIdx) => {
+                              const current = teamData[snap.id];
+                              const prevSnap = snapshotsDesc[colIdx + 1];
+                              const prev = prevSnap ? teamData[prevSnap.id] : null;
+                              const pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
+                              const prevPinnacle = prev?.pinnacle ? parseFloat(prev.pinnacle) : null;
+                              const color = getOddsColor(pinnacle, prevPinnacle);
+                              const arrow = getOddsArrow(pinnacle, prevPinnacle);
+                              return (
+                                <td key={snap.id} style={{
+                                  padding: "8px 6px", textAlign: "center",
+                                  borderRight: `1px solid ${BORDER}`,
+                                  borderBottom: `1px solid rgba(255,255,255,0.04)`,
+                                  color: pinnacle ? color : "rgba(255,255,255,0.15)",
+                                  fontWeight: pinnacle && color !== COLOR_SAME ? 600 : 400,
+                                  whiteSpace: "nowrap",
+                                  minWidth: 72,
+                                }}>
+                                  {pinnacle ? (
+                                    <>
+                                      <div style={{ fontSize: 13 }}>
+                                        {arrow && <span style={{ fontSize: 10, marginRight: 1 }}>{arrow}</span>}
+                                        {pinnacle.toFixed(2)}
+                                      </div>
+                                      <div style={{ fontSize: 9, opacity: 0.55, marginTop: 1 }}>
+                                        {(100 / pinnacle).toFixed(1)}%
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <span style={{ color: "rgba(255,255,255,0.15)" }}>-</span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ backgroundColor: "rgba(255,215,0,0.08)", borderTop: `2px solid ${BORDER}` }}>
+                        {snapshotsDesc.map((snap) => {
+                          let total = 0, count = 0;
+                          teams.forEach((team: { name: string; code: string }) => {
+                            const current = (matrixData[team.name] ?? {})[snap.id];
+                            const pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
+                            if (pinnacle && pinnacle > 0) { total += (1 / pinnacle) * 100; count++; }
+                          });
+                          const overround = total - 100;
+                          const color = total > 120 ? "#ff6b6b" : total > 110 ? "#ffd700" : "#4ade80";
+                          return (
+                            <td key={snap.id} style={{
+                              padding: "8px 6px", textAlign: "center",
+                              borderRight: `1px solid ${BORDER}`,
+                              color, fontWeight: 700, fontSize: 11, whiteSpace: "nowrap", minWidth: 72,
+                            }}>
+                              {count > 0 ? (
+                                <>
+                                  <div>{total.toFixed(1)}%</div>
+                                  <div style={{ fontSize: 9, opacity: 0.7 }}>+{overround.toFixed(1)}%</div>
+                                </>
+                              ) : "-"}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
             )}
           </div>
