@@ -1,118 +1,146 @@
 import { useState } from "react";
 import { Link, useParams } from "wouter";
-import { ArrowLeft, ChevronDown, ChevronUp, Trophy, Users, Star } from "lucide-react";
+import { ArrowLeft, Search } from "lucide-react";
 import { wcTeams, teamsByGroup, posMap, type TeamData } from "@/data/wcTeams";
 
-// 国旗 emoji 映射
-function getFlagEmoji(code: string): string {
-  const flagMap: Record<string, string> = {
-    "cz": "🇨🇿", "mx": "🇲🇽", "za": "🇿🇦", "kr": "🇰🇷",
-    "ba": "🇧🇦", "ca": "🇨🇦", "qa": "🇶🇦", "ch": "🇨🇭",
-    "br": "🇧🇷", "ht": "🇭🇹", "ma": "🇲🇦", "gb-sct": "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
-    "au": "🇦🇺", "py": "🇵🇾", "tr": "🇹🇷", "us": "🇺🇸",
-    "cw": "🇨🇼", "ec": "🇪🇨", "de": "🇩🇪", "ci": "🇨🇮",
-    "jp": "🇯🇵", "nl": "🇳🇱", "se": "🇸🇪", "tn": "🇹🇳",
-    "be": "🇧🇪", "eg": "🇪🇬", "ir": "🇮🇷", "nz": "🇳🇿",
-    "cv": "🇨🇻", "sa": "🇸🇦", "es": "🇪🇸", "uy": "🇺🇾",
-    "fr": "🇫🇷", "iq": "🇮🇶", "no": "🇳🇴", "sn": "🇸🇳",
-    "dz": "🇩🇿", "ar": "🇦🇷", "at": "🇦🇹", "jo": "🇯🇴",
-    "co": "🇨🇴", "cd": "🇨🇩", "pt": "🇵🇹", "uz": "🇺🇿",
-    "hr": "🇭🇷", "gb-eng": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "gh": "🇬🇭", "pa": "🇵🇦",
-  };
-  return flagMap[code] || "🏳️";
+// ===== 颜色常量（与 WorldCup.tsx 保持一致） =====
+const BG   = "#0D1B2A";
+const BG2  = "#112236";
+const BG3  = "#162C42";
+const GOLD = "#FFD700";
+const TEXT  = "#E8EDF2";
+const TEXT2 = "#8FA3B8";
+const BORDER = "rgba(255,255,255,0.08)";
+
+// ===== 国旗图片 =====
+function Flag({ code, size = 28 }: { code: string; size?: number }) {
+  return (
+    <img
+      src={`/flags/${code.toLowerCase()}.png`}
+      width={size}
+      height={Math.round(size * 0.67)}
+      alt={code}
+      style={{ borderRadius: 2, objectFit: "cover", display: "inline-block", flexShrink: 0 }}
+      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+    />
+  );
 }
 
-// 排名颜色
-function rankColor(rank: number): string {
-  if (rank <= 5) return "text-yellow-500 font-bold";
-  if (rank <= 15) return "text-orange-500 font-bold";
-  if (rank <= 30) return "text-blue-500 font-bold";
-  return "text-gray-600 font-medium";
+// ===== 排名颜色 =====
+function rankColor(rank: number) {
+  if (rank <= 5)  return GOLD;
+  if (rank <= 15) return "#FF9500";
+  if (rank <= 30) return "#5BA3FF";
+  return TEXT2;
 }
 
-// 位置颜色标签
-function posBadge(pos: string): string {
-  const map: Record<string, string> = {
-    GK: "bg-yellow-100 text-yellow-700",
-    DF: "bg-blue-100 text-blue-700",
-    MF: "bg-green-100 text-green-700",
-    FW: "bg-red-100 text-red-700",
-  };
-  return map[pos] || "bg-gray-100 text-gray-600";
-}
+// ===== 位置徽章样式 =====
+const posBadgeStyle: Record<string, { bg: string; color: string }> = {
+  GK: { bg: "rgba(255,215,0,0.15)",  color: GOLD },
+  DF: { bg: "rgba(91,163,255,0.15)", color: "#5BA3FF" },
+  MF: { bg: "rgba(80,220,120,0.15)", color: "#50DC78" },
+  FW: { bg: "rgba(255,80,80,0.15)",  color: "#FF5050" },
+};
 
 // ===== 球队详情页 =====
 function TeamDetail({ team, backHref }: { team: TeamData; backHref: string }) {
-  const [expandedPos, setExpandedPos] = useState<string | null>("FW");
   const positions = ["GK", "DF", "MF", "FW"] as const;
-
   const playersByPos = positions.reduce((acc, pos) => {
     acc[pos] = team.players.filter(p => p.pos === pos);
     return acc;
   }, {} as Record<string, typeof team.players>);
-
   const captain = team.players.find(p => p.captain);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8 max-w-md mx-auto">
+    <div style={{ minHeight: "100vh", background: BG, paddingBottom: 32, maxWidth: 480, margin: "0 auto" }}>
+
       {/* 顶部导航 */}
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 shadow-sm">
+      <div style={{
+        position: "sticky", top: 0, zIndex: 10,
+        background: BG2,
+        borderBottom: `1px solid ${BORDER}`,
+        padding: "12px 16px",
+        display: "flex", alignItems: "center", gap: 12,
+      }}>
         <Link href={backHref}>
-          <button className="p-1.5 rounded-full hover:bg-gray-100 transition-colors">
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
+          <button style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", alignItems: "center" }}>
+            <ArrowLeft style={{ width: 20, height: 20, color: TEXT2 }} />
           </button>
         </Link>
-        <span className="text-lg">{getFlagEmoji(team.code)}</span>
-        <h1 className="font-bold text-gray-800 text-base flex-1">{team.nameCn}</h1>
-        <span className="text-xs text-gray-400">{team.name}</span>
+        <Flag code={team.code} size={24} />
+        <span style={{ fontWeight: 700, color: TEXT, fontSize: 16, flex: 1 }}>{team.nameCn}</span>
+        <span style={{ color: TEXT2, fontSize: 12 }}>{team.name}</span>
       </div>
 
       {/* 球队概览卡片 */}
-      <div className="mx-4 mt-4 bg-white rounded-2xl shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-[#A80000] to-[#D44000] p-5 text-white">
-          <div className="flex items-center gap-4">
-            <span className="text-5xl">{getFlagEmoji(team.code)}</span>
+      <div style={{ margin: "16px 16px 0", borderRadius: 16, overflow: "hidden", border: `1px solid ${BORDER}` }}>
+        {/* 顶部横幅 */}
+        <div style={{
+          background: `linear-gradient(135deg, ${BG3} 0%, #1a3a5c 100%)`,
+          padding: "20px 20px 16px",
+          borderBottom: `1px solid ${BORDER}`,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <Flag code={team.code} size={56} />
             <div>
-              <h2 className="text-2xl font-bold">{team.nameCn}</h2>
-              <p className="text-white/80 text-sm mt-0.5">{team.name}</p>
+              <div style={{ fontSize: 22, fontWeight: 800, color: TEXT }}>{team.nameCn}</div>
+              <div style={{ fontSize: 13, color: TEXT2, marginTop: 2 }}>{team.name}</div>
+              <div style={{ marginTop: 6, display: "flex", gap: 8 }}>
+                <span style={{
+                  background: "rgba(255,215,0,0.12)", color: GOLD,
+                  fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 20,
+                  border: `1px solid rgba(255,215,0,0.25)`,
+                }}>
+                  {team.group}组
+                </span>
+                <span style={{
+                  background: "rgba(255,255,255,0.06)", color: TEXT2,
+                  fontSize: 11, padding: "2px 8px", borderRadius: 20,
+                  border: `1px solid ${BORDER}`,
+                }}>
+                  {team.players.length} 名球员
+                </span>
+              </div>
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-3 divide-x divide-gray-100 py-4">
-          <div className="flex flex-col items-center gap-1">
-            <Trophy className="w-4 h-4 text-yellow-500" />
-            <span className={`text-lg ${rankColor(team.fifaRank)}`}>#{team.fifaRank}</span>
-            <span className="text-xs text-gray-400">FIFA排名</span>
+        {/* 数据栏 */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr",
+          background: BG3,
+        }}>
+          <div style={{ padding: "14px 0", textAlign: "center", borderRight: `1px solid ${BORDER}` }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: rankColor(team.fifaRank) }}>#{team.fifaRank}</div>
+            <div style={{ fontSize: 11, color: TEXT2, marginTop: 2 }}>FIFA 世界排名</div>
           </div>
-          <div className="flex flex-col items-center gap-1">
-            <Star className="w-4 h-4 text-blue-500" />
-            <span className="text-sm font-semibold text-gray-700 text-center leading-tight px-1">{team.group}组</span>
-            <span className="text-xs text-gray-400">所在分组</span>
-          </div>
-          <div className="flex flex-col items-center gap-1">
-            <Users className="w-4 h-4 text-green-500" />
-            <span className="text-lg font-bold text-gray-700">{team.players.length}</span>
-            <span className="text-xs text-gray-400">球员人数</span>
+          <div style={{ padding: "14px 0", textAlign: "center" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: TEXT }}>{team.coach}</div>
+            <div style={{ fontSize: 11, color: TEXT2, marginTop: 2 }}>主教练</div>
           </div>
         </div>
-      </div>
-
-      {/* 主教练 & 队长 */}
-      <div className="mx-4 mt-3 bg-white rounded-2xl shadow-sm p-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl">👔</div>
-          <div>
-            <p className="text-xs text-gray-400">主教练</p>
-            <p className="font-semibold text-gray-800">{team.coach}</p>
-          </div>
-        </div>
+        {/* 队长 */}
         {captain && (
-          <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-50">
-            <div className="w-10 h-10 rounded-full bg-yellow-50 flex items-center justify-center text-xl">©️</div>
+          <div style={{
+            background: BG2, borderTop: `1px solid ${BORDER}`,
+            padding: "12px 16px", display: "flex", alignItems: "center", gap: 12,
+          }}>
+            {/* 头像占位 */}
+            <div style={{
+              width: 40, height: 40, borderRadius: "50%",
+              background: "rgba(255,215,0,0.12)",
+              border: `2px solid rgba(255,215,0,0.3)`,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: GOLD }}>C</span>
+            </div>
             <div>
-              <p className="text-xs text-gray-400">队长</p>
-              <p className="font-semibold text-gray-800">{captain.name}</p>
-              <p className="text-xs text-gray-400">{captain.club}</p>
+              <div style={{ fontSize: 11, color: TEXT2 }}>队长</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: TEXT }}>
+                {captain.nameCn || captain.name}
+                {captain.nameCn && <span style={{ color: TEXT2, fontSize: 12, marginLeft: 6 }}>{captain.name}</span>}
+              </div>
+              <div style={{ fontSize: 12, color: TEXT2 }}>{captain.club}</div>
             </div>
           </div>
         )}
@@ -120,64 +148,100 @@ function TeamDetail({ team, backHref }: { team: TeamData; backHref: string }) {
 
       {/* 球员名单 */}
       {team.players.length > 0 ? (
-        <div className="mx-4 mt-3 space-y-2">
+        <div style={{ margin: "12px 16px 0" }}>
           {positions.map(pos => {
             const players = playersByPos[pos];
             if (!players || players.length === 0) return null;
-            const isExpanded = expandedPos === pos;
+            const badge = posBadgeStyle[pos];
             return (
-              <div key={pos} className="bg-white rounded-2xl shadow-sm overflow-hidden">
-                <button
-                  className="w-full flex items-center justify-between px-4 py-3"
-                  onClick={() => setExpandedPos(isExpanded ? null : pos)}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${posBadge(pos)}`}>
-                      {posMap[pos]}
-                    </span>
-                    <span className="text-sm text-gray-500">{players.length}人</span>
-                  </div>
-                  {isExpanded ? (
-                    <ChevronUp className="w-4 h-4 text-gray-400" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  )}
-                </button>
-                {isExpanded && (
-                  <div className="border-t border-gray-50">
-                    {players.map((player, idx) => (
-                      <div
-                        key={idx}
-                        className={`px-4 py-3 flex items-center gap-3 ${idx < players.length - 1 ? "border-b border-gray-50" : ""}`}
-                      >
-                        {/* 头像占位 */}
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-sm font-bold text-gray-500 flex-shrink-0">
-                          {player.name.charAt(0)}
+              <div key={pos} style={{ marginBottom: 12 }}>
+                {/* 位置标题 */}
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "8px 4px 6px",
+                }}>
+                  <span style={{
+                    background: badge.bg, color: badge.color,
+                    fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
+                    border: `1px solid ${badge.color}30`,
+                  }}>
+                    {posMap[pos]}
+                  </span>
+                  <span style={{ color: TEXT2, fontSize: 12 }}>{players.length} 人</span>
+                </div>
+
+                {/* 球员列表 */}
+                <div style={{
+                  borderRadius: 12, overflow: "hidden",
+                  border: `1px solid ${BORDER}`,
+                }}>
+                  {players.map((player, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 12,
+                        padding: "11px 14px",
+                        background: idx % 2 === 0 ? BG3 : BG2,
+                        borderBottom: idx < players.length - 1 ? `1px solid ${BORDER}` : "none",
+                      }}
+                    >
+                      {/* 头像占位圆 */}
+                      <div style={{
+                        width: 36, height: 36, borderRadius: "50%",
+                        background: badge.bg,
+                        border: `1.5px solid ${badge.color}40`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        flexShrink: 0,
+                        fontSize: 13, fontWeight: 700, color: badge.color,
+                      }}>
+                        {(player.nameCn || player.name).charAt(0)}
+                      </div>
+
+                      {/* 姓名 + 俱乐部 */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: TEXT }}>
+                            {player.nameCn || player.name}
+                          </span>
+                          {player.nameCn && (
+                            <span style={{ fontSize: 11, color: TEXT2 }}>{player.name}</span>
+                          )}
+                          {player.captain && (
+                            <span style={{
+                              fontSize: 10, fontWeight: 800,
+                              background: "rgba(255,215,0,0.15)", color: GOLD,
+                              padding: "1px 6px", borderRadius: 10,
+                              border: `1px solid rgba(255,215,0,0.3)`,
+                              flexShrink: 0,
+                            }}>C</span>
+                          )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-gray-800 text-sm truncate">{player.name}</span>
-                            {player.captain && (
-                              <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0">C</span>
-                            )}
-                          </div>
-                          <p className="text-xs text-gray-400 truncate mt-0.5">{player.club}</p>
-                        </div>
-                        <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-                          <span className="text-xs text-gray-500">{player.age}岁</span>
-                          <span className="text-xs text-gray-400">{player.caps}帽 {player.goals}球</span>
+                        <div style={{ fontSize: 12, color: TEXT2, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {player.club}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+
+                      {/* 数据 */}
+                      <div style={{ flexShrink: 0, textAlign: "right" }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>{player.age}岁</div>
+                        <div style={{ fontSize: 11, color: TEXT2, marginTop: 1 }}>
+                          {player.caps}帽 · {player.goals}球
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             );
           })}
         </div>
       ) : (
-        <div className="mx-4 mt-3 bg-white rounded-2xl shadow-sm p-8 text-center">
-          <p className="text-gray-400 text-sm">球员名单尚未公布</p>
+        <div style={{
+          margin: "12px 16px 0", borderRadius: 12,
+          background: BG3, border: `1px solid ${BORDER}`,
+          padding: "32px 16px", textAlign: "center",
+        }}>
+          <div style={{ color: TEXT2, fontSize: 14 }}>球员名单尚未公布</div>
         </div>
       )}
     </div>
@@ -190,55 +254,76 @@ function TeamList() {
   const groups = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
 
   const filteredTeams = searchText
-    ? wcTeams.filter(
-        t =>
-          t.nameCn.includes(searchText) ||
-          t.name.toLowerCase().includes(searchText.toLowerCase())
+    ? wcTeams.filter(t =>
+        t.nameCn.includes(searchText) ||
+        t.name.toLowerCase().includes(searchText.toLowerCase())
       )
     : null;
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8 max-w-md mx-auto">
+    <div style={{ minHeight: "100vh", background: BG, paddingBottom: 32, maxWidth: 480, margin: "0 auto" }}>
+
       {/* 顶部导航 */}
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 shadow-sm">
+      <div style={{
+        position: "sticky", top: 0, zIndex: 10,
+        background: BG2, borderBottom: `1px solid ${BORDER}`,
+        padding: "12px 16px",
+        display: "flex", alignItems: "center", gap: 12,
+      }}>
         <Link href="/world-cup">
-          <button className="p-1.5 rounded-full hover:bg-gray-100 transition-colors">
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
+          <button style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", alignItems: "center" }}>
+            <ArrowLeft style={{ width: 20, height: 20, color: TEXT2 }} />
           </button>
         </Link>
-        <h1 className="font-bold text-gray-800 flex-1">球队档案</h1>
-        <span className="text-xs text-gray-400">2026 FIFA World Cup</span>
+        <span style={{ fontWeight: 700, color: TEXT, fontSize: 16, flex: 1 }}>球队档案</span>
+        <span style={{ color: TEXT2, fontSize: 11 }}>2026 FIFA World Cup</span>
       </div>
 
       {/* 搜索框 */}
-      <div className="px-4 pt-4 pb-2">
-        <input
-          type="text"
-          placeholder="搜索球队..."
-          value={searchText}
-          onChange={e => setSearchText(e.target.value)}
-          className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#A80000]/20 focus:border-[#A80000]/50"
-        />
+      <div style={{ padding: "12px 16px 8px" }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          background: BG3, border: `1px solid ${BORDER}`,
+          borderRadius: 12, padding: "10px 14px",
+        }}>
+          <Search style={{ width: 16, height: 16, color: TEXT2, flexShrink: 0 }} />
+          <input
+            type="text"
+            placeholder="搜索球队..."
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            style={{
+              flex: 1, background: "none", border: "none", outline: "none",
+              color: TEXT, fontSize: 14,
+            }}
+          />
+        </div>
       </div>
 
       {/* 搜索结果 */}
       {filteredTeams ? (
-        <div className="px-4 mt-2">
+        <div style={{ padding: "4px 16px 0" }}>
           {filteredTeams.length === 0 ? (
-            <div className="bg-white rounded-2xl p-8 text-center">
-              <p className="text-gray-400 text-sm">未找到相关球队</p>
+            <div style={{ background: BG3, borderRadius: 12, padding: "32px 16px", textAlign: "center", border: `1px solid ${BORDER}` }}>
+              <span style={{ color: TEXT2, fontSize: 14 }}>未找到相关球队</span>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${BORDER}` }}>
               {filteredTeams.map((team, idx) => (
                 <Link key={team.code} href={`/world-cup/teams/${team.code}`}>
-                  <div className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer ${idx < filteredTeams.length - 1 ? "border-b border-gray-50" : ""}`}>
-                    <span className="text-2xl">{getFlagEmoji(team.code)}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-800 text-sm">{team.nameCn}</p>
-                      <p className="text-xs text-gray-400">{team.name} · {team.group}组</p>
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: 12,
+                    padding: "12px 14px",
+                    background: idx % 2 === 0 ? BG3 : BG2,
+                    borderBottom: idx < filteredTeams.length - 1 ? `1px solid ${BORDER}` : "none",
+                    cursor: "pointer",
+                  }}>
+                    <Flag code={team.code} size={32} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, color: TEXT, fontSize: 14 }}>{team.nameCn}</div>
+                      <div style={{ color: TEXT2, fontSize: 12, marginTop: 1 }}>{team.name} · {team.group}组</div>
                     </div>
-                    <span className={`text-sm ${rankColor(team.fifaRank)}`}>#{team.fifaRank}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: rankColor(team.fifaRank) }}>#{team.fifaRank}</span>
                   </div>
                 </Link>
               ))}
@@ -247,30 +332,45 @@ function TeamList() {
         </div>
       ) : (
         /* 按小组展示 */
-        <div className="px-4 mt-2 space-y-4">
+        <div style={{ padding: "4px 16px 0" }}>
           {groups.map(group => {
             const teams = teamsByGroup[group] || [];
             if (teams.length === 0) return null;
             return (
-              <div key={group}>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-6 h-6 rounded-full bg-[#A80000] flex items-center justify-center">
-                    <span className="text-white text-xs font-bold">{group}</span>
+              <div key={group} style={{ marginBottom: 16 }}>
+                {/* 组标题 */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, padding: "0 2px" }}>
+                  <div style={{
+                    width: 24, height: 24, borderRadius: "50%",
+                    background: "rgba(255,215,0,0.15)",
+                    border: `1px solid rgba(255,215,0,0.3)`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    <span style={{ color: GOLD, fontSize: 11, fontWeight: 800 }}>{group}</span>
                   </div>
-                  <span className="text-sm font-semibold text-gray-600">{group}组</span>
+                  <span style={{ color: TEXT2, fontSize: 13, fontWeight: 600 }}>{group} 组</span>
                 </div>
-                <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                {/* 球队列表 */}
+                <div style={{ borderRadius: 12, overflow: "hidden", border: `1px solid ${BORDER}` }}>
                   {teams.map((team, idx) => (
                     <Link key={team.code} href={`/world-cup/teams/${team.code}`}>
-                      <div className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer ${idx < teams.length - 1 ? "border-b border-gray-50" : ""}`}>
-                        <span className="text-2xl">{getFlagEmoji(team.code)}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-800 text-sm">{team.nameCn}</p>
-                          <p className="text-xs text-gray-400 truncate">{team.coach}</p>
+                      <div style={{
+                        display: "flex", alignItems: "center", gap: 12,
+                        padding: "12px 14px",
+                        background: idx % 2 === 0 ? BG3 : BG2,
+                        borderBottom: idx < teams.length - 1 ? `1px solid ${BORDER}` : "none",
+                        cursor: "pointer",
+                      }}>
+                        <Flag code={team.code} size={36} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, color: TEXT, fontSize: 14 }}>{team.nameCn}</div>
+                          <div style={{ color: TEXT2, fontSize: 12, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {team.coach}
+                          </div>
                         </div>
-                        <div className="flex flex-col items-end gap-0.5">
-                          <span className={`text-sm ${rankColor(team.fifaRank)}`}>#{team.fifaRank}</span>
-                          <span className="text-xs text-gray-400">{team.players.length}人</span>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: rankColor(team.fifaRank) }}>#{team.fifaRank}</div>
+                          <div style={{ fontSize: 11, color: TEXT2, marginTop: 1 }}>{team.players.length}人</div>
                         </div>
                       </div>
                     </Link>
@@ -286,8 +386,6 @@ function TeamList() {
 }
 
 // ===== 主路由组件 =====
-// 路由：/world-cup/teams        → 列表页
-// 路由：/world-cup/teams/:code  → 某球队详情页
 export default function WcTeams() {
   const params = useParams<{ code?: string }>();
   const code = params.code;
@@ -296,10 +394,10 @@ export default function WcTeams() {
     const team = wcTeams.find(t => t.code === code);
     if (!team) {
       return (
-        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center max-w-md mx-auto">
-          <p className="text-gray-400 mb-4">未找到该球队</p>
+        <div style={{ minHeight: "100vh", background: BG, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", maxWidth: 480, margin: "0 auto" }}>
+          <div style={{ color: TEXT2, marginBottom: 16 }}>未找到该球队</div>
           <Link href="/world-cup/teams">
-            <button className="text-[#A80000] text-sm font-semibold">← 返回列表</button>
+            <button style={{ background: "none", border: "none", cursor: "pointer", color: GOLD, fontSize: 14, fontWeight: 600 }}>← 返回列表</button>
           </Link>
         </div>
       );
