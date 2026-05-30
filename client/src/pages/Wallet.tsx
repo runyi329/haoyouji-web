@@ -19,6 +19,30 @@ import Recharge from "./Recharge";
 import Withdraw from "./Withdraw";
 import { PageTag } from "@/components/PageTag";
 
+// 从交易备注中提取世界杯球队 code（小写），如 [ES] → 'es'
+function extractWcTeamCode(note: string): string | null {
+  const isWcRelated = note.includes('世界杯投注') || note.includes('订单作废-退回投注');
+  if (!isWcRelated) return null;
+  const codeMatch = note.match(/\[([A-Z]{2,10})\]/);
+  if (codeMatch) return codeMatch[1].toLowerCase();
+  const nameToCode: Record<string, string> = {
+    '西班牙': 'es', '法国': 'fr', '英格兰': 'gb-eng', '巴西': 'br', '阿根廷': 'ar',
+    '葡萄牙': 'pt', '德国': 'de', '荷兰': 'nl', '挪威': 'no', '比利时': 'be',
+    '哥伦比亚': 'co', '摩洛哥': 'ma', '日本': 'jp', '美国': 'us', '瑞士': 'ch',
+    '乌拉圭': 'uy', '墨西哥': 'mx', '厄瓜多尔': 'ec', '克罗地亚': 'hr', '土耳其': 'tr',
+    '塞内加尔': 'sn', '瑞典': 'se', '奥地利': 'at', '苏格兰': 'gb-sct', '加拿大': 'ca',
+    '科特迪瓦': 'ci', '巴拉圭': 'py', '捷克': 'cz', '埃及': 'eg', '波黑': 'ba',
+    '韩国': 'kr', '阿尔及利亚': 'dz', '加纳': 'gh', '澳大利亚': 'au', '突尼斯': 'tn',
+    '伊朗': 'ir', '刚果民主共和国': 'cd', '南非': 'za', '沙特阿拉伯': 'sa', '巴拿马': 'pa',
+    '卡塔尔': 'qa', '佛得角': 'cv', '新西兰': 'nz', '伊拉克': 'iq', '乌兹别克斯坦': 'uz',
+    '库拉索': 'cw', '约旦': 'jo', '海地': 'ht',
+  };
+  for (const [name, code] of Object.entries(nameToCode)) {
+    if (note.includes(name)) return code;
+  }
+  return null;
+}
+
 // ─── 黑金色系 Token ───────────────────────────────────────────
 const G = {
   bg: "#0d0d0d",          // 页面底色
@@ -304,6 +328,8 @@ export default function Wallet() {
         id: `m-${m.id}`,
         type: (Number(m.amount) > 0 ? "reward" : "deduct") as "reward" | "deduct",
         amount: Math.abs(Number(m.amount)), status: "completed" as const,
+        note: m.note || "",
+        wcCode: extractWcTeamCode(m.note || ""),
         createdAt: m.created_at,
       }));
     return [...recharges, ...withdraws, ...manuals]
@@ -316,6 +342,7 @@ export default function Wallet() {
     amount: Math.abs(Number(m.amount)),
     isIn: Number(m.amount) > 0,
     note: (m.note || "").replace(/^\[CNY\]/, ""),
+    wcCode: extractWcTeamCode((m.note || "").replace(/^\[CNY\]/, "")),
     createdAt: m.created_at,
   }));
 
@@ -517,11 +544,23 @@ export default function Wallet() {
                     className="flex items-center justify-between py-2"
                     style={{ borderBottom: idx < recentUsdtTx.length - 1 ? `1px solid ${G.divider}` : "none" }}
                   >
-                    <div>
-                      <div className="text-xs font-medium" style={{ color: G.white }}>
-                        {tx.type === "recharge" ? "充值" : tx.type === "withdraw" ? "提现" : tx.type === "reward" ? "奖励" : "扣费"}
+                    <div className="flex items-center space-x-2">
+                      {/* 世界杯交易显示国旗，否则显示文字 */}
+                      {(tx as any).wcCode ? (
+                        <img
+                          src={`/flags/${(tx as any).wcCode}.png`}
+                          alt={(tx as any).wcCode}
+                          className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+                        />
+                      ) : null}
+                      <div>
+                        {!(tx as any).wcCode && (
+                          <div className="text-xs font-medium" style={{ color: G.white }}>
+                            {tx.type === "recharge" ? "充值" : tx.type === "withdraw" ? "提现" : tx.type === "reward" ? "奖励" : "扣费"}
+                          </div>
+                        )}
+                        <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(tx.createdAt)}</div>
                       </div>
-                      <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(tx.createdAt)}</div>
                     </div>
                     <div className="text-right">
                       <div className="text-xs font-bold tabular-nums"
@@ -564,11 +603,23 @@ export default function Wallet() {
                     className="flex items-center justify-between py-2"
                     style={{ borderBottom: idx < recentCnyTx.length - 1 ? `1px solid ${G.divider}` : "none" }}
                   >
-                    <div>
-                      <div className="text-xs font-medium" style={{ color: G.white }}>
-                        {tx.note || (tx.isIn ? "充值" : "提现")}
+                    <div className="flex items-center space-x-2">
+                      {/* 世界杯交易显示国旗 */}
+                      {(tx as any).wcCode ? (
+                        <img
+                          src={`/flags/${(tx as any).wcCode}.png`}
+                          alt={(tx as any).wcCode}
+                          className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+                        />
+                      ) : null}
+                      <div>
+                        {!(tx as any).wcCode && (
+                          <div className="text-xs font-medium" style={{ color: G.white }}>
+                            {tx.note || (tx.isIn ? "充值" : "提现")}
+                          </div>
+                        )}
+                        <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(tx.createdAt)}</div>
                       </div>
-                      <div className="text-xs" style={{ color: G.whiteDim }}>{formatTime(tx.createdAt)}</div>
                     </div>
                     <div
                       className="text-xs font-bold tabular-nums"
