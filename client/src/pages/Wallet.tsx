@@ -303,11 +303,12 @@ export default function Wallet() {
   const [activeTab, setActiveTab] = useState<"usdt" | "cny">("usdt");
 
   const balanceQuery = trpc.recharge.getBalance.useQuery();
-  const recentRechargeQuery = trpc.recharge.getMyOrders.useQuery({ limit: 3 });
-  const recentWithdrawQuery = trpc.recharge.getMyWithdrawHistory.useQuery({ limit: 3 });
-  const recentManualQuery = trpc.recharge.getMyManualBalances.useQuery({ limit: 3 });
+  const recentRechargeQuery = trpc.recharge.getMyOrders.useQuery({ limit: 5 });
+  const recentWithdrawQuery = trpc.recharge.getMyWithdrawHistory.useQuery({ limit: 5 });
+  const recentManualQuery = trpc.recharge.getMyManualBalances.useQuery({ limit: 5 });
+  const recentBalanceHistoryQuery = trpc.recharge.getBalanceHistory.useQuery({ limit: 5 });
   const cnyBalanceQuery = trpc.recharge.getCnyBalance.useQuery();
-  const cnyHistoryQuery = trpc.recharge.getCnyHistory.useQuery({ limit: 3 });
+  const cnyHistoryQuery = trpc.recharge.getCnyHistory.useQuery({ limit: 5 });
 
   const balance = typeof balanceQuery.data === "number" ? balanceQuery.data : 0;
   const cnyBalance = typeof cnyBalanceQuery.data === "number" ? cnyBalanceQuery.data : 0;
@@ -317,10 +318,12 @@ export default function Wallet() {
     const recharges = (recentRechargeQuery.data ?? []).map((r: any) => ({
       id: `r-${r.id}`, type: "recharge" as const,
       amount: Number(r.amount), status: r.status, createdAt: r.createdAt,
+      note: "", wcCode: null,
     }));
     const withdraws = (recentWithdrawQuery.data ?? []).map((w: any) => ({
       id: `w-${w.id}`, type: "withdraw" as const,
       amount: Number(w.amount), status: w.status, createdAt: w.createdAt,
+      note: "", wcCode: null,
     }));
     const manuals = (recentManualQuery.data ?? [])
       .filter((m: any) => !(m.note || "").startsWith("[CNY]"))
@@ -332,7 +335,18 @@ export default function Wallet() {
         wcCode: extractWcTeamCode(m.note || ""),
         createdAt: m.created_at,
       }));
-    return [...recharges, ...withdraws, ...manuals]
+    // balance_history 包含世界杯投注/退款记录（type: consume/refund）
+    const balanceHistoryItems = (recentBalanceHistoryQuery.data ?? [])
+      .filter((h: any) => h.type === 'consume' || h.type === 'refund')
+      .map((h: any) => ({
+        id: `bh-${h.id}`,
+        type: (h.type === 'refund' ? "reward" : "deduct") as "reward" | "deduct",
+        amount: Math.abs(Number(h.amount)), status: "completed" as const,
+        note: h.description || "",
+        wcCode: extractWcTeamCode(h.description || ""),
+        createdAt: h.createdAt,
+      }));
+    return [...recharges, ...withdraws, ...manuals, ...balanceHistoryItems]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 3);
   })();
