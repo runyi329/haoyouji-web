@@ -941,10 +941,16 @@ export default function WcOddsAdmin() {
   const { data: stats, refetch: refetchStats } = trpc.wcOdds.getStats.useQuery();
   const { data: matrix, isLoading: matrixLoading, refetch: refetchMatrix } = trpc.wcOdds.getOddsMatrix.useQuery({ limit: 30 });
   // 水钱设置：从数据库读取，每5秒轮询一次，实现实时联动
+  const utils = trpc.useUtils();
   const { data: marginData } = trpc.wcOdds.getMarginSetting.useQuery(undefined, {
-    refetchInterval: 5000,
+    refetchInterval: 3000,
+    refetchIntervalInBackground: true,
   });
   const setMarginMutation = trpc.wcOdds.setMarginSetting.useMutation({
+    onSuccess: () => {
+      // 立即刷新，不等轮询
+      utils.wcOdds.getMarginSetting.invalidate();
+    },
     onError: (err) => { toast.error(`设置失败：${err.message}`); },
   });
   const triggerFetch = trpc.wcOdds.triggerFetch.useMutation({

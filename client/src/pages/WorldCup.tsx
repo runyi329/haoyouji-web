@@ -1216,7 +1216,8 @@ export default function WorldCup() {
   const { data: liveOddsData, isLoading: liveOddsLoading } = trpc.wcOdds.getLatestChampionOdds.useQuery();
   // 水钱设置：每5秒轮询一次，与第12页共享
   const { data: marginData } = trpc.wcOdds.getMarginSetting.useQuery(undefined, {
-    refetchInterval: 5000,
+    refetchInterval: 3000,
+    refetchIntervalInBackground: true,
   });
   const marginPct = marginData?.marginPct ?? 8;
 
