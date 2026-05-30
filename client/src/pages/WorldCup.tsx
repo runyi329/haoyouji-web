@@ -1221,9 +1221,10 @@ export default function WorldCup() {
   const marginPct = marginData?.marginPct ?? 8;
 
   // 如果有实时数据就用实时数据，否则备用静态数据
-  const rawOddsList = liveOddsData && liveOddsData.teams.length > 0
+  // 方案A：先用全部球队（包含 null 赔率的）计算 sumImplied，与第12页保持一致
+  const allTeamsForSum = liveOddsData && liveOddsData.teams.length > 0
     ? liveOddsData.teams
-        .filter(t => t.pinnacleOdds !== null)
+        .filter(t => t.pinnacleOdds !== null && parseFloat(t.pinnacleOdds!) > 0)
         .map(t => ({
           name: t.name,
           nameEn: t.code.toUpperCase(),
@@ -1233,11 +1234,12 @@ export default function WorldCup() {
     : [...championOdds];
 
   // 按水钱设置重新计算隐含概率，排序用调整后赔率
+  // sumImplied 包含全部有效赔率的球队（与第12页一致）
   const sortedOdds = (() => {
-    const sumImplied = rawOddsList.reduce((s, t) => s + 1 / t.odds, 0);
-    if (sumImplied === 0) return rawOddsList.sort((a, b) => a.odds - b.odds);
+    const sumImplied = allTeamsForSum.reduce((s, t) => s + 1 / t.odds, 0);
+    if (sumImplied === 0) return allTeamsForSum.sort((a, b) => a.odds - b.odds);
     const targetSum = (100 + marginPct) / 100;
-    return rawOddsList
+    return allTeamsForSum
       .map(t => ({
         ...t,
         // 调整后赔率 = 1 / ((1/odds) / sumImplied * targetSum)
