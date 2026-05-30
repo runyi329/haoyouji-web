@@ -378,6 +378,69 @@ const schedule: DaySchedule[] = [
 ];
 
 // ===== 分组数据 =====
+// ===== 国旗裁剪锁点配置 =====
+// 根据各国国旗视觉重心位置，配置最优object-position裁剪锁点
+// 格式： "x% y%" 或 "left/center/right top/center/bottom"
+const FLAG_POSITION: Record<string, string> = {
+  // 左上角有重要图案（五角星、标志等）→ 锁定左上
+  "cn": "15% 25%",   // 中国：五角星在左上
+  "vn": "15% 25%",   // 越南：星在左上
+  "mm": "20% 30%",   // 缅甸：星在左上
+  "kp": "20% 30%",   // 朝鲜：左上图案
+  "tl": "20% 30%",   // 东帝汶：左上图案
+
+  // 中心图案（圆形、盾形、十字等）→ 居中裁剪
+  "jp": "center center", // 日本：红圆居中
+  "br": "center center", // 巴西：菱形+圆居中
+  "de": "center center", // 德国：三色条居中
+  "fr": "center center", // 法国：三色居中
+  "es": "center center", // 西班牙：盾形居中
+  "gb-eng": "center center", // 英格兰：十字居中
+  "gb-sct": "center center", // 苏格兰：十字居中
+  "ch": "center center", // 瑞士：十字居中
+  "pt": "center center", // 葡萄牙：盾形居中
+  "ar": "center center", // 阿根廷：太阳居中
+  "uy": "center center", // 乌拉圭：太阳居中
+  "nl": "center center", // 荷兰：三色条居中
+  "be": "center center", // 比利时：三色条居中
+  "hr": "center center", // 克罗地亚：盾形居中
+  "se": "center center", // 瑞典：十字居中
+  "no": "center center", // 挪威：十字居中
+  "at": "center center", // 奥地利：三色条居中
+  "ec": "center center", // 厄瓜多尔：盾形居中
+  "co": "center center", // 哥伦比亚：三色条居中
+  "py": "center center", // 巴拉圭：盾形居中
+  "eg": "center center", // 埃及：鹰居中
+  "ma": "center center", // 摩洛哥：星居中
+  "tn": "center center", // 突尼斯：月星居中
+  "sn": "center center", // 塞内加尔：星居中
+  "gh": "center center", // 加纳：星居中
+  "ir": "center center", // 伊朗：中心文字居中
+  "iq": "center center", // 伊拉克：中心文字居中
+  "sa": "center center", // 沙特：居中
+  "qa": "center center", // 卡塔尔：居中
+  "nz": "center center", // 新西兰：居中
+  "au": "center center", // 澳大利亚：居中
+  "kr": "center center", // 韩国：太极居中
+  "jo": "center center", // 约旦：星居中
+  "dz": "center center", // 阿尔及利亚：月星居中
+  "uz": "center center", // 乌兹别克：居中
+  "cd": "center center", // 刚果(金)：居中
+  "cv": "center center", // 佛得角：星居中
+  "cw": "center center", // 库拉索：星居中
+  "ci": "center center", // 科特迪瓦：三色条居中
+  "pa": "center center", // 巴拿马：居中
+  "ht": "center center", // 海地：居中
+  "ba": "center center", // 波黑：星居中
+  "za": "center center", // 南非：居中
+  "ca": "center center", // 加拿大：枚叶居中
+  "us": "center center", // 美国：居中
+  "mx": "center center", // 墨西哥：盾形居中
+  "cz": "center center", // 捷克：三色居中
+  "tr": "center center", // 土耳其：月星居中
+  "pt": "center center", // 葡萄牙：盾形居中
+};
+
 const groups: Record<string, { name: string; code: string }[]> = {
   A: [
     { name: "墨西哥", code: "mx" },
@@ -767,7 +830,7 @@ const finalCY = B.TPAD + B_TOTAL_H / 2;
               style={{ borderRight: `1px solid ${BORDER}`, gap: 3, paddingTop: 4, paddingBottom: 4 }}>
               {/* 组标签 */}
               <span style={{ color: GOLD, fontSize: 8, fontWeight: 900, lineHeight: 1 }}>{g}</span>
-              {/* 4 个国旗竖排，正方形拉伸 */}
+              {/* 4 个国旗竖排，正方形裁剪，根据国旗视觉重心居中裁剪 */}
               {(groups[g] || []).map(t => (
                 <img
                   key={t.code}
@@ -780,6 +843,7 @@ const finalCY = B.TPAD + B_TOTAL_H / 2;
                     display: "block",
                     borderRadius: 1,
                     objectFit: "cover",
+                    objectPosition: FLAG_POSITION[t.code.toLowerCase()] ?? "center center",
                   }}
                   onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.15"; }}
                 />
