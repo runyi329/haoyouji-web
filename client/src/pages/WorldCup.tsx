@@ -42,6 +42,7 @@ interface Match {
   time?: string;
   venue?: string;
   stage: string;
+  date?: string;  // 比赛日期 YYYY-MM-DD
 }
 interface DaySchedule {
   date: string;
@@ -1205,7 +1206,7 @@ export default function WorldCup() {
                 key={day.date}
                 day={day}
                 isToday={day.date === today}
-                onMatchClick={(m) => setSelectedMatch(m)}
+                onMatchClick={(m) => setSelectedMatch({ ...m, date: day.date })}
               />
             ))}
           </div>
@@ -1297,11 +1298,28 @@ export default function WorldCup() {
                     }}>
                       {selectedMatch.stage}
                     </span>
-                    {/* 中：北京时间 */}
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-                      <span style={{ fontSize: 18, fontWeight: 900, color: GOLD, lineHeight: 1 }}>{selectedMatch.time}</span>
-                      <span style={{ fontSize: 10, color: TEXT2 }}>北京时间</span>
-                    </div>
+                    {/* 中：日期 + 时段 + 具体时间 */}
+                    {(() => {
+                      const timeStr = selectedMatch.time || "";
+                      const hour = parseInt(timeStr.split(":")[0] ?? "0", 10);
+                      const period = hour >= 0 && hour < 6 ? "凌晨"
+                        : hour >= 6 && hour < 12 ? "上午"
+                        : hour >= 12 && hour < 18 ? "下午"
+                        : "晚上";
+                      const dateStr = selectedMatch.date
+                        ? `${parseInt(selectedMatch.date.slice(5, 7))}月${parseInt(selectedMatch.date.slice(8, 10))}日`
+                        : "";
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                          {dateStr && <span style={{ fontSize: 11, color: TEXT2 }}>{dateStr}</span>}
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+                            <span style={{ fontSize: 12, color: TEXT2, fontWeight: 600 }}>{period}</span>
+                            <span style={{ fontSize: 20, fontWeight: 900, color: GOLD, lineHeight: 1 }}>{timeStr}</span>
+                          </div>
+                          <span style={{ fontSize: 10, color: TEXT2 }}>北京时间</span>
+                        </div>
+                      );
+                    })()}
                     {/* 右：场地 */}
                     {selectedMatch.venue ? (
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
