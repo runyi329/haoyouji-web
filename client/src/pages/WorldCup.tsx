@@ -875,19 +875,20 @@ export default function WorldCup() {
                       </span>
                     </div>
                     {teams.map((team, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center px-4 py-3"
-                        style={{ borderBottom: `1px solid ${BORDER}`, backgroundColor: BG }}
-                      >
-                        <Flag code={team.code} size={28} />
-                        <span className="ml-3 text-sm font-medium" style={{ color: TEXT }}>
-                          {team.name}
-                        </span>
-                        <span className="ml-auto text-xs" style={{ color: TEXT2 }}>
-                          详情 &gt;
-                        </span>
-                      </div>
+                      <Link key={i} href="/world-cup/teams">
+                        <div
+                          className="flex items-center px-4 py-3 cursor-pointer"
+                          style={{ borderBottom: `1px solid ${BORDER}`, backgroundColor: BG }}
+                        >
+                          <Flag code={team.code} size={28} />
+                          <span className="ml-3 text-sm font-medium" style={{ color: TEXT }}>
+                            {team.name}
+                          </span>
+                          <span className="ml-auto text-xs" style={{ color: GOLD2 }}>
+                            查看档案 &gt;
+                          </span>
+                        </div>
+                      </Link>
                     ))}
                   </div>
                 ))}

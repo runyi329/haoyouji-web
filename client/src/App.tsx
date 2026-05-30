@@ -67,6 +67,7 @@ import Login from "./pages/Login";
 import PetPlatform from "@/pages/PetPlatform";
 import WorldCup from "@/pages/WorldCup";
 import WcOddsAdmin from "@/pages/WcOddsAdmin";
+import WcTeams from "@/pages/WcTeams";
 
 // 首页Dashboard改为懒加载，避免在其他页面执行不必要的查询
 // const ContactsManagement = lazy(() => import("./pages/ContactsManagement")); - 已废弃
@@ -699,6 +700,7 @@ function Router() {
         {/* FIFA World Cup 2026 */}
         <Route path="/world-cup" component={WorldCup} />
         <Route path="/world-cup/admin" component={WcOddsAdmin} />
+        <Route path="/world-cup/teams" component={WcTeams} />
         {/* 404 */}
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
