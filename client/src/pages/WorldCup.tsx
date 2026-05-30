@@ -206,8 +206,8 @@ const schedule: DaySchedule[] = [
     ],
   },
   {
-    date: "2026-06-28",
-    dateLabel: "6月28日 周日",
+    date: "2026-06-26",
+    dateLabel: "6月26日 周五",
     matches: [
       { home: "比利时", homeCode: "be", away: "新西兰", awayCode: "nz", time: "03:00", venue: "西雅图", stage: "G组" },
       { home: "伊朗", homeCode: "ir", away: "埃及", awayCode: "eg", time: "03:00", venue: "英格尔伍德", stage: "G组" },
@@ -235,112 +235,144 @@ const schedule: DaySchedule[] = [
       { home: "克罗地亚", homeCode: "hr", away: "加纳", awayCode: "gh", time: "03:00", venue: "多伦多", stage: "L组" },
     ],
   },
+  // ===== 32强（Round of 32）：6月28日 - 7月3日 =====
+  {
+    date: "2026-06-28",
+    dateLabel: "6月28日 周日",
+    matches: [
+      { home: "A组第2名", homeCode: "un", away: "B组第2名", awayCode: "un", time: "待定", venue: "英格尔伍德", stage: "32强" },
+    ],
+  },
+  {
+    date: "2026-06-29",
+    dateLabel: "6月29日 周一",
+    matches: [
+      { home: "C组第1名", homeCode: "un", away: "F组第2名", awayCode: "un", time: "待定", venue: "休斯顿", stage: "32强" },
+      { home: "E组第1名", homeCode: "un", away: "最佳第三名(A/B/C/D/F组)", awayCode: "un", time: "待定", venue: "福克斯伯勒", stage: "32强" },
+      { home: "F组第1名", homeCode: "un", away: "C组第2名", awayCode: "un", time: "待定", venue: "蒙特雷", stage: "32强" },
+    ],
+  },
+  {
+    date: "2026-06-30",
+    dateLabel: "6月30日 周二",
+    matches: [
+      { home: "E组第2名", homeCode: "un", away: "I组第2名", awayCode: "un", time: "待定", venue: "阿灵顿", stage: "32强" },
+      { home: "I组第1名", homeCode: "un", away: "最佳第三名(C/D/F/G/H组)", awayCode: "un", time: "待定", venue: "东卢瑟福", stage: "32强" },
+      { home: "A组第1名", homeCode: "un", away: "最佳第三名(C/E/F/H/I组)", awayCode: "un", time: "待定", venue: "墨西哥城", stage: "32强" },
+    ],
+  },
+  {
+    date: "2026-07-01",
+    dateLabel: "7月1日 周三",
+    matches: [
+      { home: "L组第1名", homeCode: "un", away: "最佳第三名(E/H/I/J/K组)", awayCode: "un", time: "待定", venue: "亚特兰大", stage: "32强" },
+      { home: "G组第1名", homeCode: "un", away: "最佳第三名(A/E/H/I/J组)", awayCode: "un", time: "待定", venue: "西雅图", stage: "32强" },
+      { home: "D组第1名", homeCode: "un", away: "最佳第三名(B/E/F/I/J组)", awayCode: "un", time: "待定", venue: "圣克拉拉", stage: "32强" },
+    ],
+  },
   {
     date: "2026-07-02",
     dateLabel: "7月2日 周四",
     matches: [
-      { home: "A组第1名", homeCode: "un", away: "B组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-      { home: "C组第1名", homeCode: "un", away: "D组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "H组第1名", homeCode: "un", away: "J组第2名", awayCode: "un", time: "待定", venue: "英格尔伍德", stage: "32强" },
+      { home: "K组第2名", homeCode: "un", away: "L组第2名", awayCode: "un", time: "待定", venue: "多伦多", stage: "32强" },
+      { home: "B组第1名", homeCode: "un", away: "最佳第三名(E/F/G/I/J组)", awayCode: "un", time: "待定", venue: "温哥华", stage: "32强" },
     ],
   },
   {
     date: "2026-07-03",
     dateLabel: "7月3日 周五",
     matches: [
-      { home: "E组第1名", homeCode: "un", away: "F组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-      { home: "G组第1名", homeCode: "un", away: "H组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "D组第2名", homeCode: "un", away: "G组第2名", awayCode: "un", time: "待定", venue: "阿灵顿", stage: "32强" },
+      { home: "J组第1名", homeCode: "un", away: "H组第2名", awayCode: "un", time: "待定", venue: "迈阿密", stage: "32强" },
+      { home: "K组第1名", homeCode: "un", away: "最佳第三名(D/E/I/J/L组)", awayCode: "un", time: "待定", venue: "堪萨斯城", stage: "32强" },
     ],
   },
+  // ===== 16强（Round of 16）：7月4日 - 7月7日 =====
   {
     date: "2026-07-04",
     dateLabel: "7月4日 周六",
     matches: [
-      { home: "I组第1名", homeCode: "un", away: "J组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-      { home: "K组第1名", homeCode: "un", away: "L组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "32强M73胜者", homeCode: "un", away: "32强M75胜者", awayCode: "un", time: "待定", venue: "休斯顿", stage: "16强" },
+      { home: "32强M74胜者", homeCode: "un", away: "32强M77胜者", awayCode: "un", time: "待定", venue: "费城", stage: "16强" },
+    ],
+  },
+  {
+    date: "2026-07-05",
+    dateLabel: "7月5日 周日",
+    matches: [
+      { home: "32强M76胜者", homeCode: "un", away: "32强M78胜者", awayCode: "un", time: "待定", venue: "东卢瑟福", stage: "16强" },
+      { home: "32强M79胜者", homeCode: "un", away: "32强M80胜者", awayCode: "un", time: "待定", venue: "墨西哥城", stage: "16强" },
     ],
   },
   {
     date: "2026-07-06",
     dateLabel: "7月6日 周一",
     matches: [
-      { home: "B组第1名", homeCode: "un", away: "A组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-      { home: "D组第1名", homeCode: "un", away: "C组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "32强M83胜者", homeCode: "un", away: "32强M84胜者", awayCode: "un", time: "待定", venue: "阿灵顿", stage: "16强" },
+      { home: "32强M81胜者", homeCode: "un", away: "32强M82胜者", awayCode: "un", time: "待定", venue: "西雅图", stage: "16强" },
     ],
   },
   {
     date: "2026-07-07",
     dateLabel: "7月7日 周二",
     matches: [
-      { home: "F组第1名", homeCode: "un", away: "E组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-      { home: "H组第1名", homeCode: "un", away: "G组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "32强M86胜者", homeCode: "un", away: "32强M88胜者", awayCode: "un", time: "待定", venue: "亚特兰大", stage: "16强" },
+      { home: "32强M85胜者", homeCode: "un", away: "32强M87胜者", awayCode: "un", time: "待定", venue: "温哥华", stage: "16强" },
+    ],
+  },
+  // ===== 四分之一决赛（8强）：7月9日 - 7月11日 =====
+  {
+    date: "2026-07-09",
+    dateLabel: "7月9日 周四",
+    matches: [
+      { home: "16强M89胜者", homeCode: "un", away: "16强M90胜者", awayCode: "un", time: "待定", venue: "福克斯伯勒", stage: "四分之一决赛" },
     ],
   },
   {
-    date: "2026-07-08",
-    dateLabel: "7月8日 周三",
+    date: "2026-07-10",
+    dateLabel: "7月10日 周五",
     matches: [
-      { home: "J组第1名", homeCode: "un", away: "I组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-      { home: "L组第1名", homeCode: "un", away: "K组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "16强M93胜者", homeCode: "un", away: "16强M94胜者", awayCode: "un", time: "待定", venue: "英格尔伍德", stage: "四分之一决赛" },
     ],
   },
   {
     date: "2026-07-11",
     dateLabel: "7月11日 周六",
     matches: [
-      { home: "最佳第三名1", homeCode: "un", away: "最佳第三名2", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-      { home: "最佳第三名3", homeCode: "un", away: "最佳第三名4", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "16强M91胜者", homeCode: "un", away: "16强M92胜者", awayCode: "un", time: "待定", venue: "迈阿密", stage: "四分之一决赛" },
+      { home: "16强M95胜者", homeCode: "un", away: "16强M96胜者", awayCode: "un", time: "待定", venue: "堪萨斯城", stage: "四分之一决赛" },
     ],
   },
-  {
-    date: "2026-07-12",
-    dateLabel: "7月12日 周日",
-    matches: [
-      { home: "最佳第三名5", homeCode: "un", away: "最佳第三名6", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-      { home: "最佳第三名7", homeCode: "un", away: "最佳第三名8", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-    ],
-  },
+  // ===== 半决赛：7月14日 - 7月15日 =====
   {
     date: "2026-07-14",
     dateLabel: "7月14日 周二",
     matches: [
-      { home: "1/4决赛A", homeCode: "un", away: "1/4决赛B", awayCode: "un", time: "待定", venue: "TBD", stage: "四分之一决赛" },
-      { home: "1/4决赛C", homeCode: "un", away: "1/4决赛D", awayCode: "un", time: "待定", venue: "TBD", stage: "四分之一决赛" },
+      { home: "8强M97胜者", homeCode: "un", away: "8强M98胜者", awayCode: "un", time: "待定", venue: "阿灵顿", stage: "半决赛" },
     ],
   },
   {
     date: "2026-07-15",
     dateLabel: "7月15日 周三",
     matches: [
-      { home: "1/4决赛E", homeCode: "un", away: "1/4决赛F", awayCode: "un", time: "待定", venue: "TBD", stage: "四分之一决赛" },
-      { home: "1/4决赛G", homeCode: "un", away: "1/4决赛H", awayCode: "un", time: "待定", venue: "TBD", stage: "四分之一决赛" },
+      { home: "8强M99胜者", homeCode: "un", away: "8强M100胜者", awayCode: "un", time: "待定", venue: "亚特兰大", stage: "半决赛" },
     ],
   },
-  {
-    date: "2026-07-17",
-    dateLabel: "7月17日 周五",
-    matches: [
-      { home: "半决赛A", homeCode: "un", away: "半决赛B", awayCode: "un", time: "待定", venue: "TBD", stage: "半决赛" },
-    ],
-  },
+  // ===== 季军赛：7月18日 =====
   {
     date: "2026-07-18",
-    dateLabel: "7月18日 周六",
+    dateLabel: "7月18日 周五",
     matches: [
-      { home: "半决赛C", homeCode: "un", away: "半决赛D", awayCode: "un", time: "待定", venue: "TBD", stage: "半决赛" },
+      { home: "半决赛负者1", homeCode: "un", away: "半决赛负者2", awayCode: "un", time: "待定", venue: "迈阿密", stage: "季军赛" },
     ],
   },
+  // ===== 决赛：7月19日 =====
   {
     date: "2026-07-19",
     dateLabel: "7月19日 周日",
     matches: [
-      { home: "季军争夺", homeCode: "un", away: "季军争夺", awayCode: "un", time: "待定", venue: "TBD", stage: "季军赛" },
-    ],
-  },
-  {
-    date: "2026-07-20",
-    dateLabel: "7月20日 周一",
-    matches: [
-      { home: "冠军", homeCode: "un", away: "亚军", awayCode: "un", time: "待定", venue: "大都会球场", stage: "决赛" },
+      { home: "冠军", homeCode: "un", away: "亚军", awayCode: "un", time: "待定", venue: "大都会球场(东卢瑟福)", stage: "决赛" },
     ],
   },
 ];
