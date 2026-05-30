@@ -293,32 +293,32 @@ const schedule: DaySchedule[] = [
     date: "2026-07-04",
     dateLabel: "7月4日 周六",
     matches: [
-      { home: "32强M73胜者", homeCode: "un", away: "32强M75胜者", awayCode: "un", time: "待定", venue: "休斯顿", stage: "16强" },
-      { home: "32强M74胜者", homeCode: "un", away: "32强M77胜者", awayCode: "un", time: "待定", venue: "费城", stage: "16强" },
+      { home: "待定", homeCode: "un", away: "待定", awayCode: "un", time: "待定", venue: "休斯顿", stage: "16强" },
+      { home: "待定", homeCode: "un", away: "待定", awayCode: "un", time: "待定", venue: "费城", stage: "16强" },
     ],
   },
   {
     date: "2026-07-05",
     dateLabel: "7月5日 周日",
     matches: [
-      { home: "32强M76胜者", homeCode: "un", away: "32强M78胜者", awayCode: "un", time: "待定", venue: "东卢瑟福", stage: "16强" },
-      { home: "32强M79胜者", homeCode: "un", away: "32强M80胜者", awayCode: "un", time: "待定", venue: "墨西哥城", stage: "16强" },
+      { home: "待定", homeCode: "un", away: "待定", awayCode: "un", time: "待定", venue: "东卢瑟福", stage: "16强" },
+      { home: "待定", homeCode: "un", away: "待定", awayCode: "un", time: "待定", venue: "墨西哥城", stage: "16强" },
     ],
   },
   {
     date: "2026-07-06",
     dateLabel: "7月6日 周一",
     matches: [
-      { home: "32强M83胜者", homeCode: "un", away: "32强M84胜者", awayCode: "un", time: "待定", venue: "阿灵顿", stage: "16强" },
-      { home: "32强M81胜者", homeCode: "un", away: "32强M82胜者", awayCode: "un", time: "待定", venue: "西雅图", stage: "16强" },
+      { home: "待定", homeCode: "un", away: "待定", awayCode: "un", time: "待定", venue: "阿灵顿", stage: "16强" },
+      { home: "待定", homeCode: "un", away: "待定", awayCode: "un", time: "待定", venue: "西雅图", stage: "16强" },
     ],
   },
   {
     date: "2026-07-07",
     dateLabel: "7月7日 周二",
     matches: [
-      { home: "32强M86胜者", homeCode: "un", away: "32强M88胜者", awayCode: "un", time: "待定", venue: "亚特兰大", stage: "16强" },
-      { home: "32强M85胜者", homeCode: "un", away: "32强M87胜者", awayCode: "un", time: "待定", venue: "温哥华", stage: "16强" },
+      { home: "待定", homeCode: "un", away: "待定", awayCode: "un", time: "待定", venue: "亚特兰大", stage: "16强" },
+      { home: "待定", homeCode: "un", away: "待定", awayCode: "un", time: "待定", venue: "温哥华", stage: "16强" },
     ],
   },
   // ===== 四分之一决赛（8强）：7月9日 - 7月11日 =====
@@ -326,22 +326,22 @@ const schedule: DaySchedule[] = [
     date: "2026-07-09",
     dateLabel: "7月9日 周四",
     matches: [
-      { home: "16强M89胜者", homeCode: "un", away: "16强M90胜者", awayCode: "un", time: "待定", venue: "福克斯伯勒", stage: "8强" },
+      { home: "待定", homeCode: "un", away: "待定", awayCode: "un", time: "待定", venue: "福克斯伯勒", stage: "8强" },
     ],
   },
   {
     date: "2026-07-10",
     dateLabel: "7月10日 周五",
     matches: [
-      { home: "16强M93胜者", homeCode: "un", away: "16强M94胜者", awayCode: "un", time: "待定", venue: "英格尔伍德", stage: "8强" },
+      { home: "待定", homeCode: "un", away: "待定", awayCode: "un", time: "待定", venue: "英格尔伍德", stage: "8强" },
     ],
   },
   {
     date: "2026-07-11",
     dateLabel: "7月11日 周六",
     matches: [
-      { home: "16强M91胜者", homeCode: "un", away: "16强M92胜者", awayCode: "un", time: "待定", venue: "迈阿密", stage: "8强" },
-      { home: "16强M95胜者", homeCode: "un", away: "16强M96胜者", awayCode: "un", time: "待定", venue: "堪萨斯城", stage: "8强" },
+      { home: "待定", homeCode: "un", away: "待定", awayCode: "un", time: "待定", venue: "迈阿密", stage: "8强" },
+      { home: "待定", homeCode: "un", away: "待定", awayCode: "un", time: "待定", venue: "堪萨斯城", stage: "8强" },
     ],
   },
   // ===== 半决赛：7月14日 - 7月15日 =====
@@ -349,14 +349,14 @@ const schedule: DaySchedule[] = [
     date: "2026-07-14",
     dateLabel: "7月14日 周二",
     matches: [
-      { home: "8强M97胜者", homeCode: "un", away: "8强M98胜者", awayCode: "un", time: "待定", venue: "阿灵顿", stage: "4强" },
+      { home: "待定", homeCode: "un", away: "待定", awayCode: "un", time: "待定", venue: "阿灵顿", stage: "4强" },
     ],
   },
   {
     date: "2026-07-15",
     dateLabel: "7月15日 周三",
     matches: [
-      { home: "8强M99胜者", homeCode: "un", away: "8强M100胜者", awayCode: "un", time: "待定", venue: "亚特兰大", stage: "4强" },
+      { home: "待定", homeCode: "un", away: "待定", awayCode: "un", time: "待定", venue: "亚特兰大", stage: "4强" },
     ],
   },
   // ===== 季军赛：7月18日 =====
