@@ -834,85 +834,41 @@ export default function WorldCup() {
         {/* ---- 档案 Tab ---- */}
         {activeTab === "archive" && (
           <div>
-            {/* 子Tab：球队/球员 */}
-            <div
-              className="flex px-4 pt-4 pb-2 gap-3"
-              style={{ backgroundColor: BG }}
-            >
-              {(["team", "player"] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setArchiveView(v)}
-                  className="px-5 py-1.5 rounded-full text-sm font-semibold transition-all"
-                  style={{
-                    backgroundColor: archiveView === v ? GOLD : BG3,
-                    color: archiveView === v ? "#000" : TEXT2,
-                    border: archiveView === v ? "none" : `1px solid ${BORDER}`,
-                  }}
+            {Object.entries(groups).map(([groupName, teams]) => (
+              <div key={groupName}>
+                {/* 组标题 */}
+                <div
+                  className="px-4 py-2 flex items-center"
+                  style={{ backgroundColor: BG3, borderBottom: `1px solid ${BORDER}` }}
                 >
-                  {v === "team" ? "球队档案" : "球员档案"}
-                </button>
-              ))}
-            </div>
-
-            {archiveView === "team" && (
-              <div>
-                {Object.entries(groups).map(([groupName, teams]) => (
-                  <div key={groupName}>
-                    {/* 组标题 */}
+                  <span
+                    className="text-xs font-black px-2 py-0.5 rounded mr-2"
+                    style={{ backgroundColor: GOLD, color: "#000" }}
+                  >
+                    {groupName}
+                  </span>
+                  <span className="text-xs font-semibold" style={{ color: TEXT2 }}>
+                    {groupName} 组
+                  </span>
+                </div>
+                {teams.map((team, i) => (
+                  <Link key={i} href={`/world-cup/teams/${team.code}`}>
                     <div
-                      className="px-4 py-2 flex items-center"
-                      style={{ backgroundColor: BG3, borderBottom: `1px solid ${BORDER}` }}
+                      className="flex items-center px-4 py-3 cursor-pointer"
+                      style={{ borderBottom: `1px solid ${BORDER}`, backgroundColor: BG }}
                     >
-                      <span
-                        className="text-xs font-black px-2 py-0.5 rounded mr-2"
-                        style={{ backgroundColor: GOLD, color: "#000" }}
-                      >
-                        {groupName}
+                      <Flag code={team.code} size={28} />
+                      <span className="ml-3 text-sm font-medium" style={{ color: TEXT }}>
+                        {team.name}
                       </span>
-                      <span className="text-xs font-semibold" style={{ color: TEXT2 }}>
-                        {groupName} 组
+                      <span className="ml-auto text-xs" style={{ color: GOLD2 }}>
+                        查看档案 &gt;
                       </span>
                     </div>
-                    {teams.map((team, i) => (
-                      <Link key={i} href={`/world-cup/teams/${team.code}`}>
-                        <div
-                          className="flex items-center px-4 py-3 cursor-pointer"
-                          style={{ borderBottom: `1px solid ${BORDER}`, backgroundColor: BG }}
-                        >
-                          <Flag code={team.code} size={28} />
-                          <span className="ml-3 text-sm font-medium" style={{ color: TEXT }}>
-                            {team.name}
-                          </span>
-                          <span className="ml-auto text-xs" style={{ color: GOLD2 }}>
-                            查看档案 &gt;
-                          </span>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
+                  </Link>
                 ))}
               </div>
-            )}
-
-            {archiveView === "player" && (
-              <div
-                className="flex flex-col items-center justify-center py-20"
-                style={{ color: TEXT2 }}
-              >
-                <div
-                  className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
-                  style={{ backgroundColor: BG3 }}
-                >
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={TEXT2} strokeWidth="1.5">
-                    <circle cx="12" cy="8" r="4" />
-                    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-                  </svg>
-                </div>
-                <p className="text-sm font-medium" style={{ color: TEXT }}>球员档案</p>
-                <p className="text-xs mt-1" style={{ color: TEXT2 }}>即将上线，敬请期待</p>
-              </div>
-            )}
+            ))}
           </div>
         )}
 
