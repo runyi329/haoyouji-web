@@ -3,7 +3,7 @@
  * 功能：查看抓取状态、手动触发抓取、横向时间轴表格展示赔率变化、订单管理
  */
 import { useState, useRef, useCallback } from "react";
-import { ArrowLeft, RefreshCw, Play, Info, PlusCircle, Search, X, ChevronDown } from "lucide-react";
+import { ArrowLeft, RefreshCw, Info, PlusCircle, Search, X, ChevronDown } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -951,19 +951,7 @@ export default function WcOddsAdmin() {
                 </div>
               </div>
             </div>
-            <button
-              onClick={() => triggerFetch.mutate()}
-              disabled={triggerFetch.isPending}
-              className="w-full py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
-              style={{
-                backgroundColor: triggerFetch.isPending ? "rgba(255,215,0,0.3)" : "rgba(255,215,0,0.15)",
-                border: `1px solid ${GOLD}`,
-                color: GOLD,
-              }}
-            >
-              {triggerFetch.isPending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-              {triggerFetch.isPending ? "正在抓取..." : "立即抓取一次"}
-            </button>
+
           </div>
 
           {/* 赔率追踪表格 */}
@@ -1015,11 +1003,12 @@ export default function WcOddsAdmin() {
                       {teams.map((team: { name: string; code: string }) => {
                         const { code: flagCode, zh } = getTeamDisplay(team.name, team.code);
                         return (
-                          <tr key={team.name} style={{ borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
+                          <tr key={team.name} style={{ borderBottom: `1px solid rgba(255,255,255,0.05)`, height: 64 }}>
                             <td style={{
                               backgroundColor: BG2, padding: "8px 10px",
                               borderRight: `2px solid ${GOLD}`,
                               whiteSpace: "nowrap", width: 110,
+                              verticalAlign: "middle",
                             }}>
                               <TeamFlag code={flagCode || team.code} size={26} />
                               <div style={{ fontSize: 11, color: TEXT, fontWeight: 600, marginTop: 3 }}>{zh}</div>
@@ -1070,7 +1059,7 @@ export default function WcOddsAdmin() {
                       {teams.map((team: { name: string; code: string }) => {
                         const teamData = matrixData[team.name] ?? {};
                         return (
-                          <tr key={team.name} style={{ borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
+                          <tr key={team.name} style={{ borderBottom: `1px solid rgba(255,255,255,0.05)`, height: 64 }}>
                             {snapshotsDesc.map((snap, colIdx) => {
                               const current = teamData[snap.id];
                               const prevSnap = snapshotsDesc[colIdx + 1];
