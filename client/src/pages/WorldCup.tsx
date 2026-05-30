@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link } from "wouter";
 import { PageTag } from "@/components/PageTag";
+import { trpc } from "@/lib/trpc";
 
 // ===== 颜色常量 =====
 const BG = "#0D1B2A";        // 深藏青主背景
@@ -637,7 +638,21 @@ export default function WorldCup() {
     { key: "champion", label: "AI冠军预测" },
   ];
 
-  const sortedOdds = [...championOdds].sort((a, b) => a.odds - b.odds);
+  // 从 P012 最新快照拉取实时赔率
+  const { data: liveOddsData, isLoading: liveOddsLoading } = trpc.wcOdds.getLatestChampionOdds.useQuery();
+
+  // 如果有实时数据就用实时数据，否则备用静态数据
+  const sortedOdds = liveOddsData && liveOddsData.teams.length > 0
+    ? liveOddsData.teams
+        .filter(t => t.pinnacleOdds !== null)
+        .map(t => ({
+          name: t.name,
+          nameEn: t.code.toUpperCase(),
+          code: t.code,
+          odds: parseFloat(t.pinnacleOdds!),
+        }))
+        .sort((a, b) => a.odds - b.odds)
+    : [...championOdds].sort((a, b) => a.odds - b.odds);
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: BG }}>
@@ -871,6 +886,20 @@ export default function WorldCup() {
         {/* ---- AI冠军预测 Tab ---- */}
         {activeTab === "champion" && (
           <div>
+            {/* 数据来源标注 */}
+            <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
+              <span className="text-xs" style={{ color: TEXT2 }}>
+                {liveOddsLoading ? "正在加载最新赔率..."
+                  : liveOddsData && liveOddsData.teams.length > 0
+                    ? `Pinnacle 实时赔率 · 共 ${sortedOdds.length} 支球队`
+                    : "暂无实时数据，显示备用赔率"}
+              </span>
+              {liveOddsData?.fetchedAt && (
+                <span className="text-xs" style={{ color: TEXT2 }}>
+                  更新: {new Date(liveOddsData.fetchedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              )}
+            </div>
             {/* 4列国旗网格：国旗统一尺寸，国家名在同一高度 */}
             <div
               className="grid grid-cols-4 px-2 pb-6"

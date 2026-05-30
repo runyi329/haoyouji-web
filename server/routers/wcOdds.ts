@@ -134,6 +134,35 @@ export const wcOddsRouter = router({
     };
   }),
 
+  /**
+   * 获取最新快照的所有球队赔率（公开接口，P011 冠军预测使用）
+   */
+  getLatestChampionOdds: protectedProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return { teams: [], fetchedAt: null };
+    // 取最新快照
+    const latestSnap = await db
+      .select()
+      .from(wcOddsSnapshots)
+      .orderBy(desc(wcOddsSnapshots.fetchedAt))
+      .limit(1);
+    if (latestSnap.length === 0) return { teams: [], fetchedAt: null };
+    const snap = latestSnap[0];
+    // 取该快照所有球队赔率，按 rank 排序
+    const records = await db
+      .select()
+      .from(wcOddsRecords)
+      .where(eq(wcOddsRecords.snapshotId, snap.id))
+      .orderBy(asc(wcOddsRecords.rank));
+    const teams = records.map(r => ({
+      name: r.teamName,
+      code: r.teamCode || '',
+      pinnacleOdds: r.pinnacleOdds,
+      rank: r.rank,
+    }));
+    return { teams, fetchedAt: snap.fetchedAt };
+  }),
+
   // ==================== 订单管理 ====================
 
   /**
