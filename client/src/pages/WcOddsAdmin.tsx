@@ -1027,12 +1027,11 @@ export default function WcOddsAdmin() {
                   display: "flex",
                   borderRadius: 12,
                   border: `1px solid ${BORDER}`,
-                  overflow: "hidden",
-                  maxHeight: "calc(100vh - 320px)",
+                  overflow: "visible",
                 }}
               >
                 {/* ===== 左侧：固定球队列（不可滑动）===== */}
-                <div style={{ flexShrink: 0, overflowY: "hidden", zIndex: 10 }}>
+                <div style={{ flexShrink: 0, overflow: "visible", zIndex: 10 }}>
                   <table style={{ borderCollapse: "collapse", tableLayout: "fixed" }}>
                     <thead>
                       <tr style={{ backgroundColor: BG3 }}>
@@ -1083,7 +1082,7 @@ export default function WcOddsAdmin() {
                   style={{
                     flex: 1,
                     overflowX: "auto",
-                    overflowY: "hidden",
+                    overflowY: "visible",
                     WebkitOverflowScrolling: "touch",
                   }}
                 >
