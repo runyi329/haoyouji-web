@@ -647,47 +647,99 @@ function ResultsTab({ groups }: { groups: Record<string, { name: string; code: s
         </div>
       )}
 
-      {/* 淘汰赛对阵 */}
+      {/* 淘汰赛对阵 - 竖向树状图 */}
       {view === "knockout" && (
-        <div className="pb-8">
+        <div className="pb-8 px-3 pt-3" style={{ overflowX: "hidden" }}>
+          {/* 阶段标题行 */}
           {["32强", "16强", "8强", "4强", "季军赛", "决赛"].map(stage => {
             const matches = knockoutMatches.filter(m => m.stage === stage);
             const sc = stageColor(stage);
             return (
-              <div key={stage} className="mb-1">
-                <div className="flex items-center px-4 py-2" style={{ backgroundColor: BG3, borderBottom: `1px solid ${BORDER}` }}>
-                  <span className="text-xs font-black px-2 py-0.5 mr-2" style={{ backgroundColor: sc.bg, color: sc.text, borderRadius: 2 }}>
+              <div key={stage} className="mb-2">
+                {/* 阶段标题 */}
+                <div className="flex items-center mb-2 mt-3">
+                  <span
+                    className="text-xs font-black px-3 py-1"
+                    style={{ backgroundColor: sc.bg, color: sc.text, borderRadius: 2, letterSpacing: 1 }}
+                  >
                     {stage}
                   </span>
-                  <span className="text-xs" style={{ color: TEXT2 }}>{matches.length} 场</span>
+                  <span className="text-xs ml-2" style={{ color: TEXT2 }}>{matches.length} 场</span>
+                  <div className="flex-1 ml-3" style={{ height: 1, backgroundColor: BORDER }} />
                 </div>
-                {matches.map((m, i) => (
-                  <div
-                    key={m.id}
-                    className="flex items-center px-4 py-3"
-                    style={{ backgroundColor: i % 2 === 0 ? BG : BG2, borderBottom: `1px solid ${BORDER}` }}
-                  >
-                    {/* 主队（右对齐） */}
-                    <div className="flex items-center gap-2" style={{ flex: "1 1 0", minWidth: 0, justifyContent: "flex-end" }}>
-                      <span className="text-sm font-medium truncate" style={{ color: m.homeCode === "un" ? TEXT2 : TEXT }}>{m.homeName}</span>
-                      <Flag code={m.homeCode} size={20} />
+                {/* 对阵卡片列表 */}
+                <div className="flex flex-col gap-2">
+                  {matches.map((m, i) => (
+                    <div key={m.id} className="relative">
+                      {/* 对阵卡片 */}
+                      <div
+                        style={{
+                          backgroundColor: BG2,
+                          border: `1px solid ${BORDER}`,
+                          borderRadius: 4,
+                          overflow: "hidden",
+                        }}
+                      >
+                        {/* 主队行 */}
+                        <div
+                          className="flex items-center px-3 py-2"
+                          style={{ borderBottom: `1px solid ${BORDER}` }}
+                        >
+                          <Flag code={m.homeCode} size={18} />
+                          <span
+                            className="ml-2 text-sm font-medium flex-1 truncate"
+                            style={{ color: m.homeCode === "un" ? TEXT2 : TEXT }}
+                          >
+                            {m.homeName}
+                          </span>
+                          <span
+                            className="text-sm font-black ml-2 flex-shrink-0"
+                            style={{
+                              color: m.homeScore !== null ? GOLD : TEXT2,
+                              minWidth: 20,
+                              textAlign: "right",
+                            }}
+                          >
+                            {m.homeScore !== null ? m.homeScore : "-"}
+                          </span>
+                        </div>
+                        {/* 客队行 */}
+                        <div className="flex items-center px-3 py-2">
+                          <Flag code={m.awayCode} size={18} />
+                          <span
+                            className="ml-2 text-sm font-medium flex-1 truncate"
+                            style={{ color: m.awayCode === "un" ? TEXT2 : TEXT }}
+                          >
+                            {m.awayName}
+                          </span>
+                          <span
+                            className="text-sm font-black ml-2 flex-shrink-0"
+                            style={{
+                              color: m.awayScore !== null ? GOLD : TEXT2,
+                              minWidth: 20,
+                              textAlign: "right",
+                            }}
+                          >
+                            {m.awayScore !== null ? m.awayScore : "-"}
+                          </span>
+                        </div>
+                      </div>
+                      {/* 连接线：每两场连一根竖线到下一轮 */}
+                      {i % 2 === 0 && i + 1 < matches.length && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            right: -12,
+                            top: "50%",
+                            width: 12,
+                            height: 1,
+                            backgroundColor: BORDER,
+                          }}
+                        />
+                      )}
                     </div>
-                    {/* 比分 */}
-                    <div
-                      className="flex items-center justify-center flex-shrink-0 mx-3"
-                      style={{ minWidth: 52, backgroundColor: BG3, borderRadius: 3, padding: "3px 8px", border: `1px solid ${BORDER}` }}
-                    >
-                      <span className="text-sm font-black" style={{ color: m.homeScore !== null ? GOLD : TEXT2, letterSpacing: 2 }}>
-                        {m.homeScore !== null ? `${m.homeScore}:${m.awayScore}` : "-:-"}
-                      </span>
-                    </div>
-                    {/* 客队（左对齐） */}
-                    <div className="flex items-center gap-2" style={{ flex: "1 1 0", minWidth: 0 }}>
-                      <Flag code={m.awayCode} size={20} />
-                      <span className="text-sm font-medium truncate" style={{ color: m.awayCode === "un" ? TEXT2 : TEXT }}>{m.awayName}</span>
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             );
           })}
