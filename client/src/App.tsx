@@ -701,6 +701,7 @@ function Router() {
         <Route path="/world-cup" component={WorldCup} />
         <Route path="/world-cup/admin" component={WcOddsAdmin} />
         <Route path="/world-cup/teams" component={WcTeams} />
+        <Route path="/world-cup/teams/:code" component={WcTeams} />
         {/* 404 */}
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />

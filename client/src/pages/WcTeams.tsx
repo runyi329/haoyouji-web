@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useParams } from "wouter";
 import { ArrowLeft, ChevronDown, ChevronUp, Trophy, Users, Star } from "lucide-react";
 import { wcTeams, teamsByGroup, posMap, type TeamData } from "@/data/wcTeams";
 
-// 国旗 emoji 映射（通过 flag emoji）
+// 国旗 emoji 映射
 function getFlagEmoji(code: string): string {
   const flagMap: Record<string, string> = {
     "cz": "🇨🇿", "mx": "🇲🇽", "za": "🇿🇦", "kr": "🇰🇷",
@@ -42,8 +42,8 @@ function posBadge(pos: string): string {
 }
 
 // ===== 球队详情页 =====
-function TeamDetail({ team, onBack }: { team: TeamData; onBack: () => void }) {
-  const [expandedPos, setExpandedPos] = useState<string | null>(null);
+function TeamDetail({ team, backHref }: { team: TeamData; backHref: string }) {
+  const [expandedPos, setExpandedPos] = useState<string | null>("FW");
   const positions = ["GK", "DF", "MF", "FW"] as const;
 
   const playersByPos = positions.reduce((acc, pos) => {
@@ -57,9 +57,11 @@ function TeamDetail({ team, onBack }: { team: TeamData; onBack: () => void }) {
     <div className="min-h-screen bg-gray-50 pb-8 max-w-md mx-auto">
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 shadow-sm">
-        <button onClick={onBack} className="p-1.5 rounded-full hover:bg-gray-100 transition-colors">
-          <ArrowLeft className="w-5 h-5 text-gray-600" />
-        </button>
+        <Link href={backHref}>
+          <button className="p-1.5 rounded-full hover:bg-gray-100 transition-colors">
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
+          </button>
+        </Link>
         <span className="text-lg">{getFlagEmoji(team.code)}</span>
         <h1 className="font-bold text-gray-800 text-base flex-1">{team.nameCn}</h1>
         <span className="text-xs text-gray-400">{team.name}</span>
@@ -95,7 +97,7 @@ function TeamDetail({ team, onBack }: { team: TeamData; onBack: () => void }) {
         </div>
       </div>
 
-      {/* 主教练 */}
+      {/* 主教练 & 队长 */}
       <div className="mx-4 mt-3 bg-white rounded-2xl shadow-sm p-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-xl">👔</div>
@@ -183,14 +185,9 @@ function TeamDetail({ team, onBack }: { team: TeamData; onBack: () => void }) {
 }
 
 // ===== 球队列表页 =====
-export default function WcTeams() {
-  const [selectedTeam, setSelectedTeam] = useState<TeamData | null>(null);
+function TeamList() {
   const [searchText, setSearchText] = useState("");
   const groups = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
-
-  if (selectedTeam) {
-    return <TeamDetail team={selectedTeam} onBack={() => setSelectedTeam(null)} />;
-  }
 
   const filteredTeams = searchText
     ? wcTeams.filter(
@@ -234,18 +231,16 @@ export default function WcTeams() {
           ) : (
             <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
               {filteredTeams.map((team, idx) => (
-                <button
-                  key={team.code}
-                  className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left ${idx < filteredTeams.length - 1 ? "border-b border-gray-50" : ""}`}
-                  onClick={() => setSelectedTeam(team)}
-                >
-                  <span className="text-2xl">{getFlagEmoji(team.code)}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800 text-sm">{team.nameCn}</p>
-                    <p className="text-xs text-gray-400">{team.name} · {team.group}组</p>
+                <Link key={team.code} href={`/world-cup/teams/${team.code}`}>
+                  <div className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer ${idx < filteredTeams.length - 1 ? "border-b border-gray-50" : ""}`}>
+                    <span className="text-2xl">{getFlagEmoji(team.code)}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-800 text-sm">{team.nameCn}</p>
+                      <p className="text-xs text-gray-400">{team.name} · {team.group}组</p>
+                    </div>
+                    <span className={`text-sm ${rankColor(team.fifaRank)}`}>#{team.fifaRank}</span>
                   </div>
-                  <span className={`text-sm ${rankColor(team.fifaRank)}`}>#{team.fifaRank}</span>
-                </button>
+                </Link>
               ))}
             </div>
           )}
@@ -266,21 +261,19 @@ export default function WcTeams() {
                 </div>
                 <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
                   {teams.map((team, idx) => (
-                    <button
-                      key={team.code}
-                      className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left ${idx < teams.length - 1 ? "border-b border-gray-50" : ""}`}
-                      onClick={() => setSelectedTeam(team)}
-                    >
-                      <span className="text-2xl">{getFlagEmoji(team.code)}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-800 text-sm">{team.nameCn}</p>
-                        <p className="text-xs text-gray-400 truncate">{team.coach}</p>
+                    <Link key={team.code} href={`/world-cup/teams/${team.code}`}>
+                      <div className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer ${idx < teams.length - 1 ? "border-b border-gray-50" : ""}`}>
+                        <span className="text-2xl">{getFlagEmoji(team.code)}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-800 text-sm">{team.nameCn}</p>
+                          <p className="text-xs text-gray-400 truncate">{team.coach}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className={`text-sm ${rankColor(team.fifaRank)}`}>#{team.fifaRank}</span>
+                          <span className="text-xs text-gray-400">{team.players.length}人</span>
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-0.5">
-                        <span className={`text-sm ${rankColor(team.fifaRank)}`}>#{team.fifaRank}</span>
-                        <span className="text-xs text-gray-400">{team.players.length}人</span>
-                      </div>
-                    </button>
+                    </Link>
                   ))}
                 </div>
               </div>
@@ -290,4 +283,29 @@ export default function WcTeams() {
       )}
     </div>
   );
+}
+
+// ===== 主路由组件 =====
+// 路由：/world-cup/teams        → 列表页
+// 路由：/world-cup/teams/:code  → 某球队详情页
+export default function WcTeams() {
+  const params = useParams<{ code?: string }>();
+  const code = params.code;
+
+  if (code) {
+    const team = wcTeams.find(t => t.code === code);
+    if (!team) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center max-w-md mx-auto">
+          <p className="text-gray-400 mb-4">未找到该球队</p>
+          <Link href="/world-cup/teams">
+            <button className="text-[#A80000] text-sm font-semibold">← 返回列表</button>
+          </Link>
+        </div>
+      );
+    }
+    return <TeamDetail team={team} backHref="/world-cup/teams" />;
+  }
+
+  return <TeamList />;
 }

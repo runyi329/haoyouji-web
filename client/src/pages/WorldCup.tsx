@@ -875,7 +875,7 @@ export default function WorldCup() {
                       </span>
                     </div>
                     {teams.map((team, i) => (
-                      <Link key={i} href="/world-cup/teams">
+                      <Link key={i} href={`/world-cup/teams/${team.code}`}>
                         <div
                           className="flex items-center px-4 py-3 cursor-pointer"
                           style={{ borderBottom: `1px solid ${BORDER}`, backgroundColor: BG }}
