@@ -1335,6 +1335,7 @@ export default function WorldCup() {
           const homeTeamData = wcTeams.find(t => t.code === selectedMatch.homeCode);
           const awayTeamData = wcTeams.find(t => t.code === selectedMatch.awayCode);
           const POS_ORDER = ["GK", "DF", "MF", "FW"];
+          const POS_CN: Record<string, string> = { GK: "门将", DF: "后卫", MF: "中场", FW: "前锋" };
           const homePlayers = homeTeamData ? [...homeTeamData.players].sort((a, b) => POS_ORDER.indexOf(a.pos) - POS_ORDER.indexOf(b.pos)) : [];
           const awayPlayers = awayTeamData ? [...awayTeamData.players].sort((a, b) => POS_ORDER.indexOf(a.pos) - POS_ORDER.indexOf(b.pos)) : [];
 
@@ -1531,7 +1532,7 @@ export default function WorldCup() {
                                     border: "1px solid rgba(255,255,255,0.1)",
                                     borderRadius: 2, padding: "0 4px",
                                     fontFamily: "monospace", flexShrink: 0,
-                                  }}>{hp.pos}</span>
+                                  }}>{POS_CN[hp.pos] || hp.pos}</span>
                                   <span style={{
                                     fontSize: 12, fontWeight: hp.captain ? 700 : 500,
                                     color: hp.captain ? GOLD : TEXT,
@@ -1557,7 +1558,7 @@ export default function WorldCup() {
                                     border: "1px solid rgba(255,255,255,0.1)",
                                     borderRadius: 2, padding: "0 4px",
                                     fontFamily: "monospace", flexShrink: 0,
-                                  }}>{ap.pos}</span>
+                                  }}>{POS_CN[ap.pos] || ap.pos}</span>
                                   <span style={{
                                     fontSize: 12, fontWeight: ap.captain ? 700 : 500,
                                     color: ap.captain ? GOLD : TEXT,
