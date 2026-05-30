@@ -937,11 +937,7 @@ export default function WcOddsAdmin() {
   const isAdmin = user?.role === "super_admin";
   const [activeTab, setActiveTab] = useState<"odds" | "orders">("odds");
 
-  if (user && !isAdmin) {
-    navigate("/world-cup");
-    return null;
-  }
-
+  // 所有 hooks 必须在条件 return 之前调用，否则 refetchInterval 不生效
   const { data: stats, refetch: refetchStats } = trpc.wcOdds.getStats.useQuery();
   const { data: matrix, isLoading: matrixLoading, refetch: refetchMatrix } = trpc.wcOdds.getOddsMatrix.useQuery({ limit: 30 });
   // 水钱设置：从数据库读取，每5秒轮询一次，实现实时联动
@@ -961,6 +957,10 @@ export default function WcOddsAdmin() {
       toast.error(`❌ 抓取失败：${err.message}`);
     },
   });
+  if (user && !isAdmin) {
+    navigate("/world-cup");
+    return null;
+  }
 
   const tableRef = useRef<HTMLDivElement>(null);
   const snapshots = matrix?.snapshots ?? [];
