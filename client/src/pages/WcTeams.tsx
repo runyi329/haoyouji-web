@@ -76,10 +76,8 @@ function PosBadge({ pos }: { pos: string }) {
   );
 }
 
-// ===== 头像占位（球衣号码风格） =====
-function PlayerAvatar({ idx, pos }: { idx: number; pos: string }) {
-  const num = idx + 1;
-  // 根据位置给头像背景一点差异，但都是低调的深色
+// ===== 头像占位（人形轮廓） =====
+function PlayerAvatar({ pos }: { pos: string }) {
   const bgMap: Record<string, string> = {
     GK: "#1A2E42",
     DF: "#162840",
@@ -96,10 +94,13 @@ function PlayerAvatar({ idx, pos }: { idx: number; pos: string }) {
       border: `1px solid rgba(255,255,255,0.1)`,
       display: "flex", alignItems: "center", justifyContent: "center",
       flexShrink: 0,
+      overflow: "hidden",
     }}>
-      <span style={{ color: TEXT3, fontSize: 11, fontWeight: 700, fontFamily: "monospace" }}>
-        {num < 10 ? `0${num}` : num}
-      </span>
+      {/* 人形轮廓 SVG */}
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+        <circle cx="12" cy="8" r="4" fill="rgba(255,255,255,0.18)" />
+        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="rgba(255,255,255,0.18)" />
+      </svg>
     </div>
   );
 }
@@ -175,26 +176,17 @@ function TeamDetail({ team, backHref }: { team: TeamData; backHref: string }) {
                 }}
               >
                 {/* 头像（球衣号码风格） */}
-                <PlayerAvatar idx={idx} pos={player.pos} />
+                <PlayerAvatar pos={player.pos} />
 
                 {/* 姓名 + 俱乐部 */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
                     <PosBadge pos={player.pos} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: player.captain ? GOLD : TEXT }}>
                       {player.nameCn || player.name}
                     </span>
                     {player.nameCn && (
                       <span style={{ fontSize: 11, color: TEXT3 }}>{player.name}</span>
-                    )}
-                    {player.captain && (
-                      <span style={{
-                        fontSize: 10, fontWeight: 700,
-                        background: "rgba(255,215,0,0.12)", color: GOLD,
-                        padding: "1px 5px", borderRadius: 3,
-                        border: `1px solid rgba(255,215,0,0.25)`,
-                        flexShrink: 0,
-                      }}>队长</span>
                     )}
                   </div>
                   <div style={{
@@ -231,7 +223,10 @@ function TeamDetail({ team, backHref }: { team: TeamData; backHref: string }) {
               display: "flex", alignItems: "center", justifyContent: "center",
               flexShrink: 0,
             }}>
-              <span style={{ color: TEXT3, fontSize: 10, fontWeight: 700, fontFamily: "monospace" }}>HC</span>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+                <circle cx="12" cy="8" r="4" fill="rgba(255,255,255,0.18)" />
+                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" fill="rgba(255,255,255,0.18)" />
+              </svg>
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
