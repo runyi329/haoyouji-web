@@ -642,10 +642,10 @@ const B = {
   CH: 32,    // 卡片高（两行）
   CGAP: 6,   // 列间距
   RGAP: 4,   // 行间距
-  FW: 22,    // 国旗宽
-  FH: 15,    // 国旗高
+  FW: 36,    // 国旗宽（铺满格子）
+  FH: 16,    // 国旗高（半格）
   HALF: 8,   // 左半区行数
-  TPAD: 22,  // 顶部标签區高
+  TPAD: 4,   // 顶部无标签，只留少量padding
   NCOLS: 9,  // 总列数
 };
 
@@ -677,28 +677,26 @@ const STAGE_COLORS: Record<string, { bg: string; text: string }> = {
   "决赛": { bg: GOLD, text: "#000" },
 };
 
-// 单个对阵格：两行，每行放一个国旗（居中）
+// 单个对阵格：国旗直接铺满格子，无外框
 function BSlot({ m, x, y, isTop, highlight }: {
   m: KnockoutMatch; x: number; y: number; isTop: boolean; highlight?: boolean;
 }) {
   const code = isTop ? m.homeCode : m.awayCode;
   const pending = code === "un";
-  const fy = y + (B.CH / 2 - B.FH) / 2; // 居中国旗
-  const fx = x + (B.CW - B.FW) / 2;
-  const borderColor = highlight ? GOLD : "rgba(255,255,255,0.15)";
+  const slotH = B.CH / 2;
   return (
     <g>
-      <rect x={x} y={y} width={B.CW} height={B.CH / 2} rx={0}
-        fill={highlight ? "rgba(255,215,0,0.1)" : BG2}
-        stroke={borderColor} strokeWidth={highlight ? 1 : 0.6} />
       {pending ? (
-        // 未确定：画一个虚线占位框
-        <rect x={fx} y={fy} width={B.FW} height={B.FH} rx={1}
-          fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth={0.5} strokeDasharray="2,1" />
+        // 未确定：虚线占位框铺满格子
+        <rect x={x} y={y} width={B.CW} height={slotH} rx={1}
+          fill={highlight ? "rgba(255,215,0,0.08)" : "rgba(255,255,255,0.04)"}
+          stroke={highlight ? GOLD : "rgba(255,255,255,0.18)"}
+          strokeWidth={highlight ? 0.8 : 0.5} strokeDasharray="2,1" />
       ) : (
+        // 有国旗：直接铺满，无外框
         <image href={`/flags/${code.toLowerCase()}.png`}
-          x={fx} y={fy} width={B.FW} height={B.FH}
-          preserveAspectRatio="xMidYMid meet" />
+          x={x} y={y} width={B.CW} height={slotH}
+          preserveAspectRatio="none" />
       )}
     </g>
   );
@@ -744,20 +742,7 @@ const finalCY = B.TPAD + B_TOTAL_H / 2;
         style={{ display: "block" }}
         preserveAspectRatio="xMidYMid meet"
       >
-        {/* 顶部阶段标签 */}
-        {colLabels.map((label, i) => {
-          const sc = STAGE_COLORS[label] ?? { bg: BG3, text: TEXT2 };
-          const x = bX(i);
-          return (
-            <g key={i}>
-              <rect x={x} y={1} width={B.CW} height={18} rx={2} fill={sc.bg} />
-              <text x={x + B.CW / 2} y={12} fontSize={7} fill={sc.text}
-                fontFamily="system-ui,sans-serif" fontWeight={700} textAnchor="middle">
-                {label}
-              </text>
-            </g>
-          );
-        })}
+        {/* 顶部阶段标签已移除 */}
 
         {/* 左半区卡片 + 连线 */}
         {leftRounds.map((roundMatches, col) =>
