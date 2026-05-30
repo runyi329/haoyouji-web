@@ -1,5 +1,5 @@
 import { ArrowLeft, ChevronRight, Settings } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link } from "wouter";
 import { PageTag } from "@/components/PageTag";
@@ -30,6 +30,54 @@ function Flag({ code, size = 28 }: { code: string; size?: number }) {
         (e.target as HTMLImageElement).style.display = "none";
       }}
     />
+  );
+}
+
+// ===== 比赛倒计时组件 =====
+function MatchCountdown({ targetISO }: { targetISO: string }) {
+  const [remaining, setRemaining] = useState(() =>
+    Math.max(0, new Date(targetISO).getTime() - Date.now())
+  );
+  useEffect(() => {
+    const update = () => setRemaining(Math.max(0, new Date(targetISO).getTime() - Date.now()));
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [targetISO]);
+
+  if (remaining <= 0) {
+    // 比赛已开始或结束
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flex: 0, minWidth: 80 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 32, fontWeight: 900, color: TEXT }}>-</span>
+          <span style={{ fontSize: 32, fontWeight: 900, color: TEXT }}>-</span>
+        </div>
+        <span style={{ fontSize: 10, color: TEXT2 }}>进行中</span>
+      </div>
+    );
+  }
+
+  const d = Math.floor(remaining / 86400000);
+  const h = Math.floor((remaining % 86400000) / 3600000);
+  const m = Math.floor((remaining % 3600000) / 60000);
+  const s = Math.floor((remaining % 60000) / 1000);
+
+  // 格式化显示
+  let countdownDisplay: string;
+  if (d > 0) {
+    countdownDisplay = `${d}天${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  } else {
+    countdownDisplay = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flex: 0, minWidth: 90 }}>
+      <span style={{ fontSize: 16, fontWeight: 900, color: GOLD, fontVariantNumeric: "tabular-nums", letterSpacing: 1 }}>
+        {countdownDisplay}
+      </span>
+      <span style={{ fontSize: 10, color: TEXT2 }}>距开赛</span>
+    </div>
   );
 }
 
@@ -1359,7 +1407,6 @@ export default function WorldCup() {
                     {selectedMatch.venue ? (
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
                         <span style={{ fontSize: 11, fontWeight: 600, color: TEXT }}>{selectedMatch.venue}</span>
-                        <span style={{ fontSize: 10, color: TEXT2 }}>比赛场地</span>
                       </div>
                     ) : <div style={{ width: 60 }} />}
                   </div>
@@ -1375,14 +1422,28 @@ export default function WorldCup() {
                       <span style={{ fontSize: 13, fontWeight: 700, color: TEXT, textAlign: "center" }}>{selectedMatch.home}</span>
                       <span style={{ fontSize: 10, color: TEXT2 }}>主队</span>
                     </div>
-                    {/* 比分 */}
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flex: 0, minWidth: 80 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 32, fontWeight: 900, color: TEXT }}>-</span>
-                        <span style={{ fontSize: 32, fontWeight: 900, color: TEXT }}>-</span>
-                      </div>
-                      <span style={{ fontSize: 10, color: TEXT2 }}>待开赛</span>
-                    </div>
+                    {/* 比分/倒计时 */}
+                    {(() => {
+                      // 构造比赛开始的UTC时间
+                      const matchDateStr = selectedMatch.date || "";
+                      const matchTimeStr = selectedMatch.time || "00:00";
+                      // time是北京时间，北京时间=UTC+8，所以UTC=北京时间-8小时
+                      const [hh, mm] = matchTimeStr.split(":").map(Number);
+                      const utcHour = hh - 8;
+                      let utcDate = matchDateStr;
+                      let utcH = utcHour;
+                      if (utcHour < 0) {
+                        // 跨天：日期减1
+                        const d = new Date(matchDateStr + "T00:00:00Z");
+                        d.setUTCDate(d.getUTCDate() - 1);
+                        utcDate = d.toISOString().slice(0, 10);
+                        utcH = utcHour + 24;
+                      }
+                      const targetISO = `${utcDate}T${String(utcH).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00.000Z`;
+                      return (
+                        <MatchCountdown targetISO={targetISO} />
+                      );
+                    })()}
                     {/* 客队 */}
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flex: 1 }}>
                       <Flag code={selectedMatch.awayCode} size={44} />
