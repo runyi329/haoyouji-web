@@ -1232,3 +1232,16 @@ nav.safe-area-inset-bottom {
   margin-left: auto !important;
   margin-right: auto !important;
 }
+
+/* 全局禁止长按保存图片（移动端防截图保存） */
+img {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  pointer-events: none;
+}
+
+/* 需要响应点击的图片加此 class 恢复交互 */
+img.clickable-img {
+  pointer-events: auto !important;
+}
