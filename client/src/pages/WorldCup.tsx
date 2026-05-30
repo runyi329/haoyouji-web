@@ -579,12 +579,11 @@ function DayGroup({
             overflow: "hidden",
           }}
         >
-          {/* 左区：两行布局，第一行阶段标签，第二行时间 */}
+          {/* 左区：单行布局，阶段标签+时间同行 */}
           <div
-            className="flex flex-col justify-center flex-shrink-0"
-            style={{ gap: 2, marginRight: 6, width: 100, overflow: "hidden" }}
+            className="flex items-center flex-shrink-0"
+            style={{ gap: 4, marginRight: 4, width: 130, overflow: "hidden" }}
           >
-            {/* 第一行：阶段标签完整显示 */}
             <span
               style={{
                 backgroundColor: stageStyle(match.stage).bg,
@@ -595,19 +594,14 @@ function DayGroup({
                 borderRadius: 3,
                 whiteSpace: "nowrap",
                 lineHeight: "16px",
-                display: "inline-block",
-                alignSelf: "flex-start",
+                flexShrink: 0,
               }}
             >
               {match.stage}
             </span>
-            {/* 第二行：时间 + 北京时间 */}
-            <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-              <span style={{ color: GOLD, fontSize: "12px", fontWeight: 700, whiteSpace: "nowrap" }}>
-                {match.time || "待定"}
-              </span>
-              <span style={{ color: TEXT2, fontSize: "10px", whiteSpace: "nowrap" }}>北京</span>
-            </div>
+            <span style={{ color: GOLD, fontSize: "12px", fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>
+              {match.time || "待定"}
+            </span>
           </div>
 
           {/* 中区：三列固定宽度，VS居中固定对齐 */}
