@@ -1310,13 +1310,14 @@ export default function WorldCup() {
                         ? `${parseInt(selectedMatch.date.slice(5, 7))}月${parseInt(selectedMatch.date.slice(8, 10))}日`
                         : "";
                       return (
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
-                          {dateStr && <span style={{ fontSize: 11, color: TEXT2 }}>{dateStr}</span>}
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+                          {/* 第一行：北京时间 X月X日 */}
+                          <span style={{ fontSize: 11, color: TEXT2 }}>北京时间{dateStr ? ` ${dateStr}` : ""}</span>
+                          {/* 第二行：凌晨/上午/下午/晚上 + 具体时间 */}
                           <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-                            <span style={{ fontSize: 12, color: TEXT2, fontWeight: 600 }}>{period}</span>
-                            <span style={{ fontSize: 20, fontWeight: 900, color: GOLD, lineHeight: 1 }}>{timeStr}</span>
+                            <span style={{ fontSize: 13, color: TEXT2, fontWeight: 600 }}>{period}</span>
+                            <span style={{ fontSize: 22, fontWeight: 900, color: GOLD, lineHeight: 1 }}>{timeStr}</span>
                           </div>
-                          <span style={{ fontSize: 10, color: TEXT2 }}>北京时间</span>
                         </div>
                       );
                     })()}
