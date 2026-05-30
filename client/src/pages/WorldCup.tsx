@@ -239,48 +239,48 @@ const schedule: DaySchedule[] = [
     date: "2026-07-02",
     dateLabel: "7月2日 周四",
     matches: [
-      { home: "1A", homeCode: "un", away: "2B", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-      { home: "1C", homeCode: "un", away: "2D", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "A组第1名", homeCode: "un", away: "B组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "C组第1名", homeCode: "un", away: "D组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
     ],
   },
   {
     date: "2026-07-03",
     dateLabel: "7月3日 周五",
     matches: [
-      { home: "1E", homeCode: "un", away: "2F", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-      { home: "1G", homeCode: "un", away: "2H", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "E组第1名", homeCode: "un", away: "F组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "G组第1名", homeCode: "un", away: "H组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
     ],
   },
   {
     date: "2026-07-04",
     dateLabel: "7月4日 周六",
     matches: [
-      { home: "1I", homeCode: "un", away: "2J", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-      { home: "1K", homeCode: "un", away: "2L", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "I组第1名", homeCode: "un", away: "J组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "K组第1名", homeCode: "un", away: "L组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
     ],
   },
   {
     date: "2026-07-06",
     dateLabel: "7月6日 周一",
     matches: [
-      { home: "1B", homeCode: "un", away: "2A", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-      { home: "1D", homeCode: "un", away: "2C", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "B组第1名", homeCode: "un", away: "A组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "D组第1名", homeCode: "un", away: "C组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
     ],
   },
   {
     date: "2026-07-07",
     dateLabel: "7月7日 周二",
     matches: [
-      { home: "1F", homeCode: "un", away: "2E", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-      { home: "1H", homeCode: "un", away: "2G", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "F组第1名", homeCode: "un", away: "E组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "H组第1名", homeCode: "un", away: "G组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
     ],
   },
   {
     date: "2026-07-08",
     dateLabel: "7月8日 周三",
     matches: [
-      { home: "1J", homeCode: "un", away: "2I", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
-      { home: "1L", homeCode: "un", away: "2K", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "J组第1名", homeCode: "un", away: "I组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
+      { home: "L组第1名", homeCode: "un", away: "K组第2名", awayCode: "un", time: "待定", venue: "TBD", stage: "淘汰赛" },
     ],
   },
   {
