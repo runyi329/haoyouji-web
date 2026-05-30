@@ -332,9 +332,10 @@ export const wcOddsRouter = router({
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
 
       // 扣款：写入 af_manual_balances（负数）
+      const teamCodeTag = input.teamCode ? `[${input.teamCode.toUpperCase()}]` : '';
       const deductNote = input.currency === 'CNY'
-        ? `[CNY]世界杯投注-${input.teamName} -${amt}${input.note ? ' ' + input.note : ''}`
-        : `世界杯投注-${input.teamName} -${amt} USDT${input.note ? ' ' + input.note : ''}`;
+        ? `[CNY]世界杯投注-${input.teamName}${teamCodeTag} -${amt}${input.note ? ' ' + input.note : ''}`
+        : `世界杯投注-${input.teamName}${teamCodeTag} -${amt} USDT${input.note ? ' ' + input.note : ''}`;
 
       if (input.currency === 'CNY') {
         const [ledgerRows] = await (conn as any).execute(
@@ -486,6 +487,8 @@ export const wcOddsRouter = router({
           currency: wcOrders.currency,
           bonusAmount: wcOrders.bonusAmount,
           status: wcOrders.status,
+          teamCode: wcOrders.teamCode,
+          teamName: wcOrders.teamName,
         })
         .from(wcOrders)
         .where(eq(wcOrders.id, input.orderId))
@@ -612,9 +615,10 @@ export const wcOddsRouter = router({
             .limit(1);
           const betAmt = amtRows ? parseFloat(amtRows.amount) : 0;
           if (betAmt > 0) {
+            const teamCodeTag2 = orderRow.teamCode ? `[${(orderRow.teamCode as string).toUpperCase()}]` : '';
             const refundNote = currency === 'CNY'
-              ? `[CNY]订单作废-退回投注 +${betAmt}`
-              : `订单作废-退回投注 +${betAmt} USDT`;
+              ? `[CNY]订单作废-退回投注${teamCodeTag2} +${betAmt}`
+              : `订单作废-退回投注${teamCodeTag2} +${betAmt} USDT`;
             if (currency === 'CNY') {
               const [ledgerRows] = await (conn as any).execute(
                 `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,

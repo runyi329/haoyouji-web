@@ -5,6 +5,33 @@ import { trpc } from "../lib/trpc";
 
 type TransactionType = "recharge" | "withdraw" | "reward" | "all";
 
+// 从交易备注中提取世界杯球队 code（小写），如 [ES] → 'es'
+// 支持格式：世界杯投注-西班牙[ES] / 订单作废-退回投注[ES]
+function extractWcTeamCode(note: string): string | null {
+  const isWcRelated = note.includes('世界杯投注') || note.includes('订单作废-退回投注');
+  if (!isWcRelated) return null;
+  // 新格式：提取 [XX] 中的 code
+  const codeMatch = note.match(/\[([A-Z]{2,10})\]/);
+  if (codeMatch) return codeMatch[1].toLowerCase();
+  // 旧格式（无code）：通过球队名映射
+  const nameToCode: Record<string, string> = {
+    '西班牙': 'es', '法国': 'fr', '英格兰': 'gb-eng', '巴西': 'br', '阿根廷': 'ar',
+    '葡萄牙': 'pt', '德国': 'de', '荷兰': 'nl', '挪威': 'no', '比利时': 'be',
+    '哥伦比亚': 'co', '摩洛哥': 'ma', '日本': 'jp', '美国': 'us', '瑞士': 'ch',
+    '乌拉圭': 'uy', '墨西哥': 'mx', '厄瓜多尔': 'ec', '克罗地亚': 'hr', '土耳其': 'tr',
+    '塞内加尔': 'sn', '瑞典': 'se', '奥地利': 'at', '苏格兰': 'gb-sct', '加拿大': 'ca',
+    '科特迪瓦': 'ci', '巴拉圭': 'py', '捷克': 'cz', '埃及': 'eg', '波黑': 'ba',
+    '韩国': 'kr', '阿尔及利亚': 'dz', '加纳': 'gh', '澳大利亚': 'au', '突尼斯': 'tn',
+    '伊朗': 'ir', '刚果民主共和国': 'cd', '南非': 'za', '沙特阿拉伯': 'sa', '巴拿马': 'pa',
+    '卡塔尔': 'qa', '佛得角': 'cv', '新西兰': 'nz', '伊拉克': 'iq', '乌兹别克斯坦': 'uz',
+    '库拉索': 'cw', '约旦': 'jo', '海地': 'ht',
+  };
+  for (const [name, code] of Object.entries(nameToCode)) {
+    if (note.includes(name)) return code;
+  }
+  return null;
+}
+
 export default function WalletTransactions() {
   const [, setLocation] = useLocation();
   const [activeType, setActiveType] = useState<TransactionType>("all");
@@ -56,6 +83,7 @@ export default function WalletTransactions() {
           amount: order.amount, status: order.status,
           network: order.network, orderNo: order.orderNo,
           txnHash: order.txnHash, createdAt: order.createdAt,
+          wcCode: null,
         });
       });
     }
@@ -64,24 +92,26 @@ export default function WalletTransactions() {
     if (balanceHistoryQuery.data) {
       (balanceHistoryQuery.data as any[]).forEach((history: any) => {
         const amt = Number(history.amount);
+        const desc = history.description || '';
+        const wcCode = extractWcTeamCode(desc);
         if (history.type === 'withdraw') {
           transactions.push({
             id: `bh-${history.id}`, type: 'withdraw',
             amount: Math.abs(amt), status: 'completed',
-            description: history.description, createdAt: history.createdAt,
+            description: desc, wcCode, createdAt: history.createdAt,
           });
         } else if (history.type === 'reward') {
           transactions.push({
             id: `bh-${history.id}`, type: 'reward',
             amount: Math.abs(amt), status: 'completed',
-            description: history.description, createdAt: history.createdAt,
+            description: desc, wcCode, createdAt: history.createdAt,
           });
         } else if (history.type === 'consume' || history.type === 'refund') {
           transactions.push({
             id: `bh-${history.id}`,
             type: amt < 0 ? 'deduct' : 'reward',
             amount: Math.abs(amt), status: 'completed',
-            description: history.description, createdAt: history.createdAt,
+            description: desc, wcCode, createdAt: history.createdAt,
           });
         }
       });
@@ -92,12 +122,15 @@ export default function WalletTransactions() {
       (manualBalancesQuery.data as any[]).forEach((m: any) => {
         const amt = Number(m.amount);
         if (amt === 0) return;
+        const note = m.note || '';
+        const wcCode = extractWcTeamCode(note);
         transactions.push({
           id: `manual-${m.id}`,
           type: amt > 0 ? 'reward' : 'deduct',
           amount: Math.abs(amt),
           status: 'completed',
-          description: m.note || '',
+          description: note,
+          wcCode,
           createdAt: m.created_at || m.createdAt,
         });
       });
@@ -165,6 +198,7 @@ export default function WalletTransactions() {
               const StatusIcon = statusConfig.icon;
               const isRecharge = transaction.type === 'recharge';
               const isPositive = isRecharge || transaction.type === 'reward';
+              const wcCode = transaction.wcCode as string | null;
               return (
                 <div
                   key={transaction.id}
@@ -173,17 +207,35 @@ export default function WalletTransactions() {
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center">
-                      {isPositive
-                        ? <ArrowDownCircle className="w-5 h-5 text-green-400 mr-2" />
-                        : <ArrowUpCircle className="w-5 h-5 text-red-400 mr-2" />
-                      }
+                      {/* 图标区：世界杯交易显示国旗，其他显示箭头 */}
+                      <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center mr-2 flex-shrink-0"
+                        style={{ background: isPositive ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)' }}
+                      >
+                        {wcCode ? (
+                          <img
+                            src={`/flags/${wcCode}.png`}
+                            alt={wcCode}
+                            className="w-8 h-8 object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          isPositive
+                            ? <ArrowDownCircle className="w-5 h-5 text-green-400" />
+                            : <ArrowUpCircle className="w-5 h-5 text-red-400" />
+                        )}
+                      </div>
                       <div>
-                        <div className="font-medium text-white text-sm">
-                          {isRecharge ? '充値' : transaction.type === 'withdraw' ? '提现' : transaction.type === 'reward' ? '奖励' : '扣费'}
-                          {transaction.network && (
-                            <span className="text-xs text-gray-500 ml-2">{transaction.network}</span>
-                          )}
-                        </div>
+                        {/* 世界杯交易：不显示文字标题，只显示时间 */}
+                        {!wcCode && (
+                          <div className="font-medium text-white text-sm">
+                            {isRecharge ? '充値' : transaction.type === 'withdraw' ? '提现' : transaction.type === 'reward' ? '奖励' : '扣费'}
+                            {transaction.network && (
+                              <span className="text-xs text-gray-500 ml-2">{transaction.network}</span>
+                            )}
+                          </div>
+                        )}
                         <div className="text-xs text-gray-500 mt-0.5">{formatDate(transaction.createdAt)}</div>
                       </div>
                     </div>
@@ -224,7 +276,8 @@ export default function WalletTransactions() {
                     </div>
                   )}
 
-                  {transaction.description && (
+                  {/* 非世界杯交易才显示描述文字 */}
+                  {!wcCode && transaction.description && (
                     <div className="text-xs text-gray-500 mt-1">{transaction.description}</div>
                   )}
                 </div>
