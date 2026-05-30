@@ -944,6 +944,13 @@ export default function WcOddsAdmin() {
 
   const { data: stats, refetch: refetchStats } = trpc.wcOdds.getStats.useQuery();
   const { data: matrix, isLoading: matrixLoading, refetch: refetchMatrix } = trpc.wcOdds.getOddsMatrix.useQuery({ limit: 30 });
+  // 水钱设置：从数据库读取，每5秒轮询一次，实现实时联动
+  const { data: marginData } = trpc.wcOdds.getMarginSetting.useQuery(undefined, {
+    refetchInterval: 5000,
+  });
+  const setMarginMutation = trpc.wcOdds.setMarginSetting.useMutation({
+    onError: (err) => { toast.error(`设置失败：${err.message}`); },
+  });
   const triggerFetch = trpc.wcOdds.triggerFetch.useMutation({
     onSuccess: (data) => {
       toast.success(`✅ 抓取成功！共 ${data.teamCount} 支球队，快照 #${data.snapshotId}`);
@@ -975,8 +982,8 @@ export default function WcOddsAdmin() {
 
   const snapshotsDesc = [...snapshots].reverse();
 
-  // 水钱比例选择器（默认8，即总隐含概率108%）
-  const [marginPct, setMarginPct] = useState<number>(8);
+  // 水钱比例：从数据库读取，本地乐观更新用
+  const marginPct = marginData?.marginPct ?? 8;
 
   // 根据选定水钱重新计算最新一列隐含赔率
   // 原始隐含概率 = 1/odds，正则化后隐含概率 = 原始隐含概率 / sum(所有隐含概率) * (100 + marginPct)
@@ -1112,7 +1119,7 @@ export default function WcOddsAdmin() {
               <span className="text-xs font-semibold" style={{ color: GOLD }}>隐含赔率水钱：</span>
               <select
                 value={marginPct}
-                onChange={e => setMarginPct(Number(e.target.value))}
+                onChange={e => setMarginMutation.mutate({ marginPct: Number(e.target.value) })}
                 style={{
                   backgroundColor: BG3,
                   color: GOLD,

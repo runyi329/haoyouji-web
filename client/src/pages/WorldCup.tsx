@@ -1214,9 +1214,14 @@ export default function WorldCup() {
 
   // 从 P012 最新快照拉取实时赔率
   const { data: liveOddsData, isLoading: liveOddsLoading } = trpc.wcOdds.getLatestChampionOdds.useQuery();
+  // 水钱设置：每5秒轮询一次，与第12页共享
+  const { data: marginData } = trpc.wcOdds.getMarginSetting.useQuery(undefined, {
+    refetchInterval: 5000,
+  });
+  const marginPct = marginData?.marginPct ?? 8;
 
   // 如果有实时数据就用实时数据，否则备用静态数据
-  const sortedOdds = liveOddsData && liveOddsData.teams.length > 0
+  const rawOddsList = liveOddsData && liveOddsData.teams.length > 0
     ? liveOddsData.teams
         .filter(t => t.pinnacleOdds !== null)
         .map(t => ({
@@ -1225,8 +1230,21 @@ export default function WorldCup() {
           code: t.code,
           odds: parseFloat(t.pinnacleOdds!),
         }))
-        .sort((a, b) => a.odds - b.odds)
-    : [...championOdds].sort((a, b) => a.odds - b.odds);
+    : [...championOdds];
+
+  // 按水钱设置重新计算隐含概率，排序用调整后赔率
+  const sortedOdds = (() => {
+    const sumImplied = rawOddsList.reduce((s, t) => s + 1 / t.odds, 0);
+    if (sumImplied === 0) return rawOddsList.sort((a, b) => a.odds - b.odds);
+    const targetSum = (100 + marginPct) / 100;
+    return rawOddsList
+      .map(t => ({
+        ...t,
+        // 调整后赔率 = 1 / ((1/odds) / sumImplied * targetSum)
+        adjustedOdds: 1 / ((1 / t.odds) / sumImplied * targetSum),
+      }))
+      .sort((a, b) => a.adjustedOdds - b.adjustedOdds);
+  })();
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: BG }}>
@@ -1698,7 +1716,7 @@ export default function WorldCup() {
                     className="text-sm font-black"
                     style={{ color: GOLD, marginTop: 2 }}
                   >
-                    {(100 / team.odds).toFixed(1)}%
+                    {(100 / ((team as any).adjustedOdds ?? team.odds)).toFixed(1)}%
                   </span>
                 </div>
               ))}

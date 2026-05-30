@@ -670,4 +670,73 @@ export const wcOddsRouter = router({
 
       return { success: true };
     }),
+
+  // ==================== 水钱设置 ====================
+  /**
+   * 获取当前水钱设置（公开，前端实时轮询用）
+   */
+  getMarginSetting: protectedProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) return { marginPct: 8 };
+    try {
+      // 确保表存在
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS wc_margin_settings (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          margin_pct INT NOT NULL DEFAULT 8,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          updated_by INT
+        )
+      `);
+      const [rows] = await (conn as any).execute(
+        `SELECT margin_pct FROM wc_margin_settings ORDER BY id DESC LIMIT 1`
+      ) as any[];
+      const arr = Array.isArray(rows) ? rows : [];
+      if (arr.length === 0) {
+        await (conn as any).execute(`INSERT INTO wc_margin_settings (margin_pct) VALUES (8)`);
+        return { marginPct: 8 };
+      }
+      return { marginPct: Number(arr[0].margin_pct) };
+    } finally {
+      (conn as any).release?.();
+    }
+  }),
+
+  /**
+   * 更新水钱设置（仅管理员）
+   */
+  setMarginSetting: adminProcedure
+    .input(z.object({ marginPct: z.number().int().min(0).max(50) }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+      try {
+        await (conn as any).execute(`
+          CREATE TABLE IF NOT EXISTS wc_margin_settings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            margin_pct INT NOT NULL DEFAULT 8,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            updated_by INT
+          )
+        `);
+        const [rows] = await (conn as any).execute(
+          `SELECT id FROM wc_margin_settings ORDER BY id DESC LIMIT 1`
+        ) as any[];
+        const arr = Array.isArray(rows) ? rows : [];
+        if (arr.length === 0) {
+          await (conn as any).execute(
+            `INSERT INTO wc_margin_settings (margin_pct, updated_by) VALUES (?, ?)`,
+            [input.marginPct, ctx.user.id]
+          );
+        } else {
+          await (conn as any).execute(
+            `UPDATE wc_margin_settings SET margin_pct = ?, updated_by = ? WHERE id = ?`,
+            [input.marginPct, ctx.user.id, arr[0].id]
+          );
+        }
+        return { success: true, marginPct: input.marginPct };
+      } finally {
+        (conn as any).release?.();
+      }
+    }),
 });
