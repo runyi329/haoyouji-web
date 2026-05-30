@@ -572,7 +572,7 @@ function DayGroup({
           style={{
             backgroundColor: BG,
             borderBottom: `1px solid ${BORDER}`,
-            height: 40,
+            height: 50,
             paddingLeft: 8,
             paddingRight: 6,
             gap: 0,
@@ -588,24 +588,24 @@ function DayGroup({
               style={{
                 backgroundColor: stageStyle(match.stage).bg,
                 color: stageStyle(match.stage).color,
-                fontSize: "9px",
+                fontSize: "11px",
                 fontWeight: 700,
                 padding: "1px 4px",
                 borderRadius: 3,
                 whiteSpace: "nowrap",
-                lineHeight: "14px",
+                lineHeight: "16px",
                 flexShrink: 1,
                 overflow: "hidden",
                 textOverflow: "ellipsis",
-                maxWidth: 52,
+                maxWidth: 58,
               }}
             >
               {match.stage}
             </span>
-            <span style={{ color: GOLD, fontSize: "11px", fontWeight: 700, whiteSpace: "nowrap" }}>
+            <span style={{ color: GOLD, fontSize: "13px", fontWeight: 700, whiteSpace: "nowrap" }}>
               {match.time || "待定"}
             </span>
-            <span style={{ color: TEXT2, fontSize: "9px", whiteSpace: "nowrap" }}>北京时间</span>
+            <span style={{ color: TEXT2, fontSize: "11px", whiteSpace: "nowrap" }}>北京时间</span>
           </div>
 
           {/* 中区：三列固定宽度，VS居中固定对齐 */}
@@ -618,26 +618,26 @@ function DayGroup({
               <span
                 style={{
                   color: TEXT,
-                  fontSize: "11px",
+                  fontSize: "13px",
                   fontWeight: 500,
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
                 }}
               >{match.home}</span>
-              <Flag code={match.homeCode} size={14} />
+              <Flag code={match.homeCode} size={18} />
             </div>
             {/* VS：固定宽度居中 */}
             <div className="flex items-center justify-center flex-shrink-0" style={{ width: 28 }}>
-              <span style={{ color: GOLD, fontSize: "10px", fontWeight: 900 }}>VS</span>
+              <span style={{ color: GOLD, fontSize: "12px", fontWeight: 900 }}>VS</span>
             </div>
             {/* 客队：左对齐 */}
             <div className="flex items-center justify-start" style={{ flex: "1 1 0", minWidth: 0, gap: 3, overflow: "hidden" }}>
-              <Flag code={match.awayCode} size={14} />
+              <Flag code={match.awayCode} size={18} />
               <span
                 style={{
                   color: TEXT,
-                  fontSize: "11px",
+                  fontSize: "13px",
                   fontWeight: 500,
                   overflow: "hidden",
                   textOverflow: "ellipsis",
