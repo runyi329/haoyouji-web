@@ -1269,9 +1269,11 @@ export default function WorldCup() {
         {/* 海报图片 */}
         <div style={{ width: "100%", aspectRatio: "16/9", overflow: "hidden", position: "relative" }}>
           <img
-            src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/wc2026-banner-8CUuuGEm5TC7Mio8WLi4z2.webp"
-            alt="FIFA World Cup 2026"
-            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            src={activeTab === "champion"
+              ? "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/wc2026-octopus-final3-5k84RfchAe5yZJsqW9m9T6.webp"
+              : "https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/wc2026-banner-8CUuuGEm5TC7Mio8WLi4z2.webp"}
+            alt={activeTab === "champion" ? "章鱼保罗AI预测2026世界杯冠军" : "FIFA World Cup 2026"}
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "opacity 0.3s ease" }}
           />
           {/* 底部渐变过渡到深色背景 */}
           <div
@@ -1641,14 +1643,6 @@ export default function WorldCup() {
         {/* ---- AI冠军预测 Tab ---- */}
         {activeTab === "champion" && (
           <div>
-            {/* AI预测海报 */}
-            <div style={{ width: "100%", overflow: "hidden" }}>
-              <img
-                src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/wc2026-octopus-final3-5k84RfchAe5yZJsqW9m9T6.webp"
-                alt="AI预测2026世界杯冠军"
-                style={{ width: "100%", display: "block", objectFit: "cover" }}
-              />
-            </div>
             {/* 数据来源标注 */}
             <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
               <span className="text-xs" style={{ color: TEXT2 }}>
