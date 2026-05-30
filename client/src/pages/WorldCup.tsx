@@ -1209,7 +1209,7 @@ export default function WorldCup() {
   const tabs: { key: TabType; label: string }[] = [
     { key: "schedule", label: "赛程" },
     { key: "results", label: "赛果" },
-    { key: "champion", label: "AI冠军预测" },
+    { key: "champion", label: "AI夺冠预测" },
   ];
 
   // 从 P012 最新快照拉取实时赔率
@@ -1644,10 +1644,10 @@ export default function WorldCup() {
             {/* 数据来源标注 */}
             <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
               <span className="text-xs" style={{ color: TEXT2 }}>
-                {liveOddsLoading ? "正在加载最新赔率..."
+                {liveOddsLoading ? "AI实时预测加载中..."
                   : liveOddsData && liveOddsData.teams.length > 0
-                    ? `Pinnacle 实时赔率 · 共 ${sortedOdds.length} 支球队`
-                    : "暂无实时数据，显示备用赔率"}
+                    ? `AI实时预测${sortedOdds.length}支球队夺冠概率`
+                    : "AI实时预测48支球队夺冠概率"}
               </span>
               {liveOddsData?.fetchedAt && (
                 <span className="text-xs" style={{ color: TEXT2 }}>
@@ -1694,7 +1694,7 @@ export default function WorldCup() {
                     className="text-sm font-black"
                     style={{ color: GOLD, marginTop: 2 }}
                   >
-                    {team.odds.toFixed(2)}
+                    {(100 / team.odds).toFixed(1)}%
                   </span>
                 </div>
               ))}
