@@ -756,18 +756,18 @@ const finalCY = B.TPAD + B_TOTAL_H / 2;
       </svg>
 
       {/* ===== 底部分组国旗阵列 ===== */}
-      {/* A–L 共 12 组，每组一列：组标签 + 4 个国旗竖排 */}
-      <div style={{ marginTop: 12 }}>
+      {/* A–L 共 12 组，每组一列：组标签 + 4 个国旗竖排（正方形拉伸） */}
+      <div style={{ marginTop: 16 }}>
         <div className="flex items-center gap-2 px-3 py-1.5" style={{ backgroundColor: BG3 }}>
-          <span className="text-xs font-black px-1.5 py-0.5" style={{ backgroundColor: GOLD, color: "#000", borderRadius: 2, fontSize: 10 }}>GROUPS</span>
+          <span style={{ backgroundColor: GOLD, color: "#000", borderRadius: 2, fontSize: 9, fontWeight: 900, padding: "1px 5px" }}>GROUPS</span>
         </div>
-        <div className="flex" style={{ borderBottom: `1px solid ${BORDER}` }}>
+        <div className="flex" style={{ borderBottom: `1px solid ${BORDER}`, paddingTop: 4, paddingBottom: 4 }}>
           {["A","B","C","D","E","F","G","H","I","J","K","L"].map(g => (
-            <div key={g} className="flex-1 flex flex-col items-center py-1.5"
-              style={{ borderRight: `1px solid ${BORDER}` }}>
+            <div key={g} className="flex-1 flex flex-col items-center"
+              style={{ borderRight: `1px solid ${BORDER}`, gap: 3, paddingTop: 4, paddingBottom: 4 }}>
               {/* 组标签 */}
-              <span style={{ color: GOLD, fontSize: 9, fontWeight: 900, marginBottom: 2 }}>{g}</span>
-              {/* 4 个国旗竖排 */}
+              <span style={{ color: GOLD, fontSize: 8, fontWeight: 900, lineHeight: 1 }}>{g}</span>
+              {/* 4 个国旗竖排，正方形拉伸 */}
               {(groups[g] || []).map(t => (
                 <img
                   key={t.code}
@@ -775,12 +775,10 @@ const finalCY = B.TPAD + B_TOTAL_H / 2;
                   alt={t.name}
                   title={t.name}
                   style={{
-                    width: "100%",
-                    maxWidth: 28,
-                    height: "auto",
+                    width: "80%",
+                    aspectRatio: "1 / 1",
                     display: "block",
                     borderRadius: 1,
-                    marginBottom: 1,
                     objectFit: "cover",
                   }}
                   onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.15"; }}
