@@ -563,6 +563,77 @@ function ConfirmDialog({
   );
 }
 
+// ===================== 删除规则说明卡片 =====================
+function DeleteRulesCard() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className="rounded-xl mb-4 overflow-hidden"
+      style={{ border: `1px solid ${BORDER}`, backgroundColor: "rgba(255,215,0,0.04)" }}
+    >
+      {/* 标题行，点击展开/收起 */}
+      <button
+        className="w-full flex items-center justify-between px-4 py-2.5 text-left"
+        onClick={() => setOpen(v => !v)}
+        style={{ color: GOLD }}
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold">
+          <Info size={14} />
+          删除订单规则
+        </span>
+        <ChevronDown
+          size={14}
+          style={{
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.2s",
+          }}
+        />
+      </button>
+
+      {/* 展开内容 */}
+      {open && (
+        <div
+          className="px-4 pb-4 space-y-2 text-sm"
+          style={{ color: "rgba(255,215,0,0.85)" }}
+        >
+          <div className="flex gap-2 items-start">
+            <span
+              className="flex-shrink-0 rounded-full text-xs font-bold px-1.5 py-0.5"
+              style={{ backgroundColor: "rgba(255,100,100,0.25)", color: "#ff8080" }}
+            >A</span>
+            <div>
+              <span className="font-semibold" style={{ color: "#ff8080" }}>已中奖订单删除</span>
+              <span className="ml-1 opacity-80">→ 自动从用户钉包扣回奖金（防止奖金白拿）</span>
+              <div className="mt-0.5 text-xs opacity-60">备注：「订单删除-撤回奖金」</div>
+            </div>
+          </div>
+          <div className="flex gap-2 items-start">
+            <span
+              className="flex-shrink-0 rounded-full text-xs font-bold px-1.5 py-0.5"
+              style={{ backgroundColor: "rgba(100,200,255,0.2)", color: "#80d0ff" }}
+            >B</span>
+            <div>
+              <span className="font-semibold" style={{ color: "#80d0ff" }}>进行中订单删除</span>
+              <span className="ml-1 opacity-80">→ 自动退回投注金额（订单作废撤单）</span>
+              <div className="mt-0.5 text-xs opacity-60">备注：「订单作废-退回投注」</div>
+            </div>
+          </div>
+          <div className="flex gap-2 items-start">
+            <span
+              className="flex-shrink-0 rounded-full text-xs font-bold px-1.5 py-0.5"
+              style={{ backgroundColor: "rgba(180,180,180,0.2)", color: "#bbb" }}
+            >C</span>
+            <div>
+              <span className="font-semibold" style={{ color: "#bbb" }}>未中奖 / 已撤销订单删除</span>
+              <span className="ml-1 opacity-80">→ 不退款（已输的赔注不退）</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ===================== 订单列表 =====================
 function OrdersTab() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -638,6 +709,9 @@ function OrdersTab() {
         onCancel={() => setConfirmAction(null)}
         isPending={updateStatus.isPending}
       />
+      {/* 删除规则说明卡片 */}
+      <DeleteRulesCard />
+
       {/* 顶部操作栏：下拉筛选 */}
       <div className="flex items-center mb-3">
         <select

@@ -563,6 +563,88 @@ export const wcOddsRouter = router({
         }
       }
 
+      // 删除订单的钉包规则：
+      // 规则A：已中奖订单删除 → 自动从用户钉包扣回奖金（防止奖金白拿）
+      // 规则B：进行中订单删除 → 自动退回投注金额（订单作废撤单）
+      // 规则C：未中奖订单删除 → 不退款（已输的赔注不退）
+      if (input.status === 'deleted') {
+        const currency = orderRow.currency as string;
+
+        // 规则A：已中奖 → 删除，扣回奖金
+        if (orderRow.status === 'won' && orderRow.bonusAmount) {
+          const prevBonus = parseFloat(orderRow.bonusAmount);
+          const deleteWonNote = currency === 'CNY'
+            ? `[CNY]订单删除-撤回奖金 -${prevBonus}`
+            : `订单删除-撤回奖金 -${prevBonus} USDT`;
+          if (currency === 'CNY') {
+            const [ledgerRows] = await (conn as any).execute(
+              `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
+              [orderRow.userId]
+            ) as any[];
+            const ledgerId = (Array.isArray(ledgerRows) ? ledgerRows[0]?.ledger_id : null) ?? 37;
+            await (conn as any).execute(
+              `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
+              [ledgerId, orderRow.userId, -prevBonus, deleteWonNote]
+            );
+          } else {
+            await (conn as any).execute(
+              `UPDATE users SET balance = COALESCE(balance, 0) - ? WHERE id = ?`,
+              [prevBonus, orderRow.userId]
+            );
+            const [balRows] = await (conn as any).execute(
+              `SELECT balance FROM users WHERE id = ? LIMIT 1`,
+              [orderRow.userId]
+            ) as any[];
+            const newBalance = parseFloat((Array.isArray(balRows) ? balRows[0] : balRows)?.balance ?? '0') || 0;
+            await (conn as any).execute(
+              `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, 'consume', NULL, ?, ?)`,
+              [orderRow.userId, (-prevBonus).toString(), newBalance.toString(), deleteWonNote]
+            );
+          }
+        }
+
+        // 规则B：进行中 → 删除，退回投注金额
+        if (orderRow.status === 'pending') {
+          const [amtRows] = await db
+            .select({ amount: wcOrders.amount })
+            .from(wcOrders)
+            .where(eq(wcOrders.id, input.orderId))
+            .limit(1);
+          const betAmt = amtRows ? parseFloat(amtRows.amount) : 0;
+          if (betAmt > 0) {
+            const refundNote = currency === 'CNY'
+              ? `[CNY]订单作废-退回投注 +${betAmt}`
+              : `订单作废-退回投注 +${betAmt} USDT`;
+            if (currency === 'CNY') {
+              const [ledgerRows] = await (conn as any).execute(
+                `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
+                [orderRow.userId]
+              ) as any[];
+              const ledgerId = (Array.isArray(ledgerRows) ? ledgerRows[0]?.ledger_id : null) ?? 37;
+              await (conn as any).execute(
+                `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
+                [ledgerId, orderRow.userId, betAmt, refundNote]
+              );
+            } else {
+              await (conn as any).execute(
+                `UPDATE users SET balance = COALESCE(balance, 0) + ? WHERE id = ?`,
+                [betAmt, orderRow.userId]
+              );
+              const [balRows] = await (conn as any).execute(
+                `SELECT balance FROM users WHERE id = ? LIMIT 1`,
+                [orderRow.userId]
+              ) as any[];
+              const newBalance = parseFloat((Array.isArray(balRows) ? balRows[0] : balRows)?.balance ?? '0') || 0;
+              await (conn as any).execute(
+                `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, 'income', NULL, ?, ?)`,
+                [orderRow.userId, betAmt.toString(), newBalance.toString(), refundNote]
+              );
+            }
+          }
+        }
+        // 规则C：未中奖(lost)/已撤销(revoked) → 删除，不动钉包
+      }
+
       await db
         .update(wcOrders)
         .set({
