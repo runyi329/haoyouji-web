@@ -1547,3 +1547,13 @@ export const wcTeams: TeamData[] = [
   },
 
 ];
+
+// ===== 按小组分组的球队映射 =====
+export const teamsByGroup: Record<string, TeamData[]> = wcTeams.reduce(
+  (acc, team) => {
+    if (!acc[team.group]) acc[team.group] = [];
+    acc[team.group].push(team);
+    return acc;
+  },
+  {} as Record<string, TeamData[]>
+);
