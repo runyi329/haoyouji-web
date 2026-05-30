@@ -923,7 +923,34 @@ function ResultsTab({ groups }: { groups: Record<string, { name: string; code: s
   );
 }
 
-type TabType = "schedule" | "results" | "archive" | "champion";
+// ===== 比赛海报 URL 映射（COS，1280x720 JPEG） =====
+const POSTER_URLS: Record<string, string> = {
+  "mx-za":      "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-mx-za.jpg",
+  "kr-cz":      "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-kr-cz.jpg",
+  "ca-ba":      "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-ca-ba.jpg",
+  "qa-ch":      "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-qa-ch.jpg",
+  "br-ma":      "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-br-ma.jpg",
+  "ht-gbsct":   "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-ht-gbsct.jpg",
+  "us-py":      "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-us-py.jpg",
+  "au-tr":      "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-au-tr.jpg",
+  "de-cw":      "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-de-cw.jpg",
+  "ci-ec":      "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-ci-ec.jpg",
+  "nl-jp":      "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-nl-jp.jpg",
+  "es-dz":      "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-es-dz.jpg",
+  "fr-no":      "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-fr-no.jpg",
+  "ar-jo":      "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-ar-jo.jpg",
+  "pt-gh":      "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-pt-gh.jpg",
+  "gb-eng-cd":  "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/worldcup/posters/poster-gb-eng-cd.jpg",
+};
+
+/** 根据主客队 code 查找海报 URL */
+function getMatchPosterUrl(homeCode: string, awayCode: string): string | null {
+  const key1 = `${homeCode}-${awayCode}`;
+  const key2 = `${awayCode}-${homeCode}`;
+  return POSTER_URLS[key1] || POSTER_URLS[key2] || null;
+}
+
+type TabType = "schedule" | "results" | "champion";
 
 // ===== 日期分组组件（常驻展开，不可折叠） =====
 function DayGroup({
@@ -1056,7 +1083,6 @@ function DayGroup({
 export default function WorldCup() {
   const [activeTab, setActiveTab] = useState<TabType>("schedule");
   const today = new Date().toISOString().slice(0, 10);
-  const [archiveView, setArchiveView] = useState<"team" | "player">("team");
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const { user } = useAuth();
   const isAdmin = user?.role === 'super_admin';
@@ -1064,7 +1090,6 @@ export default function WorldCup() {
   const tabs: { key: TabType; label: string }[] = [
     { key: "schedule", label: "赛程" },
     { key: "results", label: "赛果" },
-    { key: "archive", label: "档案" },
     { key: "champion", label: "AI冠军预测" },
   ];
 
@@ -1188,42 +1213,93 @@ export default function WorldCup() {
         {/* 比赛详情弹层 */}
         {selectedMatch && (
           <div
-            className="fixed inset-0 z-50 flex flex-col"
+            className="fixed inset-0 z-50 flex flex-col overflow-y-auto"
             style={{ backgroundColor: BG }}
           >
-            <div className="flex items-center px-4 py-3" style={{ backgroundColor: BG2, borderBottom: `1px solid ${BORDER}` }}>
+            {/* 顶部导航栏 */}
+            <div className="flex items-center px-4 py-3 flex-shrink-0" style={{ backgroundColor: BG2, borderBottom: `1px solid ${BORDER}` }}>
               <button onClick={() => setSelectedMatch(null)} className="mr-3">
                 <ArrowLeft className="w-5 h-5" style={{ color: TEXT }} />
               </button>
               <span className="text-sm font-bold" style={{ color: TEXT }}>比赛详情</span>
             </div>
-            <div className="flex-1 flex flex-col items-center justify-center px-6 gap-6">
-              {/* 阶段 */}
-              <span
-                className="px-4 py-1 rounded-full text-sm font-bold"
-                style={{ backgroundColor: stageStyle(selectedMatch.stage).bg, color: stageStyle(selectedMatch.stage).color }}
+
+            {/* 海报区域 */}
+            {(() => {
+              const posterUrl = getMatchPosterUrl(selectedMatch.homeCode, selectedMatch.awayCode);
+              return posterUrl ? (
+                <div style={{ width: "100%", aspectRatio: "16/9", flexShrink: 0, overflow: "hidden", position: "relative" }}>
+                  <img
+                    src={posterUrl}
+                    alt={`${selectedMatch.home} vs ${selectedMatch.away}`}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                  {/* 底部渐变 */}
+                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "35%", background: `linear-gradient(to bottom, transparent, ${BG})` }} />
+                </div>
+              ) : (
+                /* 无海报时显示双旗对阵卡片 */
+                <div className="flex items-center justify-center py-10" style={{ backgroundColor: BG2 }}>
+                  <div className="flex items-center gap-6">
+                    <div className="flex flex-col items-center gap-2">
+                      <Flag code={selectedMatch.homeCode} size={56} />
+                      <span className="text-sm font-bold" style={{ color: TEXT }}>{selectedMatch.home}</span>
+                    </div>
+                    <span className="text-3xl font-black" style={{ color: GOLD }}>VS</span>
+                    <div className="flex flex-col items-center gap-2">
+                      <Flag code={selectedMatch.awayCode} size={56} />
+                      <span className="text-sm font-bold" style={{ color: TEXT }}>{selectedMatch.away}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 比赛信息卡片 */}
+            <div className="px-4 py-4 flex flex-col gap-4">
+              {/* 阶段 + 时间 + 场地 */}
+              <div
+                className="rounded-xl p-4 flex items-center justify-between"
+                style={{ backgroundColor: BG2, border: `1px solid ${BORDER}` }}
               >
-                {selectedMatch.stage}
-              </span>
-              {/* 两队 */}
-              <div className="flex items-center w-full justify-center gap-4">
-                <div className="flex flex-col items-center gap-2 flex-1">
-                  <Flag code={selectedMatch.homeCode} size={48} />
-                  <span className="text-base font-bold" style={{ color: TEXT }}>{selectedMatch.home}</span>
+                <div className="flex flex-col gap-1">
+                  <span
+                    className="text-xs font-bold px-2 py-0.5 rounded self-start"
+                    style={{ backgroundColor: stageStyle(selectedMatch.stage).bg, color: stageStyle(selectedMatch.stage).color }}
+                  >
+                    {selectedMatch.stage}
+                  </span>
+                  <span className="text-2xl font-black" style={{ color: GOLD }}>{selectedMatch.time}</span>
+                  <span className="text-xs" style={{ color: TEXT2 }}>北京时间</span>
                 </div>
-                <span className="text-2xl font-black" style={{ color: GOLD }}>VS</span>
-                <div className="flex flex-col items-center gap-2 flex-1">
-                  <Flag code={selectedMatch.awayCode} size={48} />
-                  <span className="text-base font-bold" style={{ color: TEXT }}>{selectedMatch.away}</span>
-                </div>
-              </div>
-              {/* 时间和场地 */}
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-2xl font-bold" style={{ color: GOLD }}>{selectedMatch.time}</span>
-                <span className="text-xs" style={{ color: TEXT2 }}>北京时间</span>
                 {selectedMatch.venue && (
-                  <span className="text-sm mt-2" style={{ color: TEXT2 }}>{selectedMatch.venue}</span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-xs" style={{ color: TEXT2 }}>📍 比赛场地</span>
+                    <span className="text-sm font-semibold" style={{ color: TEXT }}>{selectedMatch.venue}</span>
+                  </div>
                 )}
+              </div>
+
+              {/* 双队对阵（有海报时也显示，作为补充信息） */}
+              <div
+                className="rounded-xl p-4"
+                style={{ backgroundColor: BG2, border: `1px solid ${BORDER}` }}
+              >
+                <div className="flex items-center justify-around">
+                  <div className="flex flex-col items-center gap-2 flex-1">
+                    <Flag code={selectedMatch.homeCode} size={44} />
+                    <span className="text-sm font-bold text-center" style={{ color: TEXT }}>{selectedMatch.home}</span>
+                    <span className="text-xs" style={{ color: TEXT2 }}>主队</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <span className="text-2xl font-black" style={{ color: GOLD }}>VS</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-2 flex-1">
+                    <Flag code={selectedMatch.awayCode} size={44} />
+                    <span className="text-sm font-bold text-center" style={{ color: TEXT }}>{selectedMatch.away}</span>
+                    <span className="text-xs" style={{ color: TEXT2 }}>客队</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1234,46 +1310,6 @@ export default function WorldCup() {
           <ResultsTab groups={groups} />
         )}
 
-        {/* ---- 档案 Tab ---- */}
-        {activeTab === "archive" && (
-          <div>
-            {Object.entries(groups).map(([groupName, teams]) => (
-              <div key={groupName}>
-                {/* 组标题 */}
-                <div
-                  className="px-4 py-2 flex items-center"
-                  style={{ backgroundColor: BG3, borderBottom: `1px solid ${BORDER}` }}
-                >
-                  <span
-                    className="text-xs font-black px-2 py-0.5 rounded mr-2"
-                    style={{ backgroundColor: GOLD, color: "#000" }}
-                  >
-                    {groupName}
-                  </span>
-                  <span className="text-xs font-semibold" style={{ color: TEXT2 }}>
-                    {groupName} 组
-                  </span>
-                </div>
-                {teams.map((team, i) => (
-                  <Link key={i} href={`/world-cup/teams/${team.code}`}>
-                    <div
-                      className="flex items-center px-4 py-3 cursor-pointer"
-                      style={{ borderBottom: `1px solid ${BORDER}`, backgroundColor: BG }}
-                    >
-                      <Flag code={team.code} size={28} />
-                      <span className="ml-3 text-sm font-medium" style={{ color: TEXT }}>
-                        {team.name}
-                      </span>
-                      <span className="ml-auto text-xs" style={{ color: GOLD2 }}>
-                        查看档案 &gt;
-                      </span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
 
         {/* ---- AI冠军预测 Tab ---- */}
         {activeTab === "champion" && (
