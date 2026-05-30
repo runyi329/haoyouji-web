@@ -574,14 +574,14 @@ const knockoutMatches: KnockoutMatch[] = [
 // 策略：固定逻辑坐标系（totalW × totalH），用 viewBox + preserveAspectRatio 缩放到手机宽度
 
 // 逻辑尺寸（设计稿）
-const CW = 72;   // 卡片宽
-const CH = 34;   // 卡片高
-const CGAP = 16; // 列间距
-const RGAP = 5;  // 行间距
+// 宽度适配手机（viewBox缩放），高度不限制，可上下滚动
+const CW = 88;   // 卡片宽
+const CH = 52;   // 卡片高（两行文字）
+const CGAP = 18; // 列间距
+const RGAP = 12; // 行间距（拉开纵向间距）
 
-// 每列卡片数（左半区）: col0=8, col1=4, col2=2, col3=1
 const HALF_ROWS = 8;
-const TOTAL_H_LOGIC = HALF_ROWS * CH + (HALF_ROWS - 1) * RGAP + 20; // 总高度（逻辑）
+const TOTAL_H_LOGIC = HALF_ROWS * CH + (HALF_ROWS - 1) * RGAP + 24;
 
 function bCardCenterY(col: number, idx: number): number {
   const count = HALF_ROWS / Math.pow(2, col);
@@ -596,27 +596,27 @@ function bCardCenterY(col: number, idx: number): number {
 function BCard({ m, x, y }: { m: KnockoutMatch; x: number; y: number }) {
   const pending = m.homeCode === "un";
   const scoreColor = (s: number | null) => s !== null ? GOLD : TEXT2;
-  const fs = 7.5;
-  const maxLen = 7;
+  const fs = 11;   // 正常字体大小
+  const maxLen = 8;
   const trim = (s: string) => s.length > maxLen ? s.slice(0, maxLen - 1) + "…" : s;
   return (
     <g>
-      <rect x={x} y={y} width={CW} height={CH} rx={2} fill={BG2} stroke={BORDER} strokeWidth={0.8} />
-      <line x1={x} y1={y + CH / 2} x2={x + CW} y2={y + CH / 2} stroke={BORDER} strokeWidth={0.8} />
+      <rect x={x} y={y} width={CW} height={CH} rx={3} fill={BG2} stroke={BORDER} strokeWidth={1} />
+      <line x1={x} y1={y + CH / 2} x2={x + CW} y2={y + CH / 2} stroke={BORDER} strokeWidth={1} />
       {/* 主队 */}
-      <text x={x + 4} y={y + CH / 4 + fs / 2} fontSize={fs} fill={pending ? TEXT2 : TEXT} fontFamily="sans-serif">
+      <text x={x + 5} y={y + CH / 4 + fs * 0.38} fontSize={fs} fill={pending ? TEXT2 : TEXT} fontFamily="sans-serif">
         {trim(m.homeName)}
       </text>
       {m.homeScore !== null && (
-        <text x={x + CW - 4} y={y + CH / 4 + fs / 2} fontSize={fs} fill={scoreColor(m.homeScore)}
+        <text x={x + CW - 5} y={y + CH / 4 + fs * 0.38} fontSize={fs} fill={scoreColor(m.homeScore)}
           fontFamily="sans-serif" fontWeight={700} textAnchor="end">{m.homeScore}</text>
       )}
       {/* 客队 */}
-      <text x={x + 4} y={y + (CH * 3) / 4 + fs / 2} fontSize={fs} fill={pending ? TEXT2 : TEXT} fontFamily="sans-serif">
+      <text x={x + 5} y={y + (CH * 3) / 4 + fs * 0.38} fontSize={fs} fill={pending ? TEXT2 : TEXT} fontFamily="sans-serif">
         {trim(m.awayName)}
       </text>
       {m.awayScore !== null && (
-        <text x={x + CW - 4} y={y + (CH * 3) / 4 + fs / 2} fontSize={fs} fill={scoreColor(m.awayScore)}
+        <text x={x + CW - 5} y={y + (CH * 3) / 4 + fs * 0.38} fontSize={fs} fill={scoreColor(m.awayScore)}
           fontFamily="sans-serif" fontWeight={700} textAnchor="end">{m.awayScore}</text>
       )}
     </g>
@@ -624,7 +624,7 @@ function BCard({ m, x, y }: { m: KnockoutMatch; x: number; y: number }) {
 }
 
 function BLine({ x1, y1, x2, y2, midX }: { x1: number; y1: number; x2: number; y2: number; midX: number }) {
-  return <path d={`M${x1},${y1} H${midX} V${y2} H${x2}`} fill="none" stroke={BORDER} strokeWidth={0.8} />;
+  return <path d={`M${x1},${y1} H${midX} V${y2} H${x2}`} fill="none" stroke={BORDER} strokeWidth={1} />;
 }
 
 function BracketView() {
