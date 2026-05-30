@@ -326,22 +326,22 @@ const schedule: DaySchedule[] = [
     date: "2026-07-09",
     dateLabel: "7月9日 周四",
     matches: [
-      { home: "16强M89胜者", homeCode: "un", away: "16强M90胜者", awayCode: "un", time: "待定", venue: "福克斯伯勒", stage: "四分之一决赛" },
+      { home: "16强M89胜者", homeCode: "un", away: "16强M90胜者", awayCode: "un", time: "待定", venue: "福克斯伯勒", stage: "8强" },
     ],
   },
   {
     date: "2026-07-10",
     dateLabel: "7月10日 周五",
     matches: [
-      { home: "16强M93胜者", homeCode: "un", away: "16强M94胜者", awayCode: "un", time: "待定", venue: "英格尔伍德", stage: "四分之一决赛" },
+      { home: "16强M93胜者", homeCode: "un", away: "16强M94胜者", awayCode: "un", time: "待定", venue: "英格尔伍德", stage: "8强" },
     ],
   },
   {
     date: "2026-07-11",
     dateLabel: "7月11日 周六",
     matches: [
-      { home: "16强M91胜者", homeCode: "un", away: "16强M92胜者", awayCode: "un", time: "待定", venue: "迈阿密", stage: "四分之一决赛" },
-      { home: "16强M95胜者", homeCode: "un", away: "16强M96胜者", awayCode: "un", time: "待定", venue: "堪萨斯城", stage: "四分之一决赛" },
+      { home: "16强M91胜者", homeCode: "un", away: "16强M92胜者", awayCode: "un", time: "待定", venue: "迈阿密", stage: "8强" },
+      { home: "16强M95胜者", homeCode: "un", away: "16强M96胜者", awayCode: "un", time: "待定", venue: "堪萨斯城", stage: "8强" },
     ],
   },
   // ===== 半决赛：7月14日 - 7月15日 =====
@@ -349,14 +349,14 @@ const schedule: DaySchedule[] = [
     date: "2026-07-14",
     dateLabel: "7月14日 周二",
     matches: [
-      { home: "8强M97胜者", homeCode: "un", away: "8强M98胜者", awayCode: "un", time: "待定", venue: "阿灵顿", stage: "半决赛" },
+      { home: "8强M97胜者", homeCode: "un", away: "8强M98胜者", awayCode: "un", time: "待定", venue: "阿灵顿", stage: "4强" },
     ],
   },
   {
     date: "2026-07-15",
     dateLabel: "7月15日 周三",
     matches: [
-      { home: "8强M99胜者", homeCode: "un", away: "8强M100胜者", awayCode: "un", time: "待定", venue: "亚特兰大", stage: "半决赛" },
+      { home: "8强M99胜者", homeCode: "un", away: "8强M100胜者", awayCode: "un", time: "待定", venue: "亚特兰大", stage: "4强" },
     ],
   },
   // ===== 季军赛：7月18日 =====
@@ -572,40 +572,42 @@ function DayGroup({
           style={{
             backgroundColor: BG,
             borderBottom: `1px solid ${BORDER}`,
-            height: 50,
+            height: 56,
             paddingLeft: 8,
             paddingRight: 6,
             gap: 0,
             overflow: "hidden",
           }}
         >
-          {/* 左区：阶段标签 + 时间 + 北京时间（全在同一行，固定宽度确保VS对齐） */}
+          {/* 左区：两行布局，第一行阶段标签，第二行时间 */}
           <div
-            className="flex items-center flex-shrink-0"
-            style={{ gap: 3, marginRight: 4, width: 112, overflow: "hidden" }}
+            className="flex flex-col justify-center flex-shrink-0"
+            style={{ gap: 2, marginRight: 6, width: 100, overflow: "hidden" }}
           >
+            {/* 第一行：阶段标签完整显示 */}
             <span
               style={{
                 backgroundColor: stageStyle(match.stage).bg,
                 color: stageStyle(match.stage).color,
                 fontSize: "11px",
                 fontWeight: 700,
-                padding: "1px 4px",
+                padding: "1px 5px",
                 borderRadius: 3,
                 whiteSpace: "nowrap",
                 lineHeight: "16px",
-                flexShrink: 1,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                maxWidth: 58,
+                display: "inline-block",
+                alignSelf: "flex-start",
               }}
             >
               {match.stage}
             </span>
-            <span style={{ color: GOLD, fontSize: "13px", fontWeight: 700, whiteSpace: "nowrap" }}>
-              {match.time || "待定"}
-            </span>
-            <span style={{ color: TEXT2, fontSize: "11px", whiteSpace: "nowrap" }}>北京时间</span>
+            {/* 第二行：时间 + 北京时间 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+              <span style={{ color: GOLD, fontSize: "12px", fontWeight: 700, whiteSpace: "nowrap" }}>
+                {match.time || "待定"}
+              </span>
+              <span style={{ color: TEXT2, fontSize: "10px", whiteSpace: "nowrap" }}>北京</span>
+            </div>
           </div>
 
           {/* 中区：三列固定宽度，VS居中固定对齐 */}
