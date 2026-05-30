@@ -21,72 +21,38 @@ const COLOR_DOWN = "#FF4D4F";
 const COLOR_UP = "#52C41A";
 const COLOR_SAME = "#8FA3B8";
 
-// 国旗 + 中文名映射（ISO 3166-1 alpha-2 / 常见代码）
-const TEAM_FLAG_MAP: Record<string, { flag: string; zh: string }> = {
-  ES: { flag: "🇪🇸", zh: "西班牙" },
-  FR: { flag: "🇫🇷", zh: "法国" },
-  "GB-ENG": { flag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", zh: "英格兰" },
-  BR: { flag: "🇧🇷", zh: "巴西" },
-  AR: { flag: "🇦🇷", zh: "阿根廷" },
-  DE: { flag: "🇩🇪", zh: "德国" },
-  PT: { flag: "🇵🇹", zh: "葡萄牙" },
-  NL: { flag: "🇳🇱", zh: "荷兰" },
-  IT: { flag: "🇮🇹", zh: "意大利" },
-  BE: { flag: "🇧🇪", zh: "比利时" },
-  HR: { flag: "🇭🇷", zh: "克罗地亚" },
-  DK: { flag: "🇩🇰", zh: "丹麦" },
-  US: { flag: "🇺🇸", zh: "美国" },
-  MX: { flag: "🇲🇽", zh: "墨西哥" },
-  CA: { flag: "🇨🇦", zh: "加拿大" },
-  UY: { flag: "🇺🇾", zh: "乌拉圭" },
-  CO: { flag: "🇨🇴", zh: "哥伦比亚" },
-  EC: { flag: "🇪🇨", zh: "厄瓜多尔" },
-  PE: { flag: "🇵🇪", zh: "秘鲁" },
-  CL: { flag: "🇨🇱", zh: "智利" },
-  PY: { flag: "🇵🇾", zh: "巴拉圭" },
-  VE: { flag: "🇻🇪", zh: "委内瑞拉" },
-  BO: { flag: "🇧🇴", zh: "玻利维亚" },
-  JP: { flag: "🇯🇵", zh: "日本" },
-  KR: { flag: "🇰🇷", zh: "韩国" },
-  AU: { flag: "🇦🇺", zh: "澳大利亚" },
-  IR: { flag: "🇮🇷", zh: "伊朗" },
-  SA: { flag: "🇸🇦", zh: "沙特阿拉伯" },
-  MA: { flag: "🇲🇦", zh: "摩洛哥" },
-  SN: { flag: "🇸🇳", zh: "塞内加尔" },
-  NG: { flag: "🇳🇬", zh: "尼日利亚" },
-  GH: { flag: "🇬🇭", zh: "加纳" },
-  CM: { flag: "🇨🇲", zh: "喀麦隆" },
-  EG: { flag: "🇪🇬", zh: "埃及" },
-  TN: { flag: "🇹🇳", zh: "突尼斯" },
-  CI: { flag: "🇨🇮", zh: "科特迪瓦" },
-  ML: { flag: "🇲🇱", zh: "马里" },
-  TR: { flag: "🇹🇷", zh: "土耳其" },
-  PL: { flag: "🇵🇱", zh: "波兰" },
-  CH: { flag: "🇨🇭", zh: "瑞士" },
-  AT: { flag: "🇦🇹", zh: "奥地利" },
-  SE: { flag: "🇸🇪", zh: "瑞典" },
-  NO: { flag: "🇳🇴", zh: "挪威" },
-  CZ: { flag: "🇨🇿", zh: "捷克" },
-  HU: { flag: "🇭🇺", zh: "匈牙利" },
-  RO: { flag: "🇷🇴", zh: "罗马尼亚" },
-  RS: { flag: "🇷🇸", zh: "塞尔维亚" },
-  UA: { flag: "🇺🇦", zh: "乌克兰" },
-  SK: { flag: "🇸🇰", zh: "斯洛伐克" },
-  GR: { flag: "🇬🇷", zh: "希腊" },
-  "GB-SCT": { flag: "🏴󠁧󠁢󠁳󠁣󠁴󠁿", zh: "苏格兰" },
-  "GB-WLS": { flag: "🏴󠁧󠁢󠁷󠁬󠁳󠁿", zh: "威尔士" },
-  IE: { flag: "🇮🇪", zh: "爱尔兰" },
-  QA: { flag: "🇶🇦", zh: "卡塔尔" },
-  CN: { flag: "🇨🇳", zh: "中国" },
+// 国旗代码 → 中文名映射（使用 /flags/{code}.png 本地图片，与 WorldCup.tsx 保持一致）
+const TEAM_ZH_MAP: Record<string, string> = {
+  es: "西班牙", fr: "法国", "gb-eng": "英格兰", br: "巴西", ar: "阿根廷",
+  de: "德国", pt: "葡萄牙", nl: "荷兰", be: "比利时", hr: "克罗地亚",
+  us: "美国", mx: "墨西哥", ca: "加拿大", uy: "乌拉圭", co: "哥伦比亚",
+  ec: "厄瓜多尔", py: "巴拉圭", jp: "日本", kr: "韩国", au: "澳大利亚",
+  ir: "伊朗", sa: "沙特阿拉伯", ma: "摩洛哥", sn: "塞内加尔", gh: "加纳",
+  eg: "埃及", tn: "突尼斯", ci: "科特迪瓦", tr: "土耳其", ch: "瑞士",
+  at: "奥地利", se: "瑞典", no: "挪威", cz: "捷克", "gb-sct": "苏格兰",
+  qa: "卡塔尔", ba: "波黑", cd: "刚果(金)", cv: "佛得角", cw: "库拉索",
+  dz: "阿尔及利亚", ht: "海地", iq: "伊拉克", jo: "约旦", nz: "新西兰",
+  pa: "巴拿马", uz: "乌兹别克", za: "南非", cn: "中国",
 };
 
-function getTeamDisplay(name: string, code: string): { flag: string; zh: string } {
-  const key = code?.toUpperCase();
-  if (key && TEAM_FLAG_MAP[key]) return TEAM_FLAG_MAP[key];
-  // 尝试从名字反查
-  const found = Object.values(TEAM_FLAG_MAP).find(v => v.zh === name);
-  if (found) return found;
-  return { flag: "🏳️", zh: name };
+function TeamFlag({ code, size = 28 }: { code: string; size?: number }) {
+  const c = code.toLowerCase();
+  return (
+    <img
+      src={`/flags/${c}.png`}
+      width={size}
+      height={Math.round(size * 0.67)}
+      alt={code}
+      style={{ borderRadius: 2, objectFit: "cover", display: "inline-block", flexShrink: 0 }}
+      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+    />
+  );
+}
+
+function getTeamDisplay(name: string, code: string): { code: string; zh: string } {
+  const c = code?.toLowerCase() || "";
+  const zh = TEAM_ZH_MAP[c] || name;
+  return { code: c, zh };
 }
 
 function formatTime(ts: string | null) {
@@ -1047,7 +1013,7 @@ export default function WcOddsAdmin() {
                     </thead>
                     <tbody>
                       {teams.map((team: { name: string; code: string }) => {
-                        const { flag, zh } = getTeamDisplay(team.name, team.code);
+                        const { code: flagCode, zh } = getTeamDisplay(team.name, team.code);
                         return (
                           <tr key={team.name} style={{ borderBottom: `1px solid rgba(255,255,255,0.05)` }}>
                             <td style={{
@@ -1055,8 +1021,8 @@ export default function WcOddsAdmin() {
                               borderRight: `2px solid ${GOLD}`,
                               whiteSpace: "nowrap", width: 110,
                             }}>
-                              <div style={{ fontSize: 18, lineHeight: 1 }}>{flag}</div>
-                              <div style={{ fontSize: 11, color: TEXT, fontWeight: 600, marginTop: 2 }}>{zh}</div>
+                              <TeamFlag code={flagCode || team.code} size={26} />
+                              <div style={{ fontSize: 11, color: TEXT, fontWeight: 600, marginTop: 3 }}>{zh}</div>
                             </td>
                           </tr>
                         );
