@@ -522,7 +522,182 @@ const stageStyle = (stage: string): { bg: string; color: string } => {
   return { bg: BG3, color: TEXT2 };
 };
 
-type TabType = "schedule" | "archive" | "champion";
+// ===== 赛果 Tab =====
+interface TeamStanding {
+  name: string;
+  code: string;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  points: number;
+}
+
+interface KnockoutMatch {
+  homeCode: string;
+  homeName: string;
+  awayCode: string;
+  awayName: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  stage: string;
+  id: string;
+}
+
+function initStandings(teams: { name: string; code: string }[]): TeamStanding[] {
+  return teams.map(t => ({ name: t.name, code: t.code, played: 0, won: 0, drawn: 0, lost: 0, points: 0 }));
+}
+
+const knockoutMatches: KnockoutMatch[] = [
+  ...Array.from({ length: 16 }, (_, i) => ({
+    homeCode: "un", homeName: "待定", awayCode: "un", awayName: "待定",
+    homeScore: null, awayScore: null, stage: "32强", id: `R32-${i + 1}`,
+  })),
+  ...Array.from({ length: 8 }, (_, i) => ({
+    homeCode: "un", homeName: "32强胜者", awayCode: "un", awayName: "32强胜者",
+    homeScore: null, awayScore: null, stage: "16强", id: `R16-${i + 1}`,
+  })),
+  ...Array.from({ length: 4 }, (_, i) => ({
+    homeCode: "un", homeName: "16强胜者", awayCode: "un", awayName: "16强胜者",
+    homeScore: null, awayScore: null, stage: "8强", id: `QF-${i + 1}`,
+  })),
+  ...Array.from({ length: 2 }, (_, i) => ({
+    homeCode: "un", homeName: "8强胜者", awayCode: "un", awayName: "8强胜者",
+    homeScore: null, awayScore: null, stage: "4强", id: `SF-${i + 1}`,
+  })),
+  { homeCode: "un", homeName: "4强负者", awayCode: "un", awayName: "4强负者", homeScore: null, awayScore: null, stage: "季军赛", id: "3rd" },
+  { homeCode: "un", homeName: "4强胜者", awayCode: "un", awayName: "4强胜者", homeScore: null, awayScore: null, stage: "决赛", id: "Final" },
+];
+
+function ResultsTab({ groups }: { groups: Record<string, { name: string; code: string }[]> }) {
+  const [view, setView] = useState<"group" | "knockout">("group");
+
+  const stageColor = (stage: string) => {
+    if (stage === "决赛") return { bg: GOLD, text: "#000" };
+    if (stage === "季军赛") return { bg: "#6b4c00", text: GOLD };
+    if (stage === "4强") return { bg: "#C0001A", text: "#fff" };
+    if (stage === "8强") return { bg: "#1a3a8b", text: "#fff" };
+    if (stage === "16强") return { bg: "#1a4a2b", text: "#7FFFA0" };
+    return { bg: BG3, text: TEXT2 };
+  };
+
+  return (
+    <div>
+      {/* 子Tab切换 */}
+      <div className="flex" style={{ backgroundColor: BG2, borderBottom: `1px solid ${BORDER}` }}>
+        {([{ key: "group" as const, label: "小组赛积分" }, { key: "knockout" as const, label: "淘汰赛对阵" }]).map(t => (
+          <button
+            key={t.key}
+            onClick={() => setView(t.key)}
+            className="flex-1 py-2.5 text-sm font-semibold transition-all"
+            style={{
+              color: view === t.key ? GOLD : TEXT2,
+              borderBottom: view === t.key ? `2px solid ${GOLD}` : "2px solid transparent",
+              marginBottom: "-1px",
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 小组赛积分榜 */}
+      {view === "group" && (
+        <div className="pb-8">
+          {Object.entries(groups).map(([groupName, teams]) => {
+            const standings = initStandings(teams);
+            return (
+              <div key={groupName} className="mb-1">
+                <div className="flex items-center px-4 py-2" style={{ backgroundColor: BG3, borderBottom: `1px solid ${BORDER}` }}>
+                  <span className="text-xs font-black px-2 py-0.5 mr-2" style={{ backgroundColor: GOLD, color: "#000", borderRadius: 2 }}>
+                    {groupName}
+                  </span>
+                  <span className="text-xs font-semibold" style={{ color: TEXT2 }}>{groupName} 组</span>
+                </div>
+                {/* 表头 */}
+                <div className="flex items-center px-4 py-1.5" style={{ backgroundColor: BG2, borderBottom: `1px solid ${BORDER}` }}>
+                  <span className="flex-1 text-xs" style={{ color: TEXT2 }}>球队</span>
+                  {["场", "胜", "平", "负", "积分"].map(h => (
+                    <span key={h} className="text-xs font-semibold text-center" style={{ color: TEXT2, width: 32 }}>{h}</span>
+                  ))}
+                </div>
+                {/* 球队行 */}
+                {standings.map((s, i) => (
+                  <div
+                    key={s.code}
+                    className="flex items-center px-4 py-2.5"
+                    style={{ backgroundColor: i % 2 === 0 ? BG : BG2, borderBottom: `1px solid ${BORDER}` }}
+                  >
+                    <span className="text-xs font-bold mr-2 flex-shrink-0" style={{ color: i < 2 ? GOLD : TEXT2, width: 14 }}>
+                      {i + 1}
+                    </span>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Flag code={s.code} size={20} />
+                      <span className="text-sm font-medium truncate" style={{ color: i < 2 ? TEXT : TEXT2 }}>{s.name}</span>
+                    </div>
+                    {[s.played, s.won, s.drawn, s.lost].map((v, j) => (
+                      <span key={j} className="text-sm text-center" style={{ color: TEXT2, width: 32 }}>{v}</span>
+                    ))}
+                    <span className="text-sm font-black text-center" style={{ color: GOLD, width: 32 }}>{s.points}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 淘汰赛对阵 */}
+      {view === "knockout" && (
+        <div className="pb-8">
+          {["32强", "16强", "8强", "4强", "季军赛", "决赛"].map(stage => {
+            const matches = knockoutMatches.filter(m => m.stage === stage);
+            const sc = stageColor(stage);
+            return (
+              <div key={stage} className="mb-1">
+                <div className="flex items-center px-4 py-2" style={{ backgroundColor: BG3, borderBottom: `1px solid ${BORDER}` }}>
+                  <span className="text-xs font-black px-2 py-0.5 mr-2" style={{ backgroundColor: sc.bg, color: sc.text, borderRadius: 2 }}>
+                    {stage}
+                  </span>
+                  <span className="text-xs" style={{ color: TEXT2 }}>{matches.length} 场</span>
+                </div>
+                {matches.map((m, i) => (
+                  <div
+                    key={m.id}
+                    className="flex items-center px-4 py-3"
+                    style={{ backgroundColor: i % 2 === 0 ? BG : BG2, borderBottom: `1px solid ${BORDER}` }}
+                  >
+                    {/* 主队（右对齐） */}
+                    <div className="flex items-center gap-2" style={{ flex: "1 1 0", minWidth: 0, justifyContent: "flex-end" }}>
+                      <span className="text-sm font-medium truncate" style={{ color: m.homeCode === "un" ? TEXT2 : TEXT }}>{m.homeName}</span>
+                      <Flag code={m.homeCode} size={20} />
+                    </div>
+                    {/* 比分 */}
+                    <div
+                      className="flex items-center justify-center flex-shrink-0 mx-3"
+                      style={{ minWidth: 52, backgroundColor: BG3, borderRadius: 3, padding: "3px 8px", border: `1px solid ${BORDER}` }}
+                    >
+                      <span className="text-sm font-black" style={{ color: m.homeScore !== null ? GOLD : TEXT2, letterSpacing: 2 }}>
+                        {m.homeScore !== null ? `${m.homeScore}:${m.awayScore}` : "-:-"}
+                      </span>
+                    </div>
+                    {/* 客队（左对齐） */}
+                    <div className="flex items-center gap-2" style={{ flex: "1 1 0", minWidth: 0 }}>
+                      <Flag code={m.awayCode} size={20} />
+                      <span className="text-sm font-medium truncate" style={{ color: m.awayCode === "un" ? TEXT2 : TEXT }}>{m.awayName}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type TabType = "schedule" | "results" | "archive" | "champion";
 
 // ===== 日期分组组件（常驻展开，不可折叠） =====
 function DayGroup({
@@ -662,6 +837,7 @@ export default function WorldCup() {
 
   const tabs: { key: TabType; label: string }[] = [
     { key: "schedule", label: "赛程" },
+    { key: "results", label: "赛果" },
     { key: "archive", label: "档案" },
     { key: "champion", label: "AI冠军预测" },
   ];
@@ -825,6 +1001,11 @@ export default function WorldCup() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ---- 赛果 Tab ---- */}
+        {activeTab === "results" && (
+          <ResultsTab groups={groups} />
         )}
 
         {/* ---- 档案 Tab ---- */}
