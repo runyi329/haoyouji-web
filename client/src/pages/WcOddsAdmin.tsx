@@ -2,7 +2,7 @@
  * 世界杯赔率追踪 - 管理员页面
  * 功能：查看抓取状态、手动触发抓取、横向时间轴表格展示赔率变化、订单管理
  */
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { ArrowLeft, RefreshCw, Info, PlusCircle, Search, X, ChevronDown } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -491,6 +491,7 @@ type ConfirmAction = {
   confirmText: string;
   confirmColor: string;
   needBonus?: boolean; // won 时需要填奖金
+  defaultBonus?: string; // 预充奖金（潜在回报）
 };
 
 function ConfirmDialog({
@@ -504,7 +505,13 @@ function ConfirmDialog({
   onCancel: () => void;
   isPending: boolean;
 }) {
-  const [bonusInput, setBonusInput] = useState("");
+  const [bonusInput, setBonusInput] = useState(action?.defaultBonus ?? "");
+  // action 变化时重置奖金输入框为默认值
+  useEffect(() => {
+    if (action) setBonusInput(action.defaultBonus ?? "");
+    else setBonusInput("");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [action?.orderId, action?.newStatus]);
   if (!action) return null;
   return (
     <div
@@ -787,7 +794,12 @@ function OrdersTab() {
 
                 {/* 状态操作按钮（全部通过二次确认） */}
                 {(() => {
-                  const actions = getActions(order.status).map(a => ({ ...a, orderId: order.id }));
+                  const actions = getActions(order.status).map(a => ({
+                    ...a,
+                    orderId: order.id,
+                    // 确认中奖时，默认奖金为潜在回报
+                    defaultBonus: a.newStatus === 'won' ? (order.potentialReturn ?? '') : undefined,
+                  }));
                   if (actions.length === 0) return null;
                   return (
                     <div className="flex gap-2 mt-3 flex-wrap">

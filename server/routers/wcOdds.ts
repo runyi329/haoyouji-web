@@ -450,6 +450,90 @@ export const wcOddsRouter = router({
 
       const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
+      // 查询订单原始信息（用于钱包操作）
+      const [orderRow] = await db
+        .select({
+          userId: wcOrders.userId,
+          currency: wcOrders.currency,
+          bonusAmount: wcOrders.bonusAmount,
+          status: wcOrders.status,
+        })
+        .from(wcOrders)
+        .where(eq(wcOrders.id, input.orderId))
+        .limit(1);
+      if (!orderRow) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在' });
+
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+
+      // 中奖 → 奖金打回用户钱包
+      if (input.status === 'won') {
+        const bonusAmt = parseFloat(input.bonusAmount!);
+        const currency = orderRow.currency as string;
+        const settleNote = currency === 'CNY'
+          ? `[CNY]系统结算 +${bonusAmt}`
+          : `系统结算 +${bonusAmt} USDT`;
+        if (currency === 'CNY') {
+          const [ledgerRows] = await (conn as any).execute(
+            `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
+            [orderRow.userId]
+          ) as any[];
+          const ledgerId = (Array.isArray(ledgerRows) ? ledgerRows[0]?.ledger_id : null) ?? 37;
+          await (conn as any).execute(
+            `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
+            [ledgerId, orderRow.userId, bonusAmt, settleNote]
+          );
+        } else {
+          await (conn as any).execute(
+            `UPDATE users SET balance = COALESCE(balance, 0) + ? WHERE id = ?`,
+            [bonusAmt, orderRow.userId]
+          );
+          const [balRows] = await (conn as any).execute(
+            `SELECT balance FROM users WHERE id = ? LIMIT 1`,
+            [orderRow.userId]
+          ) as any[];
+          const newBalance = parseFloat((Array.isArray(balRows) ? balRows[0] : balRows)?.balance ?? '0') || 0;
+          await (conn as any).execute(
+            `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, 'income', NULL, ?, ?)`,
+            [orderRow.userId, bonusAmt.toString(), newBalance.toString(), settleNote]
+          );
+        }
+      }
+
+      // 撤回中奖（won → pending）→ 从钱包扣回奖金
+      if (input.status === 'pending' && orderRow.status === 'won' && orderRow.bonusAmount) {
+        const prevBonus = parseFloat(orderRow.bonusAmount);
+        const currency = orderRow.currency as string;
+        const revokeNote = currency === 'CNY'
+          ? `[CNY]撤回结算 -${prevBonus}`
+          : `撤回结算 -${prevBonus} USDT`;
+        if (currency === 'CNY') {
+          const [ledgerRows] = await (conn as any).execute(
+            `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
+            [orderRow.userId]
+          ) as any[];
+          const ledgerId = (Array.isArray(ledgerRows) ? ledgerRows[0]?.ledger_id : null) ?? 37;
+          await (conn as any).execute(
+            `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
+            [ledgerId, orderRow.userId, -prevBonus, revokeNote]
+          );
+        } else {
+          await (conn as any).execute(
+            `UPDATE users SET balance = COALESCE(balance, 0) - ? WHERE id = ?`,
+            [prevBonus, orderRow.userId]
+          );
+          const [balRows] = await (conn as any).execute(
+            `SELECT balance FROM users WHERE id = ? LIMIT 1`,
+            [orderRow.userId]
+          ) as any[];
+          const newBalance = parseFloat((Array.isArray(balRows) ? balRows[0] : balRows)?.balance ?? '0') || 0;
+          await (conn as any).execute(
+            `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, 'consume', NULL, ?, ?)`,
+            [orderRow.userId, (-prevBonus).toString(), newBalance.toString(), revokeNote]
+          );
+        }
+      }
+
       await db
         .update(wcOrders)
         .set({
