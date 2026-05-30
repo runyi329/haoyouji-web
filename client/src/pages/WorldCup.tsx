@@ -438,7 +438,6 @@ const FLAG_POSITION: Record<string, string> = {
   "mx": "center center", // 墨西哥：盾形居中
   "cz": "center center", // 捷克：三色居中
   "tr": "center center", // 土耳其：月星居中
-  "pt": "center center", // 葡萄牙：盾形居中
 };
 
 const groups: Record<string, { name: string; code: string }[]> = {
