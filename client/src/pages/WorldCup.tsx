@@ -638,12 +638,12 @@ const knockoutMatches: KnockoutMatch[] = [
 // 逻辑坐标系（固定大小，由viewBox缩放到屏幕）
 // 卡片：宽36高32，内部两行各放一个国旗
 const B = {
-  CW: 28,    // 卡片宽（也是单个国旗的宽）
-  CH: 56,    // 卡片高（两个正方形格子叠加）
+  CW: 20,    // 卡片宽（单个国旗的宽）
+  CH: 40,    // 卡片高（两个正方形格子叠加）
   CGAP: 5,   // 列间距
   RGAP: 4,   // 行间距
-  FW: 28,    // 国旗宽（铺满列宽）
-  FH: 28,    // 国旗高（正方形）
+  FW: 20,    // 国旗宽（铺满列宽）
+  FH: 20,    // 国旗高（正方形）
   HALF: 8,   // 左半区行数
   TPAD: 4,   // 顶部无标签，只留少量padding
   NCOLS: 9,  // 总列数
@@ -734,7 +734,7 @@ const finalCY = B.TPAD + B_TOTAL_H / 2;
   const lineColor = "rgba(255,255,255,0.25)";
 
   return (
-    <div style={{ paddingBottom: 24 }}>
+    <div style={{ paddingBottom: 24, paddingLeft: 12, paddingRight: 12 }}>
       {/* SVG 全宽自适应， viewBox 固定逻辑坐标，自动缩放 */}
       <svg
         viewBox={`0 0 ${B_SVG_W} ${svgH}`}
