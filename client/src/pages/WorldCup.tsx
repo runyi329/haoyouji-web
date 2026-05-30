@@ -1700,19 +1700,13 @@ export default function WorldCup() {
                       onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                     />
                   </div>
-                  {/* 中英文名在国旗下方，固定高度展示区域确保对齐 */}
-                  <div style={{ height: 32, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", marginTop: 4 }}>
+                  {/* 中文名在国旗下方 */}
+                  <div style={{ height: 20, display: "flex", alignItems: "center", justifyContent: "center", marginTop: 4 }}>
                     <span
                       className="text-xs font-semibold text-center leading-tight"
                       style={{ color: TEXT }}
                     >
                       {team.name}
-                    </span>
-                    <span
-                      className="text-center leading-tight"
-                      style={{ color: TEXT2, fontSize: "9px" }}
-                    >
-                      {team.nameEn}
                     </span>
                   </div>
                   <span
