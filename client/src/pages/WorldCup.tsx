@@ -1276,59 +1276,66 @@ export default function WorldCup() {
                 </button>
               </div>
 
-              {/* 比赛信息卡（合并，无外框） */}
+              {/* 比赛信息卡（单一容器：组别+时间+场地+对阵+比分） */}
               <div style={{ padding: "0 16px 12px" }}>
-                {/* 组别标签 + 时间 + 场地 */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <span
-                      style={{
-                        display: "inline-block", alignSelf: "flex-start",
-                        fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
-                        backgroundColor: stageStyle(selectedMatch.stage).bg,
-                        color: stageStyle(selectedMatch.stage).color,
-                        marginBottom: 4,
-                      }}
-                    >
-                      {selectedMatch.stage}
-                    </span>
-                    <span style={{ fontSize: 22, fontWeight: 900, color: GOLD, lineHeight: 1 }}>{selectedMatch.time}</span>
-                    <span style={{ fontSize: 11, color: TEXT2, marginTop: 2 }}>北京时间</span>
-                  </div>
-                  {selectedMatch.venue && (
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
-                      <span style={{ fontSize: 11, color: TEXT2 }}>比赛场地</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: TEXT }}>{selectedMatch.venue}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* 双队对阵 + 比分 */}
                 <div style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "14px 16px",
                   backgroundColor: BG2,
                   borderRadius: 12,
+                  overflow: "hidden",
                 }}>
-                  {/* 主队 */}
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flex: 1 }}>
-                    <Flag code={selectedMatch.homeCode} size={40} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: TEXT, textAlign: "center" }}>{selectedMatch.home}</span>
-                    <span style={{ fontSize: 10, color: TEXT2 }}>主队</span>
-                  </div>
-                  {/* 比分 */}
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flex: 0, minWidth: 80 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 28, fontWeight: 900, color: TEXT }}>-</span>
-                      <span style={{ fontSize: 28, fontWeight: 900, color: TEXT }}>-</span>
+                  {/* 顶部信息行：组别 + 时间 + 场地 */}
+                  <div style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "10px 14px 8px",
+                    borderBottom: `1px solid ${BORDER}`,
+                  }}>
+                    {/* 左：组别标签 */}
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
+                      backgroundColor: stageStyle(selectedMatch.stage).bg,
+                      color: stageStyle(selectedMatch.stage).color,
+                    }}>
+                      {selectedMatch.stage}
+                    </span>
+                    {/* 中：北京时间 */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                      <span style={{ fontSize: 18, fontWeight: 900, color: GOLD, lineHeight: 1 }}>{selectedMatch.time}</span>
+                      <span style={{ fontSize: 10, color: TEXT2 }}>北京时间</span>
                     </div>
-                    <span style={{ fontSize: 10, color: TEXT2 }}>待开赛</span>
+                    {/* 右：场地 */}
+                    {selectedMatch.venue ? (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: TEXT }}>{selectedMatch.venue}</span>
+                        <span style={{ fontSize: 10, color: TEXT2 }}>比赛场地</span>
+                      </div>
+                    ) : <div style={{ width: 60 }} />}
                   </div>
-                  {/* 客队 */}
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flex: 1 }}>
-                    <Flag code={selectedMatch.awayCode} size={40} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: TEXT, textAlign: "center" }}>{selectedMatch.away}</span>
-                    <span style={{ fontSize: 10, color: TEXT2 }}>客队</span>
+
+                  {/* 下部：双队对阵 + 比分 */}
+                  <div style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "14px 16px",
+                  }}>
+                    {/* 主队 */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flex: 1 }}>
+                      <Flag code={selectedMatch.homeCode} size={44} />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: TEXT, textAlign: "center" }}>{selectedMatch.home}</span>
+                      <span style={{ fontSize: 10, color: TEXT2 }}>主队</span>
+                    </div>
+                    {/* 比分 */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flex: 0, minWidth: 80 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 32, fontWeight: 900, color: TEXT }}>-</span>
+                        <span style={{ fontSize: 32, fontWeight: 900, color: TEXT }}>-</span>
+                      </div>
+                      <span style={{ fontSize: 10, color: TEXT2 }}>待开赛</span>
+                    </div>
+                    {/* 客队 */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flex: 1 }}>
+                      <Flag code={selectedMatch.awayCode} size={44} />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: TEXT, textAlign: "center" }}>{selectedMatch.away}</span>
+                      <span style={{ fontSize: 10, color: TEXT2 }}>客队</span>
+                    </div>
                   </div>
                 </div>
               </div>
