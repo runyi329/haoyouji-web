@@ -1256,14 +1256,16 @@ export default function WorldCup() {
               </button>
             </Link>
           )}
-          {/* 刷新按钮 */}
-          <button
-            onClick={() => window.location.reload()}
-            className="px-3 h-8 flex items-center justify-center rounded-full text-xs font-semibold"
-            style={{ backgroundColor: "rgba(0,0,0,0.45)", color: "#fff" }}
-          >
-            刷新
-          </button>
+          {/* 刷新按钮 - 仅超级管理员可见 */}
+          {isAdmin && (
+            <button
+              onClick={() => window.location.reload()}
+              className="px-3 h-8 flex items-center justify-center rounded-full text-xs font-semibold"
+              style={{ backgroundColor: "rgba(0,0,0,0.45)", color: "#fff" }}
+            >
+              刷新
+            </button>
+          )}
         </div>
 
         {/* 海报图片 */}
