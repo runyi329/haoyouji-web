@@ -569,11 +569,89 @@ const knockoutMatches: KnockoutMatch[] = [
   { homeCode: "un", homeName: "4强胜者", awayCode: "un", awayName: "4强胜者", homeScore: null, awayScore: null, stage: "决赛", id: "Final" },
 ];
 
-// ===== 淘汰赛 Bracket 对阵图（竖向布局）=====
-// 布局：每轮为一行，从上到下：32强→连线→ 16强→连线→ 8强→连线→ 4强→连线→ 决赛/季军赛
-// 每行内卡片横向平均分布，宽度适配手机，高度不限制
+// ===== 淘汰赛 Bracket 对阵图（经典左右对称，横向滚动）=====
+// 布局：左4列(32强→16强→8强→4强) + 中间决赛 + 右4列(4强→8强→16强→32强)
+// 整体放在 overflow-x:auto 容器里，卡片正常字体大小，不缩放
 
-function BracketView() {
+// 卡片尺寸
+const CW = 72;   // 卡片宽
+const CH = 48;   // 卡片高（两行队名）
+const CGAP = 8;  // 列间距
+const RGAP = 6;  // 同列卡片行间距
+
+// 每列卡片数（左半区）: col0=8场, col1=4场, col2=2场, col3=1场
+const HALF_ROWS = 8;
+
+// 计算某列某行卡片的中心Y（基于左半区col0=8张的均匀分布）
+const TOTAL_H = HALF_ROWS * CH + (HALF_ROWS - 1) * RGAP;
+const TOP_PAD = 28; // 顶部留给阶段标签
+
+function cardCenterY(col: number, idx: number): number {
+  const count = HALF_ROWS / Math.pow(2, col);
+  const blockH = count * CH + (count - 1) * RGAP;
+  const startY = TOP_PAD + (TOTAL_H - blockH) / 2;
+  if (col === 0) return startY + idx * (CH + RGAP) + CH / 2;
+  return (cardCenterY(col - 1, idx * 2) + cardCenterY(col - 1, idx * 2 + 1)) / 2;
+}
+
+// 9列X坐标
+const COL_COUNT = 9;
+const CENTER_COL = 4; // 决赛列
+function colX(col: number): number {
+  return col * (CW + CGAP);
+}
+const SVG_W = COL_COUNT * CW + (COL_COUNT - 1) * CGAP;
+const SVG_H = TOP_PAD + TOTAL_H + 8;
+
+// 阶段标签颜色
+const STAGE_COLORS: Record<string, { bg: string; text: string }> = {
+  "32强": { bg: "#1a2a3a", text: TEXT2 },
+  "16强": { bg: "#1a4a2b", text: "#7FFFA0" },
+  "8强":  { bg: "#1a3a8b", text: "#8ab4ff" },
+  "4强":  { bg: "#6b0010", text: "#ffaaaa" },
+  "决赛": { bg: GOLD, text: "#000" },
+};
+
+function BCard({ m, x, y, highlight }: { m: KnockoutMatch; x: number; y: number; highlight?: boolean }) {
+  const pending = m.homeCode === "un";
+  const fs = 10.5;
+  const scoreFs = 11;
+  const trim = (s: string) => s.length > 6 ? s.slice(0, 5) + "…" : s;
+  const borderColor = highlight ? GOLD : "rgba(255,255,255,0.12)";
+  return (
+    <g>
+      <rect x={x} y={y} width={CW} height={CH} rx={3}
+        fill={highlight ? "rgba(255,215,0,0.12)" : BG2}
+        stroke={borderColor} strokeWidth={highlight ? 1.5 : 0.8} />
+      <line x1={x + 1} y1={y + CH / 2} x2={x + CW - 1} y2={y + CH / 2}
+        stroke={borderColor} strokeWidth={0.8} />
+      {/* 主队 */}
+      <text x={x + 4} y={y + CH / 4 + fs * 0.4} fontSize={fs}
+        fill={pending ? TEXT2 : TEXT} fontFamily="system-ui,sans-serif">
+        {trim(m.homeName)}
+      </text>
+      {m.homeScore !== null && (
+        <text x={x + CW - 4} y={y + CH / 4 + fs * 0.4} fontSize={scoreFs}
+          fill={GOLD} fontFamily="system-ui,sans-serif" fontWeight={700} textAnchor="end">
+          {m.homeScore}
+        </text>
+      )}
+      {/* 客队 */}
+      <text x={x + 4} y={y + (CH * 3) / 4 + fs * 0.4} fontSize={fs}
+        fill={pending ? TEXT2 : TEXT} fontFamily="system-ui,sans-serif">
+        {trim(m.awayName)}
+      </text>
+      {m.awayScore !== null && (
+        <text x={x + CW - 4} y={y + (CH * 3) / 4 + fs * 0.4} fontSize={scoreFs}
+          fill={GOLD} fontFamily="system-ui,sans-serif" fontWeight={700} textAnchor="end">
+          {m.awayScore}
+        </text>
+      )}
+    </g>
+  );
+}
+
+function BracketView({ groups }: { groups: Record<string, { name: string; code: string }[]> }) {
   const r32   = knockoutMatches.filter(m => m.stage === "32强");
   const r16   = knockoutMatches.filter(m => m.stage === "16强");
   const qf    = knockoutMatches.filter(m => m.stage === "8强");
@@ -581,133 +659,145 @@ function BracketView() {
   const final = knockoutMatches.find(m => m.stage === "决赛")!;
   const third = knockoutMatches.find(m => m.stage === "季军赛")!;
 
-  // 每一轮的卡片列表（按左右交错排列，中间对齐）
-  // 左半区：奇数场（左侧），右半区：偶数场（右侧）
-  // 每轮卡片数：32强=16, 16强=8, 8强=4, 4强=2, 决赛=1, 季军=1
+  // 左半区：col0=r32前8, col1=r16前4, col2=qf前2, col3=sf[0]
+  // 右半区（镜像）：col8=r32后8, col7=r16后4, col6=qf后2, col5=sf[1]
+  const leftRounds  = [r32.slice(0, 8), r16.slice(0, 4), qf.slice(0, 2), [sf[0]]];
+  const rightRounds = [r32.slice(8, 16), r16.slice(4, 8), qf.slice(2, 4), [sf[1]]];
 
-  const stageLabel = (s: string, count: number) => {
-    const colors: Record<string, { bg: string; text: string }> = {
-      "32强": { bg: BG3, text: TEXT2 },
-      "16强": { bg: "#1a4a2b", text: "#7FFFA0" },
-      "8强":  { bg: "#1a3a8b", text: "#fff" },
-      "4强":  { bg: "#C0001A", text: "#fff" },
-      "决赛": { bg: GOLD, text: "#000" },
-      "季军赛": { bg: "#6b4c00", text: GOLD },
-    };
-    const c = colors[s] ?? { bg: BG3, text: TEXT2 };
-    return (
-      <div className="flex items-center gap-2 px-3 py-1.5" style={{ backgroundColor: c.bg }}>
-        <span className="text-sm font-black" style={{ color: c.text }}>{s}</span>
-        <span className="text-xs" style={{ color: c.text, opacity: 0.7 }}>{count}场</span>
-      </div>
-    );
-  };
+  // 阶段标签列：左侧 col0..3 = ["32强","16强","8强","4强"], 中间col4="决赛", 右侧col5..8=["4强","8强","16强","32强"]
+  const colLabels = ["32强", "16强", "8强", "4强", "决赛", "4强", "8强", "16强", "32强"];
 
-  // 对阵卡片组件（纯 HTML，不用SVG）
-  const MatchRow = ({ matches }: { matches: KnockoutMatch[] }) => (
-    <div className="flex" style={{ gap: 4, padding: "4px 8px" }}>
-      {matches.map(m => (
-        <div
-          key={m.id}
-          style={{
-            flex: 1,
-            backgroundColor: BG2,
-            border: `1px solid ${BORDER}`,
-            borderRadius: 4,
-            overflow: "hidden",
-            minWidth: 0,
-          }}
-        >
-          {/* 主队 */}
-          <div
-            className="flex items-center px-1.5"
-            style={{ height: 26, borderBottom: `1px solid ${BORDER}` }}
-          >
-            <span
-              className="text-xs flex-1 truncate"
-              style={{ color: m.homeCode === "un" ? TEXT2 : TEXT, fontSize: 11 }}
-            >
-              {m.homeName}
-            </span>
-            {m.homeScore !== null && (
-              <span className="text-xs font-bold ml-1 flex-shrink-0" style={{ color: GOLD, fontSize: 11 }}>
-                {m.homeScore}
-              </span>
-            )}
-          </div>
-          {/* 客队 */}
-          <div className="flex items-center px-1.5" style={{ height: 26 }}>
-            <span
-              className="text-xs flex-1 truncate"
-              style={{ color: m.awayCode === "un" ? TEXT2 : TEXT, fontSize: 11 }}
-            >
-              {m.awayName}
-            </span>
-            {m.awayScore !== null && (
-              <span className="text-xs font-bold ml-1 flex-shrink-0" style={{ color: GOLD, fontSize: 11 }}>
-                {m.awayScore}
-              </span>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  // 决赛/季军赛位置（垂直居中）
+  const finalCY = TOP_PAD + TOTAL_H / 2;
+  const finalY  = finalCY - CH / 2;
+  const thirdY  = finalY + CH + 10;
+  const svgTotalH = Math.max(SVG_H, thirdY + CH + 8);
 
-  // 连线行：上一轮向下收拢到下一轮
-  // 用SVG画横向收拢线，高度固定
-  const ConnectorRow = ({ fromCount, toCount }: { fromCount: number; toCount: number }) => {
-    const h = 20;
-    return (
-      <svg width="100%" height={h} style={{ display: "block", padding: "0 8px" }}>
-        {Array.from({ length: toCount }).map((_, i) => {
-          // 每个目标卡片对应两个源卡片
-          const leftSrc  = i * 2;
-          const rightSrc = i * 2 + 1;
-          // 坐标用百分比
-          const srcW = 1 / fromCount;
-          const dstW = 1 / toCount;
-          const lx = `${(leftSrc + 0.5) * srcW * 100}%`;
-          const rx = `${(rightSrc + 0.5) * srcW * 100}%`;
-          const mx = `${(i + 0.5) * dstW * 100}%`;
-          return (
-            <g key={i}>
-              <line x1={lx} y1={0} x2={lx} y2={h / 2} stroke={BORDER} strokeWidth={1} />
-              <line x1={rx} y1={0} x2={rx} y2={h / 2} stroke={BORDER} strokeWidth={1} />
-              <line x1={lx} y1={h / 2} x2={rx} y2={h / 2} stroke={BORDER} strokeWidth={1} />
-              <line x1={mx} y1={h / 2} x2={mx} y2={h} stroke={BORDER} strokeWidth={1} />
-            </g>
-          );
-        })}
-      </svg>
-    );
-  };
+  const lineColor = "rgba(255,255,255,0.2)";
 
   return (
     <div style={{ paddingBottom: 24 }}>
-      {/* 32强 */}
-      {stageLabel("32强", 16)}
-      <MatchRow matches={r32} />
-      <ConnectorRow fromCount={16} toCount={8} />
-      {/* 16强 */}
-      {stageLabel("16强", 8)}
-      <MatchRow matches={r16} />
-      <ConnectorRow fromCount={8} toCount={4} />
-      {/* 8强 */}
-      {stageLabel("8强", 4)}
-      <MatchRow matches={qf} />
-      <ConnectorRow fromCount={4} toCount={2} />
-      {/* 4强 */}
-      {stageLabel("4强", 2)}
-      <MatchRow matches={sf} />
-      <ConnectorRow fromCount={2} toCount={1} />
-      {/* 决赛 */}
-      {stageLabel("决赛", 1)}
-      <MatchRow matches={[final]} />
-      {/* 季军赛 */}
-      <div style={{ marginTop: 12 }}>
-        {stageLabel("季军赛", 1)}
-        <MatchRow matches={[third]} />
+      {/* 横向滚动容器 */}
+      <div style={{ overflowX: "auto", overflowY: "visible", WebkitOverflowScrolling: "touch" as React.CSSProperties["WebkitOverflowScrolling"] }}>
+        <svg
+          width={SVG_W}
+          height={svgTotalH}
+          style={{ display: "block", minWidth: SVG_W }}
+        >
+          {/* 顶部阶段标签 */}
+          {colLabels.map((label, i) => {
+            const sc = STAGE_COLORS[label] ?? { bg: BG3, text: TEXT2 };
+            const x = colX(i);
+            return (
+              <g key={i}>
+                <rect x={x} y={2} width={CW} height={20} rx={2} fill={sc.bg} />
+                <text x={x + CW / 2} y={14} fontSize={9} fill={sc.text}
+                  fontFamily="system-ui,sans-serif" fontWeight={700} textAnchor="middle">
+                  {label}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* 左半区卡片 + 连线 */}
+          {leftRounds.map((roundMatches, col) =>
+            roundMatches.map((m, idx) => {
+              const x  = colX(col);
+              const cy = cardCenterY(col, idx);
+              const y  = cy - CH / 2;
+              return (
+                <g key={m.id}>
+                  <BCard m={m} x={x} y={y} />
+                  {/* 向右连线到下一列 */}
+                  {col < 3 && (
+                    <path
+                      d={`M${x + CW},${cy} H${x + CW + CGAP / 2} V${cardCenterY(col + 1, Math.floor(idx / 2))} H${colX(col + 1)}`}
+                      fill="none" stroke={lineColor} strokeWidth={0.8}
+                    />
+                  )}
+                </g>
+              );
+            })
+          )}
+
+          {/* 左4强 → 决赛连线 */}
+          <path
+            d={`M${colX(3) + CW},${cardCenterY(3, 0)} H${colX(CENTER_COL)}`}
+            fill="none" stroke={GOLD} strokeWidth={1} strokeDasharray="3,2"
+          />
+
+          {/* 决赛卡片 */}
+          <BCard m={final} x={colX(CENTER_COL)} y={finalY} highlight />
+
+          {/* 季军赛卡片 */}
+          <text x={colX(CENTER_COL) + CW / 2} y={thirdY - 3} fontSize={8}
+            fill={TEXT2} fontFamily="system-ui,sans-serif" textAnchor="middle">季军赛</text>
+          <BCard m={third} x={colX(CENTER_COL)} y={thirdY} />
+
+          {/* 右半区卡片 + 连线（镜像）*/}
+          {rightRounds.map((roundMatches, col) => {
+            // col0→svgCol8, col1→7, col2→6, col3→5
+            const svgCol = 8 - col;
+            return roundMatches.map((m, idx) => {
+              const x  = colX(svgCol);
+              const cy = cardCenterY(col, idx);
+              const y  = cy - CH / 2;
+              return (
+                <g key={m.id}>
+                  <BCard m={m} x={x} y={y} />
+                  {/* 向左连线到下一列 */}
+                  {col < 3 && (
+                    <path
+                      d={`M${x},${cy} H${x - CGAP / 2} V${cardCenterY(col + 1, Math.floor(idx / 2))} H${colX(svgCol - 1) + CW}`}
+                      fill="none" stroke={lineColor} strokeWidth={0.8}
+                    />
+                  )}
+                </g>
+              );
+            });
+          })}
+
+          {/* 右4强 → 决赛连线 */}
+          <path
+            d={`M${colX(5)},${cardCenterY(3, 0)} H${colX(CENTER_COL) + CW}`}
+            fill="none" stroke={GOLD} strokeWidth={1} strokeDasharray="3,2"
+          />
+        </svg>
+      </div>
+
+      {/* ===== 底部分组国旗阵列 ===== */}
+      <div style={{ marginTop: 16, paddingBottom: 8 }}>
+        <div className="flex items-center gap-2 px-3 py-2" style={{ backgroundColor: BG3 }}>
+          <span className="text-xs font-black px-2 py-0.5" style={{ backgroundColor: GOLD, color: "#000", borderRadius: 2 }}>GROUPS</span>
+          <span className="text-xs" style={{ color: TEXT2 }}>A–L 共12组</span>
+        </div>
+        {/* 12组国旗，每行6组，共2行 */}
+        {[["A","B","C","D","E","F"],["G","H","I","J","K","L"]].map((row, ri) => (
+          <div key={ri} className="flex" style={{ borderBottom: `1px solid ${BORDER}` }}>
+            {row.map(g => (
+              <div key={g} className="flex-1 flex flex-col items-center py-2"
+                style={{ borderRight: `1px solid ${BORDER}` }}>
+                {/* 组标签 */}
+                <span className="text-xs font-black mb-1" style={{ color: GOLD }}>{g}</span>
+                {/* 4个国旗 2×2 */}
+                <div className="grid grid-cols-2 gap-0.5">
+                  {(groups[g] || []).map(t => (
+                    <img
+                      key={t.code}
+                      src={`/flags/${t.code.toLowerCase()}.png`}
+                      alt={t.name}
+                      title={t.name}
+                      width={22}
+                      height={15}
+                      style={{ borderRadius: 1, objectFit: "cover", display: "block" }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.2"; }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -792,7 +882,7 @@ function ResultsTab({ groups }: { groups: Record<string, { name: string; code: s
       )}
 
       {/* 淘汰赛对阵 - 经典左右对称Bracket图 */}
-      {view === "knockout" && <BracketView />}
+      {view === "knockout" && <BracketView groups={groups} />}
     </div>
   );
 }
