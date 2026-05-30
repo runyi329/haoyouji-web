@@ -841,8 +841,7 @@ const finalCY = B.TPAD + B_TOTAL_H / 2;
                     aspectRatio: "1 / 1",
                     display: "block",
                     borderRadius: 1,
-                    objectFit: "cover",
-                    objectPosition: FLAG_POSITION[t.code.toLowerCase()] ?? "center center",
+                    objectFit: "fill",
                   }}
                   onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.15"; }}
                 />
