@@ -975,6 +975,38 @@ export default function WcOddsAdmin() {
 
   const snapshotsDesc = [...snapshots].reverse();
 
+  // 水钱比例选择器（默认8，即总隐含概率108%）
+  const [marginPct, setMarginPct] = useState<number>(8);
+
+  // 根据选定水钱重新计算最新一列隐含赔率
+  // 原始隐含概率 = 1/odds，正则化后隐含概率 = 原始隐含概率 / sum(所有隐含概率) * (100 + marginPct)
+  const latestSnap = snapshotsDesc[0];
+  const latestAdjustedOdds = (() => {
+    if (!latestSnap) return {};
+    // 收集最新快照中所有球队的原始赔率
+    const rawOdds: Record<string, number> = {};
+    let sumImplied = 0;
+    teams.forEach((team: { name: string; code: string }) => {
+      const current = (matrixData[team.name] ?? {})[latestSnap.id];
+      const pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
+      if (pinnacle && pinnacle > 0) {
+        rawOdds[team.name] = pinnacle;
+        sumImplied += 1 / pinnacle;
+      }
+    });
+    if (sumImplied === 0) return {};
+    // 目标总隐含概率 = (100 + marginPct) / 100
+    const targetSum = (100 + marginPct) / 100;
+    // 每个球队的调整后隐含概率 = (1/odds) / sumImplied * targetSum
+    // 调整后赔率 = 1 / 调整后隐含概率
+    const result: Record<string, number> = {};
+    Object.entries(rawOdds).forEach(([name, odds]) => {
+      const adjustedImplied = (1 / odds) / sumImplied * targetSum;
+      result[name] = 1 / adjustedImplied;
+    });
+    return result;
+  })();
+
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: BG, color: TEXT }}>
       <PageTag code="P012" />
@@ -1075,6 +1107,32 @@ export default function WcOddsAdmin() {
               <span><span style={{ color: COLOR_DOWN }}>↓红</span> = 赔率降低（更热门）</span>
               <span><span style={{ color: COLOR_UP }}>↑绿</span> = 赔率升高（变冷门）</span>
             </div>
+            {/* 水钱比例选择器 */}
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
+              <span className="text-xs font-semibold" style={{ color: GOLD }}>隐含赔率水钱：</span>
+              <select
+                value={marginPct}
+                onChange={e => setMarginPct(Number(e.target.value))}
+                style={{
+                  backgroundColor: BG3,
+                  color: GOLD,
+                  border: `1px solid ${GOLD}`,
+                  borderRadius: 8,
+                  padding: "3px 10px",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              >
+                {Array.from({ length: 21 }, (_, i) => i + 5).map(v => (
+                  <option key={v} value={v} style={{ backgroundColor: BG3 }}>
+                    {v}%（总和 1{String(v).padStart(2, '0')}%）
+                  </option>
+                ))}
+              </select>
+              <span className="text-xs" style={{ color: TEXT2 }}>← 最新一列按此水钱重新计算隐含赔率</span>
+            </div>
             {matrixLoading ? (
               <div className="text-center py-8" style={{ color: TEXT2 }}>加载中...</div>
             ) : snapshots.length === 0 ? (
@@ -1168,10 +1226,15 @@ export default function WcOddsAdmin() {
                         return (
                           <tr key={team.name} style={{ borderBottom: `1px solid rgba(255,255,255,0.05)`, height: 64 }}>
                             {snapshotsDesc.map((snap, colIdx) => {
+                              const isLatest = colIdx === 0;
                               const current = teamData[snap.id];
                               const prevSnap = snapshotsDesc[colIdx + 1];
                               const prev = prevSnap ? teamData[prevSnap.id] : null;
-                              const pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
+                              const rawPinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
+                              // 最新一列使用调整后赔率，其他列使用原始赔率
+                              const pinnacle = isLatest
+                                ? (latestAdjustedOdds[team.name] ?? rawPinnacle)
+                                : rawPinnacle;
                               const prevPinnacle = prev?.pinnacle ? parseFloat(prev.pinnacle) : null;
                               const color = getOddsColor(pinnacle, prevPinnacle);
                               const arrow = getOddsArrow(pinnacle, prevPinnacle);
@@ -1184,6 +1247,8 @@ export default function WcOddsAdmin() {
                                   fontWeight: pinnacle && color !== COLOR_SAME ? 600 : 400,
                                   whiteSpace: "nowrap",
                                   minWidth: 72,
+                                  // 最新一列加金色左边框以示区分
+                                  borderLeft: isLatest ? `2px solid ${GOLD}` : undefined,
                                 }}>
                                   {pinnacle ? (
                                     <>
@@ -1207,11 +1272,21 @@ export default function WcOddsAdmin() {
                     </tbody>
                     <tfoot>
                       <tr style={{ backgroundColor: "rgba(255,215,0,0.08)", borderTop: `2px solid ${BORDER}` }}>
-                        {snapshotsDesc.map((snap) => {
+                        {snapshotsDesc.map((snap, colIdx) => {
+                          const isLatest = colIdx === 0;
                           let total = 0, count = 0;
                           teams.forEach((team: { name: string; code: string }) => {
-                            const current = (matrixData[team.name] ?? {})[snap.id];
-                            const pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
+                            let pinnacle: number | null = null;
+                            if (isLatest) {
+                              pinnacle = latestAdjustedOdds[team.name] ?? null;
+                              if (!pinnacle) {
+                                const current = (matrixData[team.name] ?? {})[snap.id];
+                                pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
+                              }
+                            } else {
+                              const current = (matrixData[team.name] ?? {})[snap.id];
+                              pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
+                            }
                             if (pinnacle && pinnacle > 0) { total += (1 / pinnacle) * 100; count++; }
                           });
                           const overround = total - 100;
@@ -1221,6 +1296,7 @@ export default function WcOddsAdmin() {
                               padding: "8px 6px", textAlign: "center",
                               borderRight: `1px solid ${BORDER}`,
                               color, fontWeight: 700, fontSize: 11, whiteSpace: "nowrap", minWidth: 72,
+                              borderLeft: isLatest ? `2px solid ${GOLD}` : undefined,
                             }}>
                               {count > 0 ? (
                                 <>
