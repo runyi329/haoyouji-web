@@ -1644,7 +1644,7 @@ export default function WorldCup() {
             {/* AI预测海报 */}
             <div style={{ width: "100%", overflow: "hidden" }}>
               <img
-                src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/wc2026-ai-prediction-banner-LTuuAwYBjVRnv5De9jV4AF.webp"
+                src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/wc2026-octopus-final3-5k84RfchAe5yZJsqW9m9T6.webp"
                 alt="AI预测2026世界杯冠军"
                 style={{ width: "100%", display: "block", objectFit: "cover" }}
               />
