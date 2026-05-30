@@ -1641,6 +1641,14 @@ export default function WorldCup() {
         {/* ---- AI冠军预测 Tab ---- */}
         {activeTab === "champion" && (
           <div>
+            {/* AI预测海报 */}
+            <div style={{ width: "100%", overflow: "hidden" }}>
+              <img
+                src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/wc2026-ai-prediction-banner-LTuuAwYBjVRnv5De9jV4AF.webp"
+                alt="AI预测2026世界杯冠军"
+                style={{ width: "100%", display: "block", objectFit: "cover" }}
+              />
+            </div>
             {/* 数据来源标注 */}
             <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
               <span className="text-xs" style={{ color: TEXT2 }}>
