@@ -631,33 +631,52 @@ function OrdersTab() {
         onCancel={() => setConfirmAction(null)}
         isPending={updateStatus.isPending}
       />
-      {/* 顶部操作栏 */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex gap-1.5 flex-wrap">
-          {(["all", "pending", "won", "lost", "revoked", "deleted"] as const).map(s => (
-            <button
-              key={s}
-              onClick={() => { setStatusFilter(s); setPage(1); }}
-              className="px-2.5 py-1 rounded-full text-xs font-medium"
-              style={{
-                backgroundColor: statusFilter === s ? "rgba(255,215,0,0.15)" : "rgba(255,255,255,0.05)",
-                border: `1px solid ${statusFilter === s ? GOLD : BORDER}`,
-                color: statusFilter === s ? GOLD : TEXT2,
-              }}
-            >
-              {s === "all" ? "全部" : (statusLabel[s]?.emoji + " " + statusLabel[s]?.text)}
-            </button>
-          ))}
-        </div>
-        <button
-          onClick={() => setShowCreateDialog(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
-          style={{ backgroundColor: GOLD, color: "#0D1B2A" }}
+      {/* 顶部操作栏：下拉筛选 */}
+      <div className="flex items-center mb-3">
+        <select
+          value={statusFilter}
+          onChange={e => { setStatusFilter(e.target.value as typeof statusFilter); setPage(1); }}
+          className="text-sm rounded-lg px-3 py-1.5 outline-none"
+          style={{
+            backgroundColor: "rgba(255,255,255,0.07)",
+            border: `1px solid ${BORDER}`,
+            color: GOLD,
+            fontWeight: 600,
+            appearance: "none",
+            WebkitAppearance: "none",
+            paddingRight: "2rem",
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23FFD700' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "right 0.6rem center",
+          }}
         >
-          <PlusCircle className="w-3.5 h-3.5" />
-          新建订单
-        </button>
+          <option value="all">全部</option>
+          <option value="pending">进行中</option>
+          <option value="won">中奖</option>
+          <option value="lost">未中</option>
+          <option value="revoked">已撤销</option>
+          <option value="deleted">已删除</option>
+        </select>
       </div>
+
+      {/* 底部浮动新建订单按鈕 */}
+      <button
+        onClick={() => setShowCreateDialog(true)}
+        className="fixed z-40 flex items-center justify-center rounded-full shadow-2xl"
+        style={{
+          bottom: "88px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: 56,
+          height: 56,
+          backgroundColor: GOLD,
+          color: "#0D1B2A",
+          boxShadow: "0 4px 24px rgba(255,215,0,0.45)",
+        }}
+        aria-label="新建订单"
+      >
+        <PlusCircle className="w-7 h-7" />
+      </button>
 
       {/* 订单列表 */}
       {isLoading ? (
@@ -668,7 +687,7 @@ function OrdersTab() {
           style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
         >
           <div style={{ color: TEXT2 }} className="text-sm">暂无订单</div>
-          <div style={{ color: TEXT2 }} className="text-xs mt-1">点击右上角"新建订单"创建第一笔</div>
+          <div style={{ color: TEXT2 }} className="text-xs mt-1">点击下方 + 按钮创建第一笔</div>
         </div>
       ) : (
         <div className="space-y-3">
