@@ -1968,7 +1968,7 @@ export default function WorldCup() {
                             style={{ width: 20, height: 20, borderRadius: 4, objectFit: "cover", flexShrink: 0 }}
                           />
                           <span style={{ fontSize: 10, color: TEXT2, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{judge.name}</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: GOLD, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{judgeScores[i].toFixed(1)}%</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: TEXT, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{judgeScores[i].toFixed(1)}</span>
                         </div>
                       ))}
                     </div>
@@ -1980,8 +1980,8 @@ export default function WorldCup() {
                       borderRadius: 8,
                       display: "flex", alignItems: "center", justifyContent: "space-between"
                     }}>
-                      <span style={{ fontSize: 11, color: TEXT2 }}>12大模型综合评分</span>
-                      <span style={{ fontSize: 15, fontWeight: 900, color: GOLD }}>{prob.toFixed(1)}%</span>
+                      <span style={{ fontSize: 11, color: TEXT2 }}>AI综合评分</span>
+                      <span style={{ fontSize: 15, fontWeight: 900, color: GOLD }}>{prob.toFixed(1)}</span>
                     </div>
                   </div>
 
