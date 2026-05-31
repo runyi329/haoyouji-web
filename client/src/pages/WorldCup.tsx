@@ -2012,9 +2012,11 @@ export default function WorldCup() {
                           {/* 小黄点已移除：k值保护仅在管理页显示 */}
                         </div>
                         {/* 第一行图标 U */}
-                        <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: "#26A17B", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>U</span>
-                        </div>
+                        <img
+                          src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/usdt-icon.png"
+                          style={{ width: 22, height: 22, borderRadius: "50%", objectFit: "cover" }}
+                          alt="USDT"
+                        />
                         {/* 第二行数字 或+ETH */}
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
                           <span style={{ fontSize: 12, color: TEXT2 }}>或</span>
