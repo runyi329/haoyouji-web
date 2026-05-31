@@ -100,12 +100,14 @@ export default function WalletTransactions() {
             id: `bh-${history.id}`, type: 'withdraw',
             amount: Math.abs(amt), status: 'completed',
             description: desc, wcCode, createdAt: history.createdAt,
+            balanceAfter: history.balance != null ? Number(history.balance) : null,
           });
         } else if (history.type === 'reward') {
           transactions.push({
             id: `bh-${history.id}`, type: 'reward',
             amount: Math.abs(amt), status: 'completed',
             description: desc, wcCode, createdAt: history.createdAt,
+            balanceAfter: history.balance != null ? Number(history.balance) : null,
           });
         } else if (history.type === 'consume' || history.type === 'refund') {
           transactions.push({
@@ -113,6 +115,7 @@ export default function WalletTransactions() {
             type: amt < 0 ? 'deduct' : 'reward',
             amount: Math.abs(amt), status: 'completed',
             description: desc, wcCode, createdAt: history.createdAt,
+            balanceAfter: history.balance != null ? Number(history.balance) : null,
           });
         }
       });
@@ -281,6 +284,14 @@ export default function WalletTransactions() {
                   {/* 非世界杯交易才显示描述文字 */}
                   {!wcCode && transaction.description && (
                     <div className="text-xs text-gray-500 mt-1">{transaction.description}</div>
+                  )}
+
+                  {/* 余额（仅 balance_history 来源才有） */}
+                  {transaction.balanceAfter != null && (
+                    <div className="text-xs mt-2 pt-2 border-t border-[#2a2a2a] flex justify-between items-center">
+                      <span className="text-gray-600">余额</span>
+                      <span className="text-gray-400 font-medium">{transaction.balanceAfter.toFixed(2)} USDT</span>
+                    </div>
                   )}
                 </div>
               );
