@@ -1837,33 +1837,29 @@ export default function WorldCup() {
                     className="rounded-2xl p-4"
                     style={{ backgroundColor: "rgba(22,44,66,0.85)", border: `1px solid ${BORDER}`, backdropFilter: "blur(8px)" }}
                   >
-                    <div className="flex items-center gap-3">
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
 
                       {/* 左列： USDT 或 ETH 两行，图标对齐 */}
-                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
                         {/* 第一行： USDT */}
                         <div style={{ display: "flex", alignItems: "center" }}>
-                          {/* 数字区域固定宽度，靠右对齐 */}
-                          <div style={{ width: 90, textAlign: "right", marginRight: 8 }}>
+                          <div style={{ minWidth: 76, textAlign: "right", marginRight: 6 }}>
                             {usdtCost !== null ? (
-                              <span style={{ fontSize: 22, fontWeight: 900, color: GOLD, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{usdtCost.toFixed(2)}</span>
+                              <span style={{ fontSize: 20, fontWeight: 900, color: GOLD, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{usdtCost.toFixed(2)}</span>
                             ) : (
-                              <span style={{ fontSize: 16, color: TEXT2 }}>加载中</span>
+                              <span style={{ fontSize: 14, color: TEXT2 }}>加载中</span>
                             )}
                           </div>
-                          {/* 图标固定位置 */}
                           <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: "#26A17B", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                             <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>U</span>
                           </div>
                         </div>
                         {/* 第二行： 或 ETH */}
                         <div style={{ display: "flex", alignItems: "center" }}>
-                          {/* 数字区域固定宽度，靠右对齐 */}
-                          <div style={{ width: 90, textAlign: "right", marginRight: 8, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
-                            <span style={{ fontSize: 13, color: TEXT2 }}>或</span>
-                            <span style={{ fontSize: 22, fontWeight: 900, color: GOLD, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{ethCost.toFixed(4)}</span>
+                          <div style={{ minWidth: 76, textAlign: "right", marginRight: 6, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 3 }}>
+                            <span style={{ fontSize: 12, color: TEXT2 }}>或</span>
+                            <span style={{ fontSize: 20, fontWeight: 900, color: GOLD, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{ethCost.toFixed(4)}</span>
                           </div>
-                          {/* 图标固定位置 */}
                           <img
                             src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
                             style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0 }}
@@ -1873,12 +1869,10 @@ export default function WorldCup() {
                       </div>
 
                       {/* 中间： 等号 */}
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <span style={{ fontSize: 28, fontWeight: 300, color: TEXT2, lineHeight: 1 }}>=</span>
-                      </div>
+                      <span style={{ fontSize: 24, fontWeight: 300, color: TEXT2, lineHeight: 1, flexShrink: 0, padding: "0 8px" }}>=</span>
 
                       {/* 右列： 数字 1 + 圆形章鱼ETH图 */}
-                      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 0 }}>
                         <span style={{
                           fontSize: 52, fontWeight: 900, color: GOLD, lineHeight: 1,
                           textShadow: "0 0 20px rgba(255,215,0,0.4)",
