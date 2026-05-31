@@ -877,30 +877,19 @@ function OrdersTab() {
                 {/* 金额行 */}
                 <div className="flex items-center gap-4 mb-2">
                   <div>
-                    <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>基础赔率</div>
-                    <div className="font-bold flex items-center gap-1" style={{ color: GOLD }}>
-                      {(order as any).baseFeeUsdt
-                        ? (1 / (parseFloat((order as any).baseFeeUsdt) / (parseFloat(order.amount ?? '0') || 1) || 0.001)).toFixed(2)
-                        : (order.pinnacleOdds ? parseFloat(order.pinnacleOdds).toFixed(2) : "-")}
+                    <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>庄家优势</div>
+                    <div className="font-bold flex items-center gap-1" style={{ color: (order as any).isDynamicPrice ? "#FF8C00" : GOLD }}>
+                      {(order as any).houseEdgePct != null
+                        ? `${parseFloat((order as any).houseEdgePct).toFixed(2)}%`
+                        : (order.pinnacleOdds ? `${((1 / parseFloat(order.pinnacleOdds)) * 100).toFixed(2)}%` : "-")}
+                      {(order as any).isDynamicPrice && (
+                        <span style={{ fontSize: 9, backgroundColor: "rgba(255,140,0,0.15)", color: "#FF8C00", borderRadius: 3, padding: "1px 4px", marginLeft: 2 }}>k値保护</span>
+                      )}
+                    </div>
+                    <div className="text-xs" style={{ color: TEXT2 }}>
+                      {(order as any).isDynamicPrice ? "k値触发" : "水钱调整后"}
                     </div>
                   </div>
-                  {(order as any).isDynamicPrice && (
-                    <div>
-                      <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>k値赔率</div>
-                      <div className="font-bold flex items-center gap-1" style={{ color: "#FF8C00" }}>
-                        {(order as any).finalFeeUsdt
-                          ? (1 / (parseFloat((order as any).finalFeeUsdt) / (parseFloat(order.amount ?? '0') || 1) || 0.001)).toFixed(2)
-                          : "-"}
-                        <span style={{ fontSize: 9, backgroundColor: "rgba(255,140,0,0.15)", color: "#FF8C00", borderRadius: 3, padding: "1px 4px", marginLeft: 2 }}>k値保护</span>
-                      </div>
-                    </div>
-                  )}
-                  {!(order as any).isDynamicPrice && (
-                    <div>
-                      <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>k値</div>
-                      <div className="text-xs" style={{ color: TEXT2 }}>未触发</div>
-                    </div>
-                  )}
                   <div>
                     <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>投注</div>
                     <div className="font-bold" style={{ color: TEXT }}>

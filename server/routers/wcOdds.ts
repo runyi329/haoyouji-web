@@ -505,6 +505,8 @@ export const wcOddsRouter = router({
       // 单独查询 k值动态定价字段（这些字段不在 drizzle schema 中，用原生 SQL 补充）
       const conn2 = await getDbConnection();
       let dynamicMap: Record<number, { isDynamicPrice: boolean; baseFeeUsdt: string | null; finalFeeUsdt: string | null; orderNo: string | null }> = {};
+      // 快照庄家优势缓存：snapshotId -> houseEdgePct
+      const snapshotEdgeCache: Record<number, number> = {};
       if (conn2 && drizzleRows.length > 0) {
         try {
           const ids = drizzleRows.map(r => r.id);
@@ -522,6 +524,21 @@ export const wcOddsRouter = router({
               orderNo: d.order_no != null ? String(d.order_no) : null,
             };
           }
+          // 对每个不同的 snapshot_id，查询该快照所有球队的 pinnacle_odds，计算庄家优势
+          const uniqueSnapshotIds = [...new Set(drizzleRows.map(r => r.snapshotId).filter(Boolean))] as number[];
+          for (const sid of uniqueSnapshotIds) {
+            try {
+              const [snapRows] = await (conn2 as any).execute(
+                `SELECT SUM(1/pinnacle_odds) AS sum_implied FROM wc_odds_records WHERE snapshot_id = ? AND pinnacle_odds > 0`,
+                [sid]
+              ) as any[];
+              const arr = Array.isArray(snapRows) ? snapRows : [];
+              if (arr.length > 0 && arr[0].sum_implied != null) {
+                const sumImplied = parseFloat(String(arr[0].sum_implied));
+                snapshotEdgeCache[sid] = Math.max(0, (sumImplied - 1) * 100);
+              }
+            } catch (_) { /* 忽略 */ }
+          }
         } catch (_) { /* 字段不存在时忽略 */ } finally {
           (conn2 as any).release?.();
         }
@@ -532,6 +549,21 @@ export const wcOddsRouter = router({
         baseFeeUsdt: dynamicMap[r.id]?.baseFeeUsdt ?? null,
         finalFeeUsdt: dynamicMap[r.id]?.finalFeeUsdt ?? null,
         orderNo: dynamicMap[r.id]?.orderNo ?? null,
+        // 庄家优势：k値未触发时用快照全场反推；k値触发时用实际赔率反推
+        houseEdgePct: (() => {
+          const isDyn = dynamicMap[r.id]?.isDynamicPrice ?? false;
+          const baseEdge = snapshotEdgeCache[r.snapshotId] != null ? parseFloat(snapshotEdgeCache[r.snapshotId].toFixed(2)) : null;
+          if (isDyn && r.potentialReturn && r.amount) {
+            const actualOdds = parseFloat(String(r.potentialReturn)) / parseFloat(String(r.amount));
+            const baseOdds = r.pinnacleOdds ? parseFloat(String(r.pinnacleOdds)) : 0;
+            if (actualOdds > 0 && baseOdds > 0 && baseEdge !== null) {
+              // k値额外压常 = (1/实际赔率 - 1/基础赔率) * 100
+              const kExtra = (1 / actualOdds - 1 / baseOdds) * 100;
+              return parseFloat((baseEdge + kExtra).toFixed(2));
+            }
+          }
+          return baseEdge;
+        })(),
       }));
       return { orders: rows, page: input.page, pageSize: input.pageSize };
     }),
