@@ -1226,7 +1226,7 @@ function DayGroup({
 export default function WorldCup() {
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     const saved = localStorage.getItem("wc_activeTab") as TabType | null;
-    return (saved === "schedule" || saved === "results" || saved === "champion") ? saved : "schedule";
+    return (saved === "schedule" || saved === "results" || saved === "champion") ? saved : "champion";
   });
   const today = new Date().toISOString().slice(0, 10);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
@@ -1732,13 +1732,11 @@ export default function WorldCup() {
             <div className="flex items-center gap-1 px-4 py-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
               <span className="text-xs" style={{ color: TEXT2 }}>
                 {liveOddsLoading ? "AI实时评级加载中..."
-                  : `AI实时评级${liveOddsData && liveOddsData.teams.length > 0 ? sortedOdds.length : 48}支球队夺冠评级（0~`}
+                  : `AI实时评级${liveOddsData && liveOddsData.teams.length > 0 ? sortedOdds.length : 48}支球队夺冠评级（0~5`}
               </span>
               {!liveOddsLoading && (
                 <>
-                  {[1,2,3,4,5].map(i => (
-                    <img key={i} src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/stars/star-full.png" alt="★" style={{ width: 10, height: 10, objectFit: "contain" }} />
-                  ))}
+                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/stars/star-full.png" alt="★" style={{ width: 10, height: 10, objectFit: "contain" }} />
                   <span className="text-xs" style={{ color: TEXT2 }}>）</span>
                 </>
               )}
