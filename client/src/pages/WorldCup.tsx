@@ -1771,35 +1771,18 @@ export default function WorldCup() {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* 背景：纯深色 + 章鱼插图悬浮右上角 */}
+              {/* 背景：纯深色 */}
               <div style={{ position: "relative", backgroundColor: BG }}>
-                {/* 章鱼插图：右上角，半透明，不遮挡文字 */}
-                <img
-                  src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/paul_ai_front-oBnASFnVcZiBBF6ZfLUibn.webp"
-                  alt=""
-                  style={{
-                    position: "absolute",
-                    right: -16,
-                    top: -20,
-                    width: 160,
-                    height: 160,
-                    objectFit: "contain",
-                    opacity: 0.88,
-                    pointerEvents: "none",
-                    zIndex: 0,
-                  }}
-                />
                 {/* 内容区域 */}
                 <div style={{ position: "relative", zIndex: 1, padding: "20px 20px 28px" }}>
 
                   {/* 顶部拖拽条 */}
-                  <div className="flex justify-center mb-4">
+                  <div className="flex justify-center mb-3">
                     <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.25)" }} />
                   </div>
 
                   {/* AI 分析标题行 */}
-                  <div className="flex items-center gap-2 mb-4">
-                    {/* 脉冲圆点 */}
+                  <div className="flex items-center gap-2 mb-3">
                     <div style={{ position: "relative", width: 10, height: 10, flexShrink: 0 }}>
                       <div style={{
                         position: "absolute", inset: 0, borderRadius: "50%",
@@ -1815,29 +1798,42 @@ export default function WorldCup() {
                     )}
                   </div>
 
-                  {/* 队名 + 国旗 */}
-                  <div className="flex items-center gap-3 mb-1">
-                    <div style={{ width: 52, height: 36, overflow: "hidden", borderRadius: 4, flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>
+                  {/* 左章鱼 + 右内容 左右布局 */}
+                  <div className="flex items-center gap-3 mb-4">
+                    {/* 左侧：章鱼插图 */}
+                    <div style={{ flexShrink: 0, width: 120, height: 120 }}>
                       <img
-                        src={`/flags/${selectedTeam.code.toLowerCase()}.png`}
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        alt={selectedTeam.name}
+                        src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/paul_ai_front-LqwqCsDzhwePCFjiDyExnp.png"
+                        alt="章鱼保罗"
+                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
                       />
                     </div>
-                    <div>
-                      <div style={{ fontSize: 20, fontWeight: 900, color: TEXT, lineHeight: 1.2 }}>{selectedTeam.name}</div>
-                      <div style={{ fontSize: 11, color: TEXT2, marginTop: 2 }}>当前夺冠概率（{dataSource}赔率）</div>
+                    {/* 右侧：队名+国旗+概率 靠右对齐 */}
+                    <div style={{ flex: 1, textAlign: "right" }}>
+                      {/* 队名 + 国旗 */}
+                      <div className="flex items-center justify-end gap-2 mb-1">
+                        <div>
+                          <div style={{ fontSize: 20, fontWeight: 900, color: TEXT, lineHeight: 1.2 }}>{selectedTeam.name}</div>
+                          <div style={{ fontSize: 11, color: TEXT2, marginTop: 2, textAlign: "right" }}>当前夺冠概率（{dataSource}赔率）</div>
+                        </div>
+                        <div style={{ width: 44, height: 30, overflow: "hidden", borderRadius: 3, flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>
+                          <img
+                            src={`/flags/${selectedTeam.code.toLowerCase()}.png`}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            alt={selectedTeam.name}
+                          />
+                        </div>
+                      </div>
+                      {/* 大概率数字 */}
+                      <div className="flex items-end justify-end gap-1">
+                        <span style={{
+                          fontSize: 52, fontWeight: 900, color: GOLD, lineHeight: 1,
+                          textShadow: "0 0 20px rgba(255,215,0,0.4)",
+                          fontVariantNumeric: "tabular-nums",
+                        }}>{prob.toFixed(1)}</span>
+                        <span style={{ fontSize: 22, fontWeight: 700, color: GOLD2, marginBottom: 6 }}>%</span>
+                      </div>
                     </div>
-                  </div>
-
-                  {/* 大概率数字 */}
-                  <div className="flex items-end gap-2 mb-5" style={{ paddingLeft: 4 }}>
-                    <span style={{
-                      fontSize: 52, fontWeight: 900, color: GOLD, lineHeight: 1,
-                      textShadow: "0 0 20px rgba(255,215,0,0.4)",
-                      fontVariantNumeric: "tabular-nums",
-                    }}>{prob.toFixed(1)}</span>
-                    <span style={{ fontSize: 22, fontWeight: 700, color: GOLD2, marginBottom: 6 }}>%</span>
                   </div>
 
                   {/* 分隔线 */}
