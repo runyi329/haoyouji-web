@@ -772,6 +772,61 @@ export const wcOddsRouter = router({
         // 规则C：未中奖(lost)/已撤销(revoked) → 删除，不动钉包
       }
 
+      // 删除 → 恢复进行中：需要重新占用投注金额，先检查用户余额是否足够
+      if (input.status === 'pending' && orderRow.status === 'deleted') {
+        const [amtRows] = await db
+          .select({ amount: wcOrders.amount })
+          .from(wcOrders)
+          .where(eq(wcOrders.id, input.orderId))
+          .limit(1);
+        const betAmt = amtRows ? parseFloat(amtRows.amount) : 0;
+        if (betAmt > 0) {
+          const currency = orderRow.currency as string;
+          let currentBalance: number;
+          if (currency === 'CNY') {
+            currentBalance = await getUserCnyBalance(orderRow.userId).catch(() => 0);
+          } else {
+            currentBalance = await getUserBalance(orderRow.userId).catch(() => 0);
+          }
+          if (currentBalance < betAmt) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: `用户 ${currency} 余额不足，无法恢复订单（当前 ${currentBalance.toFixed(2)}，需要 ${betAmt.toFixed(2)}）`,
+            });
+          }
+          // 余额足够，重新占用投注金额
+          const teamCodeTag = orderRow.teamCode ? `[${(orderRow.teamCode as string).toUpperCase()}]` : '';
+          const deductNote = currency === 'CNY'
+            ? `[CNY]世界杯恢复投注-${orderRow.teamName}${teamCodeTag} -${betAmt}`
+            : `世界杯恢复投注-${orderRow.teamName}${teamCodeTag} -${betAmt} USDT`;
+          if (currency === 'CNY') {
+            const [ledgerRows] = await (conn as any).execute(
+              `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
+              [orderRow.userId]
+            ) as any[];
+            const ledgerId = (Array.isArray(ledgerRows) ? ledgerRows[0]?.ledger_id : null) ?? 37;
+            await (conn as any).execute(
+              `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
+              [ledgerId, orderRow.userId, -betAmt, deductNote]
+            );
+          } else {
+            await (conn as any).execute(
+              `UPDATE users SET balance = COALESCE(balance, 0) - ? WHERE id = ?`,
+              [betAmt, orderRow.userId]
+            );
+            const [balRows] = await (conn as any).execute(
+              `SELECT balance FROM users WHERE id = ? LIMIT 1`,
+              [orderRow.userId]
+            ) as any[];
+            const newBalance = parseFloat((Array.isArray(balRows) ? balRows[0] : balRows)?.balance ?? '0') || 0;
+            await (conn as any).execute(
+              `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, 'consume', NULL, ?, ?)`,
+              [orderRow.userId, (-betAmt).toString(), newBalance.toString(), deductNote]
+            );
+          }
+        }
+      }
+
       await db
         .update(wcOrders)
         .set({

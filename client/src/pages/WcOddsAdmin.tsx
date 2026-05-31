@@ -566,6 +566,7 @@ type ConfirmAction = {
   confirmColor: string;
   needBonus?: boolean; // won 时需要填奖金
   defaultBonus?: string; // 预充奖金（潜在回报）
+  needSecondConfirm?: boolean; // 删除操作需要二次确认
 };
 
 function ConfirmDialog({
@@ -580,13 +581,16 @@ function ConfirmDialog({
   isPending: boolean;
 }) {
   const [bonusInput, setBonusInput] = useState(action?.defaultBonus ?? "");
-  // action 变化时重置奖金输入框为默认值
+  const [secondConfirmInput, setSecondConfirmInput] = useState("");
+  // action 变化时重置输入框
   useEffect(() => {
     if (action) setBonusInput(action.defaultBonus ?? "");
     else setBonusInput("");
+    setSecondConfirmInput("");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action?.orderId, action?.newStatus]);
   if (!action) return null;
+  const secondConfirmOk = !action.needSecondConfirm || secondConfirmInput === "确认删除";
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center px-4"
@@ -599,6 +603,22 @@ function ConfirmDialog({
       >
         <div className="text-base font-bold mb-1" style={{ color: TEXT }}>{action.title}</div>
         <div className="text-sm mb-4" style={{ color: TEXT2 }}>{action.desc}</div>
+        {action.needSecondConfirm && (
+          <div className="mb-4">
+            <label className="text-xs mb-1.5 block" style={{ color: "#FF4D4F" }}>
+              请输入「确认删除」以继续
+            </label>
+            <input
+              type="text"
+              className="w-full px-3 py-2.5 rounded-lg text-sm outline-none"
+              style={{ backgroundColor: BG3, border: `1px solid #FF4D4F88`, color: TEXT }}
+              placeholder="输入「确认删除」"
+              value={secondConfirmInput}
+              onChange={e => setSecondConfirmInput(e.target.value)}
+              autoFocus
+            />
+          </div>
+        )}
         {action.needBonus && (
           <div className="mb-4">
             <label className="text-xs mb-1.5 block" style={{ color: TEXT2 }}>实际奖金金额 <span style={{ color: "#ff4d4f" }}>*</span></label>
@@ -625,7 +645,7 @@ function ConfirmDialog({
           </button>
           <button
             onClick={() => onConfirm(action.needBonus ? bonusInput : undefined)}
-            disabled={isPending || (action.needBonus ? !bonusInput || isNaN(parseFloat(bonusInput)) : false)}
+            disabled={isPending || (action.needBonus ? !bonusInput || isNaN(parseFloat(bonusInput)) : false) || !secondConfirmOk}
             className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
             style={{ backgroundColor: action.confirmColor, color: "#0D1B2A", opacity: isPending ? 0.6 : 1 }}
           >
@@ -749,20 +769,20 @@ function OrdersTab() {
       case "pending": return [
         { orderId: id, newStatus: "won",     title: "确认中奖？",   desc: "请填写实际奖金金额，确认后记录中奖结果。可随时撤回。", confirmText: "确认中奖", confirmColor: "#52C41A", needBonus: true },
         { orderId: id, newStatus: "lost",    title: "确认未中？",   desc: "标记为未中（赔注），可随时撤回恢复进行中。",           confirmText: "确认未中", confirmColor: "#FF4D4F" },
-        { orderId: id, newStatus: "revoked", title: "确认撤销订单？", desc: "撤销后可随时恢复为进行中，不影响钱包余额。",          confirmText: "确认撤销", confirmColor: "#8FA3B8" },
-        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，订单将从默认列表隐藏，可在[已删除]筛选中恢复。", confirmText: "确认删除", confirmColor: "#555" },
+        { orderId: id, newStatus: "revoked", title: "确认撤销订单？", desc: "撤销后可随时恢复为进行中，不影响钉包余额。",          confirmText: "确认撤销", confirmColor: "#8FA3B8" },
+        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "删除后将退回投注金额。此操作不可忽视，请再次确认。", confirmText: "我确认要删除", confirmColor: "#555", needSecondConfirm: true },
       ];
       case "won": return [
         { orderId: id, newStatus: "pending", title: "撤回中奖结算？", desc: "将订单恢复为进行中，清除奖金记录。", confirmText: "确认撤回", confirmColor: GOLD },
-        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，可在[已删除]筛选中恢复。",    confirmText: "确认删除", confirmColor: "#555" },
+        // 已中奖订单不允许删除
       ];
       case "lost": return [
         { orderId: id, newStatus: "pending", title: "撤回未中结算？", desc: "将订单恢复为进行中。",            confirmText: "确认撤回", confirmColor: GOLD },
-        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，可在[已删除]筛选中恢复。", confirmText: "确认删除", confirmColor: "#555" },
+        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "删除后不可恢复，请再次确认。", confirmText: "我确认要删除", confirmColor: "#555", needSecondConfirm: true },
       ];
       case "revoked": return [
         { orderId: id, newStatus: "pending", title: "恢复为进行中？", desc: "将已撤销订单重新激活为进行中。",   confirmText: "确认恢复", confirmColor: GOLD },
-                { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "软删除，可在[已删除]筛选中恢复。", confirmText: "确认删除", confirmColor: "#555" },
+        { orderId: id, newStatus: "deleted", title: "确认删除订单？", desc: "删除后不可恢复，请再次确认。", confirmText: "我确认要删除", confirmColor: "#555", needSecondConfirm: true },
       ];
       case "deleted": return [
         { orderId: id, newStatus: "pending", title: "从回收站恢复？", desc: "将订单恢复为进行中状态。", confirmText: "确认恢复", confirmColor: GOLD },
