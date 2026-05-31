@@ -655,8 +655,8 @@ export const wcOddsRouter = router({
         if (orderRow.status === 'won' && orderRow.bonusAmount) {
           const prevBonus = parseFloat(orderRow.bonusAmount);
           const deleteWonNote = currency === 'CNY'
-            ? `[CNY]订单删除-撤回奖金 -${prevBonus}`
-            : `订单删除-撤回奖金 -${prevBonus} USDT`;
+            ? `[CNY]系统结算`
+            : `系统结算`;
           if (currency === 'CNY') {
             const [ledgerRows] = await (conn as any).execute(
               `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
@@ -695,8 +695,8 @@ export const wcOddsRouter = router({
           if (betAmt > 0) {
             const teamCodeTag2 = orderRow.teamCode ? `[${(orderRow.teamCode as string).toUpperCase()}]` : '';
             const refundNote = currency === 'CNY'
-              ? `[CNY]订单作废-退回投注${teamCodeTag2} +${betAmt}`
-              : `订单作废-退回投注${teamCodeTag2} +${betAmt} USDT`;
+              ? `[CNY]系统结算`
+              : `系统结算`;
             if (currency === 'CNY') {
               const [ledgerRows] = await (conn as any).execute(
                 `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
