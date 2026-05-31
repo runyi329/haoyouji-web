@@ -1236,10 +1236,8 @@ export default function WorldCup() {
   const marginPct = marginData?.marginPct ?? 8;
 
   const handleRefresh = () => {
-    setIsRefreshing(true);
-    Promise.all([refetchLiveOdds(), refetchMargin()]).finally(() => {
-      setTimeout(() => setIsRefreshing(false), 800);
-    });
+    localStorage.setItem("wc_activeTab", activeTab);
+    window.location.reload();
   };
 
   // 如果有实时数据就用实时数据，否则备用静态数据
