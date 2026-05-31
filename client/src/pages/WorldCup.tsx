@@ -1748,15 +1748,17 @@ export default function WorldCup() {
               style={{ gap: "1px", backgroundColor: BORDER }}
             >
               {(() => {
-                // 计算全部队伍的隐含概率，用于相对映射五星指数
+                // 计算全部队伍的隐含概率，用对数映射使星级分布更均匀平缓
                 const probs = sortedOdds.map(t => 100 / ((t as any).adjustedOdds ?? t.odds));
-                const maxProb = Math.max(...probs);
-                const minProb = Math.min(...probs);
-                const probRange = maxProb - minProb || 1;
+                const logProbs = probs.map(p => Math.log(p + 1));
+                const maxLog = Math.max(...logProbs);
+                const minLog = Math.min(...logProbs);
+                const logRange = maxLog - minLog || 1;
                 return sortedOdds.map((team) => {
                   const prob = 100 / ((team as any).adjustedOdds ?? team.odds);
-                  // 线性映射：最热门→5星，最冷门→0.5星，支持半星精度
-                  const rawStars = 0.5 + ((prob - minProb) / probRange) * 4.5;
+                  const logProb = Math.log(prob + 1);
+                  // 对数映射：坡度更平缓，避免大量球队堆在低星区
+                  const rawStars = 0.5 + ((logProb - minLog) / logRange) * 4.5;
                   const stars = Math.round(rawStars * 2) / 2; // 四舍五入到0.5精度
                   return (
                 <div
