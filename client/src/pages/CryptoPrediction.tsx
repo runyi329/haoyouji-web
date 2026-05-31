@@ -2340,6 +2340,10 @@ export default function CryptoPrediction() {
                 setLocation(`/ledger/${ledgerId}/gujian${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`);
                 return;
               }
+              if (t.key === "market") {
+                setLocation('/world-cup');
+                return;
+              }
               setTab(t.key as any);
             }}
               className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
