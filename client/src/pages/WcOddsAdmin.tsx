@@ -1155,6 +1155,15 @@ export default function WcOddsAdmin() {
     },
     onError: (err) => { toast.error(`设置失败：${err.message}`); },
   });
+  // k 值设置
+  const { data: kData } = trpc.wcOdds.getKSetting.useQuery(undefined, {
+    refetchInterval: 3000,
+    refetchIntervalInBackground: true,
+  });
+  const setKMutation = trpc.wcOdds.setKSetting.useMutation({
+    onSuccess: () => { utils.wcOdds.getKSetting.invalidate(); },
+    onError: (err) => { toast.error(`k值设置失败：${err.message}`); },
+  });
   const triggerFetch = trpc.wcOdds.triggerFetch.useMutation({
     onSuccess: (data) => {
       toast.success(`✅ 抓取成功！共 ${data.teamCount} 支球队，快照 #${data.snapshotId}`);
@@ -1323,31 +1332,61 @@ export default function WcOddsAdmin() {
               <span><span style={{ color: COLOR_DOWN }}>↓红</span> = 赔率降低（更热门）</span>
               <span><span style={{ color: COLOR_UP }}>↑绿</span> = 赔率升高（变冷门）</span>
             </div>
-            {/* 水钱比例选择器 */}
-            <div className="flex items-center gap-2 mb-3 flex-wrap">
-              <span className="text-xs font-semibold" style={{ color: GOLD }}>隐含赔率水钱：</span>
-              <select
-                value={marginPct}
-                onChange={e => setMarginMutation.mutate({ marginPct: Number(e.target.value) })}
-                style={{
-                  backgroundColor: BG3,
-                  color: GOLD,
-                  border: `1px solid ${GOLD}`,
-                  borderRadius: 8,
-                  padding: "3px 10px",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  outline: "none",
-                }}
-              >
-                {Array.from({ length: 21 }, (_, i) => i + 5).map(v => (
-                  <option key={v} value={v} style={{ backgroundColor: BG3 }}>
-                    {v}%（总和 1{String(v).padStart(2, '0')}%）
-                  </option>
-                ))}
-              </select>
-              <span className="text-xs" style={{ color: TEXT2 }}>← 最新一列按此水钱重新计算隐含赔率</span>
+            {/* 水钱 + k值并排设置行 */}
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
+              {/* 水钱 */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold" style={{ color: GOLD }}>水钱</span>
+                <select
+                  value={marginPct}
+                  onChange={e => setMarginMutation.mutate({ marginPct: Number(e.target.value) })}
+                  style={{
+                    backgroundColor: BG3,
+                    color: GOLD,
+                    border: `1px solid ${GOLD}`,
+                    borderRadius: 8,
+                    padding: "3px 10px",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    outline: "none",
+                  }}
+                >
+                  {Array.from({ length: 21 }, (_, i) => i + 5).map(v => (
+                    <option key={v} value={v} style={{ backgroundColor: BG3 }}>
+                      {v}%
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {/* 分隔符 */}
+              <span style={{ color: BORDER, fontSize: 16 }}>|</span>
+              {/* k 值 */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold" style={{ color: GOLD }}>k值</span>
+                <select
+                  value={kData?.kValue ?? 3}
+                  onChange={e => setKMutation.mutate({ kValue: Number(e.target.value) })}
+                  style={{
+                    backgroundColor: BG3,
+                    color: "#FF9500",
+                    border: `1px solid #FF9500`,
+                    borderRadius: 8,
+                    padding: "3px 10px",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    outline: "none",
+                  }}
+                >
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map(v => (
+                    <option key={v} value={v} style={{ backgroundColor: BG3 }}>
+                      {v}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs" style={{ color: TEXT2 }}>动态保护强度</span>
+              </div>
             </div>
             {matrixLoading ? (
               <div className="text-center py-8" style={{ color: TEXT2 }}>加载中...</div>

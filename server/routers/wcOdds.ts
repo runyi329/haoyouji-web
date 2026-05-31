@@ -741,6 +741,73 @@ export const wcOddsRouter = router({
     }),
 
   /**
+   * 获取 k 值设置（公开，前端计算费用用）
+   */
+  getKSetting: protectedProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) return { kValue: 3 };
+    try {
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS wc_k_settings (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          k_value INT NOT NULL DEFAULT 3,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          updated_by INT
+        )
+      `);
+      const [rows] = await (conn as any).execute(
+        `SELECT k_value FROM wc_k_settings ORDER BY id DESC LIMIT 1`
+      ) as any[];
+      const arr = Array.isArray(rows) ? rows : [];
+      if (arr.length === 0) {
+        await (conn as any).execute(`INSERT INTO wc_k_settings (k_value) VALUES (3)`);
+        return { kValue: 3 };
+      }
+      return { kValue: Number(arr[0].k_value) };
+    } finally {
+      (conn as any).release?.();
+    }
+  }),
+
+  /**
+   * 设置 k 值（仅管理员）
+   */
+  setKSetting: adminProcedure
+    .input(z.object({ kValue: z.number().int().min(1).max(10) }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+      try {
+        await (conn as any).execute(`
+          CREATE TABLE IF NOT EXISTS wc_k_settings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            k_value INT NOT NULL DEFAULT 3,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            updated_by INT
+          )
+        `);
+        const [rows] = await (conn as any).execute(
+          `SELECT id FROM wc_k_settings ORDER BY id DESC LIMIT 1`
+        ) as any[];
+        const arr = Array.isArray(rows) ? rows : [];
+        if (arr.length === 0) {
+          await (conn as any).execute(
+            `INSERT INTO wc_k_settings (k_value, updated_by) VALUES (?, ?)`,
+            [input.kValue, ctx.user.id]
+          );
+        } else {
+          await (conn as any).execute(
+            `UPDATE wc_k_settings SET k_value = ?, updated_by = ? WHERE id = ?`,
+            [input.kValue, ctx.user.id, arr[0].id]
+          );
+        }
+        return { success: true, kValue: input.kValue };
+      } finally {
+        (conn as any).release?.();
+      }
+    }),
+
+  /**
    * 48支球队投注比例统计
    * 统计所有非删除订单，按球队分组，多币种折算成 USDT
    */

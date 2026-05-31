@@ -1233,6 +1233,24 @@ export default function WorldCup() {
     refetchIntervalInBackground: true,
   });
   const marginPct = marginData?.marginPct ?? 8;
+  // k 值设置：动态保护强度
+  const { data: kData } = trpc.wcOdds.getKSetting.useQuery(undefined, {
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
+  });
+  const kValue = kData?.kValue ?? 3;
+  // 投注比例数据（用于指数加价）
+  const { data: bettingStatsData } = trpc.wcOdds.getBettingStats.useQuery(undefined, {
+    refetchInterval: 30000,
+    refetchIntervalInBackground: true,
+  });
+  // 队代码 -> 投注占比 Map
+  const teamPctMap = new Map<string, number>();
+  if (bettingStatsData?.teams) {
+    for (const t of bettingStatsData.teams) {
+      if (t.teamCode) teamPctMap.set(t.teamCode.toLowerCase(), t.percentage);
+    }
+  }
 
   const handleRefresh = () => {
     localStorage.setItem("wc_activeTab", activeTab);
@@ -1751,7 +1769,13 @@ export default function WorldCup() {
       {/* ===== 国旗点击详情弹窗 ===== */}
       {selectedTeam && (() => {
         const prob = selectedTeam.prob;
-        const ethCost = prob / 100;
+        // 两段式费用计算： max(固定水钱价, 指数加价)
+        const baseEthCost = prob / 100;
+        const teamCode = selectedTeam.code.toLowerCase();
+        const pct = teamPctMap.get(teamCode) ?? 0;
+        const expEthCost = baseEthCost * Math.exp(kValue * (pct / 100));
+        const isDynamic = expEthCost > baseEthCost * 1.005; // 超出 0.5% 才显示小黄点
+        const ethCost = Math.max(baseEthCost, expEthCost);
         const usdtCost = ethPrice > 0 ? ethCost * ethPrice : null;
         const dataSource = liveOddsData && liveOddsData.teams.length > 0 ? "实时" : "参考";
         const fetchedAt = liveOddsData?.fetchedAt
@@ -1849,12 +1873,29 @@ export default function WorldCup() {
 
                       {/* 左组： grid布局，数字列自适应 + 图标列固定22px */}
                       <div style={{ display: "grid", gridTemplateColumns: "auto 22px", rowGap: 8, columnGap: 6, alignItems: "center", flexShrink: 0 }}>
-                        {/* 第一行数字 */}
-                        <div style={{ textAlign: "right" }}>
+                        {/* 第一行数字 + 小黄点 */}
+                        <div style={{ textAlign: "right", position: "relative", display: "inline-flex", alignItems: "center", gap: 4 }}>
                           {usdtCost !== null ? (
                             <span style={{ fontSize: 20, fontWeight: 900, color: GOLD, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{usdtCost.toFixed(2)}</span>
                           ) : (
                             <span style={{ fontSize: 14, color: TEXT2 }}>加载中</span>
+                          )}
+                          {/* 小黄点：k值保护已触发 */}
+                          {isDynamic && (
+                            <span
+                              title="动态保护已触发"
+                              style={{
+                                display: "inline-block",
+                                width: 7,
+                                height: 7,
+                                borderRadius: "50%",
+                                backgroundColor: GOLD,
+                                flexShrink: 0,
+                                alignSelf: "flex-start",
+                                marginTop: 2,
+                                boxShadow: "0 0 4px rgba(255,215,0,0.8)",
+                              }}
+                            />
                           )}
                         </div>
                         {/* 第一行图标 U */}
