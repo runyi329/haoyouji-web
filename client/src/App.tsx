@@ -67,6 +67,8 @@ import Login from "./pages/Login";
 import PetPlatform from "@/pages/PetPlatform";
 import WorldCup from "@/pages/WorldCup";
 import WcOddsAdmin from "@/pages/WcOddsAdmin";
+import NbaFinals from "@/pages/NbaFinals";
+import NbaOddsAdmin from "@/pages/NbaOddsAdmin";
 import WcTeams from "@/pages/WcTeams";
 
 // 首页Dashboard改为懒加载，避免在其他页面执行不必要的查询
@@ -692,6 +694,8 @@ function Router() {
         {/* FIFA World Cup 2026 */}
         <Route path="/world-cup" component={WorldCup} />
         <Route path="/world-cup/admin" component={WcOddsAdmin} />
+        <Route path="/nba-finals" component={NbaFinals} />
+        <Route path="/nba-admin" component={NbaOddsAdmin} />
         <Route path="/world-cup/teams" component={WcTeams} />
         <Route path="/world-cup/teams/:code" component={WcTeams} />
         {/* 404 */}

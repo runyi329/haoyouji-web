@@ -54,6 +54,7 @@ import ExcelJS from "exceljs";
 import { sendAlertEmail, sendBackupTestEmail } from "./email-service";
 import { petRouter } from "./pet-router";
 import { wcOddsRouter } from "./routers/wcOdds";
+import { nbaOddsRouter } from "./routers/nbaOdds";
 
 // // 在应用启动时初始化数据库
 // initDatabase().catch(err => {
@@ -160,6 +161,7 @@ function toBeijingTimeStr(val: any): string | null {
 
 export const appRouter = router({
   wcOdds: wcOddsRouter,
+  nbaOdds: nbaOddsRouter,
   pet: petRouter,
   system: systemRouter,
   equity: equityRouter,

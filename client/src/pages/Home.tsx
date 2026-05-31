@@ -1664,7 +1664,7 @@ export default function Home() {
   const [isAnimating, setIsAnimating] = useState(false);
 
   // AI 社交容器轮播 state
-  const SOCIAL_PAGES = 3;
+  const SOCIAL_PAGES = 4;
   const [socialPageIndex, setSocialPageIndex] = useState(1);
   const [socialTransition, setSocialTransition] = useState(true);
   const socialContainerRef = useRef<HTMLDivElement>(null);
@@ -1868,7 +1868,19 @@ export default function Home() {
               刷新
             </button>
           </div>,
-          // 页2：蓄水池动画（水滴）
+          // 页2：AI球伴NBA总决赛海报（点击跳转NBA总决赛页面）
+          <div
+            key="p2-nba"
+            className="w-full h-full relative cursor-pointer active:opacity-90 transition-opacity"
+            onClick={() => navigate('/nba-finals')}
+          >
+            <img
+              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/ljIUDkwGLrRmCTDS.png"
+              alt="AI球伴·NBA总决赛同行"
+              className="w-full h-full object-cover"
+            />
+          </div>,
+          // 页3：蓄水池动画（水滴）
           <div key="p2" className="w-full h-full flex flex-col px-3 py-2">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 社交</span>
