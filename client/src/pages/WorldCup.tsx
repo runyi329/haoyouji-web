@@ -1781,42 +1781,35 @@ export default function WorldCup() {
                     <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.25)" }} />
                   </div>
 
-                  {/* AI 分析标题行 */}
-                  <div className="flex items-center gap-2 mb-3">
-                    <div style={{ position: "relative", width: 10, height: 10, flexShrink: 0 }}>
-                      <div style={{
-                        position: "absolute", inset: 0, borderRadius: "50%",
-                        backgroundColor: "#4ADE80",
-                        animation: "pulseRing 1.6s ease-out infinite",
-                        opacity: 0.5,
-                      }} />
-                      <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: "#4ADE80" }} />
-                    </div>
-                    <span style={{ fontSize: 12, color: "#4ADE80", fontWeight: 700, letterSpacing: 1 }}>AI 实时分析</span>
-                    {fetchedAt && (
-                      <span style={{ fontSize: 10, color: TEXT2, marginLeft: "auto" }}>数据更新 {fetchedAt}</span>
-                    )}
-                  </div>
-
                   {/* 左章鱼 + 右内容 左右布局 */}
-                  <div className="flex items-center gap-3 mb-4">
-                    {/* 左侧：章鱼插图 */}
-                    <div style={{ flexShrink: 0, width: 120, height: 120 }}>
+                  <div className="flex items-start gap-3 mb-0" style={{ overflow: "hidden" }}>
+                    {/* 左侧：章鱼插图，放大，下方被分隔线裁切 */}
+                    <div style={{ flexShrink: 0, width: 160, height: 160, marginBottom: -20 }}>
                       <img
                         src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/paul_ai_front-LqwqCsDzhwePCFjiDyExnp.png"
                         alt="章鱼保罗"
-                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                        style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "top" }}
                       />
                     </div>
-                    {/* 右侧：队名+国旗+概率 靠右对齐 */}
-                    <div style={{ flex: 1, textAlign: "right" }}>
+                    {/* 右侧： AI标题 + 队名+国旗+概率 靠右对齐 */}
+                    <div style={{ flex: 1, textAlign: "right", paddingTop: 4 }}>
+                      {/* AI 实时分析标题 */}
+                      <div className="flex items-center justify-end gap-2 mb-3">
+                        <span style={{ fontSize: 12, color: "#4ADE80", fontWeight: 700, letterSpacing: 1 }}>AI 实时分析</span>
+                        <div style={{ position: "relative", width: 10, height: 10, flexShrink: 0 }}>
+                          <div style={{
+                            position: "absolute", inset: 0, borderRadius: "50%",
+                            backgroundColor: "#4ADE80",
+                            animation: "pulseRing 1.6s ease-out infinite",
+                            opacity: 0.5,
+                          }} />
+                          <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: "#4ADE80" }} />
+                        </div>
+                      </div>
                       {/* 队名 + 国旗 */}
                       <div className="flex items-center justify-end gap-2 mb-1">
-                        <div>
-                          <div style={{ fontSize: 20, fontWeight: 900, color: TEXT, lineHeight: 1.2 }}>{selectedTeam.name}</div>
-                          <div style={{ fontSize: 11, color: TEXT2, marginTop: 2, textAlign: "right" }}>当前夺冠概率（{dataSource}赔率）</div>
-                        </div>
-                        <div style={{ width: 44, height: 30, overflow: "hidden", borderRadius: 3, flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>
+                        <div style={{ fontSize: 22, fontWeight: 900, color: TEXT, lineHeight: 1.2 }}>{selectedTeam.name}</div>
+                        <div style={{ width: 56, height: 38, overflow: "hidden", borderRadius: 4, flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>
                           <img
                             src={`/flags/${selectedTeam.code.toLowerCase()}.png`}
                             style={{ width: "100%", height: "100%", objectFit: "cover" }}
