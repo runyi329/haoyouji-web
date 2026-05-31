@@ -1974,9 +1974,9 @@ export default function WorldCup() {
                     </div>
                     {/* 平均分 */}
                     <div style={{
-                      marginTop: 8, padding: "6px 12px",
-                      backgroundColor: "rgba(255,215,0,0.08)",
-                      border: `1px solid rgba(255,215,0,0.2)`,
+                      marginTop: 6, padding: "6px 12px",
+                      backgroundColor: "rgba(22,44,66,0.7)",
+                      border: `1px solid ${BORDER}`,
                       borderRadius: 8,
                       display: "flex", alignItems: "center", justifyContent: "space-between"
                     }}>
