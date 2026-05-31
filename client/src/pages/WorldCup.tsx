@@ -2042,26 +2042,15 @@ export default function WorldCup() {
                       </div>
 
                     </div>
-                  </div>
-
-                  {/* 数量滑块 */}
-                  <div style={{ marginTop: 12, marginBottom: 4 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                      <span style={{ fontSize: 11, color: TEXT2 }}>购买数量</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: GOLD }}>{buyQty} 枚</span>
-                    </div>
+                    {/* 数量滑块 - 内置在费用容器底部 */}
                     <input
                       type="range"
                       min={1}
                       max={100}
                       value={buyQty}
                       onChange={e => setBuyQty(Number(e.target.value))}
-                      style={{ width: "100%", accentColor: "#FFD700", cursor: "pointer" }}
+                      style={{ width: "100%", accentColor: "#FFD700", cursor: "pointer", marginTop: 12, display: "block" }}
                     />
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 10, color: TEXT2 }}>1</span>
-                      <span style={{ fontSize: 10, color: TEXT2 }}>100</span>
-                    </div>
                   </div>
 
                   <button
