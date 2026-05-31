@@ -1664,7 +1664,7 @@ export default function Home() {
   const [isAnimating, setIsAnimating] = useState(false);
 
   // AI 社交容器轮播 state
-  const SOCIAL_PAGES = 4;
+  const SOCIAL_PAGES = 5;
   const [socialPageIndex, setSocialPageIndex] = useState(1);
   const [socialTransition, setSocialTransition] = useState(true);
   const socialContainerRef = useRef<HTMLDivElement>(null);
@@ -1941,6 +1941,33 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+            </div>
+          </div>,
+          // 页5：AI 旅行入口（点击跳转AI旅行页面）
+          <div
+            key="p5-ai-travel"
+            className="w-full h-full relative cursor-pointer active:opacity-90 transition-opacity"
+            onClick={() => navigate('/ai-travel')}
+          >
+            <img
+              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/wvSFVajprWDkVXHi.png"
+              alt="AI旅行·智能出行"
+              className="w-full h-full object-cover"
+            />
+            <div
+              className="absolute inset-0 flex flex-col justify-end p-3"
+              style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 55%)' }}
+            >
+              <div className="flex items-center space-x-1.5 mb-0.5">
+                <span className="text-white font-bold" style={{ fontSize: 16 }}>AI 旅行</span>
+                <span
+                  className="text-xs px-1.5 py-0.5 rounded-full font-bold"
+                  style={{ background: 'linear-gradient(90deg, #0891b2, #2563eb)', color: '#fff', fontSize: 9 }}
+                >
+                  AI
+                </span>
+              </div>
+              <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.75)' }}>智能规划 · 景点推荐 · 旅游账本</p>
             </div>
           </div>,
         ];

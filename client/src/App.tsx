@@ -159,6 +159,8 @@ const OilDetailPage = lazy(() => import("./pages/OilDetailPage"));
 const CNYDetailPage = lazy(() => import("./pages/CNYDetailPage"));
 // 宏观数据页面
 const MacroDataPage = lazy(() => import("./pages/MacroDataPage"));
+// AI 旅行页面
+const AiTravel = lazy(() => import("./pages/AiTravel"));
 // 房产×AI 页面
 const RealEstatePage = lazy(() => import("./pages/RealEstatePage"));
 // 智能财务汇总入口页
@@ -696,6 +698,8 @@ function Router() {
         <Route path="/world-cup/admin" component={WcOddsAdmin} />
         <Route path="/nba-finals" component={NbaFinals} />
         <Route path="/nba-admin" component={NbaOddsAdmin} />
+        {/* AI 旅行 */}
+        <Route path="/ai-travel" component={AiTravel} />
         <Route path="/world-cup/teams" component={WcTeams} />
         <Route path="/world-cup/teams/:code" component={WcTeams} />
         {/* 404 */}
