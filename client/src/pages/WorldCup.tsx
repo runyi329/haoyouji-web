@@ -1832,55 +1832,61 @@ export default function WorldCup() {
                   {/* 分隔线 */}
                   <div style={{ height: 1, backgroundColor: BORDER, marginBottom: 16 }} />
 
-                  {/* 费用卡片：章鱼 ETH 图 + 费用行 */}
+                  {/* 费用卡片：左列两行 + 中间等号 + 右列圆图+1 */}
                   <div
                     className="rounded-2xl p-4"
                     style={{ backgroundColor: "rgba(22,44,66,0.85)", border: `1px solid ${BORDER}`, backdropFilter: "blur(8px)" }}
                   >
-                    <div className="flex items-center gap-4">
-                      {/* 左：章鱼持ETH圆形图 */}
-                      <img
-                        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/paul-eth-coin.png"
-                        alt="ETH"
-                        style={{ width: 72, height: 72, objectFit: "contain", flexShrink: 0 }}
-                      />
-                      {/* 右：费用数字 */}
-                      <div style={{ flex: 1 }}>
-                        {/* 猜中奖励行 */}
-                        <div className="flex items-center gap-2 mb-2">
-                          <span style={{ fontSize: 28, fontWeight: 900, color: GOLD, lineHeight: 1 }}>1</span>
-                          <img
-                            src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
-                            style={{ width: 24, height: 24, borderRadius: "50%" }}
-                            alt="ETH"
-                          />
-                        </div>
-                        {/* 费用行 */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span style={{ fontSize: 16, fontWeight: 900, color: GOLD }}>{ethCost.toFixed(4)}</span>
-                          <img
-                            src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
-                            style={{ width: 16, height: 16, borderRadius: "50%" }}
-                            alt="ETH"
-                          />
-                          <span style={{ fontSize: 13, color: TEXT2 }}>或</span>
+                    <div className="flex items-stretch gap-3">
+
+                      {/* 左列：上行 U，中间“或”，下行 ETH */}
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 4 }}>
+                        {/* 第一行： USDT */}
+                        <div className="flex items-center gap-2">
                           {usdtCost !== null ? (
                             <>
-                              <span style={{ fontSize: 16, fontWeight: 900, color: GOLD }}>{usdtCost.toFixed(2)}</span>
-                              <div style={{ width: 16, height: 16, borderRadius: "50%", backgroundColor: "#26A17B", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                <span style={{ color: "#fff", fontSize: 9, fontWeight: 700 }}>U</span>
+                              <span style={{ fontSize: 22, fontWeight: 900, color: GOLD, lineHeight: 1 }}>{usdtCost.toFixed(2)}</span>
+                              <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: "#26A17B", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>U</span>
                               </div>
                             </>
                           ) : (
-                            <span style={{ fontSize: 13, color: TEXT2 }}>加载中...</span>
+                            <span style={{ fontSize: 16, color: TEXT2 }}>加载中...</span>
                           )}
                         </div>
+                        {/* 第二行： 或 */}
+                        <div style={{ fontSize: 13, color: TEXT2, lineHeight: 1 }}>或</div>
+                        {/* 第三行： ETH */}
+                        <div className="flex items-center gap-2">
+                          <span style={{ fontSize: 22, fontWeight: 900, color: GOLD, lineHeight: 1 }}>{ethCost.toFixed(4)}</span>
+                          <img
+                            src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
+                            style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0 }}
+                            alt="ETH"
+                          />
+                        </div>
                         {ethPrice > 0 && (
-                          <div style={{ marginTop: 4, fontSize: 11, color: TEXT2 }}>
+                          <div style={{ fontSize: 10, color: TEXT2, marginTop: 2 }}>
                             ETH ${ethPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </div>
                         )}
                       </div>
+
+                      {/* 中间： 等号 */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <span style={{ fontSize: 28, fontWeight: 300, color: TEXT2, lineHeight: 1 }}>=</span>
+                      </div>
+
+                      {/* 右列： 圆形章鱼ETH图 + 数字 1 */}
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, flexShrink: 0 }}>
+                        <img
+                          src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/paul-eth-coin-circle.png"
+                          alt="章鱼ETH"
+                          style={{ width: 64, height: 64, objectFit: "contain", borderRadius: "50%" }}
+                        />
+                        <span style={{ fontSize: 28, fontWeight: 900, color: GOLD, lineHeight: 1 }}>1</span>
+                      </div>
+
                     </div>
                   </div>
 
