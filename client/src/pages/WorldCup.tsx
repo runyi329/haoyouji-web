@@ -1212,6 +1212,16 @@ export default function WorldCup() {
     { key: "champion", label: "AI夺冠预测" },
   ];
 
+  // ETH 实时价格（每5秒轮询，与 P065 同源）
+  const { data: ethPriceData } = trpc.cryptoData.getEthPrice.useQuery(undefined, {
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
+  });
+  const ethPrice = ethPriceData?.success ? ethPriceData.price : 0;
+
+  // 点击国旗弹窗
+  const [selectedTeam, setSelectedTeam] = useState<{ name: string; code: string; prob: number } | null>(null);
+
   // 从 P012 最新快照拉取实时赔率
   const { data: liveOddsData, isLoading: liveOddsLoading } = trpc.wcOdds.getLatestChampionOdds.useQuery();
   // 水钱设置：每5秒轮询一次，与第12页共享
@@ -1691,8 +1701,14 @@ export default function WorldCup() {
                   className="flex flex-col items-center py-3 px-1"
                   style={{ backgroundColor: BG, gap: 0 }}
                 >
-                  {/* 国旗统一宽高，object-fit:cover拉伸裁切 */}
-                  <div style={{ width: 48, height: 32, flexShrink: 0, overflow: "hidden", borderRadius: 3 }}>
+                  {/* 国旗统一宽高，object-fit:cover拉伸裁切，点击弹出详情 */}
+                  <div
+                    style={{ width: 48, height: 32, flexShrink: 0, overflow: "hidden", borderRadius: 3, cursor: "pointer" }}
+                    onClick={() => {
+                      const prob = 100 / ((team as any).adjustedOdds ?? team.odds);
+                      setSelectedTeam({ name: team.name, code: team.code, prob });
+                    }}
+                  >
                     <img
                       src={`/flags/${team.code.toLowerCase()}.png`}
                       style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
@@ -1717,10 +1733,123 @@ export default function WorldCup() {
                   </span>
                 </div>
               ))}
+
             </div>
           </div>
         )}
       </div>
+
+      {/* ===== 国旗点击详情弹窗 ===== */}
+      {selectedTeam && (() => {
+        const prob = selectedTeam.prob;
+        const ethCost = prob / 100;
+        const usdtCost = ethPrice > 0 ? ethCost * ethPrice : null;
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center"
+            style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+            onClick={() => setSelectedTeam(null)}
+          >
+            <div
+              className="w-full max-w-md rounded-t-3xl p-6 pb-10"
+              style={{ backgroundColor: BG2, border: `1px solid ${BORDER}` }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 顶部拖拽条 */}
+              <div className="flex justify-center mb-4">
+                <div style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.2)" }} />
+              </div>
+
+              {/* 国旗 + 队名 */}
+              <div className="flex items-center gap-3 mb-5">
+                <div style={{ width: 64, height: 44, overflow: "hidden", borderRadius: 4, flexShrink: 0 }}>
+                  <img
+                    src={`/flags/${selectedTeam.code.toLowerCase()}.png`}
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    alt={selectedTeam.name}
+                  />
+                </div>
+                <div>
+                  <div className="text-lg font-black" style={{ color: TEXT }}>{selectedTeam.name}</div>
+                  <div className="text-sm" style={{ color: TEXT2 }}>夺冠概率 {prob.toFixed(1)}%</div>
+                </div>
+              </div>
+
+              {/* 奖励说明 */}
+              <div
+                className="rounded-2xl p-4 mb-3"
+                style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
+              >
+                <div className="text-xs mb-2" style={{ color: TEXT2 }}>猜中奖励</div>
+                <div className="flex items-center gap-2">
+                  <img
+                    src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
+                    style={{ width: 24, height: 24, borderRadius: "50%" }}
+                    alt="ETH"
+                  />
+                  <span className="text-3xl font-black" style={{ color: GOLD }}>1 ETH</span>
+                </div>
+              </div>
+
+              {/* 参与费用 */}
+              <div
+                className="rounded-2xl p-4"
+                style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
+              >
+                <div className="text-xs mb-3" style={{ color: TEXT2 }}>参与费用</div>
+
+                {/* ETH */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <img
+                      src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
+                      style={{ width: 28, height: 28, borderRadius: "50%" }}
+                      alt="ETH"
+                    />
+                    <span className="text-sm font-semibold" style={{ color: TEXT }}>以太坊</span>
+                  </div>
+                  <span className="text-xl font-black" style={{ color: GOLD }}>
+                    {ethCost.toFixed(4)} ETH
+                  </span>
+                </div>
+
+                <div style={{ height: 1, backgroundColor: BORDER, margin: "8px 0" }} />
+
+                {/* USDT */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", backgroundColor: "#26A17B", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>U</span>
+                    </div>
+                    <span className="text-sm font-semibold" style={{ color: TEXT }}>USDT 等值</span>
+                  </div>
+                  {usdtCost !== null ? (
+                    <span className="text-xl font-black" style={{ color: GOLD }}>
+                      {usdtCost.toFixed(2)} U
+                    </span>
+                  ) : (
+                    <span className="text-sm" style={{ color: TEXT2 }}>价格加载中...</span>
+                  )}
+                </div>
+
+                {ethPrice > 0 && (
+                  <div className="text-right mt-2 text-xs" style={{ color: TEXT2 }}>
+                    ETH 现价 ${ethPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                )}
+              </div>
+
+              <button
+                className="w-full mt-4 py-3 rounded-2xl text-sm font-semibold"
+                style={{ backgroundColor: "rgba(255,255,255,0.08)", color: TEXT2 }}
+                onClick={() => setSelectedTeam(null)}
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
