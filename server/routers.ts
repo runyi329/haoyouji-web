@@ -12637,14 +12637,14 @@ ${klinesSummary}
         } catch (_) {
           // 表不存在时忽略
         }
-        // 3. 从 balance_history 取 consume 记录（仅消费类，其他类型已在 af_manual_balances 有重复）
+        // 3. 从 balance_history 取 consume/refund 记录（消费+退款，其他类型已在 af_manual_balances 有重复）
         let bhList: any[] = [];
         try {
           const bhRows = await db.execute(
             sql`SELECT id, amount, type, description, created_at
                 FROM balance_history
                 WHERE user_id = ${targetUserId}
-                  AND type = 'consume'
+                  AND type IN ('consume', 'refund')
                 ORDER BY created_at ASC`
           ) as any;
           bhList = ((bhRows[0] || bhRows) as any[]).map((r: any) => ({
