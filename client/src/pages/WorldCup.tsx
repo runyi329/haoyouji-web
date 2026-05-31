@@ -1860,8 +1860,9 @@ export default function WorldCup() {
         const ethCost = Math.max(baseEthCost, expEthCost);
         const usdtCost = ethPrice > 0 ? ethCost * ethPrice : null;
         const dataSource = liveOddsData && liveOddsData.teams.length > 0 ? "实时" : "参考";
-        // 评委打分（用 prob 和 teamCode 作为 seed，保证同队同概率分数稳定）
-        const scoreSeed = Math.round(prob * 1000) + selectedTeam.code.charCodeAt(0) * 100;
+        // 评委打分（用 prob、teamCode 和当前小时数作为 seed，每小时自动更新一次）
+        const currentHour = new Date().getFullYear() * 100000 + (new Date().getMonth() + 1) * 1000 + new Date().getDate() * 100 + new Date().getHours();
+        const scoreSeed = Math.round(prob * 1000) + selectedTeam.code.charCodeAt(0) * 100 + currentHour;
         const judgeScores = genJudgeScores(prob, scoreSeed);
         const fetchedAt = liveOddsData?.fetchedAt
           ? new Date(liveOddsData.fetchedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
