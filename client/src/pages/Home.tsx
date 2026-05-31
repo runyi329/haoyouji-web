@@ -1847,7 +1847,7 @@ export default function Home() {
           // 页1：AI球伴世界杯海报（点击跳转世界杯页面）
           <div
             key="p1"
-            className="w-full h-full cursor-pointer active:opacity-90 transition-opacity"
+            className="w-full h-full relative cursor-pointer active:opacity-90 transition-opacity"
             onClick={() => navigate('/world-cup')}
           >
             <img
@@ -1859,6 +1859,14 @@ export default function Home() {
                 (e.target as HTMLImageElement).src = 'https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/ai-companion-banner-iXFfNP3mVNQj6sgUr4f9bG.png';
               }}
             />
+            {/* 右上角刷新按钮 */}
+            <button
+              className="absolute top-2 right-2 z-10 px-2.5 py-1 rounded-full text-xs font-semibold"
+              style={{ backgroundColor: 'rgba(0,0,0,0.45)', color: '#fff', lineHeight: 1.4 }}
+              onClick={(e) => { e.stopPropagation(); window.location.reload(); }}
+            >
+              刷新
+            </button>
           </div>,
           // 页2：蓄水池动画（水滴）
           <div key="p2" className="w-full h-full flex flex-col px-3 py-2">
