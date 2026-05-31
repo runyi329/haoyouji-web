@@ -1873,8 +1873,8 @@ export default function WorldCup() {
 
                       {/* 左组： grid布局，数字列自适应 + 图标列固定22px */}
                       <div style={{ display: "grid", gridTemplateColumns: "auto 22px", rowGap: 8, columnGap: 6, alignItems: "center", flexShrink: 0 }}>
-                        {/* 第一行数字 + 小黄点 */}
-                        <div style={{ textAlign: "right", position: "relative", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        {/* 第一行数字 */}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
                           {usdtCost !== null ? (
                             <span style={{ fontSize: 20, fontWeight: 900, color: GOLD, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{usdtCost.toFixed(2)}</span>
                           ) : (
