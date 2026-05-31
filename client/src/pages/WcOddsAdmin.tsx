@@ -858,10 +858,11 @@ function OrdersTab() {
                 {/* 顶行：球队 + 状态 */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
+                    {order.teamCode && <TeamFlag code={order.teamCode} size={22} />}
                     <span className="font-bold text-base" style={{ color: TEXT }}>{order.teamName}</span>
-                    {order.teamCode && (
-                      <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(255,255,255,0.06)", color: TEXT2 }}>
-                        {order.teamCode}
+                    {(order as any).orderNo && (
+                      <span className="text-xs px-1.5 py-0.5 rounded font-mono" style={{ backgroundColor: "rgba(255,215,0,0.10)", color: GOLD, letterSpacing: 1 }}>
+                        #{(order as any).orderNo}
                       </span>
                     )}
                   </div>
@@ -876,26 +877,30 @@ function OrdersTab() {
                 {/* 金额行 */}
                 <div className="flex items-center gap-4 mb-2">
                   <div>
-                    <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>赔率</div>
+                    <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>基础赔率</div>
                     <div className="font-bold flex items-center gap-1" style={{ color: GOLD }}>
-                      {order.pinnacleOdds ? parseFloat(order.pinnacleOdds).toFixed(2) : "-"}
-                      {/* 小黄点：k値保护已触发 */}
-                      {(order as any).isDynamicPrice && (
-                        <span
-                          title={`k値保护已触发\n基础费用: ${(order as any).baseFeeUsdt ?? '-'} USDT\n实际费用: ${(order as any).finalFeeUsdt ?? '-'} USDT`}
-                          style={{
-                            display: "inline-block",
-                            width: 7,
-                            height: 7,
-                            borderRadius: "50%",
-                            backgroundColor: "#FFD700",
-                            flexShrink: 0,
-                            marginBottom: 1,
-                          }}
-                        />
-                      )}
+                      {(order as any).baseFeeUsdt
+                        ? (1 / (parseFloat((order as any).baseFeeUsdt) / (parseFloat(order.amount ?? '0') || 1) || 0.001)).toFixed(2)
+                        : (order.pinnacleOdds ? parseFloat(order.pinnacleOdds).toFixed(2) : "-")}
                     </div>
                   </div>
+                  {(order as any).isDynamicPrice && (
+                    <div>
+                      <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>k値赔率</div>
+                      <div className="font-bold flex items-center gap-1" style={{ color: "#FF8C00" }}>
+                        {(order as any).finalFeeUsdt
+                          ? (1 / (parseFloat((order as any).finalFeeUsdt) / (parseFloat(order.amount ?? '0') || 1) || 0.001)).toFixed(2)
+                          : "-"}
+                        <span style={{ fontSize: 9, backgroundColor: "rgba(255,140,0,0.15)", color: "#FF8C00", borderRadius: 3, padding: "1px 4px", marginLeft: 2 }}>k値保护</span>
+                      </div>
+                    </div>
+                  )}
+                  {!(order as any).isDynamicPrice && (
+                    <div>
+                      <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>k値</div>
+                      <div className="text-xs" style={{ color: TEXT2 }}>未触发</div>
+                    </div>
+                  )}
                   <div>
                     <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>投注</div>
                     <div className="font-bold" style={{ color: TEXT }}>

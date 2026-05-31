@@ -408,10 +408,21 @@ export const wcOddsRouter = router({
       const baseFee = input.baseFeeUsdt ?? null;
       const finalFee = input.finalFeeUsdt ?? null;
 
+      // 生成唯一6位订单编号（大写字母+数字），碰撞时重试
+      const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let orderNo = '';
+      for (let attempt = 0; attempt < 10; attempt++) {
+        let candidate = '';
+        for (let i = 0; i < 6; i++) candidate += CHARS[Math.floor(Math.random() * CHARS.length)];
+        const [existing] = await (conn as any).execute(`SELECT id FROM wc_orders WHERE order_no = ? LIMIT 1`, [candidate]) as any[];
+        if (!Array.isArray(existing) || existing.length === 0) { orderNo = candidate; break; }
+      }
+
       await (conn as any).execute(
-        `INSERT INTO wc_orders (user_id, team_name, team_code, snapshot_id, pinnacle_odds, amount, potential_return, currency, status, note, is_dynamic_price, base_fee_usdt, final_fee_usdt, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, NOW())`,
+        `INSERT INTO wc_orders (order_no, user_id, team_name, team_code, snapshot_id, pinnacle_odds, amount, potential_return, currency, status, note, is_dynamic_price, base_fee_usdt, final_fee_usdt, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, NOW())`,
         [
+          orderNo || null,
           input.userId,
           input.teamName,
           input.teamCode || null,
@@ -493,13 +504,13 @@ export const wcOddsRouter = router({
       }
       // 单独查询 k值动态定价字段（这些字段不在 drizzle schema 中，用原生 SQL 补充）
       const conn2 = await getDbConnection();
-      let dynamicMap: Record<number, { isDynamicPrice: boolean; baseFeeUsdt: string | null; finalFeeUsdt: string | null }> = {};
+      let dynamicMap: Record<number, { isDynamicPrice: boolean; baseFeeUsdt: string | null; finalFeeUsdt: string | null; orderNo: string | null }> = {};
       if (conn2 && drizzleRows.length > 0) {
         try {
           const ids = drizzleRows.map(r => r.id);
           const placeholders = ids.map(() => '?').join(',');
           const [dynRows] = await (conn2 as any).execute(
-            `SELECT id, COALESCE(is_dynamic_price, 0) AS is_dynamic_price, base_fee_usdt, final_fee_usdt FROM wc_orders WHERE id IN (${placeholders})`,
+            `SELECT id, order_no, COALESCE(is_dynamic_price, 0) AS is_dynamic_price, base_fee_usdt, final_fee_usdt FROM wc_orders WHERE id IN (${placeholders})`,
             ids
           ) as any[];
           const dynArr = Array.isArray(dynRows) ? dynRows : [];
@@ -508,6 +519,7 @@ export const wcOddsRouter = router({
               isDynamicPrice: Boolean(d.is_dynamic_price),
               baseFeeUsdt: d.base_fee_usdt != null ? String(d.base_fee_usdt) : null,
               finalFeeUsdt: d.final_fee_usdt != null ? String(d.final_fee_usdt) : null,
+              orderNo: d.order_no != null ? String(d.order_no) : null,
             };
           }
         } catch (_) { /* 字段不存在时忽略 */ } finally {
@@ -519,6 +531,7 @@ export const wcOddsRouter = router({
         isDynamicPrice: dynamicMap[r.id]?.isDynamicPrice ?? false,
         baseFeeUsdt: dynamicMap[r.id]?.baseFeeUsdt ?? null,
         finalFeeUsdt: dynamicMap[r.id]?.finalFeeUsdt ?? null,
+        orderNo: dynamicMap[r.id]?.orderNo ?? null,
       }));
       return { orders: rows, page: input.page, pageSize: input.pageSize };
     }),
