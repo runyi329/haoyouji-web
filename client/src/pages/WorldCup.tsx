@@ -1837,10 +1837,10 @@ export default function WorldCup() {
                     className="rounded-2xl p-4"
                     style={{ backgroundColor: "rgba(22,44,66,0.85)", border: `1px solid ${BORDER}`, backdropFilter: "blur(8px)" }}
                   >
-                    <div className="flex items-stretch gap-3">
+                    <div className="flex items-center gap-3">
 
-                      {/* 左列：上行 U，中间“或”，下行 ETH */}
-                      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 4 }}>
+                      {/* 左列： USDT 或 ETH 两行 */}
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
                         {/* 第一行： USDT */}
                         <div className="flex items-center gap-2">
                           {usdtCost !== null ? (
@@ -1854,10 +1854,9 @@ export default function WorldCup() {
                             <span style={{ fontSize: 16, color: TEXT2 }}>加载中...</span>
                           )}
                         </div>
-                        {/* 第二行： 或 */}
-                        <div style={{ fontSize: 13, color: TEXT2, lineHeight: 1 }}>或</div>
-                        {/* 第三行： ETH */}
+                        {/* 第二行： 或 ETH */}
                         <div className="flex items-center gap-2">
+                          <span style={{ fontSize: 13, color: TEXT2, marginRight: 2 }}>或</span>
                           <span style={{ fontSize: 22, fontWeight: 900, color: GOLD, lineHeight: 1 }}>{ethCost.toFixed(4)}</span>
                           <img
                             src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
@@ -1865,11 +1864,6 @@ export default function WorldCup() {
                             alt="ETH"
                           />
                         </div>
-                        {ethPrice > 0 && (
-                          <div style={{ fontSize: 10, color: TEXT2, marginTop: 2 }}>
-                            ETH ${ethPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </div>
-                        )}
                       </div>
 
                       {/* 中间： 等号 */}
@@ -1877,14 +1871,17 @@ export default function WorldCup() {
                         <span style={{ fontSize: 28, fontWeight: 300, color: TEXT2, lineHeight: 1 }}>=</span>
                       </div>
 
-                      {/* 右列： 圆形章鱼ETH图 + 数字 1 */}
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, flexShrink: 0 }}>
+                      {/* 右列： 数字 1 + 圆形章鱼ETH图 */}
+                      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                        <span style={{
+                          fontSize: 52, fontWeight: 900, color: GOLD, lineHeight: 1,
+                          textShadow: "0 0 20px rgba(255,215,0,0.4)",
+                        }}>1</span>
                         <img
                           src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/paul-eth-coin-circle.png"
                           alt="章鱼ETH"
-                          style={{ width: 64, height: 64, objectFit: "contain", borderRadius: "50%" }}
+                          style={{ width: 56, height: 56, objectFit: "contain", borderRadius: "50%", flexShrink: 0 }}
                         />
-                        <span style={{ fontSize: 28, fontWeight: 900, color: GOLD, lineHeight: 1 }}>1</span>
                       </div>
 
                     </div>
