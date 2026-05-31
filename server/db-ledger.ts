@@ -6266,3 +6266,21 @@ async function restoreMay27MisDeletedRecords() {
   _may27RestoreDone = true;
 }
 restoreMay27MisDeletedRecords().catch(console.error);
+
+// ========== funder_asset_orders.asset_type 字段迁移 ==========
+let _assetTypeMigrated = false;
+async function ensureAssetTypeColumn() {
+  if (_assetTypeMigrated) return;
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    await db.execute(sql`ALTER TABLE funder_asset_orders ADD COLUMN asset_type VARCHAR(20) NULL DEFAULT NULL COMMENT '资产类型：stock=股票, crypto=数字币, NULL=未设置'`);
+    console.log('[ensureAssetTypeColumn] asset_type 字段添加成功');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureAssetTypeColumn] error:', e.message);
+    }
+  }
+  _assetTypeMigrated = true;
+}
+ensureAssetTypeColumn().catch(console.error);

@@ -186,6 +186,7 @@ export default function FunderManagement() {
     commissionRate: '',
     commissionBase: '',
     commissionStartDate: '',
+    assetType: '' as '' | 'stock' | 'crypto',
   });
 
   // 担保货币列表：[{ coin: 'BTC', qty: '' }, ...]
@@ -210,6 +211,7 @@ export default function FunderManagement() {
     profitShare: true,
     commissionShare: true,
     aiIcon: false,
+    assetType: true,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean>>(DEFAULT_DISPLAY_CONFIG);
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT'];
@@ -514,6 +516,7 @@ export default function FunderManagement() {
       commissionRate: '',
       commissionBase: '',
       commissionStartDate: '',
+      assetType: '' as '' | 'stock' | 'crypto',
     });
     setCollateralAssets([]);
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
@@ -546,6 +549,7 @@ export default function FunderManagement() {
       commissionRate: order.participantInfo?.commissionRate ? String(order.participantInfo.commissionRate) : '',
       commissionBase: order.participantInfo?.commissionBase ? String(order.participantInfo.commissionBase) : '',
       commissionStartDate: order.participantInfo?.commissionStartDate ? String(order.participantInfo.commissionStartDate).slice(0, 10) : '',
+      assetType: (order.asset_type || '') as '' | 'stock' | 'crypto',
     });
     // 加载担保货币
     try {
@@ -630,6 +634,7 @@ export default function FunderManagement() {
       displayConfig: Object.fromEntries(
         Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')
       ) as Record<string, boolean>,
+      assetType: formData.assetType || undefined,
     };
     if (editingOrder) {
       updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...payload });
@@ -1129,6 +1134,30 @@ export default function FunderManagement() {
                   </div>
                 </div>
               )}
+              {/* 类型 */}
+              {!editingOrder?.participantInfo && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">类型<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
+                  <div className="flex gap-2">
+                    {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }] as const).map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setFormData(d => ({ ...d, assetType: d.assetType === opt.value ? '' : opt.value }))}
+                        className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
+                        style={
+                          formData.assetType === opt.value
+                            ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                            : { backgroundColor: '#F3F4F6', color: '#6B7280' }
+                        }
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* 币种 */}
               <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">币种</label>
@@ -1582,6 +1611,7 @@ export default function FunderManagement() {
                       { key: 'holdDuration', label: '持有时长' },
                       { key: 'orderNo', label: '订单编号' },
                       { key: 'aiIcon', label: 'AI图标（持有资产右上角）' },
+                      { key: 'assetType', label: '资产类型（股票/数字币）' },
                     ].map(({ key, label }) => (
                       <div key={key} className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">{label}</span>
@@ -1668,7 +1698,12 @@ export default function FunderManagement() {
                   <div className="flex" style={{ minHeight: '100px' }}>
                     {/* 左栏 */}
                     <div className="flex-1 p-4 pr-3">
-                      <div className="h-5 flex items-center text-xs font-medium" style={{ color: '#3B82F6' }}>{editingOrder?.participantInfo ? '订单资产' : '持有资产'}</div>
+                      <div className="h-5 flex items-center gap-1 text-xs font-medium" style={{ color: '#3B82F6' }}>
+                        {editingOrder?.participantInfo ? '订单资产' : '持有资产'}
+                        {displayConfig.assetType && formData.assetType && (
+                          <span className="text-xs font-normal" style={{ color: '#9CA3AF' }}>({formData.assetType === 'stock' ? '股票' : '数字币'})</span>
+                        )}
+                      </div>
                       <div className="h-7 flex items-baseline gap-1 flex-wrap">
                         <span className="text-lg font-bold tabular-nums" style={{ color: '#1A2340' }}>
                           {formData.buyQuantity ? parseFloat(parseFloat(formData.buyQuantity).toFixed(8)).toString() : '—'}
