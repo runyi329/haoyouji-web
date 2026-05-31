@@ -878,17 +878,19 @@ function OrdersTab() {
                 <div className="flex items-center gap-4 mb-2">
                   <div>
                     <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>庄家优势</div>
-                    <div className="font-bold flex items-center gap-1" style={{ color: (order as any).isDynamicPrice ? "#FF8C00" : GOLD }}>
+                    <div className="font-bold" style={{ color: (order as any).isDynamicPrice ? "#FF8C00" : GOLD }}>
                       {(order as any).houseEdgePct != null
                         ? `${parseFloat((order as any).houseEdgePct).toFixed(2)}%`
                         : (order.pinnacleOdds ? `${((1 / parseFloat(order.pinnacleOdds)) * 100).toFixed(2)}%` : "-")}
-                      {(order as any).isDynamicPrice && (
-                        <span style={{ fontSize: 9, backgroundColor: "rgba(255,140,0,0.15)", color: "#FF8C00", borderRadius: 3, padding: "1px 4px", marginLeft: 2 }}>k値保护</span>
-                      )}
                     </div>
-                    <div className="text-xs" style={{ color: TEXT2 }}>
-                      {(order as any).isDynamicPrice ? "k値触发" : "水钱调整后"}
-                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>k値</div>
+                    {(order as any).isDynamicPrice ? (
+                      <div className="font-bold" style={{ fontSize: 11, backgroundColor: "rgba(255,140,0,0.15)", color: "#FF8C00", borderRadius: 4, padding: "2px 6px", display: "inline-block" }}>k値保护</div>
+                    ) : (
+                      <div className="text-xs" style={{ color: TEXT2 }}>未触发</div>
+                    )}
                   </div>
                   <div>
                     <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>投注</div>
