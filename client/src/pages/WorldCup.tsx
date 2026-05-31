@@ -2245,7 +2245,7 @@ export function WorldCupEmbedded() {
           );
         })()}
         {/* ---- 赛果 Tab ---- */}
-        {activeTab === "results" && <ResultsTab />}
+        {activeTab === "results" && <ResultsTab groups={groups} />}
         {/* ---- AI夺冠预测 Tab ---- */}
         {activeTab === "champion" && (
           <div style={{ padding: "16px 16px 0" }}>
