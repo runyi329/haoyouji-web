@@ -930,12 +930,214 @@ function OrdersTab() {
   );
 }
 
+// ===================== 投注比例统计 Tab =====================
+function BettingStatsTab() {
+  const { data, isLoading, refetch } = trpc.wcOdds.getBettingStats.useQuery(undefined, {
+    refetchInterval: 30000, // 每30秒自动刷新
+    refetchIntervalInBackground: true,
+  });
+
+  const teams = data?.teams ?? [];
+  const grandTotal = data?.grandTotalUsdt ?? 0;
+  const maxPct = teams.length > 0 ? teams[0].percentage : 100;
+
+  // 颜色梯度：从金色（最高）→ 蓝色（最低）
+  function barColor(pct: number): string {
+    if (pct >= maxPct * 0.7) return GOLD;
+    if (pct >= maxPct * 0.4) return "#52C41A";
+    if (pct >= maxPct * 0.2) return "#1890FF";
+    return "#4A6FA5";
+  }
+
+  return (
+    <div className="px-4 pt-4 pb-20">
+      {/* 顶部汇总卡片 */}
+      <div
+        className="rounded-xl p-4 mb-4 flex items-center justify-between"
+        style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
+      >
+        <div>
+          <div className="text-xs mb-1" style={{ color: TEXT2 }}>累计投注总额（折算USDT）</div>
+          <div className="text-2xl font-bold" style={{ color: GOLD }}>
+            {grandTotal.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
+          </div>
+          <div className="text-xs mt-1" style={{ color: TEXT2 }}>
+            共 {data?.totalOrders ?? 0} 笔订单 · {teams.length} 支球队有投注
+          </div>
+        </div>
+        <button
+          onClick={() => refetch()}
+          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs"
+          style={{ backgroundColor: "rgba(255,215,0,0.1)", color: GOLD, border: `1px solid rgba(255,215,0,0.3)` }}
+        >
+          <RefreshCw className="w-3 h-3" />
+          刷新
+        </button>
+      </div>
+
+      {isLoading && (
+        <div className="text-center py-12" style={{ color: TEXT2 }}>
+          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+          加载中...
+        </div>
+      )}
+
+      {!isLoading && teams.length === 0 && (
+        <div className="text-center py-12" style={{ color: TEXT2 }}>
+          暂无投注数据
+        </div>
+      )}
+
+      {!isLoading && teams.length > 0 && (
+        <>
+          {/* ===== 可视化图表：横向柱状图 ===== */}
+          <div
+            className="rounded-xl p-4 mb-4"
+            style={{ backgroundColor: BG2, border: `1px solid ${BORDER}` }}
+          >
+            <div className="text-sm font-semibold mb-3" style={{ color: TEXT }}>投注比例图表（按占比排序）</div>
+            <div className="space-y-1.5">
+              {teams.map((team, idx) => (
+                <div key={team.teamCode || team.teamName} className="flex items-center gap-2">
+                  {/* 排名 */}
+                  <div
+                    className="text-xs font-mono w-5 text-right flex-shrink-0"
+                    style={{ color: idx < 3 ? GOLD : TEXT2 }}
+                  >
+                    {idx + 1}
+                  </div>
+                  {/* 国旗 */}
+                  <TeamFlag code={team.teamCode || ""} size={18} />
+                  {/* 队名 */}
+                  <div
+                    className="text-xs w-16 flex-shrink-0 truncate"
+                    style={{ color: TEXT }}
+                  >
+                    {TEAM_ZH_MAP[team.teamCode] || team.teamName}
+                  </div>
+                  {/* 柱状条 */}
+                  <div className="flex-1 relative h-5 rounded overflow-hidden" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+                    <div
+                      className="h-full rounded transition-all duration-500"
+                      style={{
+                        width: `${maxPct > 0 ? (team.percentage / maxPct) * 100 : 0}%`,
+                        backgroundColor: barColor(team.percentage),
+                        opacity: 0.85,
+                      }}
+                    />
+                    {/* 百分比标签（叠加在柱子上） */}
+                    <span
+                      className="absolute right-1 top-0 bottom-0 flex items-center text-xs font-mono"
+                      style={{ color: TEXT, fontSize: "10px" }}
+                    >
+                      {team.percentage.toFixed(2)}%
+                    </span>
+                  </div>
+                  {/* USDT金额 */}
+                  <div
+                    className="text-xs font-mono w-20 text-right flex-shrink-0"
+                    style={{ color: TEXT2 }}
+                  >
+                    {team.totalUsdt.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}U
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ===== 数据表格 ===== */}
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{ backgroundColor: BG2, border: `1px solid ${BORDER}` }}
+          >
+            <div className="px-4 py-3" style={{ borderBottom: `1px solid ${BORDER}` }}>
+              <span className="text-sm font-semibold" style={{ color: TEXT }}>详细数据表格</span>
+            </div>
+            {/* 表头 */}
+            <div
+              className="grid text-xs px-3 py-2"
+              style={{
+                gridTemplateColumns: "2rem 1.5rem 1fr 2.5rem 5rem 4rem",
+                gap: "0.5rem",
+                color: TEXT2,
+                borderBottom: `1px solid ${BORDER}`,
+                backgroundColor: BG3,
+              }}
+            >
+              <span>#</span>
+              <span></span>
+              <span>球队</span>
+              <span className="text-right">笔数</span>
+              <span className="text-right">金额(U)</span>
+              <span className="text-right">占比</span>
+            </div>
+            {/* 数据行 */}
+            {teams.map((team, idx) => (
+              <div
+                key={team.teamCode || team.teamName}
+                className="grid text-xs px-3 py-2 items-center"
+                style={{
+                  gridTemplateColumns: "2rem 1.5rem 1fr 2.5rem 5rem 4rem",
+                  gap: "0.5rem",
+                  borderBottom: idx < teams.length - 1 ? `1px solid ${BORDER}` : "none",
+                  backgroundColor: idx % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)",
+                }}
+              >
+                <span style={{ color: idx < 3 ? GOLD : TEXT2 }}>{idx + 1}</span>
+                <TeamFlag code={team.teamCode || ""} size={16} />
+                <span style={{ color: TEXT }}>{TEAM_ZH_MAP[team.teamCode] || team.teamName}</span>
+                <span className="text-right" style={{ color: TEXT2 }}>{team.orderCount}</span>
+                <span className="text-right font-mono" style={{ color: TEXT }}>
+                  {team.totalUsdt.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span
+                  className="text-right font-mono font-semibold"
+                  style={{ color: barColor(team.percentage) }}
+                >
+                  {team.percentage.toFixed(2)}%
+                </span>
+              </div>
+            ))}
+            {/* 合计行 */}
+            <div
+              className="grid text-xs px-3 py-2.5 items-center font-semibold"
+              style={{
+                gridTemplateColumns: "2rem 1.5rem 1fr 2.5rem 5rem 4rem",
+                gap: "0.5rem",
+                borderTop: `1px solid ${BORDER}`,
+                backgroundColor: BG3,
+                color: GOLD,
+              }}
+            >
+              <span>合计</span>
+              <span></span>
+              <span>{teams.length} 队</span>
+              <span className="text-right">{data?.totalOrders ?? 0}</span>
+              <span className="text-right font-mono">
+                {grandTotal.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              <span className="text-right">100%</span>
+            </div>
+          </div>
+
+          {/* 更新时间 */}
+          {data?.updatedAt && (
+            <div className="text-center mt-3 text-xs" style={{ color: TEXT2 }}>
+              数据更新于 {new Date(data.updatedAt).toLocaleString("zh-CN")}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ===================== 主页面 =====================
 export default function WcOddsAdmin() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const isAdmin = user?.role === "super_admin";
-  const [activeTab, setActiveTab] = useState<"odds" | "orders">("odds");
+  const [activeTab, setActiveTab] = useState<"odds" | "orders" | "stats">("odds");
 
   // 所有 hooks 必须在条件 return 之前调用，否则 refetchInterval 不生效
   const { data: stats, refetch: refetchStats } = trpc.wcOdds.getStats.useQuery();
@@ -1051,6 +1253,7 @@ export default function WcOddsAdmin() {
         {([
           { key: "odds", label: "赔率追踪" },
           { key: "orders", label: "订单管理" },
+          { key: "stats", label: "投注比例" },
         ] as const).map(tab => (
           <button
             key={tab.key}
@@ -1332,6 +1535,8 @@ export default function WcOddsAdmin() {
 
       {/* 订单管理 Tab */}
       {activeTab === "orders" && <OrdersTab />}
+      {/* 投注比例 Tab */}
+      {activeTab === "stats" && <BettingStatsTab />}
     </div>
   );
 }

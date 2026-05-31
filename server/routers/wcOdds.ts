@@ -739,4 +739,101 @@ export const wcOddsRouter = router({
         (conn as any).release?.();
       }
     }),
+
+  /**
+   * 48支球队投注比例统计
+   * 统计所有非删除订单，按球队分组，多币种折算成 USDT
+   */
+  getBettingStats: adminProcedure.query(async () => {
+    const { getLatestPrice } = await import('../price-scanner');
+    const conn = await getDbConnection();
+    if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+    try {
+      // 查询所有非删除订单，按球队+货币分组统计
+      const [rows] = await (conn as any).execute(`
+        SELECT
+          team_code,
+          team_name,
+          currency,
+          COUNT(*) AS order_count,
+          SUM(amount) AS total_amount
+        FROM wc_orders
+        WHERE status != 'deleted'
+        GROUP BY team_code, team_name, currency
+        ORDER BY team_name
+      `) as any[];
+      const arr = Array.isArray(rows) ? rows : [];
+
+      // 汇率：CNY → USDT（固定汇率 7.25 CNY/USD 作为 fallback）
+      const CNY_TO_USDT = 1 / 7.25;
+
+      // 按球队聚合，合并不同货币
+      const teamMap: Record<string, {
+        teamCode: string;
+        teamName: string;
+        orderCount: number;
+        totalUsdt: number;
+        breakdown: { currency: string; amount: number; usdt: number }[];
+      }> = {};
+
+      for (const row of arr) {
+        const key = (row.team_code || row.team_name) as string;
+        const currency = (row.currency as string).toUpperCase();
+        const rawAmount = parseFloat(row.total_amount) || 0;
+        const orderCount = parseInt(row.order_count) || 0;
+
+        // 折算成 USDT
+        let usdt = 0;
+        if (currency === 'USDT' || currency === 'USDC') {
+          usdt = rawAmount;
+        } else if (currency === 'CNY') {
+          usdt = rawAmount * CNY_TO_USDT;
+        } else {
+          // 其他数字货币：用 price-scanner 实时价格
+          const price = getLatestPrice(currency) ?? 0;
+          usdt = rawAmount * price;
+        }
+
+        if (!teamMap[key]) {
+          teamMap[key] = {
+            teamCode: (row.team_code || '').toLowerCase(),
+            teamName: row.team_name,
+            orderCount: 0,
+            totalUsdt: 0,
+            breakdown: [],
+          };
+        }
+        teamMap[key].orderCount += orderCount;
+        teamMap[key].totalUsdt += usdt;
+        teamMap[key].breakdown.push({ currency, amount: rawAmount, usdt });
+      }
+
+      const teams = Object.values(teamMap);
+      const grandTotal = teams.reduce((s, t) => s + t.totalUsdt, 0);
+
+      // 按 totalUsdt 降序排列，计算占比
+      const result = teams
+        .map(t => ({
+          teamCode: t.teamCode,
+          teamName: t.teamName,
+          orderCount: t.orderCount,
+          totalUsdt: parseFloat(t.totalUsdt.toFixed(4)),
+          percentage: grandTotal > 0
+            ? parseFloat(((t.totalUsdt / grandTotal) * 100).toFixed(2))
+            : 0,
+          breakdown: t.breakdown,
+        }))
+        .sort((a, b) => b.totalUsdt - a.totalUsdt);
+
+      return {
+        teams: result,
+        grandTotalUsdt: parseFloat(grandTotal.toFixed(4)),
+        totalOrders: result.reduce((s, t) => s + t.orderCount, 0),
+        updatedAt: new Date().toISOString(),
+        cnyRate: CNY_TO_USDT,
+      };
+    } finally {
+      (conn as any).release?.();
+    }
+  }),
 });
