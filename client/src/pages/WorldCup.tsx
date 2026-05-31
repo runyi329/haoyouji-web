@@ -1753,86 +1753,142 @@ export default function WorldCup() {
         const prob = selectedTeam.prob;
         const ethCost = prob / 100;
         const usdtCost = ethPrice > 0 ? ethCost * ethPrice : null;
+        const dataSource = liveOddsData && liveOddsData.teams.length > 0 ? "实时" : "参考";
+        const fetchedAt = liveOddsData?.fetchedAt
+          ? new Date(liveOddsData.fetchedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
+          : null;
         return (
           <div
             className="fixed inset-0 z-50 flex items-end justify-center"
-            style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+            style={{ backgroundColor: "rgba(0,0,0,0.75)" }}
             onClick={() => setSelectedTeam(null)}
           >
             <div
-              className="w-full max-w-md rounded-t-3xl p-6 pb-10"
-              style={{ backgroundColor: BG2, border: `1px solid ${BORDER}` }}
+              className="w-full max-w-md rounded-t-3xl overflow-hidden"
+              style={{
+                border: `1px solid ${BORDER}`,
+                animation: "slideUpSheet 0.32s cubic-bezier(0.32,0.72,0,1)",
+              }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* 顶部拖拽条 */}
-              <div className="flex justify-center mb-4">
-                <div style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.2)" }} />
-              </div>
+              {/* 背景图层：章鱼触须 */}
+              <div style={{ position: "relative" }}>
+                <div
+                  style={{
+                    position: "absolute", inset: 0,
+                    backgroundImage: `url(https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/paul_sheet_bg5-ZAJwvdvEhaAor24gA4GcYK.webp)`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "top center",
+                    opacity: 0.92,
+                  }}
+                />
+                {/* 内容区域 */}
+                <div style={{ position: "relative", zIndex: 1, padding: "20px 20px 28px" }}>
 
-              {/* 国旗 + 队名 */}
-              <div className="flex items-center gap-3 mb-5">
-                <div style={{ width: 64, height: 44, overflow: "hidden", borderRadius: 4, flexShrink: 0 }}>
-                  <img
-                    src={`/flags/${selectedTeam.code.toLowerCase()}.png`}
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    alt={selectedTeam.name}
-                  />
-                </div>
-                <div>
-                  <div className="text-lg font-black" style={{ color: TEXT }}>{selectedTeam.name}</div>
-                  <div className="text-sm" style={{ color: TEXT2 }}>🐙 章鱼保罗觉得我有 {prob.toFixed(1)}% 的夺冠戏</div>
-                </div>
-              </div>
-
-                            {/* 奖励 + 费用 合并卡片 */}
-              <div
-                className="rounded-2xl p-4"
-                style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
-              >
-                {/* 猜中奖励行：1 + ETH图标 */}
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-3xl font-black" style={{ color: GOLD }}>1</span>
-                  <img
-                    src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
-                    style={{ width: 28, height: 28, borderRadius: "50%" }}
-                    alt="ETH"
-                  />
-                </div>
-                <div style={{ height: 1, backgroundColor: BORDER, margin: "8px 0 12px" }} />
-                {/* 费用行：数字+ETH图标 或 数字+U图标 */}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xl font-black" style={{ color: GOLD }}>{ethCost.toFixed(4)}</span>
-                  <img
-                    src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
-                    style={{ width: 20, height: 20, borderRadius: "50%" }}
-                    alt="ETH"
-                  />
-                  <span className="text-sm" style={{ color: TEXT2 }}>或</span>
-                  {usdtCost !== null ? (
-                    <>
-                      <span className="text-xl font-black" style={{ color: GOLD }}>{usdtCost.toFixed(2)}</span>
-                      <div style={{ width: 20, height: 20, borderRadius: "50%", backgroundColor: "#26A17B", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <span style={{ color: "#fff", fontSize: 10, fontWeight: 700 }}>U</span>
-                      </div>
-                    </>
-                  ) : (
-                    <span className="text-sm" style={{ color: TEXT2 }}>加载中...</span>
-                  )}
-                </div>
-                {ethPrice > 0 && (
-                  <div className="mt-2 text-xs" style={{ color: TEXT2 }}>
-                    ETH ${ethPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {/* 顶部拖拽条 */}
+                  <div className="flex justify-center mb-4">
+                    <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.25)" }} />
                   </div>
-                )}
-              </div>
 
-              <button
-                className="w-full mt-4 py-3 rounded-2xl text-sm font-semibold"
-                style={{ backgroundColor: "rgba(255,255,255,0.08)", color: TEXT2 }}
-                onClick={() => setSelectedTeam(null)}
-              >
-                关闭
-              </button>
+                  {/* AI 分析标题行 */}
+                  <div className="flex items-center gap-2 mb-4">
+                    {/* 脉冲圆点 */}
+                    <div style={{ position: "relative", width: 10, height: 10, flexShrink: 0 }}>
+                      <div style={{
+                        position: "absolute", inset: 0, borderRadius: "50%",
+                        backgroundColor: "#4ADE80",
+                        animation: "pulseRing 1.6s ease-out infinite",
+                        opacity: 0.5,
+                      }} />
+                      <div style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: "#4ADE80" }} />
+                    </div>
+                    <span style={{ fontSize: 12, color: "#4ADE80", fontWeight: 700, letterSpacing: 1 }}>AI 实时分析</span>
+                    {fetchedAt && (
+                      <span style={{ fontSize: 10, color: TEXT2, marginLeft: "auto" }}>数据更新 {fetchedAt}</span>
+                    )}
+                  </div>
+
+                  {/* 队名 + 国旗 */}
+                  <div className="flex items-center gap-3 mb-1">
+                    <div style={{ width: 52, height: 36, overflow: "hidden", borderRadius: 4, flexShrink: 0, boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }}>
+                      <img
+                        src={`/flags/${selectedTeam.code.toLowerCase()}.png`}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        alt={selectedTeam.name}
+                      />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: TEXT, lineHeight: 1.2 }}>{selectedTeam.name}</div>
+                      <div style={{ fontSize: 11, color: TEXT2, marginTop: 2 }}>当前夺冠概率（{dataSource}赔率）</div>
+                    </div>
+                  </div>
+
+                  {/* 大概率数字 */}
+                  <div className="flex items-end gap-2 mb-5" style={{ paddingLeft: 4 }}>
+                    <span style={{
+                      fontSize: 52, fontWeight: 900, color: GOLD, lineHeight: 1,
+                      textShadow: "0 0 20px rgba(255,215,0,0.4)",
+                      fontVariantNumeric: "tabular-nums",
+                    }}>{prob.toFixed(1)}</span>
+                    <span style={{ fontSize: 22, fontWeight: 700, color: GOLD2, marginBottom: 6 }}>%</span>
+                  </div>
+
+                  {/* 分隔线 */}
+                  <div style={{ height: 1, backgroundColor: BORDER, marginBottom: 16 }} />
+
+                  {/* 奖励 + 费用卡片 */}
+                  <div
+                    className="rounded-2xl p-4"
+                    style={{ backgroundColor: "rgba(22,44,66,0.85)", border: `1px solid ${BORDER}`, backdropFilter: "blur(8px)" }}
+                  >
+                    {/* 猜中奖励行 */}
+                    <div style={{ fontSize: 11, color: TEXT2, marginBottom: 6 }}>猜中奖励</div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-3xl font-black" style={{ color: GOLD }}>1</span>
+                      <img
+                        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
+                        style={{ width: 28, height: 28, borderRadius: "50%" }}
+                        alt="ETH"
+                      />
+                    </div>
+                    <div style={{ height: 1, backgroundColor: BORDER, margin: "8px 0 12px" }} />
+                    {/* 费用行 */}
+                    <div style={{ fontSize: 11, color: TEXT2, marginBottom: 6 }}>参与费用</div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xl font-black" style={{ color: GOLD }}>{ethCost.toFixed(4)}</span>
+                      <img
+                        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
+                        style={{ width: 20, height: 20, borderRadius: "50%" }}
+                        alt="ETH"
+                      />
+                      <span className="text-sm" style={{ color: TEXT2 }}>或</span>
+                      {usdtCost !== null ? (
+                        <>
+                          <span className="text-xl font-black" style={{ color: GOLD }}>{usdtCost.toFixed(2)}</span>
+                          <div style={{ width: 20, height: 20, borderRadius: "50%", backgroundColor: "#26A17B", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <span style={{ color: "#fff", fontSize: 10, fontWeight: 700 }}>U</span>
+                          </div>
+                        </>
+                      ) : (
+                        <span className="text-sm" style={{ color: TEXT2 }}>加载中...</span>
+                      )}
+                    </div>
+                    {ethPrice > 0 && (
+                      <div className="mt-2 text-xs" style={{ color: TEXT2 }}>
+                        ETH ${ethPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    className="w-full mt-4 py-3 rounded-2xl text-sm font-semibold"
+                    style={{ backgroundColor: "rgba(255,255,255,0.08)", color: TEXT2 }}
+                    onClick={() => setSelectedTeam(null)}
+                  >
+                    关闭
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         );
