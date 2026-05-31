@@ -1729,18 +1729,13 @@ export default function WorldCup() {
         {activeTab === "champion" && (
           <div>
             {/* 数据来源标注 */}
-            <div className="flex items-center justify-between px-4 py-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
+            <div className="flex items-center px-4 py-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
               <span className="text-xs" style={{ color: TEXT2 }}>
-                {liveOddsLoading ? "AI实时预测加载中..."
+                {liveOddsLoading ? "AI实时评级加载中..."
                   : liveOddsData && liveOddsData.teams.length > 0
-                    ? `AI实时预测${sortedOdds.length}支球队夺冠概率`
-                    : "AI实时预测48支球队夺冠概率"}
+                    ? `AI实时评级${sortedOdds.length}支球队夺冠评级（0~5星）`
+                    : "AI实时评级48支球队夺冠评级（0~5星）"}
               </span>
-              {liveOddsData?.fetchedAt && (
-                <span className="text-xs" style={{ color: TEXT2 }}>
-                  更新: {new Date(liveOddsData.fetchedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                </span>
-              )}
             </div>
             {/* 4列国旗网格：国旗统一尺寸，国家名在同一高度 */}
             <div
