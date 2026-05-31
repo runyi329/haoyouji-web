@@ -1329,7 +1329,7 @@ export default function WcOddsAdmin() {
         style={{ backgroundColor: BG2, borderBottom: `1px solid ${BORDER}` }}
       >
         <button
-          onClick={() => navigate("/world-cup")}
+          onClick={() => window.history.back()}
           className="w-8 h-8 flex items-center justify-center rounded-full"
           style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
         >
