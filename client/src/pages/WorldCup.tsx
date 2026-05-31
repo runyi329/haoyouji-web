@@ -1947,13 +1947,6 @@ export default function WorldCup() {
 
                   {/* ===== 12大模型评委打分表 ===== */}
                   <div style={{ marginBottom: 12 }}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div style={{ position: "relative", width: 8, height: 8, flexShrink: 0 }}>
-                        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", backgroundColor: "#4ADE80", animation: "pulseRing 1.6s ease-out infinite", opacity: 0.5 }} />
-                        <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#4ADE80" }} />
-                      </div>
-                      <span style={{ fontSize: 11, color: "#4ADE80", fontWeight: 700, letterSpacing: 0.5 }}>AI评委实时追踪打分</span>
-                    </div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 8px" }}>
                       {AI_JUDGES.map((judge, i) => (
                         <div key={judge.key} style={{
