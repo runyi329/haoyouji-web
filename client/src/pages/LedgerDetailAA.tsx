@@ -2105,7 +2105,8 @@ export default function LedgerDetailAA({
             }) : tagData;
             // 汇总行数据
             const totalMargin = validTags.reduce((s, t) => s + t.marginCny, 0);
-            const totalPnl = validTags.reduce((s, t) => s + (t.points[t.points.length - 1]?.pnl ?? 0), 0);
+            // totalPnl 统计所有有数据的标签（不限于有保证金），与红色区域「全部统计之和」口径一致
+            const totalPnl = visibleTags.reduce((s, t) => s + (t.points[t.points.length - 1]?.pnl ?? 0), 0);
             const weightedDenominator = validTags.reduce((s, t) => {
               const configSD = initialBalancesData?.balances ? String(initialBalancesData.balances[`${t.name}__startDate`] ?? '') : '';
               const firstDate = configSD || t.points[0]?.date;
