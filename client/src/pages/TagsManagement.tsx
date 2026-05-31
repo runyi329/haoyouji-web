@@ -24,6 +24,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import { PageTag } from "@/components/PageTag";
 // 颜色选项
 const colorOptions = [
   { name: "红色", value: "#ef4444" },
@@ -240,6 +241,7 @@ export default function TagsManagement() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-pink-50 to-white p-4">
+      <PageTag code="P021" />
       <div className="max-w-2xl mx-auto">
         {/* 头部 */}
         <div className="flex items-center justify-between mb-6">

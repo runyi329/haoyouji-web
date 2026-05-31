@@ -9,6 +9,7 @@ import { useParams, useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import {
+import { PageTag } from "@/components/PageTag";
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, ReferenceLine, Cell, Area, AreaChart, Legend
 } from "recharts";
@@ -1979,6 +1980,7 @@ export function LedgerAIDatabaseContent({ homeMode = false }: { homeMode?: boole
 
   return (
     <div className="h-screen flex flex-col" style={{ background: BG }}>
+      <PageTag code="P030" />
       {/* 顶部红色导航 */}
       <div className="px-4 py-3 flex items-center gap-3 flex-shrink-0" style={{ background: RED, color: "#fff" }}>
         <button

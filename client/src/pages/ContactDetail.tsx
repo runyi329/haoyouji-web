@@ -43,6 +43,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+import { PageTag } from "@/components/PageTag";
 // 高亮搜索关键字组件
 function HighlightText({ text, keyword }: { text: string; keyword: string }) {
   if (!keyword.trim()) return <>{text}</>;
@@ -1519,6 +1520,7 @@ export default function ContactDetail() {
   if (isLoading) {
     return (
       <div className="container py-8">
+      <PageTag code="P027" />
         <div className="text-center py-12 text-muted-foreground">加载中...</div>
       </div>
     );

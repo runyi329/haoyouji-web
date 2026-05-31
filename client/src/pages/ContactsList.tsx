@@ -65,6 +65,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 
+import { PageTag } from "@/components/PageTag";
 // 可拖拽的标签项组件
 function SortableTagItem({
   tag,
@@ -1181,6 +1182,7 @@ export default function ContactsList() {
 
   return (
       <div ref={containerRef} className="max-w-md mx-auto shadow-2xl bg-[#FAF3ED] h-screen flex flex-col overflow-hidden" style={{ overscrollBehaviorX: 'none', touchAction: 'pan-y' }}>
+      <PageTag code="P015" />
       {/* 顶部深红色头部 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white px-4 pt-4 pb-4 rounded-b-3xl mb-3">
         {/* 第一行：返回 + 标题 + 人脉总数 */}

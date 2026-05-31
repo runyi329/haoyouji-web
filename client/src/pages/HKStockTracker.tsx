@@ -9,6 +9,7 @@ import { useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import {
+import { PageTag } from "@/components/PageTag";
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line, ReferenceLine, Cell, Area, AreaChart, Legend
 } from "recharts";
@@ -445,6 +446,7 @@ export default function HKStockTracker() {
 
   return (
     <div className="h-screen flex flex-col" style={{ background: BG }}>
+      <PageTag code="P031" />
       {/* 顶部蓝色导航 */}
       <div className="px-4 py-3 flex items-center gap-3 flex-shrink-0" style={{ background: BLUE, color: "#fff" }}>
         <button

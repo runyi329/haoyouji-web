@@ -8,6 +8,7 @@ import { useLocation } from "wouter";
 import { ChevronLeft, TrendingUp, TrendingDown, BarChart2, Search } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
+import { PageTag } from "@/components/PageTag";
 // ─── 配色 ────────────────────────────────────────────────
 const BLUE = "#1565C0";
 const BLUE_DARK = "#0D47A1";
@@ -262,6 +263,7 @@ export default function USStockTracker() {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: BG }}>
+      <PageTag code="P032" />
 
       {/* ── 顶部导航 ── */}
       <div
