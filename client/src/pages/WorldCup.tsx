@@ -1729,13 +1729,19 @@ export default function WorldCup() {
         {activeTab === "champion" && (
           <div>
             {/* 数据来源标注 */}
-            <div className="flex items-center px-4 py-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
+            <div className="flex items-center gap-1 px-4 py-2" style={{ borderBottom: `1px solid ${BORDER}` }}>
               <span className="text-xs" style={{ color: TEXT2 }}>
                 {liveOddsLoading ? "AI实时评级加载中..."
-                  : liveOddsData && liveOddsData.teams.length > 0
-                    ? `AI实时评级${sortedOdds.length}支球队夺冠评级（0~5星）`
-                    : "AI实时评级48支球队夺冠评级（0~5星）"}
+                  : `AI实时评级${liveOddsData && liveOddsData.teams.length > 0 ? sortedOdds.length : 48}支球队夺冠评级（0~`}
               </span>
+              {!liveOddsLoading && (
+                <>
+                  {[1,2,3,4,5].map(i => (
+                    <img key={i} src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/stars/star-full.png" alt="★" style={{ width: 10, height: 10, objectFit: "contain" }} />
+                  ))}
+                  <span className="text-xs" style={{ color: TEXT2 }}>）</span>
+                </>
+              )}
             </div>
             {/* 4列国旗网格：国旗统一尺寸，国家名在同一高度 */}
             <div
