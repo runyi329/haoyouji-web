@@ -1780,26 +1780,32 @@ export default function WorldCup() {
                 className="rounded-2xl p-4"
                 style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
               >
-                {/* 猜中奖励行：直接显示 1 ETH */}
+                {/* 猜中奖励行：1 + ETH图标 */}
                 <div className="flex items-center gap-2 mb-3">
+                  <span className="text-3xl font-black" style={{ color: GOLD }}>1</span>
                   <img
                     src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
-                    style={{ width: 24, height: 24, borderRadius: "50%" }}
+                    style={{ width: 28, height: 28, borderRadius: "50%" }}
                     alt="ETH"
                   />
-                  <span className="text-3xl font-black" style={{ color: GOLD }}>1 ETH</span>
                 </div>
                 <div style={{ height: 1, backgroundColor: BORDER, margin: "8px 0 12px" }} />
-                {/* 费用行：ETH 或 USDT，无标题文字 */}
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className="text-xl font-black" style={{ color: GOLD }}>
-                    {ethCost.toFixed(4)} ETH
-                  </span>
+                {/* 费用行：数字+ETH图标 或 数字+U图标 */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xl font-black" style={{ color: GOLD }}>{ethCost.toFixed(4)}</span>
+                  <img
+                    src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
+                    style={{ width: 20, height: 20, borderRadius: "50%" }}
+                    alt="ETH"
+                  />
                   <span className="text-sm" style={{ color: TEXT2 }}>或</span>
                   {usdtCost !== null ? (
-                    <span className="text-xl font-black" style={{ color: GOLD }}>
-                      {usdtCost.toFixed(2)} U
-                    </span>
+                    <>
+                      <span className="text-xl font-black" style={{ color: GOLD }}>{usdtCost.toFixed(2)}</span>
+                      <div style={{ width: 20, height: 20, borderRadius: "50%", backgroundColor: "#26A17B", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <span style={{ color: "#fff", fontSize: 10, fontWeight: 700 }}>U</span>
+                      </div>
+                    </>
                   ) : (
                     <span className="text-sm" style={{ color: TEXT2 }}>加载中...</span>
                   )}
