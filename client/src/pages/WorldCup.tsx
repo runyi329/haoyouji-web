@@ -1775,13 +1775,13 @@ export default function WorldCup() {
                 </div>
               </div>
 
-              {/* 奖励说明 */}
+                            {/* 奖励 + 费用 合并卡片 */}
               <div
-                className="rounded-2xl p-4 mb-3"
+                className="rounded-2xl p-4"
                 style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
               >
-                <div className="text-xs mb-2" style={{ color: TEXT2 }}>猜中奖励</div>
-                <div className="flex items-center gap-2">
+                {/* 猜中奖励行：直接显示 1 ETH */}
+                <div className="flex items-center gap-2 mb-3">
                   <img
                     src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
                     style={{ width: 24, height: 24, borderRadius: "50%" }}
@@ -1789,52 +1789,24 @@ export default function WorldCup() {
                   />
                   <span className="text-3xl font-black" style={{ color: GOLD }}>1 ETH</span>
                 </div>
-              </div>
-
-              {/* 参与费用 */}
-              <div
-                className="rounded-2xl p-4"
-                style={{ backgroundColor: BG3, border: `1px solid ${BORDER}` }}
-              >
-                <div className="text-xs mb-3" style={{ color: TEXT2 }}>参与费用</div>
-
-                {/* ETH */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <img
-                      src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
-                      style={{ width: 28, height: 28, borderRadius: "50%" }}
-                      alt="ETH"
-                    />
-                    <span className="text-sm font-semibold" style={{ color: TEXT }}>以太坊</span>
-                  </div>
+                <div style={{ height: 1, backgroundColor: BORDER, margin: "8px 0 12px" }} />
+                {/* 费用行：ETH 或 USDT，无标题文字 */}
+                <div className="flex items-center gap-3 flex-wrap">
                   <span className="text-xl font-black" style={{ color: GOLD }}>
                     {ethCost.toFixed(4)} ETH
                   </span>
-                </div>
-
-                <div style={{ height: 1, backgroundColor: BORDER, margin: "8px 0" }} />
-
-                {/* USDT */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div style={{ width: 28, height: 28, borderRadius: "50%", backgroundColor: "#26A17B", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>U</span>
-                    </div>
-                    <span className="text-sm font-semibold" style={{ color: TEXT }}>USDT 等值</span>
-                  </div>
+                  <span className="text-sm" style={{ color: TEXT2 }}>或</span>
                   {usdtCost !== null ? (
                     <span className="text-xl font-black" style={{ color: GOLD }}>
                       {usdtCost.toFixed(2)} U
                     </span>
                   ) : (
-                    <span className="text-sm" style={{ color: TEXT2 }}>价格加载中...</span>
+                    <span className="text-sm" style={{ color: TEXT2 }}>加载中...</span>
                   )}
                 </div>
-
                 {ethPrice > 0 && (
-                  <div className="text-right mt-2 text-xs" style={{ color: TEXT2 }}>
-                    ETH 现价 ${ethPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <div className="mt-2 text-xs" style={{ color: TEXT2 }}>
+                    ETH ${ethPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 )}
               </div>
