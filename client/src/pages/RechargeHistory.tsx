@@ -122,7 +122,18 @@ export default function RechargeHistory() {
                     ? (statusStyleMap[item.status] || { bg: 'bg-gray-800/40', text: 'text-gray-400', border: 'border-gray-600/40' })
                     : { bg: 'bg-blue-900/30', text: 'text-blue-300', border: 'border-blue-700/40' };
                   const isManual = item.sourceType === 'manual';
-                  const label = isRecharge ? (item.note || '充值') : (isManual ? '手动调账' : '系统结算');
+                  const isBh = item.sourceType === 'balance_history';
+                  const bhTypeLabel: Record<string, string> = {
+                    consume: '消费', refund: '退款', reward: '奖励', withdraw: '提现',
+                    reward_clawback: '奖励回收',
+                  };
+                  const label = isRecharge
+                    ? (item.note || '充值')
+                    : isManual
+                    ? '手动调账'
+                    : isBh
+                    ? (bhTypeLabel[item.type] || item.type || '流水')
+                    : '系统结算';
                   return (
                     <div key={item.id} className="px-4 py-3">
                       <div className="flex items-center justify-between mb-1.5">
@@ -131,7 +142,7 @@ export default function RechargeHistory() {
                           {label}
                         </span>
                       </div>
-                      {isManual && item.note && (
+                      {(isManual || isBh) && item.note && (
                         <div className="text-xs text-gray-400 mb-1">{item.note}</div>
                       )}
                       <div className="flex items-center justify-between text-xs text-gray-600">

@@ -798,13 +798,43 @@ export async function getUserBalance(userId: number, ledgerId?: number): Promise
 // 获取用户余额变动记录
 export async function getUserBalanceHistory(userId: number, limit: number = 50) {
   const db = await getDb();
-  
-  return await db
+  const conn = await getDbConnection();
+  const pool = conn as any;
+
+  // 获取当前真实余额： users.balance + af_manual_balances
+  const [balRows] = await pool.execute(
+    `SELECT
+       (SELECT COALESCE(balance, 0) FROM users WHERE id = ?) AS userBalance,
+       (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ?) AS manual`,
+    [userId, userId]
+  ) as any[];
+  const userBalance = parseFloat((balRows as any[])[0]?.userBalance ?? '0') || 0;
+  const manual = parseFloat((balRows as any[])[0]?.manual ?? '0') || 0;
+  const currentBalance = parseFloat((userBalance + manual).toFixed(8));
+
+  // 按时间正序取所有 balance_history 记录（不限 limit）用于倒推
+  const allRows = await db
     .select()
     .from(balanceHistory)
     .where(eq(balanceHistory.userId, userId))
-    .orderBy(sql`${balanceHistory.createdAt} DESC`)
-    .limit(limit);
+    .orderBy(sql`${balanceHistory.createdAt} ASC`);
+
+  // 倒推余额：从当前真实余额开始，倒序遍历每条记录减去其 amount，得到该记录发生前的余额，
+  // 再加上该记录的 amount 得到该记录发生后的余额快照
+  const reversed = [...allRows].reverse();
+  let running = currentBalance;
+  const balanceAfterMap = new Map<number, number>();
+  for (const row of reversed) {
+    const amt = parseFloat(String(row.amount));
+    balanceAfterMap.set(row.id, parseFloat(running.toFixed(2)));
+    running -= amt; // 倒推：当前余额减去该笔金额 = 该笔发生前的余额
+  }
+
+  // 返回时倒序（最新在前），并截取 limit 条
+  return allRows.reverse().slice(0, limit).map((row) => ({
+    ...row,
+    balance: balanceAfterMap.get(row.id) ?? null as any,
+  }));
 }
 
 // 定期清理过期订单（只清理pending状态，submitted状态的不过期，因为用户已确认转账）
