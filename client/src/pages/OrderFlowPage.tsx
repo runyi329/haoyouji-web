@@ -579,10 +579,10 @@ export default function OrderFlowPage() {
 
   return (
     <div
-      <PageTag code="P155" />
       className="min-h-screen pb-28 max-w-md mx-auto relative"
       style={{ background: OKX_BG, overflowX: "hidden", touchAction: "pan-y" }}
     >
+        <PageTag code="P155" />
       {/* ===== 顶部导航 ===== */}
       <div
         className="sticky top-0 z-20 flex items-center px-4 py-3"

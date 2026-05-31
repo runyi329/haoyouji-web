@@ -275,13 +275,13 @@ export default function GoldTrackerPage() {
 
   return (
     <div
-      <PageTag code="P099" />
       className="min-h-screen pb-8"
       style={{
         background: "#000000",
         color: "#e8d5a3",
       }}
     >
+        <PageTag code="P099" />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-30 flex items-center px-4 py-3"

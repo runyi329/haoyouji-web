@@ -228,7 +228,6 @@ export default function SentiaHome() {
 
   return (
     <div style={{
-      <PageTag code="P188" />
       minHeight: "100vh",
       background: C.bg,
       color: C.text,
@@ -259,6 +258,7 @@ export default function SentiaHome() {
           boxShadow: menuOpen ? "4px 0 32px rgba(0,0,0,0.6)" : "none",
         }}
       >
+        <PageTag code="P188" />
         {/* Menu Header */}
         <div style={{
           padding: "18px 20px",

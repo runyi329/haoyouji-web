@@ -79,10 +79,10 @@ export default function WalletCnyTransactions() {
 
   return (
     <div
-      <PageTag code="P201" />
       className="min-h-screen"
       style={{ background: "linear-gradient(160deg, #0d0d0d 0%, #1a1a1a 50%, #111111 100%)" }}
     >
+        <PageTag code="P201" />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-20 flex items-center justify-between px-4 py-3"

@@ -9,7 +9,6 @@ import { PageTag } from "@/components/PageTag";
 export default function BeautySettings() {
   return (
     <MerchantSettingsPage
-      <PageTag code="P261" />
       merchantCode="liulifan"
       adminUsername="liulifan"
       accentColor="#E91E8C"

@@ -12,10 +12,10 @@ export default function TaxDataPage() {
 
   return (
     <div
-      <PageTag code="P193" />
       className="min-h-screen max-w-md mx-auto relative"
       style={{ background: '#f5f6f8', color: '#1a1a2e' }}
     >
+        <PageTag code="P193" />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-20 flex items-center px-4 py-3"

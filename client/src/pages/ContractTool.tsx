@@ -112,10 +112,10 @@ export default function ContractTool() {
 
   return (
     <div
-      <PageTag code="P070" />
       className="min-h-screen flex flex-col"
       style={{ background: "#0d1117", color: "white", fontFamily: "-apple-system, sans-serif" }}
     >
+        <PageTag code="P070" />
       {/* 顶部导航 */}
       <div
         style={{

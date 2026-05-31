@@ -9,7 +9,6 @@ import { PageTag } from "@/components/PageTag";
 export default function JiangSettings() {
   return (
     <MerchantSettingsPage
-      <PageTag code="P290" />
       merchantCode="jiang"
       adminUsername="jiang"
       accentColor="#D32F2F"
