@@ -1771,15 +1771,22 @@ export default function WorldCup() {
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* 背景图层：章鱼触须 */}
-              <div style={{ position: "relative" }}>
-                <div
+              {/* 背景：纯深色 + 章鱼插图悬浮右上角 */}
+              <div style={{ position: "relative", backgroundColor: BG }}>
+                {/* 章鱼插图：右上角，半透明，不遮挡文字 */}
+                <img
+                  src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/paul_ai_front-oBnASFnVcZiBBF6ZfLUibn.webp"
+                  alt=""
                   style={{
-                    position: "absolute", inset: 0,
-                    backgroundImage: `url(https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/paul_sheet_bg5-ZAJwvdvEhaAor24gA4GcYK.webp)`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "top center",
-                    opacity: 0.92,
+                    position: "absolute",
+                    right: -16,
+                    top: -20,
+                    width: 160,
+                    height: 160,
+                    objectFit: "contain",
+                    opacity: 0.88,
+                    pointerEvents: "none",
+                    zIndex: 0,
                   }}
                 />
                 {/* 内容区域 */}
