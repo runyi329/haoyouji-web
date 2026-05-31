@@ -1,7 +1,31 @@
 import { useLocation, useSearch } from "wouter";
-import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, Clock, ArrowDownCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, Clock, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import { PageTag } from "@/components/PageTag";
+
+// 从备注中提取世界杯球队 code，与 P202 保持一致
+function extractWcTeamCode(note: string): string | null {
+  const isWcRelated = note.includes('世界杯投注') || note.includes('订单作废-退回投注');
+  if (!isWcRelated) return null;
+  const codeMatch = note.match(/\[([A-Z]{2,10})\]/);
+  if (codeMatch) return codeMatch[1].toLowerCase();
+  const nameToCode: Record<string, string> = {
+    '西班牙': 'es', '法国': 'fr', '英格兰': 'gb-eng', '巴西': 'br', '阿根廷': 'ar',
+    '葡萄牙': 'pt', '德国': 'de', '荷兰': 'nl', '挪威': 'no', '比利时': 'be',
+    '哥伦比亚': 'co', '摩洛哥': 'ma', '日本': 'jp', '美国': 'us', '瑞士': 'ch',
+    '乌拉圭': 'uy', '墨西哥': 'mx', '厄瓜多尔': 'ec', '克罗地亚': 'hr', '土耳其': 'tr',
+    '塞内加尔': 'sn', '瑞典': 'se', '奥地利': 'at', '苏格兰': 'gb-sct', '加拿大': 'ca',
+    '科特迪瓦': 'ci', '巴拉圭': 'py', '捷克': 'cz', '埃及': 'eg', '波黑': 'ba',
+    '韩国': 'kr', '阿尔及利亚': 'dz', '加纳': 'gh', '澳大利亚': 'au', '突尼斯': 'tn',
+    '伊朗': 'ir', '刚果民主共和国': 'cd', '南非': 'za', '沙特阿拉伯': 'sa', '巴拿马': 'pa',
+    '卡塔尔': 'qa', '佛得角': 'cv', '新西兰': 'nz', '伊拉克': 'iq', '乌兹别克斯坦': 'uz',
+    '库拉索': 'cw', '约旦': 'jo', '海地': 'ht',
+  };
+  for (const [name, code] of Object.entries(nameToCode)) {
+    if (note.includes(name)) return code;
+  }
+  return null;
+}
 
 export default function RechargeHistory() {
   const [, setLocation] = useLocation();
@@ -111,18 +135,11 @@ export default function RechargeHistory() {
                   const amt = parseFloat(String(item.amount));
                   const isPositive = amt >= 0;
                   const amtDisplay = `${isPositive ? '+' : ''}${amt.toFixed(2)} USDT`;
-                  const statusStyleMap: Record<string, { bg: string; text: string; border: string }> = {
-                    completed: { bg: 'bg-green-900/30',  text: 'text-green-300',  border: 'border-green-700/40' },
-                    submitted: { bg: 'bg-blue-900/30',   text: 'text-blue-300',   border: 'border-blue-700/40' },
-                    pending:   { bg: 'bg-amber-900/30',  text: 'text-amber-300',  border: 'border-amber-700/40' },
-                    expired:   { bg: 'bg-gray-800/40',   text: 'text-gray-400',   border: 'border-gray-600/40' },
-                    cancelled: { bg: 'bg-red-900/30',    text: 'text-red-400',    border: 'border-red-700/40' },
-                  };
-                  const statusStyle = isRecharge
-                    ? (statusStyleMap[item.status] || { bg: 'bg-gray-800/40', text: 'text-gray-400', border: 'border-gray-600/40' })
-                    : { bg: 'bg-blue-900/30', text: 'text-blue-300', border: 'border-blue-700/40' };
                   const isManual = item.sourceType === 'manual';
                   const isBh = item.sourceType === 'balance_history';
+                  // 提取世界杯国旗 code
+                  const noteText = item.note || item.description || '';
+                  const wcCode = extractWcTeamCode(noteText);
                   const bhTypeLabel: Record<string, string> = {
                     consume: '消费', refund: '退款', reward: '奖励', withdraw: '提现',
                     reward_clawback: '奖励回收',
@@ -134,20 +151,56 @@ export default function RechargeHistory() {
                     : isBh
                     ? (bhTypeLabel[item.type] || item.type || '流水')
                     : '系统结算';
+                  const statusStyleMap: Record<string, { bg: string; text: string; border: string }> = {
+                    completed: { bg: 'bg-green-900/30',  text: 'text-green-300',  border: 'border-green-700/40' },
+                    submitted: { bg: 'bg-blue-900/30',   text: 'text-blue-300',   border: 'border-blue-700/40' },
+                    pending:   { bg: 'bg-amber-900/30',  text: 'text-amber-300',  border: 'border-amber-700/40' },
+                    expired:   { bg: 'bg-gray-800/40',   text: 'text-gray-400',   border: 'border-gray-600/40' },
+                    cancelled: { bg: 'bg-red-900/30',    text: 'text-red-400',    border: 'border-red-700/40' },
+                  };
+                  const statusStyle = isRecharge
+                    ? (statusStyleMap[item.status] || { bg: 'bg-gray-800/40', text: 'text-gray-400', border: 'border-gray-600/40' })
+                    : { bg: 'bg-blue-900/30', text: 'text-blue-300', border: 'border-blue-700/40' };
                   return (
                     <div key={item.id} className="px-4 py-3">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className={`font-semibold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>{amtDisplay}</span>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
-                          {label}
-                        </span>
+                      <div className="flex items-start justify-between mb-1.5">
+                        <div className="flex items-center">
+                          {/* 图标区：世界杯交易显示国旗，其他显示箭头 */}
+                          <div
+                            className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center mr-2 flex-shrink-0"
+                            style={{ background: isPositive ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)' }}
+                          >
+                            {wcCode ? (
+                              <img
+                                src={`/flags/${wcCode}.png`}
+                                alt={wcCode}
+                                className="w-8 h-8 object-cover"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            ) : (
+                              isPositive
+                                ? <ArrowDownCircle className="w-5 h-5 text-green-400" />
+                                : <ArrowUpCircle className="w-5 h-5 text-red-400" />
+                            )}
+                          </div>
+                          <div>
+                            {/* 世界杯交易：不显示文字标签 */}
+                            {!wcCode && (
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}>
+                                {label}
+                              </span>
+                            )}
+                            <div className="text-xs text-gray-500 mt-0.5">{formatDate(item.createdAt)}</div>
+                          </div>
+                        </div>
+                        <span className={`font-semibold text-base ${isPositive ? 'text-green-400' : 'text-red-400'}`}>{amtDisplay}</span>
                       </div>
-                      {(isManual || isBh) && item.note && (
-                        <div className="text-xs text-gray-400 mb-1">{item.note}</div>
+                      {/* 非世界杯才显示备注文字 */}
+                      {!wcCode && (isManual || isBh) && noteText && (
+                        <div className="text-xs text-gray-400 mb-1 ml-10">{noteText}</div>
                       )}
-                      <div className="flex items-center justify-between text-xs text-gray-600">
+                      <div className="flex items-center justify-between text-xs text-gray-600 ml-10">
                         <span>{item.balanceAfter != null ? `余额 ${parseFloat(String(item.balanceAfter)).toFixed(2)}` : ''}</span>
-                        <span>{formatDate(item.createdAt)}</span>
                       </div>
                     </div>
                   );
