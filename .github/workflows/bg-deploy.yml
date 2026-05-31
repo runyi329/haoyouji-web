@@ -14,48 +14,41 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          cat > ~/.ssh/config << 'SSHEOF'
-Host *
-  StrictHostKeyChecking no
-  UserKnownHostsFile /dev/null
-  ServerAliveInterval 20
-  ServerAliveCountMax 20
-SSHEOF
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  ServerAliveInterval 20\n  ServerAliveCountMax 20\n' > ~/.ssh/config
           chmod 600 ~/.ssh/config
 
       - name: upload deploy script
         run: |
-          # Create deploy script locally and upload via scp
           cat > /tmp/deploy.sh << 'SCRIPTEOF'
-#!/bin/bash
-export PATH="/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
-LOG=/tmp/haoyouji-deploy.log
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] === DEPLOY START ===" > $LOG
-cd /root/haoyouji-web || { echo "cd failed" >> $LOG; exit 1; }
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] git fetch..." >> $LOG
-git fetch origin >> $LOG 2>&1
-git reset --hard origin/main >> $LOG 2>&1
-git clean -fd >> $LOG 2>&1
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] pnpm install..." >> $LOG
-rm -rf node_modules/.vite client/.vite
-pnpm install --frozen-lockfile >> $LOG 2>&1
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] pnpm build..." >> $LOG
-pnpm run build >> $LOG 2>&1
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] sync to ubuntu user..." >> $LOG
-cp -r dist/. /home/ubuntu/haoyouji-web/dist/ >> $LOG 2>&1
-cp package.json /home/ubuntu/haoyouji-web/ >> $LOG 2>&1
-chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/dist >> $LOG 2>&1
-rsync -a --delete node_modules/ /home/ubuntu/haoyouji-web/node_modules/ >> $LOG 2>&1
-chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules >> $LOG 2>&1
-cp .env /home/ubuntu/haoyouji-web/.env 2>/dev/null && chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/.env >> $LOG 2>&1 || true
-sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' ecosystem.config.cjs > /home/ubuntu/haoyouji-web/ecosystem.config.cjs
-chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/ecosystem.config.cjs
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] pm2 restart..." >> $LOG
-sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart /home/ubuntu/haoyouji-web/ecosystem.config.cjs --update-env' >> $LOG 2>&1 || \
-  sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' >> $LOG 2>&1
-sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' >> $LOG 2>&1
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] === DEPLOY DONE ===" >> $LOG
-SCRIPTEOF
+          #!/bin/bash
+          export PATH="/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+          LOG=/tmp/haoyouji-deploy.log
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] === DEPLOY START ===" > $LOG
+          cd /root/haoyouji-web || { echo "cd failed" >> $LOG; exit 1; }
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] git fetch..." >> $LOG
+          git fetch origin >> $LOG 2>&1
+          git reset --hard origin/main >> $LOG 2>&1
+          git clean -fd >> $LOG 2>&1
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] pnpm install..." >> $LOG
+          rm -rf node_modules/.vite client/.vite
+          pnpm install --frozen-lockfile >> $LOG 2>&1
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] pnpm build..." >> $LOG
+          pnpm run build >> $LOG 2>&1
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] sync to ubuntu user..." >> $LOG
+          cp -r dist/. /home/ubuntu/haoyouji-web/dist/ >> $LOG 2>&1
+          cp package.json /home/ubuntu/haoyouji-web/ >> $LOG 2>&1
+          chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/dist >> $LOG 2>&1
+          rsync -a --delete node_modules/ /home/ubuntu/haoyouji-web/node_modules/ >> $LOG 2>&1
+          chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules >> $LOG 2>&1
+          cp .env /home/ubuntu/haoyouji-web/.env 2>/dev/null && chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/.env >> $LOG 2>&1 || true
+          sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' ecosystem.config.cjs > /home/ubuntu/haoyouji-web/ecosystem.config.cjs
+          chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/ecosystem.config.cjs
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] pm2 restart..." >> $LOG
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart /home/ubuntu/haoyouji-web/ecosystem.config.cjs --update-env' >> $LOG 2>&1 || \
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' >> $LOG 2>&1
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' >> $LOG 2>&1
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] === DEPLOY DONE ===" >> $LOG
+          SCRIPTEOF
           chmod +x /tmp/deploy.sh
           scp -i ~/.ssh/id_rsa -P ${{ secrets.DEPLOY_PORT }} /tmp/deploy.sh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/haoyouji-deploy.sh
           echo "Script uploaded"
@@ -74,7 +67,7 @@ SCRIPTEOF
               'tail -3 /tmp/haoyouji-deploy.log 2>/dev/null || echo "log not ready"' 2>/dev/null || echo "ssh-fail")
             echo "[$i/20] $RESULT"
             if echo "$RESULT" | grep -q "DEPLOY DONE"; then
-              echo "✅ Deploy completed!"
+              echo "Deploy completed!"
               exit 0
             fi
           done
