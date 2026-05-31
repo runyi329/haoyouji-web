@@ -1880,23 +1880,7 @@ export default function WorldCup() {
                           ) : (
                             <span style={{ fontSize: 14, color: TEXT2 }}>加载中</span>
                           )}
-                          {/* 小黄点：k值保护已触发 */}
-                          {isDynamic && (
-                            <span
-                              title="动态保护已触发"
-                              style={{
-                                display: "inline-block",
-                                width: 7,
-                                height: 7,
-                                borderRadius: "50%",
-                                backgroundColor: GOLD,
-                                flexShrink: 0,
-                                alignSelf: "flex-start",
-                                marginTop: 2,
-                                boxShadow: "0 0 4px rgba(255,215,0,0.8)",
-                              }}
-                            />
-                          )}
+                          {/* 小黄点已移除：k值保护仅在管理页显示 */}
                         </div>
                         {/* 第一行图标 U */}
                         <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: "#26A17B", display: "flex", alignItems: "center", justifyContent: "center" }}>
