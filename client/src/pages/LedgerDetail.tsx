@@ -2981,7 +2981,7 @@ export default function LedgerDetail() {
               <div className="flex items-center gap-2">
                 {/* 快捷按钮：根据数据库配置动态显示（37/52/59号账本） */}
                 {isShortcutLedger && myShortcuts && (() => {
-                  const _sc = [myShortcuts.gold, myShortcuts.qq, myShortcuts.oil, myShortcuts.stock, myShortcuts.digitalB, myShortcuts.ledger59, (myShortcuts as any).ethPosition].filter(Boolean).length;
+                  const _sc = [myShortcuts.gold, myShortcuts.qq, myShortcuts.oil, myShortcuts.stock, myShortcuts.digitalB, myShortcuts.ledger59, (myShortcuts as any).ethPosition, (myShortcuts as any).worldCup].filter(Boolean).length;
                   if (_sc >= 4) return null;
                   return (<>
                     {/* 黄金（MT5）*/}
@@ -3092,6 +3092,21 @@ export default function LedgerDetail() {
                         </svg>
                       </div>
                     )}
+                    {/* 世界杯快捷按钮 */}
+                    {(myShortcuts as any).worldCup && (
+                      <div
+                        className="w-8 h-8 rounded-full cursor-pointer overflow-hidden flex-shrink-0"
+                        style={{ border: '1.5px solid rgba(255,255,255,0.5)', position: 'relative' }}
+                        onClick={() => setLocation('/world-cup')}
+                        title="FIFA World Cup 2026"
+                      >
+                        <img
+                          src="/wc2026-logo.png"
+                          alt="World Cup"
+                          style={{ width: '105%', height: '105%', objectFit: 'cover', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
+                        />
+                      </div>
+                    )}
                   </>);
                 })()}
 
@@ -3199,9 +3214,9 @@ export default function LedgerDetail() {
             </div>
             {/* 第二行：操作按钮（圆圈多时分三行） */}
             <div className="flex flex-col gap-1.5 mt-2">
-              {/* AI账本：圆圈多时（>=4个）移到第二行，与头像左对齐 */}
-              {isCustomAI && isShortcutLedger && myShortcuts && (() => {
-                const _sc2 = [myShortcuts.gold, myShortcuts.qq, myShortcuts.oil, myShortcuts.stock, myShortcuts.digitalB, myShortcuts.ledger59, (myShortcuts as any).ethPosition].filter(Boolean).length;
+              {/* 圆圈多时（>=4个）移到第二行，与头像左对齐（适用于所有shortcut账本） */}
+              {isShortcutLedger && myShortcuts && (() => {
+                const _sc2 = [myShortcuts.gold, myShortcuts.qq, myShortcuts.oil, myShortcuts.stock, myShortcuts.digitalB, myShortcuts.ledger59, (myShortcuts as any).ethPosition, (myShortcuts as any).worldCup].filter(Boolean).length;
                 if (_sc2 < 4) return null;
                 return (
                   <div className="flex items-center gap-1.5 w-full mb-1.5">
@@ -3245,6 +3260,12 @@ export default function LedgerDetail() {
                           <path d="M127.961 287.957L255.923 212.319L127.961 154.158V287.957Z" fill="rgba(255,255,255,0.8)"/>
                           <path d="M0 212.319L127.962 287.957V154.158L0 212.319Z" fill="rgba(255,255,255,0.4)"/>
                         </svg>
+                      </div>
+                    )}
+                    {/* 世界杯快捷按钮 */}
+                    {(myShortcuts as any).worldCup && (
+                      <div className="w-8 h-8 rounded-full cursor-pointer overflow-hidden flex-shrink-0" style={{ border: '1.5px solid rgba(255,255,255,0.5)', position: 'relative' }} onClick={() => setLocation('/world-cup')} title="FIFA World Cup 2026">
+                        <img src="/wc2026-logo.png" alt="World Cup" style={{ width: '105%', height: '105%', objectFit: 'cover', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
                       </div>
                     )}
                   </div>
