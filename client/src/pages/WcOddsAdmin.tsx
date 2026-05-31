@@ -103,6 +103,11 @@ function CreateOrderDialog({
     { enabled: !!selectedTeam }
   );
 
+  // 获取全队赔率（用于计算水钱调整）
+  const { data: allOddsData } = trpc.wcOdds.getLatestSnapshotAllOdds.useQuery(undefined, { enabled: open });
+  // 获取水钱设置
+  const { data: marginData } = trpc.wcOdds.getMarginSetting.useQuery(undefined, { enabled: open });
+
   const { data: userResults } = trpc.wcOdds.searchUsers.useQuery(
     { keyword: userKeyword },
     { enabled: userKeyword.length >= 1 }
@@ -138,7 +143,22 @@ function CreateOrderDialog({
     onClose();
   }
 
-  const odds = latestOdds?.pinnacleOdds ? parseFloat(latestOdds.pinnacleOdds) : null;
+  // 计算水钱调整后的赔率（和矩阵页完全一致）
+  const rawOdds = latestOdds?.pinnacleOdds ? parseFloat(latestOdds.pinnacleOdds) : null;
+  const marginPct = marginData?.marginPct ?? 8;
+  const adjustedOdds = (() => {
+    if (!rawOdds || !allOddsData?.records?.length) return rawOdds;
+    let sumImplied = 0;
+    for (const r of allOddsData.records) {
+      const p = r.pinnacleOdds ? parseFloat(r.pinnacleOdds) : null;
+      if (p && p > 0) sumImplied += 1 / p;
+    }
+    if (sumImplied === 0) return rawOdds;
+    const targetSum = (100 + marginPct) / 100;
+    const adjustedImplied = (1 / rawOdds) / sumImplied * targetSum;
+    return 1 / adjustedImplied;
+  })();
+  const odds = adjustedOdds;
   const amtNum = parseFloat(amount);
   const potentialReturn = odds && !isNaN(amtNum) && amtNum > 0 ? (odds * amtNum).toFixed(2) : null;
 
@@ -392,7 +412,7 @@ function CreateOrderDialog({
               className="rounded-lg px-4 py-3"
               style={{ backgroundColor: "rgba(255,215,0,0.06)", border: `1px solid rgba(255,215,0,0.2)` }}
             >
-              <div className="text-xs mb-1" style={{ color: TEXT2 }}>最新 Pinnacle 赔率（快照 #{latestOdds?.snapshotId ?? "-"}）</div>
+              <div className="text-xs mb-1" style={{ color: TEXT2 }}>实时赔率（水钱 {marginPct}% 调整后 · 快照 #{latestOdds?.snapshotId ?? "-"}）</div>
               <div className="flex items-center gap-3">
                 <span className="text-2xl font-bold" style={{ color: GOLD }}>
                   {odds ? odds.toFixed(2) : "暂无数据"}

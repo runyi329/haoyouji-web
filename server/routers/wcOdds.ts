@@ -237,6 +237,35 @@ export const wcOddsRouter = router({
     }),
 
   /**
+   * 获取最新快照所有球队的原始赔率（用于Dialog中计算水钱调整后赔率）
+   */
+  getLatestSnapshotAllOdds: adminProcedure
+    .query(async () => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+
+      const latestSnapshot = await db
+        .select()
+        .from(wcOddsSnapshots)
+        .orderBy(desc(wcOddsSnapshots.fetchedAt))
+        .limit(1);
+
+      if (latestSnapshot.length === 0) return { snapshotId: null, records: [] };
+
+      const snap = latestSnapshot[0];
+      const records = await db
+        .select({
+          teamName: wcOddsRecords.teamName,
+          teamCode: wcOddsRecords.teamCode,
+          pinnacleOdds: wcOddsRecords.pinnacleOdds,
+        })
+        .from(wcOddsRecords)
+        .where(eq(wcOddsRecords.snapshotId, snap.id));
+
+      return { snapshotId: snap.id, records };
+    }),
+
+  /**
    * 搜索用户（管理员用，从全量用户中搜索下单人）
    */
   searchUsers: adminProcedure
@@ -298,6 +327,10 @@ export const wcOddsRouter = router({
       amount: z.string(),
       currency: z.enum(['CNY', 'USDT']),
       note: z.string().max(500).optional(),
+      // k值动态定价相关字段
+      isDynamicPrice: z.boolean().optional(),  // 是否触发了k值保护
+      baseFeeUsdt: z.string().optional(),       // 基础费用（水钱价，USDT）
+      finalFeeUsdt: z.string().optional(),      // 实际费用（k值价，USDT）
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -331,6 +364,13 @@ export const wcOddsRouter = router({
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
 
+      // 确保 wc_orders 表有 k值动态定价字段（幂等迎头，已有则跳过）
+      try {
+        await (conn as any).execute(`ALTER TABLE wc_orders ADD COLUMN IF NOT EXISTS is_dynamic_price TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'k值保护是否触发'`);
+        await (conn as any).execute(`ALTER TABLE wc_orders ADD COLUMN IF NOT EXISTS base_fee_usdt DECIMAL(15,4) DEFAULT NULL COMMENT '基础费用(USDT)'`);
+        await (conn as any).execute(`ALTER TABLE wc_orders ADD COLUMN IF NOT EXISTS final_fee_usdt DECIMAL(15,4) DEFAULT NULL COMMENT '实际费用(USDT)'`);
+      } catch (_) { /* 字段已存在则忽略 */ }
+
       // 扣款：写入 af_manual_balances（负数）
       const teamCodeTag = input.teamCode ? `[${input.teamCode.toUpperCase()}]` : '';
       const deductNote = input.currency === 'CNY'
@@ -363,18 +403,29 @@ export const wcOddsRouter = router({
         );
       }
 
-      await db.insert(wcOrders).values({
-        userId: input.userId,
-        teamName: input.teamName,
-        teamCode: input.teamCode || null,
-        snapshotId: input.snapshotId,
-        pinnacleOdds: input.pinnacleOdds,
-        amount: input.amount,
-        potentialReturn,
-        currency: input.currency,
-        status: 'pending',
-        note: input.note || null,
-      });
+      // 将 k值动态定价字段写入订单
+      const isDynamic = input.isDynamicPrice ?? false;
+      const baseFee = input.baseFeeUsdt ?? null;
+      const finalFee = input.finalFeeUsdt ?? null;
+
+      await (conn as any).execute(
+        `INSERT INTO wc_orders (user_id, team_name, team_code, snapshot_id, pinnacle_odds, amount, potential_return, currency, status, note, is_dynamic_price, base_fee_usdt, final_fee_usdt, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, NOW())`,
+        [
+          input.userId,
+          input.teamName,
+          input.teamCode || null,
+          input.snapshotId,
+          input.pinnacleOdds,
+          input.amount,
+          potentialReturn,
+          input.currency,
+          input.note || null,
+          isDynamic ? 1 : 0,
+          baseFee,
+          finalFee,
+        ]
+      );
 
       return { success: true };
     }),
@@ -407,7 +458,7 @@ export const wcOddsRouter = router({
         conditions.push(like(wcOrders.teamName, `%${input.teamName}%`));
       }
 
-      const baseQuery = db
+            const baseQuery = db
         .select({
           id: wcOrders.id,
           userId: wcOrders.userId,
@@ -434,14 +485,41 @@ export const wcOddsRouter = router({
         .orderBy(desc(wcOrders.createdAt))
         .limit(input.pageSize)
         .offset(offset);
-
-      let rows;
+      let drizzleRows;
       if (conditions.length === 1) {
-        rows = await baseQuery.where(conditions[0]);
+        drizzleRows = await baseQuery.where(conditions[0]);
       } else {
-        rows = await baseQuery.where(and(...conditions));
+        drizzleRows = await baseQuery.where(and(...conditions));
       }
-
+      // 单独查询 k值动态定价字段（这些字段不在 drizzle schema 中，用原生 SQL 补充）
+      const conn2 = await getDbConnection();
+      let dynamicMap: Record<number, { isDynamicPrice: boolean; baseFeeUsdt: string | null; finalFeeUsdt: string | null }> = {};
+      if (conn2 && drizzleRows.length > 0) {
+        try {
+          const ids = drizzleRows.map(r => r.id);
+          const placeholders = ids.map(() => '?').join(',');
+          const [dynRows] = await (conn2 as any).execute(
+            `SELECT id, COALESCE(is_dynamic_price, 0) AS is_dynamic_price, base_fee_usdt, final_fee_usdt FROM wc_orders WHERE id IN (${placeholders})`,
+            ids
+          ) as any[];
+          const dynArr = Array.isArray(dynRows) ? dynRows : [];
+          for (const d of dynArr) {
+            dynamicMap[Number(d.id)] = {
+              isDynamicPrice: Boolean(d.is_dynamic_price),
+              baseFeeUsdt: d.base_fee_usdt != null ? String(d.base_fee_usdt) : null,
+              finalFeeUsdt: d.final_fee_usdt != null ? String(d.final_fee_usdt) : null,
+            };
+          }
+        } catch (_) { /* 字段不存在时忽略 */ } finally {
+          (conn2 as any).release?.();
+        }
+      }
+      const rows = drizzleRows.map(r => ({
+        ...r,
+        isDynamicPrice: dynamicMap[r.id]?.isDynamicPrice ?? false,
+        baseFeeUsdt: dynamicMap[r.id]?.baseFeeUsdt ?? null,
+        finalFeeUsdt: dynamicMap[r.id]?.finalFeeUsdt ?? null,
+      }));
       return { orders: rows, page: input.page, pageSize: input.pageSize };
     }),
 
