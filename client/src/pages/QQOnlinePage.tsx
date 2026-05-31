@@ -4,6 +4,7 @@
  */
 import { useState, useCallback } from "react";
 import { useLocation } from "wouter";
+import { PageTag } from "@/components/PageTag";
 
 // ─── 类型定义 ─────────────────────────────────────────────────
 
@@ -320,6 +321,7 @@ export default function QQOnlinePage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#F5F5F5", fontFamily: "'PingFang SC','Helvetica Neue',sans-serif" }}>
+      <PageTag code="P176" />
       {/* 顶部导航 */}
       <div style={{
         background: "linear-gradient(135deg,#B71C1C 0%,#D32F2F 100%)",

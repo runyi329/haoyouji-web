@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Loader2, ChevronLeft, PawPrint, Calendar, MapPin, Settings, ChevronRight } from "lucide-react";
 import { centerToast } from "@/components/ui/center-toast";
+import { PageTag } from "@/components/PageTag";
 
 // 插画资源 CDN URL
 const BANNER_IMG = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/pet-platform/banner-teddy-cat-h2.webp";
@@ -478,6 +479,7 @@ export default function PetPlatform() {
 
   return (
     <div className="min-h-screen pb-10" style={{ background: COLORS.bg }}>
+      <PageTag code="P161" />
       {/* ===== 顶部插画横幅（完整显示插画） ===== */}
       <div className="relative">
         {/* 插画完整显示，不裁剪 */}

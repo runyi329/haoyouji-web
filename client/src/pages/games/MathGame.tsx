@@ -7,6 +7,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { StarRewardPopup } from "@/components/StarRewardPopup";
 import { useState, useCallback, useEffect } from "react";
+import { PageTag } from "@/components/PageTag";
 
 // 音效生成函数
 const playCorrectSound = () => {
@@ -304,6 +305,7 @@ export default function MathGame() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
+      <PageTag code="P276" />
       <style>{`
         @keyframes spin {
           from { transform: rotateZ(0deg); }

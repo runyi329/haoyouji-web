@@ -1,5 +1,6 @@
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { PageTag } from "@/components/PageTag";
 
 interface Props {
   ledgerId: number;
@@ -81,6 +82,7 @@ export default function LedgerMemberManage({ ledgerId }: Props) {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0a0a0a", color: "#f0f0f0" }}>
+      <PageTag code="P127" />
       {/* 顶部导航 */}
       <div
         style={{

@@ -10,6 +10,7 @@ import { useLocation } from "wouter";
 import { ArrowLeft, ChevronDown, ChevronRight, BookOpen, Copy, Check } from "lucide-react";
 import { useState, useCallback } from "react";
 import BottomNav from "@/components/BottomNav";
+import { PageTag } from "@/components/PageTag";
 
 // ─────────────────────────────────────────────
 // 工具函数：将条款内容转为纯文本
@@ -1039,6 +1040,7 @@ export default function JiangBuildRules() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <PageTag code="P284" />
       {/* 顶部 Header */}
       <div className="bg-[#0d0d14] border-b border-[#D32F2F]/20 sticky top-0 z-10">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">

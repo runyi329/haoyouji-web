@@ -4,6 +4,7 @@ import { trpc } from '@/lib/trpc';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, TrendingUp, Users, Target, Activity, Loader2, BarChart3, Clock } from 'lucide-react';
+import { PageTag } from "@/components/PageTag";
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart
@@ -96,6 +97,7 @@ export default function InteractionStats() {
 
     return (
       <div className="space-y-4">
+        <PageTag code="P023" />
         {/* 核心指标卡片 */}
         <div className="grid grid-cols-2 gap-3">
           {coreMetrics.map((metric, index) => {

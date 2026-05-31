@@ -7,6 +7,7 @@ import { useParams, useLocation } from "wouter";
 import { ChevronLeft, Camera, Brain, Loader2, CheckCircle, AlertCircle, Star, ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 type MealType = "breakfast" | "lunch" | "dinner" | "snack";
 
@@ -213,6 +214,7 @@ export default function DietMeal() {
 
   return (
     <div className="min-h-screen bg-[#FFF5F5] pb-8">
+      <PageTag code="P085" />
       {/* 顶部导航 */}
       <div className="bg-gradient-to-r from-purple-500 to-pink-400 text-white px-3 py-3 flex items-center">
         <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1 -ml-1">

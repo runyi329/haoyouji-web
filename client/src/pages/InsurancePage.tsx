@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { PageTag } from "@/components/PageTag";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend, AreaChart, Area
@@ -117,6 +118,7 @@ export default function InsurancePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8 max-w-md mx-auto">
+      <PageTag code="P104" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-20 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
         <button onClick={() => setLocation('/smart-finance')} className="text-gray-500 text-sm">← 返回</button>

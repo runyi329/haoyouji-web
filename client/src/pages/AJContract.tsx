@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useCenterToast } from "@/components/ui/center-toast";
 import SignaturePad from "@/components/SignaturePad";
+import { PageTag } from "@/components/PageTag";
 
 // ── 合同正文（纯文本渲染） ──
 const CONTRACT_SECTIONS = [
@@ -184,6 +185,7 @@ export default function AJContract() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#F5F6F8", display: "flex", flexDirection: "column" }}>
+      <PageTag code="P040" />
       {/* 顶部导航 */}
       <div style={{
         background: "#1A2B4A",

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Loader2, X, Check, Calculator, Pencil, RefreshCw } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 // QQ 全局渐变色函数（红→橙→黄→黄绿→绿）
 function gradientColor(value: number, min: number, max: number): string {
@@ -49,6 +50,7 @@ export default function QQSettings() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
+      <PageTag code="P177" />
       {/* 顶部导航 */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 sticky top-0 z-20">
         <button

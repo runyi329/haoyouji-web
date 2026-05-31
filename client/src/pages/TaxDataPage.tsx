@@ -5,12 +5,14 @@
  */
 import { useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 export default function TaxDataPage() {
   const [, navigate] = useLocation();
 
   return (
     <div
+      <PageTag code="P193" />
       className="min-h-screen max-w-md mx-auto relative"
       style={{ background: '#f5f6f8', color: '#1a1a2e' }}
     >

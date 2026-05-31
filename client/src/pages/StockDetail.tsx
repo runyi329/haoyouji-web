@@ -8,6 +8,7 @@ import { ChevronLeft, Calendar, Building2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useState, useRef, useEffect } from "react";
+import { PageTag } from "@/components/PageTag";
 
 // ─── 配色 ────────────────────────────────────────────────
 const RED = "#D32F2F";
@@ -1973,6 +1974,7 @@ export default function StockDetail() {
 
   return (
     <div className="h-screen flex flex-col" style={{ background: BG }}>
+      <PageTag code="P191" />
       {/* 顶部导航 */}
       <div
         className="px-4 py-3 flex items-center gap-3 flex-shrink-0"

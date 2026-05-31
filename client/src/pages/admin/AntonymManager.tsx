@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Pencil, Trash2, Plus } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 interface AntonymPair {
   id: number;
@@ -116,6 +117,7 @@ export default function AntonymManagement() {
 
   return (
     <div className="container py-8">
+      <PageTag code="P214" />
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold">反义词题库管理</h1>

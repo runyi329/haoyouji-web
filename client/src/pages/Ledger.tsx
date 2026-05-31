@@ -11,6 +11,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { pinyin } from "pinyin-pro";
 import BottomNav from "@/components/BottomNav";
+import { PageTag } from "@/components/PageTag";
 
 
 export default function Ledger() {
@@ -442,6 +443,7 @@ export default function Ledger() {
 
   return (
     <div className="min-h-screen bg-[#FAF3ED] pb-20 max-w-md mx-auto relative shadow-2xl">
+      <PageTag code="P109" />
       {/* 顶部导航栏 */}
       <div className="bg-white shadow-sm sticky top-0 z-40">
         <div className="px-4 py-3 flex items-center">

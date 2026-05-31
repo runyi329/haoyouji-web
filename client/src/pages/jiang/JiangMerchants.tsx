@@ -13,6 +13,7 @@ import { ChevronLeft, Wine, Cpu, Sparkles } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import JiangTabBar from "./JiangTabBar";
 import BottomNav from "@/components/BottomNav";
+import { PageTag } from "@/components/PageTag";
 
 const SENTIA_ICON = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sentia-icon-v1_cfb26d59.webp";
 
@@ -145,6 +146,7 @@ export default function JiangMerchants() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <PageTag code="P286" />
       {/* 顶部 Header */}
       <div className="bg-[#0d0d14] border-b border-[#D32F2F]/20">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">

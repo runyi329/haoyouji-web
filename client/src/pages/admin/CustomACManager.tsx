@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Plus, UserPlus, ChevronDown, ChevronUp, Users } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 // 钻石图标 SVG
 function DiamondIcon({ className = "w-4 h-4" }: { className?: string }) {
@@ -71,6 +72,7 @@ export default function CustomACManager() {
 
   return (
     <div className="space-y-4">
+      <PageTag code="P219" />
       {/* 标题 + 新建按钮 */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-2">

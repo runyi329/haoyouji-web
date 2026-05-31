@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Star, Save, ChevronDown, ChevronUp, Loader2, Settings } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 // 游戏配置定义 - 每个游戏一个独立入口
 interface GameConfig {
@@ -296,6 +297,7 @@ export default function GameRewardManager() {
 
   return (
     <div className="space-y-4">
+      <PageTag code="P229" />
       <div className="mb-6">
         <h2 className="text-xl font-bold text-gray-800">游戏奖励配置</h2>
         <p className="text-sm text-gray-500 mt-1">

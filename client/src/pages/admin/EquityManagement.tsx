@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 // 用户搜索选择器组件
 function UserSelector({ value, onChange }: { value: string; onChange: (userId: string, userName: string) => void }) {
@@ -410,6 +411,7 @@ export default function EquityManagement() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
+      <PageTag code="P228" />
       {/* 顶部导航 */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center">

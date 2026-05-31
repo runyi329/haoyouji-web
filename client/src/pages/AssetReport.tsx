@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Loader2, ChevronDown, ArrowLeft, Share2, Check } from "lucide-react";
 import { Link } from "wouter";
 import { useState as useReactState, useEffect } from "react";
+import { PageTag } from "@/components/PageTag";
 
 const BASE_URL = "https://www.jiangyuchen.cn";
 
@@ -1213,6 +1214,7 @@ export default function AssetReport() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
+      <PageTag code="P063" />
       {/* 顶部：红区（Red Zone） - 实时估值展示 */}
       <div className="bg-gradient-to-br from-[#800000] to-[#A80000] text-white px-6 pt-4 pb-10 rounded-b-[30px] relative overflow-hidden">
         {/* 背景装饰：半透明公式和专业术语 - 增强可见度 */}

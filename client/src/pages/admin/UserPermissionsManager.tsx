@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Shield, Check, X } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 import {
   Select,
   SelectContent,
@@ -80,6 +81,7 @@ export default function UserPermissionsManager() {
   return (
     <Card className="p-6">
       <div className="flex items-center gap-2 mb-6">
+        <PageTag code="P242" />
         <Shield className="w-5 h-5 text-[#D32F2F]" />
         <h2 className="text-xl font-bold">用户功能权限管理</h2>
       </div>

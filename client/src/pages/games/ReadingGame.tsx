@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { ArrowLeft, Volume2, BookOpen, Languages, Play, Pause } from "lucide-react";
 import { toast } from "sonner";
 import { pinyin } from "pinyin-pro";
+import { PageTag } from "@/components/PageTag";
 
 export default function ReadingGame() {
   const params = useParams();
@@ -284,6 +285,7 @@ export default function ReadingGame() {
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 p-4">
+      <PageTag code="P279" />
       {/* 顶部导航 */}
       <div className="max-w-4xl mx-auto mb-6 flex items-center justify-between">
         <Link href="/games/reading">

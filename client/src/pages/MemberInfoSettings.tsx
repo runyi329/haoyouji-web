@@ -7,6 +7,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { PageTag } from "@/components/PageTag";
 
 export default function MemberInfoSettings() {
   const params = useParams();
@@ -116,6 +117,7 @@ export default function MemberInfoSettings() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
+      <PageTag code="P141" />
       {/* 顶部导航栏 */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="container flex items-center justify-between h-14 px-4">

@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 // ─── 麻六记真实菜单（来源：官网+大众点评多店推荐菜汇总）────────────────────────
 const MALUJI_DISHES = [
@@ -1152,6 +1153,7 @@ export default function DemoOpinionBook() {
 
   return (
     <div className="flex flex-col h-screen">
+      <PageTag code="P079" />
       {/* 角色切换栏（固定在顶部） */}
       <div className="flex-none z-50" style={{ backgroundColor: "#111111" }}>
         <div className="flex items-center px-3 py-2.5 gap-2">

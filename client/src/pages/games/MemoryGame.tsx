@@ -7,6 +7,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { StarRewardPopup } from "@/components/StarRewardPopup";
+import { PageTag } from "@/components/PageTag";
 
 const emojis = ["🐶", "🐱", "🐰", "🦊", "🐻", "🐼", "🐨", "🦁", "🐯", "🐸", "🐵", "🦄"];
 
@@ -195,6 +196,7 @@ export default function MemoryGame() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
+      <PageTag code="P277" />
       {/* 顶部导航 */}
       <header className="z-50 glass border-b border-border/50">
         <div className="container flex items-center justify-between h-14">

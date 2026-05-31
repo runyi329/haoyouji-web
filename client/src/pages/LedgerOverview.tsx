@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { X } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 function formatNumber(num: number): string {
   if (num >= 10000) {
@@ -113,6 +114,7 @@ export default function LedgerOverview() {
 
   return (
     <div className="min-h-screen bg-[#FAF3ED] pb-20 max-w-md mx-auto relative shadow-2xl">
+      <PageTag code="P128" />
       {/* Header Banner Carousel */}
       <div className="relative">
         <Carousel 

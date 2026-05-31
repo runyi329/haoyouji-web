@@ -10,6 +10,7 @@ import FAQAccordion from "@/components/FAQAccordion";
 import Tooltip from '../components/Tooltip';
 import { GaugeChart } from '../components/GaugeChart';
 import CompanyEquityPieChart from "@/components/CompanyEquityPieChart";
+import { PageTag } from "@/components/PageTag";
 
 export default function MyEquityRedWhite() {
   const [, setLocation] = useLocation();
@@ -201,6 +202,7 @@ export default function MyEquityRedWhite() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
+      <PageTag code="P148" />
       <div className="max-w-md mx-auto py-4 space-y-4">
         
         {/* ============ 第一部分：综合股权概览 ============ */}

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { PageTag } from "@/components/PageTag";
 
 const STATUS_LABEL: Record<string, { text: string; color: string }> = {
   pending: { text: "待处理", color: "#f59e0b" },
@@ -118,6 +119,7 @@ export default function AfWithdrawPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-10 max-w-md mx-auto overflow-x-hidden" style={{ maxWidth: '100vw' }}>
+      <PageTag code="P057" />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-10 flex items-center px-4 py-3"

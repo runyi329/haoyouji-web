@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronRight, Calendar, Users, Plus } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 type ViewType = "balance" | "income" | "expense";
 
@@ -153,6 +154,7 @@ export default function LedgerCalendar() {
 
   return (
     <div className="min-h-screen bg-gray-100" style={{ display: 'flex', flexDirection: 'column' }}>
+      <PageTag code="P115" />
       {/* 顶部导航栏 - 深色主题色 */}
       <div 
         className="px-4 py-3" 

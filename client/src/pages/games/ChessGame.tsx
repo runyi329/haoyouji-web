@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useState, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { StarRewardPopup } from "@/components/StarRewardPopup";
+import { PageTag } from "@/components/PageTag";
 
 // 棋子类型
 type PieceType = "king" | "queen" | "rook" | "bishop" | "knight" | "pawn";
@@ -461,6 +462,7 @@ export default function ChessGame() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 to-blue-50 pb-20">
+      <PageTag code="P271" />
       {/* 顶部导航 */}
       <header className="z-50 glass border-b border-border/50">
         <div className="container flex items-center justify-between h-16">

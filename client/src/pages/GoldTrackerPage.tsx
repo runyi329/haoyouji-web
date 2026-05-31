@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import ReactECharts from "echarts-for-react";
+import { PageTag } from "@/components/PageTag";
 
 // ─── 类型 ───────────────────────────────────────────────────────────────────
 
@@ -274,6 +275,7 @@ export default function GoldTrackerPage() {
 
   return (
     <div
+      <PageTag code="P099" />
       className="min-h-screen pb-8"
       style={{
         background: "#000000",

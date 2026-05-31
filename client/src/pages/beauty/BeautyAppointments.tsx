@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import BeautyTabBar from "./BeautyTabBar";
 import BottomNav from "@/components/BottomNav";
+import { PageTag } from "@/components/PageTag";
 
 const STATUS_MAP: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   pending: { label: "待确认", color: "text-amber-500 bg-amber-50", icon: <AlertCircle className="w-3.5 h-3.5" /> },
@@ -40,6 +41,7 @@ export default function BeautyAppointments() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
+      <PageTag code="P247" />
       <div className="sticky top-0 z-10">
         <div className="bg-white border-b border-gray-100">
           <div className="flex items-center justify-between px-4 py-3">

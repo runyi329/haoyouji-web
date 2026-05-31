@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { ArrowLeft, RefreshCw, ExternalLink } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { PageTag } from "@/components/PageTag";
 
 interface ContractData {
   symbol: string;
@@ -312,6 +313,7 @@ export default function OilBusinessPage() {
 
   return (
     <div className="min-h-screen text-white" style={{ backgroundColor: "#0a0c10", fontFamily: "'SF Mono', 'Consolas', monospace" }}>
+      <PageTag code="P151" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-20 border-b" style={{ backgroundColor: "#0d1117", borderColor: "#1e2530" }}>
         <div className="px-4 py-3 flex items-center justify-between">

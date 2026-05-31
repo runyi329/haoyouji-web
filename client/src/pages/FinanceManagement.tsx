@@ -3,6 +3,7 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
@@ -405,6 +406,7 @@ export default function FinanceManagement() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F0F4FF' }}>
+      <PageTag code="P095" />
       <div
         className="sticky top-0 z-10 px-4 py-3 flex items-center gap-3"
         style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}

@@ -7,6 +7,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { PageTag } from "@/components/PageTag";
 
 export default function MerchantProductDetail() {
   const params = useParams<{ id: string }>();
@@ -121,6 +122,7 @@ export default function MerchantProductDetail() {
 
   return (
     <div className="min-h-screen bg-white pb-24">
+      <PageTag code="P144" />
       {/* 顶部导航栏 */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-100 flex items-center h-12 px-3">
         <button

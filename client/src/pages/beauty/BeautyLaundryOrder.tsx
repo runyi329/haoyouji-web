@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ChevronLeft, MapPin, Clock, MessageSquare, ChevronRight, Shield, Truck } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 const PACKAGES: Record<string, { label: string; price: number }> = {
   "1": { label: "衣鞋任洗1件", price: 29 },
@@ -101,6 +102,7 @@ export default function BeautyLaundryOrder() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28" style={{ fontFamily: "'PingFang SC', 'Helvetica Neue', sans-serif" }}>
+      <PageTag code="P254" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-50 bg-white border-b border-gray-100 flex items-center px-4 py-3">
         <button onClick={() => navigate(`/beauty/laundry`)} className="mr-3 p-1">

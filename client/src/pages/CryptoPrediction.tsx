@@ -14,6 +14,7 @@ import {
   Wallet, ChevronDown, ChevronUp, ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 // ─── 币种配置 ──────────────────────────────────────────────────
 // 委买价格档位（低于市价，抄底用）
@@ -2289,6 +2290,7 @@ export default function CryptoPrediction() {
 
   return (
     <div className="min-h-screen pb-20" style={{ background: '#F0F4FF', color: '#1A2340' }}>
+      <PageTag code="P076" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-50 px-4 pt-3 pb-2 flex items-center justify-between" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}>
         <div className="flex items-center gap-2">

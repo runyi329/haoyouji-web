@@ -32,6 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
+import { PageTag } from "@/components/PageTag";
 
 const ACTION_TYPE_NAMES: Record<string, string> = {
   add_contact: "添加人脉",
@@ -205,6 +206,7 @@ export default function PointsManagement() {
 
   return (
     <div className="container max-w-6xl py-8">
+      <PageTag code="P233" />
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">积分管理</h1>
         <p className="text-muted-foreground">管理用户积分和查看积分变动历史</p>

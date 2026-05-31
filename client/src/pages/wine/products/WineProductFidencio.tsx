@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 const CDN = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets";
 const COS = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com";
@@ -88,6 +89,7 @@ export default function WineProductFidencio() {
 
   return (
     <div className="min-h-screen bg-[#0d0505] text-[#e8d5b7] pb-28">
+      <PageTag code="P306" />
 
       {/* 顶部导航（铁规：44px 高） */}
       <div className="sticky top-0 z-20 bg-[#0d0505]/95 backdrop-blur-sm border-b border-[#8B1A1A]/30 px-4 flex items-center gap-3" style={{ height: 44 }}>

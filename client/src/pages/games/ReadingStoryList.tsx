@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft, BookOpen, Sparkles, Settings } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 export default function ReadingStoryList() {
   // 获取故事列表
@@ -24,6 +25,7 @@ export default function ReadingStoryList() {
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 via-orange-50 to-red-50 p-4">
+      <PageTag code="P280" />
       {/* 顶部导航 */}
       <div className="max-w-6xl mx-auto mb-6 flex items-center justify-between">
         <Link href="/games">

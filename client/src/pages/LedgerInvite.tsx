@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { ChevronLeft, Share2, Copy, Check } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import QRCode from "qrcode";
+import { PageTag } from "@/components/PageTag";
 
 export default function LedgerInvite() {
   const { id } = useParams<{ id: string }>();
@@ -70,6 +71,7 @@ export default function LedgerInvite() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: `${'#D32F2F'}15` }}>
+      <PageTag code="P126" />
       {/* 顶部导航栏 */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="container mx-auto px-4 py-3 flex items-center">

@@ -4,12 +4,14 @@ import { Database, Type, BookText, BookMarked } from "lucide-react";
 import CharacterManager from "./CharacterManager";
 import VocabularyMasterManager from "./VocabularyMasterManager";
 import AntonymManager from "./AntonymManager";
+import { PageTag } from "@/components/PageTag";
 
 export default function MasterLibraryManager() {
   const [activeTab, setActiveTab] = useState<"characters" | "chinese" | "english" | "antonym">("characters");
 
   return (
     <div className="space-y-6">
+      <PageTag code="P231" />
       <div className="flex items-center gap-3 mb-6">
         <Database className="w-6 h-6 text-primary" />
         <h2 className="text-2xl font-bold">总库管理</h2>

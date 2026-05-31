@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Shield, ShieldCheck, ShieldAlert, Lock, Unlock, RefreshCw, AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 interface EncryptionConfig {
   id: number;
@@ -119,6 +120,7 @@ export default function DataSecurityPanel() {
 
   return (
     <div className="space-y-4">
+      <PageTag code="P227" />
       {/* 标题和状态 */}
       <div className="bg-white rounded-2xl p-5 shadow-sm">
         <div className="flex items-center gap-3 mb-4">

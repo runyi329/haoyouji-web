@@ -3,6 +3,7 @@ import { ArrowLeft, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, Wallet, Copy, 
 import { trpc } from "../../lib/trpc";
 import { useState } from "react";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 interface WalletAddress {
   id: number;
@@ -144,6 +145,7 @@ export default function WalletAddressManager() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
+      <PageTag code="P245" />
       {/* 顶部导航 */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center justify-between px-4 py-3">

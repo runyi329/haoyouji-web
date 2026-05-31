@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Share2 } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 import {
   ChevronLeft, Gem, X, TrendingUp, Heart, GraduationCap, Share2 as _Share2,
   Home, Briefcase, Utensils, Car, Dumbbell, Music, Building2, Users, Star,
@@ -5348,6 +5349,7 @@ export function CustomShowcaseView({ isShareMode = false }: { isShareMode?: bool
 
   return (
     <div style={{ width: "100vw", height: "100vh", overflow: "hidden", background: "#0D0800", position: "relative" }}>
+      <PageTag code="P077" />
       {/* 蜂巢全屏 */}
       <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
         <svg width={CANVAS_W} height={CANVAS_H} style={{ position: "absolute", top: 0, left: 0, overflow: "visible" }}>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
+import { PageTag } from "@/components/PageTag";
 
 /**
  * 支付结果页
@@ -78,6 +79,7 @@ export default function PaymentResult() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#f5f5f5' }}>
+      <PageTag code="P159" />
       {/* 顶部状态栏区域 - 参照支付宝的红色顶部 */}
       <div
         className="w-full flex flex-col items-center pt-12 pb-10"

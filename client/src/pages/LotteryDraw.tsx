@@ -8,6 +8,7 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { ChevronLeft, Shield, CheckCircle, XCircle } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 // ─── 滚动名单组件 ───────────────────────────────────────────────────────────
 function RollingNames({ names, finalName, onDone }: {
@@ -119,6 +120,7 @@ export function LotteryDrawScreen() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#FAF3ED' }}>
+      <PageTag code="P136" />
       {/* 顶部导航 */}
       <div className="bg-white border-b" style={{ borderColor: '#E0E0E0' }}>
         <div className="flex items-center h-14 px-4 gap-3">

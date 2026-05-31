@@ -7,6 +7,7 @@
 import { useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 
+import { PageTag } from "@/components/PageTag";
 export default function SmartFinancePage() {
   const [, navigate] = useLocation();
 
@@ -164,6 +165,7 @@ export default function SmartFinancePage() {
       className="min-h-screen max-w-md mx-auto relative"
       style={{ background: '#f5f6f8', color: '#1a1a2e' }}
     >
+      <PageTag code="P033" />
       {/* ── 顶部导航 ── */}
       <div
         className="sticky top-0 z-20 flex items-center px-4 py-3"

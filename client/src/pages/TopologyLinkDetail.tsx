@@ -1,6 +1,7 @@
 import { useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { ArrowLeft } from 'lucide-react';
+import { PageTag } from "@/components/PageTag";
 
 export default function TopologyLinkDetail() {
   const [location, setLocation] = useLocation();
@@ -17,6 +18,7 @@ export default function TopologyLinkDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <PageTag code="P195" />
       {/* 顶部导航 */}
       <div className="bg-[#D32F2F] text-white px-4 py-3 flex items-center gap-3">
         <button onClick={() => setLocation('/parent/topology')} className="p-1">

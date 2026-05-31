@@ -8,6 +8,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 import {
   MessageSquare, ChevronLeft, CheckCircle, XCircle,
   Clock, Send, RefreshCw, Settings, FileText, Zap, Pencil, Save
@@ -83,6 +84,7 @@ export default function JiangSmsManage() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
+      <PageTag code="P293" />
       {/* 顶部导航 */}
       <div className="bg-[#0d0d14] border-b border-[#D32F2F]/20 sticky top-0 z-10">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">

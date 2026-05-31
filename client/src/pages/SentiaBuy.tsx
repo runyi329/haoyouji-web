@@ -8,6 +8,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "../lib/trpc";
 import QRCode from "qrcode";
+import { PageTag } from "@/components/PageTag";
 
 const SENTIA_ICON = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/snt-ai-2-N3gEAMNGbei2Fqn5vNs6VJ.webp";
 const SNT_PRICE = 0.04; // USDT per SNT
@@ -453,6 +454,7 @@ export default function SentiaBuy() {
 
   return (
     <>
+      <PageTag code="P187" />
     <div style={{
       minHeight: "100vh",
       background: BNB.bg,

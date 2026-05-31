@@ -4,10 +4,12 @@
  * 使用通用 MerchantSettingsPage 组件（§10.1 通用商家设置规范）
  */
 import MerchantSettingsPage from "@/components/MerchantSettingsPage";
+import { PageTag } from "@/components/PageTag";
 
 export default function BeautySettings() {
   return (
     <MerchantSettingsPage
+      <PageTag code="P261" />
       merchantCode="liulifan"
       adminUsername="liulifan"
       accentColor="#E91E8C"

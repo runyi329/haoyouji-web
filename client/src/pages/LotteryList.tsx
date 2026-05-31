@@ -7,6 +7,7 @@ import React, { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { PageTag } from "@/components/PageTag";
 import {
   ChevronLeft, Plus, Trophy, Users, Clock, Zap, Layers,
   Edit2, PlayCircle, PauseCircle, XCircle, Eye, Trash2,
@@ -129,6 +130,7 @@ export default function LotteryList() {
 
   return (
     <div className="min-h-screen pb-24" style={{ backgroundColor: "#FAF3ED" }}>
+      <PageTag code="P138" />
       {/* 顶部导航栏 */}
       <div
         className="bg-white sticky top-0 z-10"

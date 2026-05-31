@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, Star, Shield, Truck, Clock, Award } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb";
 
@@ -49,6 +50,7 @@ export default function BeautyLaundry() {
 
   return (
     <div className="min-h-screen bg-white pb-24" style={{ fontFamily: "'PingFang SC', 'Helvetica Neue', sans-serif" }}>
+      <PageTag code="P253" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-50 bg-white border-b border-gray-100 flex items-center px-4 py-3">
         <button onClick={() => navigate("/beauty")} className="mr-3 p-1">

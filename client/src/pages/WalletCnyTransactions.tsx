@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, RefreshCw } from "lucide-react";
 import { trpc } from "../lib/trpc";
+import { PageTag } from "@/components/PageTag";
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -78,6 +79,7 @@ export default function WalletCnyTransactions() {
 
   return (
     <div
+      <PageTag code="P201" />
       className="min-h-screen"
       style={{ background: "linear-gradient(160deg, #0d0d0d 0%, #1a1a1a 50%, #111111 100%)" }}
     >

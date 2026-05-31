@@ -5,6 +5,7 @@ import { ChevronLeft, Package, Truck, CheckCircle, XCircle, Clock, Search, Send 
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PageTag } from "@/components/PageTag";
 
 type StatusFilter = "all" | "pending" | "shipped" | "completed" | "cancelled";
 
@@ -94,6 +95,7 @@ export default function AdminRedeemOrders() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <PageTag code="P212" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-100 flex items-center h-12 px-3">
         <button

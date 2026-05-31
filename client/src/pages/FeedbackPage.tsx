@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { CheckCircle, MessageSquare, Camera, X, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 // ===== 6大维度 + 子维度数据（正面 + 负面标签）=====
 const OPINION_DIMENSIONS = [
@@ -375,6 +376,7 @@ export default function FeedbackPage() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
+      <PageTag code="P094" />
 
       {/* ── 顶部红色区 ── */}
       <div className="bg-[#D32F2F] px-4 py-3 relative overflow-hidden">

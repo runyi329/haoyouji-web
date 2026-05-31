@@ -9,6 +9,7 @@ import { StarRewardPopup } from "@/components/StarRewardPopup";
 import { CartoonStar } from "@/components/CartoonStar";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { Mic, MicOff } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 interface AntonymPair {
   id: number;
@@ -750,6 +751,7 @@ export default function AntonymGame() {
 
   return (
     <div className="min-h-screen bg-background p-4">
+      <PageTag code="P266" />
       <div className="max-w-md mx-auto">
         <Link href="/games" className="flex items-center gap-2 text-[#1976D2] mb-4">
           <ChevronLeft size={20} />

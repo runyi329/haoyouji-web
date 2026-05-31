@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft, Search, TrendingUp, TrendingDown, Minus, RefreshCw, Info } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { PageTag } from "@/components/PageTag";
 
 const RED = "#D32F2F";
 const BG = "#FAF3ED";
@@ -137,6 +138,7 @@ export default function RetailInvestor() {
 
   return (
     <div className="h-screen flex flex-col" style={{ background: BG }}>
+      <PageTag code="P184" />
       {/* 顶部导航 */}
       <div className="px-4 py-3 flex items-center gap-3 flex-shrink-0" style={{ background: RED }}>
         <button

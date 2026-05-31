@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
+import { PageTag } from "@/components/PageTag";
 
 const LEDGER_ID = 59;
 
@@ -587,6 +588,7 @@ export default function EquityWeightManage() {
 
   return (
     <div style={{ background: BG_PAGE, minHeight: '100vh', color: '#fff', display: 'flex', flexDirection: 'column' }}>
+      <PageTag code="P092" />
 
       {/* 顶栏 */}
       <div className="flex items-center px-4 py-3" style={{ borderBottom: `1px solid ${GOLD_BORDER}`, flexShrink: 0 }}>

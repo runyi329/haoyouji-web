@@ -11,6 +11,7 @@ import { useLocation } from "wouter";
 import { Settings, ChevronRight, TrendingUp, TrendingDown, RefreshCw } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
+import { PageTag } from "@/components/PageTag";
 
 interface Props {
   ledgerId: number;
@@ -239,6 +240,7 @@ export default function LedgerDetailAF({ ledgerId, ledgerData, user }: Props) {
 
   return (
     <div className="min-h-screen pb-20" style={{ background: '#F0F4FF', color: '#1A2340' }}>
+      <PageTag code="P118" />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-10 px-4 pt-3 pb-2 flex items-center justify-between"

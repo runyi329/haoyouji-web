@@ -3,6 +3,7 @@ import { trpc } from '@/lib/trpc';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Tags, Loader2 } from 'lucide-react';
+import { PageTag } from "@/components/PageTag";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip
 } from 'recharts';
@@ -18,6 +19,7 @@ export default function TagStats() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-20">
+      <PageTag code="P024" />
       {/* Header */}
       <div className="bg-gradient-to-br from-[#A80000] to-[#8a0000] text-white sticky top-0 z-10 shadow-lg">
         <div className="container mx-auto px-4 py-4">

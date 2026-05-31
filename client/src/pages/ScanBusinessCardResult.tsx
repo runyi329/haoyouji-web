@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 type RecognizedInfo = {
   name: string;
@@ -85,6 +86,7 @@ export default function ScanBusinessCardResult() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PageTag code="P186" />
       {/* 头部 */}
       <div className="sticky top-0 z-10 bg-background border-b px-4 py-3">
         <div className="flex items-center gap-3">

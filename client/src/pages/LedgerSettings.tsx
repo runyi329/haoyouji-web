@@ -8,6 +8,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { PageTag } from "@/components/PageTag";
 import {
  AlertDialog,
  AlertDialogAction,
@@ -330,6 +331,7 @@ export default function LedgerSettings() {
 
  return (
  <div className="min-h-screen bg-gray-50 pb-20">
+   <PageTag code="P132" />
  {/* 导航栏 + 头像区域合并为一个白色卡片 */}
  <div className="bg-white border-b border-divider sticky top-0 z-10">
  {/* 顶部导航行 */}

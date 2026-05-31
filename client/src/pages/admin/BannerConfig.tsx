@@ -9,6 +9,7 @@ import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Upload, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { autoCompressImage } from "@/utils/imageUtils";
+import { PageTag } from "@/components/PageTag";
 
 export default function BannerConfig() {
   const [, navigate] = useLocation();
@@ -72,6 +73,7 @@ export default function BannerConfig() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-blue-50 pb-20">
+      <PageTag code="P215" />
       {/* 顶部导航 */}
       <header className="z-50 glass border-b border-border/50">
         <div className="container flex items-center justify-between h-14">

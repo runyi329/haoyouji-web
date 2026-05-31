@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 export default function ProfileSettings() {
   const [, setLocation] = useLocation();
@@ -67,6 +68,7 @@ export default function ProfileSettings() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 pb-20">
+      <PageTag code="P171" />
       {/* 用户信息卡片 - 动态布局 */}
       <div 
         className="bg-gradient-to-br from-[#A80000] to-[#d44] text-white relative overflow-hidden transition-all duration-300"

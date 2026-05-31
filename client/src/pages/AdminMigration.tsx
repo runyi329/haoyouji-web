@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import { PageTag } from "@/components/PageTag";
 
 export default function AdminMigration() {
   const [, setLocation] = useLocation();
@@ -35,6 +36,7 @@ export default function AdminMigration() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
+      <PageTag code="P045" />
       <div className="max-w-2xl mx-auto">
         <Button
           variant="ghost"

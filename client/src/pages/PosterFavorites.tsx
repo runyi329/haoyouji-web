@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { trpc } from '../lib/trpc';
+import { PageTag } from "@/components/PageTag";
 
 // 海报模板配置
 interface PosterTemplate {
@@ -180,6 +181,7 @@ export default function PosterFavorites() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 max-w-md mx-auto relative shadow-2xl">
+      <PageTag code="P165" />
       {/* 顶部导航栏 - z-20确保在最上层 */}
       <div className="bg-white border-b sticky top-0 z-20">
         <div className="flex items-center justify-between px-4 py-3">

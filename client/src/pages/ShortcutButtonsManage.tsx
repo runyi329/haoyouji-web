@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
+import { PageTag } from "@/components/PageTag";
 
 const SHORTCUT_KEYS = ["gold", "qq", "oil", "stock", "digitalB", "ledger59", "ethPosition", "worldCup"] as const;
 const SHORTCUT_LABELS: Record<string, string> = {
@@ -110,6 +111,7 @@ export default function ShortcutButtonsManage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <PageTag code="P190" />
       {/* 顶部导航 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white p-3 flex items-center">
         <button onClick={() => navigate(`/ledger/${ledgerId}/settings`)}>

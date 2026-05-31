@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import BottomNav from "@/components/BottomNav";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { PageTag } from "@/components/PageTag";
 
 type TabType = "products" | "members";
 
@@ -290,6 +291,7 @@ export default function HanmingHome() {
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
+      <PageTag code="P281" />
       {/* 顶部 Header */}
       <div className="sticky top-0 z-10 bg-white border-b border-[#C9A84C]/30 shadow-sm">
         {/* 品牌标识 */}

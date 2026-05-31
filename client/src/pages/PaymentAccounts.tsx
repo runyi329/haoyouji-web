@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 import {
   ArrowLeft,
   CreditCard,
@@ -404,6 +405,7 @@ export default function PaymentAccounts({ hideHeader = false }: PaymentAccountsP
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
+      <PageTag code="P158" />
       {/* 顶部导航栏 */}
       {!hideHeader && (
         <div className="bg-white border-b border-gray-200 sticky top-0 z-10">

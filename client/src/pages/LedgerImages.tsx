@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { PageTag } from "@/components/PageTag";
 
 export default function LedgerImages() {
   const { id } = useParams<{ id: string }>();
@@ -50,6 +51,7 @@ export default function LedgerImages() {
   
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
+      <PageTag code="P124" />
       {/* 顶部导航 */}
       <div className="bg-white px-4 py-3 flex items-center border-b border-gray-100 sticky top-0 z-10">
         <button onClick={() => setLocation(`/ledger/${ledgerId}/settings`)} className="mr-3">

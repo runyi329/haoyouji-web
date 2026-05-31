@@ -3,6 +3,7 @@ import { useLocation, useParams } from "wouter";
 import { ChevronLeft, Plus, Trash2, Pencil, Users, ArrowLeftRight, Search, X, Filter } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -236,6 +237,7 @@ export default function LedgerEquityManage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
+      <PageTag code="P120" />
       {/* 顶部导航 */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="flex items-center justify-between h-14 px-4">

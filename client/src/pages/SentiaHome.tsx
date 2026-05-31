@@ -6,6 +6,7 @@
  */
 import { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
+import { PageTag } from "@/components/PageTag";
 
 const SENTIA_ICON = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/snt-ai-2-N3gEAMNGbei2Fqn5vNs6VJ.webp";
 const ARCH_IMG = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sentia-architecture-en-Y5rojCok9dBL7NaQP6LCAo.webp";
@@ -227,6 +228,7 @@ export default function SentiaHome() {
 
   return (
     <div style={{
+      <PageTag code="P188" />
       minHeight: "100vh",
       background: C.bg,
       color: C.text,

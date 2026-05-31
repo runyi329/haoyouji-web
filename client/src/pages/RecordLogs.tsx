@@ -2,6 +2,7 @@ import { useRoute, useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useColorTheme } from "@/contexts/ColorThemeContext";
+import { PageTag } from "@/components/PageTag";
 
 // 操作类型的中文映射
 const ACTION_LABELS: Record<string, string> = {
@@ -106,6 +107,7 @@ export default function RecordLogs() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      <PageTag code="P182" />
       {/* 顶部导航栏 */}
       <div style={{ backgroundColor: themeColors.primary }}>
         <div className="flex items-center justify-between px-4 py-3">

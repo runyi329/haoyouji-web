@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft, Search, X, Loader2, ChevronLeft as PrevIcon, ChevronRight } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 interface CoinItem {
   symbol: string;
@@ -161,6 +162,7 @@ export default function OtherCoinsPage() {
 
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#F5F5F5", overflow: "hidden" }}>
+      <PageTag code="P156" />
       {/* ── 顶部彩色区域 ── */}
       <div style={{
         background: "linear-gradient(160deg, #1A237E 0%, #283593 40%, #1565C0 70%, #0D47A1 100%)",

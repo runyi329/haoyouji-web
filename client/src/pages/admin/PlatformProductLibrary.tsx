@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 import {
   Plus,
   Edit,
@@ -112,6 +113,7 @@ export default function PlatformProductLibrary() {
 
   return (
     <div className="space-y-4">
+      <PageTag code="P232" />
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid grid-cols-2 w-full max-w-md">
           <TabsTrigger value="library" className="flex items-center gap-1.5">

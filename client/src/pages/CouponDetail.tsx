@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLocation, useRoute } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { ChevronLeft, Calendar, User, CheckCircle } from 'lucide-react';
+import { PageTag } from "@/components/PageTag";
 
 export default function CouponDetail() {
   const [, setLocation] = useLocation();
@@ -85,6 +86,7 @@ export default function CouponDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <PageTag code="P071" />
       {/* 顶部导航栏 */}
       <div className="bg-[#D32F2F] text-white p-4 flex items-center">
         <button onClick={() => setLocation('/coupons')} className="mr-3">

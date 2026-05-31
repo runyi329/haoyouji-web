@@ -19,6 +19,7 @@ import {
 import WineTabBar from "./WineTabBar";
 import BottomNav from "@/components/BottomNav";
 import ShareSheet from "@/components/ShareSheet";
+import { PageTag } from "@/components/PageTag";
 
 const HERO_BG = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/wine-hero-banner_b83f1a40.webp";
 const ABOUT_BG = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/wine-about-bg_24a554e9.webp";
@@ -94,6 +95,7 @@ export default function WineHome() {
 
   return (
     <div className="min-h-screen bg-[#0d0505] text-white pb-24">
+      <PageTag code="P302" />
       {/* Hero 区域 */}
       <div
         className="relative min-h-[260px] flex flex-col justify-end"

@@ -1,10 +1,12 @@
 import { Construction } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import BottomNav from "@/components/BottomNav";
+import { PageTag } from "@/components/PageTag";
 
 export default function Moments() {
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
+      <PageTag code="P145" />
       {/* 顶部标题栏 */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">

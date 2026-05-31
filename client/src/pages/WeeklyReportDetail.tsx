@@ -3,6 +3,7 @@ import { ArrowLeft, Shield, Award, Loader2, HelpCircle } from 'lucide-react';
 import { useLocation, useRoute } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import Tooltip from '../components/Tooltip';
+import { PageTag } from "@/components/PageTag";
 
 interface WeeklyReport {
   weekNumber: string;
@@ -129,6 +130,7 @@ export default function WeeklyReportDetail() {
 
   return (
     <div className="min-h-screen bg-[#FAF3ED]">
+      <PageTag code="P204" />
       {/* 顶部导航 */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="flex items-center px-4 py-3">

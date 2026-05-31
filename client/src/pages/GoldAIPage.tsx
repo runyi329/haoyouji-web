@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import ReactECharts from "echarts-for-react";
 import { Streamdown } from "streamdown";
+import { PageTag } from "@/components/PageTag";
 
 // ─── 配色（与 StockDetail 完全一致）────────────────────────────────────────────
 const RED = "#D32F2F";
@@ -269,6 +270,7 @@ export default function GoldAIPage() {
 
   return (
     <div className="min-h-screen pb-8" style={{ background: BG, color: TEXT }}>
+      <PageTag code="P098" />
       {/* 顶部导航（与 StockDetail 完全一致：红色背景 + 白色文字） */}
       <div
         className="sticky top-0 z-30 px-4 py-3 flex items-center gap-3 flex-shrink-0"

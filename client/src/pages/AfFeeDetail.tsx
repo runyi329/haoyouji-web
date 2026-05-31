@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { PageTag } from "@/components/PageTag";
 
 const now = new Date();
 const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -88,6 +89,7 @@ export default function AfFeeDetail() {
 
   return (
     <div className="min-h-screen pb-10" style={{ background: '#f5f7fa' }}>
+      <PageTag code="P047" />
 
       {/* ── 顶部蓝色区域 ── */}
       <div style={{ background: 'linear-gradient(135deg,#1e3a8a 0%,#2563eb 100%)' }}>

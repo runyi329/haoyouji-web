@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { SECTIONS, TABLE_OF_CONTENTS, WHITEPAPER_VERSION, WHITEPAPER_DATE } from "./SentiaWhitepaperData";
+import { PageTag } from "@/components/PageTag";
 
 const SENTIA_ICON = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/snt-ai-2-N3gEAMNGbei2Fqn5vNs6VJ.webp";
 
@@ -197,6 +198,7 @@ export default function SentiaWhitepaper() {
 
   return (
     <div className="min-h-screen bg-[#0B0E11] text-[#EAECEF]" style={{ fontFamily: "'Inter', 'PingFang SC', sans-serif" }}>
+      <PageTag code="P189" />
       {/* ── Top Nav ── */}
       <nav className="sticky top-0 z-50 bg-[#0B0E11] border-b border-[#2B2F36]">
         <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">

@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 const TASK_STATUS: Record<string, { label: string; color: string; bgColor: string; Icon: any }> = {
   draft:     { label: "草稿",   color: "#9E9E9E", bgColor: "#F5F5F5", Icon: AlertCircle },
@@ -214,6 +215,7 @@ const LedgerAIEmployees = () => {
 
   return (
     <div className="min-h-screen bg-[#F9F9F9] flex flex-col">
+      <PageTag code="P112" />
       {/* 顶部导航 */}
       <div className="bg-gradient-to-r from-[#D32F2F] to-[#B71C1C] text-white sticky top-0 z-10">
         <div className="flex items-center h-14 px-4">

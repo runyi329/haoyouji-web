@@ -4,6 +4,7 @@ import { ArrowLeft, Hourglass } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { Switch } from "@/components/ui/switch";
+import { PageTag } from "@/components/PageTag";
 
 const LedgerFeatures = () => {
   const [, setLocation] = useLocation();
@@ -74,6 +75,7 @@ const LedgerFeatures = () => {
   if (!ledger) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <PageTag code="P121" />
         <div className="text-gray-500">加载中...</div>
       </div>
     );

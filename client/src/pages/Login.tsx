@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { saveToken, saveCredentials, getSavedCredentials, clearCredentials } from "@/lib/tokenStorage";
+import { PageTag } from "@/components/PageTag";
 
 export default function Login() {
   const [, setLocation] = useLocation();
@@ -199,6 +200,7 @@ export default function Login() {
 
   return (
     <div className="fixed inset-0 flex flex-col" style={{ backgroundColor: '#A80000' }}>
+      <PageTag code="P133" />
       {/* 主内容区域 */}
       <main className="flex-1 flex flex-col items-center px-6 pt-8 overflow-y-auto touch-pan-y">
         <div className="w-full max-w-md">

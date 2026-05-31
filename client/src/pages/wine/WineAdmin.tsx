@@ -8,6 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { ArrowLeft, Plus, Edit2, Trash2, Upload, X, Package, MapPin, Eye, EyeOff, Wine, Share2, Clock, CheckCircle2, Search, ChevronRight, XCircle, Users } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 const MERCHANT_CODE = "cx8618";
 
@@ -159,6 +160,7 @@ export default function WineAdmin() {
 
   return (
     <div className="min-h-screen bg-[#1a0a0a] text-[#e8d5b7]">
+      <PageTag code="P300" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 bg-[#2d0d0d] border-b border-[#5a1e1e] px-4 py-3 flex items-center gap-3">
         <button onClick={() => setLocation("/wine/profile")} className="text-[#C9A84C]">

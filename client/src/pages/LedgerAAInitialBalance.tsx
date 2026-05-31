@@ -25,6 +25,7 @@ import { ChevronLeft, ChevronDown, Save, Tag, Users } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
+import { PageTag } from "@/components/PageTag";
 
 // 支持的数字币配置
 const CRYPTO_COINS = [
@@ -455,6 +456,7 @@ export default function LedgerAAInitialBalance() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#FAF3ED" }}>
+      <PageTag code="P111" />
       {/* 顶部导航栏 */}
       <div
         className="flex items-center px-4 py-3 sticky top-0 z-10"

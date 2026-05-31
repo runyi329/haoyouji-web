@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { trpc } from '../lib/trpc';
 import { Plus, Users } from 'lucide-react';
 import AddMemberDialog from '../components/AddMemberDialog';
+import { PageTag } from "@/components/PageTag";
 
 // 6个成长里程碑
 const MILESTONES = [
@@ -52,6 +53,7 @@ export default function WorkGroupMembers() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F5F5' }}>
+      <PageTag code="P209" />
       {/* 顶部导航 */}
       <div
         className="text-white px-4 py-3 flex items-center justify-between sticky top-0 z-10"

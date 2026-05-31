@@ -20,6 +20,7 @@ import {
   Wrench
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { PageTag } from "@/components/PageTag";
 import {
   Dialog,
   DialogContent,
@@ -340,6 +341,7 @@ export default function Academy() {
 
   return (
     <div className="min-h-screen bg-white">
+      <PageTag code="P043" />
       {/* 顶部装饰区 */}
       <div className="bg-gradient-to-br from-red-600 to-red-800 rounded-b-3xl pb-20 relative">
         <div className="px-4 pt-4">

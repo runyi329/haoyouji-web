@@ -15,6 +15,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useState } from "react";
 import { UserAvatar } from "@/components/UserAvatar";
+import { PageTag } from "@/components/PageTag";
 
 export default function LedgerPendingApprovals() {
   const [, params] = useRoute("/ledger/:id/pending-approvals");
@@ -145,6 +146,7 @@ export default function LedgerPendingApprovals() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <PageTag code="P129" />
       {/* 顶部导航 */}
       <div className="bg-[#D32F2F] text-white p-4 flex items-center sticky top-0 z-10">
         <button

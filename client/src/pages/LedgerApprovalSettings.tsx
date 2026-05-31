@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { PageTag } from "@/components/PageTag";
 
 interface ApprovalRule {
   recorderId: number | null;
@@ -170,6 +171,7 @@ export default function LedgerApprovalSettings() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-400 to-blue-600">
+      <PageTag code="P114" />
       {/* 顶部导航 */}
       <div className="bg-[#1976D2] text-white p-4 flex items-center">
         <button

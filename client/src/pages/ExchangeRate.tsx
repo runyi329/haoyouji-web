@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { ChevronLeft, RefreshCw, ChevronDown } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 const CURRENCIES = [
   { code: "CNY", name: "人民币", flag: "🇨🇳" },
@@ -86,6 +87,7 @@ export default function ExchangeRate() {
 
   return (
     <div className="flex flex-col" style={{ height: "100dvh", background: "#F2F2F7", overflow: "hidden" }}>
+      <PageTag code="P093" />
 
       {/* 顶部红色区域（固定不动） */}
       <div style={{ background: "linear-gradient(135deg, #C0392B 0%, #96281B 100%)", flexShrink: 0 }}>

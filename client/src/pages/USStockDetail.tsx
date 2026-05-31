@@ -7,6 +7,7 @@ import { useParams } from "wouter";
 import { ChevronLeft, Calendar, Globe } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
+import { PageTag } from "@/components/PageTag";
 
 // ─── 配色 ────────────────────────────────────────────────
 const BLUE = "#1565C0";
@@ -141,6 +142,7 @@ export default function USStockDetail() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: BG }}>
+      <PageTag code="P198" />
       {/* 顶部导航 */}
       <div className="px-4 py-3 flex items-center gap-3 flex-shrink-0" style={{ background: BLUE, color: "#fff" }}>
         <button

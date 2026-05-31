@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Search, Tag, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+import { PageTag } from "@/components/PageTag";
 export default function TagSearch() {
   const [, setLocation] = useLocation();
   const [keyword, setKeyword] = useState("");
@@ -15,6 +16,7 @@ export default function TagSearch() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50">
+      <PageTag code="P017" />
       {/* 头部 */}
       <div className="bg-white/80 backdrop-blur-sm border-b sticky top-0 z-10">
         <div className="container py-4">

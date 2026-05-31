@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
 import { themeTemplates } from "@/contexts/ColorThemeContext";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 export default function ThemeSettings() {
   const [, setLocation] = useLocation();
@@ -17,6 +18,7 @@ export default function ThemeSettings() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
+      <PageTag code="P299" />
       {/* 头部 */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center gap-3 p-4">

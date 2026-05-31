@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight, Clock, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import BeautyTabBar from "./BeautyTabBar";
 import BottomNav from "@/components/BottomNav";
+import { PageTag } from "@/components/PageTag";
 
 export default function BeautyServices() {
   const { user } = useAuth();
@@ -16,6 +17,7 @@ export default function BeautyServices() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
+      <PageTag code="P260" />
       <div className="sticky top-0 z-10">
         <div className="bg-white border-b border-gray-100">
           <div className="flex items-center justify-between px-4 py-3">

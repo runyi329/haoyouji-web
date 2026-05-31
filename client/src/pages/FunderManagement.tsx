@@ -3,6 +3,7 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 // 币种选项
 const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'] as const;
@@ -646,6 +647,7 @@ export default function FunderManagement() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F0F4FF' }}>
+      <PageTag code="P096" />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-10 px-4 py-3 flex items-center gap-3"

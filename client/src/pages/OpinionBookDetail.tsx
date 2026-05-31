@@ -7,6 +7,7 @@ import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Search, Settings, Star, ChevronDown, MessageSquare, RefreshCw } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 // ─── 词云组件（螺旋扩散，最大词在中心）─────────────────────────────────────────
 function WordCloud({ tags }: { tags: Array<{ tag: string; count: number }> }) {
@@ -355,6 +356,7 @@ export default function OpinionBookDetail() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ backgroundColor: "#FAF3ED" }}>
+      <PageTag code="P154" />
 
       {/* ══════════════════════════════════════════════════════════════
           红色区域：占 2/5 屏幕高度

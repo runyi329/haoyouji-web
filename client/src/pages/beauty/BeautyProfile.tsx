@@ -10,6 +10,7 @@ import {
   ArrowLeft, Users, Star, Calendar, ChevronRight, Gift, ClipboardList, Settings
 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
+import { PageTag } from "@/components/PageTag";
 
 export default function BeautyProfile() {
   const [, setLocation] = useLocation();
@@ -31,6 +32,7 @@ export default function BeautyProfile() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
+      <PageTag code="P259" />
       {/* 顶部红金渐变区域 */}
       <div className="relative bg-gradient-to-br from-rose-500 via-red-400 to-rose-400 text-white overflow-hidden">
         {/* 装饰圆 */}

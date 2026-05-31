@@ -16,6 +16,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { PageTag } from "@/components/PageTag";
 
 export default function DietMembers() {
   const [, setLocation] = useLocation();
@@ -128,6 +129,7 @@ export default function DietMembers() {
 
   return (
     <div className="min-h-screen bg-[#FAF3ED]">
+      <PageTag code="P086" />
       {/* 顶部导航 */}
       <div className="text-white px-3 py-2.5 flex items-center sticky top-0 z-10"
         style={{ backgroundColor: 'var(--brand-red, #D32F2F)' }}>

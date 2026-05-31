@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Plus, UserPlus, ChevronDown, ChevronUp, StickyNote } from "lucide-react";
+import { PageTag } from "@/components/PageTag";
 
 function DiamondIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
@@ -68,6 +69,7 @@ export default function CustomADManager() {
 
   return (
     <div className="space-y-4">
+      <PageTag code="P220" />
       {/* 新建按钮 */}
       <div className="flex justify-end">
         <Button

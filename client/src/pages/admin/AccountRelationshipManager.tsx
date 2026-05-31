@@ -41,6 +41,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { PageTag } from "@/components/PageTag";
 
 /**
  * 功能权限开关组件
@@ -470,6 +471,7 @@ export default function AccountRelationshipManager() {
 
   return (
     <div className="space-y-6">
+      <PageTag code="P210" />
       {/* 说明卡片 */}
       <Card className="p-6 bg-gradient-to-br from-red-50 to-rose-50">
         <h3 className="font-bold text-lg mb-4 flex items-center gap-2">

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageTag } from "@/components/PageTag";
 
 type CategoryType = "expense" | "income";
 
@@ -263,6 +264,7 @@ const LedgerCategories = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <PageTag code="P116" />
       {/* 顶部导航 */}
       <div className="bg-white p-4 flex items-center justify-between border-b sticky top-0 z-10">
         <button onClick={() => setLocation(backPath)}>

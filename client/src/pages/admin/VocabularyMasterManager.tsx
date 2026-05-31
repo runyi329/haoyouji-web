@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/lib/trpc";
 import { Plus, Trash2, Edit, Search } from "lucide-react";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 interface VocabularyMasterManagerProps {
   defaultTab?: "chinese" | "english";
@@ -145,6 +146,7 @@ export default function VocabularyMasterManager({ defaultTab = "chinese" }: Voca
   return (
     <Card className="p-6">
       <div className="space-y-6">
+        <PageTag code="P244" />
         {/* 顶部操作栏 */}
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold">总词库管理</h2>

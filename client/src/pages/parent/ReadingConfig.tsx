@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ArrowLeft, Plus, Sparkles, Trash2, Edit } from "lucide-react";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 export default function ReadingConfig() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -114,6 +115,7 @@ export default function ReadingConfig() {
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50 p-4">
+      <PageTag code="P296" />
       {/* 顶部导航 */}
       <div className="max-w-6xl mx-auto mb-6 flex items-center justify-between">
         <Link href="/games/reading">

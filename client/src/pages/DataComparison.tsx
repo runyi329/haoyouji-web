@@ -8,6 +8,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { useColorTheme } from "@/contexts/ColorThemeContext";
 
+import { PageTag } from "@/components/PageTag";
 type TabType = "all" | "my" | "shared";
 type TimePeriodType = "day" | "week" | "month";
 type ChartType = "bar" | "line" | "calendar";
@@ -38,6 +39,7 @@ export default function DataComparison() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <PageTag code="P018" />
       {/* 顶部导航区 - 使用主题色渐变背景 */}
       <div 
         className="text-white"

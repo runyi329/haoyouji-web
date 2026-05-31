@@ -20,6 +20,7 @@ import {
 import { ChevronLeft, Home, Plane, Hammer, Briefcase, GraduationCap, Receipt, Edit, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { PageTag } from "@/components/PageTag";
 
 const ledgerTypeConfig: Record<string, { name: string; icon: any; defaultName: string }> = {
   family: { name: "家庭/情侣账本", icon: Home, defaultName: "家庭记账" },
@@ -98,6 +99,7 @@ export default function CreateLedger() {
 
   return (
     <div className="min-h-screen bg-[#FAF3ED]">
+      <PageTag code="P073" />
       {/* 顶部导航栏 */}
       <div className="text-white px-3 py-2.5 flex items-center" style={{ backgroundColor: 'var(--brand-red, #D32F2F)' }}>
         <button onClick={() => setLocation("/ledger/create-type")} className="p-1 -ml-1">

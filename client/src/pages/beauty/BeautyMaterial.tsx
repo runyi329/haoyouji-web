@@ -28,6 +28,7 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
+import { PageTag } from "@/components/PageTag";
 
 
 // ===== 裁剪工具函数 =====
@@ -886,6 +887,7 @@ export default function BeautyMaterial() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      <PageTag code="P255" />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-10 flex items-center justify-between px-4 py-3"

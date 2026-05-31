@@ -38,6 +38,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import BeautyTabBar from "./BeautyTabBar";
 import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 const STORE_INFO = {
   name: "奢贝美容院",
@@ -134,6 +135,7 @@ export default function BeautyHome() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
+      <PageTag code="P252" />
       {/* 开机画面 */}
       {showSplash && splashImageUrl && (
         <SplashScreen

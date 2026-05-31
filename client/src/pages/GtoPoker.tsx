@@ -3,6 +3,7 @@ import { ArrowLeft, BookOpen, Calculator, StickyNote, Save, RotateCcw } from "lu
 import { useState, useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 // ─── 起手牌数据 ───────────────────────────────────────────────────────────────
 const RANKS = ["A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"];
@@ -1547,6 +1548,7 @@ export default function GtoPoker() {
 
   return (
     <div className="min-h-screen bg-gray-50 max-w-md mx-auto">
+      <PageTag code="P100" />
       <div className="bg-gradient-to-r from-green-900 to-green-700 text-white">
         <div className="flex items-center p-3">
           <button onClick={() => navigate(`/ledger/${ledgerId}`)}>

@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Search, User, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 export default function SuperViewUserList() {
   const [, navigate] = useLocation();
@@ -60,6 +61,7 @@ export default function SuperViewUserList() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[#F5F5F5]">
+      <PageTag code="P241" />
       {/* 顶部导航 */}
       <div className="bg-[#D32F2F] text-white px-4 pt-12 pb-4 flex items-center gap-3">
         <button onClick={() => navigate("/")} className="p-1">

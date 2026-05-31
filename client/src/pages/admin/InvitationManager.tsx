@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Search, Copy, Link2, Users, CheckCircle, XCircle, Share, RefreshCw, Edit, UserPlus, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { PageTag } from "@/components/PageTag";
 import {
   Dialog,
   DialogContent,
@@ -163,6 +164,7 @@ export function InvitationManager() {
 
   return (
     <div className="space-y-6">
+      <PageTag code="P230" />
       {/* 页面标题和说明 */}
       <div>
         <h3 className="text-lg font-semibold">用户邀请权限管理</h3>

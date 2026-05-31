@@ -19,6 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { FALLBACK_PRODUCTS } from "./beauty-fallback-data";
+import { PageTag } from "@/components/PageTag";
 
 /* ─── 图片资源 ─── */
 const IMG = {
@@ -266,6 +267,7 @@ export default function BeautyProductDetail() {
   /* ── 红立方专属：官方级长图文产品页 ── */
   return (
     <div className="min-h-screen pb-24" style={{ background: "#0a0a0a", color: "#f5f0eb" }}>
+      <PageTag code="P257" />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-20 flex items-center justify-between px-4 py-3"

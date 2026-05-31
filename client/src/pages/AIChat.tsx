@@ -3,6 +3,7 @@ import { AIChatBox, Message, Session } from "@/components/AIChatBox";
 
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { PageTag } from "@/components/PageTag";
 
 export default function AIChat() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -144,6 +145,7 @@ export default function AIChat() {
 
   return (
     <div className="h-screen bg-white overflow-hidden">
+      <PageTag code="P037" />
       <AIChatBox
         messages={messages}
         onSendMessage={handleSendMessage}

@@ -11,6 +11,7 @@ import {
 import { LotteryDatePicker } from "@/components/LotteryDatePicker";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
+import { PageTag } from "@/components/PageTag";
 // ─── 裁剪工具函数 ──────────────────────────────────────────────────────────────────────────
 // 图片压缩工具：限制最大宽度和输出质量
 async function compressImageDataUrl(dataUrl: string, maxWidth = 800, quality = 0.75): Promise<string> {
@@ -313,6 +314,7 @@ export default function LotteryEdit() {
 
   return (
     <div className="min-h-screen pb-28" style={{ backgroundColor: C.bg }}>
+      <PageTag code="P137" />
       {/* 裁剪弹窗 */}
       {cropModalSrc && cropTargetPrizeIdx !== null && (
         <ImageCropModal

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Volume2, Star, RotateCcw, Settings } from "lucide-react";
 import ListeningGame from "./ListeningGame";
+import { PageTag } from "@/components/PageTag";
 
 // 音效URLs
 const SOUND_CORRECT = "/sounds/correct.mp3";
@@ -832,6 +833,7 @@ export default function CharacterGame() {
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-pink-50 to-yellow-50 p-4">
+      <PageTag code="P268" />
       <div className="max-w-4xl mx-auto pt-8">
         {/* 顶部信息栏 */}
         <div className="flex justify-between items-center mb-6">

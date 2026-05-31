@@ -5,6 +5,7 @@ import { Link } from "wouter";
 import { ArrowLeft, RotateCcw, Trophy, Clock } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { StarRewardPopup } from "@/components/StarRewardPopup";
+import { PageTag } from "@/components/PageTag";
 
 interface CardItem {
   id: number;
@@ -332,6 +333,7 @@ export default function CharacterMemoryGame() {
 
   return (
     <div className="min-h-screen pb-20" style={{ background: 'transparent' }}>
+      <PageTag code="P270" />
       {/* 游戏未开始 - 使用背景图+按钮锁定在图片实际渲染区域上 */}
       {!gameStarted && (
         <GameSetupScreen 
