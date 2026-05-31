@@ -748,6 +748,11 @@ export default function FunderManagement() {
                         <span className="text-sm font-bold px-2.5 py-0.5 rounded-full text-white" style={{ backgroundColor: coinColor }}>
                           {order.coin}
                         </span>
+                        {order.asset_type && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: order.asset_type === 'stock' ? '#FEF3C7' : '#EFF6FF', color: order.asset_type === 'stock' ? '#92400E' : '#1D4ED8' }}>
+                            {order.asset_type === 'stock' ? '股票' : '数字币'}
+                          </span>
+                        )}
                         <span className="text-sm font-medium text-gray-700">
                           {order.userName || order.username}
                         </span>
@@ -859,6 +864,51 @@ export default function FunderManagement() {
                           <span className="font-medium" style={{ color: '#059669' }}>{String(order.participantInfo.commissionStartDate).slice(0, 10)}</span>
                         </div>
                       )}
+                      {/* 今日币价 */}
+                      {(assetOrdersData as any)?.livePrices?.[order.coin] && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">今日币价</span>
+                          <span className="font-medium text-gray-700">{(assetOrdersData as any).livePrices[order.coin].toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                        </div>
+                      )}
+                      {/* 持有时长 */}
+                      {order.buy_date && (() => {
+                        const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
+                        if (elapsed <= 0) return null;
+                        const days = Math.floor(elapsed / (1000 * 60 * 60 * 24));
+                        const hours = Math.floor((elapsed % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                        const label = days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
+                        return (
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-400">持有时长</span>
+                            <span className="font-medium text-gray-700">{label}</span>
+                          </div>
+                        );
+                      })()}
+                      {/* 已结利息/已结佣金 */}
+                      {(order as any).paidTotal && parseFloat((order as any).paidTotal.amount) > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">{order.participantInfo ? '已结佣金' : '已结利息'}</span>
+                          <span className="font-medium" style={{ color: '#4B5563' }}>
+                            {parseFloat((order as any).paidTotal.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })} {(order as any).paidTotal.currency === 'CNY' ? '元' : 'U'}
+                          </span>
+                        </div>
+                      )}
+                      {/* 担保货币 */}
+                      {order.collateral_assets && (() => {
+                        try {
+                          const assets = JSON.parse(order.collateral_assets);
+                          if (!Array.isArray(assets) || assets.length === 0) return null;
+                          const valid = assets.filter((a: any) => a.coin && a.qty !== '');
+                          if (valid.length === 0) return null;
+                          return valid.map((a: any, idx: number) => (
+                            <div key={idx} className="flex items-center gap-1">
+                              <span className="text-gray-400">{valid.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
+                              <span className="font-medium text-gray-700">{a.qty} {a.coin}</span>
+                            </div>
+                          ));
+                        } catch { return null; }
+                      })()}
                     </div>
 
                     {order.admin_note && (

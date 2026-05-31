@@ -14718,11 +14718,38 @@ ${klinesSummary}
               }
             };
           }
-          return o;
+                    return o;
         });
-        return { orders: ordersWithParticipant, livePrices };
+        // 附带每个订单的已结利息/已结佣金汇总（paid_total）
+        let paidTotalMap: Record<number, { amount: number; currency: string }> = {};
+        if (conn && ordersWithParticipant.length > 0) {
+          try {
+            const orderIds = ordersWithParticipant.map((o: any) => Number(o.id));
+            const placeholders = orderIds.map(() => '?').join(',');
+            const ptRows = await conn.execute(
+              `SELECT order_id, IFNULL(currency, 'U') as currency, SUM(amount) as total_paid
+               FROM funder_interest_payments
+               WHERE order_id IN (${placeholders})
+               GROUP BY order_id, IFNULL(currency, 'U')`,
+              orderIds
+            ) as any;
+            const ptArr = Array.isArray(ptRows[0]) ? ptRows[0] : (Array.isArray(ptRows) ? ptRows : []);
+            for (const row of ptArr) {
+              const oid = Number(row.order_id);
+              if (!paidTotalMap[oid]) {
+                paidTotalMap[oid] = { amount: parseFloat(row.total_paid || '0'), currency: row.currency };
+              } else {
+                paidTotalMap[oid].amount += parseFloat(row.total_paid || '0');
+              }
+            }
+          } catch {}
+        }
+        const ordersWithPaid = ordersWithParticipant.map((o: any) => ({
+          ...o,
+          paidTotal: paidTotalMap[Number(o.id)] || null,
+        }));
+        return { orders: ordersWithPaid, livePrices };
       }),
-
     // 获取资方资产汇总（资金方首页用）
     funderGetAssetSummary: protectedProcedure
       .input(z.object({ ledgerId: z.number(), userId: z.number().optional() }))
