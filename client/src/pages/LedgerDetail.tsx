@@ -1265,7 +1265,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
   const hasInterest = order.interest_base && order.interest_rate_annual && order.interest_start_date && order.status === 'active';
   // 解析字段展示配置（默认全部显示）
   const dc: Record<string, boolean> = (() => {
-    const defaults = { buyPrice: true, buyValue: true, interestBase: true, buyDate: true, todayPrice: true, currentValue: true, holdDuration: true, orderNo: true, accruedInterest: true, paidInterest: true, profitShare: true, commissionShare: true, collateral: true, aiIcon: false };
+    const defaults = { buyPrice: true, buyValue: true, interestBase: true, buyDate: true, todayPrice: true, currentValue: true, holdDuration: true, orderNo: true, accruedInterest: true, paidInterest: true, profitShare: true, commissionShare: true, collateral: true, aiIcon: false, assetType: true };
     try {
       const raw = order.display_config;
       if (!raw) return defaults;
@@ -1323,6 +1323,9 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
               <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} text-gray-400`}>
                 ({order.userName || order.username})
               </span>
+            )}
+            {dc.assetType && order.asset_type && (
+              <span className="text-xs text-gray-400">({order.asset_type === 'stock' ? '股票' : '数字币'})</span>
             )}
           </div>
           {dc.aiIcon && (
