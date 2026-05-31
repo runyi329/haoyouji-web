@@ -1975,7 +1975,7 @@ export default function WorldCup() {
                       borderRadius: 8,
                       display: "flex", alignItems: "center", justifyContent: "space-between"
                     }}>
-                      <span style={{ fontSize: 11, color: TEXT2 }}>AI综合评分</span>
+                      <span style={{ fontSize: 11, color: TEXT2 }}>AI综合分析</span>
                       <span style={{ fontSize: 15, fontWeight: 900, color: GOLD }}>{prob.toFixed(1)}</span>
                     </div>
                   </div>
