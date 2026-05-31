@@ -1795,7 +1795,7 @@ export default function WorldCup() {
                     <div style={{ flex: 1, textAlign: "right", paddingTop: 4 }}>
                       {/* AI 实时分析标题 */}
                       <div className="flex items-center justify-end gap-2 mb-3">
-                        <span style={{ fontSize: 12, color: "#4ADE80", fontWeight: 700, letterSpacing: 1 }}>AI 实时分析</span>
+                        <span style={{ fontSize: 12, color: "#4ADE80", fontWeight: 700, letterSpacing: 1 }}>AI 实时分析夺冠可能</span>
                         <div style={{ position: "relative", width: 10, height: 10, flexShrink: 0 }}>
                           <div style={{
                             position: "absolute", inset: 0, borderRadius: "50%",
