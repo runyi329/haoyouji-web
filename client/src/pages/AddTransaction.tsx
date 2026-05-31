@@ -1219,7 +1219,7 @@ const AddTransaction = () => {
               {categoryLevels.map((cats, level) => {
                 // custom_aa管理员模式：URL中有categoryId时，只显示该单个标签（不显示其他用户标签）
                 const urlCategoryId = urlParams.get('categoryId') ? parseInt(urlParams.get('categoryId')!) : null;
-                const isAdminViewMode = isCustomAA && userRole === 'admin' && !!urlCategoryId;
+                const isAdminViewMode = isCustomAA && (userRole === 'admin' || userRole === 'owner') && !!urlCategoryId;
                 const filteredCats = (isCustomAA && level === 0)
                   ? (isAdminViewMode
                     ? cats.filter((c: any) => c.id === urlCategoryId)
