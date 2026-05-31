@@ -1511,8 +1511,11 @@ export default function WcOddsAdmin() {
                     <tbody>
                       {teams.map((team: { name: string; code: string }) => {
                         const { code: flagCode, zh } = getTeamDisplay(team.name, team.code);
+                        // 左侧行高与右侧同步：k値触发时用双行高
+                        const hasDynamic = !!(latestAdjustedOdds[team.name]?.dynamic);
+                        const rowHeight = hasDynamic ? 88 : 64;
                         return (
-                          <tr key={team.name} style={{ borderBottom: `1px solid rgba(255,255,255,0.05)`, height: 64 }}>
+                          <tr key={team.name} style={{ borderBottom: `1px solid rgba(255,255,255,0.05)`, height: rowHeight }}>
                             <td style={{
                               backgroundColor: BG2, padding: "8px 10px",
                               borderRight: `2px solid ${GOLD}`,
@@ -1567,8 +1570,11 @@ export default function WcOddsAdmin() {
                     <tbody>
                       {teams.map((team: { name: string; code: string }) => {
                         const teamData = matrixData[team.name] ?? {};
+                        // 行高与左侧同步：k値触发时用双行高
+                        const hasDynamicRight = !!(latestAdjustedOdds[team.name]?.dynamic);
+                        const rowHeightRight = hasDynamicRight ? 88 : 64;
                         return (
-                          <tr key={team.name} style={{ borderBottom: `1px solid rgba(255,255,255,0.05)`, height: 64 }}>
+                          <tr key={team.name} style={{ borderBottom: `1px solid rgba(255,255,255,0.05)`, height: rowHeightRight }}>
                             {snapshotsDesc.map((snap, colIdx) => {
                               const isLatest = colIdx === 0;
                               const current = teamData[snap.id];
