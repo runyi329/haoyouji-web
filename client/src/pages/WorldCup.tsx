@@ -41,11 +41,11 @@ function StarRating({ stars }: { stars: number }) {
   for (let i = 1; i <= total; i++) {
     let src: string;
     if (stars >= i) {
-      src = "/stars/star-full.png";
+      src = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/stars/star-full.png";
     } else if (stars >= i - 0.5) {
-      src = "/stars/star-half.png";
+      src = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/stars/star-half.png";
     } else {
-      src = "/stars/star-empty.png";
+      src = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/stars/star-empty.png";
     }
     items.push(
       <img key={i} src={src} alt="" style={{ width: 11, height: 11, objectFit: "contain" }} />
