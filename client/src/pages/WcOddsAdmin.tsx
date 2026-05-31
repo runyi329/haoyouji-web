@@ -1295,6 +1295,8 @@ export default function WcOddsAdmin() {
 
   // 水钱比例：从数据库读取，本地乐观更新用
   const marginPct = marginData?.marginPct ?? 8;
+  // 本地「原始数据」预览模式（不写库，只影响最新列展示）
+  const [showRawOdds, setShowRawOdds] = useState(false);
 
   // 根据选定水钱重新计算最新一列隐含赔率
   // 原始隐含概率 = 1/odds，正则化后隐含概率 = 原始隐含概率 / sum(所有隐含概率) * (100 + marginPct)
@@ -1321,7 +1323,8 @@ export default function WcOddsAdmin() {
       }
     });
     if (sumImplied === 0) return {} as Record<string, { base: number; dynamic: number | null }>;
-    const targetSum = (100 + marginPct) / 100;
+    // 原始数据模式：targetSum = sumImplied，等价于不做任何正则化，直接还原原始赔率
+    const targetSum = showRawOdds ? sumImplied : (100 + marginPct) / 100;
     const result: Record<string, { base: number; dynamic: number | null }> = {};
     Object.entries(rawOdds).forEach(([name, odds]) => {
       const adjustedImplied = (1 / odds) / sumImplied * targetSum;
@@ -1447,12 +1450,19 @@ export default function WcOddsAdmin() {
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold" style={{ color: GOLD }}>水钱</span>
                 <select
-                  value={marginPct}
-                  onChange={e => setMarginMutation.mutate({ marginPct: Number(e.target.value) })}
+                  value={showRawOdds ? 'raw' : marginPct}
+                  onChange={e => {
+                    if (e.target.value === 'raw') {
+                      setShowRawOdds(true);
+                    } else {
+                      setShowRawOdds(false);
+                      setMarginMutation.mutate({ marginPct: Number(e.target.value) });
+                    }
+                  }}
                   style={{
                     backgroundColor: BG3,
-                    color: GOLD,
-                    border: `1px solid ${GOLD}`,
+                    color: showRawOdds ? '#FFFFFF' : GOLD,
+                    border: `1px solid ${showRawOdds ? '#FFFFFF' : GOLD}`,
                     borderRadius: 8,
                     padding: "3px 10px",
                     fontSize: 13,
@@ -1461,6 +1471,7 @@ export default function WcOddsAdmin() {
                     outline: "none",
                   }}
                 >
+                  <option value="raw" style={{ backgroundColor: BG3, color: '#FFFFFF' }}>原始数据</option>
                   {Array.from({ length: 21 }, (_, i) => i + 5).map(v => (
                     <option key={v} value={v} style={{ backgroundColor: BG3 }}>
                       {v}%
