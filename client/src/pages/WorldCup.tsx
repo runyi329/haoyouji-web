@@ -1786,7 +1786,7 @@ export default function WorldCup() {
                     {/* 左侧：章鱼插图，放大，下方被分隔线裁切 */}
                     <div style={{ flexShrink: 0, width: 160, height: 160, marginBottom: -20 }}>
                       <img
-                        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/paul-ai-front.png"
+                        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/paul-ai-front.webp"
                         alt="章鱼保罗"
                         style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "top" }}
                       />
@@ -1884,7 +1884,7 @@ export default function WorldCup() {
                           textShadow: "0 0 20px rgba(255,215,0,0.4)",
                         }}>1</span>
                         <img
-                          src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/paul-eth-coin-circle.png"
+                          src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/paul-eth-coin-circle.webp"
                           alt="章鱼ETH"
                           style={{ width: 56, height: 56, objectFit: "contain", borderRadius: "50%", flexShrink: 0 }}
                         />
