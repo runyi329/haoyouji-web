@@ -33,6 +33,7 @@ import {
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { PageTag } from "@/components/PageTag";
 // import { InlineFieldSelector } from "@/components/InlineFieldSelector";
 
 // 扩展信息字段值
@@ -1451,6 +1452,7 @@ export default function AddContact() {
   
   return (
     <div className="min-h-screen bg-background">
+      <PageTag code="P019" />
       {/* 顶部导航栏 */}
       <div className="sticky top-0 z-10 bg-background border-b">
         <div className="container flex items-center justify-between h-14">

@@ -17,6 +17,7 @@ import {
 import { Tag, User, TrendingUp, Hash, ArrowLeft } from "lucide-react";
 import { useLocation } from "wouter";
 
+import { PageTag } from "@/components/PageTag";
 type DataScope = "all" | "mine" | "shared";
 
 const COLORS = [
@@ -39,6 +40,7 @@ export default function TagAnalytics() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50 p-3">
+        <PageTag code="P022" />
         <div className="container max-w-2xl mx-auto space-y-3">
           {[1, 2, 3, 4].map((i) => (
             <Card key={i} className="p-4 animate-pulse">
@@ -77,6 +79,7 @@ export default function TagAnalytics() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50 pb-20">
+      <PageTag code="P022" />
       {/* 头部 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white p-4 sticky top-0 z-10 shadow-lg">
         <div className="container max-w-2xl mx-auto">
