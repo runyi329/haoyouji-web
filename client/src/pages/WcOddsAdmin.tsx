@@ -94,6 +94,10 @@ function CreateOrderDialog({
 
   const { data: teamList } = trpc.wcOdds.getTeamList.useQuery(undefined, { enabled: open });
 
+  // k值和投注比例（用于计算动态费用）
+  const { data: kData } = trpc.wcOdds.getKSetting.useQuery(undefined, { enabled: open });
+  const { data: bettingStats } = trpc.wcOdds.getBettingStats.useQuery(undefined, { enabled: open });
+
   const { data: latestOdds } = trpc.wcOdds.getLatestOddsForTeam.useQuery(
     { teamName: selectedTeam?.name ?? "" },
     { enabled: !!selectedTeam }
@@ -138,6 +142,22 @@ function CreateOrderDialog({
   const amtNum = parseFloat(amount);
   const potentialReturn = odds && !isNaN(amtNum) && amtNum > 0 ? (odds * amtNum).toFixed(2) : null;
 
+  // 计算k値动态赔率和费用
+  const kValue = kData?.kValue ?? 3;
+  const selectedTeamPct = selectedTeam
+    ? ((bettingStats?.teams ?? []).find(t => t.teamName === selectedTeam.name)?.percentage ?? 0) / 100
+    : 0;
+  // 基础隐含概率：水钱调整后的赔率（这里用原始 Pinnacle 赔率作为代理，因为 Dialog 里没有全队数据）
+  // 实际费用计算：基础赔率 vs k値调整后赔率，取较小的赔率（即较高的费用）
+  // 这里简化：直接用 e^(k*pct) 乘以投注金额作为费用比较
+  const kMultiplier = Math.exp(kValue * selectedTeamPct);
+  // 基础费用 = amount（即投注金额本身）
+  // k値费用 = amount * kMultiplier（当占比高时额外收费）
+  // 注：这里的费用指的是对应的 USDT 收费金额，不是赔率
+  const baseFeeUsdt = amtNum > 0 ? amtNum : 0;  // 基础费用（水钱价）
+  const dynamicFeeUsdt = amtNum > 0 ? amtNum * kMultiplier : 0;  // k値费用
+  const isDynamicActive = dynamicFeeUsdt > baseFeeUsdt * 1.005;  // 超过0.5%才算触发
+
   const filteredTeams = (teamList ?? []).filter(t =>
     !teamSearch || t.teamName.includes(teamSearch)
   );
@@ -164,6 +184,10 @@ function CreateOrderDialog({
       amount,
       currency,
       note: note || undefined,
+      // k値动态定价字段
+      isDynamicPrice: isDynamicActive,
+      baseFeeUsdt: baseFeeUsdt > 0 ? baseFeeUsdt.toFixed(4) : undefined,
+      finalFeeUsdt: isDynamicActive && dynamicFeeUsdt > 0 ? dynamicFeeUsdt.toFixed(4) : undefined,
     });
   }
 
@@ -443,6 +467,36 @@ function CreateOrderDialog({
               <span className="text-xl font-bold" style={{ color: COLOR_UP }}>
                 {formatAmount(potentialReturn)} {currency}
               </span>
+            </div>
+          )}
+
+          {/* k値动态定价提示（当触发时显示） */}
+          {isDynamicActive && amtNum > 0 && (
+            <div
+              className="rounded-lg px-4 py-3"
+              style={{ backgroundColor: "rgba(255,140,0,0.08)", border: "1px solid rgba(255,140,0,0.35)" }}
+            >
+              <div className="text-xs mb-2 font-semibold" style={{ color: "#FF8C00" }}>
+                ⚡ k値保护已触发（该队投注占比 {(selectedTeamPct * 100).toFixed(1)}%）
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="text-center">
+                  <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>基础费用（水钱价）</div>
+                  <div className="font-bold text-sm" style={{ color: TEXT }}>
+                    {baseFeeUsdt.toFixed(2)} {currency}
+                  </div>
+                </div>
+                <div className="text-lg" style={{ color: "#FF8C00" }}>→</div>
+                <div className="text-center">
+                  <div className="text-xs mb-0.5" style={{ color: "#FF8C00" }}>实际费用（k値价）</div>
+                  <div className="font-bold text-sm" style={{ color: "#FF8C00" }}>
+                    {dynamicFeeUsdt.toFixed(2)} {currency}
+                  </div>
+                </div>
+              </div>
+              <div className="text-xs mt-2" style={{ color: TEXT2 }}>
+                溢价倍数 {kMultiplier.toFixed(2)}x（k={kValue}，占比{(selectedTeamPct * 100).toFixed(1)}%）
+              </div>
             </div>
           )}
 
@@ -803,8 +857,23 @@ function OrdersTab() {
                 <div className="flex items-center gap-4 mb-2">
                   <div>
                     <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>赔率</div>
-                    <div className="font-bold" style={{ color: GOLD }}>
+                    <div className="font-bold flex items-center gap-1" style={{ color: GOLD }}>
                       {order.pinnacleOdds ? parseFloat(order.pinnacleOdds).toFixed(2) : "-"}
+                      {/* 小黄点：k値保护已触发 */}
+                      {(order as any).isDynamicPrice && (
+                        <span
+                          title={`k値保护已触发\n基础费用: ${(order as any).baseFeeUsdt ?? '-'} USDT\n实际费用: ${(order as any).finalFeeUsdt ?? '-'} USDT`}
+                          style={{
+                            display: "inline-block",
+                            width: 7,
+                            height: 7,
+                            borderRadius: "50%",
+                            backgroundColor: "#FFD700",
+                            flexShrink: 0,
+                            marginBottom: 1,
+                          }}
+                        />
+                      )}
                     </div>
                   </div>
                   <div>
@@ -1160,6 +1229,11 @@ export default function WcOddsAdmin() {
     refetchInterval: 3000,
     refetchIntervalInBackground: true,
   });
+  // 投注比例数据（用于计算k值动态赔率）
+  const { data: bettingStatsData } = trpc.wcOdds.getBettingStats.useQuery(undefined, {
+    refetchInterval: 30000,
+    refetchIntervalInBackground: true,
+  });
   const setKMutation = trpc.wcOdds.setKSetting.useMutation({
     onSuccess: () => { utils.wcOdds.getKSetting.invalidate(); },
     onError: (err) => { toast.error(`k值设置失败：${err.message}`); },
@@ -1205,9 +1279,17 @@ export default function WcOddsAdmin() {
   // 根据选定水钱重新计算最新一列隐含赔率
   // 原始隐含概率 = 1/odds，正则化后隐含概率 = 原始隐含概率 / sum(所有隐含概率) * (100 + marginPct)
   const latestSnap = snapshotsDesc[0];
+  const kValue = kData?.kValue ?? 3;
+  // 构建投注占比映射表 { teamName -> percentage(0~1) }
+  const betPctMap: Record<string, number> = {};
+  if (bettingStatsData?.teams) {
+    for (const t of bettingStatsData.teams) {
+      betPctMap[t.teamName] = (t.percentage ?? 0) / 100;
+    }
+  }
+  // 计算基础赔率（水钱调整）和k値动态赔率
   const latestAdjustedOdds = (() => {
-    if (!latestSnap) return {};
-    // 收集最新快照中所有球队的原始赔率
+    if (!latestSnap) return {} as Record<string, { base: number; dynamic: number | null }>;
     const rawOdds: Record<string, number> = {};
     let sumImplied = 0;
     teams.forEach((team: { name: string; code: string }) => {
@@ -1218,15 +1300,22 @@ export default function WcOddsAdmin() {
         sumImplied += 1 / pinnacle;
       }
     });
-    if (sumImplied === 0) return {};
-    // 目标总隐含概率 = (100 + marginPct) / 100
+    if (sumImplied === 0) return {} as Record<string, { base: number; dynamic: number | null }>;
     const targetSum = (100 + marginPct) / 100;
-    // 每个球队的调整后隐含概率 = (1/odds) / sumImplied * targetSum
-    // 调整后赔率 = 1 / 调整后隐含概率
-    const result: Record<string, number> = {};
+    const result: Record<string, { base: number; dynamic: number | null }> = {};
     Object.entries(rawOdds).forEach(([name, odds]) => {
       const adjustedImplied = (1 / odds) / sumImplied * targetSum;
-      result[name] = 1 / adjustedImplied;
+      const baseOdds = 1 / adjustedImplied;  // 基础赔率（水钱价）
+      // k値动态赔率：基础赔率 / e^(k * 占比)
+      // 即：实际赔率 = 基础赔率 / e^(k * pct)
+      // 等价于：实际隐含概率 = 基础隐含概率 * e^(k * pct)
+      const pct = betPctMap[name] ?? 0;
+      const kMultiplier = Math.exp(kValue * pct);
+      const dynamicImplied = adjustedImplied * kMultiplier;
+      const dynamicOdds = 1 / dynamicImplied;
+      // 只有当k値动态赔率与基础赔率差异超过0.5%时，才显示双组数据
+      const isDynamic = dynamicOdds < baseOdds * 0.995;
+      result[name] = { base: baseOdds, dynamic: isDynamic ? dynamicOdds : null };
     });
     return result;
   })();
@@ -1486,10 +1575,12 @@ export default function WcOddsAdmin() {
                               const prevSnap = snapshotsDesc[colIdx + 1];
                               const prev = prevSnap ? teamData[prevSnap.id] : null;
                               const rawPinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
-                              // 最新一列使用调整后赔率，其他列使用原始赔率
+                              // 最新一列：使用基础赔率（水钱价）和k値动态赔率
+                              const latestEntry = isLatest ? latestAdjustedOdds[team.name] : null;
                               const pinnacle = isLatest
-                                ? (latestAdjustedOdds[team.name] ?? rawPinnacle)
+                                ? (latestEntry?.base ?? rawPinnacle)
                                 : rawPinnacle;
+                              const dynamicOdds = isLatest ? (latestEntry?.dynamic ?? null) : null;
                               const prevPinnacle = prev?.pinnacle ? parseFloat(prev.pinnacle) : null;
                               const color = getOddsColor(pinnacle, prevPinnacle);
                               const arrow = getOddsArrow(pinnacle, prevPinnacle);
@@ -1501,12 +1592,13 @@ export default function WcOddsAdmin() {
                                   color: pinnacle ? color : "rgba(255,255,255,0.15)",
                                   fontWeight: pinnacle && color !== COLOR_SAME ? 600 : 400,
                                   whiteSpace: "nowrap",
-                                  minWidth: 72,
+                                  minWidth: dynamicOdds ? 80 : 72,
                                   // 最新一列加金色左边框以示区分
                                   borderLeft: isLatest ? `2px solid ${GOLD}` : undefined,
                                 }}>
                                   {pinnacle ? (
                                     <>
+                                      {/* 基础赔率（水钱价） */}
                                       <div style={{ fontSize: 13 }}>
                                         {arrow && <span style={{ fontSize: 10, marginRight: 1 }}>{arrow}</span>}
                                         {pinnacle.toFixed(2)}
@@ -1514,6 +1606,17 @@ export default function WcOddsAdmin() {
                                       <div style={{ fontSize: 9, opacity: 0.55, marginTop: 1 }}>
                                         {(100 / pinnacle).toFixed(1)}%
                                       </div>
+                                      {/* k値动态赔率（触发时显示第二组，橙色） */}
+                                      {dynamicOdds && (
+                                        <>
+                                          <div style={{ fontSize: 10, color: "#FF8C00", fontWeight: 700, marginTop: 3, lineHeight: 1 }}>
+                                            {dynamicOdds.toFixed(2)}
+                                          </div>
+                                          <div style={{ fontSize: 9, color: "#FF8C00", opacity: 0.8 }}>
+                                            {(100 / dynamicOdds).toFixed(1)}%
+                                          </div>
+                                        </>
+                                      )}
                                     </>
                                   ) : (
                                     <span style={{ color: "rgba(255,255,255,0.15)" }}>-</span>
@@ -1533,7 +1636,7 @@ export default function WcOddsAdmin() {
                           teams.forEach((team: { name: string; code: string }) => {
                             let pinnacle: number | null = null;
                             if (isLatest) {
-                              pinnacle = latestAdjustedOdds[team.name] ?? null;
+                              pinnacle = latestAdjustedOdds[team.name]?.base ?? null;
                               if (!pinnacle) {
                                 const current = (matrixData[team.name] ?? {})[snap.id];
                                 pinnacle = current?.pinnacle ? parseFloat(current.pinnacle) : null;
