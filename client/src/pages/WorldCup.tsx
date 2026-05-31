@@ -1824,7 +1824,7 @@ export default function WorldCup() {
                           textShadow: "0 0 20px rgba(255,215,0,0.4)",
                           fontVariantNumeric: "tabular-nums",
                         }}>{prob.toFixed(1)}</span>
-                        <span style={{ fontSize: 22, fontWeight: 700, color: GOLD2, marginBottom: 6 }}>%</span>
+                        <span style={{ fontSize: 22, fontWeight: 700, color: GOLD2, alignSelf: "flex-end", marginBottom: 4 }}>%</span>
                       </div>
                     </div>
                   </div>
