@@ -33,6 +33,31 @@ function Flag({ code, size = 28 }: { code: string; size?: number }) {
   );
 }
 
+// ===== 五星指数组件 =====
+// stars: 0.5 ~ 5.0，支持半星精度
+function StarRating({ stars }: { stars: number }) {
+  const total = 5;
+  const items = [];
+  for (let i = 1; i <= total; i++) {
+    let src: string;
+    if (stars >= i) {
+      src = "/stars/star-full.png";
+    } else if (stars >= i - 0.5) {
+      src = "/stars/star-half.png";
+    } else {
+      src = "/stars/star-empty.png";
+    }
+    items.push(
+      <img key={i} src={src} alt="" style={{ width: 11, height: 11, objectFit: "contain" }} />
+    );
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 1 }}>
+      {items}
+    </div>
+  );
+}
+
 // ===== 比赛倒计时组件 =====
 function MatchCountdown({ targetISO }: { targetISO: string }) {
   const [remaining, setRemaining] = useState(() =>
@@ -1722,7 +1747,18 @@ export default function WorldCup() {
               className="grid grid-cols-4 px-2 pb-6"
               style={{ gap: "1px", backgroundColor: BORDER }}
             >
-              {sortedOdds.map((team) => (
+              {(() => {
+                // 计算全部队伍的隐含概率，用于相对映射五星指数
+                const probs = sortedOdds.map(t => 100 / ((t as any).adjustedOdds ?? t.odds));
+                const maxProb = Math.max(...probs);
+                const minProb = Math.min(...probs);
+                const probRange = maxProb - minProb || 1;
+                return sortedOdds.map((team) => {
+                  const prob = 100 / ((team as any).adjustedOdds ?? team.odds);
+                  // 线性映射：最热门→5星，最冷门→0.5星，支持半星精度
+                  const rawStars = 0.5 + ((prob - minProb) / probRange) * 4.5;
+                  const stars = Math.round(rawStars * 2) / 2; // 四舍五入到0.5精度
+                  return (
                 <div
                   key={team.code + team.name}
                   className="flex flex-col items-center py-3 px-1"
@@ -1752,14 +1788,13 @@ export default function WorldCup() {
                       {team.name}
                     </span>
                   </div>
-                  <span
-                    className="text-sm font-black"
-                    style={{ color: GOLD, marginTop: 2 }}
-                  >
-                    {(100 / ((team as any).adjustedOdds ?? team.odds)).toFixed(1)}%
-                  </span>
+                  <div style={{ marginTop: 3 }}>
+                    <StarRating stars={stars} />
+                  </div>
                 </div>
-              ))}
+                  );
+                });
+              })()}
 
             </div>
           </div>
