@@ -1223,9 +1223,9 @@ export default function WorldCup() {
   const [selectedTeam, setSelectedTeam] = useState<{ name: string; code: string; prob: number } | null>(null);
 
   // 从 P012 最新快照拉取实时赔率
-  const { data: liveOddsData, isLoading: liveOddsLoading } = trpc.wcOdds.getLatestChampionOdds.useQuery();
+  const { data: liveOddsData, isLoading: liveOddsLoading, refetch: refetchLiveOdds } = trpc.wcOdds.getLatestChampionOdds.useQuery();
   // 水钱设置：每5秒轮询一次，与第12页共享
-  const { data: marginData } = trpc.wcOdds.getMarginSetting.useQuery(undefined, {
+  const { data: marginData, refetch: refetchMargin } = trpc.wcOdds.getMarginSetting.useQuery(undefined, {
     refetchInterval: 3000,
     refetchIntervalInBackground: true,
   });
@@ -1290,7 +1290,7 @@ export default function WorldCup() {
           {/* 刷新按钮 - 仅超级管理员可见 */}
           {isAdmin && (
             <button
-              onClick={() => window.location.reload()}
+              onClick={() => { refetchLiveOdds(); refetchMargin(); }}
               className="px-3 h-8 flex items-center justify-center rounded-full text-xs font-semibold"
               style={{ backgroundColor: "rgba(0,0,0,0.45)", color: "#fff" }}
             >
