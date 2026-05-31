@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageTag } from "@/components/PageTag";
+import { WorldCupEmbedded } from "@/pages/WorldCup";
 
 // ─── 币种配置 ──────────────────────────────────────────────────
 // 委买价格档位（低于市价，抄底用）
@@ -2329,10 +2330,10 @@ export default function CryptoPrediction() {
             { key: "contract", label: "谷底增筹" },
             { key: "gujian", label: "谷间优筹" },
             { key: "finance", label: "融资付息" },
-            ...(isOwner ? [{ key: "market", label: "行情评估" }] : []),
+            ...(isOwner ? [{ key: "market", label: "冠军预测" }] : []),
           ] : [
-            { key: "contract", label: isCustomAF ? "谷底增筹" : "无损合约" },
-            ...(isOwner ? [{ key: "market", label: "行情评估" }] : []),
+            { key: "contract", label: isCustomAF ? "谷底增瘨" : "无损合约" },
+            ...(isOwner ? [{ key: "market", label: "冠军预测" }] : []),
           ]).map((t) => (
             <button key={t.key} onClick={() => {
               if (t.key === "gujian") {
@@ -3471,9 +3472,9 @@ export default function CryptoPrediction() {
           </div>
         )}
 
-        {/* 行情评估（竞猜） */}
+        {/* 冠军预测（足球首页，原行情评估内容已隐藏） */}
         {tab === "market" && (
-          <MarketBetPanelWithTabs ledgerId={ledgerId} />
+          <WorldCupEmbedded />
         )}
       </div>
 

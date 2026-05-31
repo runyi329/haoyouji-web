@@ -2069,3 +2069,324 @@ export default function WorldCup() {
     </div>
   );
 }
+
+// ===== 嵌入版（用于P076冠军预测Tab，去掉顶部海报和返回按钮） =====
+export function WorldCupEmbedded() {
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    const saved = localStorage.getItem("wc_activeTab") as TabType | null;
+    return (saved === "schedule" || saved === "results" || saved === "champion") ? saved : "champion";
+  });
+  const today = new Date().toISOString().slice(0, 10);
+  const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'super_admin';
+  const tabs: { key: TabType; label: string }[] = [
+    { key: "schedule", label: "赛程" },
+    { key: "results", label: "赛果" },
+    { key: "champion", label: "AI夺冠预测" },
+  ];
+  // ETH 实时价格
+  const { data: ethPriceData } = trpc.cryptoData.getEthPrice.useQuery(undefined, {
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
+  });
+  const ethPrice = ethPriceData?.success ? ethPriceData.price : 0;
+  // 点击国旗弹窗
+  const [selectedTeam, setSelectedTeam] = useState<{ name: string; code: string; prob: number } | null>(null);
+  const [buyQty, setBuyQty] = useState(1);
+  // 从 P012 最新快照拉取实时赔率
+  const { data: liveOddsData, isLoading: liveOddsLoading, refetch: refetchLiveOdds } = trpc.wcOdds.getLatestChampionOdds.useQuery();
+  // 水钱设置
+  const { data: marginData, refetch: refetchMargin } = trpc.wcOdds.getMarginSetting.useQuery(undefined, {
+    refetchInterval: 3000,
+    refetchIntervalInBackground: true,
+  });
+  const marginPct = marginData?.marginPct ?? 8;
+  // k 值设置
+  const { data: kData } = trpc.wcOdds.getKSetting.useQuery(undefined, {
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
+  });
+  const kValue = kData?.kValue ?? 3;
+  // 投注比例数据
+  const { data: bettingStatsData } = trpc.wcOdds.getBettingStats.useQuery(undefined, {
+    refetchInterval: 30000,
+    refetchIntervalInBackground: true,
+  });
+  const teamPctMap = new Map<string, number>();
+  if (bettingStatsData?.teams) {
+    for (const t of bettingStatsData.teams) {
+      if (t.teamCode) teamPctMap.set(t.teamCode.toLowerCase(), t.percentage);
+    }
+  }
+  const allTeamsForSum = liveOddsData && liveOddsData.teams.length > 0
+    ? liveOddsData.teams
+        .filter(t => t.pinnacleOdds !== null && parseFloat(t.pinnacleOdds!) > 0)
+        .map(t => ({
+          name: t.name,
+          nameEn: t.code.toUpperCase(),
+          code: t.code,
+          odds: parseFloat(t.pinnacleOdds!),
+        }))
+    : [...championOdds];
+  const sortedOdds = (() => {
+    const sumImplied = allTeamsForSum.reduce((s, t) => s + 1 / t.odds, 0);
+    if (sumImplied === 0) return allTeamsForSum.sort((a, b) => a.odds - b.odds);
+    const targetSum = (100 + marginPct) / 100;
+    return allTeamsForSum
+      .map(t => ({
+        ...t,
+        adjustedOdds: 1 / ((1 / t.odds) / sumImplied * targetSum),
+      }))
+      .sort((a, b) => a.adjustedOdds - b.adjustedOdds);
+  })();
+
+  return (
+    <div className="flex flex-col" style={{ backgroundColor: BG, minHeight: "100%" }}>
+      {/* Tab 栏 */}
+      <div
+        className="flex"
+        style={{
+          backgroundColor: BG2,
+          borderBottom: `2px solid ${BORDER}`,
+        }}
+      >
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => { setActiveTab(tab.key); localStorage.setItem("wc_activeTab", tab.key); }}
+            className="flex-1 py-3 text-sm font-bold transition-all"
+            style={{
+              color: activeTab === tab.key ? GOLD : TEXT2,
+              borderBottom: activeTab === tab.key ? `2px solid ${GOLD}` : "2px solid transparent",
+              marginBottom: "-2px",
+              fontSize: tab.key === "champion" ? "12px" : "14px",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {/* 内容区域 */}
+      <div className="flex-1 pb-8">
+        {/* ---- 赛程 Tab ---- */}
+        {activeTab === "schedule" && (
+          <div>
+            {schedule.map((day) => (
+              <DayGroup
+                key={day.date}
+                day={day}
+                isToday={day.date === today}
+                onMatchClick={(m) => setSelectedMatch({ ...m, date: day.date })}
+              />
+            ))}
+          </div>
+        )}
+        {/* 比赛详情弹层 */}
+        {selectedMatch && (() => {
+          const posterUrl = getMatchPosterUrl(selectedMatch.homeCode, selectedMatch.awayCode);
+          const homeTeamData = wcTeams.find(t => t.code === selectedMatch.homeCode);
+          const awayTeamData = wcTeams.find(t => t.code === selectedMatch.awayCode);
+          return (
+            <div
+              className="fixed inset-0 z-50 flex items-end justify-center"
+              style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+              onClick={() => setSelectedMatch(null)}
+            >
+              <div
+                className="w-full max-w-md rounded-t-3xl overflow-hidden"
+                style={{ backgroundColor: BG3, maxHeight: "80vh", overflowY: "auto" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {posterUrl && (
+                  <div style={{ width: "100%", aspectRatio: "16/9", overflow: "hidden" }}>
+                    <img src={posterUrl} alt="match poster" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </div>
+                )}
+                <div className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Flag code={selectedMatch.homeCode} size={32} />
+                      <span style={{ color: TEXT, fontWeight: 700, fontSize: 16 }}>{selectedMatch.home}</span>
+                    </div>
+                    <span style={{ color: TEXT2, fontSize: 13, fontWeight: 600 }}>VS</span>
+                    <div className="flex items-center gap-2">
+                      <span style={{ color: TEXT, fontWeight: 700, fontSize: 16 }}>{selectedMatch.away}</span>
+                      <Flag code={selectedMatch.awayCode} size={32} />
+                    </div>
+                  </div>
+                  <div style={{ color: TEXT2, fontSize: 12, textAlign: "center", marginBottom: 8 }}>
+                    {selectedMatch.date} {selectedMatch.time} · {selectedMatch.venue}
+                  </div>
+                  {homeTeamData && awayTeamData && (
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      {[homeTeamData, awayTeamData].map((team) => (
+                        <div key={team.code} className="rounded-xl p-3" style={{ backgroundColor: "rgba(255,255,255,0.05)" }}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <Flag code={team.code} size={20} />
+                            <span style={{ color: TEXT, fontSize: 13, fontWeight: 600 }}>{team.name}</span>
+                          </div>
+                          <div style={{ color: TEXT2, fontSize: 11 }}>FIFA排名: #{team.fifaRank}</div>
+                          <div style={{ color: TEXT2, fontSize: 11 }}>历届冠军: {team.worldCupWins}次</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <button
+                    className="w-full mt-4 py-2 rounded-xl text-sm"
+                    style={{ backgroundColor: "rgba(255,255,255,0.08)", color: TEXT2 }}
+                    onClick={() => setSelectedMatch(null)}
+                  >
+                    关闭
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+        {/* ---- 赛果 Tab ---- */}
+        {activeTab === "results" && <ResultsTab />}
+        {/* ---- AI夺冠预测 Tab ---- */}
+        {activeTab === "champion" && (
+          <div style={{ padding: "16px 16px 0" }}>
+            {/* 冠军赔率列表 */}
+            {liveOddsLoading ? (
+              <div style={{ color: TEXT2, textAlign: "center", padding: "40px 0", fontSize: 14 }}>加载中…</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {sortedOdds.map((team, idx) => {
+                  const prob = 1 / (team as any).adjustedOdds;
+                  const probPct = (prob / sortedOdds.reduce((s, t) => s + 1 / (t as any).adjustedOdds, 0) * 100).toFixed(1);
+                  const teamPct = teamPctMap.get(team.code.toLowerCase()) ?? 0;
+                  const judgeScores = genJudgeScores(parseFloat(probPct), team.code.split("").reduce((s, c) => s + c.charCodeAt(0), 0));
+                  const avgScore = judgeScores.reduce((s, v) => s + v, 0) / judgeScores.length;
+                  const stars = Math.max(0.5, Math.min(5, avgScore / 20 * 5));
+                  return (
+                    <div
+                      key={team.code}
+                      onClick={() => setSelectedTeam({ name: team.name, code: team.code, prob: parseFloat(probPct) })}
+                      style={{
+                        backgroundColor: idx === 0 ? "rgba(255,215,0,0.08)" : BG3,
+                        border: `1px solid ${idx === 0 ? "rgba(255,215,0,0.3)" : BORDER}`,
+                        borderRadius: 16,
+                        padding: "12px 14px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                      }}
+                    >
+                      <span style={{ color: idx === 0 ? GOLD : TEXT2, fontWeight: 700, fontSize: 15, minWidth: 24, textAlign: "center" }}>
+                        {idx + 1}
+                      </span>
+                      <Flag code={team.code} size={32} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: TEXT, fontWeight: 600, fontSize: 14 }}>{team.name}</div>
+                        <StarRating stars={stars} />
+                      </div>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        <div style={{ color: idx === 0 ? GOLD : TEXT, fontWeight: 700, fontSize: 16 }}>{probPct}%</div>
+                        {teamPct > 0 && (
+                          <div style={{ color: TEXT2, fontSize: 11 }}>投注{teamPct.toFixed(1)}%</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {/* 刷新按钮（管理员） */}
+            {isAdmin && (
+              <button
+                onClick={() => { refetchLiveOdds(); refetchMargin(); }}
+                className="w-full mt-4 py-2 rounded-xl text-sm"
+                style={{ backgroundColor: "rgba(255,255,255,0.06)", color: TEXT2 }}
+              >
+                刷新赔率
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      {/* 国旗弹窗 */}
+      {selectedTeam && (() => {
+        const judgeScores = genJudgeScores(selectedTeam.prob, selectedTeam.code.split("").reduce((s, c) => s + c.charCodeAt(0), 0));
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center"
+            style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+            onClick={() => { setSelectedTeam(null); setBuyQty(1); }}
+          >
+            <div
+              className="w-full max-w-md rounded-t-3xl overflow-hidden"
+              style={{ backgroundColor: BG3, maxHeight: "80vh", overflowY: "auto" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ padding: "20px 20px 0" }}>
+                <div className="flex items-center gap-3 mb-4">
+                  <Flag code={selectedTeam.code} size={40} />
+                  <div>
+                    <div style={{ color: TEXT, fontWeight: 700, fontSize: 18 }}>{selectedTeam.name}</div>
+                    <div style={{ color: GOLD, fontWeight: 600, fontSize: 16 }}>夺冠概率 {selectedTeam.prob}%</div>
+                  </div>
+                </div>
+                {/* 12位AI评委打分 */}
+                <div style={{ marginBottom: 16 }}>
+                  <div style={{ color: TEXT2, fontSize: 12, marginBottom: 8 }}>12位AI评委打分</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+                    {AI_JUDGES.map((judge, i) => (
+                      <div key={judge.key} style={{ backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 8, padding: "6px 8px" }}>
+                        <div style={{ color: TEXT2, fontSize: 10 }}>{judge.name}</div>
+                        <div style={{ color: GOLD, fontWeight: 700, fontSize: 13 }}>{judgeScores[i].toFixed(1)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* 购买区 */}
+                <div style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 16, padding: "16px", marginBottom: 16 }}>
+                  <div style={{ color: TEXT2, fontSize: 12, marginBottom: 12, textAlign: "center" }}>购买冠军预测券</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+                      <span style={{ fontSize: 52, fontWeight: 900, color: TEXT, lineHeight: 1 }}>
+                        {(selectedTeam.prob * 0.01 * (ethPrice || 2000) * buyQty).toFixed(4)}
+                      </span>
+                      <img
+                        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
+                        style={{ width: 22, height: 22, borderRadius: "50%" }}
+                        alt="ETH"
+                      />
+                    </div>
+                    <span style={{ fontSize: 22, fontWeight: 300, color: TEXT2, lineHeight: 1, flexShrink: 0 }}>=</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
+                      <span style={{ fontSize: 52, fontWeight: 900, color: GOLD, lineHeight: 1 }}>{buyQty}</span>
+                      <img
+                        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/paul-eth-coin-circle.webp"
+                        alt="章鱼ETH"
+                        style={{ width: 56, height: 56, objectFit: "contain", borderRadius: "50%", flexShrink: 0 }}
+                      />
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min={1}
+                    max={100}
+                    value={buyQty}
+                    onChange={e => setBuyQty(Number(e.target.value))}
+                    style={{ width: "100%", accentColor: "#FFD700", cursor: "pointer", marginTop: 12, display: "block" }}
+                  />
+                </div>
+                <button
+                  className="w-full mt-4 py-3 rounded-2xl text-sm font-semibold"
+                  style={{ backgroundColor: "rgba(255,255,255,0.08)", color: TEXT2 }}
+                  onClick={() => { setSelectedTeam(null); setBuyQty(1); }}
+                >
+                  关闭
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
