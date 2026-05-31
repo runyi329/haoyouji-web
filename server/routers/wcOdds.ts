@@ -718,7 +718,7 @@ export const wcOddsRouter = router({
               ) as any[];
               const newBalance = parseFloat((Array.isArray(balRows) ? balRows[0] : balRows)?.balance ?? '0') || 0;
               await (conn as any).execute(
-                `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, 'income', NULL, ?, ?)`,
+                `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, 'refund', NULL, ?, ?)`,
                 [orderRow.userId, betAmt.toString(), newBalance.toString(), refundNote]
               );
             }
