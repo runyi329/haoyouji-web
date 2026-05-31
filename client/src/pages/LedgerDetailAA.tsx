@@ -61,6 +61,36 @@ interface Props {
   user: any;
 }
 
+// A股2026年法定节假日（不含周末）
+const HOLIDAY_SET_2026 = new Set([
+  '2026-01-01','2026-01-02','2026-01-03',
+  '2026-02-15','2026-02-16','2026-02-17','2026-02-18','2026-02-19','2026-02-20','2026-02-21','2026-02-22','2026-02-23',
+  '2026-04-04','2026-04-05','2026-04-06',
+  '2026-05-01','2026-05-02','2026-05-03','2026-05-04','2026-05-05',
+  '2026-06-19','2026-06-20','2026-06-21',
+  '2026-09-25','2026-09-26','2026-09-27',
+  '2026-10-01','2026-10-02','2026-10-03','2026-10-04','2026-10-05','2026-10-06','2026-10-07',
+]);
+
+/**
+ * 从 dateStr（含）往前找第一个 A 股交易日（跳过周末和2026节假日）。
+ * 例：startDate=2026-05-06（周三），返回 2026-04-30（上一个交易日）。
+ */
+function getPrevTradingDay(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() - 1); // 先退一天，从 startDate 的前一天开始找
+  for (let i = 0; i < 30; i++) { // 最多往前找30天，避免死循环
+    const s = d.toISOString().slice(0, 10);
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6 && !HOLIDAY_SET_2026.has(s)) return s;
+    d.setDate(d.getDate() - 1);
+  }
+  // 兜底：直接返回前一天
+  const fallback = new Date(dateStr + 'T00:00:00');
+  fallback.setDate(fallback.getDate() - 1);
+  return fallback.toISOString().slice(0, 10);
+}
+
 export default function LedgerDetailAA({
   ledgerId,
   ledgerData,
@@ -320,13 +350,11 @@ export default function LedgerDetailAA({
         return { date: day.date, balance, income, expense };
       }).filter(Boolean).sort((a: any, b: any) => a.date.localeCompare(b.date));
       // 计算每天的盈亏値（绝对金额、%初始、%保证金）
-      // 如果该标签配置了 startDate，则只显示 startDate 前一天及之后的数据
+      // 如果该标签配置了 startDate，则只显示 startDate 前一个交易日及之后的数据
       const tagStartDate = initialBalancesData.balances[`${tagName}__startDate`];
       let filteredTagDays = tagDays;
       if (tagStartDate) {
-        const effectiveStart = new Date(String(tagStartDate));
-        effectiveStart.setDate(effectiveStart.getDate() - 1);
-        const effectiveStartStr = effectiveStart.toISOString().slice(0, 10);
+        const effectiveStartStr = getPrevTradingDay(String(tagStartDate));
         filteredTagDays = tagDays.filter((d: any) => d.date >= effectiveStartStr);
       }
       const points = filteredTagDays.map((d: any) => {
@@ -379,9 +407,7 @@ export default function LedgerDetailAA({
       const tagStartDate = initialBalancesData.balances[`${tagName}__startDate`];
       let effectiveStartStr: string | null = null;
       if (tagStartDate) {
-        const sd = new Date(String(tagStartDate));
-        sd.setDate(sd.getDate() - 1);
-        effectiveStartStr = sd.toISOString().slice(0, 10);
+        effectiveStartStr = getPrevTradingDay(String(tagStartDate));
       }
       const tagDayMap: Record<string, { income: number; expense: number }> = {};
       (activeMemberTransactions || []).forEach((day: any) => {
@@ -454,9 +480,7 @@ export default function LedgerDetailAA({
   // 计算走势图的有效开始日期（startDate前一天），与日历同步
   const chartEffectiveStartDate = useMemo(() => {
     if (!stats.startDate) return null;
-    const d = new Date(stats.startDate);
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().slice(0, 10);
+    return getPrevTradingDay(stats.startDate);
   }, [stats.startDate]);
 
   const chartData = useMemo(() => {
@@ -586,9 +610,7 @@ export default function LedgerDetailAA({
   // 计算当前标签的有效开始日期：初始日期的前一天
   const tagEffectiveStartDate = useMemo(() => {
     if (!stats.startDate) return null;
-    const d = new Date(stats.startDate);
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().slice(0, 10);
+    return getPrevTradingDay(stats.startDate);
   }, [stats.startDate]);
 
   const getCellValue = (day: number): string | null => {
