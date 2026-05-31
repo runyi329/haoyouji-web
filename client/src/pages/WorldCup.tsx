@@ -1832,48 +1832,56 @@ export default function WorldCup() {
                   {/* 分隔线 */}
                   <div style={{ height: 1, backgroundColor: BORDER, marginBottom: 16 }} />
 
-                  {/* 奖励 + 费用卡片 */}
+                  {/* 费用卡片：章鱼 ETH 图 + 费用行 */}
                   <div
                     className="rounded-2xl p-4"
                     style={{ backgroundColor: "rgba(22,44,66,0.85)", border: `1px solid ${BORDER}`, backdropFilter: "blur(8px)" }}
                   >
-                    {/* 猜中奖励行 */}
-                    <div style={{ fontSize: 11, color: TEXT2, marginBottom: 6 }}>猜中奖励</div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="text-3xl font-black" style={{ color: GOLD }}>1</span>
+                    <div className="flex items-center gap-4">
+                      {/* 左：章鱼持ETH圆形图 */}
                       <img
-                        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
-                        style={{ width: 28, height: 28, borderRadius: "50%" }}
+                        src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/paul_eth_coin_3763d29d.png"
                         alt="ETH"
+                        style={{ width: 72, height: 72, objectFit: "contain", flexShrink: 0 }}
                       />
-                    </div>
-                    <div style={{ height: 1, backgroundColor: BORDER, margin: "8px 0 12px" }} />
-                    {/* 费用行 */}
-                    <div style={{ fontSize: 11, color: TEXT2, marginBottom: 6 }}>参与费用</div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xl font-black" style={{ color: GOLD }}>{ethCost.toFixed(4)}</span>
-                      <img
-                        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
-                        style={{ width: 20, height: 20, borderRadius: "50%" }}
-                        alt="ETH"
-                      />
-                      <span className="text-sm" style={{ color: TEXT2 }}>或</span>
-                      {usdtCost !== null ? (
-                        <>
-                          <span className="text-xl font-black" style={{ color: GOLD }}>{usdtCost.toFixed(2)}</span>
-                          <div style={{ width: 20, height: 20, borderRadius: "50%", backgroundColor: "#26A17B", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            <span style={{ color: "#fff", fontSize: 10, fontWeight: 700 }}>U</span>
+                      {/* 右：费用数字 */}
+                      <div style={{ flex: 1 }}>
+                        {/* 猜中奖励行 */}
+                        <div className="flex items-center gap-2 mb-2">
+                          <span style={{ fontSize: 28, fontWeight: 900, color: GOLD, lineHeight: 1 }}>1</span>
+                          <img
+                            src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
+                            style={{ width: 24, height: 24, borderRadius: "50%" }}
+                            alt="ETH"
+                          />
+                        </div>
+                        {/* 费用行 */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span style={{ fontSize: 16, fontWeight: 900, color: GOLD }}>{ethCost.toFixed(4)}</span>
+                          <img
+                            src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
+                            style={{ width: 16, height: 16, borderRadius: "50%" }}
+                            alt="ETH"
+                          />
+                          <span style={{ fontSize: 13, color: TEXT2 }}>或</span>
+                          {usdtCost !== null ? (
+                            <>
+                              <span style={{ fontSize: 16, fontWeight: 900, color: GOLD }}>{usdtCost.toFixed(2)}</span>
+                              <div style={{ width: 16, height: 16, borderRadius: "50%", backgroundColor: "#26A17B", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <span style={{ color: "#fff", fontSize: 9, fontWeight: 700 }}>U</span>
+                              </div>
+                            </>
+                          ) : (
+                            <span style={{ fontSize: 13, color: TEXT2 }}>加载中...</span>
+                          )}
+                        </div>
+                        {ethPrice > 0 && (
+                          <div style={{ marginTop: 4, fontSize: 11, color: TEXT2 }}>
+                            ETH ${ethPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </div>
-                        </>
-                      ) : (
-                        <span className="text-sm" style={{ color: TEXT2 }}>加载中...</span>
-                      )}
-                    </div>
-                    {ethPrice > 0 && (
-                      <div className="mt-2 text-xs" style={{ color: TEXT2 }}>
-                        ETH ${ethPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
 
                   <button
