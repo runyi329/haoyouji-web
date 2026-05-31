@@ -1200,7 +1200,10 @@ function DayGroup({
 
 // ===== 主组件 =====
 export default function WorldCup() {
-  const [activeTab, setActiveTab] = useState<TabType>("schedule");
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    const saved = localStorage.getItem("wc_activeTab") as TabType | null;
+    return (saved === "schedule" || saved === "results" || saved === "champion") ? saved : "schedule";
+  });
   const today = new Date().toISOString().slice(0, 10);
   const [selectedMatch, setSelectedMatch] = useState<Match | null>(null);
   const { user } = useAuth();
@@ -1332,7 +1335,7 @@ export default function WorldCup() {
           {tabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => { setActiveTab(tab.key); localStorage.setItem("wc_activeTab", tab.key); }}
               className="flex-1 py-3 text-sm font-bold transition-all"
               style={{
                 color: activeTab === tab.key ? GOLD : TEXT2,
