@@ -255,7 +255,6 @@ const MyRedeemOrders = lazy(() => import("./pages/MyRedeemOrders"));
 const AdminRedeemOrders = lazy(() => import("./pages/admin/AdminRedeemOrders"));
 const ProductPublish = lazy(() => import("./pages/admin/ProductPublish"));
 const PaymentResult = lazy(() => import("./pages/PaymentResult"));
-const SentiaHome = lazy(() => import("./pages/SentiaHome"));
 // AE 共享抽奖
 const LotteryCreate = lazy(() => import("./pages/LotteryCreate"));
 // AF 加密货币竞猜
@@ -273,8 +272,6 @@ const LotteryActivity = lazy(() => import("./pages/LotteryActivity"));
 const LotteryList = lazy(() => import("./pages/LotteryList"));
 const LotteryDrawScreen = lazy(() => import("./pages/LotteryDraw").then(m => ({ default: m.LotteryDrawScreen })));
 const LotteryResults = lazy(() => import("./pages/LotteryDraw").then(m => ({ default: m.LotteryResults })));
-const SentiaBuy = lazy(() => import("./pages/SentiaBuy"));
-const SentiaWhitepaper = lazy(() => import("./pages/SentiaWhitepaper"));
 // 脉动工具
 const Tools = lazy(() => import("./pages/Tools"));
 const ContractTool = lazy(() => import("./pages/ContractTool"));
@@ -565,11 +562,6 @@ function Router() {
         <Route path="/work-groups/:id" component={WorkGroupDetail} />
         <Route path="/node-growth-guide" component={NodeGrowthGuide} />
         <Route path="/partnership/dashboard-manage" component={PartnershipDashboardManage} />
-
-        {/* Sentia 数字货币子站 */}
-        <Route path="/sentia" component={SentiaHome} />
-        <Route path="/sentia/buy" component={SentiaBuy} />
-        <Route path="/sentia/whitepaper" component={SentiaWhitepaper} />
 
         {/* 奢贝美容院 */}
         <Route path="/beauty" component={BeautyHome} />
