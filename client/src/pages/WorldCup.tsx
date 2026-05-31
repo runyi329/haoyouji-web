@@ -1837,42 +1837,48 @@ export default function WorldCup() {
                     className="rounded-2xl p-4"
                     style={{ backgroundColor: "rgba(22,44,66,0.85)", border: `1px solid ${BORDER}`, backdropFilter: "blur(8px)" }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    {/*
+                      布局： [数字列(flex:1靠右)] [图标列(固定22px)] [等号(固定)] [1(固定)] [圆图(固定)]
+                      图标列固定宽度，两行完全对齐
+                    */}
+                    <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
 
-                      {/* 左列： USDT 或 ETH 两行，图标对齐 */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
-                        {/* 第一行： USDT */}
-                        <div style={{ display: "flex", alignItems: "center" }}>
-                          <div style={{ minWidth: 76, textAlign: "right", marginRight: 6 }}>
-                            {usdtCost !== null ? (
-                              <span style={{ fontSize: 20, fontWeight: 900, color: GOLD, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{usdtCost.toFixed(2)}</span>
-                            ) : (
-                              <span style={{ fontSize: 14, color: TEXT2 }}>加载中</span>
-                            )}
-                          </div>
-                          <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: "#26A17B", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>U</span>
-                          </div>
+                      {/* 数字列： flex:1，两行数字靠右对齐 */}
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+                        {/* 第一行： USDT数字 */}
+                        <div style={{ textAlign: "right", paddingRight: 8 }}>
+                          {usdtCost !== null ? (
+                            <span style={{ fontSize: 20, fontWeight: 900, color: GOLD, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{usdtCost.toFixed(2)}</span>
+                          ) : (
+                            <span style={{ fontSize: 14, color: TEXT2 }}>加载中</span>
+                          )}
                         </div>
-                        {/* 第二行： 或 ETH */}
-                        <div style={{ display: "flex", alignItems: "center" }}>
-                          <div style={{ minWidth: 76, textAlign: "right", marginRight: 6, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 3 }}>
-                            <span style={{ fontSize: 12, color: TEXT2 }}>或</span>
-                            <span style={{ fontSize: 20, fontWeight: 900, color: GOLD, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{ethCost.toFixed(4)}</span>
-                          </div>
-                          <img
-                            src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
-                            style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0 }}
-                            alt="ETH"
-                          />
+                        {/* 第二行： 或 + ETH数字 */}
+                        <div style={{ textAlign: "right", paddingRight: 8, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 3 }}>
+                          <span style={{ fontSize: 12, color: TEXT2 }}>或</span>
+                          <span style={{ fontSize: 20, fontWeight: 900, color: GOLD, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{ethCost.toFixed(4)}</span>
                         </div>
                       </div>
 
-                      {/* 中间： 等号 */}
-                      <span style={{ fontSize: 24, fontWeight: 300, color: TEXT2, lineHeight: 1, flexShrink: 0, padding: "0 8px" }}>=</span>
+                      {/* 图标列：固定22px，两行完全对齐 */}
+                      <div style={{ width: 22, display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
+                        {/* U 图标 */}
+                        <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: "#26A17B", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <span style={{ color: "#fff", fontSize: 11, fontWeight: 700 }}>U</span>
+                        </div>
+                        {/* ETH 图标 */}
+                        <img
+                          src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/eth-circle-icon.webp"
+                          style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0 }}
+                          alt="ETH"
+                        />
+                      </div>
 
-                      {/* 右列： 数字 1 + 圆形章鱼ETH图 */}
-                      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 0 }}>
+                      {/* 等号 */}
+                      <span style={{ fontSize: 22, fontWeight: 300, color: TEXT2, lineHeight: 1, flexShrink: 0, padding: "0 10px" }}>=</span>
+
+                      {/* 右列： 1 + 圆形章鱼ETH图 */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
                         <span style={{
                           fontSize: 52, fontWeight: 900, color: GOLD, lineHeight: 1,
                           textShadow: "0 0 20px rgba(255,215,0,0.4)",
