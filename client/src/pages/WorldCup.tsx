@@ -648,7 +648,6 @@ const championOdds: TeamOdds[] = [
   { name: "埃及", nameEn: "Egypt", code: "eg", odds: 900.00 },
   { name: "新西兰", nameEn: "New Zealand", code: "nz", odds: 1000.00 },
   { name: "乌兹别克", nameEn: "Uzbekistan", code: "uz", odds: 1000.00 },
-  { name: "哥伦比亚", nameEn: "Colombia", code: "co", odds: 53.05 },
   { name: "阿尔及利亚", nameEn: "Algeria", code: "dz", odds: 1200.00 },
   { name: "刚果(金)", nameEn: "DR Congo", code: "cd", odds: 1500.00 },
   { name: "佛得角", nameEn: "Cape Verde", code: "cv", odds: 1500.00 },
