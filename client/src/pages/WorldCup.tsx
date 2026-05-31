@@ -1786,7 +1786,7 @@ export default function WorldCup() {
                     {/* 左侧：章鱼插图，放大，下方被分隔线裁切 */}
                     <div style={{ flexShrink: 0, width: 160, height: 160, marginBottom: -20 }}>
                       <img
-                        src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/paul_ai_front-LqwqCsDzhwePCFjiDyExnp.png"
+                        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/paul-ai-front.png"
                         alt="章鱼保罗"
                         style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "top" }}
                       />
@@ -1840,7 +1840,7 @@ export default function WorldCup() {
                     <div className="flex items-center gap-4">
                       {/* 左：章鱼持ETH圆形图 */}
                       <img
-                        src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/paul_eth_coin_3763d29d.png"
+                        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/paul-eth-coin.png"
                         alt="ETH"
                         style={{ width: 72, height: 72, objectFit: "contain", flexShrink: 0 }}
                       />
