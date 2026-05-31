@@ -1295,6 +1295,7 @@ export default function WorldCup() {
 
   // 点击国旗弹窗
   const [selectedTeam, setSelectedTeam] = useState<{ name: string; code: string; prob: number } | null>(null);
+  const [buyQty, setBuyQty] = useState(1);
 
   // 从 P012 最新快照拉取实时赔率
   const { data: liveOddsData, isLoading: liveOddsLoading, refetch: refetchLiveOdds } = trpc.wcOdds.getLatestChampionOdds.useQuery();
@@ -1857,7 +1858,8 @@ export default function WorldCup() {
         const pct = teamPctMap.get(teamCode) ?? 0;
         const expEthCost = baseEthCost * Math.exp(kValue * (pct / 100));
         const isDynamic = expEthCost > baseEthCost * 1.005; // 超出 0.5% 才显示小黄点
-        const ethCost = Math.max(baseEthCost, expEthCost);
+        const unitEthCost = Math.max(baseEthCost, expEthCost);
+        const ethCost = unitEthCost * buyQty;
         const usdtCost = ethPrice > 0 ? ethCost * ethPrice : null;
         const dataSource = liveOddsData && liveOddsData.teams.length > 0 ? "实时" : "参考";
         // 评委打分（用 prob、teamCode 和当前小时数作为 seed，每小时自动更新一次）
@@ -2031,7 +2033,7 @@ export default function WorldCup() {
                         <span style={{
                           fontSize: 52, fontWeight: 900, color: GOLD, lineHeight: 1,
                           textShadow: "0 0 20px rgba(255,215,0,0.4)",
-                        }}>1</span>
+                        }}>{buyQty}</span>
                         <img
                           src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/paul-eth-coin-circle.webp"
                           alt="章鱼ETH"
@@ -2042,10 +2044,30 @@ export default function WorldCup() {
                     </div>
                   </div>
 
+                  {/* 数量滑块 */}
+                  <div style={{ marginTop: 12, marginBottom: 4 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, color: TEXT2 }}>购买数量</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: GOLD }}>{buyQty} 枚</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={1}
+                      max={100}
+                      value={buyQty}
+                      onChange={e => setBuyQty(Number(e.target.value))}
+                      style={{ width: "100%", accentColor: "#FFD700", cursor: "pointer" }}
+                    />
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 10, color: TEXT2 }}>1</span>
+                      <span style={{ fontSize: 10, color: TEXT2 }}>100</span>
+                    </div>
+                  </div>
+
                   <button
                     className="w-full mt-4 py-3 rounded-2xl text-sm font-semibold"
                     style={{ backgroundColor: "rgba(255,255,255,0.08)", color: TEXT2 }}
-                    onClick={() => setSelectedTeam(null)}
+                    onClick={() => { setSelectedTeam(null); setBuyQty(1); }}
                   >
                     关闭
                   </button>
