@@ -1771,7 +1771,7 @@ export default function WorldCup() {
                 </div>
                 <div>
                   <div className="text-lg font-black" style={{ color: TEXT }}>{selectedTeam.name}</div>
-                  <div className="text-sm" style={{ color: TEXT2 }}>夺冠概率 {prob.toFixed(1)}%</div>
+                  <div className="text-sm" style={{ color: TEXT2 }}>🐙 章鱼保罗觉得我有 {prob.toFixed(1)}% 的夺冠戏</div>
                 </div>
               </div>
 
