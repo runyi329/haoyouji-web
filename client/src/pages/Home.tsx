@@ -2536,8 +2536,8 @@ export default function Home() {
 
           {/* 三个功能入口 - flex-1撑满剩余空间 */}
           <div className="px-3 pt-1.5 pb-2 flex flex-col flex-1 min-h-0 gap-1.5">
-            {/* 第一行：智能财务 + 智能会计 */}
-            <div className="grid grid-cols-2 gap-2 flex-1">
+            {/* 第一行：智能财务 + 智能会计 + NBA */}
+            <div className="grid grid-cols-3 gap-2 flex-1">
               {/* 智能财务 - 黑白金立体风格 */}
               <div
                 className="flex items-center justify-center rounded-xl cursor-pointer active:scale-[0.98] relative overflow-hidden"
@@ -2582,6 +2582,32 @@ export default function Home() {
                 <div className="flex items-center space-x-1 relative z-10">
                   <FileText className="w-3.5 h-3.5" style={{ color: '#C9A84C', filter: 'drop-shadow(0 1px 2px rgba(201,168,76,0.5))' }} />
                   <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.05em' }}>智能会计</span>
+                </div>
+              </div>
+              {/* NBA 总决赛入口 - 蓝红风格 */}
+              <div
+                className="flex items-center justify-center rounded-xl cursor-pointer active:scale-[0.98] relative overflow-hidden"
+                onClick={() => navigate('/nba-finals')}
+                style={{
+                  background: 'linear-gradient(135deg, #0a1628 0%, #1a2d4a 45%, #0d1f38 100%)',
+                  boxShadow: '0 6px 20px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(200,16,46,0.7)',
+                  transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                  padding: '6px 4px',
+                }}
+              >
+                {/* 顶部红蓝高光线 */}
+                <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #C8102E 40%, #1D428A 60%, transparent 95%)' }} />
+                {/* 底部暗影线 */}
+                <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
+                <div className="flex flex-col items-center relative z-10">
+                  <img
+                    src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/PmSjVLxfNIQkAblL.png"
+                    alt="NBA"
+                    className="w-6 h-6 object-contain mb-0.5"
+                    style={{ filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.5))' }}
+                  />
+                  <span className="text-xs font-semibold" style={{ color: '#C8102E', letterSpacing: '0.05em', fontSize: '0.6rem' }}>NBA决赛</span>
                 </div>
               </div>
             </div>
