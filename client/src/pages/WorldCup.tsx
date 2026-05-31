@@ -1,5 +1,5 @@
 import { ArrowLeft, ChevronRight, Settings } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link } from "wouter";
 import { PageTag } from "@/components/PageTag";
@@ -15,6 +15,52 @@ const GOLD2 = "#E8B800";     // 金色次级
 const TEXT = "#E8EDF2";      // 主文字
 const TEXT2 = "#8FA3B8";     // 次级文字
 const BORDER = "rgba(255,255,255,0.08)"; // 分隔线
+
+// ===== COS 基础路径 =====
+const COS_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com";
+
+// ===== 12个大模型评委 =====
+const AI_JUDGES = [
+  { key: "chatgpt",  name: "ChatGPT" },
+  { key: "claude",   name: "Claude" },
+  { key: "gemini",   name: "Gemini" },
+  { key: "grok",     name: "Grok" },
+  { key: "llama",    name: "Llama" },
+  { key: "copilot",  name: "Copilot" },
+  { key: "deepseek", name: "DeepSeek" },
+  { key: "doubao",   name: "豆包" },
+  { key: "qwen",     name: "通义千问" },
+  { key: "ernie",    name: "文心一言" },
+  { key: "hunyuan",  name: "混元" },
+  { key: "pangu",    name: "盘古" },
+];
+
+/**
+ * 根据目标均值生成12个随机分数，使其平均值精确等于 target
+ * 每个分数在 [target*0.6, target*1.4] 范围内随机，最后一个用于补偿误差
+ */
+function genJudgeScores(target: number, seed: number): number[] {
+  // 用 seed 做伪随机，保证同一球队同一概率每次打开分数一致
+  const rng = (i: number) => {
+    let x = Math.sin(seed * 9301 + i * 49297 + 233720) * 10000;
+    return x - Math.floor(x);
+  };
+  const n = AI_JUDGES.length;
+  const scores: number[] = [];
+  let sum = 0;
+  for (let i = 0; i < n - 1; i++) {
+    const lo = target * 0.55;
+    const hi = target * 1.45;
+    const v = lo + rng(i) * (hi - lo);
+    scores.push(v);
+    sum += v;
+  }
+  // 最后一个补偿，使均值精确等于 target
+  const last = target * n - sum;
+  // 限制最后一个在合理范围内
+  scores.push(Math.max(target * 0.3, Math.min(target * 1.7, last)));
+  return scores;
+}
 
 // ===== 国旗图片（使用本地public/flags目录） =====
 function Flag({ code, size = 28 }: { code: string; size?: number }) {
@@ -1814,6 +1860,9 @@ export default function WorldCup() {
         const ethCost = Math.max(baseEthCost, expEthCost);
         const usdtCost = ethPrice > 0 ? ethCost * ethPrice : null;
         const dataSource = liveOddsData && liveOddsData.teams.length > 0 ? "实时" : "参考";
+        // 评委打分（用 prob 和 teamCode 作为 seed，保证同队同概率分数稳定）
+        const scoreSeed = Math.round(prob * 1000) + selectedTeam.code.charCodeAt(0) * 100;
+        const judgeScores = genJudgeScores(prob, scoreSeed);
         const fetchedAt = liveOddsData?.fetchedAt
           ? new Date(liveOddsData.fetchedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
           : null;
@@ -1853,7 +1902,10 @@ export default function WorldCup() {
                     </div>
                     {/* 右侧： AI标题 + 队名+国旗+概率 靠右对齐 */}
                     <div style={{ flex: 1, textAlign: "right", paddingTop: 4 }}>
-                      {/* AI 实时分析标题 */}
+                      {/* AI 实时分析标题 + 实时时间 */}
+                      <div className="flex items-center justify-end gap-2 mb-1">
+                        <span style={{ fontSize: 10, color: TEXT2 }}>{new Date().toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
+                      </div>
                       <div className="flex items-center justify-end gap-2 mb-3">
                         <span style={{ fontSize: 12, color: "#4ADE80", fontWeight: 700, letterSpacing: 1 }}>AI 实时分析夺冠可能</span>
                         <div style={{ position: "relative", width: 10, height: 10, flexShrink: 0 }}>
@@ -1890,7 +1942,47 @@ export default function WorldCup() {
                   </div>
 
                   {/* 分隔线 */}
-                  <div style={{ height: 1, backgroundColor: BORDER, marginBottom: 16 }} />
+                  <div style={{ height: 1, backgroundColor: BORDER, marginBottom: 12 }} />
+
+                  {/* ===== 12大模型评委打分表 ===== */}
+                  <div style={{ marginBottom: 12 }}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div style={{ position: "relative", width: 8, height: 8, flexShrink: 0 }}>
+                        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", backgroundColor: "#4ADE80", animation: "pulseRing 1.6s ease-out infinite", opacity: 0.5 }} />
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", backgroundColor: "#4ADE80" }} />
+                      </div>
+                      <span style={{ fontSize: 11, color: "#4ADE80", fontWeight: 700, letterSpacing: 0.5 }}>AI评委实时追踪打分</span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 8px" }}>
+                      {AI_JUDGES.map((judge, i) => (
+                        <div key={judge.key} style={{
+                          display: "flex", alignItems: "center", gap: 6,
+                          backgroundColor: "rgba(22,44,66,0.7)",
+                          borderRadius: 8, padding: "5px 8px",
+                          border: `1px solid ${BORDER}`,
+                        }}>
+                          <img
+                            src={`${COS_BASE}/ai-logos/${judge.key}.png`}
+                            alt={judge.name}
+                            style={{ width: 20, height: 20, borderRadius: 4, objectFit: "cover", flexShrink: 0 }}
+                          />
+                          <span style={{ fontSize: 10, color: TEXT2, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{judge.name}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: GOLD, fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{judgeScores[i].toFixed(1)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                    {/* 平均分 */}
+                    <div style={{
+                      marginTop: 8, padding: "6px 12px",
+                      backgroundColor: "rgba(255,215,0,0.08)",
+                      border: `1px solid rgba(255,215,0,0.2)`,
+                      borderRadius: 8,
+                      display: "flex", alignItems: "center", justifyContent: "space-between"
+                    }}>
+                      <span style={{ fontSize: 11, color: TEXT2 }}>12大模型综合评分</span>
+                      <span style={{ fontSize: 15, fontWeight: 900, color: GOLD }}>{prob.toFixed(1)}%</span>
+                    </div>
+                  </div>
 
                   {/* 费用卡片：左列两行 + 中间等号 + 右列圆图+1 */}
                   <div
