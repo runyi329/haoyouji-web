@@ -560,13 +560,15 @@ export default function LedgerAAInitialBalance() {
                 <div className="px-4 py-2 space-y-2">
                   {rows.map(({ member, ratio, amount }) => {
                     const pct = ratio;
-                    // 每个人独立计算：基准 = max(100, 自己的比例)
-                    const base = Math.max(100, pct);
+                    // 判断是否超出：总计超过100% 或 单人超过100%
+                    const isOver = total > 100 || pct > 100;
+                    // 基准：超出时以 max(总计, 单人值, 100) 为满格
+                    const base = isOver ? Math.max(total, pct, 100) : 100;
                     // 灰色轨道宽度：100%占基准的比例
                     const grayWidth = (100 / base) * 100;
                     // 红色条宽度：实际值占基准的比例
                     const redWidth = (pct / base) * 100;
-                    const isPersonOver = pct > 100;
+                    const isPersonOver = isOver && pct > 0;
                     return (
                       <div key={member.userId} className="flex items-center gap-3 py-2">
                         {/* 用户信息 */}
