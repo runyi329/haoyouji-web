@@ -907,20 +907,8 @@ export default function LedgerDetailAA({
             </div>
           </div>
         </div>
-        {/* 第二行：充值 + 刷新 + 返回 + 全部下拉 */}
+        {/* 第二行：刷新 + 返回（靠左）+ 标签下拉（充满剩余宽度） */}
         <div className="px-4 pb-2 flex items-center gap-1.5 w-full">
-              {/* 充值按钮 */}
-              <button
-                onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}`)}
-                className="w-16 flex-shrink-0 flex items-center justify-center h-9 rounded-full text-sm font-medium"
-                style={{
-                  backgroundColor: "rgba(255,255,255,0.9)",
-                  color: "#D32F2F",
-                  border: "1px solid rgba(255,255,255,0.4)",
-                }}
-              >
-                充值
-              </button>
               {/* 刷新按钮 */}
               <button
                 onClick={() => window.location.reload()}
