@@ -1877,7 +1877,7 @@ export default function Home() {
             <img
               src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/banners/ai-travel-banner.webp"
               alt="AI环游世界·智能出行"
-              className="w-full h-full object-cover"
+              className="w-full h-full object-contain"
               onError={(e) => { (e.target as HTMLImageElement).src = '/ai-travel-banner.png'; }}
             />
           </div>,
