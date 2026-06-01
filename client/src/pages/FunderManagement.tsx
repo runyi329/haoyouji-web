@@ -226,6 +226,9 @@ export default function FunderManagement() {
     return '';
   }, [formData.buyPrice, formData.buyQuantity]);
 
+  // 员工名字筛选
+  const [employeeNameFilter, setEmployeeNameFilter] = useState('');
+
   // 担保价值（在 assetOrdersData 定义后使用）——放到这里是为了先定义类型，实际计算在下方的 derivedCollateral 中
   const { data: funderUsers, isLoading: usersLoading } = trpc.ledger.funderGetFunderUsers.useQuery(
     { ledgerId },
@@ -722,6 +725,34 @@ export default function FunderManagement() {
           <h2 className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">
             订单列表 {assetOrders ? `· ${(assetOrders as any[]).length} 笔` : ''}
           </h2>
+          {/* 员工筛选按鈕（仅在有订单时显示） */}
+          {!ordersLoading && assetOrders && (assetOrders as any[]).length > 0 && (() => {
+            const names = Array.from(new Set(
+              (assetOrders as any[]).map((o: any) => o.userName || o.username || '').filter(Boolean)
+            )) as string[];
+            if (names.length <= 1) return null;
+            return (
+              <div className="flex gap-2 overflow-x-auto pb-1 mb-3">
+                <button
+                  onClick={() => setEmployeeNameFilter('')}
+                  className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                  style={employeeNameFilter === ''
+                    ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                    : { backgroundColor: '#fff', color: '#6B7280', border: '1px solid #E5E7EB' }}
+                >全部</button>
+                {names.map(name => (
+                  <button
+                    key={name}
+                    onClick={() => setEmployeeNameFilter(employeeNameFilter === name ? '' : name)}
+                    className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                    style={employeeNameFilter === name
+                      ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                      : { backgroundColor: '#fff', color: '#6B7280', border: '1px solid #E5E7EB' }}
+                  >{name}</button>
+                ))}
+              </div>
+            );
+          })()}
           {ordersLoading ? (
             <div className="text-center py-4 text-gray-400 text-sm">加载中...</div>
           ) : !assetOrders || (assetOrders as any[]).length === 0 ? (
@@ -729,9 +760,18 @@ export default function FunderManagement() {
               <TrendingUp className="w-10 h-10 text-gray-200 mx-auto mb-2" />
               <div className="text-gray-400 text-sm">暂无订单</div>
             </div>
-          ) : (
+          ) : (() => {
+            const keyword = employeeNameFilter.trim();
+            const filteredOrders = keyword
+              ? (assetOrders as any[]).filter((o: any) => (o.userName || o.username || '') === keyword)
+              : (assetOrders as any[]);
+            return filteredOrders.length === 0 ? (
+              <div className="text-center py-8 bg-white rounded-2xl shadow-sm">
+                <div className="text-gray-400 text-sm">该员工暂无订单</div>
+              </div>
+            ) : (
             <div className="space-y-3">
-              {(assetOrders as any[]).map((order: any) => {
+              {filteredOrders.map((order: any) => {
                 const statusLabel = STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status;
                 const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
                 const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
@@ -1153,7 +1193,8 @@ export default function FunderManagement() {
                 );
               })}
             </div>
-          )}
+            );
+          })()}
         </div>
       </div>
 
