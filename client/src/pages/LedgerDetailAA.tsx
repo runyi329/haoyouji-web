@@ -2131,7 +2131,7 @@ export default function LedgerDetailAA({
                 const pauseD = new Date(configPauseDate);
                 pauseD.setDate(pauseD.getDate() - 1);
                 const dayBefore = pauseD.toISOString().slice(0, 10);
-                if (dayBefore < endDate) { endDate = dayBefore; isPaused = true; }
+                if (dayBefore <= endDate) { endDate = dayBefore; isPaused = true; }
               }
               const days = firstDate ? Math.max(1, Math.round((new Date(endDate).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 0;
               const latestPnl = tag.points[tag.points.length - 1]?.pnl ?? 0;
