@@ -1664,7 +1664,7 @@ export default function Home() {
   const [isAnimating, setIsAnimating] = useState(false);
 
   // AI 社交容器轮播 state
-  const SOCIAL_PAGES = 5;
+  const SOCIAL_PAGES = 4;
   const [socialPageIndex, setSocialPageIndex] = useState(1);
   const [socialTransition, setSocialTransition] = useState(true);
   const socialContainerRef = useRef<HTMLDivElement>(null);
@@ -1881,17 +1881,8 @@ export default function Home() {
               onError={(e) => { (e.target as HTMLImageElement).src = '/ai-travel-banner.png'; }}
             />
           </div>,
-          // 页3：AI球伴NBA总决赛海报（仅展示，不可点击）
-          <div
-            key="p2-nba"
-            className="w-full h-full relative"
-          >
-            <img
-              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/banners/nba-finals-banner.webp"
-              alt="AI球伴·NBA总决赛同行"
-              className="w-full h-full object-cover"
-            />
-          </div>,
+          // 页3：AI球伴NBA总决赛海报（暂时隐藏）
+          // <div key="p2-nba" ...> 已隐藏，SOCIAL_PAGES=4 时不包含此页 </div>
           // 页4：积分商城（商品分类入口）
           <div key="p3" className="w-full h-full flex flex-col overflow-hidden">
             {/* 顶部标题 */}
