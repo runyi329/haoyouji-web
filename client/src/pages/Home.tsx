@@ -1868,7 +1868,7 @@ export default function Home() {
               刷新
             </button>
           </div>,
-          // 页2：AI球伴NBA总决赛海报（点击跳转NBA总决赛页面）
+          // 页2：AI球伴NBA总决赛海报（仅展示，不可点击）
           <div
             key="p2-nba"
             className="w-full h-full relative"
@@ -1879,24 +1879,34 @@ export default function Home() {
               className="w-full h-full object-cover"
             />
           </div>,
-          // 页3：蓄水池动画（水滴）
-          <div key="p2" className="w-full h-full flex flex-col px-3 py-2">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 社交</span>
-              <div onClick={handleRefresh} className="flex flex-col items-center cursor-pointer">
-                <div className={`w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors ${isFetching ? 'animate-spin' : ''}`}>
-                  <RefreshCw className="w-3.5 h-3.5 text-[#A80000]" />
-                </div>
-                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>刷新</span>
+          // 页3：AI 旅行入口（点击跳转AI旅行页面）
+          <div
+            key="p5-ai-travel"
+            className="w-full h-full relative cursor-pointer active:opacity-90 transition-opacity"
+            onClick={() => navigate('/ai-travel')}
+          >
+            <img
+              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/wvSFVajprWDkVXHi.png"
+              alt="AI旅行·智能出行"
+              className="w-full h-full object-cover"
+            />
+            <div
+              className="absolute inset-0 flex flex-col justify-end p-3"
+              style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 55%)' }}
+            >
+              <div className="flex items-center space-x-1.5 mb-0.5">
+                <span className="text-white font-bold" style={{ fontSize: 16 }}>AI 旅行</span>
+                <span
+                  className="text-xs px-1.5 py-0.5 rounded-full font-bold"
+                  style={{ background: 'linear-gradient(90deg, #0891b2, #2563eb)', color: '#fff', fontSize: 9 }}
+                >
+                  AI
+                </span>
               </div>
-            </div>
-            <div className="flex-1 flex items-center justify-center">
-              <div style={{ width: '100%', aspectRatio: '4/3' }}>
-                <XushuchiLottie />
-              </div>
+              <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.75)' }}>智能规划 · 景点推荐 · 旅游账本</p>
             </div>
           </div>,
-          // 页3：积分商城（商品分类入口）
+          // 页4：积分商城（商品分类入口）
           <div key="p3" className="w-full h-full flex flex-col overflow-hidden">
             {/* 顶部标题 */}
             <div className="flex items-center justify-between px-3 pt-2 pb-1.5 flex-shrink-0">
@@ -1942,31 +1952,21 @@ export default function Home() {
               </div>
             </div>
           </div>,
-          // 页5：AI 旅行入口（点击跳转AI旅行页面）
-          <div
-            key="p5-ai-travel"
-            className="w-full h-full relative cursor-pointer active:opacity-90 transition-opacity"
-            onClick={() => navigate('/ai-travel')}
-          >
-            <img
-              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/wvSFVajprWDkVXHi.png"
-              alt="AI旅行·智能出行"
-              className="w-full h-full object-cover"
-            />
-            <div
-              className="absolute inset-0 flex flex-col justify-end p-3"
-              style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 55%)' }}
-            >
-              <div className="flex items-center space-x-1.5 mb-0.5">
-                <span className="text-white font-bold" style={{ fontSize: 16 }}>AI 旅行</span>
-                <span
-                  className="text-xs px-1.5 py-0.5 rounded-full font-bold"
-                  style={{ background: 'linear-gradient(90deg, #0891b2, #2563eb)', color: '#fff', fontSize: 9 }}
-                >
-                  AI
-                </span>
+          // 页5：蓄水池动画（水滴）
+          <div key="p2" className="w-full h-full flex flex-col px-3 py-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-[#A80000] tracking-wide">AI 社交</span>
+              <div onClick={handleRefresh} className="flex flex-col items-center cursor-pointer">
+                <div className={`w-7 h-7 rounded-full bg-red-50 flex items-center justify-center hover:bg-red-100 transition-colors ${isFetching ? 'animate-spin' : ''}`}>
+                  <RefreshCw className="w-3.5 h-3.5 text-[#A80000]" />
+                </div>
+                <span className="text-gray-400 mt-0.5" style={{ fontSize: '0.55rem' }}>刷新</span>
               </div>
-              <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.75)' }}>智能规划 · 景点推荐 · 旅游账本</p>
+            </div>
+            <div className="flex-1 flex items-center justify-center">
+              <div style={{ width: '100%', aspectRatio: '4/3' }}>
+                <XushuchiLottie />
+              </div>
             </div>
           </div>,
         ];
