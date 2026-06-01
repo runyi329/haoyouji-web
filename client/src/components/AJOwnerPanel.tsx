@@ -813,12 +813,33 @@ function InvoiceListInline({
     },
   });
 
-  // 搜索过滤
+  // 员工筛选 state
+  const [selectedEmployee, setSelectedEmployee] = useState<string>('');
+
+  // 从 invoices 中提取不重复的员工名列表
+  const employeeNames = useMemo(() => {
+    const list: any[] = Array.isArray(invoices) ? invoices : [];
+    const names = Array.from(new Set(
+      list.map((inv: any) => safeStr(inv.creatorNickname || inv.creatorName || inv.creatorUsername)).filter(Boolean)
+    )) as string[];
+    return names;
+  }, [invoices]);
+
+  // 搜索过滤 + 员工过滤
   const filteredInvoices = useMemo(() => {
     const list: any[] = Array.isArray(invoices) ? invoices : [];
-    if (!searchText.trim()) return list;
+    let result = list;
+    // 员工筛选
+    if (selectedEmployee) {
+      result = result.filter((inv: any) => {
+        const creator = safeStr(inv.creatorNickname || inv.creatorName || inv.creatorUsername);
+        return creator === selectedEmployee;
+      });
+    }
+    // 文本搜索
+    if (!searchText.trim()) return result;
     const kw = searchText.trim().toLowerCase();
-    return list.filter((inv: any) => {
+    return result.filter((inv: any) => {
       const amount = String(Number(inv.amount || 0).toFixed(2));
       const desc = safeStr(inv.description).toLowerCase();
       const category = safeStr(inv.category).toLowerCase();
@@ -826,7 +847,7 @@ function InvoiceListInline({
       const date = safeStr(inv.recordDate || inv.date).toLowerCase();
       return amount.includes(kw) || desc.includes(kw) || category.includes(kw) || creator.includes(kw) || date.includes(kw);
     });
-  }, [invoices, searchText]);
+  }, [invoices, searchText, selectedEmployee]);
 
   return (
     <div>
@@ -873,6 +894,28 @@ function InvoiceListInline({
           initialIndex={previewIndex}
           onClose={() => setPreviewImages(null)}
         />
+      )}
+      {/* 员工筛选胶囊按鈕（有多个员工时显示） */}
+      {!isLoading && employeeNames.length >= 2 && (
+        <div className="flex gap-2 overflow-x-auto px-4 pb-2 pt-1" style={{ scrollbarWidth: 'none' }}>
+          <button
+            onClick={() => setSelectedEmployee('')}
+            className="shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all"
+            style={selectedEmployee === ''
+              ? { background: AJ_COLOR, color: '#fff' }
+              : { backgroundColor: '#f3f4f6', color: '#6B7280', border: '1px solid #E5E7EB' }}
+          >全部</button>
+          {employeeNames.map(name => (
+            <button
+              key={name}
+              onClick={() => setSelectedEmployee(selectedEmployee === name ? '' : name)}
+              className="shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all"
+              style={selectedEmployee === name
+                ? { background: AJ_COLOR, color: '#fff' }
+                : { backgroundColor: '#f3f4f6', color: '#6B7280', border: '1px solid #E5E7EB' }}
+            >{name}</button>
+          ))}
+        </div>
       )}
       {isLoading ? (
         <div className="text-center py-8 text-gray-400 text-sm">加载中...</div>
