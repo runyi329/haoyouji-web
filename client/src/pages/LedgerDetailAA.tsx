@@ -2194,7 +2194,7 @@ export default function LedgerDetailAA({
                         <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
                         <span
                           className="text-[11px] font-medium"
-                          style={{ color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 28, cursor: tag.name.length > 2 ? 'pointer' : 'default', textDecoration: tag.name.length > 2 ? 'underline' : 'none', textDecorationStyle: tag.name.length > 2 ? 'dashed' : undefined, textDecorationColor: tag.name.length > 2 ? '#999' : undefined, textUnderlineOffset: '2px' }}
+                          style={{ color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 44, cursor: tag.name.length > 2 ? 'pointer' : 'default', textDecoration: tag.name.length > 2 ? 'underline' : 'none', textDecorationStyle: tag.name.length > 2 ? 'dashed' : undefined, textDecorationColor: tag.name.length > 2 ? '#999' : undefined, textUnderlineOffset: '2px' }}
                           onClick={() => tag.name.length > 2 ? setTooltipTagName(tooltipTagName === tag.name ? null : tag.name) : undefined}
                         >{tag.name.length > 2 ? tag.name.slice(0, 2) + '…' : tag.name}</span>
                         {tooltipTagName === tag.name && (
