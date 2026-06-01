@@ -2123,12 +2123,21 @@ export default function LedgerDetailAA({
             const tagData = visibleTags.map((tag, idx) => {
               const configStartDate = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__startDate`] ?? '') : '';
               const firstDate = configStartDate || tag.points[0]?.date;
-              const today = new Date().toISOString().slice(0, 10);
-              const days = firstDate ? Math.max(1, Math.round((new Date(today).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 0;
+              const configPauseDate = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__pauseDate`] ?? '') : '';
+              // 有暂停日期时，截止日期为暂停前一天；否则截止日期为今天
+              let endDate = new Date().toISOString().slice(0, 10);
+              let isPaused = false;
+              if (configPauseDate) {
+                const pauseD = new Date(configPauseDate);
+                pauseD.setDate(pauseD.getDate() - 1);
+                const dayBefore = pauseD.toISOString().slice(0, 10);
+                if (dayBefore < endDate) { endDate = dayBefore; isPaused = true; }
+              }
+              const days = firstDate ? Math.max(1, Math.round((new Date(endDate).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 0;
               const latestPnl = tag.points[tag.points.length - 1]?.pnl ?? 0;
               const annualized = tag.marginCny > 0 && days > 0 ? (latestPnl / tag.marginCny / days) * 365 * 100 : null;
               const divAmt = dividendByTag[tag.name] ?? 0;
-              return { tag, days, latestPnl, annualized, divAmt, isLast: idx === visibleTags.length - 1 };
+              return { tag, days, latestPnl, annualized, divAmt, isLast: idx === visibleTags.length - 1, isPaused, firstDate, endDate };
             });
             // 排序逻辑
             const sortedTagData = overviewSort ? [...tagData].sort((a, b) => {
@@ -2188,7 +2197,7 @@ export default function LedgerDetailAA({
                   <span style={{ color: overviewSort?.col === 'dividend' ? '#1565C0' : '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px', fontSize: 10 }} onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>分红¥</span><SortArrow col="dividend" />
                 </div>
                 {/* 数据行 */}
-                {sortedTagData.map(({ tag, days, latestPnl, annualized, divAmt, isLast }) => {
+                {sortedTagData.map(({ tag, days, latestPnl, annualized, divAmt, isLast, isPaused, firstDate, endDate }) => {
                   const rowBorder = isLast ? 'none' : '1px solid #F9F9F9';
                   return (
                     <>
@@ -2208,7 +2217,20 @@ export default function LedgerDetailAA({
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 周期 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder }}><span style={{ color: '#424242' }}>{days > 0 ? `${days}天` : '--'}</span></div>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder }}>
+                        {isPaused ? (
+                          <span
+                            style={{ display: 'inline-block', backgroundColor: '#1565C0', color: '#FFFFFF', borderRadius: 4, padding: '1px 5px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                            onClick={() => {
+                              if (!firstDate || !endDate) return;
+                              const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
+                              alert(`${fmt(firstDate)} ~ ${fmt(endDate)}，共 ${days} 天`);
+                            }}
+                          >{days > 0 ? `${days}天` : '--'}</span>
+                        ) : (
+                          <span style={{ color: '#424242' }}>{days > 0 ? `${days}天` : '--'}</span>
+                        )}
+                      </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 占比 */}
                       {(() => {
