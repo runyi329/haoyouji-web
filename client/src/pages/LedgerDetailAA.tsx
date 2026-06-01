@@ -97,6 +97,7 @@ export default function LedgerDetailAA({
   transactionsData,
   user,
   membersData,
+  refetchTransactions,
 }: Props) {
   const [, setLocation] = useLocation();
 
@@ -156,7 +157,16 @@ export default function LedgerDetailAA({
     setViewAsUserId(userId);
     setShowViewAsPicker(false);
     setViewAsSearch('');
-    trpcUtils.ledger.getMyInitialBalances.invalidate();
+    // 同步 sessionStorage，使后端身份代入（x-view-as-user-id 请求头）生效
+    if (userId) {
+      sessionStorage.setItem('view-as-user-id', String(userId));
+    } else {
+      sessionStorage.removeItem('view-as-user-id');
+    }
+    // 刷新所有查询，使视角切换立即生效（包括 transactionsData、initialBalancesData 等）
+    trpcUtils.invalidate();
+    // 同时触发父组件的 refetch，确保 transactionsData 切换到被观察用户的数据
+    if (refetchTransactions) refetchTransactions();
   };
 
   // selectedTagId 变化时同步到 sessionStorage
@@ -744,7 +754,19 @@ export default function LedgerDetailAA({
     const effectiveCanEdit = canEdit && (!viewAsUserId || viewTargetCanEdit);
 
     if (!effectiveCanEdit) {
-      // 普通成员或观察非管理员视角：不可编辑，但可查看图片和股票
+      // 普通成员或观察非管理员视角：先检查暂停日期（仍需弹出提示），再查看图片/股票
+      const pauseDateRO = selectedTagPauseDate;
+      if (pauseDateRO) {
+        if (dateStr === pauseDateRO) {
+          alert(`暂停于 ${pauseDateRO}，此日期及之后无法添加新记录`);
+          return;
+        }
+        if (dateStr > pauseDateRO) {
+          alert(`暂停于 ${pauseDateRO}，此日期无法添加新记录`);
+          return;
+        }
+      }
+      // 不可编辑，但可查看图片和股票
       if (existing && existing.records.length > 0) {
         // 收集当天所有记录的图片
         const allImages: string[] = [];
@@ -2560,8 +2582,13 @@ export default function LedgerDetailAA({
         </div>
       )}
 
-      {/* ── 悬浮加号按鈕（仅管理员/创建者可见，且「2026 AA」账本除外） ── */}
-      {canEdit && !hideFloatingAddButton && (
+      {/* ── 悬浮加号按鈕（仅管理员/创建者可见，且「2026 AA」账本除外；观察非管理员视角时隐藏） ── */}
+      {canEdit && !hideFloatingAddButton && (() => {
+        const viewTargetMemberFAB = viewAsUserId ? (membersData || []).find((m: any) => m.userId === viewAsUserId) : null;
+        const viewTargetCanEditFAB = viewTargetMemberFAB ? (viewTargetMemberFAB.role === 'owner' || viewTargetMemberFAB.role === 'admin') : true;
+        const effectiveCanEditFAB = !viewAsUserId || viewTargetCanEditFAB;
+        return effectiveCanEditFAB;
+      })() && (
         <button
           onClick={() => {
             let url = `/ledger/${ledgerId}/add`;
