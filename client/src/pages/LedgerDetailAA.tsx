@@ -778,19 +778,25 @@ export default function LedgerDetailAA({
 
     // 暂停日期检查：暂停日期及之后禁止新增记录（管理员也不能新增，但可编辑已有记录）
     const pauseDate = selectedTagPauseDate;
-    const isPausedDate = pauseDate && dateStr >= pauseDate;
+    const isPauseDay = pauseDate && dateStr === pauseDate;
+    const isPausedAfterDay = pauseDate && dateStr > pauseDate;
+    // 点击暂停日期当天：弹出说明
+    if (isPauseDay) {
+      alert(`暂停于 ${pauseDate}，此日期及之后无法添加新记录`);
+      return;
+    }
+    // 点击暂停日期之后的日期：同样弹出说明
+    if (isPausedAfterDay) {
+      alert(`暂停于 ${pauseDate}，此日期无法添加新记录`);
+      return;
+    }
     if (existing && existing.records.length > 0) {
-      // 已有记录：跳转编辑第一条记录（暂停后仍可编辑已有记录）
+      // 已有记录：跳转编辑第一条记录
       const recordId = existing.records[0].id;
       let editUrl = `/ledger/${ledgerId}/add?edit=${recordId}`;
       if (selectedTagId) editUrl += `&categoryId=${selectedTagId}`;
       setLocation(editUrl);
     } else {
-      // 无记录：暂停日期及之后禁止新增
-      if (isPausedDate) {
-        alert(`该标签已于 ${pauseDate} 暂停，无法在此日期后添加新记录`);
-        return;
-      }
       let url = `/ledger/${ledgerId}/add?date=${dateStr}`;
       if (selectedTagId) url += `&categoryId=${selectedTagId}`;
       setLocation(url);
@@ -1318,17 +1324,17 @@ export default function LedgerDetailAA({
                   // 非交易日样式
                   const cellBg = isNonTrading
                     ? '#F0F0F0'
-                    : isPauseDay ? '#FFF8E1'
-                    : isPausedAfter ? '#FFF8E1'
+                    : isPauseDay ? '#1565C0'
+                    : isPausedAfter ? '#F0F0F0'
                     : todayMark ? '#FFF3E0' : '#F9F9F9';
                   const cellBorder = isNonTrading
                     ? '1px solid #E0E0E0'
-                    : isPauseDay ? '1.5px solid #F59E0B'
-                    : isPausedAfter ? '1px solid #FDE68A'
+                    : isPauseDay ? '1.5px solid #1565C0'
+                    : isPausedAfter ? '1px solid #E0E0E0'
                     : todayMark ? '1.5px solid #D32F2F' : '1px solid #F0F0F0';
                   const dayNumColor = isNonTrading
                     ? '#BDBDBD'
-                    : isPauseDay || isPausedAfter ? '#B45309'
+                    : isPausedAfter ? '#BDBDBD'
                     : todayMark ? '#D32F2F' : '#222222';
 
                   // 检查该日期是否有图片和股票代码
@@ -1360,39 +1366,38 @@ export default function LedgerDetailAA({
                         position: 'relative',
                       }}
                     >
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', marginBottom: '1px' }}>
-                        <span style={{ fontSize: '10px', fontWeight: 500, lineHeight: 1, color: dayNumColor }}>{day}</span>
-                        {/* 暂停标志：暂停日期显示暂停图标 */}
-                        {isPauseDay && (
-                          <PauseCircle style={{ width: '7px', height: '7px', color: '#F59E0B', flexShrink: 0 }} />
-                        )}
-                        {/* 图片/股票标识：日期右边小点（红=图片，蓝=股票，紫=两者） */}
-                        {dotColor && (
-                          <span
-                            style={{
-                              width: '3px',
-                              height: '3px',
-                              borderRadius: '50%',
-                              backgroundColor: dotColor,
-                              flexShrink: 0,
-                              display: 'inline-block',
-                            }}
-                          />
-                        )}
-                      </span>
-                      {isNonTrading ? (
-                        <span style={{ fontSize: '7px', fontWeight: 400, lineHeight: 1.1, color: '#BDBDBD', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
-                          {nonTradingLabel}
-                        </span>
-                      ) : isPauseDay ? (
-                        <span style={{ fontSize: '7px', fontWeight: 600, lineHeight: 1.1, color: '#F59E0B', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
-                          暂停
-                        </span>
-                      ) : hasRecord ? (
-                        <span style={{ fontSize: '8px', fontWeight: 600, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
-                          {cellValue}
-                        </span>
-                      ) : null}
+                      {isPauseDay ? (
+                        /* 暂停日期：整格显示暂停图标（两根竖线），无日期数字 */
+                        <PauseCircle style={{ width: '18px', height: '18px', color: '#FFFFFF' }} />
+                      ) : (
+                        <>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', marginBottom: '1px' }}>
+                            <span style={{ fontSize: '10px', fontWeight: 500, lineHeight: 1, color: dayNumColor }}>{day}</span>
+                            {/* 图片/股票标识：日期右边小点（红=图片，蓝=股票，紫=两者） */}
+                            {!isPausedAfter && dotColor && (
+                              <span
+                                style={{
+                                  width: '3px',
+                                  height: '3px',
+                                  borderRadius: '50%',
+                                  backgroundColor: dotColor,
+                                  flexShrink: 0,
+                                  display: 'inline-block',
+                                }}
+                              />
+                            )}
+                          </span>
+                          {isNonTrading ? (
+                            <span style={{ fontSize: '7px', fontWeight: 400, lineHeight: 1.1, color: '#BDBDBD', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
+                              {nonTradingLabel}
+                            </span>
+                          ) : !isPausedAfter && hasRecord ? (
+                            <span style={{ fontSize: '8px', fontWeight: 600, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
+                              {cellValue}
+                            </span>
+                          ) : null}
+                        </>
+                      )}
                     </button>
                   );
                 })}
