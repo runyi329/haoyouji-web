@@ -1921,7 +1921,6 @@ export default function LedgerDetailAA({
           })()}
           </div>
           )}
-        </div>
 
           <div className="mx-3 mt-2 rounded-2xl shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF' }}>
             {/* 图表标题行 */}
@@ -2337,6 +2336,7 @@ export default function LedgerDetailAA({
               })}
             </div>
           </div>
+        </div>
       )}
 
       {/* ── 视角切换弹窗（管理员/创建者点击头像弹出） ── */}
