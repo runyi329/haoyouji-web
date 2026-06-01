@@ -45,6 +45,8 @@ interface TagEntry {
   margin: string;
   marginCoin: string; // "" = 人民币, "BTC"/"ETH"/"SOL"/"LDO" = 数字币
   startDate: string;
+  pauseDate: string;
+  endDate: string;
   visible: boolean;
 }
 
@@ -54,6 +56,8 @@ const defaultEntry = (): TagEntry => ({
   margin: "",
   marginCoin: "",
   startDate: "",
+  pauseDate: "",
+  endDate: "",
   visible: true,
 });
 
@@ -124,6 +128,8 @@ export default function LedgerAAInitialBalance() {
               : "",
           marginCoin: balances[`${n}__marginCoin`] ?? "",
           startDate: balances[`${n}__startDate`] ?? "",
+          pauseDate: balances[`${n}__pauseDate`] ?? "",
+          endDate: balances[`${n}__endDate`] ?? "",
           visible:
             balances[`${n}__visible`] !== undefined
               ? Number(balances[`${n}__visible`]) !== 0
@@ -201,6 +207,12 @@ export default function LedgerAAInitialBalance() {
       balances[`${n}__marginCoin`] = entry.marginCoin;
       if (entry.startDate) {
         balances[`${n}__startDate`] = entry.startDate;
+      }
+      if (entry.pauseDate) {
+        balances[`${n}__pauseDate`] = entry.pauseDate;
+      }
+      if (entry.endDate) {
+        balances[`${n}__endDate`] = entry.endDate;
       }
       balances[`${n}__visible`] = entry.visible ? 1 : 0;
     }
@@ -1226,6 +1238,50 @@ export default function LedgerAAInitialBalance() {
                               onChange={(e) =>
                                 updateEntry(userId, cat.name, {
                                   startDate: e.target.value,
+                                })
+                              }
+                              className="flex-1 text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
+                              style={{
+                                borderColor: "#E0E0E0",
+                                backgroundColor: "#FFFFFF",
+                                color: "#222222",
+                              }}
+                            />
+                          </div>
+
+                          {/* 行2b：暂停日期 */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs w-16 flex-shrink-0 font-medium" style={{ color: '#B45309' }}>
+                              暂停日期
+                            </span>
+                            <input
+                              type="date"
+                              value={entry.pauseDate}
+                              onChange={(e) =>
+                                updateEntry(userId, cat.name, {
+                                  pauseDate: e.target.value,
+                                })
+                              }
+                              className="flex-1 text-sm border rounded-lg px-2 py-1 outline-none"
+                              style={{
+                                borderColor: '#FDE68A',
+                                backgroundColor: '#FFFBEB',
+                                color: '#92400E',
+                              }}
+                            />
+                          </div>
+
+                          {/* 行2c：结束日期 */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-400 w-16 flex-shrink-0">
+                              结束日期
+                            </span>
+                            <input
+                              type="date"
+                              value={entry.endDate}
+                              onChange={(e) =>
+                                updateEntry(userId, cat.name, {
+                                  endDate: e.target.value,
                                 })
                               }
                               className="flex-1 text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"

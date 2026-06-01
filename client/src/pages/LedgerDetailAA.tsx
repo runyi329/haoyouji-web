@@ -229,12 +229,17 @@ export default function LedgerDetailAA({
     if (!selectedTagId || !categories) return null;
     return categories.find((c: any) => c.id === selectedTagId) || null;
   }, [selectedTagId, categories]);;
-  // 获取当前选中标签的配置（暂停日期、结束日期等）——必须在 selectedTag 之后定义
+  // 获取当前选中标签的配置（暂停日期、结束日期等）——从 initialBalancesData 读取（用户×标签维度）
   const selectedTagName = selectedTag?.name ?? null;
-  const { data: selectedTagConfig } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId, tagName: selectedTagName ?? '' },
-    { enabled: !!ledgerId && !!selectedTagName }
-  );
+  // 暂停日期和结束日期从当前用户的 initialBalancesData 中读取（tagName__pauseDate / tagName__endDate）
+  const selectedTagPauseDate: string | null = useMemo(() => {
+    if (!selectedTagName || !initialBalancesData?.balances) return null;
+    return (initialBalancesData.balances as any)[`${selectedTagName}__pauseDate`] ?? null;
+  }, [selectedTagName, initialBalancesData]);
+  const selectedTagEndDate: string | null = useMemo(() => {
+    if (!selectedTagName || !initialBalancesData?.balances) return null;
+    return (initialBalancesData.balances as any)[`${selectedTagName}__endDate`] ?? null;
+  }, [selectedTagName, initialBalancesData]);
 
   // 当前用户的交易数据
   const activeMemberTransactions = useMemo(() => {
@@ -772,7 +777,7 @@ export default function LedgerDetailAA({
     }
 
     // 暂停日期检查：暂停日期及之后禁止新增记录（管理员也不能新增，但可编辑已有记录）
-    const pauseDate = selectedTagConfig?.pause_date ?? null;
+    const pauseDate = selectedTagPauseDate;
     const isPausedDate = pauseDate && dateStr >= pauseDate;
     if (existing && existing.records.length > 0) {
       // 已有记录：跳转编辑第一条记录（暂停后仍可编辑已有记录）
@@ -1304,9 +1309,9 @@ export default function LedgerDetailAA({
                       }
                     }
                   }
-                  // 暂停日期判断
-                  const pauseDateStr = selectedTagConfig?.pause_date ?? null;
-                  const endDateStr = selectedTagConfig?.end_date ?? null;
+                  // 暂停日期判断（从用户自己的 initialBalancesData 读取）
+                  const pauseDateStr = selectedTagPauseDate;
+                  const endDateStr = selectedTagEndDate;
                   const dayDateStr2 = getDateStr(day);
                   const isPauseDay = !isNonTrading && pauseDateStr && dayDateStr2 === pauseDateStr;
                   const isPausedAfter = !isNonTrading && pauseDateStr && dayDateStr2 > pauseDateStr;
