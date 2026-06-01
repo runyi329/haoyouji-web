@@ -738,8 +738,13 @@ export default function LedgerDetailAA({
     const dateStr = getDateStr(day);
     const existing = dayMap.get(dateStr);
 
-    if (!canEdit) {
-      // 普通成员：不可编辑，但可查看图片和股票
+    // 观察视角权限判断：如果切换到非管理员用户视角，按只读处理
+    const viewTargetMember = viewAsUserId ? (membersData || []).find((m: any) => m.userId === viewAsUserId) : null;
+    const viewTargetCanEdit = viewTargetMember ? (viewTargetMember.role === 'owner' || viewTargetMember.role === 'admin') : true;
+    const effectiveCanEdit = canEdit && (!viewAsUserId || viewTargetCanEdit);
+
+    if (!effectiveCanEdit) {
+      // 普通成员或观察非管理员视角：不可编辑，但可查看图片和股票
       if (existing && existing.records.length > 0) {
         // 收集当天所有记录的图片
         const allImages: string[] = [];
