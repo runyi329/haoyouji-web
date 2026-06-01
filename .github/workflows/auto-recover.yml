@@ -1,0 +1,39 @@
+name: auto-recover
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/auto-recover.yml'
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: setup ssh
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  ServerAliveInterval 15\n  ServerAliveCountMax 10\n  ConnectTimeout 15\n' > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+      - name: kill stuck processes and restart pm2
+        timeout-minutes: 4
+        run: |
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+          echo "=== Kill stuck build processes ==="
+          pkill -9 -f "pnpm" 2>/dev/null || true
+          pkill -9 -f "vite" 2>/dev/null || true
+          pkill -9 -f "esbuild" 2>/dev/null || true
+          pkill -9 -f "node.*build" 2>/dev/null || true
+          sleep 3
+          echo "=== Restart pm2 ==="
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 delete haoyouji-web 2>/dev/null || true'
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs 2>/dev/null' || \
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/dist/index.js --name haoyouji-web 2>/dev/null'
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save 2>/dev/null'
+          echo "=== PM2 status ==="
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list'
+          echo "=== Recent app logs ==="
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 logs haoyouji-web --nostream --lines 10' 2>/dev/null || true
+          ENDSSH
