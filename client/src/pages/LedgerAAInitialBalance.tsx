@@ -197,7 +197,7 @@ export default function LedgerAAInitialBalance() {
       }
       if (entry.ratio !== "") {
         const num = parseFloat(entry.ratio);
-        if (!isNaN(num)) balances[`${n}__ratio`] = Math.min(100, Math.max(0, num));
+        if (!isNaN(num)) balances[`${n}__ratio`] = Math.max(0, num);
       }
       if (entry.margin !== "") {
         const num = parseFloat(entry.margin);
@@ -558,8 +558,12 @@ export default function LedgerAAInitialBalance() {
 
                 {/* 各用户占比列表 */}
                 <div className="px-4 py-2 space-y-2">
-                  {rows.map(({ member, ratio, amount }) => {
+                  {(() => {
+                    // 进度条基准：超过100%时以最大单个值和100中的较大者为基准
+                    const maxPct = Math.max(100, ...rows.map(r => r.ratio));
+                    return rows.map(({ member, ratio, amount }) => {
                     const pct = ratio;
+                    const barWidth = maxPct > 0 ? (pct / maxPct) * 100 : 0;
                     return (
                       <div key={member.userId} className="flex items-center gap-3 py-2">
                         {/* 用户信息 */}
@@ -588,7 +592,7 @@ export default function LedgerAAInitialBalance() {
                             <div
                               className="h-full rounded-full transition-all"
                               style={{
-                                width: `${Math.min(pct, 100)}%`,
+                                width: `${barWidth}%`,
                                 backgroundColor: pct > 0 ? (cat?.color || "#D32F2F") : "transparent",
                                 opacity: pct > 0 ? 1 : 0,
                               }}
@@ -597,7 +601,9 @@ export default function LedgerAAInitialBalance() {
                         </div>
                       </div>
                     );
-                  })}
+                    });
+                  })()
+                  }
                 </div>
 
                 {/* 底部合计条 */}
