@@ -696,8 +696,9 @@ function Router() {
         {/* FIFA World Cup 2026 */}
         <Route path="/world-cup" component={WorldCup} />
         <Route path="/world-cup/admin" component={WcOddsAdmin} />
-        <Route path="/nba-finals" component={NbaFinals} />
-        <Route path="/nba-admin" component={NbaOddsAdmin} />
+        {/* NBA 总决赛页面暂时隐藏 */}
+        {/* <Route path="/nba-finals" component={NbaFinals} /> */}
+        {/* <Route path="/nba-admin" component={NbaOddsAdmin} /> */}
         {/* AI 旅行 */}
         <Route path="/ai-travel" component={AiTravel} />
         <Route path="/world-cup/teams" component={WcTeams} />
