@@ -1001,7 +1001,7 @@ const AddTransaction = () => {
           <div className="px-3 py-1.5 rounded-xl flex-shrink-0" style={{ background: '#F0F4FF', border: '1px solid #D0DAF5' }}>
             <span className="text-[11px]" style={{ color: '#4A5A8A' }}>以下为 <strong>AI财会助理</strong> 自动生成预览，提交后管理员可见</span>
           </div>
-          <div className="mb-2 bg-white rounded-xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 1px 8px rgba(26,43,74,0.08)', border: '1px solid #E2E8F0' }}>
+          <div className="mb-2 bg-white rounded-xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 1px 8px rgba(26,43,74,0.08)', border: '1px solid #E2E8F0', maxWidth: '100%', width: '100%' }}>
 
             {/* 顶部色条 */}
             <div style={{ height: 4, background: 'linear-gradient(90deg, #1A2B4A 0%, #C9A84C 100%)' }} />
@@ -1019,32 +1019,32 @@ const AddTransaction = () => {
             </div>
 
             {/* 明细表格 - 用 table 确保列宽完全对齐 */}
-            <table className="w-full text-[10px] border-collapse table-fixed" style={{ borderBottom: '2px solid #1A3A5C', maxWidth: '100%' }}>
+            <table className="w-full text-[10px] border-collapse table-fixed" style={{ borderBottom: '2px solid #1A3A5C', maxWidth: '100%', tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: '2.5em' }} />
                 <col style={{ width: '4em' }} />
                 <col style={{ width: '5em' }} />
                 <col />
-                <col style={{ width: '1%', whiteSpace: 'nowrap' }} />
-                <col style={{ width: '1%', whiteSpace: 'nowrap' }} />
+                <col style={{ width: '4em' }} />
+                <col style={{ width: '2.5em' }} />
               </colgroup>
               <thead>
                 <tr style={{ background: '#1A3A5C', borderBottom: '1px solid #C9A84C' }}>
-                  <th className="px-0.5 py-0.5 text-center font-bold text-white border-r border-white/20 whitespace-nowrap">序号</th>
+                  <th className="px-0.5 py-0.5 text-center font-bold text-white border-r border-white/20">序号</th>
                   <th className="px-0.5 py-0.5 text-center font-bold text-white border-r border-white/20">日期</th>
-                  <th className="px-0.5 py-0.5 text-center font-bold text-white border-r border-white/20 whitespace-nowrap">报销事由</th>
+                  <th className="px-0.5 py-0.5 text-center font-bold text-white border-r border-white/20">报销事由</th>
                   <th className="px-0.5 py-0.5 text-center font-bold text-white border-r border-white/20">报销类目</th>
-                  <th className="px-1 py-0.5 text-center font-bold text-white border-r border-white/20 whitespace-nowrap">金额</th>
-                  <th className="px-1 py-0.5 text-center font-bold text-white whitespace-nowrap">附件</th>
+                  <th className="px-1 py-0.5 text-center font-bold text-white border-r border-white/20">金额</th>
+                  <th className="px-1 py-0.5 text-center font-bold text-white">附件</th>
                 </tr>
               </thead>
               <tbody>
                 <tr style={{ background: '#fff' }}>
-                  <td className="px-0.5 py-1 text-center border-r border-gray-200 whitespace-nowrap">1</td>
+                  <td className="px-0.5 py-1 text-center border-r border-gray-200">1</td>
                   <td className="px-0.5 py-1 text-center border-r border-gray-200">{String(selectedDate.getMonth()+1).padStart(2,'0')}/{String(selectedDate.getDate()).padStart(2,'0')}</td>
-                  <td className="px-0.5 py-1 text-center border-r border-gray-200 text-[#444] whitespace-nowrap text-[9px]">待AI主管确认</td>
+                  <td className="px-0.5 py-1 text-center border-r border-gray-200 text-[#444] text-[9px] overflow-hidden" style={{ maxWidth: 0 }}><span className="block truncate">待AI主管确认</span></td>
                   <td className="px-1 py-1 text-center border-r border-gray-200 text-[#444] text-[9px]">待AI财务确认</td>
-                  <td className="px-1 py-1 text-center border-r border-gray-200 font-bold text-[#1A3A5C] whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-1 py-1 text-center border-r border-gray-200 font-bold text-[#1A3A5C]">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                   <td className="py-0.5 text-center" style={{ verticalAlign: 'middle' }}>
                     {uploadedImages.length > 0 ? (
                       <div className="flex items-center justify-center gap-0.5">
@@ -1057,7 +1057,7 @@ const AddTransaction = () => {
               </tbody>
               <tfoot>
                 <tr style={{ background: '#EEF2F7' }}>
-                  <td colSpan={3} className="px-1.5 py-1 text-center font-bold border-r border-gray-300 whitespace-nowrap">合计金额（大写）</td>
+                  <td colSpan={3} className="px-1.5 py-1 text-center font-bold border-r border-gray-300">合计金额（大写）</td>
                   <td className="px-1.5 py-1.5 text-center font-bold text-[#1A3A5C] border-r border-gray-300">
                     {(() => {
                       const num = parseFloat(amount) || 0;
@@ -1081,8 +1081,8 @@ const AddTransaction = () => {
                       return result;
                     })()}
                   </td>
-                  <td className="px-1 py-1 text-center font-bold text-[#1A3A5C] border-r border-gray-300 whitespace-nowrap">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td className="px-1 py-1 text-center whitespace-nowrap"></td>
+                  <td className="px-1 py-1 text-center font-bold text-[#1A3A5C] border-r border-gray-300">¥{parseFloat(amount || '0').toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-1 py-1 text-center"></td>
                 </tr>
               </tfoot>
             </table>
