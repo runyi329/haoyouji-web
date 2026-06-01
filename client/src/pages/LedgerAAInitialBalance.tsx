@@ -1011,6 +1011,27 @@ export default function LedgerAAInitialBalance() {
                             style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
                           />
                         </div>
+                        <div className="mt-2">
+                          <div className="text-xs mb-1 font-medium" style={{ color: '#B45309' }}>暂停日期</div>
+                          <input
+                            type="date"
+                            value={tagConfigForm.pauseDate}
+                            onChange={e => setTagConfigForm(prev => ({ ...prev, pauseDate: e.target.value }))}
+                            className="w-full rounded-xl px-3 py-2 text-sm border outline-none"
+                            style={{ borderColor: '#FDE68A', backgroundColor: '#FFFBEB' }}
+                          />
+                          <div className="text-xs text-gray-400 mt-1">设置后，该日期及之后的日历格子显示暂停标志，无法新增记录</div>
+                        </div>
+                        <div className="mt-2">
+                          <div className="text-xs text-gray-400 mb-1">结束日期</div>
+                          <input
+                            type="date"
+                            value={tagConfigForm.endDate}
+                            onChange={e => setTagConfigForm(prev => ({ ...prev, endDate: e.target.value }))}
+                            className="w-full rounded-xl px-3 py-2 text-sm border outline-none"
+                            style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
+                          />
+                        </div>
                         {tagConfigForm.interestMode === 'profit_only' && (
                           <div className="mt-1.5 text-xs text-gray-400">亏损时利息自动为 0%（依据盈亏汇总判断）</div>
                         )}
