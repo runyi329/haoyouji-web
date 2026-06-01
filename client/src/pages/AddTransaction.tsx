@@ -768,7 +768,7 @@ const AddTransaction = () => {
   const themeColors = ["bg-[#D32F2F]", "bg-[#CBA471]", "bg-[#4CAF50]", "bg-[#1976D2]"];
 
   return (
-    <div className={`h-screen flex flex-col ${isCustomAJ ? 'bg-[#F4F6F9]' : 'bg-[#FAF3ED]'}`}>
+    <div className={`h-screen flex flex-col overflow-x-hidden ${isCustomAJ ? 'bg-[#F4F6F9]' : 'bg-[#FAF3ED]'}`}>
       <PageTag code="P004" />
       {/* 顶部导航 */}
       <div className={`${isCustomAJ ? 'bg-[#1A2B4A]' : 'bg-[#D32F2F]'} text-white p-3 flex items-center justify-between flex-shrink-0`}>
@@ -822,7 +822,7 @@ const AddTransaction = () => {
             </div>
           </div>
           {/* 内容区（可滚动） */}
-          <div className="flex-1 overflow-y-auto flex flex-col px-3 pt-2 pb-4 gap-2">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col px-3 pt-2 pb-4 gap-2">
           {/* 容器一：开票信息（紧凑两行） */}
           <div className="rounded-2xl bg-white overflow-hidden shadow-sm flex-shrink-0" style={{ border: '1px solid #E2E8F0' }}>
             <div className="px-3 py-3">
