@@ -807,7 +807,7 @@ const AddTransaction = () => {
 
       {/* custom_aj 账本：报销申请单风格 */}
       {isCustomAJ ? (
-        <div className="flex-1 overflow-hidden bg-[#F5F5F5] flex flex-col">
+        <div className="flex-1 overflow-hidden overflow-x-hidden bg-[#F5F5F5] flex flex-col" style={{ maxWidth: '100vw' }}>
           {/* 单据头 */}
           <div className="bg-[#1A2B4A] px-4 pt-1.5 pb-4 flex items-center justify-between flex-shrink-0">
             <div>
@@ -1013,13 +1013,13 @@ const AddTransaction = () => {
 
             {/* 编制单位 + 填报日期 + 单位 */}
             <div className="px-2 py-0.5 flex items-center justify-between text-[9px] text-gray-500" style={{ borderBottom: '1px solid #E0E0E0', background: '#FAFAFA' }}>
-              <span>编制单位：<span className="text-gray-700">{selectedCompany?.name || '—'}</span></span>
+              <span className="truncate max-w-[35%]">编制单位：<span className="text-gray-700">{selectedCompany?.name || '—'}</span></span>
               <span>填报日期：{selectedDate.getFullYear()}年 {String(selectedDate.getMonth()+1).padStart(2,'0')}月 {String(selectedDate.getDate()).padStart(2,'0')}日</span>
               <span>单位：元</span>
             </div>
 
             {/* 明细表格 - 用 table 确保列宽完全对齐 */}
-            <table className="w-full text-[10px] border-collapse" style={{ borderBottom: '2px solid #1A3A5C' }}>
+            <table className="w-full text-[10px] border-collapse table-fixed" style={{ borderBottom: '2px solid #1A3A5C', maxWidth: '100%' }}>
               <colgroup>
                 <col style={{ width: '2.5em' }} />
                 <col style={{ width: '4em' }} />
