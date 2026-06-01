@@ -1868,7 +1868,20 @@ export default function Home() {
               刷新
             </button>
           </div>,
-          // 页2：AI球伴NBA总决赛海报（仅展示，不可点击）
+          // 页2：AI环游世界旅行入口（点击跳转AI旅行页面）
+          <div
+            key="p5-ai-travel"
+            className="w-full h-full relative cursor-pointer active:opacity-90 transition-opacity"
+            onClick={() => navigate('/ai-travel')}
+          >
+            <img
+              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/banners/ai-travel-banner.png"
+              alt="AI环游世界·智能出行"
+              className="w-full h-full object-cover"
+              onError={(e) => { (e.target as HTMLImageElement).src = '/ai-travel-banner.png'; }}
+            />
+          </div>,
+          // 页3：AI球伴NBA总决赛海报（仅展示，不可点击）
           <div
             key="p2-nba"
             className="w-full h-full relative"
@@ -1878,33 +1891,6 @@ export default function Home() {
               alt="AI球伴·NBA总决赛同行"
               className="w-full h-full object-cover"
             />
-          </div>,
-          // 页3：AI 旅行入口（点击跳转AI旅行页面）
-          <div
-            key="p5-ai-travel"
-            className="w-full h-full relative cursor-pointer active:opacity-90 transition-opacity"
-            onClick={() => navigate('/ai-travel')}
-          >
-            <img
-              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/wvSFVajprWDkVXHi.png"
-              alt="AI旅行·智能出行"
-              className="w-full h-full object-cover"
-            />
-            <div
-              className="absolute inset-0 flex flex-col justify-end p-3"
-              style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 55%)' }}
-            >
-              <div className="flex items-center space-x-1.5 mb-0.5">
-                <span className="text-white font-bold" style={{ fontSize: 16 }}>AI 旅行</span>
-                <span
-                  className="text-xs px-1.5 py-0.5 rounded-full font-bold"
-                  style={{ background: 'linear-gradient(90deg, #0891b2, #2563eb)', color: '#fff', fontSize: 9 }}
-                >
-                  AI
-                </span>
-              </div>
-              <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.75)' }}>智能规划 · 景点推荐 · 旅游账本</p>
-            </div>
           </div>,
           // 页4：积分商城（商品分类入口）
           <div key="p3" className="w-full h-full flex flex-col overflow-hidden">
