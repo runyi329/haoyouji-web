@@ -236,6 +236,8 @@ export default function LedgerAAInitialBalance() {
     interestRate: string;
     interestBaseAmount: string;
     interestStartDate: string;
+    pauseDate: string;
+    endDate: string;
     note: string;
     pnlNote: string;
     originalAmount: string;
@@ -245,6 +247,8 @@ export default function LedgerAAInitialBalance() {
     interestRate: '',
     interestBaseAmount: '',
     interestStartDate: '',
+    pauseDate: '',
+    endDate: '',
     note: '',
     pnlNote: '',
     originalAmount: '',
@@ -278,12 +282,14 @@ export default function LedgerAAInitialBalance() {
         interestRate: tagConfigData.interest_rate ?? '',
         interestBaseAmount: tagConfigData.interest_base_amount ?? '',
         interestStartDate: tagConfigData.interest_start_date ?? '',
+        pauseDate: tagConfigData.pause_date ?? '',
+        endDate: tagConfigData.end_date ?? '',
         note: tagConfigData.note ?? '',
         pnlNote: tagConfigData.pnl_note ?? '',
         originalAmount: tagConfigData.original_amount ?? '',
       });
     } else if (selectedTagName) {
-      setTagConfigForm({ settlementAmount: '', interestMode: 'fixed', interestRate: '', interestBaseAmount: '', interestStartDate: '', note: '', pnlNote: '', originalAmount: '' });
+      setTagConfigForm({ settlementAmount: '', interestMode: 'fixed', interestRate: '', interestBaseAmount: '', interestStartDate: '', pauseDate: '', endDate: '', note: '', pnlNote: '', originalAmount: '' });
     }
     // 切换标签时重置编辑模式
     setTagConfigEditing(false);
@@ -323,6 +329,8 @@ export default function LedgerAAInitialBalance() {
       interestRate: tagConfigForm.interestRate || undefined,
       interestBaseAmount: tagConfigForm.interestBaseAmount || undefined,
       interestStartDate: tagConfigForm.interestStartDate || undefined,
+      pauseDate: tagConfigForm.pauseDate || undefined,
+      endDate: tagConfigForm.endDate || undefined,
       note: tagConfigForm.note || undefined,
       marginByCoin: marginByCoinJson,
       pnlManual: pnlManualJson,
@@ -930,6 +938,18 @@ export default function LedgerAAInitialBalance() {
                           <div className="flex items-center justify-between">
                             <span className="text-xs text-gray-500">起息日</span>
                             <span className="text-xs text-gray-700">{tagConfigForm.interestStartDate}</span>
+                          </div>
+                        )}
+                        {tagConfigForm.pauseDate && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500">暂停日期</span>
+                            <span className="text-xs font-medium" style={{ color: '#F59E0B' }}>{tagConfigForm.pauseDate}</span>
+                          </div>
+                        )}
+                        {tagConfigForm.endDate && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500">结束日期</span>
+                            <span className="text-xs text-gray-700">{tagConfigForm.endDate}</span>
                           </div>
                         )}
                         {tagConfigForm.interestMode === 'profit_only' && (

@@ -11564,6 +11564,8 @@ ${klinesSummary}
         interestRate: z.string().optional(),
         interestBaseAmount: z.string().optional(),
         interestStartDate: z.string().optional(),
+        pauseDate: z.string().optional(),
+        endDate: z.string().optional(),
         note: z.string().optional(),
         marginByCoin: z.string().optional(),
         pnlManual: z.string().optional(),
@@ -11583,11 +11585,11 @@ ${klinesSummary}
         const existingList = (existing as any)[0] as any[];
         if (existingList.length > 0) {
           await db.execute(
-            sql`UPDATE ledger_tag_config SET settlement_amount = ${input.settlementAmount ?? null}, interest_mode = ${input.interestMode ?? 'fixed'}, interest_rate = ${input.interestRate ?? null}, interest_base_amount = ${input.interestBaseAmount ?? null}, interest_start_date = ${input.interestStartDate ?? null}, note = ${input.note ?? null}, margin_by_coin = ${input.marginByCoin ?? null}, pnl_manual = ${input.pnlManual ?? null}, pnl_note = ${input.pnlNote ?? null}, original_amount = ${input.originalAmount ?? null} WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}`
+            sql`UPDATE ledger_tag_config SET settlement_amount = ${input.settlementAmount ?? null}, interest_mode = ${input.interestMode ?? 'fixed'}, interest_rate = ${input.interestRate ?? null}, interest_base_amount = ${input.interestBaseAmount ?? null}, interest_start_date = ${input.interestStartDate ?? null}, pause_date = ${input.pauseDate ?? null}, end_date = ${input.endDate ?? null}, note = ${input.note ?? null}, margin_by_coin = ${input.marginByCoin ?? null}, pnl_manual = ${input.pnlManual ?? null}, pnl_note = ${input.pnlNote ?? null}, original_amount = ${input.originalAmount ?? null} WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}`
           );
         } else {
           await db.execute(
-            sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, settlement_amount, interest_mode, interest_rate, interest_base_amount, interest_start_date, note, margin_by_coin, pnl_manual, pnl_note, original_amount, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.settlementAmount ?? null}, ${input.interestMode ?? 'fixed'}, ${input.interestRate ?? null}, ${input.interestBaseAmount ?? null}, ${input.interestStartDate ?? null}, ${input.note ?? null}, ${input.marginByCoin ?? null}, ${input.pnlManual ?? null}, ${input.pnlNote ?? null}, ${input.originalAmount ?? null}, ${ctx.user.id})`
+            sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, settlement_amount, interest_mode, interest_rate, interest_base_amount, interest_start_date, pause_date, end_date, note, margin_by_coin, pnl_manual, pnl_note, original_amount, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.settlementAmount ?? null}, ${input.interestMode ?? 'fixed'}, ${input.interestRate ?? null}, ${input.interestBaseAmount ?? null}, ${input.interestStartDate ?? null}, ${input.pauseDate ?? null}, ${input.endDate ?? null}, ${input.note ?? null}, ${input.marginByCoin ?? null}, ${input.pnlManual ?? null}, ${input.pnlNote ?? null}, ${input.originalAmount ?? null}, ${ctx.user.id})`
           );
         }
         return { success: true };

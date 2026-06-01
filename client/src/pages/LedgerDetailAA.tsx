@@ -25,7 +25,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import ReactECharts from "echarts-for-react";
 import { useLocation } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
-import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X, RefreshCw, PauseCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { PageTag } from "@/components/PageTag";
 import {
@@ -183,6 +183,12 @@ export default function LedgerDetailAA({
   const { data: initialBalancesData } = trpc.ledger.getMyInitialBalances.useQuery(
     { ledgerId, viewAsUserId: viewAsUserId ?? undefined },
     { enabled: !!ledgerId }
+  );
+  // 获取当前选中标签的配置（暂停日期、结束日期等）
+  const selectedTagName = useMemo(() => selectedTag?.name ?? null, [selectedTag]);
+  const { data: selectedTagConfig } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId, tagName: selectedTagName ?? '' },
+    { enabled: !!ledgerId && !!selectedTagName }
   );
   // 过滤掉全局默认分类（如「购物」），只保留手动创建的标签
   const allCategories = useMemo(() => {
@@ -765,14 +771,21 @@ export default function LedgerDetailAA({
       return;
     }
 
+    // 暂停日期检查：暂停日期及之后禁止新增记录（管理员也不能新增，但可编辑已有记录）
+    const pauseDate = selectedTagConfig?.pause_date ?? null;
+    const isPausedDate = pauseDate && dateStr >= pauseDate;
     if (existing && existing.records.length > 0) {
-      // 已有记录：跳转编辑第一条记录
+      // 已有记录：跳转编辑第一条记录（暂停后仍可编辑已有记录）
       const recordId = existing.records[0].id;
       let editUrl = `/ledger/${ledgerId}/add?edit=${recordId}`;
       if (selectedTagId) editUrl += `&categoryId=${selectedTagId}`;
       setLocation(editUrl);
     } else {
-      // 无记录：跳转新增
+      // 无记录：暂停日期及之后禁止新增
+      if (isPausedDate) {
+        alert(`该标签已于 ${pauseDate} 暂停，无法在此日期后添加新记录`);
+        return;
+      }
       let url = `/ledger/${ledgerId}/add?date=${dateStr}`;
       if (selectedTagId) url += `&categoryId=${selectedTagId}`;
       setLocation(url);
@@ -1291,15 +1304,26 @@ export default function LedgerDetailAA({
                       }
                     }
                   }
+                  // 暂停日期判断
+                  const pauseDateStr = selectedTagConfig?.pause_date ?? null;
+                  const endDateStr = selectedTagConfig?.end_date ?? null;
+                  const dayDateStr2 = getDateStr(day);
+                  const isPauseDay = !isNonTrading && pauseDateStr && dayDateStr2 === pauseDateStr;
+                  const isPausedAfter = !isNonTrading && pauseDateStr && dayDateStr2 > pauseDateStr;
                   // 非交易日样式
                   const cellBg = isNonTrading
                     ? '#F0F0F0'
+                    : isPauseDay ? '#FFF8E1'
+                    : isPausedAfter ? '#FFF8E1'
                     : todayMark ? '#FFF3E0' : '#F9F9F9';
                   const cellBorder = isNonTrading
                     ? '1px solid #E0E0E0'
+                    : isPauseDay ? '1.5px solid #F59E0B'
+                    : isPausedAfter ? '1px solid #FDE68A'
                     : todayMark ? '1.5px solid #D32F2F' : '1px solid #F0F0F0';
                   const dayNumColor = isNonTrading
                     ? '#BDBDBD'
+                    : isPauseDay || isPausedAfter ? '#B45309'
                     : todayMark ? '#D32F2F' : '#222222';
 
                   // 检查该日期是否有图片和股票代码
@@ -1333,6 +1357,10 @@ export default function LedgerDetailAA({
                     >
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', marginBottom: '1px' }}>
                         <span style={{ fontSize: '10px', fontWeight: 500, lineHeight: 1, color: dayNumColor }}>{day}</span>
+                        {/* 暂停标志：暂停日期显示暂停图标 */}
+                        {isPauseDay && (
+                          <PauseCircle style={{ width: '7px', height: '7px', color: '#F59E0B', flexShrink: 0 }} />
+                        )}
                         {/* 图片/股票标识：日期右边小点（红=图片，蓝=股票，紫=两者） */}
                         {dotColor && (
                           <span
@@ -1350,6 +1378,10 @@ export default function LedgerDetailAA({
                       {isNonTrading ? (
                         <span style={{ fontSize: '7px', fontWeight: 400, lineHeight: 1.1, color: '#BDBDBD', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
                           {nonTradingLabel}
+                        </span>
+                      ) : isPauseDay ? (
+                        <span style={{ fontSize: '7px', fontWeight: 600, lineHeight: 1.1, color: '#F59E0B', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
+                          暂停
                         </span>
                       ) : hasRecord ? (
                         <span style={{ fontSize: '8px', fontWeight: 600, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
