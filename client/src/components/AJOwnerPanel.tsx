@@ -721,11 +721,15 @@ function InvoiceListInline({
   companyId,
   period: externalPeriod,
   searchText = '',
+  externalEmployee = '',
+  onEmployeeNamesChange,
 }: {
   ledgerId: number;
   companyId: number;
   period?: 'all' | 'day' | 'week' | 'month' | 'year';
   searchText?: string;
+  externalEmployee?: string;
+  onEmployeeNamesChange?: (names: string[], invoices: any[]) => void;
 }) {
   const [internalPeriod, setInternalPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'year'>('month');
   const period = externalPeriod ?? internalPeriod;
@@ -813,27 +817,25 @@ function InvoiceListInline({
     },
   });
 
-  // 员工筛选 state
-  const [selectedEmployee, setSelectedEmployee] = useState<string>('');
-
-  // 从 invoices 中提取不重复的员工名列表
-  const employeeNames = useMemo(() => {
-    const list: any[] = Array.isArray(invoices) ? invoices : [];
-    const names = Array.from(new Set(
-      list.map((inv: any) => safeStr(inv.creatorNickname || inv.creatorName || inv.creatorUsername)).filter(Boolean)
-    )) as string[];
-    return names;
-  }, [invoices]);
-
-  // 搜索过滤 + 员工过滤
+  // 通知父组件员工名列表变化
+  useEffect(() => {
+    if (!isLoading && Array.isArray(invoices)) {
+      const list: any[] = invoices as any[];
+      const names = Array.from(new Set(
+        list.map((inv: any) => safeStr(inv.creatorNickname || inv.creatorName || inv.creatorUsername)).filter(Boolean)
+      )) as string[];
+      onEmployeeNamesChange?.(names, list);
+    }
+  }, [invoices, isLoading]);
+  // 搜索过滤 + 员工过滤（使用外部传入的员工筛选）
   const filteredInvoices = useMemo(() => {
     const list: any[] = Array.isArray(invoices) ? invoices : [];
     let result = list;
-    // 员工筛选
-    if (selectedEmployee) {
+    // 员工筛选（由父组件控制）
+    if (externalEmployee) {
       result = result.filter((inv: any) => {
         const creator = safeStr(inv.creatorNickname || inv.creatorName || inv.creatorUsername);
-        return creator === selectedEmployee;
+        return creator === externalEmployee;
       });
     }
     // 文本搜索
@@ -847,7 +849,7 @@ function InvoiceListInline({
       const date = safeStr(inv.recordDate || inv.date).toLowerCase();
       return amount.includes(kw) || desc.includes(kw) || category.includes(kw) || creator.includes(kw) || date.includes(kw);
     });
-  }, [invoices, searchText, selectedEmployee]);
+  }, [invoices, searchText, externalEmployee]);
 
   return (
     <div>
@@ -895,28 +897,7 @@ function InvoiceListInline({
           onClose={() => setPreviewImages(null)}
         />
       )}
-      {/* 员工筛选胶囊按鈕（有多个员工时显示） */}
-      {!isLoading && employeeNames.length >= 2 && (
-        <div className="flex gap-2 overflow-x-auto px-4 pb-2 pt-1" style={{ scrollbarWidth: 'none' }}>
-          <button
-            onClick={() => setSelectedEmployee('')}
-            className="shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all"
-            style={selectedEmployee === ''
-              ? { background: AJ_COLOR, color: '#fff' }
-              : { backgroundColor: '#f3f4f6', color: '#6B7280', border: '1px solid #E5E7EB' }}
-          >全部</button>
-          {employeeNames.map(name => (
-            <button
-              key={name}
-              onClick={() => setSelectedEmployee(selectedEmployee === name ? '' : name)}
-              className="shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all"
-              style={selectedEmployee === name
-                ? { background: AJ_COLOR, color: '#fff' }
-                : { backgroundColor: '#f3f4f6', color: '#6B7280', border: '1px solid #E5E7EB' }}
-            >{name}</button>
-          ))}
-        </div>
-      )}
+
       {isLoading ? (
         <div className="text-center py-8 text-gray-400 text-sm">加载中...</div>
       ) : filteredInvoices.length === 0 ? (
@@ -1217,6 +1198,11 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   const [period, setPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>('all');
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [searchText, setSearchText] = useState('');
+  // 员工筛选
+  const [selectedEmployee, setSelectedEmployee] = useState<string>('');
+  const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
+  const [employeeNames, setEmployeeNames] = useState<string[]>([]);
+  const [allInvoices, setAllInvoices] = useState<any[]>([]);
 
   // 备份弹窗状态
   const [showBackupDialog, setShowBackupDialog] = useState(false);
@@ -1314,10 +1300,24 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
     }
   }, [companiesLoading, companies.length]);
 
-  // 切换企业时清空搜索
+  // 切换企业时清空搜索和员工筛选
   useEffect(() => {
     setSearchText('');
+    setSelectedEmployee('');
+    setEmployeeNames([]);
+    setAllInvoices([]);
   }, [selectedCompanyId]);
+
+  // 员工筛选时计算对应金额和条数
+  const filteredStats = useMemo(() => {
+    if (!selectedEmployee) return null;
+    const filtered = allInvoices.filter((inv: any) => {
+      const creator = safeStr(inv.creatorNickname || inv.creatorName || inv.creatorUsername);
+      return creator === selectedEmployee;
+    });
+    const totalAmount = filtered.reduce((sum: number, inv: any) => sum + Number(inv.amount || 0), 0);
+    return { totalAmount, invoiceCount: filtered.length };
+  }, [allInvoices, selectedEmployee]);
 
   // 统计数据
   const { data: stats, isLoading: statsLoading } = (trpc as any).ledger.ajOwnerGetCompanyStats.useQuery(
@@ -1387,28 +1387,79 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
         {selectedCompanyId != null && (
           <div className="flex items-center justify-around w-full">
             <div className="text-center">
-              <div className="text-white/60 text-[10px] mb-0.5">{periodLabels[period]}累计金额</div>
+              <div className="text-white/60 text-[10px] mb-0.5">
+                {selectedEmployee ? `${selectedEmployee}累计金额` : `${periodLabels[period]}累计金额`}
+              </div>
               <div className="text-white text-xl font-bold leading-none">
-                {statsLoading ? '--' : `¥${Number(stats?.totalAmount || 0).toFixed(2)}`}
+                {filteredStats
+                  ? `¥${filteredStats.totalAmount.toFixed(2)}`
+                  : statsLoading ? '--' : `¥${Number(stats?.totalAmount || 0).toFixed(2)}`}
               </div>
             </div>
             <div className="w-px h-8 bg-white/20 flex-shrink-0" />
             <div className="text-center">
-              <div className="text-white/60 text-[10px] mb-0.5">{periodLabels[period]}开票条数</div>
+              <div className="text-white/60 text-[10px] mb-0.5">
+                {selectedEmployee ? `${selectedEmployee}开票条数` : `${periodLabels[period]}开票条数`}
+              </div>
               <div className="text-white text-xl font-bold leading-none">
-                {statsLoading ? '--' : `${Number(stats?.invoiceCount || 0)}`}
+                {filteredStats
+                  ? filteredStats.invoiceCount
+                  : statsLoading ? '--' : Number(stats?.invoiceCount || 0)}
                 <span className="text-white/60 text-xs font-normal ml-1">笔</span>
               </div>
             </div>
-            {Number(stats?.salesmanCount || 0) > 0 && (
+            {employeeNames.length > 0 && (
               <>
                 <div className="w-px h-8 bg-white/20 flex-shrink-0" />
-                <div className="text-center">
-                  <div className="text-white/60 text-[10px] mb-0.5">业务员</div>
-                  <div className="text-white text-xl font-bold leading-none">
-                    {Number(stats.salesmanCount)}
-                    <span className="text-white/60 text-xs font-normal ml-1">人</span>
-                  </div>
+                <div className="text-center relative">
+                  <button
+                    onClick={() => setShowEmployeeDropdown(v => !v)}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+                  >
+                    <div className="text-white/60 text-[10px] mb-0.5 flex items-center gap-0.5 justify-center">
+                      业务员
+                      <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" style={{ fill: 'rgba(255,255,255,0.6)' }}><path d="M6 8L2 4h8z"/></svg>
+                    </div>
+                    <div className="text-white text-xl font-bold leading-none">
+                      {selectedEmployee
+                        ? <span className="text-sm font-semibold">{selectedEmployee}</span>
+                        : <>{employeeNames.length}<span className="text-white/60 text-xs font-normal ml-1">人</span></>
+                      }
+                    </div>
+                  </button>
+                  {showEmployeeDropdown && (
+                    <div
+                      style={{
+                        position: 'absolute', top: '110%', left: '50%', transform: 'translateX(-50%)',
+                        background: '#fff', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+                        zIndex: 200, minWidth: '120px', overflow: 'hidden',
+                      }}
+                    >
+                      <button
+                        onClick={() => { setSelectedEmployee(''); setShowEmployeeDropdown(false); }}
+                        style={{
+                          display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left',
+                          fontSize: '13px', fontWeight: selectedEmployee === '' ? 700 : 400,
+                          color: selectedEmployee === '' ? AJ_COLOR : '#333',
+                          background: selectedEmployee === '' ? 'rgba(26,43,74,0.08)' : '#fff',
+                          border: 'none', cursor: 'pointer', borderBottom: '1px solid #f0f0f0',
+                        }}
+                      >全部员工</button>
+                      {employeeNames.map(name => (
+                        <button
+                          key={name}
+                          onClick={() => { setSelectedEmployee(name); setShowEmployeeDropdown(false); }}
+                          style={{
+                            display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left',
+                            fontSize: '13px', fontWeight: selectedEmployee === name ? 700 : 400,
+                            color: selectedEmployee === name ? AJ_COLOR : '#333',
+                            background: selectedEmployee === name ? 'rgba(26,43,74,0.08)' : '#fff',
+                            border: 'none', cursor: 'pointer', borderBottom: '1px solid #f0f0f0',
+                          }}
+                        >{name}</button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -1439,7 +1490,14 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
               )}
             </div>
           </div>
-          <InvoiceListInline ledgerId={ledgerId} companyId={selectedCompanyId} period={period} searchText={searchText} />
+          <InvoiceListInline
+            ledgerId={ledgerId}
+            companyId={selectedCompanyId}
+            period={period}
+            searchText={searchText}
+            externalEmployee={selectedEmployee}
+            onEmployeeNamesChange={(names, invs) => { setEmployeeNames(names); setAllInvoices(invs); }}
+          />
         </div>
       )}
 
