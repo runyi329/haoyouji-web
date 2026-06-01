@@ -86,6 +86,8 @@ jobs:
               { file: 'carousel-friend-share.webp', key: 'assets/banners/carousel-friend-share.webp', mime: 'image/webp' },
               { file: 'maluji-coupon-banner.png', key: 'assets/banners/maluji-coupon-banner.png', mime: 'image/png' },
               { file: 'data_profit_poster.png', key: 'assets/banners/data-profit-poster.png', mime: 'image/png' },
+              { file: 'ai-travel-banner.webp', key: 'assets/banners/ai-travel-banner.webp', mime: 'image/webp' },
+              { file: 'nba-finals-banner.webp', key: 'assets/banners/nba-finals-banner.webp', mime: 'image/webp' },
               // 徽章
               { file: 'badge-1star.webp', key: 'assets/badges/badge-1star.webp', mime: 'image/webp' },
               { file: 'badge-2star.webp', key: 'assets/badges/badge-2star.webp', mime: 'image/webp' },

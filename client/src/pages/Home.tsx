@@ -1875,7 +1875,7 @@ export default function Home() {
             onClick={() => navigate('/ai-travel')}
           >
             <img
-              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/banners/ai-travel-banner.png"
+              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/banners/ai-travel-banner.webp"
               alt="AI环游世界·智能出行"
               className="w-full h-full object-cover"
               onError={(e) => { (e.target as HTMLImageElement).src = '/ai-travel-banner.png'; }}
@@ -1887,7 +1887,7 @@ export default function Home() {
             className="w-full h-full relative"
           >
             <img
-              src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/ljIUDkwGLrRmCTDS.png"
+              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/banners/nba-finals-banner.webp"
               alt="AI球伴·NBA总决赛同行"
               className="w-full h-full object-cover"
             />
