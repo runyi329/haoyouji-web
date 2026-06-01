@@ -559,8 +559,8 @@ export default function LedgerAAInitialBalance() {
                 {/* 各用户占比列表 */}
                 <div className="px-4 py-2 space-y-2">
                   {(() => {
-                    // 进度条基准：超过100%时以最大单个值和100中的较大者为基准
-                    const maxPct = Math.max(100, ...rows.map(r => r.ratio));
+                    // 进度条基准：超过100%时以总计值为满格基准，这样100%的人进度条会自动缩进
+                    const maxPct = Math.max(100, total);
                     return rows.map(({ member, ratio, amount }) => {
                     const pct = ratio;
                     const barWidth = maxPct > 0 ? (pct / maxPct) * 100 : 0;
