@@ -343,14 +343,14 @@ export default function InterestManagePage() {
                                   ) : (
                                     <div>
                                       <div className="flex items-center gap-2 mb-1">
-                                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${period.principal >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${period.principal >= 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                                           {period.principal >= 0 ? '手工加息' : '手工减息'}
                                         </span>
                                         <span className="text-xs text-gray-400">{period.created_at?.slice(0, 10)}</span>
                                       </div>
                                       <div className="text-xs">
                                         <span className="text-gray-400">调整金额 </span>
-                                        <span className={`font-semibold ${period.principal >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                        <span className={`font-semibold ${period.principal >= 0 ? 'text-red-500' : 'text-green-600'}`}>
                                           {period.principal >= 0 ? '+' : ''}¥{fmt(period.principal)}
                                         </span>
                                         {period.manual_remark && (
@@ -449,7 +449,7 @@ export default function InterestManagePage() {
                       {tag.manualAdj !== 0 && (
                         <div className="flex justify-between text-xs mt-0.5">
                           <span className="text-gray-500">手工调整</span>
-                          <span className={`font-semibold ${tag.manualAdj > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                          <span className={`font-semibold ${tag.manualAdj > 0 ? 'text-red-500' : 'text-green-600'}`}>
                             {tag.manualAdj > 0 ? '+' : ''}{fmt(tag.manualAdj)}
                           </span>
                         </div>
@@ -519,7 +519,7 @@ export default function InterestManagePage() {
                             <div key={log.id} className="px-4 py-3 flex items-start justify-between">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <span className={`text-sm font-bold ${parseFloat(log.amount) > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                  <span className={`text-sm font-bold ${parseFloat(log.amount) > 0 ? 'text-red-500' : 'text-green-600'}`}>
                                     {parseFloat(log.amount) > 0 ? '+' : ''}{fmt(parseFloat(log.amount))}
                                   </span>
                                   {log.remark && (
