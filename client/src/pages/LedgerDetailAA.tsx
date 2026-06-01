@@ -1681,6 +1681,248 @@ export default function LedgerDetailAA({
       {/* ── 全部模式：多线盈亏增长图表 ── */}
       {selectedTagId === null && (
         <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+          {/* ── 标签周期年化表格（在滚动容器内） ── */}
+          {allTagsChartData.length > 0 && (
+          <div className="mx-3 mt-3 rounded-2xl shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF' }}>
+          {/* 表格标题行 */}
+          <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b" style={{ borderColor: '#F5F5F5' }}>
+            <span className="text-sm font-bold" style={{ color: '#1A1A1A' }}>概览</span>
+          </div>
+          {/* 概览表格 - 用单个 Grid 容器包裹所有行，确保整列宽度一致 */}
+          {(() => {
+            const visibleTags = allTagsChartData.filter(tag => tag.points.length > 0);
+            const validTags = visibleTags.filter(t => t.marginCny > 0);
+            // 计算每个 tag 的数据
+            const tagData = visibleTags.map((tag, idx) => {
+              const configStartDate = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__startDate`] ?? '') : '';
+              const firstDate = configStartDate || tag.points[0]?.date;
+              const configPauseDate = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__pauseDate`] ?? '') : '';
+              // 有暂停日期时，截止日期为暂停前一天；否则截止日期为今天
+              let endDate = new Date().toISOString().slice(0, 10);
+              let isPaused = false;
+              if (configPauseDate) {
+                const pauseD = new Date(configPauseDate);
+                pauseD.setDate(pauseD.getDate() - 1);
+                const dayBefore = pauseD.toISOString().slice(0, 10);
+                if (dayBefore <= endDate) { endDate = dayBefore; isPaused = true; }
+              }
+              const days = firstDate ? Math.max(1, Math.round((new Date(endDate).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 0;
+              const latestPnl = tag.points[tag.points.length - 1]?.pnl ?? 0;
+              const annualized = tag.marginCny > 0 && days > 0 ? (latestPnl / tag.marginCny / days) * 365 * 100 : null;
+              const divAmt = dividendByTag[tag.name] ?? 0;
+              return { tag, days, latestPnl, annualized, divAmt, isLast: idx === visibleTags.length - 1, isPaused, firstDate, endDate };
+            });
+            // 排序逻辑
+            const sortedTagData = overviewSort ? [...tagData].sort((a, b) => {
+              let va = 0, vb = 0;
+              if (overviewSort.col === 'days') { va = a.days; vb = b.days; }
+              else if (overviewSort.col === 'ratio') {
+                const ra = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${a.tag.name}__ratio`] ?? 0) : 0;
+                const rb = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${b.tag.name}__ratio`] ?? 0) : 0;
+                va = ra; vb = rb;
+              }
+              else if (overviewSort.col === 'amount') { va = a.tag.marginCny; vb = b.tag.marginCny; }
+              else if (overviewSort.col === 'pnl') { va = a.latestPnl; vb = b.latestPnl; }
+              else if (overviewSort.col === 'annualized') { va = a.annualized ?? -Infinity; vb = b.annualized ?? -Infinity; }
+              else if (overviewSort.col === 'dividend') { va = a.divAmt; vb = b.divAmt; }
+              return overviewSort.dir === 'desc' ? vb - va : va - vb;
+            }) : tagData;
+            // 汇总行数据
+            const totalMargin = validTags.reduce((s, t) => s + t.marginCny, 0);
+            // totalPnl 统计所有有数据的标签（不限于有保证金），与红色区域「全部统计之和」口径一致
+            const totalPnl = visibleTags.reduce((s, t) => s + (t.points[t.points.length - 1]?.pnl ?? 0), 0);
+            const weightedDenominator = validTags.reduce((s, t) => {
+              const configSD = initialBalancesData?.balances ? String(initialBalancesData.balances[`${t.name}__startDate`] ?? '') : '';
+              const firstDate = configSD || t.points[0]?.date;
+              const today = new Date().toISOString().slice(0, 10);
+              const days = firstDate ? Math.max(1, Math.round((new Date(today).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 1;
+              return s + t.marginCny * (days / 365);
+            }, 0);
+            const weightedAnnualized = weightedDenominator > 0 ? (totalPnl / weightedDenominator) * 100 : null;
+            const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
+            // Grid 列定义：名称固定52px，其他列 minmax 自适应
+            const gridCols = 'auto 1px auto 1px auto 1px auto 1px auto 1px auto 1px auto';
+            const cellCls = 'px-1 py-1.5 text-[10px] font-medium text-center';
+            const dataCellCls = 'px-1 py-2 text-right text-[11px]';
+            const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
+            // 排序箭头辅助
+            const SortArrow = ({ col }: { col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend' }) => {
+              if (!overviewSort || overviewSort.col !== col) return <span style={{ color: '#D0D0D0', fontSize: 7, marginLeft: 1 }}>▼</span>;
+              return <span style={{ color: '#1565C0', fontSize: 7, marginLeft: 1 }}>{overviewSort.dir === 'desc' ? '▼' : '▲'}</span>;
+            };
+            const sortHeaderCls = cellCls + ' cursor-pointer select-none';
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: gridCols }}>
+                {/* 表头行 */}
+                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E', fontSize: 10 }}>名称</span></div>
+                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
+                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
+                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E', fontSize: 10 }}>金额¥</span><SortArrow col="amount" /></div>
+                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E', fontSize: 10 }}>回报¥</span><SortArrow col="pnl" /></div>
+                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
+                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={cellCls + ' cursor-pointer'} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => { handleOverviewSort('dividend'); }}>
+                  <span style={{ color: overviewSort?.col === 'dividend' ? '#1565C0' : '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px', fontSize: 10 }} onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>分红¥</span><SortArrow col="dividend" />
+                </div>
+                {/* 数据行 */}
+                {sortedTagData.map(({ tag, days, latestPnl, annualized, divAmt, isLast, isPaused, firstDate, endDate }) => {
+                  const rowBorder = isLast ? 'none' : '1px solid #F9F9F9';
+                  return (
+                    <>
+                      {/* 名称 */}
+                      <div key={`${tag.name}-name`} className="px-1 py-2 flex items-center justify-center gap-1" style={{ borderBottom: rowBorder, position: 'relative' }}>
+                        <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
+                        <span
+                          className="text-[11px] font-medium"
+                          style={{ color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 44, cursor: tag.name.length > 2 ? 'pointer' : 'default', textDecoration: tag.name.length > 2 ? 'underline' : 'none', textDecorationStyle: tag.name.length > 2 ? 'dashed' : undefined, textDecorationColor: tag.name.length > 2 ? '#999' : undefined, textUnderlineOffset: '2px' }}
+                          onClick={() => tag.name.length > 2 ? setTooltipTagName(tooltipTagName === tag.name ? null : tag.name) : undefined}
+                        >{tag.name.length > 2 ? tag.name.slice(0, 2) + '…' : tag.name}</span>
+                        {tooltipTagName === tag.name && (
+                          <div style={{ position: 'absolute', zIndex: 50, background: '#333', color: '#fff', borderRadius: 6, padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', transform: 'translateY(-120%)', pointerEvents: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+                            {tag.name}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 周期 */}
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder }}>
+                        {isPaused ? (
+                          <span
+                            style={{ display: 'inline-block', backgroundColor: '#1565C0', color: '#FFFFFF', borderRadius: 4, padding: '1px 5px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                            onClick={() => {
+                              if (!firstDate || !endDate) return;
+                              const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
+                              alert(`${fmt(firstDate)} ~ ${fmt(endDate)}，共 ${days} 天`);
+                            }}
+                          >{days > 0 ? `${days}天` : '--'}</span>
+                        ) : (
+                          <span style={{ color: '#424242' }}>{days > 0 ? `${days}天` : '--'}</span>
+                        )}
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 占比 */}
+                      {(() => {
+                        const ratioVal = initialBalancesData?.balances ? initialBalancesData.balances[`${tag.name}__ratio`] : undefined;
+                        const ratioNum = ratioVal !== undefined && ratioVal !== null ? Number(ratioVal) : null;
+                        // 初始金额：该标签在账本设置里配置的起始资金
+                        const tagInitialBalance = tag.initialBalance ?? 0;
+                        const actualAmt = ratioNum !== null && tagInitialBalance > 0 ? tagInitialBalance * (ratioNum / 100) : null;
+                        return (
+                          <div className={dataCellCls} style={{ borderBottom: rowBorder, position: 'relative' }}>
+                            <span
+                              style={{
+                                color: ratioNum !== null ? '#424242' : '#BDBDBD',
+                                cursor: ratioNum !== null ? 'pointer' : 'default',
+                                textDecoration: ratioNum !== null ? 'underline' : 'none',
+                                textDecorationStyle: 'dashed',
+                                textDecorationColor: '#999',
+                                textUnderlineOffset: '2px',
+                              }}
+                              onClick={() => ratioNum !== null ? setTooltipRatioTag(tooltipRatioTag === tag.name ? null : tag.name) : undefined}
+                            >
+                              {ratioNum !== null ? `${ratioNum.toFixed(0)}%` : '--'}
+                            </span>
+                            {tooltipRatioTag === tag.name && ratioNum !== null && actualAmt !== null && (
+                              <div style={{
+                                position: 'absolute', bottom: '100%', right: 0, zIndex: 50,
+                                background: '#1A1A1A', color: '#FFF', borderRadius: 6,
+                                padding: '5px 8px', whiteSpace: 'nowrap', fontSize: 10,
+                                boxShadow: '0 2px 8px rgba(0,0,0,0.25)', marginBottom: 4,
+                              }}>
+                                {tagInitialBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} × {ratioNum.toFixed(0)}% = {actualAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 金额 */}
+                      <div className="px-1 py-2 flex flex-col items-end justify-center" style={{ borderBottom: rowBorder }}>
+                        {tag.marginCny > 0 ? (
+                          <>
+                            <div className="text-[11px] leading-none" style={{ color: '#424242' }}>{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
+                            {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
+                              <div className="text-[8px] mt-1 leading-none" style={{ color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
+                            )}
+                          </>
+                        ) : <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>}
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 回报 */}
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                        {latestPnl !== 0 ? `${latestPnl < 0 ? '-' : ''}${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 年化 */}
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}>
+                        {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 分红 */}
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: divAmt > 0 ? '#D32F2F' : '#BDBDBD' }}>
+                        {divAmt > 0 ? `${divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                      </div>
+                    </>
+                  );
+                })}
+                {/* 汇总行 */}
+                {validTags.length > 0 && (
+                  <>
+                    {/* 合计-名称 */}
+                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px' }}>
+                      <span className="text-[10px] font-semibold" style={{ color: '#9E9E9E' }}>合计</span>
+                    </div>
+                    {/* 站线要用 background 而非 border，这样才能覆盖 borderTop */}
+                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
+                    {/* 周期 -- */}
+                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                      <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>
+                    </div>
+                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
+                    {/* 占比 -- */}
+                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                      <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>
+                    </div>
+                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
+                    {/* 金额：只显示人民币汇总，居中 */}
+                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                      <span className="text-[11px] font-semibold" style={{ color: '#1A1A1A' }}>{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
+                    </div>
+                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
+                    {/* 回报 */}
+                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                      <span className="text-[11px] font-semibold" style={{ color: totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                        {totalPnl !== 0 ? `${totalPnl < 0 ? '-' : ''}${Math.abs(totalPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                      </span>
+                    </div>
+                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
+                    {/* 年化 */}
+                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                      <span className="text-[11px] font-semibold" style={{ color: weightedAnnualized === null ? '#BDBDBD' : weightedAnnualized >= 0 ? '#D32F2F' : '#388E3C' }}>
+                        {weightedAnnualized === null ? '--' : `${weightedAnnualized >= 0 ? '+' : ''}${weightedAnnualized.toFixed(1)}%`}
+                      </span>
+                    </div>
+                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
+                    {/* 分红 */}
+                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 16px 0' }}>
+                      <span className="text-[11px] font-semibold" style={{ color: totalDividend > 0 ? '#D32F2F' : '#BDBDBD' }}>
+                        {totalDividend > 0 ? `${totalDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+          </div>
+          )}
+        </div>
+
           <div className="mx-3 mt-2 rounded-2xl shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF' }}>
             {/* 图表标题行 */}
             <div className="px-4 pt-4 pb-1 flex items-center justify-between">
@@ -2095,248 +2337,6 @@ export default function LedgerDetailAA({
               })}
             </div>
           </div>
-
-          {/* ── 标签周期年化表格（在滚动容器内） ── */}
-          {allTagsChartData.length > 0 && (
-          <div className="mx-3 mt-3 rounded-2xl shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF' }}>
-          {/* 表格标题行 */}
-          <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b" style={{ borderColor: '#F5F5F5' }}>
-            <span className="text-sm font-bold" style={{ color: '#1A1A1A' }}>概览</span>
-          </div>
-          {/* 概览表格 - 用单个 Grid 容器包裹所有行，确保整列宽度一致 */}
-          {(() => {
-            const visibleTags = allTagsChartData.filter(tag => tag.points.length > 0);
-            const validTags = visibleTags.filter(t => t.marginCny > 0);
-            // 计算每个 tag 的数据
-            const tagData = visibleTags.map((tag, idx) => {
-              const configStartDate = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__startDate`] ?? '') : '';
-              const firstDate = configStartDate || tag.points[0]?.date;
-              const configPauseDate = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__pauseDate`] ?? '') : '';
-              // 有暂停日期时，截止日期为暂停前一天；否则截止日期为今天
-              let endDate = new Date().toISOString().slice(0, 10);
-              let isPaused = false;
-              if (configPauseDate) {
-                const pauseD = new Date(configPauseDate);
-                pauseD.setDate(pauseD.getDate() - 1);
-                const dayBefore = pauseD.toISOString().slice(0, 10);
-                if (dayBefore <= endDate) { endDate = dayBefore; isPaused = true; }
-              }
-              const days = firstDate ? Math.max(1, Math.round((new Date(endDate).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 0;
-              const latestPnl = tag.points[tag.points.length - 1]?.pnl ?? 0;
-              const annualized = tag.marginCny > 0 && days > 0 ? (latestPnl / tag.marginCny / days) * 365 * 100 : null;
-              const divAmt = dividendByTag[tag.name] ?? 0;
-              return { tag, days, latestPnl, annualized, divAmt, isLast: idx === visibleTags.length - 1, isPaused, firstDate, endDate };
-            });
-            // 排序逻辑
-            const sortedTagData = overviewSort ? [...tagData].sort((a, b) => {
-              let va = 0, vb = 0;
-              if (overviewSort.col === 'days') { va = a.days; vb = b.days; }
-              else if (overviewSort.col === 'ratio') {
-                const ra = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${a.tag.name}__ratio`] ?? 0) : 0;
-                const rb = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${b.tag.name}__ratio`] ?? 0) : 0;
-                va = ra; vb = rb;
-              }
-              else if (overviewSort.col === 'amount') { va = a.tag.marginCny; vb = b.tag.marginCny; }
-              else if (overviewSort.col === 'pnl') { va = a.latestPnl; vb = b.latestPnl; }
-              else if (overviewSort.col === 'annualized') { va = a.annualized ?? -Infinity; vb = b.annualized ?? -Infinity; }
-              else if (overviewSort.col === 'dividend') { va = a.divAmt; vb = b.divAmt; }
-              return overviewSort.dir === 'desc' ? vb - va : va - vb;
-            }) : tagData;
-            // 汇总行数据
-            const totalMargin = validTags.reduce((s, t) => s + t.marginCny, 0);
-            // totalPnl 统计所有有数据的标签（不限于有保证金），与红色区域「全部统计之和」口径一致
-            const totalPnl = visibleTags.reduce((s, t) => s + (t.points[t.points.length - 1]?.pnl ?? 0), 0);
-            const weightedDenominator = validTags.reduce((s, t) => {
-              const configSD = initialBalancesData?.balances ? String(initialBalancesData.balances[`${t.name}__startDate`] ?? '') : '';
-              const firstDate = configSD || t.points[0]?.date;
-              const today = new Date().toISOString().slice(0, 10);
-              const days = firstDate ? Math.max(1, Math.round((new Date(today).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 1;
-              return s + t.marginCny * (days / 365);
-            }, 0);
-            const weightedAnnualized = weightedDenominator > 0 ? (totalPnl / weightedDenominator) * 100 : null;
-            const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
-            // Grid 列定义：名称固定52px，其他列 minmax 自适应
-            const gridCols = 'auto 1px auto 1px auto 1px auto 1px auto 1px auto 1px auto';
-            const cellCls = 'px-1 py-1.5 text-[10px] font-medium text-center';
-            const dataCellCls = 'px-1 py-2 text-right text-[11px]';
-            const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
-            // 排序箭头辅助
-            const SortArrow = ({ col }: { col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend' }) => {
-              if (!overviewSort || overviewSort.col !== col) return <span style={{ color: '#D0D0D0', fontSize: 7, marginLeft: 1 }}>▼</span>;
-              return <span style={{ color: '#1565C0', fontSize: 7, marginLeft: 1 }}>{overviewSort.dir === 'desc' ? '▼' : '▲'}</span>;
-            };
-            const sortHeaderCls = cellCls + ' cursor-pointer select-none';
-            return (
-              <div style={{ display: 'grid', gridTemplateColumns: gridCols }}>
-                {/* 表头行 */}
-                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E', fontSize: 10 }}>名称</span></div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E', fontSize: 10 }}>金额¥</span><SortArrow col="amount" /></div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E', fontSize: 10 }}>回报¥</span><SortArrow col="pnl" /></div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={cellCls + ' cursor-pointer'} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => { handleOverviewSort('dividend'); }}>
-                  <span style={{ color: overviewSort?.col === 'dividend' ? '#1565C0' : '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px', fontSize: 10 }} onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>分红¥</span><SortArrow col="dividend" />
-                </div>
-                {/* 数据行 */}
-                {sortedTagData.map(({ tag, days, latestPnl, annualized, divAmt, isLast, isPaused, firstDate, endDate }) => {
-                  const rowBorder = isLast ? 'none' : '1px solid #F9F9F9';
-                  return (
-                    <>
-                      {/* 名称 */}
-                      <div key={`${tag.name}-name`} className="px-1 py-2 flex items-center justify-center gap-1" style={{ borderBottom: rowBorder, position: 'relative' }}>
-                        <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
-                        <span
-                          className="text-[11px] font-medium"
-                          style={{ color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 44, cursor: tag.name.length > 2 ? 'pointer' : 'default', textDecoration: tag.name.length > 2 ? 'underline' : 'none', textDecorationStyle: tag.name.length > 2 ? 'dashed' : undefined, textDecorationColor: tag.name.length > 2 ? '#999' : undefined, textUnderlineOffset: '2px' }}
-                          onClick={() => tag.name.length > 2 ? setTooltipTagName(tooltipTagName === tag.name ? null : tag.name) : undefined}
-                        >{tag.name.length > 2 ? tag.name.slice(0, 2) + '…' : tag.name}</span>
-                        {tooltipTagName === tag.name && (
-                          <div style={{ position: 'absolute', zIndex: 50, background: '#333', color: '#fff', borderRadius: 6, padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', transform: 'translateY(-120%)', pointerEvents: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
-                            {tag.name}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
-                      {/* 周期 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder }}>
-                        {isPaused ? (
-                          <span
-                            style={{ display: 'inline-block', backgroundColor: '#1565C0', color: '#FFFFFF', borderRadius: 4, padding: '1px 5px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
-                            onClick={() => {
-                              if (!firstDate || !endDate) return;
-                              const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
-                              alert(`${fmt(firstDate)} ~ ${fmt(endDate)}，共 ${days} 天`);
-                            }}
-                          >{days > 0 ? `${days}天` : '--'}</span>
-                        ) : (
-                          <span style={{ color: '#424242' }}>{days > 0 ? `${days}天` : '--'}</span>
-                        )}
-                      </div>
-                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
-                      {/* 占比 */}
-                      {(() => {
-                        const ratioVal = initialBalancesData?.balances ? initialBalancesData.balances[`${tag.name}__ratio`] : undefined;
-                        const ratioNum = ratioVal !== undefined && ratioVal !== null ? Number(ratioVal) : null;
-                        // 初始金额：该标签在账本设置里配置的起始资金
-                        const tagInitialBalance = tag.initialBalance ?? 0;
-                        const actualAmt = ratioNum !== null && tagInitialBalance > 0 ? tagInitialBalance * (ratioNum / 100) : null;
-                        return (
-                          <div className={dataCellCls} style={{ borderBottom: rowBorder, position: 'relative' }}>
-                            <span
-                              style={{
-                                color: ratioNum !== null ? '#424242' : '#BDBDBD',
-                                cursor: ratioNum !== null ? 'pointer' : 'default',
-                                textDecoration: ratioNum !== null ? 'underline' : 'none',
-                                textDecorationStyle: 'dashed',
-                                textDecorationColor: '#999',
-                                textUnderlineOffset: '2px',
-                              }}
-                              onClick={() => ratioNum !== null ? setTooltipRatioTag(tooltipRatioTag === tag.name ? null : tag.name) : undefined}
-                            >
-                              {ratioNum !== null ? `${ratioNum.toFixed(0)}%` : '--'}
-                            </span>
-                            {tooltipRatioTag === tag.name && ratioNum !== null && actualAmt !== null && (
-                              <div style={{
-                                position: 'absolute', bottom: '100%', right: 0, zIndex: 50,
-                                background: '#1A1A1A', color: '#FFF', borderRadius: 6,
-                                padding: '5px 8px', whiteSpace: 'nowrap', fontSize: 10,
-                                boxShadow: '0 2px 8px rgba(0,0,0,0.25)', marginBottom: 4,
-                              }}>
-                                {tagInitialBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} × {ratioNum.toFixed(0)}% = {actualAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
-                      {/* 金额 */}
-                      <div className="px-1 py-2 flex flex-col items-end justify-center" style={{ borderBottom: rowBorder }}>
-                        {tag.marginCny > 0 ? (
-                          <>
-                            <div className="text-[11px] leading-none" style={{ color: '#424242' }}>{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
-                            {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
-                              <div className="text-[8px] mt-1 leading-none" style={{ color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
-                            )}
-                          </>
-                        ) : <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>}
-                      </div>
-                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
-                      {/* 回报 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
-                        {latestPnl !== 0 ? `${latestPnl < 0 ? '-' : ''}${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
-                      </div>
-                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
-                      {/* 年化 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}>
-                        {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
-                      </div>
-                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
-                      {/* 分红 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: divAmt > 0 ? '#D32F2F' : '#BDBDBD' }}>
-                        {divAmt > 0 ? `${divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
-                      </div>
-                    </>
-                  );
-                })}
-                {/* 汇总行 */}
-                {validTags.length > 0 && (
-                  <>
-                    {/* 合计-名称 */}
-                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px' }}>
-                      <span className="text-[10px] font-semibold" style={{ color: '#9E9E9E' }}>合计</span>
-                    </div>
-                    {/* 站线要用 background 而非 border，这样才能覆盖 borderTop */}
-                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
-                    {/* 周期 -- */}
-                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
-                      <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>
-                    </div>
-                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
-                    {/* 占比 -- */}
-                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
-                      <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>
-                    </div>
-                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
-                    {/* 金额：只显示人民币汇总，居中 */}
-                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
-                      <span className="text-[11px] font-semibold" style={{ color: '#1A1A1A' }}>{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
-                    </div>
-                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
-                    {/* 回报 */}
-                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
-                      <span className="text-[11px] font-semibold" style={{ color: totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
-                        {totalPnl !== 0 ? `${totalPnl < 0 ? '-' : ''}${Math.abs(totalPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
-                      </span>
-                    </div>
-                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
-                    {/* 年化 */}
-                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
-                      <span className="text-[11px] font-semibold" style={{ color: weightedAnnualized === null ? '#BDBDBD' : weightedAnnualized >= 0 ? '#D32F2F' : '#388E3C' }}>
-                        {weightedAnnualized === null ? '--' : `${weightedAnnualized >= 0 ? '+' : ''}${weightedAnnualized.toFixed(1)}%`}
-                      </span>
-                    </div>
-                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
-                    {/* 分红 */}
-                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 16px 0' }}>
-                      <span className="text-[11px] font-semibold" style={{ color: totalDividend > 0 ? '#D32F2F' : '#BDBDBD' }}>
-                        {totalDividend > 0 ? `${totalDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
-                      </span>
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })()}
-          </div>
-          )}
-        </div>
       )}
 
       {/* ── 视角切换弹窗（管理员/创建者点击头像弹出） ── */}
