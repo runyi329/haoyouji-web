@@ -14590,18 +14590,20 @@ ${klinesSummary}
           if (participantOrderIds.length > 0) {
             const placeholders = participantOrderIds.map(() => '?').join(',');
             rows = await conn!.execute(
-              `SELECT fo.*, u.username, u.name as userName, u.avatar
+              `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
                FROM funder_asset_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
+               LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
                WHERE fo.ledger_id = ? AND (fo.user_id = ? OR fo.id IN (${placeholders}))
                ORDER BY fo.created_at DESC`,
               [input.ledgerId, targetUserId, ...participantOrderIds]
             );
           } else {
             rows = await conn!.execute(
-              `SELECT fo.*, u.username, u.name as userName, u.avatar
+              `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
                FROM funder_asset_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
+               LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
                WHERE fo.ledger_id = ? AND fo.user_id = ?
                ORDER BY fo.created_at DESC`,
               [input.ledgerId, targetUserId]
@@ -14614,9 +14616,10 @@ ${klinesSummary}
           } else {
             const placeholders = participantOrderIds.map(() => '?').join(',');
             rows = await conn!.execute(
-              `SELECT fo.*, u.username, u.name as userName, u.avatar
+              `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
                FROM funder_asset_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
+               LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
                WHERE fo.ledger_id = ? AND fo.id IN (${placeholders})
                ORDER BY fo.created_at DESC`,
               [input.ledgerId, ...participantOrderIds]
@@ -14640,18 +14643,20 @@ ${klinesSummary}
             if (pIds.length > 0) {
               const ph = pIds.map(() => '?').join(',');
               rows = await conn!.execute(
-                `SELECT fo.*, u.username, u.name as userName, u.avatar
+                `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
                  FROM funder_asset_orders fo
                  LEFT JOIN users u ON u.id = fo.user_id
+                 LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
                  WHERE fo.ledger_id = ? AND (fo.user_id = ? OR fo.id IN (${ph}))
                  ORDER BY fo.created_at DESC`,
                 [input.ledgerId, targetUserId, ...pIds]
               );
             } else {
               rows = await conn!.execute(
-                `SELECT fo.*, u.username, u.name as userName, u.avatar
+                `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
                  FROM funder_asset_orders fo
                  LEFT JOIN users u ON u.id = fo.user_id
+                 LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
                  WHERE fo.ledger_id = ? AND fo.user_id = ?
                  ORDER BY fo.created_at DESC`,
                 [input.ledgerId, targetUserId]
@@ -14659,9 +14664,10 @@ ${klinesSummary}
             }
           } else {
             rows = await db.execute(
-              sql`SELECT fo.*, u.username, u.name as userName, u.avatar
+              sql`SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
                   FROM funder_asset_orders fo
                   LEFT JOIN users u ON u.id = fo.user_id
+                  LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
                   WHERE fo.ledger_id = ${input.ledgerId}
                   ORDER BY fo.created_at DESC`
             );
