@@ -184,12 +184,6 @@ export default function LedgerDetailAA({
     { ledgerId, viewAsUserId: viewAsUserId ?? undefined },
     { enabled: !!ledgerId }
   );
-  // 获取当前选中标签的配置（暂停日期、结束日期等）
-  const selectedTagName = useMemo(() => selectedTag?.name ?? null, [selectedTag]);
-  const { data: selectedTagConfig } = trpc.ledger.getTagConfig.useQuery(
-    { ledgerId, tagName: selectedTagName ?? '' },
-    { enabled: !!ledgerId && !!selectedTagName }
-  );
   // 过滤掉全局默认分类（如「购物」），只保留手动创建的标签
   const allCategories = useMemo(() => {
     if (!rawCategories) return [];
@@ -235,6 +229,12 @@ export default function LedgerDetailAA({
     if (!selectedTagId || !categories) return null;
     return categories.find((c: any) => c.id === selectedTagId) || null;
   }, [selectedTagId, categories]);;
+  // 获取当前选中标签的配置（暂停日期、结束日期等）——必须在 selectedTag 之后定义
+  const selectedTagName = selectedTag?.name ?? null;
+  const { data: selectedTagConfig } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId, tagName: selectedTagName ?? '' },
+    { enabled: !!ledgerId && !!selectedTagName }
+  );
 
   // 当前用户的交易数据
   const activeMemberTransactions = useMemo(() => {
