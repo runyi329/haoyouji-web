@@ -558,17 +558,15 @@ export default function LedgerAAInitialBalance() {
 
                 {/* 各用户占比列表 */}
                 <div className="px-4 py-2 space-y-2">
-                  {(() => {
-                    // 进度条设计：灰色轨道=100%固定宽度，红色条按实际比例可超出灰色轨道
-                    // maxPct = 总计值（超过100时），用于计算红色条相对于整个可用宽度的比例
-                    const maxPct = Math.max(100, total);
-                    // 100%对应的宽度比例（灰色轨道占整个容器的宽度）
-                    const trackWidth = (100 / maxPct) * 100; // 百分比
-                    return rows.map(({ member, ratio, amount }) => {
+                  {rows.map(({ member, ratio, amount }) => {
                     const pct = ratio;
-                    // 红色条宽度：相对于整个容器（包含超出部分）
-                    const barWidth = maxPct > 0 ? (pct / maxPct) * 100 : 0;
-                    const isOver = total > 100 && pct > 0;
+                    // 每个人独立计算：基准 = max(100, 自己的比例)
+                    const base = Math.max(100, pct);
+                    // 灰色轨道宽度：100%占基准的比例
+                    const grayWidth = (100 / base) * 100;
+                    // 红色条宽度：实际值占基准的比例
+                    const redWidth = (pct / base) * 100;
+                    const isPersonOver = pct > 100;
                     return (
                       <div key={member.userId} className="flex items-center gap-3 py-2">
                         {/* 用户信息 */}
@@ -593,44 +591,52 @@ export default function LedgerAAInitialBalance() {
                               <span className="text-xs text-gray-400">¥{parseFloat(amount).toLocaleString("zh-CN")}</span>
                             )}
                           </div>
-                          {/* 进度条容器：overflow-visible 允许红色条超出 */}
-                          <div className="relative h-2" style={{ overflow: "visible" }}>
-                            {/* 灰色轨道：代表100%的位置，固定宽度 */}
-                            <div
-                              className="absolute top-0 left-0 h-full rounded-full"
-                              style={{
-                                width: `${trackWidth}%`,
-                                backgroundColor: "#E0E0E0",
-                              }}
-                            />
-                            {/* 红色进度条：按实际比例，可超出灰色轨道 */}
-                            {pct > 0 && (
-                              <div
-                                className="absolute top-0 left-0 h-full rounded-full transition-all"
-                                style={{
-                                  width: `${barWidth}%`,
-                                  backgroundColor: cat?.color || "#D32F2F",
-                                  zIndex: 1,
-                                }}
-                              />
-                            )}
-                            {/* 100%刻度线：仅在超出时显示 */}
-                            {isOver && pct > 0 && (
-                              <div
-                                className="absolute top-0 h-full flex flex-col items-center"
-                                style={{ left: `${trackWidth}%`, zIndex: 2, transform: "translateX(-50%)" }}
-                              >
-                                <div className="w-px h-full bg-gray-500" />
-                                <span className="text-gray-500 mt-0.5" style={{ fontSize: 8, whiteSpace: "nowrap" }}>100</span>
-                              </div>
-                            )}
-                          </div>
+                          {pct > 0 ? (
+                            <div className="relative h-2">
+                              {isPersonOver ? (
+                                <>
+                                  {/* 超过100%：红色在底层（满格），灰色在上层作参照 */}
+                                  <div
+                                    className="absolute top-0 left-0 h-full rounded-full"
+                                    style={{ width: "100%", backgroundColor: cat?.color || "#D32F2F" }}
+                                  />
+                                  <div
+                                    className="absolute top-0 left-0 h-full rounded-full"
+                                    style={{ width: `${grayWidth}%`, backgroundColor: "#E0E0E0", zIndex: 1 }}
+                                  />
+                                  {/* 100刻度标记：在灰色轨道右端 */}
+                                  <div
+                                    className="absolute flex items-center"
+                                    style={{ left: `${grayWidth}%`, top: "-2px", bottom: "-2px", zIndex: 2, transform: "translateX(-50%)" }}
+                                  >
+                                    <div className="w-px h-full bg-gray-600" />
+                                  </div>
+                                  <span
+                                    className="absolute text-gray-500"
+                                    style={{ left: `${grayWidth}%`, top: "10px", fontSize: 8, transform: "translateX(-50%)", whiteSpace: "nowrap", zIndex: 2 }}
+                                  >100</span>
+                                </>
+                              ) : (
+                                <>
+                                  {/* 未超过100%：灰色满格（代表100%），红色在内部按比例 */}
+                                  <div
+                                    className="absolute top-0 left-0 h-full rounded-full"
+                                    style={{ width: "100%", backgroundColor: "#E0E0E0" }}
+                                  />
+                                  <div
+                                    className="absolute top-0 left-0 h-full rounded-full"
+                                    style={{ width: `${redWidth}%`, backgroundColor: cat?.color || "#D32F2F", zIndex: 1 }}
+                                  />
+                                </>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="h-2 rounded-full" style={{ backgroundColor: "#F5F5F5" }} />
+                          )}
                         </div>
                       </div>
                     );
-                    });
-                  })()
-                  }
+                  })}
                 </div>
 
                 {/* 底部合计条 */}
