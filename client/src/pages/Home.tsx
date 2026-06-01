@@ -1871,8 +1871,7 @@ export default function Home() {
           // 页2：AI球伴NBA总决赛海报（点击跳转NBA总决赛页面）
           <div
             key="p2-nba"
-            className="w-full h-full relative cursor-pointer active:opacity-90 transition-opacity"
-            onClick={() => navigate('/nba-finals')}
+            className="w-full h-full relative"
           >
             <img
               src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663346422697/ljIUDkwGLrRmCTDS.png"
@@ -2563,8 +2562,8 @@ export default function Home() {
 
           {/* 三个功能入口 - flex-1撑满剩余空间 */}
           <div className="px-3 pt-1.5 pb-2 flex flex-col flex-1 min-h-0 gap-1.5">
-            {/* 第一行：智能财务 + 智能会计 + NBA */}
-            <div className="grid grid-cols-3 gap-2 flex-1">
+            {/* 第一行：智能财务 + 智能会计 */}
+            <div className="grid grid-cols-2 gap-2 flex-1">
               {/* 智能财务 - 黑白金立体风格 */}
               <div
                 className="flex items-center justify-center rounded-xl cursor-pointer active:scale-[0.98] relative overflow-hidden"
@@ -2611,8 +2610,8 @@ export default function Home() {
                   <span className="text-xs font-semibold" style={{ color: '#F5D78E', letterSpacing: '0.05em' }}>智能会计</span>
                 </div>
               </div>
-              {/* NBA 总决赛入口 - 蓝红风格 */}
-              <div
+              {/* NBA 总决赛入口 - 暂时隐藏 */}
+              {false && <div
                 className="flex items-center justify-center rounded-xl cursor-pointer active:scale-[0.98] relative overflow-hidden"
                 onClick={() => navigate('/nba-finals')}
                 style={{
@@ -2636,7 +2635,7 @@ export default function Home() {
                   />
                   <span className="text-xs font-semibold" style={{ color: '#C8102E', letterSpacing: '0.05em', fontSize: '0.6rem' }}>NBA决赛</span>
                 </div>
-              </div>
+              </div>}
             </div>
             {/* 第二行：智能钱包（横向宽条）- 黑白金立体风格，点击跳转全局钱包 */}
             <div
