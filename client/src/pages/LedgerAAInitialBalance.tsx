@@ -1232,21 +1232,31 @@ export default function LedgerAAInitialBalance() {
                             <span className="text-xs text-gray-400 w-16 flex-shrink-0">
                               开始日期
                             </span>
-                            <input
-                              type="date"
-                              value={entry.startDate}
-                              onChange={(e) =>
-                                updateEntry(userId, cat.name, {
-                                  startDate: e.target.value,
-                                })
-                              }
-                              className="flex-1 text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
-                              style={{
-                                borderColor: "#E0E0E0",
-                                backgroundColor: "#FFFFFF",
-                                color: "#222222",
-                              }}
-                            />
+                            <div className="flex-1 flex items-center gap-1">
+                              <input
+                                type="date"
+                                value={entry.startDate}
+                                onChange={(e) =>
+                                  updateEntry(userId, cat.name, {
+                                    startDate: e.target.value,
+                                  })
+                                }
+                                className="flex-1 text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
+                                style={{
+                                  borderColor: "#E0E0E0",
+                                  backgroundColor: "#FFFFFF",
+                                  color: "#222222",
+                                }}
+                              />
+                              {entry.startDate && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateEntry(userId, cat.name, { startDate: '' })}
+                                  className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                                  style={{ fontSize: 12 }}
+                                >×</button>
+                              )}
+                            </div>
                           </div>
 
                           {/* 行2b：暂停日期 */}
@@ -1254,21 +1264,31 @@ export default function LedgerAAInitialBalance() {
                             <span className="text-xs w-16 flex-shrink-0 font-medium" style={{ color: '#B45309' }}>
                               暂停日期
                             </span>
-                            <input
-                              type="date"
-                              value={entry.pauseDate}
-                              onChange={(e) =>
-                                updateEntry(userId, cat.name, {
-                                  pauseDate: e.target.value,
-                                })
-                              }
-                              className="flex-1 text-sm border rounded-lg px-2 py-1 outline-none"
-                              style={{
-                                borderColor: '#FDE68A',
-                                backgroundColor: '#FFFBEB',
-                                color: '#92400E',
-                              }}
-                            />
+                            <div className="flex-1 flex items-center gap-1">
+                              <input
+                                type="date"
+                                value={entry.pauseDate}
+                                onChange={(e) =>
+                                  updateEntry(userId, cat.name, {
+                                    pauseDate: e.target.value,
+                                  })
+                                }
+                                className="flex-1 text-sm border rounded-lg px-2 py-1 outline-none"
+                                style={{
+                                  borderColor: '#FDE68A',
+                                  backgroundColor: '#FFFBEB',
+                                  color: '#92400E',
+                                }}
+                              />
+                              {entry.pauseDate && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateEntry(userId, cat.name, { pauseDate: '' })}
+                                  className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full hover:bg-amber-100"
+                                  style={{ fontSize: 12, color: '#B45309' }}
+                                >×</button>
+                              )}
+                            </div>
                           </div>
 
                           {/* 行2c：结束日期 */}
@@ -1276,21 +1296,31 @@ export default function LedgerAAInitialBalance() {
                             <span className="text-xs text-gray-400 w-16 flex-shrink-0">
                               结束日期
                             </span>
-                            <input
-                              type="date"
-                              value={entry.endDate}
-                              onChange={(e) =>
-                                updateEntry(userId, cat.name, {
-                                  endDate: e.target.value,
-                                })
-                              }
-                              className="flex-1 text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
-                              style={{
-                                borderColor: "#E0E0E0",
-                                backgroundColor: "#FFFFFF",
-                                color: "#222222",
-                              }}
-                            />
+                            <div className="flex-1 flex items-center gap-1">
+                              <input
+                                type="date"
+                                value={entry.endDate}
+                                onChange={(e) =>
+                                  updateEntry(userId, cat.name, {
+                                    endDate: e.target.value,
+                                  })
+                                }
+                                className="flex-1 text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
+                                style={{
+                                  borderColor: "#E0E0E0",
+                                  backgroundColor: "#FFFFFF",
+                                  color: "#222222",
+                                }}
+                              />
+                              {entry.endDate && (
+                                <button
+                                  type="button"
+                                  onClick={() => updateEntry(userId, cat.name, { endDate: '' })}
+                                  className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                                  style={{ fontSize: 12 }}
+                                >×</button>
+                              )}
+                            </div>
                           </div>
 
                           {/* 行3：初始比例 */}
