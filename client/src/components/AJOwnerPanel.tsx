@@ -1650,23 +1650,23 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                   padding: '7px 6px', marginBottom: '5px',
                 }}>
                   <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '10px', display: 'flex', alignItems: 'center' }}>开票笔数</div>
-                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                  <div style={{ textAlign: 'center' }}>
                     <span style={{ color: '#FCD34D', fontSize: '14px', fontWeight: 700 }}>
                       {employeeStats ? (employeeStats.pending.count + (employeeStats.supportNeeded?.count ?? 0)) : '--'}
                     </span>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>笔</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', marginLeft: '1px' }}>笔</span>
                   </div>
-                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                  <div style={{ textAlign: 'center' }}>
                     <span style={{ color: '#81C784', fontSize: '14px', fontWeight: 700 }}>
                       {employeeStats ? employeeStats.approved.count : '--'}
                     </span>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>笔</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', marginLeft: '1px' }}>笔</span>
                   </div>
-                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                  <div style={{ textAlign: 'center' }}>
                     <span style={{ color: '#fff', fontSize: '14px', fontWeight: 700 }}>
                       {employeeStats ? (employeeStats.approved.count + employeeStats.pending.count + (employeeStats.supportNeeded?.count ?? 0)) : '--'}
                     </span>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>笔</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', marginLeft: '1px' }}>笔</span>
                   </div>
                 </div>
 
