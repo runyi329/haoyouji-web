@@ -2115,19 +2115,20 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                   if (!groups[key]) groups[key] = [];
                   groups[key].push(item);
                 });
-                // 检测金额相近（同组内差值 < 5%）
-                const similarSet = new Set<number>();
+                // 检测金额相近（差值 < 5%），记录每个id对应的相近单号列表
+                const similarMap = new Map<number, number[]>();
                 pendingList.forEach((a: any) => {
                   pendingList.forEach((b: any) => {
                     if (a.id !== b.id && Math.abs(a.amount - b.amount) / Math.max(a.amount, b.amount) < 0.05) {
-                      similarSet.add(a.id); similarSet.add(b.id);
+                      if (!similarMap.has(a.id)) similarMap.set(a.id, []);
+                      if (!similarMap.get(a.id)!.includes(b.id)) similarMap.get(a.id)!.push(b.id);
                     }
                   });
                 });
                 const fmtDate = (d: any) => {
                   const s = String(d).slice(0, 10);
                   const parts = s.split('-');
-                  if (parts.length === 3) return `${parts[1]}月${parts[2]}日`;
+                  if (parts.length === 3) return `${parseInt(parts[1])}月${parseInt(parts[2])}日`;
                   return s;
                 };
                 let globalIdx = 0;
@@ -2142,15 +2143,16 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                     }}>{company}（{items.length} 笔）</div>
                     {/* 表头 */}
                     <div style={{
-                      display: 'grid', gridTemplateColumns: '20px 1fr 60px 52px 60px',
+                      display: 'grid', gridTemplateColumns: '20px 1fr 60px 52px',
                       gap: '4px', padding: '3px 16px',
                       fontSize: '10px', color: '#bbb', borderBottom: '1px solid #f5f5f5',
                     }}>
-                      <span>#</span><span>业务员 · 日期 · 单号</span><span style={{textAlign:'right'}}>金额</span><span style={{textAlign:'right'}}>津贴</span><span style={{textAlign:'right'}}></span>
+                      <span>#</span><span>业务员 · 日期 · 单号</span><span style={{textAlign:'right'}}>金额</span><span style={{textAlign:'right'}}>津贴</span>
                     </div>
                     {items.map((item: any) => {
                       globalIdx++;
-                      const isSimilar = similarSet.has(item.id);
+                      const similarIds = similarMap.get(item.id);
+                      const isSimilar = !!similarIds && similarIds.length > 0;
                       return (
                         <div key={item.id} style={{
                           display: 'grid', gridTemplateColumns: '20px 1fr 60px 52px',
@@ -2161,12 +2163,16 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                         }}>
                           <span style={{ fontSize: '10px', color: '#ccc' }}>{globalIdx}</span>
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A2B4A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {item.employeeName || '未知'}
-                              {isSimilar && <span style={{ marginLeft: '4px', fontSize: '10px', color: '#d97706', fontWeight: 700 }}>相近</span>}
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A2B4A', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'nowrap', overflow: 'hidden' }}>
+                              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 1 }}>{item.employeeName || '未知'}</span>
+                              {isSimilar && (
+                                <span style={{ fontSize: '9px', color: '#d97706', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, background: '#fef3c7', padding: '1px 4px', borderRadius: '4px' }}>
+                                  ≈#{similarIds!.join(' #')}
+                                </span>
+                              )}
                             </div>
                             <div style={{ fontSize: '10px', color: '#aaa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {fmtDate(item.recordDate)}{item.expenseReason ? ` · ${item.expenseReason}` : ''} · #{item.id}
+                              {fmtDate(item.recordDate)} · #{item.id}{item.expenseReason ? ` · ${item.expenseReason}` : ''}
                             </div>
                           </div>
                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#16a34a', textAlign: 'right' }}>
