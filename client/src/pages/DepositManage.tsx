@@ -49,6 +49,178 @@ function toCNY(margin: string, coin: string, prices: Record<string, number>): nu
 
 type SortMode = "amount" | "name";
 
+// ── 备注面板（可折叠，一条一条增加，与资方管理 FunderNoteRow 一致）──
+interface DepositNoteItem { text: string; time: string; }
+
+function parseDepositNotes(raw: string): DepositNoteItem[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed as DepositNoteItem[];
+  } catch {}
+  return [{ text: raw, time: '' }];
+}
+
+function formatDepositNoteTime(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const m = d.getMonth() + 1;
+  const day = d.getDate();
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  const s = String(d.getSeconds()).padStart(2, '0');
+  return `${m}月${day}日 ${h}:${min}:${s}`;
+}
+
+const NoteEditIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6B7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}>
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+);
+
+function DepositNoteRow({ ledgerId, tagName, initialNote, onSaved }: {
+  ledgerId: number;
+  tagName: string;
+  initialNote: string;
+  onSaved: (note: string) => void;
+}) {
+  const [notes, setNotes] = React.useState<DepositNoteItem[]>(() => parseDepositNotes(initialNote));
+  const [expanded, setExpanded] = React.useState(false);
+  const [editingIdx, setEditingIdx] = React.useState<number | null>(null);
+  const [editValue, setEditValue] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const saveTagConfig = trpc.ledger.saveTagConfig.useMutation();
+
+  const saveNotes = async (newNotes: DepositNoteItem[]) => {
+    setSaving(true);
+    try {
+      const raw = JSON.stringify(newNotes);
+      await saveTagConfig.mutateAsync({ ledgerId, tagName, note: raw });
+      setNotes(newNotes);
+      onSaved(raw);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveEdit = async (idx: number) => {
+    if (!editValue.trim()) return;
+    const newNotes = notes.map((n, i) =>
+      i === idx ? { text: editValue.trim(), time: new Date().toISOString() } : n
+    );
+    await saveNotes(newNotes);
+    setEditingIdx(null);
+  };
+
+  const handleAddNote = () => {
+    const newNotes = [...notes, { text: '', time: new Date().toISOString() }];
+    setNotes(newNotes);
+    setEditingIdx(newNotes.length - 1);
+    setEditValue('');
+    setExpanded(true);
+  };
+
+  const handleSaveNew = async (idx: number) => {
+    if (!editValue.trim()) {
+      setNotes(notes.filter((_, i) => i !== idx));
+      setEditingIdx(null);
+      return;
+    }
+    const newNotes = notes.map((n, i) =>
+      i === idx ? { text: editValue.trim(), time: new Date().toISOString() } : n
+    );
+    await saveNotes(newNotes);
+    setEditingIdx(null);
+  };
+
+  return (
+    <div className="px-3 py-2 text-xs mt-2 rounded-xl" style={{ backgroundColor: '#F8FBFF', border: '1px solid #DBEAFE' }} onClick={e => e.stopPropagation()}>
+      {/* 标题行：备注（左）+ 展开箭头（右） */}
+      <div
+        className="flex items-center justify-between cursor-pointer select-none"
+        onClick={() => setExpanded(v => !v)}
+      >
+        <div className="flex items-center gap-1.5">
+          <span className="shrink-0 text-xs font-bold" style={{ color: '#6B7280' }}>备注</span>
+          {notes.length > 0 && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#EEF2FF', color: '#6366F1' }}>{notes.length}</span>
+          )}
+        </div>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </div>
+      {/* 展开状态 */}
+      {expanded && (
+        <div className="mt-1.5">
+          {notes.length === 0 && (
+            <div style={{ color: '#C0C8D8' }} className="py-1">暂无备注</div>
+          )}
+          {notes.map((note, idx) => (
+            <div key={idx}>
+              {idx > 0 && <div style={{ borderTop: '1px solid #E8EFFF' }} className="my-1" />}
+              <div className="flex items-center gap-1 py-0.5">
+                {editingIdx === idx ? (
+                  <>
+                    <input
+                      autoFocus
+                      className="flex-1 text-xs border rounded px-1.5 py-0.5 outline-none"
+                      style={{ borderColor: '#C7D7FF', color: '#1A2340', minWidth: 0 }}
+                      value={editValue}
+                      onChange={e => setEditValue(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') { note.text ? handleSaveEdit(idx) : handleSaveNew(idx); }
+                        if (e.key === 'Escape') { setEditingIdx(null); if (!note.text) setNotes(notes.filter((_, i) => i !== idx)); }
+                      }}
+                      placeholder="输入备注..."
+                      maxLength={200}
+                    />
+                    <button
+                      onClick={() => note.text ? handleSaveEdit(idx) : handleSaveNew(idx)}
+                      disabled={saving}
+                      className="shrink-0 text-xs px-2 py-0.5 rounded"
+                      style={{ background: '#3B82F6', color: '#fff' }}
+                    >{saving ? '...' : '保存'}</button>
+                    <button
+                      onClick={() => { setEditingIdx(null); if (!note.text) setNotes(notes.filter((_, i) => i !== idx)); }}
+                      className="shrink-0 text-xs px-1.5 py-0.5 rounded"
+                      style={{ background: '#F3F4F6', color: '#6B7280' }}
+                    >取消</button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 break-all" style={{ color: '#4B5563' }}>{note.text}</span>
+                    {note.time && <span className="shrink-0 text-[10px]" style={{ color: '#C0C8D8' }}>{formatDepositNoteTime(note.time)}</span>}
+                    <button onClick={() => { setEditingIdx(idx); setEditValue(note.text); }} className="shrink-0" title="编辑">
+                      <NoteEditIcon />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+          <div style={{ borderTop: notes.length > 0 ? '1px solid #E8EFFF' : 'none' }} className="mt-1 pt-1">
+            <button
+              type="button"
+              onClick={handleAddNote}
+              className="flex items-center gap-1"
+              style={{ color: '#9CA3AF' }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              <span style={{ fontSize: '11px' }}>添加备注</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DepositManage() {
   const params = useParams();
   const [, setLocation] = useLocation();
@@ -993,6 +1165,16 @@ export default function DepositManage() {
                               );
                             })()}
                           </>
+                        )}
+
+                        {/* 备注面板（始终显示，不随编辑模式隐藏） */}
+                        {!rightEditMode && selectedTagForRight && (
+                          <DepositNoteRow
+                            ledgerId={ledgerId}
+                            tagName={selectedTagForRight}
+                            initialNote={(rightTagConfig as any)?.note || ''}
+                            onSaved={() => refetchRightTagConfig()}
+                          />
                         )}
 
                         {/* 编辑模式 */}
