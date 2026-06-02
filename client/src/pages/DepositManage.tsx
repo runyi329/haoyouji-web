@@ -438,7 +438,7 @@ export default function DepositManage() {
 
   // ── 右侧保证金状态 ──
   const [selectedTagForRight, setSelectedTagForRight] = useState<string | null>(null);
-  const [rightMarginEdits, setRightMarginEdits] = useState<Array<{ coin: string; amount: string }>>([]);
+  const [rightMarginEdits, setRightMarginEdits] = useState<Array<{ coin: string; amount: string; label: string }>>([]);
   const [rightEditMode, setRightEditMode] = useState(false);
   const [rightSaving, setRightSaving] = useState(false);
   // 初始金额、倍数、保证金基数编辑状态（余额改为自动读取，不再手动登记）
@@ -483,9 +483,16 @@ export default function DepositManage() {
     const savedMargin = rightTagConfig?.margin_by_coin
       ? (() => { try { return JSON.parse(rightTagConfig.margin_by_coin as string); } catch { return null; } })()
       : null;
-    const entries = savedMargin
-      ? Object.entries(savedMargin).map(([coin, amount]) => ({ coin, amount: String(amount) }))
-      : [{ coin: "ETH", amount: "" }];
+    let entries: Array<{ coin: string; amount: string; label: string }>;
+    if (!savedMargin) {
+      entries = [{ coin: "ETH", amount: "", label: "" }];
+    } else if (Array.isArray(savedMargin)) {
+      // 新格式：数组
+      entries = savedMargin.map((e: any) => ({ coin: e.coin || '元', amount: String(e.amount), label: e.label || '' }));
+    } else {
+      // 旧格式对象
+      entries = Object.entries(savedMargin).map(([coin, amount]) => ({ coin, amount: String(amount), label: '' }));
+    }
     setRightMarginEdits(entries);
     setRightEditMode(true);
   };
@@ -493,9 +500,10 @@ export default function DepositManage() {
   const handleSaveRightMargin = () => {
     if (!selectedTagForRight) return;
     setRightSaving(true);
-    const validEntries = rightMarginEdits.filter(e => e.amount && parseFloat(e.amount) > 0);
+    // 支持负数（给出保证金），过滤掉金额为空的行
+    const validEntries = rightMarginEdits.filter(e => e.amount !== '' && !isNaN(parseFloat(e.amount)));
     const marginByCoinJson = validEntries.length > 0
-      ? JSON.stringify(Object.fromEntries(validEntries.map(e => [e.coin || "元", parseFloat(e.amount) || 0])))
+      ? JSON.stringify(validEntries.map(e => ({ coin: e.coin || '元', amount: parseFloat(e.amount), label: e.label || '' })))
       : undefined;
     // 保留其他配置字段，只更新 marginByCoin（余额改为自动读取，不保存 accountBalance/balanceDate）
     saveTagConfigMutation.mutate({
@@ -511,9 +519,8 @@ export default function DepositManage() {
   const handleSaveBalanceInfo = () => {
     if (!selectedTagForRight) return;
     setRightSaving(true);
-    const marginByCoinJson = rightMarginData.length > 0
-      ? JSON.stringify(Object.fromEntries(rightMarginData.map(e => [e.coin, e.amount])))
-      : (rightTagConfig?.margin_by_coin as string | undefined);
+    // 保存时保持当前保证金数据不变
+    const marginByCoinJson = rightTagConfig?.margin_by_coin as string | undefined;
     saveTagConfigMutation.mutate({
       ledgerId,
       tagName: selectedTagForRight,
@@ -552,8 +559,13 @@ export default function DepositManage() {
   const rightMarginData = useMemo(() => {
     if (!rightTagConfig?.margin_by_coin) return [];
     try {
-      const obj = JSON.parse(rightTagConfig.margin_by_coin as string);
-      return Object.entries(obj).map(([coin, amount]) => ({ coin, amount: Number(amount) }));
+      const parsed = JSON.parse(rightTagConfig.margin_by_coin as string);
+      // 新格式：数组 [{ coin, amount, label? }]
+      if (Array.isArray(parsed)) {
+        return parsed.map((e: any) => ({ coin: e.coin || '元', amount: Number(e.amount), label: e.label || '' }));
+      }
+      // 旧格式向下兼容：对象 { coin: amount }
+      return Object.entries(parsed).map(([coin, amount]) => ({ coin, amount: Number(amount), label: '' }));
     } catch { return []; }
   }, [rightTagConfig]);
 
@@ -948,19 +960,22 @@ export default function DepositManage() {
                               <div className="text-xs text-gray-400 py-2 text-center">暂未设置右侧保证金</div>
                             ) : (
                               <div className="space-y-2 mb-3">
-                                {rightMarginData.map(({ coin, amount }) => (
+                                {rightMarginData.map(({ coin, amount, label }, _i) => (
                                   <div
-                                    key={coin}
+                                    key={_i}
                                     className="flex items-center justify-between py-1.5"
                                     style={{ borderBottom: "1px solid #F3F4F6" }}
                                   >
-                                    <span className="text-sm font-semibold text-gray-800">
-                                      {amount.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
-                                      <span className="text-xs text-gray-500 ml-1">{coin}</span>
-                                    </span>
+                                    <div className="flex flex-col">
+                                      <span className="text-sm font-semibold" style={{ color: amount < 0 ? '#388E3C' : '#1A2340' }}>
+                                        {amount >= 0 ? '+' : ''}{amount.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
+                                        <span className="text-xs text-gray-500 ml-1">{coin}</span>
+                                      </span>
+                                      {label ? <span className="text-[10px] text-gray-400">{label}</span> : null}
+                                    </div>
                                     {coin !== "元" && (
-                                      <span className="text-xs text-gray-400">
-                                        {calcCNYStr(String(amount), coin)}
+                                      <span className="text-xs" style={{ color: amount < 0 ? '#388E3C' : '#6B7280' }}>
+                                        {amount < 0 ? '-' : ''}¥{Math.abs(toCNY(String(Math.abs(amount)), coin, cryptoPrices)).toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
                                       </span>
                                     )}
                                   </div>
@@ -1025,7 +1040,7 @@ export default function DepositManage() {
                               return (
                                 <div className="mt-3 rounded-xl p-3 space-y-2" style={{ backgroundColor: "#F8FBFF", border: "1px solid #DBEAFE" }}>
                                   <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-gray-600">账户余额（自动读取）</span>
+                                    <span className="text-xs font-bold text-gray-600">账户余额{autoBalanceDate ? `（${autoBalanceDate}）` : ''}</span>
                                     {!rightBalanceEditMode ? (
                                       <button
                                         onClick={() => {
@@ -1045,25 +1060,19 @@ export default function DepositManage() {
                                       </div>
                                     )}
                                   </div>
-                                  {/* 余额：自动读取，始终显示（只读） */}
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs text-gray-500">余额（自动）</span>
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="text-sm font-bold text-gray-800">
-                                        {autoBalanceNum !== null ? `¥${autoBalanceNum.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
+                                  {/* 余额：自动读取，始终显示（只读），靠右对齐 */}
+                                  <div className="flex items-center justify-end gap-2">
+                                    {autoBalanceNum !== null && _isStale && (
+                                      <span
+                                        className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+                                        style={{ backgroundColor: "#FEF9C3", color: "#B45309" }}
+                                      >
+                                        ⚠️ 数据过旧
                                       </span>
-                                      {autoBalanceNum !== null && (
-                                        <span
-                                          className="text-xs px-1.5 py-0.5 rounded-full font-medium"
-                                          style={{
-                                            backgroundColor: _isStale ? "#FEF9C3" : "#DCFCE7",
-                                            color: _isStale ? "#B45309" : "#16A34A",
-                                          }}
-                                        >
-                                          {_isStale ? `⚠️ ${autoBalanceDate || "未知日期"}` : `✓ ${autoBalanceDate || "最新"}`}
-                                        </span>
-                                      )}
-                                    </div>
+                                    )}
+                                    <span className="text-base font-bold text-gray-800">
+                                      {autoBalanceNum !== null ? `¥${autoBalanceNum.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
+                                    </span>
                                   </div>
                                   {/* 初始金额：查看模式显示保存值，编辑模式显示输入框 */}
                                   {!rightBalanceEditMode ? (
@@ -1180,11 +1189,11 @@ export default function DepositManage() {
                         {/* 编辑模式 */}
                         {rightEditMode && (
                           <>
-                            <div className="space-y-2 mb-3">
+                            <div className="space-y-3 mb-3">
                               {rightMarginEdits.map((entry, idx) => (
-                                <div key={idx} className="flex items-center gap-2">
-                                  {/* 币种选择 */}
-                                  <div className="flex gap-1 flex-wrap">
+                                <div key={idx} className="rounded-xl p-2.5" style={{ backgroundColor: '#F0F4FF', border: '1px solid #DBEAFE' }}>
+                                  {/* 币种选择行 */}
+                                  <div className="flex gap-1 flex-wrap mb-2">
                                     {CRYPTO_COINS.map((c) => (
                                       <button
                                         key={c}
@@ -1195,7 +1204,7 @@ export default function DepositManage() {
                                         }}
                                         className="px-2 py-1 rounded-lg text-xs font-medium"
                                         style={{
-                                          backgroundColor: (entry.coin || "ETH") === c ? "#2563eb" : "#F0F4FF",
+                                          backgroundColor: (entry.coin || "ETH") === c ? "#2563eb" : "#FFFFFF",
                                           color: (entry.coin || "ETH") === c ? "#FFFFFF" : "#374151",
                                         }}
                                       >
@@ -1203,21 +1212,32 @@ export default function DepositManage() {
                                       </button>
                                     ))}
                                   </div>
-                                  {/* 数量输入 */}
-                                  <input
-                                    type="number"
-                                    value={entry.amount}
-                                    onChange={(e) => {
-                                      const next = [...rightMarginEdits];
-                                      next[idx] = { ...next[idx], amount: e.target.value };
-                                      setRightMarginEdits(next);
-                                    }}
-                                    placeholder="数量"
-                                    className="w-24 text-sm border rounded-lg px-2 py-1.5 outline-none"
-                                    style={{ borderColor: "#BFDBFE", backgroundColor: "#F8FBFF" }}
-                                  />
-                                  {/* 删除行 */}
-                                  {rightMarginEdits.length > 1 && (
+                                  {/* 金额输入（支持负数）+ 备注标签 + 删除 */}
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      value={entry.amount}
+                                      onChange={(e) => {
+                                        const next = [...rightMarginEdits];
+                                        next[idx] = { ...next[idx], amount: e.target.value };
+                                        setRightMarginEdits(next);
+                                      }}
+                                      placeholder="金额（负数=给出）"
+                                      className="flex-1 text-sm border rounded-lg px-2 py-1.5 outline-none"
+                                      style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF" }}
+                                    />
+                                    <input
+                                      type="text"
+                                      value={entry.label || ''}
+                                      onChange={(e) => {
+                                        const next = [...rightMarginEdits];
+                                        next[idx] = { ...next[idx], label: e.target.value };
+                                        setRightMarginEdits(next);
+                                      }}
+                                      placeholder="备注"
+                                      className="w-20 text-sm border rounded-lg px-2 py-1.5 outline-none"
+                                      style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF" }}
+                                    />
                                     <button
                                       onClick={() => setRightMarginEdits(rightMarginEdits.filter((_, i) => i !== idx))}
                                       className="w-7 h-7 flex items-center justify-center rounded-full flex-shrink-0"
@@ -1225,15 +1245,15 @@ export default function DepositManage() {
                                     >
                                       <X className="w-3 h-3 text-red-400" />
                                     </button>
-                                  )}
+                                  </div>
                                 </div>
                               ))}
-                              {/* 添加币种行 */}
+                              {/* 添加一条保证金 */}
                               <button
-                                onClick={() => setRightMarginEdits([...rightMarginEdits, { coin: "ETH", amount: "" }])}
+                                onClick={() => setRightMarginEdits([...rightMarginEdits, { coin: "ETH", amount: "", label: "" }])}
                                 className="flex items-center gap-1 text-xs text-blue-500 mt-1"
                               >
-                                <Plus className="w-3 h-3" />添加币种
+                                <Plus className="w-3 h-3" />添加一条保证金
                               </button>
                             </div>
                             <div className="flex gap-2">
