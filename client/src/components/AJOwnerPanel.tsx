@@ -1650,23 +1650,23 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                   padding: '7px 6px', marginBottom: '5px',
                 }}>
                   <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '10px', display: 'flex', alignItems: 'center' }}>开票笔数</div>
-                  <div style={{ textAlign: 'center' }}>
-                    <span style={{ color: '#FCD34D', fontSize: '14px', fontWeight: 700 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#FCD34D', fontSize: '13px', fontWeight: 700, lineHeight: 1 }}>
                       {employeeStats ? (employeeStats.pending.count + (employeeStats.supportNeeded?.count ?? 0)) : '--'}
                     </span>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', marginLeft: '1px' }}>笔</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', lineHeight: 1 }}>笔</span>
                   </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <span style={{ color: '#81C784', fontSize: '14px', fontWeight: 700 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#81C784', fontSize: '13px', fontWeight: 700, lineHeight: 1 }}>
                       {employeeStats ? employeeStats.approved.count : '--'}
                     </span>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', marginLeft: '1px' }}>笔</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', lineHeight: 1 }}>笔</span>
                   </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <span style={{ color: '#fff', fontSize: '14px', fontWeight: 700 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#fff', fontSize: '13px', fontWeight: 700, lineHeight: 1 }}>
                       {employeeStats ? (employeeStats.approved.count + employeeStats.pending.count + (employeeStats.supportNeeded?.count ?? 0)) : '--'}
                     </span>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', marginLeft: '1px' }}>笔</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', lineHeight: 1 }}>笔</span>
                   </div>
                 </div>
 
@@ -1677,23 +1677,23 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                   padding: '7px 6px', marginBottom: '5px',
                 }}>
                   <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '10px', display: 'flex', alignItems: 'center' }}>报销金额</div>
-                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                    <span style={{ color: '#FCD34D', fontSize: '11px', fontWeight: 700 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#FCD34D', fontSize: '13px', fontWeight: 700, lineHeight: 1 }}>
                       {employeeStats ? employeeStats.pending.amount.toFixed(0) : '--'}
                     </span>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>元</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', lineHeight: 1 }}>元</span>
                   </div>
-                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                    <span style={{ color: '#81C784', fontSize: '11px', fontWeight: 700 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#81C784', fontSize: '13px', fontWeight: 700, lineHeight: 1 }}>
                       {employeeStats ? employeeStats.approved.amount.toFixed(0) : '--'}
                     </span>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>元</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', lineHeight: 1 }}>元</span>
                   </div>
-                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                    <span style={{ color: '#fff', fontSize: '11px', fontWeight: 700 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#fff', fontSize: '13px', fontWeight: 700, lineHeight: 1 }}>
                       {employeeStats ? (employeeStats.approved.amount + employeeStats.pending.amount).toFixed(0) : '--'}
                     </span>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>元</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', lineHeight: 1 }}>元</span>
                   </div>
                 </div>
 
@@ -1704,23 +1704,23 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                   padding: '7px 6px',
                 }}>
                   <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '10px', display: 'flex', alignItems: 'center' }}>成本津贴</div>
-                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                    <span style={{ color: '#FCD34D', fontSize: '11px', fontWeight: 700 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#FCD34D', fontSize: '13px', fontWeight: 700, lineHeight: 1 }}>
                       {employeeStats ? employeeStats.estimatedBonus.toFixed(2) : '--'}
                     </span>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>元</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', lineHeight: 1 }}>元</span>
                   </div>
-                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                    <span style={{ color: '#81C784', fontSize: '11px', fontWeight: 700 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#81C784', fontSize: '13px', fontWeight: 700, lineHeight: 1 }}>
                       {employeeStats ? employeeStats.totalBonus.toFixed(2) : '--'}
                     </span>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>元</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', lineHeight: 1 }}>元</span>
                   </div>
-                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                    <span style={{ color: '#fff', fontSize: '11px', fontWeight: 700 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#fff', fontSize: '13px', fontWeight: 700, lineHeight: 1 }}>
                       {employeeStats ? (employeeStats.totalBonus + employeeStats.estimatedBonus).toFixed(2) : '--'}
                     </span>
-                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>元</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', lineHeight: 1 }}>元</span>
                   </div>
                 </div>
               </div>
