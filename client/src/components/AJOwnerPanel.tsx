@@ -1532,11 +1532,21 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
     },
   });
 
-  // 统计数据
+  // 统计数据（单公司模式才请求后端，全部公司模式用 allInvoices 就地计算）
   const { data: stats, isLoading: statsLoading } = (trpc as any).ledger.ajOwnerGetCompanyStats.useQuery(
-    { ledgerId, companyId: selectedCompanyId!, period },
-    { enabled: selectedCompanyId != null }
+    { ledgerId, companyId: selectedCompanyId === 0 ? undefined : selectedCompanyId!, period },
+    { enabled: selectedCompanyId != null && selectedCompanyId !== 0 }
   );
+
+  // 全部公司模式下，用 allInvoices 就地计算总金额和总笔数
+  const allCompaniesStats = useMemo(() => {
+    if (selectedCompanyId !== 0) return null;
+    const source = selectedEmployee
+      ? allInvoices.filter((inv: any) => safeStr(inv.creatorNickname || inv.creatorName || inv.creatorUsername) === selectedEmployee)
+      : allInvoices;
+    const totalAmount = source.reduce((sum: number, inv: any) => sum + Number(inv.amount || 0), 0);
+    return { totalAmount, invoiceCount: source.length };
+  }, [selectedCompanyId, allInvoices, selectedEmployee]);
 
   const periodLabels: Record<string, string> = { all: '全部', day: '今日', week: '本周', month: '本月', quarter: '本季', year: '本年' };
 
@@ -1597,8 +1607,8 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
             <span>备份</span>
           </button>
         </div>
-        {/* 统计数据行 */}
-        {selectedCompanyId != null && selectedCompanyId !== 0 && (
+        {/* 统计数据行（永远显示，包括全部公司模式） */}
+        {selectedCompanyId != null && (
           <div className="w-full">
             {/* 第一行：累计金额 | 开票条数 | 业务员选择器 */}
             <div className="flex items-center justify-around w-full">
@@ -1609,7 +1619,9 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                 <div className="text-white text-xl font-bold leading-none">
                   {filteredStats
                     ? `¥${filteredStats.totalAmount.toFixed(2)}`
-                    : statsLoading ? '--' : `¥${Number(stats?.totalAmount || 0).toFixed(2)}`}
+                    : allCompaniesStats != null
+                      ? `¥${allCompaniesStats.totalAmount.toFixed(2)}`
+                      : statsLoading ? '--' : `¥${Number(stats?.totalAmount || 0).toFixed(2)}`}
                 </div>
               </div>
               <div className="w-px h-8 bg-white/20 flex-shrink-0" />
@@ -1620,7 +1632,9 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                 <div className="text-white text-xl font-bold leading-none">
                   {filteredStats
                     ? filteredStats.invoiceCount
-                    : statsLoading ? '--' : Number(stats?.invoiceCount || 0)}
+                    : allCompaniesStats != null
+                      ? allCompaniesStats.invoiceCount
+                      : statsLoading ? '--' : Number(stats?.invoiceCount || 0)}
                   <span className="text-white/60 text-xs font-normal ml-1">笔</span>
                 </div>
               </div>
