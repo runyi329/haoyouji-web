@@ -1041,9 +1041,8 @@ export default function DepositManage() {
                               const marginPct = autoBalanceNum !== null && autoBalanceNum > 0 ? (rightTotalCNY / autoBalanceNum * 100) : null;
                               return (
                                 <div className="mt-3 rounded-xl p-3 space-y-2" style={{ backgroundColor: "#F8FBFF", border: "1px solid #DBEAFE" }}>
-                                  {/* 标题行：账户余额 + 设置按鈕 */}
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs font-bold text-gray-600">账户余额</span>
+                                  {/* 设置按鈕单独一行，靠右 */}
+                                  <div className="flex justify-end">
                                     {!rightBalanceEditMode ? (
                                       <button
                                         onClick={() => {
@@ -1063,10 +1062,15 @@ export default function DepositManage() {
                                       </div>
                                     )}
                                   </div>
-                                  {/* 余额行：日期（蓝色）在左，金额在右，字体与初始金额一致 */}
+                                  {/* 账户余额 + 简写日期 在左，金额在右，字体与初始金额一致 */}
                                   <div className="flex items-center justify-between">
-                                    <span className="text-xs font-medium" style={{ color: _isStale ? '#B45309' : '#2563EB' }}>
-                                      {autoBalanceDate || '--'}
+                                    <span className="text-xs text-gray-500">
+                                      账户余额
+                                      {autoBalanceDate && (
+                                        <span className="ml-1" style={{ color: _isStale ? '#B45309' : '#2563EB' }}>
+                                          {autoBalanceDate.slice(5)}{/* MM-DD 简写 */}
+                                        </span>
+                                      )}
                                     </span>
                                     <span className="text-sm font-semibold text-gray-700">
                                       {autoBalanceNum !== null ? `¥${autoBalanceNum.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
