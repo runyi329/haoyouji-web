@@ -1013,7 +1013,12 @@ function InvoiceListInline({
       const category = safeStr(inv.category).toLowerCase();
       const creator = safeStr(inv.creatorNickname || inv.creatorName).toLowerCase();
       const date = safeStr(inv.recordDate || inv.date).toLowerCase();
-      return amount.includes(kw) || desc.includes(kw) || category.includes(kw) || creator.includes(kw) || date.includes(kw);
+      // 订单编号：支持搜索数字（如"43"、"0043"）或带#前缀（如"#43"）
+      const idStr = inv.id ? String(inv.id).padStart(4, '0') : '';
+      const idRaw = inv.id ? String(inv.id) : '';
+      const kwClean = kw.startsWith('#') ? kw.slice(1) : kw;
+      const idMatch = idStr.includes(kwClean) || idRaw.includes(kwClean);
+      return amount.includes(kw) || desc.includes(kw) || category.includes(kw) || creator.includes(kw) || date.includes(kw) || idMatch;
     });
   }, [invoices, searchText, externalEmployee]);
 
