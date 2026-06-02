@@ -69,7 +69,7 @@ export default function ReimbursementForm({
     if (!file) return;
     try {
       const { autoCompressImage } = await import('@/utils/imageUtils');
-      const { base64 } = await autoCompressImage(file, 'normal');
+      const { base64 } = await autoCompressImage(file, 'receipt');
       setVoucherImage(base64);
     } catch (error) {
       console.error('图片上传失败', error);

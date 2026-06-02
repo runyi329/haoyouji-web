@@ -106,6 +106,9 @@ export const IMAGE_COMPRESS_CONFIG = {
   normal: { maxSize: 800, quality: 0.8 },
   // 高清图片：1200x1200，质量 85%，预计 100-300KB
   hd: { maxSize: 1200, quality: 0.85 },
+  // 凭证专用（发票/收据/转账记录）：2000x2000，质量 90%，预计 200-500KB
+  // 保证放大后文字清晰可读
+  receipt: { maxSize: 2000, quality: 0.9 },
   // 最大文件大小限制（字节）
   maxFileSizeBytes: 500 * 1024, // 500KB
 };
@@ -118,7 +121,7 @@ export const IMAGE_COMPRESS_CONFIG = {
  */
 export const autoCompressImage = async (
   input: File | Blob,
-  type: 'avatar' | 'thumbnail' | 'normal' | 'hd' = 'normal'
+  type: 'avatar' | 'thumbnail' | 'normal' | 'hd' | 'receipt' = 'normal'
 ): Promise<{ base64: string; blob: Blob; size: number }> => {
   const config = IMAGE_COMPRESS_CONFIG[type];
   const { maxSize, quality } = config;
@@ -216,7 +219,7 @@ export const autoCompressImage = async (
  */
 export const compressFileImage = async (
   file: File,
-  type: 'avatar' | 'thumbnail' | 'normal' | 'hd' = 'normal'
+  type: 'avatar' | 'thumbnail' | 'normal' | 'hd' | 'receipt' = 'normal'
 ): Promise<File> => {
   // 如果不是图片，直接返回
   if (!file.type.startsWith('image/')) {

@@ -194,7 +194,7 @@ export default function TransactionDetail() {
     try {
       toast.loading('正在上传图片...');
       const { autoCompressImage } = await import('@/utils/imageUtils');
-      const { base64 } = await autoCompressImage(file, 'normal');
+      const { base64 } = await autoCompressImage(file, 'receipt');
       setRbVoucher(base64);
       toast.dismiss();
       toast.success('图片上传成功');

@@ -948,7 +948,7 @@ const AddTransaction = () => {
                   try {
                     const uploadedUrls: string[] = [];
                     for (const file of confirmedFiles) {
-                      const { base64 } = await autoCompressImage(file, 'normal');
+                      const { base64 } = await autoCompressImage(file, 'receipt');
                       const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
                       if (result.success && result.imageUrl) uploadedUrls.push(result.imageUrl);
                     }
@@ -1307,7 +1307,7 @@ const AddTransaction = () => {
                       try {
                         const uploadedUrls: string[] = [];
                         for (const file of confirmedFiles) {
-                          const { base64 } = await autoCompressImage(file, 'normal');
+                          const { base64 } = await autoCompressImage(file, 'receipt');
                           const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
                           if (result.success && result.imageUrl) uploadedUrls.push(result.imageUrl);
                         }
@@ -1691,7 +1691,7 @@ const AddTransaction = () => {
                 try {
                   const uploadedUrls: string[] = [];
                   for (const file of confirmedFiles) {
-                    const { base64 } = await autoCompressImage(file, 'normal');
+                    const { base64 } = await autoCompressImage(file, 'receipt');
                     const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
                     if (result.success && result.imageUrl) {
                       uploadedUrls.push(result.imageUrl);
