@@ -17256,7 +17256,7 @@ ${klinesSummary}
     ajOwnerGetCompanyInvoices: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
-        companyId: z.number(),
+        companyId: z.number().optional(),
         period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
       }))
       .query(async ({ ctx, input }) => {
@@ -17268,20 +17268,39 @@ ${klinesSummary}
         );
         const memberRole = (memberRows as any[])[0]?.role;
         if (!memberRole) throw new TRPCError({ code: 'FORBIDDEN', message: '您不是该账本成员' });
-        // 允许：自己创建的企业 OR 被授权为 funder 的企业
-        const [companyRows] = await (conn as any).execute(
-          `SELECT id, name FROM aj_companies WHERE id=? AND ledger_id=? AND (
-            created_by=?
-            OR EXISTS (
-              SELECT 1 FROM aj_company_access a
-              WHERE a.company_id=aj_companies.id AND a.user_id=? AND a.is_enabled=1
-              AND COALESCE(a.access_type,'worker')='funder'
+        // 如果指定了 companyId，验证权限；否则查询该用户有权限的所有公司
+        let companyFilter = '';
+        let companyParams: any[] = [];
+        if (input.companyId) {
+          const [companyRows] = await (conn as any).execute(
+            `SELECT id, name FROM aj_companies WHERE id=? AND ledger_id=? AND (
+              created_by=?
+              OR EXISTS (
+                SELECT 1 FROM aj_company_access a
+                WHERE a.company_id=aj_companies.id AND a.user_id=? AND a.is_enabled=1
+                AND COALESCE(a.access_type,'worker')='funder'
+              )
+            )`,
+            [input.companyId, input.ledgerId, ctx.user.id, ctx.user.id]
+          );
+          if ((companyRows as any[]).length === 0) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '您没有权限查看该企业的开票记录' });
+          }
+          companyFilter = 'AND lr.aj_company_id = ?';
+          companyParams = [input.companyId];
+        } else {
+          // 全部公司：限制在该用户有权限的公司范围内
+          companyFilter = `AND lr.aj_company_id IN (
+            SELECT id FROM aj_companies WHERE ledger_id=? AND (
+              created_by=?
+              OR EXISTS (
+                SELECT 1 FROM aj_company_access a
+                WHERE a.company_id=aj_companies.id AND a.user_id=? AND a.is_enabled=1
+                AND COALESCE(a.access_type,'worker')='funder'
+              )
             )
-          )`,
-          [input.companyId, input.ledgerId, ctx.user.id, ctx.user.id]
-        );
-        if ((companyRows as any[]).length === 0) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '您没有权限查看该企业的开票记录' });
+          )`;
+          companyParams = [input.ledgerId, ctx.user.id, ctx.user.id];
         }
         const now = new Date();
         // 北京时间 UTC+8
@@ -17303,15 +17322,6 @@ ${klinesSummary}
           dateParams.push(qStart.toISOString().split('T')[0]);
         } else if (input.period === 'year') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
 
-
-
-
-
-
-
-
-
-
         const finalSql = `SELECT lr.id, lr.amount, lr.recordDate as recordDate, lr.description, lr.categoryId,
                   lr.aj_status as ajStatus, lr.createdAt as createdAt,
                   lr.images as images,
@@ -17319,6 +17329,7 @@ ${klinesSummary}
                   lr.aj_accounting_code as ajAccountingCode,
                   lr.aj_expense_reason as ajExpenseReason,
                   lr.aj_employee_no as ajEmployeeNo,
+                  lr.aj_company_id as ajCompanyId,
                   u.username as creatorUsername, u.name as creatorName,
                   lm.nickname as creatorNickname,
                   ac.name as companyName,
@@ -17328,10 +17339,10 @@ ${klinesSummary}
            LEFT JOIN ledger_members lm ON lm.userId = lr.createdBy AND lm.ledgerId = lr.ledgerId
            LEFT JOIN aj_companies ac ON ac.id = lr.aj_company_id
            LEFT JOIN ledger_categories lc ON lc.id = lr.categoryId
-           WHERE lr.ledgerId=? AND lr.aj_company_id=? AND lr.deleted_at IS NULL ${dateFilter}
+           WHERE lr.ledgerId=? AND lr.deleted_at IS NULL ${companyFilter} ${dateFilter}
            ORDER BY lr.recordDate DESC, lr.createdAt DESC
-           LIMIT 200`;
-        const finalParams = [input.ledgerId, input.companyId, ...dateParams];
+           LIMIT 500`;
+        const finalParams = [input.ledgerId, ...companyParams, ...dateParams];
         console.log('[ajOwnerGetCompanyInvoices] sql params:', finalParams, 'period:', input.period, 'dateFilter:', dateFilter);
         const [rows] = await (conn as any).execute(finalSql, finalParams);
         console.log('[ajOwnerGetCompanyInvoices] rows count:', (rows as any[]).length);

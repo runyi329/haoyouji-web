@@ -868,6 +868,20 @@ function ImageFullscreenViewer({ images, initialIndex, onClose }: { images: stri
 }
 
 // ========== 企业发票列表（内嵌展开，带时间筛选下拉框） ==========
+// 公司色板：10种预设颜色，按 ajCompanyId 取模
+const COMPANY_COLORS = [
+  '#1A2B4A', // 默认深蓝
+  '#7C3AED', // 紫色
+  '#B45309', // 棕色
+  '#065F46', // 深绿
+  '#9D174D', // 深红
+  '#1E40AF', // 蓝色
+  '#92400E', // 深橙
+  '#1F2937', // 深灰
+  '#6B21A8', // 深紫
+  '#134E4A', // 深青绿
+];
+
 function InvoiceListInline({
   ledgerId,
   companyId,
@@ -877,7 +891,7 @@ function InvoiceListInline({
   onEmployeeNamesChange,
 }: {
   ledgerId: number;
-  companyId: number;
+  companyId?: number;
   period?: 'all' | 'day' | 'week' | 'month' | 'year';
   searchText?: string;
   externalEmployee?: string;
@@ -1065,7 +1079,9 @@ function InvoiceListInline({
             <div key={inv.id ?? idx} style={{ background: '#fff', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 1px 4px rgba(26,43,74,0.08)', border: '1px solid rgba(26,43,74,0.07)' }}>
               {/* 顶部标题栏（带棱角裁切） */}
               <div style={{
-                background: '#1A2B4A',
+                background: companyId == null
+                  ? COMPANY_COLORS[((inv.ajCompanyId ?? inv.aj_company_id ?? 0) % COMPANY_COLORS.length + COMPANY_COLORS.length) % COMPANY_COLORS.length]
+                  : '#1A2B4A',
                 padding: '7px 12px 14px 12px',
                 position: 'relative',
                 clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 7px), 97% 100%, 94% calc(100% - 5px), 91% 100%, 88% calc(100% - 5px), 85% 100%, 82% calc(100% - 5px), 79% 100%, 76% calc(100% - 5px), 73% 100%, 70% calc(100% - 5px), 67% 100%, 64% calc(100% - 5px), 61% 100%, 58% calc(100% - 5px), 55% 100%, 52% calc(100% - 5px), 49% 100%, 46% calc(100% - 5px), 43% 100%, 40% calc(100% - 5px), 37% 100%, 34% calc(100% - 5px), 31% 100%, 28% calc(100% - 5px), 25% 100%, 22% calc(100% - 5px), 19% 100%, 16% calc(100% - 5px), 13% 100%, 10% calc(100% - 5px), 7% 100%, 4% calc(100% - 5px), 1% 100%, 0 calc(100% - 7px))'
@@ -1451,10 +1467,14 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   const { data: myCompanies, isLoading: companiesLoading } = (trpc as any).ledger.ajOwnerGetMyCompanies.useQuery({ ledgerId });
   const companies: any[] = Array.isArray(myCompanies) ? myCompanies : [];
 
-  // 企业加载完成后自动选中第一个
+  // 企业加载完成后自动选中第一个（如果只有一家公司则直接选中，否则默认选全部）
   useEffect(() => {
     if (!companiesLoading && companies.length > 0 && selectedCompanyId === null) {
-      setSelectedCompanyId(companies[0].id);
+      if (companies.length === 1) {
+        setSelectedCompanyId(companies[0].id);
+      } else {
+        setSelectedCompanyId(0); // 0 = 全部
+      }
     }
   }, [companiesLoading, companies.length]);
 
@@ -1485,7 +1505,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
 
   // 待审单明细（批量审核确认弹窗用）
   const { data: pendingList, refetch: refetchPendingList } = (trpc as any).ledger.ajOwnerGetPendingList.useQuery(
-    { ledgerId, companyId: selectedCompanyId ?? undefined, employeeName: selectedEmployee || undefined, period },
+    { ledgerId, companyId: (selectedCompanyId === 0 ? undefined : selectedCompanyId) ?? undefined, employeeName: selectedEmployee || undefined, period },
     { enabled: selectedCompanyId != null, staleTime: 0, refetchOnWindowFocus: false, refetchOnMount: false }
   );
 
@@ -1497,9 +1517,12 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
       toast.success(`批量审核完成：${result.approved} 笔已通过，共 ${result.totalAmount.toFixed(2)} 元，共发放津贴 ${result.totalBonus.toFixed(4)} USDT`);
       // 刷新所有相关数据，保持当前公司+业务员筛选状态不变
       if (selectedCompanyId != null) {
-        utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId, companyId: selectedCompanyId, period });
-        utils.ledger.ajOwnerGetEmployeeStats.invalidate({ ledgerId, companyId: selectedCompanyId, employeeName: selectedEmployee, period });
-        utils.ledger.ajOwnerGetCompanyStats.invalidate({ ledgerId, companyId: selectedCompanyId, period });
+        const cid = selectedCompanyId === 0 ? undefined : selectedCompanyId;
+        utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId, companyId: cid, period });
+        if (cid != null) {
+          utils.ledger.ajOwnerGetEmployeeStats.invalidate({ ledgerId, companyId: cid, employeeName: selectedEmployee, period });
+          utils.ledger.ajOwnerGetCompanyStats.invalidate({ ledgerId, companyId: cid, period });
+        }
       }
       refetchPendingList();
     },
@@ -1534,11 +1557,12 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
           ) : (
             <div className="relative flex-1 min-w-0">
               <select
-                value={selectedCompanyId ?? ''}
+                value={selectedCompanyId ?? 0}
                 onChange={e => setSelectedCompanyId(Number(e.target.value))}
                 className="appearance-none w-full text-xs text-white/90 pl-2 pr-6 py-1 rounded-full border border-white/30 cursor-pointer outline-none focus:outline-none focus:ring-0 truncate"
                 style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}
               >
+                <option value={0} style={{ color: '#222', background: '#fff' }}>全部公司</option>
                 {companies.map((c: any) => (
                   <option key={c.id} value={c.id} style={{ color: '#222', background: '#fff' }}>{safeStr(c.name)}</option>
                 ))}
@@ -1574,7 +1598,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
           </button>
         </div>
         {/* 统计数据行 */}
-        {selectedCompanyId != null && (
+        {selectedCompanyId != null && selectedCompanyId !== 0 && (
           <div className="w-full">
             {/* 第一行：累计金额 | 开票条数 | 业务员选择器 */}
             <div className="flex items-center justify-around w-full">
@@ -1814,7 +1838,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
           </div>
           <InvoiceListInline
             ledgerId={ledgerId}
-            companyId={selectedCompanyId}
+            companyId={selectedCompanyId === 0 ? undefined : selectedCompanyId}
             period={period}
             searchText={searchText}
             externalEmployee={selectedEmployee}
