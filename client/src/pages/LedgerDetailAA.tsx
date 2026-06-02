@@ -145,14 +145,16 @@ export default function LedgerDetailAA({
   const [imgScale, setImgScale] = useState(1);
   const [imgTranslateX, setImgTranslateX] = useState(0);
   const [imgTranslateY, setImgTranslateY] = useState(0);
-  // 用 ref 存储实时值，避免 touch 事件闭包读取旧 state
+  const imgContainerRef = useRef<HTMLDivElement>(null);
+  // 所有实时状态存入 ref，避免原生事件闭包问题
   const imgScaleRef = useRef(1);
   const imgTxRef = useRef(0);
   const imgTyRef = useRef(0);
   const imgPinchRef = useRef<{ dist: number } | null>(null);
-  // 增量拖动：记录上一次触点位置，每次 move 用差值累加
   const imgLastTouchRef = useRef<{ x: number; y: number } | null>(null);
   const imgSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const previewIndexRef = useRef(0);
+  const previewImagesRef = useRef<string[]>([]);
 
   // 股票预览（普通成员点击有蓝点/紫点的日历格子时弹出）
   const [previewStocks, setPreviewStocks] = useState<Array<{code: string; name: string}>>([]);
@@ -179,6 +181,96 @@ export default function LedgerDetailAA({
     // 同时触发父组件的 refetch，确保 transactionsData 切换到被观察用户的数据
     if (refetchTransactions) refetchTransactions();
   };
+
+  // 同步 previewImages/previewImageIndex 到 ref（供原生事件闭包使用）
+  previewImagesRef.current = previewImages;
+  previewIndexRef.current = previewImageIndex;
+
+  // 图片预览弹窗：用原生事件绑定，完全避开 React 合成事件的 passive 限制
+  useEffect(() => {
+    if (!showImagePreview) return;
+    const el = imgContainerRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        const dx = e.touches[1].clientX - e.touches[0].clientX;
+        const dy = e.touches[1].clientY - e.touches[0].clientY;
+        imgPinchRef.current = { dist: Math.hypot(dx, dy) };
+        imgLastTouchRef.current = null;
+        imgSwipeStartRef.current = null;
+      } else if (e.touches.length === 1) {
+        const pt = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        if (imgScaleRef.current > 1) {
+          imgLastTouchRef.current = pt;
+          imgSwipeStartRef.current = null;
+        } else {
+          imgSwipeStartRef.current = pt;
+          imgLastTouchRef.current = null;
+        }
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      if (e.touches.length === 2 && imgPinchRef.current) {
+        const dx = e.touches[1].clientX - e.touches[0].clientX;
+        const dy = e.touches[1].clientY - e.touches[0].clientY;
+        const newDist = Math.hypot(dx, dy);
+        const ratio = newDist / imgPinchRef.current.dist;
+        const newScale = Math.min(5, Math.max(1, imgScaleRef.current * ratio));
+        imgScaleRef.current = newScale;
+        setImgScale(newScale);
+        imgPinchRef.current.dist = newDist;
+      } else if (e.touches.length === 1 && imgLastTouchRef.current && imgScaleRef.current > 1) {
+        const dx = e.touches[0].clientX - imgLastTouchRef.current.x;
+        const dy = e.touches[0].clientY - imgLastTouchRef.current.y;
+        imgTxRef.current += dx;
+        imgTyRef.current += dy;
+        setImgTranslateX(imgTxRef.current);
+        setImgTranslateY(imgTyRef.current);
+        imgLastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      imgPinchRef.current = null;
+      imgLastTouchRef.current = null;
+      if (imgScaleRef.current < 1) {
+        imgScaleRef.current = 1; imgTxRef.current = 0; imgTyRef.current = 0;
+        setImgScale(1); setImgTranslateX(0); setImgTranslateY(0);
+      }
+      if (imgScaleRef.current <= 1 && imgSwipeStartRef.current && e.changedTouches.length > 0) {
+        const dx = e.changedTouches[0].clientX - imgSwipeStartRef.current.x;
+        const dy = e.changedTouches[0].clientY - imgSwipeStartRef.current.y;
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+          const imgs = previewImagesRef.current;
+          const cur = previewIndexRef.current;
+          if (dx < 0 && cur < imgs.length - 1) {
+            previewIndexRef.current = cur + 1;
+            setPreviewImageIndex(cur + 1);
+            imgScaleRef.current = 1; imgTxRef.current = 0; imgTyRef.current = 0;
+            setImgScale(1); setImgTranslateX(0); setImgTranslateY(0);
+          } else if (dx > 0 && cur > 0) {
+            previewIndexRef.current = cur - 1;
+            setPreviewImageIndex(cur - 1);
+            imgScaleRef.current = 1; imgTxRef.current = 0; imgTyRef.current = 0;
+            setImgScale(1); setImgTranslateX(0); setImgTranslateY(0);
+          }
+        }
+        imgSwipeStartRef.current = null;
+      }
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [showImagePreview]);
 
   // selectedTagId 变化时同步到 sessionStorage
   useEffect(() => {
@@ -2472,97 +2564,59 @@ export default function LedgerDetailAA({
         <div
           className="fixed inset-0 z-50 flex flex-col"
           style={{ backgroundColor: 'rgba(0,0,0,0.92)' }}
-          onClick={() => { if (imgScale <= 1) setShowImagePreview(false); }}
         >
-          {/* 顶部计数 + 关闭 */}
-          <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
-            <span className="text-white text-sm">{previewImageIndex + 1} / {previewImages.length}</span>
+          {/* 顶部：图片计数 + 关闭按钮（任何状态下均可点击） */}
+          <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0">
+            <span className="text-white text-sm">
+              {previewImages.length > 1 ? `${previewImageIndex + 1} / ${previewImages.length}` : '凭证查看'}
+            </span>
             <button
-              className="w-8 h-8 flex items-center justify-center rounded-full"
-              style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-              onClick={() => setShowImagePreview(false)}
+              className="w-9 h-9 flex items-center justify-center rounded-full"
+              style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
+              onClick={() => {
+                setShowImagePreview(false);
+                imgScaleRef.current = 1; imgTxRef.current = 0; imgTyRef.current = 0;
+                setImgScale(1); setImgTranslateX(0); setImgTranslateY(0);
+              }}
             >
               <X className="w-5 h-5 text-white" />
             </button>
           </div>
 
-          {/* 图片区域 + 触摸滑动 + 捧合缩放 */}
+          {/* 图片区域：由 useEffect 绑定原生 touch 事件 */}
           <div
+            ref={imgContainerRef}
             className="flex-1 relative overflow-hidden"
-            style={{ touchAction: imgScale > 1 ? 'none' : 'pan-y' }}
-            onClick={e => e.stopPropagation()}
-            onTouchStart={e => {
-              if (e.touches.length === 2) {
-                const dx = e.touches[1].clientX - e.touches[0].clientX;
-                const dy = e.touches[1].clientY - e.touches[0].clientY;
-                imgPinchRef.current = { dist: Math.hypot(dx, dy) };
-                imgLastTouchRef.current = null;
-              } else if (e.touches.length === 1) {
-                if (imgScaleRef.current > 1) {
-                  // 放大状态：增量拖动
-                  imgLastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-                } else {
-                  // 未放大：记录滑动起点
-                  imgSwipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-                  imgLastTouchRef.current = null;
-                }
-              }
-            }}
-            onTouchMove={e => {
-              if (e.touches.length === 2 && imgPinchRef.current) {
-                const dx = e.touches[1].clientX - e.touches[0].clientX;
-                const dy = e.touches[1].clientY - e.touches[0].clientY;
-                const newDist = Math.hypot(dx, dy);
-                const ratio = newDist / imgPinchRef.current.dist;
-                const newScale = Math.min(5, Math.max(1, imgScaleRef.current * ratio));
-                imgScaleRef.current = newScale;
-                setImgScale(newScale);
-                imgPinchRef.current.dist = newDist;
-              } else if (e.touches.length === 1 && imgLastTouchRef.current && imgScaleRef.current > 1) {
-                const dx = e.touches[0].clientX - imgLastTouchRef.current.x;
-                const dy = e.touches[0].clientY - imgLastTouchRef.current.y;
-                imgTxRef.current += dx;
-                imgTyRef.current += dy;
-                setImgTranslateX(imgTxRef.current);
-                setImgTranslateY(imgTyRef.current);
-                imgLastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-              }
-            }}
-            onTouchEnd={e => {
-              imgPinchRef.current = null;
-              imgLastTouchRef.current = null;
-              if (imgScaleRef.current < 1) {
-                imgScaleRef.current = 1; imgTxRef.current = 0; imgTyRef.current = 0;
-                setImgScale(1); setImgTranslateX(0); setImgTranslateY(0);
-              }
-              // 单指左右滑动切换图片（仅在未放大时）
-              if (imgScaleRef.current <= 1 && imgSwipeStartRef.current) {
-                const dx = e.changedTouches[0].clientX - imgSwipeStartRef.current.x;
-                const dy = e.changedTouches[0].clientY - imgSwipeStartRef.current.y;
-                if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
-                  if (dx < 0) { setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1)); imgTxRef.current = 0; imgTyRef.current = 0; setImgTranslateX(0); setImgTranslateY(0); }
-                  else { setPreviewImageIndex(i => Math.max(0, i - 1)); imgTxRef.current = 0; imgTyRef.current = 0; setImgTranslateX(0); setImgTranslateY(0); }
-                }
-                imgSwipeStartRef.current = null;
-              }
-            }}
+            style={{ touchAction: 'none' }}
           >
-            {/* 左箭头（未放大且非第一张时显示） */}
+            {/* 左箭头 */}
             {imgScale <= 1 && previewImages.length > 1 && previewImageIndex > 0 && (
               <button
                 className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center rounded-full"
                 style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-                onClick={() => { setPreviewImageIndex(i => Math.max(0, i - 1)); imgScaleRef.current = 1; imgTxRef.current = 0; imgTyRef.current = 0; setImgScale(1); setImgTranslateX(0); setImgTranslateY(0); }}
+                onClick={() => {
+                  const idx = Math.max(0, previewImageIndex - 1);
+                  previewIndexRef.current = idx;
+                  setPreviewImageIndex(idx);
+                  imgScaleRef.current = 1; imgTxRef.current = 0; imgTyRef.current = 0;
+                  setImgScale(1); setImgTranslateX(0); setImgTranslateY(0);
+                }}
               >
                 <ChevronLeft className="w-5 h-5 text-white" />
               </button>
             )}
-            {/* 右箭头（未放大且非最后一张时显示） */}
+            {/* 右箭头 */}
             {imgScale <= 1 && previewImages.length > 1 && previewImageIndex < previewImages.length - 1 && (
               <button
                 className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center rounded-full"
                 style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-                onClick={() => { setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1)); imgScaleRef.current = 1; imgTxRef.current = 0; imgTyRef.current = 0; setImgScale(1); setImgTranslateX(0); setImgTranslateY(0); }}
+                onClick={() => {
+                  const idx = Math.min(previewImages.length - 1, previewImageIndex + 1);
+                  previewIndexRef.current = idx;
+                  setPreviewImageIndex(idx);
+                  imgScaleRef.current = 1; imgTxRef.current = 0; imgTyRef.current = 0;
+                  setImgScale(1); setImgTranslateX(0); setImgTranslateY(0);
+                }}
               >
                 <ChevronRight className="w-5 h-5 text-white" />
               </button>
@@ -2574,12 +2628,13 @@ export default function LedgerDetailAA({
                 alt={`图片${previewImageIndex + 1}`}
                 className="max-w-full max-h-full object-contain rounded-lg"
                 style={{
-                  maxHeight: 'calc(100vh - 140px)',
+                  maxHeight: 'calc(100vh - 130px)',
                   userSelect: 'none',
                   WebkitUserSelect: 'none',
+                  pointerEvents: 'none',
                   transform: `scale(${imgScale}) translate(${imgTranslateX / imgScale}px, ${imgTranslateY / imgScale}px)`,
                   transformOrigin: 'center center',
-                  transition: imgPinchRef.current ? 'none' : 'transform 0.1s ease',
+                  transition: imgPinchRef.current ? 'none' : 'transform 0.15s ease',
                 }}
                 onContextMenu={e => e.preventDefault()}
                 draggable={false}
@@ -2588,9 +2643,9 @@ export default function LedgerDetailAA({
           </div>
 
           {/* 底部提示 + 圆点指示器 */}
-          <div className="flex-shrink-0 pb-4" onClick={e => e.stopPropagation()}>
+          <div className="flex-shrink-0 pb-4">
             <div className="text-center text-xs py-1" style={{ color: 'rgba(255,255,255,0.5)' }}>
-              {imgScale > 1 ? '双指缩小还原 · 放大状态下可拖动' : '双指放大 · 左右滑动切换'}
+              {imgScale > 1 ? '双指缩小还原 · 单指拖动' : '双指放大 · 左右滑动切换'}
             </div>
             {previewImages.length > 1 && (
               <div className="flex justify-center gap-1.5 py-2">

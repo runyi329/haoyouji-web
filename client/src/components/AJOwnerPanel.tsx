@@ -689,114 +689,179 @@ function ImageFullscreenViewer({ images, initialIndex, onClose }: { images: stri
   const [scale, setScale] = useState(1);
   const [translateX, setTranslateX] = useState(0);
   const [translateY, setTranslateY] = useState(0);
-  // 用 ref 存储实时值，避免 touch 事件闭包读取旧 state
+  const containerRef = useRef<HTMLDivElement>(null);
+  // 所有实时状态存入 ref，避免原生事件闭包问题
   const scaleRef = useRef(1);
   const txRef = useRef(0);
   const tyRef = useRef(0);
   const pinchRef = useRef<{ dist: number } | null>(null);
-  // 增量拖动：记录上一次触点位置，每次 move 用差值累加
   const lastTouchRef = useRef<{ x: number; y: number } | null>(null);
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
+  const currentRef = useRef(initialIndex);
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
 
   // 切换图片时重置缩放
   const switchImage = (idx: number) => {
-    setCurrent(idx); setScale(1); setTranslateX(0); setTranslateY(0);
+    currentRef.current = idx;
+    setCurrent(idx);
     scaleRef.current = 1; txRef.current = 0; tyRef.current = 0;
+    setScale(1); setTranslateX(0); setTranslateY(0);
   };
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    e.stopPropagation();
-    if (e.touches.length === 2) {
-      const dx = e.touches[1].clientX - e.touches[0].clientX;
-      const dy = e.touches[1].clientY - e.touches[0].clientY;
-      pinchRef.current = { dist: Math.hypot(dx, dy) };
-      lastTouchRef.current = null;
-    } else if (e.touches.length === 1) {
-      if (scaleRef.current > 1) {
-        // 放大状态：记录拖动起点（增量模式）
-        lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      } else {
-        // 未放大：记录滑动起点（用于切换图片）
-        swipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  // 用原生事件绑定，完全避开 React 合成事件的 passive 限制和闭包问题
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        const dx = e.touches[1].clientX - e.touches[0].clientX;
+        const dy = e.touches[1].clientY - e.touches[0].clientY;
+        pinchRef.current = { dist: Math.hypot(dx, dy) };
         lastTouchRef.current = null;
+        swipeStartRef.current = null;
+      } else if (e.touches.length === 1) {
+        const pt = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        if (scaleRef.current > 1) {
+          lastTouchRef.current = pt;
+          swipeStartRef.current = null;
+        } else {
+          swipeStartRef.current = pt;
+          lastTouchRef.current = null;
+        }
       }
-    }
-  };
+    };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    e.stopPropagation();
-    if (e.touches.length === 2 && pinchRef.current) {
-      const dx = e.touches[1].clientX - e.touches[0].clientX;
-      const dy = e.touches[1].clientY - e.touches[0].clientY;
-      const newDist = Math.hypot(dx, dy);
-      const ratio = newDist / pinchRef.current.dist;
-      const newScale = Math.min(5, Math.max(1, scaleRef.current * ratio));
-      scaleRef.current = newScale;
-      setScale(newScale);
-      pinchRef.current.dist = newDist;
-    } else if (e.touches.length === 1 && lastTouchRef.current && scaleRef.current > 1) {
-      const dx = e.touches[0].clientX - lastTouchRef.current.x;
-      const dy = e.touches[0].clientY - lastTouchRef.current.y;
-      txRef.current += dx;
-      tyRef.current += dy;
-      setTranslateX(txRef.current);
-      setTranslateY(tyRef.current);
-      lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    }
-  };
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault(); // 需要 non-passive 才能调用
+      if (e.touches.length === 2 && pinchRef.current) {
+        const dx = e.touches[1].clientX - e.touches[0].clientX;
+        const dy = e.touches[1].clientY - e.touches[0].clientY;
+        const newDist = Math.hypot(dx, dy);
+        const ratio = newDist / pinchRef.current.dist;
+        const newScale = Math.min(5, Math.max(1, scaleRef.current * ratio));
+        scaleRef.current = newScale;
+        setScale(newScale);
+        pinchRef.current.dist = newDist;
+      } else if (e.touches.length === 1 && lastTouchRef.current && scaleRef.current > 1) {
+        const dx = e.touches[0].clientX - lastTouchRef.current.x;
+        const dy = e.touches[0].clientY - lastTouchRef.current.y;
+        txRef.current += dx;
+        tyRef.current += dy;
+        setTranslateX(txRef.current);
+        setTranslateY(tyRef.current);
+        lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    e.stopPropagation();
-    pinchRef.current = null;
-    lastTouchRef.current = null;
-    // 缩放小于1时重置
-    if (scaleRef.current < 1) {
-      scaleRef.current = 1; txRef.current = 0; tyRef.current = 0;
-      setScale(1); setTranslateX(0); setTranslateY(0);
-    }
-  };
+    const onTouchEnd = (e: TouchEvent) => {
+      pinchRef.current = null;
+      lastTouchRef.current = null;
+      if (scaleRef.current < 1) {
+        scaleRef.current = 1; txRef.current = 0; tyRef.current = 0;
+        setScale(1); setTranslateX(0); setTranslateY(0);
+      }
+      // 单指左右滑动切换图片（仅在未放大时）
+      if (scaleRef.current <= 1 && swipeStartRef.current && e.changedTouches.length > 0) {
+        const dx = e.changedTouches[0].clientX - swipeStartRef.current.x;
+        const dy = e.changedTouches[0].clientY - swipeStartRef.current.y;
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+          const imgs = imagesRef.current;
+          const cur = currentRef.current;
+          if (dx < 0 && cur < imgs.length - 1) {
+            currentRef.current = cur + 1;
+            setCurrent(cur + 1); scaleRef.current = 1; txRef.current = 0; tyRef.current = 0;
+            setScale(1); setTranslateX(0); setTranslateY(0);
+          } else if (dx > 0 && cur > 0) {
+            currentRef.current = cur - 1;
+            setCurrent(cur - 1); scaleRef.current = 1; txRef.current = 0; tyRef.current = 0;
+            setScale(1); setTranslateX(0); setTranslateY(0);
+          }
+        }
+        swipeStartRef.current = null;
+      }
+    };
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, []);
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
-      onClick={() => { if (scale <= 1) onClose(); }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 9999, display: 'flex', flexDirection: 'column' }}
     >
+      {/* 顶部左右布局：图片计数 + 关闭按钮（任何状态下均可点击） */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 8px', flexShrink: 0 }}>
+        <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '14px' }}>
+          {images.length > 1 ? `${current + 1} / ${images.length}` : '凭证查看'}
+        </span>
+        <button
+          onClick={onClose}
+          style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+
+      {/* 图片区域 */}
       <div
-        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', overflow: 'hidden', touchAction: scale > 1 ? 'none' : 'pan-y' }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onClick={e => e.stopPropagation()}
+        ref={containerRef}
+        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }}
       >
+        {/* 左箭头 */}
+        {scale <= 1 && images.length > 1 && current > 0 && (
+          <button onClick={() => switchImage(current - 1)}
+            style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+          </button>
+        )}
+        {/* 右箭头 */}
+        {scale <= 1 && images.length > 1 && current < images.length - 1 && (
+          <button onClick={() => switchImage(current + 1)}
+            style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', zIndex: 10, width: '36px', height: '36px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.2)', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+          </button>
+        )}
         <img
           src={images[current]}
           alt="凭证"
           style={{
-            maxWidth: '96vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px',
+            maxWidth: '92vw', maxHeight: 'calc(100vh - 120px)', objectFit: 'contain', borderRadius: '8px',
             transform: `scale(${scale}) translate(${translateX / scale}px, ${translateY / scale}px)`,
             transformOrigin: 'center center',
-            transition: pinchRef.current ? 'none' : 'transform 0.1s ease',
+            transition: pinchRef.current ? 'none' : 'transform 0.15s ease',
             userSelect: 'none', WebkitUserSelect: 'none',
+            pointerEvents: 'none',
           }}
           draggable={false}
           onContextMenu={e => e.preventDefault()}
         />
       </div>
-      {images.length > 1 && (
-        <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }} onClick={e => e.stopPropagation()}>
-          {images.map((img, i) => (
-            <div
-              key={i}
-              onClick={() => switchImage(i)}
-              style={{ width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', border: i === current ? '2px solid #fff' : '2px solid transparent', cursor: 'pointer' }}
-            >
-              <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            </div>
-          ))}
+
+      {/* 底部：缩略图 + 提示 */}
+      <div style={{ flexShrink: 0, paddingBottom: '16px' }}>
+        {images.length > 1 && (
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '8px' }}>
+            {images.map((img, i) => (
+              <div key={i} onClick={() => switchImage(i)}
+                style={{ width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', border: i === current ? '2px solid #fff' : '2px solid transparent', cursor: 'pointer', flexShrink: 0 }}>
+                <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>
+          {scale > 1 ? '双指缩小还原 · 单指拖动' : '双指放大 · 左右滑动切换'}
         </div>
-      )}
-      <div style={{ marginTop: '12px', marginBottom: '8px', color: 'rgba(255,255,255,0.6)', fontSize: '13px' }}>
-        {scale > 1 ? '双指缩小或双击还原' : '点击任意处关闭 · 双指放大'}
       </div>
     </div>
   );
