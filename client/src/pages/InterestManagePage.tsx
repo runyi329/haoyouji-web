@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import {
   ChevronLeft, Plus, Minus, Trash2, ChevronDown, ChevronUp,
-  TrendingUp, FileText, Edit2, Check, X, PlusCircle
+  TrendingUp, FileText, Edit2, Check, X, PlusCircle, Pause, Play
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { PageTag } from "@/components/PageTag";
@@ -65,6 +65,8 @@ export default function InterestManagePage() {
   const [manualForm, setManualForm] = useState({ amount: '', remark: '', isPlus: true });
   // 日志
   const [showLogs, setShowLogs] = useState<string | null>(null);
+  // 暂停确认弹窗
+  const [confirmPauseTag, setConfirmPauseTag] = useState<string | null>(null);
 
   // 账本分类（标签）
   const { data: rawCategories = [] } = trpc.ledger.getCategories.useQuery(
@@ -84,6 +86,39 @@ export default function InterestManagePage() {
     { ledgerId: lid },
     { enabled: lid > 0 }
   );
+
+  // 所有标签配置（用于读取 pause_date）
+  const { data: allTagsConfig = {}, refetch: refetchTagsConfig } = trpc.ledger.getAllTagsConfigByLedger.useQuery(
+    { ledgerId: lid },
+    { enabled: lid > 0 }
+  );
+
+  // 暂停 / 恢复 mutation
+  const saveTagConfigMutation = trpc.ledger.saveTagConfig.useMutation({
+    onSuccess: () => {
+      refetchTagsConfig();
+      toast.success('已更新');
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const handlePause = useCallback((tagName: string) => {
+    const today = new Date().toISOString().slice(0, 10);
+    saveTagConfigMutation.mutate({
+      ledgerId: lid,
+      tagName,
+      pauseDate: today,
+    });
+    setConfirmPauseTag(null);
+  }, [lid, saveTagConfigMutation]);
+
+  const handleResume = useCallback((tagName: string) => {
+    saveTagConfigMutation.mutate({
+      ledgerId: lid,
+      tagName,
+      pauseDate: null,
+    });
+  }, [lid, saveTagConfigMutation]);
 
   // 新增分段
   const addPeriodMutation = trpc.ledger.addTagInterestPeriod.useMutation({
@@ -150,28 +185,37 @@ export default function InterestManagePage() {
 
   // 构建标签数据
   const tagData = useMemo(() => {
-    return categories.map((cat: any) => {
+    const list = categories.map((cat: any) => {
       const tagName = cat.name;
+      const tagConfig = (allTagsConfig as any)[tagName];
+      const pauseDate: string | null = tagConfig?.pause_date ?? null;
       const periods = allPeriods.filter((p: any) => p.tag_name === tagName);
       const tagLogs = allLogs.filter((l: any) => l.tag_name === tagName);
       const manualAdj = tagLogs.reduce((sum: number, l: any) => sum + parseFloat(l.amount || '0'), 0);
 
       // 各段利息（is_manual=1的手工调息直接用principal作为利息金额）
+      // 暂停时：end_date为空的分段用 pauseDate 作为结束日，利息冻结
       const periodDetails = periods.map((p: any) => {
         const principal = parseFloat(p.principal) || 0;
         const annualRate = parseFloat(p.annual_rate) || 0;
-        const days = calcPeriodDays(p.start_date, p.end_date);
+        const effectiveEndDate = (!p.end_date && pauseDate) ? pauseDate : (p.end_date || null);
+        const days = calcPeriodDays(p.start_date, effectiveEndDate);
         const isManual = p.is_manual === 1 || p.is_manual === '1' || p.is_manual === true;
         const interest = isManual ? principal : calcPeriodInterest(principal, annualRate, days);
-        const dailyInterest = (!isManual && principal > 0 && annualRate > 0) ? principal * annualRate / 100 / 365 : 0;
+        const dailyInterest = (!isManual && !pauseDate && principal > 0 && annualRate > 0) ? principal * annualRate / 100 / 365 : 0;
         return { ...p, principal, annualRate, days, interest, dailyInterest, isManual };
       });
       const autoInterest = periodDetails.filter(p => !p.isManual).reduce((sum, p) => sum + p.interest, 0);
       const manualTotal = periodDetails.filter(p => p.isManual).reduce((sum, p) => sum + p.interest, 0);
       const totalInterest = autoInterest + manualTotal;
-      return { tagName, periods: periodDetails, tagLogs, manualAdj: manualTotal, autoInterest, totalInterest };
+      return { tagName, periods: periodDetails, tagLogs, manualAdj: manualTotal, autoInterest, totalInterest, pauseDate };
     });
-  }, [categories, allPeriods, allLogs]);
+    // 暂停的标签排到最后
+    return [
+      ...list.filter(t => !t.pauseDate),
+      ...list.filter(t => !!t.pauseDate),
+    ];
+  }, [categories, allPeriods, allLogs, allTagsConfig]);
 
   const handleAddPeriod = (tagName: string) => {
     const principal = parseFloat(addForm.principal);
@@ -235,16 +279,21 @@ export default function InterestManagePage() {
           <div className="text-center py-16 text-gray-400 text-sm">暂无标签数据</div>
         ) : (
           tagData.map((tag) => (
-            <div key={tag.tagName} className="bg-white rounded-2xl overflow-hidden shadow-sm">
+            <div key={tag.tagName} className={`rounded-2xl overflow-hidden shadow-sm ${tag.pauseDate ? 'bg-gray-100 opacity-70' : 'bg-white'}`}>
               {/* 标签标题行 */}
               <div
                 className="px-4 py-3 flex items-center justify-between cursor-pointer"
                 onClick={() => setExpandedTag(expandedTag === tag.tagName ? null : tag.tagName)}
               >
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-blue-500" />
+                  <div className={`w-2 h-2 rounded-full ${tag.pauseDate ? 'bg-gray-400' : 'bg-blue-500'}`} />
                   <span className="text-sm font-bold text-gray-900">{tag.tagName}</span>
                   <span className="text-xs text-gray-400">{tag.periods.length} 段</span>
+                  {tag.pauseDate && (
+                    <span className="text-xs text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded-full">
+                      已暂停 {tag.pauseDate.slice(5)}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
@@ -503,6 +552,23 @@ export default function InterestManagePage() {
                         <FileText className="w-3.5 h-3.5" />
                         日志({tag.tagLogs.length})
                       </button>
+                      {tag.pauseDate ? (
+                        <button
+                          onClick={() => handleResume(tag.tagName)}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-green-50 text-green-600 text-xs font-medium"
+                        >
+                          <Play className="w-3.5 h-3.5" />
+                          恢复
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmPauseTag(tag.tagName)}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gray-100 text-gray-500 text-xs font-medium"
+                        >
+                          <Pause className="w-3.5 h-3.5" />
+                          暂停
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -601,6 +667,29 @@ export default function InterestManagePage() {
           </div>
         </SheetContent>
       </Sheet>
+      {/* 确认暂停弹窗 */}
+      {confirmPauseTag && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl p-6 mx-4 max-w-sm w-full">
+            <div className="text-base font-bold mb-2">确认暂停？</div>
+            <div className="text-sm text-gray-500 mb-4">暂停后利息将从今天起冻结，不再滚动计算。</div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmPauseTag(null)}
+                className="flex-1 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => handlePause(confirmPauseTag)}
+                className="flex-1 py-2 rounded-xl bg-gray-500 text-white text-sm font-semibold"
+              >
+                确认暂停
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
