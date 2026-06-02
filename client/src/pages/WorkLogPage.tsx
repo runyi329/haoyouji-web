@@ -77,12 +77,12 @@ const WorkLogPage: React.FC = () => {
     return 'bg-red-800';
   };
 
-  // 生成日历网格（最近365天）
-  const generateCalendarDays = (): Array<{ date: string | null; count: number }> => {
-    const days: Array<{ date: string | null; count: number }> = [];
+  // 生成日历网格（最近30天，以大格子形式展示）
+  const generateCalendarDays = (): Array<{ date: string; count: number }> => {
+    const days: Array<{ date: string; count: number }> = [];
     const today = new Date();
     
-    for (let i = 364; i >= 0; i--) {
+    for (let i = 29; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
@@ -152,88 +152,99 @@ const WorkLogPage: React.FC = () => {
 
   // 日历视图
   const renderCalendarView = () => {
-    const weeks: Array<Array<{ date: string | null; count: number }>> = [];
-    let currentWeek: Array<{ date: string | null; count: number }> = [];
-
-    calendarDays.forEach((day, idx) => {
-      currentWeek.push(day);
-      if ((idx + 1) % 7 === 0) {
-        weeks.push(currentWeek);
-        currentWeek = [];
-      }
-    });
-
-    if (currentWeek.length > 0) {
-      weeks.push(currentWeek);
-    }
-
     return (
       <div className="space-y-6">
         {/* 统计信息 */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-            <p className="text-xs text-gray-600 mb-1">活跃天数</p>
-            <p className="text-2xl font-bold text-red-600">{dayStats.size}</p>
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex flex-col items-center justify-center">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">活跃天数</p>
+            <p className="text-xl font-bold text-red-600">{dayStats.size}</p>
           </div>
-          <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-            <p className="text-xs text-gray-600 mb-1">提交总数</p>
-            <p className="text-2xl font-bold text-red-600">{commits.length}</p>
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex flex-col items-center justify-center">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">提交总数</p>
+            <p className="text-xl font-bold text-red-600">{commits.length}</p>
           </div>
-          <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-            <p className="text-xs text-gray-600 mb-1">平均每天</p>
-            <p className="text-2xl font-bold text-red-600">
+          <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex flex-col items-center justify-center">
+            <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">平均每天</p>
+            <p className="text-xl font-bold text-red-600">
               {dayStats.size > 0 ? (commits.length / dayStats.size).toFixed(1) : 0}
             </p>
           </div>
         </div>
 
-        {/* 热力图 */}
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-          <p className="text-sm font-semibold text-gray-900 mb-4">最近一年活跃度</p>
-          <div className="space-y-2">
-            {weeks.map((week, weekIdx) => (
-              <div key={weekIdx} className="flex gap-1">
-                {week.map((day, dayIdx) => (
-                  <div
-                    key={dayIdx}
-                    onClick={() => day.date && setSelectedDate(day.date)}
-                    className={`w-6 h-6 rounded cursor-pointer transition-all ${getHeatmapColor(day.count)} ${
-                      selectedDate === day.date ? 'ring-2 ring-red-500' : ''
-                    }`}
-                    title={day.date ? `${day.date}: ${day.count} commits` : ''}
-                  ></div>
-                ))}
+        {/* 大格子日历 */}
+        <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
+          {calendarDays.map((day) => {
+            const dateObj = new Date(day.date);
+            const displayDate = `${dateObj.getMonth() + 1}-${dateObj.getDate()}`;
+            const isSelected = selectedDate === day.date;
+            
+            return (
+              <div
+                key={day.date}
+                onClick={() => setSelectedDate(day.date)}
+                className={`aspect-square rounded-xl border flex flex-col items-center justify-center cursor-pointer transition-all ${
+                  isSelected 
+                    ? 'bg-red-500 border-red-600 shadow-md transform scale-105 z-10' 
+                    : day.count > 0 
+                      ? 'bg-white border-red-100 hover:border-red-300' 
+                      : 'bg-gray-50 border-gray-100 opacity-60'
+                }`}
+              >
+                <span className={`text-[10px] mb-1 ${isSelected ? 'text-red-100' : 'text-gray-400'}`}>
+                  {displayDate}
+                </span>
+                <span className={`text-xl font-black ${isSelected ? 'text-white' : day.count > 0 ? 'text-red-600' : 'text-gray-300'}`}>
+                  {day.count}
+                </span>
+                {day.count > 0 && !isSelected && (
+                  <div className="mt-1 w-1 h-1 rounded-full bg-red-400"></div>
+                )}
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
-        {/* 选中日期的提交记录 */}
-        {selectedDate && dayStats.has(selectedDate) && (
-          <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
-            <p className="text-sm font-semibold text-gray-900 mb-4">
-              {selectedDate} 的提交（{dayStats.get(selectedDate)?.count} 条）
-            </p>
-            <div className="space-y-3">
-              {dayStats.get(selectedDate)?.commits.map((commit) => {
-                const typeInfo = getTypeInfo(commit.type);
-                return (
-                  <div key={commit.hash} className="border-l-4 border-red-500 pl-3 py-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${typeInfo.color}`}>
-                        {typeInfo.label}
-                      </span>
-                      {commit.scope && (
-                        <span className="text-xs text-gray-600 bg-gray-100 px-2 py-0.5 rounded">
-                          {commit.scope}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-900">{commit.cleanMessage}</p>
-                  </div>
-                );
-              })}
+        {/* 选中日期的提交记录详情 */}
+        {selectedDate && (
+          <div className="bg-white rounded-2xl p-5 shadow-lg border border-red-500/10 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-50">
+              <h3 className="text-lg font-bold text-gray-900">
+                {new Date(selectedDate).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
+              </h3>
+              <span className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-xs font-bold">
+                {dayStats.get(selectedDate)?.count || 0} 次修改
+              </span>
             </div>
+            
+            {dayStats.has(selectedDate) ? (
+              <div className="space-y-4">
+                {dayStats.get(selectedDate)?.commits.map((commit) => {
+                  const typeInfo = getTypeInfo(commit.type);
+                  return (
+                    <div key={commit.hash} className="group">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight ${typeInfo.color}`}>
+                          {typeInfo.label}
+                        </span>
+                        {commit.scope && (
+                          <span className="text-[10px] text-gray-400 font-medium">
+                            @{commit.scope}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-700 leading-relaxed font-medium group-hover:text-red-600 transition-colors">
+                        {commit.cleanMessage}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-10 text-center">
+                <p className="text-gray-400 text-sm italic">这一天没有修改记录</p>
+              </div>
+            )}
           </div>
         )}
       </div>
