@@ -279,7 +279,7 @@ export default function InterestManagePage() {
           <div className="text-center py-16 text-gray-400 text-sm">暂无标签数据</div>
         ) : (
           tagData.map((tag) => (
-            <div key={tag.tagName} className={`rounded-2xl overflow-hidden shadow-sm ${tag.pauseDate ? 'bg-blue-50 border border-blue-100' : 'bg-white'}`}>
+            <div key={tag.tagName} className="rounded-2xl overflow-hidden shadow-sm" style={tag.pauseDate ? { backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' } : { backgroundColor: '#ffffff' }}>
               {/* 标签标题行 */}
               <div
                 className="px-4 py-3 flex items-center justify-between cursor-pointer"
