@@ -17337,6 +17337,82 @@ ${klinesSummary}
         console.log('[ajOwnerGetCompanyInvoices] rows count:', (rows as any[]).length);
         return rows as any[];
       }),
+    // AJ账本资方：查询指定业务员的详细统计（状态分布、金额分布、已发/待发津贴）
+    ajOwnerGetEmployeeStats: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        companyId: z.number(),
+        employeeName: z.string(),
+        period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
+      }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        if (!(memberRows as any[])[0]?.role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        // 日期过滤
+        const now = new Date();
+        const bjNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+        const today = bjNow.toISOString().split('T')[0];
+        let dateFilter = '';
+        const dateParams: string[] = [];
+        if (input.period === 'day') { dateFilter = 'AND lr.recordDate = ?'; dateParams.push(today); }
+        else if (input.period === 'week') {
+          const ws = new Date(bjNow); ws.setUTCDate(ws.getUTCDate() - ws.getUTCDay() + (ws.getUTCDay() === 0 ? -6 : 1));
+          dateFilter = 'AND lr.recordDate >= ? AND lr.recordDate <= ?';
+          dateParams.push(ws.toISOString().split('T')[0], today);
+        } else if (input.period === 'month') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
+        else if (input.period === 'quarter') {
+          const q = Math.floor(bjNow.getUTCMonth()/3);
+          const qStart = new Date(Date.UTC(bjNow.getUTCFullYear(), q*3, 1));
+          dateFilter = 'AND lr.recordDate >= ?';
+          dateParams.push(qStart.toISOString().split('T')[0]);
+        } else if (input.period === 'year') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
+        // 查询该业务员在该企业的所有记录（按状态分组）
+        const [statusRows] = await (conn as any).execute(
+          `SELECT
+             COALESCE(lr.aj_status, 'pending') as status,
+             COUNT(*) as count,
+             COALESCE(SUM(lr.amount), 0) as amount
+           FROM ledger_records lr
+           LEFT JOIN users u ON u.id = lr.createdBy
+           LEFT JOIN ledger_members lm ON lm.userId = lr.createdBy AND lm.ledgerId = lr.ledgerId
+           WHERE lr.ledgerId=? AND lr.aj_company_id=? AND lr.deleted_at IS NULL ${dateFilter}
+             AND (COALESCE(lm.nickname, u.name, u.username) = ?)
+           GROUP BY COALESCE(lr.aj_status, 'pending')`,
+          [input.ledgerId, input.companyId, ...dateParams, input.employeeName]
+        );
+        // 查询已发津贴（af_manual_balances 中该业务员的成本津贴记录）
+        const [bonusRows] = await (conn as any).execute(
+          `SELECT COALESCE(SUM(amb.amount), 0) as totalBonus
+           FROM af_manual_balances amb
+           JOIN users u ON u.id = amb.user_id
+           LEFT JOIN ledger_members lm ON lm.userId = u.id AND lm.ledgerId = ?
+           WHERE amb.ledger_id = ? AND amb.note LIKE '成本津贴 #%' AND amb.amount > 0
+             AND (COALESCE(lm.nickname, u.name, u.username) = ?)`,
+          [input.ledgerId, input.ledgerId, input.employeeName]
+        );
+        const statusMap: Record<string, { count: number; amount: number }> = {};
+        for (const row of statusRows as any[]) {
+          statusMap[row.status] = { count: Number(row.count), amount: Number(row.amount) };
+        }
+        const approved = statusMap['approved'] || { count: 0, amount: 0 };
+        const pending = statusMap['pending'] || { count: 0, amount: 0 };
+        const supportNeeded = statusMap['support_needed'] || { count: 0, amount: 0 };
+        const totalBonus = Number((bonusRows as any[])[0]?.totalBonus || 0);
+        // 预计待发：待审核记录按1%/汇率估算（用固定汇率7.2近似）
+        const estimatedBonus = parseFloat((pending.amount * 0.01 / 7.2).toFixed(4));
+        return {
+          approved,
+          pending,
+          supportNeeded,
+          totalBonus,
+          estimatedBonus,
+        };
+      }),
     // AJ账本资方：修改申请单的报销类目（税务分类名称）
     ajOwnerUpdateInvoiceCategory: protectedProcedure
       .input(z.object({

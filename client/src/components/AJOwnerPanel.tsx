@@ -1471,6 +1471,12 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
     return { totalAmount, invoiceCount: filtered.length };
   }, [allInvoices, selectedEmployee]);
 
+  // 业务员详细统计（状态分布、金额分布、已发/待发津贴）
+  const { data: employeeStats } = (trpc as any).ledger.ajOwnerGetEmployeeStats.useQuery(
+    { ledgerId, companyId: selectedCompanyId!, employeeName: selectedEmployee, period },
+    { enabled: !!selectedEmployee && selectedCompanyId != null }
+  );
+
   // 统计数据
   const { data: stats, isLoading: statsLoading } = (trpc as any).ledger.ajOwnerGetCompanyStats.useQuery(
     { ledgerId, companyId: selectedCompanyId!, period },
@@ -1537,83 +1543,200 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
         </div>
         {/* 统计数据行 */}
         {selectedCompanyId != null && (
-          <div className="flex items-center justify-around w-full">
-            <div className="text-center">
-              <div className="text-white/60 text-[10px] mb-0.5">
-                {selectedEmployee ? `${selectedEmployee}累计金额` : `${periodLabels[period]}累计金额`}
+          <div className="w-full">
+            {/* 第一行：累计金额 | 开票条数 | 业务员选择器 */}
+            <div className="flex items-center justify-around w-full">
+              <div className="text-center">
+                <div className="text-white/60 text-[10px] mb-0.5">
+                  {selectedEmployee ? `${selectedEmployee}累计金额` : `${periodLabels[period]}累计金额`}
+                </div>
+                <div className="text-white text-xl font-bold leading-none">
+                  {filteredStats
+                    ? `¥${filteredStats.totalAmount.toFixed(2)}`
+                    : statsLoading ? '--' : `¥${Number(stats?.totalAmount || 0).toFixed(2)}`}
+                </div>
               </div>
-              <div className="text-white text-xl font-bold leading-none">
-                {filteredStats
-                  ? `¥${filteredStats.totalAmount.toFixed(2)}`
-                  : statsLoading ? '--' : `¥${Number(stats?.totalAmount || 0).toFixed(2)}`}
+              <div className="w-px h-8 bg-white/20 flex-shrink-0" />
+              <div className="text-center">
+                <div className="text-white/60 text-[10px] mb-0.5">
+                  {selectedEmployee ? `${selectedEmployee}开票条数` : `${periodLabels[period]}开票条数`}
+                </div>
+                <div className="text-white text-xl font-bold leading-none">
+                  {filteredStats
+                    ? filteredStats.invoiceCount
+                    : statsLoading ? '--' : Number(stats?.invoiceCount || 0)}
+                  <span className="text-white/60 text-xs font-normal ml-1">笔</span>
+                </div>
               </div>
-            </div>
-            <div className="w-px h-8 bg-white/20 flex-shrink-0" />
-            <div className="text-center">
-              <div className="text-white/60 text-[10px] mb-0.5">
-                {selectedEmployee ? `${selectedEmployee}开票条数` : `${periodLabels[period]}开票条数`}
-              </div>
-              <div className="text-white text-xl font-bold leading-none">
-                {filteredStats
-                  ? filteredStats.invoiceCount
-                  : statsLoading ? '--' : Number(stats?.invoiceCount || 0)}
-                <span className="text-white/60 text-xs font-normal ml-1">笔</span>
-              </div>
-            </div>
-            {employeeNames.length > 0 && (
-              <>
-                <div className="w-px h-8 bg-white/20 flex-shrink-0" />
-                <div className="text-center relative">
-                  <button
-                    onClick={() => setShowEmployeeDropdown(v => !v)}
-                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
-                  >
-                    <div className="text-white/60 text-[10px] mb-0.5 flex items-center gap-0.5 justify-center">
-                      业务员
-                      <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" style={{ fill: 'rgba(255,255,255,0.6)' }}><path d="M6 8L2 4h8z"/></svg>
-                    </div>
-                    <div className="text-white text-xl font-bold leading-none">
-                      {selectedEmployee
-                        ? <span className="text-sm font-semibold">{selectedEmployee}</span>
-                        : <>{employeeNames.length}<span className="text-white/60 text-xs font-normal ml-1">人</span></>
-                      }
-                    </div>
-                  </button>
-                  {showEmployeeDropdown && (
-                    <div
-                      style={{
-                        position: 'absolute', top: '110%', right: 0,
-                        background: '#fff', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
-                        zIndex: 200, width: 'max-content', minWidth: '80px', maxWidth: '200px', overflow: 'hidden',
-                      }}
+              {employeeNames.length > 0 && (
+                <>
+                  <div className="w-px h-8 bg-white/20 flex-shrink-0" />
+                  <div className="text-center relative">
+                    <button
+                      onClick={() => setShowEmployeeDropdown(v => !v)}
+                      style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                     >
-                      <button
-                        onClick={() => { setSelectedEmployee(''); setShowEmployeeDropdown(false); }}
+                      <div className="text-white/60 text-[10px] mb-0.5 flex items-center gap-0.5 justify-center">
+                        业务员
+                        <svg viewBox="0 0 12 12" className="w-2.5 h-2.5" style={{ fill: 'rgba(255,255,255,0.6)' }}><path d="M6 8L2 4h8z"/></svg>
+                      </div>
+                      <div className="text-white text-xl font-bold leading-none">
+                        {selectedEmployee
+                          ? <span className="text-sm font-semibold">{selectedEmployee}</span>
+                          : <>{employeeNames.length}<span className="text-white/60 text-xs font-normal ml-1">人</span></>
+                        }
+                      </div>
+                    </button>
+                    {showEmployeeDropdown && (
+                      <div
                         style={{
-                          display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left',
-                          fontSize: '13px', fontWeight: selectedEmployee === '' ? 700 : 400,
-                          color: selectedEmployee === '' ? AJ_COLOR : '#333',
-                          background: selectedEmployee === '' ? 'rgba(26,43,74,0.08)' : '#fff',
-                          border: 'none', cursor: 'pointer', borderBottom: '1px solid #f0f0f0',
+                          position: 'absolute', top: '110%', right: 0,
+                          background: '#fff', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
+                          zIndex: 200, width: 'max-content', minWidth: '80px', maxWidth: '200px', overflow: 'hidden',
                         }}
-                      >全部员工</button>
-                      {employeeNames.map(name => (
+                      >
                         <button
-                          key={name}
-                          onClick={() => { setSelectedEmployee(name); setShowEmployeeDropdown(false); }}
+                          onClick={() => { setSelectedEmployee(''); setShowEmployeeDropdown(false); }}
                           style={{
                             display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left',
-                            fontSize: '13px', fontWeight: selectedEmployee === name ? 700 : 400,
-                            color: selectedEmployee === name ? AJ_COLOR : '#333',
-                            background: selectedEmployee === name ? 'rgba(26,43,74,0.08)' : '#fff',
+                            fontSize: '13px', fontWeight: selectedEmployee === '' ? 700 : 400,
+                            color: selectedEmployee === '' ? AJ_COLOR : '#333',
+                            background: selectedEmployee === '' ? 'rgba(26,43,74,0.08)' : '#fff',
                             border: 'none', cursor: 'pointer', borderBottom: '1px solid #f0f0f0',
                           }}
-                        >{name}</button>
-                      ))}
+                        >全部员工</button>
+                        {employeeNames.map(name => (
+                          <button
+                            key={name}
+                            onClick={() => { setSelectedEmployee(name); setShowEmployeeDropdown(false); }}
+                            style={{
+                              display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left',
+                              fontSize: '13px', fontWeight: selectedEmployee === name ? 700 : 400,
+                              color: selectedEmployee === name ? AJ_COLOR : '#333',
+                              background: selectedEmployee === name ? 'rgba(26,43,74,0.08)' : '#fff',
+                              border: 'none', cursor: 'pointer', borderBottom: '1px solid #f0f0f0',
+                            }}
+                          >{name}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* 第二行：选中业务员时展开详细统计 */}
+            {selectedEmployee && (
+              <div
+                style={{
+                  marginTop: '10px',
+                  borderTop: '1px solid rgba(255,255,255,0.15)',
+                  paddingTop: '10px',
+                }}
+              >
+                {/* 开票状态分布 */}
+                <div style={{ marginBottom: '8px' }}>
+                  <div className="text-white/50 text-[10px] mb-1.5">开票状态分布</div>
+                  <div className="flex items-center gap-2">
+                    <div
+                      style={{
+                        flex: 1, background: 'rgba(255,255,255,0.1)', borderRadius: '8px',
+                        padding: '6px 8px', textAlign: 'center',
+                        border: '1px solid rgba(76,175,80,0.5)',
+                      }}
+                    >
+                      <div style={{ color: '#81C784', fontSize: '10px', marginBottom: '2px' }}>审批通过</div>
+                      <div style={{ color: '#fff', fontSize: '15px', fontWeight: 700, lineHeight: 1 }}>
+                        {employeeStats ? employeeStats.approved.count : '--'}
+                        <span style={{ fontSize: '10px', fontWeight: 400, color: 'rgba(255,255,255,0.6)', marginLeft: '2px' }}>笔</span>
+                      </div>
                     </div>
-                  )}
+                    <div
+                      style={{
+                        flex: 1, background: 'rgba(255,255,255,0.1)', borderRadius: '8px',
+                        padding: '6px 8px', textAlign: 'center',
+                        border: '1px solid rgba(245,158,11,0.5)',
+                      }}
+                    >
+                      <div style={{ color: '#FCD34D', fontSize: '10px', marginBottom: '2px' }}>待审核</div>
+                      <div style={{ color: '#fff', fontSize: '15px', fontWeight: 700, lineHeight: 1 }}>
+                        {employeeStats ? employeeStats.pending.count : '--'}
+                        <span style={{ fontSize: '10px', fontWeight: 400, color: 'rgba(255,255,255,0.6)', marginLeft: '2px' }}>笔</span>
+                      </div>
+                    </div>
+                    {(employeeStats?.supportNeeded?.count ?? 0) > 0 && (
+                      <div
+                        style={{
+                          flex: 1, background: 'rgba(255,255,255,0.1)', borderRadius: '8px',
+                          padding: '6px 8px', textAlign: 'center',
+                          border: '1px solid rgba(255,152,0,0.5)',
+                        }}
+                      >
+                        <div style={{ color: '#FFB74D', fontSize: '10px', marginBottom: '2px' }}>补充材料</div>
+                        <div style={{ color: '#fff', fontSize: '15px', fontWeight: 700, lineHeight: 1 }}>
+                          {employeeStats.supportNeeded.count}
+                          <span style={{ fontSize: '10px', fontWeight: 400, color: 'rgba(255,255,255,0.6)', marginLeft: '2px' }}>笔</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </>
+
+                {/* 金额分布 + 津贴统计 */}
+                <div className="flex items-stretch gap-2">
+                  {/* 金额分布 */}
+                  <div
+                    style={{
+                      flex: 3, background: 'rgba(255,255,255,0.08)', borderRadius: '8px',
+                      padding: '7px 8px', border: '1px solid rgba(255,255,255,0.12)',
+                    }}
+                  >
+                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', marginBottom: '5px' }}>金额分布</div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px' }}>通过金额</span>
+                      <span style={{ color: '#81C784', fontSize: '12px', fontWeight: 600 }}>
+                        ¥{employeeStats ? employeeStats.approved.amount.toFixed(2) : '--'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px' }}>待审金额</span>
+                      <span style={{
+                        color: '#FCD34D', fontSize: '12px', fontWeight: 600,
+                        borderBottom: '1px dashed rgba(252,211,77,0.5)',
+                      }}>
+                        ¥{employeeStats ? employeeStats.pending.amount.toFixed(2) : '--'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 津贴统计 */}
+                  <div
+                    style={{
+                      flex: 2, background: 'rgba(255,255,255,0.08)', borderRadius: '8px',
+                      padding: '7px 8px', border: '1px solid rgba(255,255,255,0.12)',
+                    }}
+                  >
+                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', marginBottom: '5px' }}>津贴统计</div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px' }}>已发</span>
+                      <span style={{ color: '#81C784', fontSize: '12px', fontWeight: 600 }}>
+                        {employeeStats ? employeeStats.totalBonus.toFixed(2) : '--'}
+                        <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginLeft: '1px' }}>U</span>
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px' }}>预计</span>
+                      <span style={{
+                        color: '#FCD34D', fontSize: '12px', fontWeight: 600,
+                        borderBottom: '1px dashed rgba(252,211,77,0.5)',
+                      }}>
+                        {employeeStats ? employeeStats.estimatedBonus.toFixed(4) : '--'}
+                        <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginLeft: '1px' }}>U</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         )}
