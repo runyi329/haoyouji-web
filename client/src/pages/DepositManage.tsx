@@ -516,6 +516,7 @@ export default function DepositManage() {
       marginByCoin: marginByCoinJson,
       initialAmount: rightTagConfig?.initial_amount as string | undefined,
       accountMultiplier: rightTagConfig?.account_multiplier as string | undefined,
+      marginBase: (rightTagConfig as any)?.margin_base as string | undefined, // 保留保证金基数，不覆盖
     });
   };
 
