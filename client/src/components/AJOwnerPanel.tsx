@@ -689,24 +689,37 @@ function ImageFullscreenViewer({ images, initialIndex, onClose }: { images: stri
   const [scale, setScale] = useState(1);
   const [translateX, setTranslateX] = useState(0);
   const [translateY, setTranslateY] = useState(0);
-  const pinchRef = useRef<{ dist: number; midX: number; midY: number } | null>(null);
-  const dragRef = useRef<{ startX: number; startY: number; tx: number; ty: number } | null>(null);
+  // 用 ref 存储实时值，避免 touch 事件闭包读取旧 state
+  const scaleRef = useRef(1);
+  const txRef = useRef(0);
+  const tyRef = useRef(0);
+  const pinchRef = useRef<{ dist: number } | null>(null);
+  // 增量拖动：记录上一次触点位置，每次 move 用差值累加
+  const lastTouchRef = useRef<{ x: number; y: number } | null>(null);
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // 切换图片时重置缩放
-  const switchImage = (idx: number) => { setCurrent(idx); setScale(1); setTranslateX(0); setTranslateY(0); };
+  const switchImage = (idx: number) => {
+    setCurrent(idx); setScale(1); setTranslateX(0); setTranslateY(0);
+    scaleRef.current = 1; txRef.current = 0; tyRef.current = 0;
+  };
 
   const handleTouchStart = (e: React.TouchEvent) => {
     e.stopPropagation();
     if (e.touches.length === 2) {
       const dx = e.touches[1].clientX - e.touches[0].clientX;
       const dy = e.touches[1].clientY - e.touches[0].clientY;
-      pinchRef.current = {
-        dist: Math.hypot(dx, dy),
-        midX: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-        midY: (e.touches[0].clientY + e.touches[1].clientY) / 2,
-      };
-    } else if (e.touches.length === 1 && scale > 1) {
-      dragRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, tx: translateX, ty: translateY };
+      pinchRef.current = { dist: Math.hypot(dx, dy) };
+      lastTouchRef.current = null;
+    } else if (e.touches.length === 1) {
+      if (scaleRef.current > 1) {
+        // 放大状态：记录拖动起点（增量模式）
+        lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else {
+        // 未放大：记录滑动起点（用于切换图片）
+        swipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        lastTouchRef.current = null;
+      }
     }
   };
 
@@ -717,22 +730,30 @@ function ImageFullscreenViewer({ images, initialIndex, onClose }: { images: stri
       const dy = e.touches[1].clientY - e.touches[0].clientY;
       const newDist = Math.hypot(dx, dy);
       const ratio = newDist / pinchRef.current.dist;
-      setScale(s => Math.min(5, Math.max(1, s * ratio)));
+      const newScale = Math.min(5, Math.max(1, scaleRef.current * ratio));
+      scaleRef.current = newScale;
+      setScale(newScale);
       pinchRef.current.dist = newDist;
-    } else if (e.touches.length === 1 && dragRef.current && scale > 1) {
-      const dx = e.touches[0].clientX - dragRef.current.startX;
-      const dy = e.touches[0].clientY - dragRef.current.startY;
-      setTranslateX(dragRef.current.tx + dx);
-      setTranslateY(dragRef.current.ty + dy);
+    } else if (e.touches.length === 1 && lastTouchRef.current && scaleRef.current > 1) {
+      const dx = e.touches[0].clientX - lastTouchRef.current.x;
+      const dy = e.touches[0].clientY - lastTouchRef.current.y;
+      txRef.current += dx;
+      tyRef.current += dy;
+      setTranslateX(txRef.current);
+      setTranslateY(tyRef.current);
+      lastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     e.stopPropagation();
     pinchRef.current = null;
-    dragRef.current = null;
+    lastTouchRef.current = null;
     // 缩放小于1时重置
-    setScale(s => { if (s < 1) { setTranslateX(0); setTranslateY(0); return 1; } return s; });
+    if (scaleRef.current < 1) {
+      scaleRef.current = 1; txRef.current = 0; tyRef.current = 0;
+      setScale(1); setTranslateX(0); setTranslateY(0);
+    }
   };
 
   return (

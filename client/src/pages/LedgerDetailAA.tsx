@@ -145,8 +145,14 @@ export default function LedgerDetailAA({
   const [imgScale, setImgScale] = useState(1);
   const [imgTranslateX, setImgTranslateX] = useState(0);
   const [imgTranslateY, setImgTranslateY] = useState(0);
+  // 用 ref 存储实时值，避免 touch 事件闭包读取旧 state
+  const imgScaleRef = useRef(1);
+  const imgTxRef = useRef(0);
+  const imgTyRef = useRef(0);
   const imgPinchRef = useRef<{ dist: number } | null>(null);
-  const imgDragRef = useRef<{ startX: number; startY: number; tx: number; ty: number } | null>(null);
+  // 增量拖动：记录上一次触点位置，每次 move 用差值累加
+  const imgLastTouchRef = useRef<{ x: number; y: number } | null>(null);
+  const imgSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // 股票预览（普通成员点击有蓝点/紫点的日历格子时弹出）
   const [previewStocks, setPreviewStocks] = useState<Array<{code: string; name: string}>>([]);
@@ -2490,11 +2496,16 @@ export default function LedgerDetailAA({
                 const dx = e.touches[1].clientX - e.touches[0].clientX;
                 const dy = e.touches[1].clientY - e.touches[0].clientY;
                 imgPinchRef.current = { dist: Math.hypot(dx, dy) };
-              } else if (e.touches.length === 1 && imgScale > 1) {
-                imgDragRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, tx: imgTranslateX, ty: imgTranslateY };
-              } else {
-                (e.currentTarget as any)._touchStartX = e.touches[0].clientX;
-                (e.currentTarget as any)._touchStartY = e.touches[0].clientY;
+                imgLastTouchRef.current = null;
+              } else if (e.touches.length === 1) {
+                if (imgScaleRef.current > 1) {
+                  // 放大状态：增量拖动
+                  imgLastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                } else {
+                  // 未放大：记录滑动起点
+                  imgSwipeStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                  imgLastTouchRef.current = null;
+                }
               }
             }}
             onTouchMove={e => {
@@ -2503,28 +2514,36 @@ export default function LedgerDetailAA({
                 const dy = e.touches[1].clientY - e.touches[0].clientY;
                 const newDist = Math.hypot(dx, dy);
                 const ratio = newDist / imgPinchRef.current.dist;
-                setImgScale(s => Math.min(5, Math.max(1, s * ratio)));
+                const newScale = Math.min(5, Math.max(1, imgScaleRef.current * ratio));
+                imgScaleRef.current = newScale;
+                setImgScale(newScale);
                 imgPinchRef.current.dist = newDist;
-              } else if (e.touches.length === 1 && imgDragRef.current && imgScale > 1) {
-                const dx = e.touches[0].clientX - imgDragRef.current.startX;
-                const dy = e.touches[0].clientY - imgDragRef.current.startY;
-                setImgTranslateX(imgDragRef.current.tx + dx);
-                setImgTranslateY(imgDragRef.current.ty + dy);
+              } else if (e.touches.length === 1 && imgLastTouchRef.current && imgScaleRef.current > 1) {
+                const dx = e.touches[0].clientX - imgLastTouchRef.current.x;
+                const dy = e.touches[0].clientY - imgLastTouchRef.current.y;
+                imgTxRef.current += dx;
+                imgTyRef.current += dy;
+                setImgTranslateX(imgTxRef.current);
+                setImgTranslateY(imgTyRef.current);
+                imgLastTouchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
               }
             }}
             onTouchEnd={e => {
               imgPinchRef.current = null;
-              if (imgDragRef.current) { imgDragRef.current = null; return; }
+              imgLastTouchRef.current = null;
+              if (imgScaleRef.current < 1) {
+                imgScaleRef.current = 1; imgTxRef.current = 0; imgTyRef.current = 0;
+                setImgScale(1); setImgTranslateX(0); setImgTranslateY(0);
+              }
               // 单指左右滑动切换图片（仅在未放大时）
-              if (imgScale <= 1) {
-                const startX = (e.currentTarget as any)._touchStartX ?? 0;
-                const startY = (e.currentTarget as any)._touchStartY ?? 0;
-                const dx = e.changedTouches[0].clientX - startX;
-                const dy = e.changedTouches[0].clientY - startY;
+              if (imgScaleRef.current <= 1 && imgSwipeStartRef.current) {
+                const dx = e.changedTouches[0].clientX - imgSwipeStartRef.current.x;
+                const dy = e.changedTouches[0].clientY - imgSwipeStartRef.current.y;
                 if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
-                  if (dx < 0) { setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1)); setImgTranslateX(0); setImgTranslateY(0); }
-                  else { setPreviewImageIndex(i => Math.max(0, i - 1)); setImgTranslateX(0); setImgTranslateY(0); }
+                  if (dx < 0) { setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1)); imgTxRef.current = 0; imgTyRef.current = 0; setImgTranslateX(0); setImgTranslateY(0); }
+                  else { setPreviewImageIndex(i => Math.max(0, i - 1)); imgTxRef.current = 0; imgTyRef.current = 0; setImgTranslateX(0); setImgTranslateY(0); }
                 }
+                imgSwipeStartRef.current = null;
               }
             }}
           >
@@ -2533,7 +2552,7 @@ export default function LedgerDetailAA({
               <button
                 className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center rounded-full"
                 style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-                onClick={() => { setPreviewImageIndex(i => Math.max(0, i - 1)); setImgTranslateX(0); setImgTranslateY(0); }}
+                onClick={() => { setPreviewImageIndex(i => Math.max(0, i - 1)); imgScaleRef.current = 1; imgTxRef.current = 0; imgTyRef.current = 0; setImgScale(1); setImgTranslateX(0); setImgTranslateY(0); }}
               >
                 <ChevronLeft className="w-5 h-5 text-white" />
               </button>
@@ -2543,7 +2562,7 @@ export default function LedgerDetailAA({
               <button
                 className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center rounded-full"
                 style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-                onClick={() => { setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1)); setImgTranslateX(0); setImgTranslateY(0); }}
+                onClick={() => { setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1)); imgScaleRef.current = 1; imgTxRef.current = 0; imgTyRef.current = 0; setImgScale(1); setImgTranslateX(0); setImgTranslateY(0); }}
               >
                 <ChevronRight className="w-5 h-5 text-white" />
               </button>
