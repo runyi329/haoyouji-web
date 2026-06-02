@@ -1494,16 +1494,14 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
     }
   }, [companiesLoading, companies.length]);
 
-  // 切换企业时清空搜索和员工筛选，并持久化到localStorage
+  // 切换企业时清空搜索和发票列表，并持久化公司选择到localStorage
+  // 注意：不清除员工筛选，刷新后保持原业务员选择
   useEffect(() => {
     setSearchText('');
-    setSelectedEmployee('');
     setEmployeeNames([]);
     setAllInvoices([]);
     if (selectedCompanyId !== null) {
       localStorage.setItem(`fvp_company_${ledgerId}`, String(selectedCompanyId));
-      // 切换公司时清空员工缓存
-      localStorage.removeItem(`fvp_employee_${ledgerId}`);
     }
   }, [selectedCompanyId]);
 
