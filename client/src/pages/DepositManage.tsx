@@ -963,22 +963,14 @@ export default function DepositManage() {
                           <>
                             {/* 保证金内置容器 */}
                             <div className="rounded-xl p-3 mb-3 space-y-2" style={{ backgroundColor: '#F8FBFF', border: '1px solid #DBEAFE' }}>
-                              {/* 标题行：右侧放编辑和清空按钮 */}
-                              <div className="flex justify-end items-center gap-3">
+                              {/* 标题行：右侧放编辑按钮 */}
+                              <div className="flex justify-end items-center">
                                 <button
                                   onClick={handleStartRightEditing}
                                   className="text-xs text-blue-500 flex items-center gap-0.5"
                                 >
                                   <Pencil className="w-3 h-3" />编辑保证金
                                 </button>
-                                {rightMarginData.length > 0 && (
-                                  <button
-                                    onClick={handleClearRightMargin}
-                                    className="text-xs text-red-400 flex items-center gap-0.5"
-                                  >
-                                    <Trash2 className="w-3 h-3" />清空
-                                  </button>
-                                )}
                               </div>
                               {rightMarginData.length === 0 ? (
                                 <div className="text-xs text-gray-400 py-2 text-center">暂未设置右侧保证金</div>
@@ -989,16 +981,18 @@ export default function DepositManage() {
                                     return (
                                       <div
                                         key={_i}
-                                        className="flex items-start justify-between py-1.5"
-                                        style={{ borderBottom: '1px solid #F3F4F6' }}
+                                        className="flex items-start justify-between py-2"
+                                        style={{ borderBottom: '1px solid #E5E7EB' }}
                                       >
-                                        {/* 左：标题「保证金」 + 日期简写 + 备注 */}
+                                        {/* 左：「保证金」和日期同一行 + 备注在下一行 */}
                                         <div className="flex flex-col">
-                                          <span className="text-xs font-medium text-gray-700">保证金</span>
-                                          <span className="text-xs" style={{ color: '#2563EB' }}>
-                                            {date ? date.slice(5) : '--'}
-                                          </span>
-                                          {label ? <span className="text-[10px] text-gray-400">{label}</span> : null}
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-xs font-medium text-gray-700">保证金</span>
+                                            <span className="text-xs" style={{ color: '#2563EB' }}>
+                                              {date ? date.slice(5) : '--'}
+                                            </span>
+                                          </div>
+                                          {label ? <span className="text-[10px] text-gray-400 mt-0.5">{label}</span> : null}
                                         </div>
                                         {/* 右：上行原币金额，下行折合人民币 */}
                                         <div className="flex flex-col items-end">
