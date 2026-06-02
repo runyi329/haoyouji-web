@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import taxCategoriesRaw from "@/data/tax_categories.json";
 import taxAccountingMap from "@/data/tax_accounting_map.json";
@@ -686,23 +686,87 @@ function ExpenseTypePanel({
 // ========== 图片全屏预览弹窗 ==========
 function ImageFullscreenViewer({ images, initialIndex, onClose }: { images: string[]; initialIndex: number; onClose: () => void }) {
   const [current, setCurrent] = useState(initialIndex);
+  const [scale, setScale] = useState(1);
+  const [translateX, setTranslateX] = useState(0);
+  const [translateY, setTranslateY] = useState(0);
+  const pinchRef = useRef<{ dist: number; midX: number; midY: number } | null>(null);
+  const dragRef = useRef<{ startX: number; startY: number; tx: number; ty: number } | null>(null);
+
+  // 切换图片时重置缩放
+  const switchImage = (idx: number) => { setCurrent(idx); setScale(1); setTranslateX(0); setTranslateY(0); };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    e.stopPropagation();
+    if (e.touches.length === 2) {
+      const dx = e.touches[1].clientX - e.touches[0].clientX;
+      const dy = e.touches[1].clientY - e.touches[0].clientY;
+      pinchRef.current = {
+        dist: Math.hypot(dx, dy),
+        midX: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        midY: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+      };
+    } else if (e.touches.length === 1 && scale > 1) {
+      dragRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, tx: translateX, ty: translateY };
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    e.stopPropagation();
+    if (e.touches.length === 2 && pinchRef.current) {
+      const dx = e.touches[1].clientX - e.touches[0].clientX;
+      const dy = e.touches[1].clientY - e.touches[0].clientY;
+      const newDist = Math.hypot(dx, dy);
+      const ratio = newDist / pinchRef.current.dist;
+      setScale(s => Math.min(5, Math.max(1, s * ratio)));
+      pinchRef.current.dist = newDist;
+    } else if (e.touches.length === 1 && dragRef.current && scale > 1) {
+      const dx = e.touches[0].clientX - dragRef.current.startX;
+      const dy = e.touches[0].clientY - dragRef.current.startY;
+      setTranslateX(dragRef.current.tx + dx);
+      setTranslateY(dragRef.current.ty + dy);
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    e.stopPropagation();
+    pinchRef.current = null;
+    dragRef.current = null;
+    // 缩放小于1时重置
+    setScale(s => { if (s < 1) { setTranslateX(0); setTranslateY(0); return 1; } return s; });
+  };
+
   return (
     <div
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
-      onClick={onClose}
+      onClick={() => { if (scale <= 1) onClose(); }}
     >
-      <img
-        src={images[current]}
-        alt="凭证"
-        style={{ maxWidth: '96vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px' }}
+      <div
+        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', overflow: 'hidden', touchAction: scale > 1 ? 'none' : 'pan-y' }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         onClick={e => e.stopPropagation()}
-      />
+      >
+        <img
+          src={images[current]}
+          alt="凭证"
+          style={{
+            maxWidth: '96vw', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px',
+            transform: `scale(${scale}) translate(${translateX / scale}px, ${translateY / scale}px)`,
+            transformOrigin: 'center center',
+            transition: pinchRef.current ? 'none' : 'transform 0.1s ease',
+            userSelect: 'none', WebkitUserSelect: 'none',
+          }}
+          draggable={false}
+          onContextMenu={e => e.preventDefault()}
+        />
+      </div>
       {images.length > 1 && (
         <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }} onClick={e => e.stopPropagation()}>
           {images.map((img, i) => (
             <div
               key={i}
-              onClick={() => setCurrent(i)}
+              onClick={() => switchImage(i)}
               style={{ width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', border: i === current ? '2px solid #fff' : '2px solid transparent', cursor: 'pointer' }}
             >
               <img src={img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -710,7 +774,9 @@ function ImageFullscreenViewer({ images, initialIndex, onClose }: { images: stri
           ))}
         </div>
       )}
-      <div style={{ marginTop: '20px', color: 'rgba(255,255,255,0.6)', fontSize: '13px' }}>点击任意处关闭</div>
+      <div style={{ marginTop: '12px', marginBottom: '8px', color: 'rgba(255,255,255,0.6)', fontSize: '13px' }}>
+        {scale > 1 ? '双指缩小或双击还原' : '点击任意处关闭 · 双指放大'}
+      </div>
     </div>
   );
 }

@@ -142,6 +142,11 @@ export default function LedgerDetailAA({
   const [previewImages, setPreviewImages] = useState<string[]>([]);
   const [previewImageIndex, setPreviewImageIndex] = useState(0);
   const [showImagePreview, setShowImagePreview] = useState(false);
+  const [imgScale, setImgScale] = useState(1);
+  const [imgTranslateX, setImgTranslateX] = useState(0);
+  const [imgTranslateY, setImgTranslateY] = useState(0);
+  const imgPinchRef = useRef<{ dist: number } | null>(null);
+  const imgDragRef = useRef<{ startX: number; startY: number; tx: number; ty: number } | null>(null);
 
   // 股票预览（普通成员点击有蓝点/紫点的日历格子时弹出）
   const [previewStocks, setPreviewStocks] = useState<Array<{code: string; name: string}>>([]);
@@ -2461,7 +2466,7 @@ export default function LedgerDetailAA({
         <div
           className="fixed inset-0 z-50 flex flex-col"
           style={{ backgroundColor: 'rgba(0,0,0,0.92)' }}
-          onClick={() => setShowImagePreview(false)}
+          onClick={() => { if (imgScale <= 1) setShowImagePreview(false); }}
         >
           {/* 顶部计数 + 关闭 */}
           <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
@@ -2475,42 +2480,70 @@ export default function LedgerDetailAA({
             </button>
           </div>
 
-          {/* 图片区域 + 触摸滑动 */}
+          {/* 图片区域 + 触摸滑动 + 捧合缩放 */}
           <div
             className="flex-1 relative overflow-hidden"
+            style={{ touchAction: imgScale > 1 ? 'none' : 'pan-y' }}
             onClick={e => e.stopPropagation()}
             onTouchStart={e => {
-              const t = e.touches[0];
-              (e.currentTarget as any)._touchStartX = t.clientX;
-              (e.currentTarget as any)._touchStartY = t.clientY;
+              if (e.touches.length === 2) {
+                const dx = e.touches[1].clientX - e.touches[0].clientX;
+                const dy = e.touches[1].clientY - e.touches[0].clientY;
+                imgPinchRef.current = { dist: Math.hypot(dx, dy) };
+              } else if (e.touches.length === 1 && imgScale > 1) {
+                imgDragRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, tx: imgTranslateX, ty: imgTranslateY };
+              } else {
+                (e.currentTarget as any)._touchStartX = e.touches[0].clientX;
+                (e.currentTarget as any)._touchStartY = e.touches[0].clientY;
+              }
+            }}
+            onTouchMove={e => {
+              if (e.touches.length === 2 && imgPinchRef.current) {
+                const dx = e.touches[1].clientX - e.touches[0].clientX;
+                const dy = e.touches[1].clientY - e.touches[0].clientY;
+                const newDist = Math.hypot(dx, dy);
+                const ratio = newDist / imgPinchRef.current.dist;
+                setImgScale(s => Math.min(5, Math.max(1, s * ratio)));
+                imgPinchRef.current.dist = newDist;
+              } else if (e.touches.length === 1 && imgDragRef.current && imgScale > 1) {
+                const dx = e.touches[0].clientX - imgDragRef.current.startX;
+                const dy = e.touches[0].clientY - imgDragRef.current.startY;
+                setImgTranslateX(imgDragRef.current.tx + dx);
+                setImgTranslateY(imgDragRef.current.ty + dy);
+              }
             }}
             onTouchEnd={e => {
-              const startX = (e.currentTarget as any)._touchStartX ?? 0;
-              const startY = (e.currentTarget as any)._touchStartY ?? 0;
-              const dx = e.changedTouches[0].clientX - startX;
-              const dy = e.changedTouches[0].clientY - startY;
-              if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
-                if (dx < 0) setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1));
-                else setPreviewImageIndex(i => Math.max(0, i - 1));
+              imgPinchRef.current = null;
+              if (imgDragRef.current) { imgDragRef.current = null; return; }
+              // 单指左右滑动切换图片（仅在未放大时）
+              if (imgScale <= 1) {
+                const startX = (e.currentTarget as any)._touchStartX ?? 0;
+                const startY = (e.currentTarget as any)._touchStartY ?? 0;
+                const dx = e.changedTouches[0].clientX - startX;
+                const dy = e.changedTouches[0].clientY - startY;
+                if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 40) {
+                  if (dx < 0) { setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1)); setImgTranslateX(0); setImgTranslateY(0); }
+                  else { setPreviewImageIndex(i => Math.max(0, i - 1)); setImgTranslateX(0); setImgTranslateY(0); }
+                }
               }
             }}
           >
-            {/* 左箭头（非第一张时显示） */}
-            {previewImages.length > 1 && previewImageIndex > 0 && (
+            {/* 左箭头（未放大且非第一张时显示） */}
+            {imgScale <= 1 && previewImages.length > 1 && previewImageIndex > 0 && (
               <button
                 className="absolute left-3 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center rounded-full"
                 style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-                onClick={() => setPreviewImageIndex(i => Math.max(0, i - 1))}
+                onClick={() => { setPreviewImageIndex(i => Math.max(0, i - 1)); setImgTranslateX(0); setImgTranslateY(0); }}
               >
                 <ChevronLeft className="w-5 h-5 text-white" />
               </button>
             )}
-            {/* 右箭头（非最后一张时显示） */}
-            {previewImages.length > 1 && previewImageIndex < previewImages.length - 1 && (
+            {/* 右箭头（未放大且非最后一张时显示） */}
+            {imgScale <= 1 && previewImages.length > 1 && previewImageIndex < previewImages.length - 1 && (
               <button
                 className="absolute right-3 top-1/2 -translate-y-1/2 z-10 w-9 h-9 flex items-center justify-center rounded-full"
                 style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-                onClick={() => setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1))}
+                onClick={() => { setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1)); setImgTranslateX(0); setImgTranslateY(0); }}
               >
                 <ChevronRight className="w-5 h-5 text-white" />
               </button>
@@ -2521,25 +2554,37 @@ export default function LedgerDetailAA({
                 src={previewImages[previewImageIndex]}
                 alt={`图片${previewImageIndex + 1}`}
                 className="max-w-full max-h-full object-contain rounded-lg"
-                style={{ maxHeight: 'calc(100vh - 140px)', userSelect: 'none', WebkitUserSelect: 'none', pointerEvents: 'none' }}
+                style={{
+                  maxHeight: 'calc(100vh - 140px)',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  transform: `scale(${imgScale}) translate(${imgTranslateX / imgScale}px, ${imgTranslateY / imgScale}px)`,
+                  transformOrigin: 'center center',
+                  transition: imgPinchRef.current ? 'none' : 'transform 0.1s ease',
+                }}
                 onContextMenu={e => e.preventDefault()}
                 draggable={false}
               />
             </div>
           </div>
 
-          {/* 底部圆点指示器 */}
-          {previewImages.length > 1 && (
-            <div className="flex justify-center gap-1.5 py-4 flex-shrink-0" onClick={e => e.stopPropagation()}>
-              {previewImages.map((_, i) => (
-                <div
-                  key={i}
-                  className="w-1.5 h-1.5 rounded-full transition-all"
-                  style={{ backgroundColor: i === previewImageIndex ? '#fff' : 'rgba(255,255,255,0.4)' }}
-                />
-              ))}
+          {/* 底部提示 + 圆点指示器 */}
+          <div className="flex-shrink-0 pb-4" onClick={e => e.stopPropagation()}>
+            <div className="text-center text-xs py-1" style={{ color: 'rgba(255,255,255,0.5)' }}>
+              {imgScale > 1 ? '双指缩小还原 · 放大状态下可拖动' : '双指放大 · 左右滑动切换'}
             </div>
-          )}
+            {previewImages.length > 1 && (
+              <div className="flex justify-center gap-1.5 py-2">
+                {previewImages.map((_, i) => (
+                  <div
+                    key={i}
+                    className="w-1.5 h-1.5 rounded-full transition-all"
+                    style={{ backgroundColor: i === previewImageIndex ? '#fff' : 'rgba(255,255,255,0.4)' }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
