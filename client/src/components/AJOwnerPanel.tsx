@@ -1430,7 +1430,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                   {showEmployeeDropdown && (
                     <div
                       style={{
-                        position: 'absolute', top: '110%', left: 0,
+                        position: 'absolute', top: '110%', right: 0,
                         background: '#fff', borderRadius: '10px', boxShadow: '0 4px 20px rgba(0,0,0,0.18)',
                         zIndex: 200, width: 'max-content', minWidth: '80px', maxWidth: '200px', overflow: 'hidden',
                       }}
