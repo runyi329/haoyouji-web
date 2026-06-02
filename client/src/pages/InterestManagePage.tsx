@@ -297,7 +297,7 @@ export default function InterestManagePage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <div className={`text-sm font-bold ${tag.totalInterest === 0 ? 'text-gray-400' : tag.totalInterest > 0 ? 'text-red-500' : 'text-green-600'}`}>¥ {fmt(tag.totalInterest)}</div>
+                    <div className={`text-sm font-bold ${Math.abs(tag.totalInterest) < 0.005 ? 'text-gray-400' : tag.totalInterest > 0 ? 'text-red-500' : 'text-green-600'}`}>¥ {Math.abs(tag.totalInterest) < 0.005 ? '0.00' : fmt(tag.totalInterest)}</div>
                     <div className="text-xs text-gray-400">累计利息</div>
                   </div>
                   {expandedTag === tag.tagName
