@@ -11567,7 +11567,7 @@ ${klinesSummary}
         pauseDate: z.string().optional(),
         endDate: z.string().optional(),
         note: z.string().optional(),
-        marginByCoin: z.string().optional(),
+        marginByCoin: z.string().nullable().optional(),
         pnlManual: z.string().optional(),
         pnlNote: z.string().optional(),
         originalAmount: z.string().optional(),
