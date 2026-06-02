@@ -279,25 +279,25 @@ export default function InterestManagePage() {
           <div className="text-center py-16 text-gray-400 text-sm">暂无标签数据</div>
         ) : (
           tagData.map((tag) => (
-            <div key={tag.tagName} className={`rounded-2xl overflow-hidden shadow-sm ${tag.pauseDate ? 'bg-gray-100 opacity-70' : 'bg-white'}`}>
+            <div key={tag.tagName} className={`rounded-2xl overflow-hidden shadow-sm ${tag.pauseDate ? 'bg-blue-50 border border-blue-100' : 'bg-white'}`}>
               {/* 标签标题行 */}
               <div
                 className="px-4 py-3 flex items-center justify-between cursor-pointer"
                 onClick={() => setExpandedTag(expandedTag === tag.tagName ? null : tag.tagName)}
               >
                 <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${tag.pauseDate ? 'bg-gray-400' : 'bg-blue-500'}`} />
+                  <div className={`w-2 h-2 rounded-full ${tag.pauseDate ? 'bg-blue-300' : 'bg-blue-500'}`} />
                   <span className="text-sm font-bold text-gray-900">{tag.tagName}</span>
                   <span className="text-xs text-gray-400">{tag.periods.length} 段</span>
                   {tag.pauseDate && (
-                    <span className="text-xs text-gray-400 bg-gray-200 px-1.5 py-0.5 rounded-full">
+                    <span className="text-xs text-blue-400 bg-blue-100 px-1.5 py-0.5 rounded-full">
                       已暂停 {tag.pauseDate.slice(5)}
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <div className={`text-sm font-bold ${tag.totalInterest >= 0 ? 'text-red-500' : 'text-green-600'}`}>¥ {fmt(tag.totalInterest)}</div>
+                    <div className={`text-sm font-bold ${tag.totalInterest === 0 ? 'text-gray-400' : tag.totalInterest > 0 ? 'text-red-500' : 'text-green-600'}`}>¥ {fmt(tag.totalInterest)}</div>
                     <div className="text-xs text-gray-400">累计利息</div>
                   </div>
                   {expandedTag === tag.tagName
