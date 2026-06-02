@@ -1,10 +1,6 @@
 name: 回填人民币汇率历史数据（CNY+CNH）
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/backfill-cny-cnh.yml'
-      - 'scripts/backfill_cny_cnh.py'
 jobs:
   backfill:
     runs-on: ubuntu-latest

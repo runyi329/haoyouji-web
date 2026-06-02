@@ -2,12 +2,6 @@ name: 批量上传所有图片到 COS
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - 'client/public/**'
-
 jobs:
   upload:
     runs-on: ubuntu-latest

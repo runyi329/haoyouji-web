@@ -1,8 +1,6 @@
 name: 创建世界杯赔率追踪表
 on:
-  push:
-    branches:
-      - create-wc-odds-tables
+  workflow_dispatch:
 jobs:
   migrate:
     name: 创建wc_odds_snapshots和wc_odds_records表

@@ -1,9 +1,6 @@
 name: zz-sms-send
 on:
-  push:
-    paths:
-      - '.github/workflows/zz-sms-send.yml'
-      - 'scripts/send-sms-alert.sh'
+  workflow_dispatch:
 jobs:
   send:
     runs-on: ubuntu-latest

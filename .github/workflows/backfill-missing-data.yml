@@ -1,10 +1,6 @@
 name: 补拉缺失日线数据
 
 on:
-  push:
-    paths:
-      - '.github/workflows/backfill-missing-data.yml'
-      - 'scripts/backfill-april-2025.py'
   workflow_dispatch:
 
 jobs:

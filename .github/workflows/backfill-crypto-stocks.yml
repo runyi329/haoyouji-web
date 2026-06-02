@@ -1,10 +1,6 @@
 name: 补齐美股和数字币日线数据
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/backfill-crypto-stocks.yml'
-
 jobs:
   backfill:
     runs-on: ubuntu-latest

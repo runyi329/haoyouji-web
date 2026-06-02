@@ -1,10 +1,7 @@
 name: 查询用户4957150提现记录
 
 on:
-  push:
-    paths:
-      - '.github/workflows/query-user4957150-withdraw.yml'
-
+  workflow_dispatch:
 jobs:
   query:
     runs-on: ubuntu-latest

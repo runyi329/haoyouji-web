@@ -1,9 +1,7 @@
 # triggered: 2026-04-18 fix APP_ID 1401098628 new-secret-key
 name: zz-update-sms-config
 on:
-  push:
-    paths:
-      - '.github/workflows/zz-update-sms-config.yml'
+  workflow_dispatch:
 jobs:
   update:
     runs-on: ubuntu-latest

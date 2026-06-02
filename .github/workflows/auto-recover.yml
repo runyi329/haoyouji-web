@@ -1,10 +1,6 @@
 name: auto-recover
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/auto-recover.yml'
+  workflow_dispatch:
 jobs:
   recover:
     runs-on: ubuntu-latest

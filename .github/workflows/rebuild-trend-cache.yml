@@ -1,10 +1,6 @@
 name: 重建趋势缓存（从 Tushare 直接计算）
 
 on:
-  push:
-    paths:
-      - '.github/workflows/rebuild-trend-cache.yml'
-      - 'scripts/rebuild-trend-from-tushare.py'
   workflow_dispatch:
 
 jobs:

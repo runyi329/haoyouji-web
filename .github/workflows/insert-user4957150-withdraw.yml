@@ -1,10 +1,7 @@
 name: 建表并补入用户4957150提现申请
 
 on:
-  push:
-    paths:
-      - '.github/workflows/insert-user4957150-withdraw.yml'
-
+  workflow_dispatch:
 jobs:
   insert:
     runs-on: ubuntu-latest

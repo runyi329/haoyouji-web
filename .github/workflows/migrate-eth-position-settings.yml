@@ -1,8 +1,6 @@
 name: 迁移eth_position_settings表结构
 on:
-  push:
-    branches:
-      - migrate-eth-settings
+  workflow_dispatch:
 jobs:
   migrate:
     name: 给eth_position_settings表加price_step字段

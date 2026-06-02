@@ -1,12 +1,7 @@
 name: 删除 ts_daily 原始数据表
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/drop-ts-daily.yml'
-
+  workflow_dispatch:
 jobs:
   drop-ts-daily:
     runs-on: ubuntu-latest

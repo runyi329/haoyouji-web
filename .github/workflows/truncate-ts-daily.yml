@@ -1,10 +1,7 @@
 name: 清理 ts_daily 历史数据
 
 on:
-  push:
-    paths:
-      - '.github/workflows/truncate-ts-daily.yml'
-
+  workflow_dispatch:
 jobs:
   truncate-ts-daily:
     runs-on: ubuntu-latest

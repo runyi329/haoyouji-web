@@ -1,9 +1,6 @@
 name: 补拉缺失 ts_daily_basic 数据
 
 on:
-  push:
-    paths:
-      - '.github/workflows/backfill-daily-basic.yml'
   workflow_dispatch:
 
 jobs:

@@ -1,9 +1,7 @@
 # triggered: 2026-04-18 retry5 query specific template IDs
 name: zz-diagnose-sms
 on:
-  push:
-    paths:
-      - '.github/workflows/zz-diagnose-sms.yml'
+  workflow_dispatch:
 jobs:
   diagnose:
     runs-on: ubuntu-latest

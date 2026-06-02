@@ -1,8 +1,6 @@
 name: 执行数据库迁移-opinion表
 on:
-  push:
-    branches:
-      - migration-opinion-tables
+  workflow_dispatch:
 jobs:
   migrate:
     name: 创建opinion相关表

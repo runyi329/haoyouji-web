@@ -1,10 +1,7 @@
 name: 检查数据库表状态
 
 on:
-  push:
-    paths:
-      - '.github/workflows/check-db-tables.yml'
-
+  workflow_dispatch:
 jobs:
   check-tables:
     runs-on: ubuntu-latest
