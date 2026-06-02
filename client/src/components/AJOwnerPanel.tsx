@@ -2131,7 +2131,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                         </div>
                       </div>
                       <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px', display: 'flex', gap: '8px' }}>
-                        <span>{item.recordDate}</span>
+                        <span>{item.recordDate ? String(item.recordDate).slice(0, 10) : ''}</span>
                         {item.taxCategory && <span>{item.taxCategory}</span>}
                         {item.expenseReason && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>{item.expenseReason}</span>}
                         <span style={{ color: '#bbb' }}># {item.id}</span>
