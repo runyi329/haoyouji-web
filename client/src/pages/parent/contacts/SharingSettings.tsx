@@ -225,43 +225,50 @@ export default function SharingSettings() {
   // 启动扫码器（智能识别普通二维码和介绍二维码）
   const startScanner = useCallback(async () => {
     setIsScanning(true);
+    // 二维码识别成功的回调
+    const onScanSuccess = async (decodedText: string) => {
+      await stopScanner();
+      try {
+        const parsed = JSON.parse(decodedText);
+        if (parsed.type === 'sharing_introduce_all') {
+          addByAggregateIntroduceQrCode.mutate({ qrContent: decodedText });
+        } else if (parsed.type === 'sharing_introduce') {
+          addByIntroduceQrCode.mutate({ qrContent: decodedText });
+        } else {
+          addByQrCode.mutate({ qrContent: decodedText });
+        }
+      } catch {
+        addByQrCode.mutate({ qrContent: decodedText });
+      }
+    };
+    const scanConfig = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
     try {
       const scanner = new Html5Qrcode('qr-reader');
       scannerRef.current = scanner;
-      // 尝试启用连续自动对焦
-      const videoConstraints: MediaTrackConstraints = {
-        facingMode: 'environment',
-        // @ts-ignore - focusMode 是非标准扩展属性，部分浏览器支持
-        focusMode: 'continuous',
-        // @ts-ignore
-        advanced: [{ focusMode: 'continuous' }],
-      };
+      // iOS Safari 兼容：只传 facingMode，不传非标准属性（focusMode/advanced 在新版iOS会导致权限拒绝）
       await scanner.start(
-        videoConstraints,
-        { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
-        async (decodedText) => {
-          await stopScanner();
-          // 判断二维码类型
-          try {
-            const parsed = JSON.parse(decodedText);
-            if (parsed.type === 'sharing_introduce_all') {
-              addByAggregateIntroduceQrCode.mutate({ qrContent: decodedText });
-            } else if (parsed.type === 'sharing_introduce') {
-              addByIntroduceQrCode.mutate({ qrContent: decodedText });
-            } else {
-              addByQrCode.mutate({ qrContent: decodedText });
-            }
-          } catch {
-            addByQrCode.mutate({ qrContent: decodedText });
-          }
-        },
+        { facingMode: 'environment' },
+        scanConfig,
+        onScanSuccess,
         () => {}
       );
     } catch (err: any) {
-      toast.error('无法启动摄像头：' + (err?.message || '请允许摄像头权限'));
-      setIsScanning(false);
+      // 后置摄像头失败时，尝试回退到默认摄像头（兼容部分iOS设备）
+      try {
+        const scanner2 = new Html5Qrcode('qr-reader');
+        scannerRef.current = scanner2;
+        await scanner2.start(
+          { facingMode: 'user' },
+          scanConfig,
+          onScanSuccess,
+          () => {}
+        );
+      } catch (err2: any) {
+        toast.error('无法启动摄像头，请在系统设置中允许浏览器访问摄像头后重试');
+        setIsScanning(false);
+      }
     }
-  }, [stopScanner, addByQrCode, addByIntroduceQrCode]);
+  }, [stopScanner, addByQrCode, addByIntroduceQrCode, addByAggregateIntroduceQrCode]);
 
   // 关闭扫码对话框时停止扫码
   useEffect(() => {
