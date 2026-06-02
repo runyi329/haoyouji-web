@@ -1634,106 +1634,93 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                   paddingTop: '10px',
                 }}
               >
-                {/* 开票状态分布 */}
-                <div style={{ marginBottom: '8px' }}>
-                  <div className="text-white/50 text-[10px] mb-1.5">开票状态分布</div>
-                  <div className="flex items-center gap-2">
-                    <div
-                      style={{
-                        flex: 1, background: 'rgba(255,255,255,0.1)', borderRadius: '8px',
-                        padding: '6px 8px', textAlign: 'center',
-                        border: '1px solid rgba(76,175,80,0.5)',
-                      }}
-                    >
-                      <div style={{ color: '#81C784', fontSize: '10px', marginBottom: '2px' }}>审批通过</div>
-                      <div style={{ color: '#fff', fontSize: '15px', fontWeight: 700, lineHeight: 1 }}>
-                        {employeeStats ? employeeStats.approved.count : '--'}
-                        <span style={{ fontSize: '10px', fontWeight: 400, color: 'rgba(255,255,255,0.6)', marginLeft: '2px' }}>笔</span>
-                      </div>
-                    </div>
-                    <div
-                      style={{
-                        flex: 1, background: 'rgba(255,255,255,0.1)', borderRadius: '8px',
-                        padding: '6px 8px', textAlign: 'center',
-                        border: '1px solid rgba(245,158,11,0.5)',
-                      }}
-                    >
-                      <div style={{ color: '#FCD34D', fontSize: '10px', marginBottom: '2px' }}>待审核</div>
-                      <div style={{ color: '#fff', fontSize: '15px', fontWeight: 700, lineHeight: 1 }}>
-                        {employeeStats ? employeeStats.pending.count : '--'}
-                        <span style={{ fontSize: '10px', fontWeight: 400, color: 'rgba(255,255,255,0.6)', marginLeft: '2px' }}>笔</span>
-                      </div>
-                    </div>
-                    {(employeeStats?.supportNeeded?.count ?? 0) > 0 && (
-                      <div
-                        style={{
-                          flex: 1, background: 'rgba(255,255,255,0.1)', borderRadius: '8px',
-                          padding: '6px 8px', textAlign: 'center',
-                          border: '1px solid rgba(255,152,0,0.5)',
-                        }}
-                      >
-                        <div style={{ color: '#FFB74D', fontSize: '10px', marginBottom: '2px' }}>补充材料</div>
-                        <div style={{ color: '#fff', fontSize: '15px', fontWeight: 700, lineHeight: 1 }}>
-                          {employeeStats.supportNeeded.count}
-                          <span style={{ fontSize: '10px', fontWeight: 400, color: 'rgba(255,255,255,0.6)', marginLeft: '2px' }}>笔</span>
-                        </div>
-                      </div>
-                    )}
+                {/* 三组统计：笔数 / 金额 / 津贴，每组都是 待审 | 已审 | 总计 三列 */}
+                {/* 表头行 */}
+                <div style={{ display: 'grid', gridTemplateColumns: '56px 1fr 1fr 1fr', gap: '0', marginBottom: '4px' }}>
+                  <div />
+                  <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontSize: '10px' }}>待审</div>
+                  <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontSize: '10px' }}>已审</div>
+                  <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.35)', fontSize: '10px' }}>总计</div>
+                </div>
+
+                {/* 笔数行 */}
+                <div style={{
+                  display: 'grid', gridTemplateColumns: '56px 1fr 1fr 1fr', gap: '0',
+                  background: 'rgba(255,255,255,0.07)', borderRadius: '8px',
+                  padding: '7px 6px', marginBottom: '5px',
+                }}>
+                  <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '10px', display: 'flex', alignItems: 'center' }}>开票笔数</div>
+                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#FCD34D', fontSize: '14px', fontWeight: 700 }}>
+                      {employeeStats ? (employeeStats.pending.count + (employeeStats.supportNeeded?.count ?? 0)) : '--'}
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>笔</span>
+                  </div>
+                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#81C784', fontSize: '14px', fontWeight: 700 }}>
+                      {employeeStats ? employeeStats.approved.count : '--'}
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>笔</span>
+                  </div>
+                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#fff', fontSize: '14px', fontWeight: 700 }}>
+                      {employeeStats ? (employeeStats.approved.count + employeeStats.pending.count + (employeeStats.supportNeeded?.count ?? 0)) : '--'}
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>笔</span>
                   </div>
                 </div>
 
-                {/* 金额分布 + 津贴统计 */}
-                <div className="flex items-stretch gap-2">
-                  {/* 金额分布 */}
-                  <div
-                    style={{
-                      flex: 3, background: 'rgba(255,255,255,0.08)', borderRadius: '8px',
-                      padding: '7px 8px', border: '1px solid rgba(255,255,255,0.12)',
-                    }}
-                  >
-                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', marginBottom: '5px' }}>金额分布</div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px' }}>通过金额</span>
-                      <span style={{ color: '#81C784', fontSize: '12px', fontWeight: 600 }}>
-                        ¥{employeeStats ? employeeStats.approved.amount.toFixed(2) : '--'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px' }}>待审金额</span>
-                      <span style={{
-                        color: '#FCD34D', fontSize: '12px', fontWeight: 600,
-                        borderBottom: '1px dashed rgba(252,211,77,0.5)',
-                      }}>
-                        ¥{employeeStats ? employeeStats.pending.amount.toFixed(2) : '--'}
-                      </span>
-                    </div>
+                {/* 金额行 */}
+                <div style={{
+                  display: 'grid', gridTemplateColumns: '56px 1fr 1fr 1fr', gap: '0',
+                  background: 'rgba(255,255,255,0.07)', borderRadius: '8px',
+                  padding: '7px 6px', marginBottom: '5px',
+                }}>
+                  <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '10px', display: 'flex', alignItems: 'center' }}>报销金额</div>
+                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#FCD34D', fontSize: '11px', fontWeight: 700 }}>
+                      {employeeStats ? employeeStats.pending.amount.toFixed(0) : '--'}
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>元</span>
                   </div>
+                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#81C784', fontSize: '11px', fontWeight: 700 }}>
+                      {employeeStats ? employeeStats.approved.amount.toFixed(0) : '--'}
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>元</span>
+                  </div>
+                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#fff', fontSize: '11px', fontWeight: 700 }}>
+                      {employeeStats ? (employeeStats.approved.amount + employeeStats.pending.amount).toFixed(0) : '--'}
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>元</span>
+                  </div>
+                </div>
 
-                  {/* 津贴统计 */}
-                  <div
-                    style={{
-                      flex: 2, background: 'rgba(255,255,255,0.08)', borderRadius: '8px',
-                      padding: '7px 8px', border: '1px solid rgba(255,255,255,0.12)',
-                    }}
-                  >
-                    <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '10px', marginBottom: '5px' }}>津贴统计</div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px' }}>已发</span>
-                      <span style={{ color: '#81C784', fontSize: '12px', fontWeight: 600 }}>
-                        {employeeStats ? employeeStats.totalBonus.toFixed(2) : '--'}
-                        <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginLeft: '1px' }}>U</span>
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '10px' }}>预计</span>
-                      <span style={{
-                        color: '#FCD34D', fontSize: '12px', fontWeight: 600,
-                        borderBottom: '1px dashed rgba(252,211,77,0.5)',
-                      }}>
-                        {employeeStats ? employeeStats.estimatedBonus.toFixed(4) : '--'}
-                        <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.5)', marginLeft: '1px' }}>U</span>
-                      </span>
-                    </div>
+                {/* 津贴行 */}
+                <div style={{
+                  display: 'grid', gridTemplateColumns: '56px 1fr 1fr 1fr', gap: '0',
+                  background: 'rgba(255,255,255,0.07)', borderRadius: '8px',
+                  padding: '7px 6px',
+                }}>
+                  <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '10px', display: 'flex', alignItems: 'center' }}>成本津贴</div>
+                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#FCD34D', fontSize: '11px', fontWeight: 700 }}>
+                      {employeeStats ? employeeStats.estimatedBonus.toFixed(2) : '--'}
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>元</span>
+                  </div>
+                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#81C784', fontSize: '11px', fontWeight: 700 }}>
+                      {employeeStats ? employeeStats.totalBonus.toFixed(2) : '--'}
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>元</span>
+                  </div>
+                  <div style={{ textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
+                    <span style={{ color: '#fff', fontSize: '11px', fontWeight: 700 }}>
+                      {employeeStats ? (employeeStats.totalBonus + employeeStats.estimatedBonus).toFixed(2) : '--'}
+                    </span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px' }}>元</span>
                   </div>
                 </div>
               </div>
