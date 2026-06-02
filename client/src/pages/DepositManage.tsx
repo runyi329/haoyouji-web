@@ -962,34 +962,55 @@ export default function DepositManage() {
                               <div className="text-xs text-gray-400 py-2 text-center">暂未设置右侧保证金</div>
                             ) : (
                               <div className="space-y-2 mb-3">
-                                {(rightMarginData as Array<{ coin: string; amount: number; label: string; date: string }>).map(({ coin, amount, label, date }, _i) => (
-                                  <div
-                                    key={_i}
-                                    className="flex items-center justify-between py-1.5"
-                                    style={{ borderBottom: "1px solid #F3F4F6" }}
-                                  >
-                                    <div className="flex flex-col">
-                                      <span className="text-sm font-semibold" style={{ color: amount < 0 ? '#388E3C' : '#1A2340' }}>
-                                        {amount >= 0 ? '+' : ''}{amount.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
-                                        <span className="text-xs text-gray-500 ml-1">{coin}</span>
-                                      </span>
-                                      <div className="flex items-center gap-1.5">
-                                        {date && <span className="text-[10px] text-gray-400">{date}</span>}
+                                {(rightMarginData as Array<{ coin: string; amount: number; label: string; date: string }>).map(({ coin, amount, label, date }, _i) => {
+                                  const cnyVal = coin !== '元' ? toCNY(String(Math.abs(amount)), coin, cryptoPrices) : Math.abs(amount);
+                                  return (
+                                    <div
+                                      key={_i}
+                                      className="flex items-center justify-between py-1.5"
+                                      style={{ borderBottom: "1px solid #F3F4F6" }}
+                                    >
+                                      {/* 左：日期简写 + 备注 */}
+                                      <div className="flex flex-col">
+                                        <span className="text-xs font-medium" style={{ color: '#2563EB' }}>
+                                          {date ? date.slice(5) : '--'}
+                                        </span>
                                         {label ? <span className="text-[10px] text-gray-400">{label}</span> : null}
                                       </div>
+                                      {/* 右：上行原币金额，下行折合人民币 */}
+                                      <div className="flex flex-col items-end">
+                                        <span className="text-sm font-semibold" style={{ color: amount < 0 ? '#388E3C' : '#1A2340' }}>
+                                          {amount >= 0 ? '+' : ''}{amount.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
+                                          <span className="text-xs text-gray-500 ml-1">{coin}</span>
+                                        </span>
+                                        {coin !== '元' && (
+                                          <span className="text-xs" style={{ color: amount < 0 ? '#388E3C' : '#6B7280' }}>
+                                            {amount < 0 ? '-' : ''}¥{cnyVal.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
+                                          </span>
+                                        )}
+                                      </div>
                                     </div>
-                                    {coin !== "元" && (
-                                      <span className="text-xs" style={{ color: amount < 0 ? '#388E3C' : '#6B7280' }}>
-                                        {amount < 0 ? '-' : ''}¥{Math.abs(toCNY(String(Math.abs(amount)), coin, cryptoPrices)).toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
+                                  );
+                                })}
+                                {/* 合计行：上行各币种汇总，下行折合人民币 */}
+                                <div className="flex items-end justify-between pt-1" style={{ borderTop: '1px solid #DBEAFE' }}>
+                                  <span className="text-xs text-gray-500">合计</span>
+                                  <div className="flex flex-col items-end">
+                                    {/* 各币种分行展示 */}
+                                    {Object.entries(
+                                      (rightMarginData as Array<{ coin: string; amount: number }>).reduce((acc, { coin, amount }) => {
+                                        acc[coin] = (acc[coin] || 0) + amount;
+                                        return acc;
+                                      }, {} as Record<string, number>)
+                                    ).map(([coin, total]) => (
+                                      <span key={coin} className="text-xs font-semibold" style={{ color: total < 0 ? '#388E3C' : '#1A2340' }}>
+                                        {total >= 0 ? '+' : ''}{total.toLocaleString("zh-CN", { maximumFractionDigits: 4 })} {coin}
                                       </span>
-                                    )}
+                                    ))}
+                                    <span className="text-sm font-bold text-blue-700">
+                                      ¥{rightTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
+                                    </span>
                                   </div>
-                                ))}
-                                <div className="flex items-center justify-between pt-1">
-                                  <span className="text-xs text-gray-500">折合人民币合计</span>
-                                  <span className="text-sm font-bold text-blue-700">
-                                    ¥{rightTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
-                                  </span>
                                 </div>
                               </div>
                             )}
