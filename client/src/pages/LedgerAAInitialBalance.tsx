@@ -36,8 +36,7 @@ const CRYPTO_COINS = [
   { name: "USDT", label: "USDT" },
 ];
 
-// USDT/CNY 汇率（固定）
-const CNY_RATE = 7.0;
+const CNY_RATE_FALLBACK = 7.0; // 居底备用，实际汇率从接口实时获取
 
 interface TagEntry {
   amount: string;
@@ -94,16 +93,15 @@ export default function LedgerAAInitialBalance() {
 
   // 数字币价格（USDT），统一走后端代理（规范：crypto-price-unified）
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 0, placeholderData: (prev: any) => prev });
-  // 价格单位为 USDT，需乘以 CNY_RATE 转换为人民币
+  // 使用接口返回的实时 USDT/CNY 汇率，居底用 CNY_RATE_FALLBACK
   const cryptoPrices: Record<string, number> = {};
   if (cryptoPricesRaw) {
-    // 适配新的返回结构 { prices: {...}, changes: {...} }
+    const cnyRate = (cryptoPricesRaw as any)?.usdtCnyRate ?? CNY_RATE_FALLBACK;
     const pricesMap = (cryptoPricesRaw as any)?.prices ?? cryptoPricesRaw;
     for (const [coin, usdtPrice] of Object.entries(pricesMap as Record<string, number>)) {
-      cryptoPrices[coin] = usdtPrice * CNY_RATE;
+      cryptoPrices[coin] = usdtPrice * cnyRate;
     }
-    // USDT 稳定币价格固定为 1 USDT = CNY_RATE 元
-    cryptoPrices['USDT'] = CNY_RATE;
+    cryptoPrices['USDT'] = cnyRate; // USDT 直接是实时汇率
   }
 
   useEffect(() => {
@@ -230,7 +228,7 @@ export default function LedgerAAInitialBalance() {
     if (isNaN(num) || num === 0) return null;
     if (!coin) return null; // 法币模式不需要折算
     // USDT 稳定币，用固定汇率 7.0 折算
-    const price = coin === 'USDT' ? CNY_RATE : cryptoPrices[coin];
+    const price = cryptoPrices[coin] ?? (coin === 'USDT' ? CNY_RATE_FALLBACK : 0);
     if (!price) return null;
     const cny = num * price;
     return `≈ ¥${cny.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}`;

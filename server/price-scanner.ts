@@ -15,6 +15,46 @@ const CACHE_FILE = path.join(process.cwd(), 'price-cache.json');
 // 内存价格缓存（含今日开盘价、24h高低价、成交量）
 const latestPrices: Record<string, { price: number; todayOpen: number; changePercent: number; high24h: number; low24h: number; volume24h: number; quoteVolume24h: number; updatedAt: string }> = {};
 
+// USDT/CNY 实时汇率缓存（默认 7.0 兜底）
+let usdtCnyRate: number = 7.0;
+
+/** 从 Gate.io 获取 USDT/CNY 实时汇率（USDT_CNY 交易对） */
+async function fetchUsdtCnyRate(): Promise<number | null> {
+  try {
+    const r = await fetch(
+      'https://api.gateio.ws/api/v4/spot/tickers?currency_pair=USDT_CNY',
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (r.ok) {
+      const j: any = await r.json();
+      if (Array.isArray(j) && j[0]?.last) {
+        const rate = parseFloat(j[0].last);
+        if (rate > 5 && rate < 10) return rate; // 合理范围校验
+      }
+    }
+  } catch {}
+  // 备用：OKX 现货 USDT-CNY
+  try {
+    const r2 = await fetch(
+      'https://www.okx.com/api/v5/market/ticker?instId=USDT-CNY',
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (r2.ok) {
+      const j2: any = await r2.json();
+      if (j2.code === '0' && j2.data?.[0]?.last) {
+        const rate = parseFloat(j2.data[0].last);
+        if (rate > 5 && rate < 10) return rate;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+/** 获取当前 USDT/CNY 汇率（实时，失败时返回上次缓存值） */
+export function getUsdtCnyRate(): number {
+  return usdtCnyRate;
+}
+
 const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM'];
 // 股票类合约（仅 OKX SWAP 有价格，Gate.io/火币无此品种）
 const STOCK_COINS = ['TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'];
@@ -216,6 +256,13 @@ async function scanPrices() {
   }
   // 有更新时持久化到文件
   if (updated) saveCacheToFile();
+  // 同步更新 USDT/CNY 实时汇率
+  try {
+    const rate = await fetchUsdtCnyRate();
+    if (rate !== null) {
+      usdtCnyRate = rate;
+    }
+  } catch {}
 }
 
 export function getLatestPrice(coin: string): number | null {

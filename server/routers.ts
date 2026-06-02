@@ -21531,7 +21531,7 @@ insights 数组每项包含：
     // 从 price-scanner 内存缓存读取（规范：crypto-price-unified）
     // changePercent 已由 price-scanner 用火币日K开盘价实时计算（北京时间 00:00 对齐）
     // 不再查数据库，直接返回缓存即可
-    const { getAllLatestPrices } = await import('./price-scanner');
+    const { getAllLatestPrices, getUsdtCnyRate } = await import('./price-scanner');
     const allPrices = getAllLatestPrices();
     const prices: Record<string, number> = {};
     const changes: Record<string, number> = {};
@@ -21541,7 +21541,8 @@ insights 数组每项包含：
       changes[coin] = entry.changePercent ?? 0;
       opens[coin] = entry.todayOpen ?? 0;
     }
-    return { prices, changes, opens };
+    const usdtCnyRate = getUsdtCnyRate();
+    return { prices, changes, opens, usdtCnyRate };
   }),
 
   // 分红功能：获取某用户在某账本的分红汇总（按标签分组）
