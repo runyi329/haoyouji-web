@@ -1356,6 +1356,11 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   const [employeeNames, setEmployeeNames] = useState<string[]>([]);
   const [allInvoices, setAllInvoices] = useState<any[]>([]);
 
+  // 批量审核弹窗状态
+  const [showBatchConfirm, setShowBatchConfirm] = useState(false); // 第一次确认（明细列表）
+  const [showBatchConfirm2, setShowBatchConfirm2] = useState(false); // 第二次确认
+  const [batchApproving, setBatchApproving] = useState(false);
+
   // 备份弹窗状态
   const [showBackupDialog, setShowBackupDialog] = useState(false);
   const [backupTab, setBackupTab] = useState<'manual' | 'auto'>('manual');
@@ -1476,6 +1481,25 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
     { ledgerId, companyId: selectedCompanyId!, employeeName: selectedEmployee, period },
     { enabled: selectedCompanyId != null }
   );
+
+  // 待审单明细（批量审核确认弹窗用）
+  const { data: pendingList, refetch: refetchPendingList } = (trpc as any).ledger.ajOwnerGetPendingList.useQuery(
+    { ledgerId, companyId: selectedCompanyId ?? undefined, employeeName: selectedEmployee || undefined, period },
+    { enabled: showBatchConfirm, staleTime: 0 }
+  );
+
+  // 批量审核 mutation
+  const batchApproveMutation = (trpc as any).ledger.ajOwnerBatchApprove.useMutation({
+    onSuccess: (result: any) => {
+      setBatchApproving(false);
+      setShowBatchConfirm2(false);
+      toast.success(`批量审核完成：${result.approved} 笔已通过，共 ${result.totalAmount.toFixed(2)} 元，共发放津贴 ${result.totalBonus.toFixed(4)} USDT`);
+    },
+    onError: (err: any) => {
+      setBatchApproving(false);
+      toast.error('批量审核失败: ' + (err?.message || '未知错误'));
+    },
+  });
 
   // 统计数据
   const { data: stats, isLoading: statsLoading } = (trpc as any).ledger.ajOwnerGetCompanyStats.useQuery(
@@ -1723,6 +1747,34 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                     <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '9px', lineHeight: 1 }}>元</span>
                   </div>
                 </div>
+
+                {/* 批量审核按鈕 */}
+                {employeeStats && employeeStats.pending.count > 0 && (
+                  <div style={{ marginTop: '10px' }}>
+                    <button
+                      onClick={() => { setShowBatchConfirm(true); refetchPendingList(); }}
+                      style={{
+                        width: '100%',
+                        padding: '8px 0',
+                        borderRadius: '8px',
+                        background: 'linear-gradient(90deg, #22c55e 0%, #16a34a 100%)',
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        letterSpacing: '0.5px',
+                      }}
+                    >
+                      {selectedEmployee
+                        ? `一键审核 ${selectedEmployee} 全部待审单（${employeeStats.pending.count} 笔）`
+                        : selectedCompanyId
+                          ? `一键审核本公司全部待审单（${employeeStats.pending.count} 笔）`
+                          : `一键审核全部待审单（${employeeStats.pending.count} 笔）`
+                      }
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1989,6 +2041,191 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* 批量审核第一次确认弹窗：明细列表 */}
+      {showBatchConfirm && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.55)',
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          }}
+          onClick={() => setShowBatchConfirm(false)}
+        >
+          <div
+            style={{
+              background: '#fff', borderRadius: '16px 16px 0 0',
+              width: '100%', maxWidth: 480, maxHeight: '80vh',
+              display: 'flex', flexDirection: 'column',
+              padding: '0 0 env(safe-area-inset-bottom)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 弹窗标题 */}
+            <div style={{ padding: '16px 16px 8px', borderBottom: '1px solid #f0f0f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '15px', color: '#1A2B4A' }}>
+                    批量审核确认
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>
+                    {selectedEmployee ? `业务员：${selectedEmployee}` : selectedCompanyId ? '本公司全部业务员' : '全部企业全部业务员'}
+                    {' · '}{pendingList ? `${pendingList.length} 笔待审` : '加载中...'}
+                  </div>
+                </div>
+                <button onClick={() => setShowBatchConfirm(false)} style={{ color: '#999', fontSize: '20px', lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+              </div>
+              {/* 汇总信息 */}
+              {pendingList && pendingList.length > 0 && (
+                <div style={{
+                  marginTop: '10px', padding: '10px 12px',
+                  background: '#f0fdf4', borderRadius: '10px',
+                  display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '4px',
+                }}>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 700, color: '#16a34a' }}>{pendingList.length}</div>
+                    <div style={{ fontSize: '10px', color: '#888' }}>待审笔数</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 700, color: '#16a34a' }}>
+                      {pendingList.reduce((s: number, r: any) => s + r.amount, 0).toFixed(2)}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#888' }}>总金额（元）</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 700, color: '#16a34a' }}>
+                      {(pendingList.reduce((s: number, r: any) => s + r.amount, 0) * 0.01 / 7.2).toFixed(4)}
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#888' }}>预计津贴（U）</div>
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* 明细列表 */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 16px' }}>
+              {!pendingList ? (
+                <div style={{ textAlign: 'center', color: '#aaa', padding: '24px 0', fontSize: '13px' }}>加载中...</div>
+              ) : pendingList.length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#aaa', padding: '24px 0', fontSize: '13px' }}>暂无待审单</div>
+              ) : (
+                pendingList.map((item: any, idx: number) => (
+                  <div key={item.id} style={{
+                    padding: '10px 0',
+                    borderBottom: idx < pendingList.length - 1 ? '1px solid #f5f5f5' : 'none',
+                    display: 'flex', alignItems: 'flex-start', gap: '10px',
+                  }}>
+                    <div style={{
+                      width: '28px', height: '28px', borderRadius: '50%',
+                      background: '#f0fdf4', color: '#16a34a',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '11px', fontWeight: 700, flexShrink: 0,
+                    }}>{idx + 1}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#1A2B4A' }}>
+                          {item.employeeName || '未知业务员'}
+                          {item.companyName && <span style={{ fontSize: '11px', color: '#888', marginLeft: '6px' }}>{item.companyName}</span>}
+                        </div>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#16a34a' }}>
+                          ¥{item.amount.toFixed(2)}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px', display: 'flex', gap: '8px' }}>
+                        <span>{item.recordDate}</span>
+                        {item.taxCategory && <span>{item.taxCategory}</span>}
+                        {item.expenseReason && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>{item.expenseReason}</span>}
+                        <span style={{ color: '#bbb' }}># {item.id}</span>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#86efac', marginTop: '1px' }}>
+                        预计津贴 +{(item.amount * 0.01 / 7.2).toFixed(4)} U
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            {/* 底部按鈕 */}
+            {pendingList && pendingList.length > 0 && (
+              <div style={{ padding: '12px 16px', borderTop: '1px solid #f0f0f0' }}>
+                <button
+                  onClick={() => { setShowBatchConfirm(false); setShowBatchConfirm2(true); }}
+                  style={{
+                    width: '100%', padding: '12px 0', borderRadius: '10px',
+                    background: 'linear-gradient(90deg, #22c55e 0%, #16a34a 100%)',
+                    color: '#fff', fontWeight: 700, fontSize: '14px',
+                    border: 'none', cursor: 'pointer',
+                  }}
+                >
+                  确认，进入第二步确认
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 批量审核第二次确认弹窗：最终确认 */}
+      {showBatchConfirm2 && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            background: 'rgba(0,0,0,0.65)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          onClick={() => !batchApproving && setShowBatchConfirm2(false)}
+        >
+          <div
+            style={{
+              background: '#fff', borderRadius: '16px',
+              width: 'calc(100% - 48px)', maxWidth: 360,
+              padding: '24px 20px',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ textAlign: 'center', marginBottom: '16px' }}>
+              <div style={{ fontSize: '40px', marginBottom: '8px' }}>&#9888;&#65039;</div>
+              <div style={{ fontWeight: 700, fontSize: '16px', color: '#1A2B4A' }}>最终确认批量审核</div>
+              <div style={{ fontSize: '13px', color: '#888', marginTop: '6px', lineHeight: 1.6 }}>
+                即将对 <span style={{ color: '#16a34a', fontWeight: 700 }}>{pendingList?.length || 0} 笔</span> 待审单执行审核通过，
+                共计金额 <span style={{ color: '#16a34a', fontWeight: 700 }}>¥{pendingList ? pendingList.reduce((s: number, r: any) => s + r.amount, 0).toFixed(2) : '0.00'}</span>，
+                预计发放津贴 <span style={{ color: '#16a34a', fontWeight: 700 }}>{pendingList ? (pendingList.reduce((s: number, r: any) => s + r.amount, 0) * 0.01 / 7.2).toFixed(4) : '0.0000'} U</span>。
+                <br /><span style={{ color: '#e53e3e', fontSize: '12px' }}>此操作不可撤销，请确认。</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => setShowBatchConfirm2(false)}
+                disabled={batchApproving}
+                style={{
+                  flex: 1, padding: '11px 0', borderRadius: '10px',
+                  background: '#f5f5f5', color: '#666',
+                  fontWeight: 600, fontSize: '14px', border: 'none', cursor: 'pointer',
+                }}
+              >返回</button>
+              <button
+                onClick={() => {
+                  setBatchApproving(true);
+                  batchApproveMutation.mutate({
+                    ledgerId,
+                    companyId: selectedCompanyId ?? undefined,
+                    employeeName: selectedEmployee || undefined,
+                    period,
+                  });
+                }}
+                disabled={batchApproving}
+                style={{
+                  flex: 2, padding: '11px 0', borderRadius: '10px',
+                  background: batchApproving ? '#86efac' : 'linear-gradient(90deg, #22c55e 0%, #16a34a 100%)',
+                  color: '#fff', fontWeight: 700, fontSize: '14px',
+                  border: 'none', cursor: batchApproving ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {batchApproving ? '审核中...' : '确认批量审核通过'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

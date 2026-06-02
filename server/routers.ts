@@ -17417,6 +17417,170 @@ ${klinesSummary}
           estimatedBonus,
         };
       }),
+    // AJ账本资方：批量审核通过（按公司+业务员筛选）
+    ajOwnerBatchApprove: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        companyId: z.number().optional(),   // 不传则全部企业
+        employeeName: z.string().optional(), // 不传则全部业务员
+        period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 权限校验
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=? LIMIT 1`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const memberRole = (memberRows as any[])[0]?.role || null;
+        if (!memberRole || !['owner', 'admin', 'funder'].includes(memberRole)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '权限不足' });
+        }
+        // 日期过滤
+        const now = new Date();
+        const bjNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+        const today = bjNow.toISOString().split('T')[0];
+        let dateFilter = '';
+        const dateParams: string[] = [];
+        if (input.period === 'day') { dateFilter = 'AND lr.recordDate = ?'; dateParams.push(today); }
+        else if (input.period === 'week') {
+          const ws = new Date(bjNow); ws.setUTCDate(ws.getUTCDate() - ws.getUTCDay() + (ws.getUTCDay() === 0 ? -6 : 1));
+          dateFilter = 'AND lr.recordDate >= ? AND lr.recordDate <= ?';
+          dateParams.push(ws.toISOString().split('T')[0], today);
+        } else if (input.period === 'month') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
+        else if (input.period === 'quarter') {
+          const q = Math.floor(bjNow.getUTCMonth()/3);
+          const qStart = new Date(Date.UTC(bjNow.getUTCFullYear(), q*3, 1));
+          dateFilter = 'AND lr.recordDate >= ?';
+          dateParams.push(qStart.toISOString().split('T')[0]);
+        } else if (input.period === 'year') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
+        // 构建企业和业务员过滤
+        const companyFilter = input.companyId ? 'AND lr.aj_company_id = ?' : '';
+        const companyParams = input.companyId ? [input.companyId] : [];
+        const employeeFilter = input.employeeName ? 'AND (COALESCE(lm.nickname, u.name, u.username) = ?)' : '';
+        const employeeParams = input.employeeName ? [input.employeeName] : [];
+        // 查询所有待审记录
+        const [pendingRows] = await (conn as any).execute(
+          `SELECT lr.id, lr.createdBy, lr.amount, lr.ledgerId,
+                  COALESCE(lr.reimbursementAmount, lr.amount) as reimbursementAmount
+           FROM ledger_records lr
+           LEFT JOIN users u ON u.id = lr.createdBy
+           LEFT JOIN ledger_members lm ON lm.userId = lr.createdBy AND lm.ledgerId = lr.ledgerId
+           WHERE lr.ledgerId=? AND lr.deleted_at IS NULL
+             AND (lr.aj_status IS NULL OR lr.aj_status = 'pending')
+             ${dateFilter} ${companyFilter} ${employeeFilter}`,
+          [input.ledgerId, ...dateParams, ...companyParams, ...employeeParams]
+        );
+        const records = pendingRows as any[];
+        if (records.length === 0) return { approved: 0, totalAmount: 0, totalBonus: 0 };
+        // 获取汇率
+        let usdCnyRate = 7.2;
+        try {
+          const res = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(5000) });
+          const d = await res.json() as any;
+          if (d.result === 'success' && d.rates?.['CNY']) usdCnyRate = d.rates['CNY'];
+        } catch (_) {}
+        // 批量更新状态并发放津贴
+        let totalBonus = 0;
+        for (const rec of records) {
+          await (conn as any).execute(
+            `UPDATE ledger_records SET aj_status='approved', aj_approved_by=?, aj_approved_at=NOW() WHERE id=?`,
+            [ctx.user.id, rec.id]
+          );
+          const reimbursementAmount = parseFloat(rec.reimbursementAmount || rec.amount || '0');
+          if (reimbursementAmount > 0 && rec.createdBy) {
+            const rewardNote = `成本津贴 #${rec.id}`;
+            // 检查是否已发放过
+            const [existRows] = await (conn as any).execute(
+              `SELECT id FROM af_manual_balances WHERE note=? LIMIT 1`,
+              [rewardNote]
+            );
+            if ((existRows as any[]).length === 0) {
+              const usdtRewarded = parseFloat((reimbursementAmount * 0.01 / usdCnyRate).toFixed(6));
+              if (usdtRewarded > 0) {
+                await (conn as any).execute(
+                  `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
+                  [rec.ledgerId, rec.createdBy, usdtRewarded, rewardNote]
+                );
+                try {
+                  await (conn as any).execute(
+                    `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description, created_at) VALUES (?, ?, 'reward', ?, 0, ?, NOW())`,
+                    [rec.createdBy, usdtRewarded, rec.id, rewardNote]
+                  );
+                } catch (_) {}
+                totalBonus += usdtRewarded;
+              }
+            }
+          }
+        }
+        const totalAmount = records.reduce((s: number, r: any) => s + parseFloat(r.reimbursementAmount || r.amount || '0'), 0);
+        return { approved: records.length, totalAmount, totalBonus: parseFloat(totalBonus.toFixed(4)) };
+      }),
+    // AJ账本资方：获取待审单明细（用于批量审核确认弹窗）
+    ajOwnerGetPendingList: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        companyId: z.number().optional(),
+        employeeName: z.string().optional(),
+        period: z.enum(['all', 'day', 'week', 'month', 'quarter', 'year']).default('month'),
+      }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [memberRows] = await (conn as any).execute(
+          `SELECT role FROM ledger_members WHERE ledgerId=? AND userId=? LIMIT 1`,
+          [input.ledgerId, ctx.user.id]
+        );
+        if (!(memberRows as any[])[0]?.role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const now = new Date();
+        const bjNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+        const today = bjNow.toISOString().split('T')[0];
+        let dateFilter = '';
+        const dateParams: string[] = [];
+        if (input.period === 'day') { dateFilter = 'AND lr.recordDate = ?'; dateParams.push(today); }
+        else if (input.period === 'week') {
+          const ws = new Date(bjNow); ws.setUTCDate(ws.getUTCDate() - ws.getUTCDay() + (ws.getUTCDay() === 0 ? -6 : 1));
+          dateFilter = 'AND lr.recordDate >= ? AND lr.recordDate <= ?';
+          dateParams.push(ws.toISOString().split('T')[0], today);
+        } else if (input.period === 'month') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,7)+'-01'); }
+        else if (input.period === 'quarter') {
+          const q = Math.floor(bjNow.getUTCMonth()/3);
+          const qStart = new Date(Date.UTC(bjNow.getUTCFullYear(), q*3, 1));
+          dateFilter = 'AND lr.recordDate >= ?';
+          dateParams.push(qStart.toISOString().split('T')[0]);
+        } else if (input.period === 'year') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
+        const companyFilter = input.companyId ? 'AND lr.aj_company_id = ?' : '';
+        const companyParams = input.companyId ? [input.companyId] : [];
+        const employeeFilter = input.employeeName ? 'AND (COALESCE(lm.nickname, u.name, u.username) = ?)' : '';
+        const employeeParams = input.employeeName ? [input.employeeName] : [];
+        const [rows] = await (conn as any).execute(
+          `SELECT lr.id, lr.recordDate,
+                  COALESCE(lr.reimbursementAmount, lr.amount) as amount,
+                  COALESCE(lm.nickname, u.name, u.username) as employeeName,
+                  c.name as companyName,
+                  lr.aj_expense_reason as expenseReason,
+                  lr.aj_tax_category as taxCategory
+           FROM ledger_records lr
+           LEFT JOIN users u ON u.id = lr.createdBy
+           LEFT JOIN ledger_members lm ON lm.userId = lr.createdBy AND lm.ledgerId = lr.ledgerId
+           LEFT JOIN aj_companies c ON c.id = lr.aj_company_id
+           WHERE lr.ledgerId=? AND lr.deleted_at IS NULL
+             AND (lr.aj_status IS NULL OR lr.aj_status = 'pending')
+             ${dateFilter} ${companyFilter} ${employeeFilter}
+           ORDER BY lr.recordDate DESC, lr.id DESC`,
+          [input.ledgerId, ...dateParams, ...companyParams, ...employeeParams]
+        );
+        return (rows as any[]).map(r => ({
+          id: r.id,
+          recordDate: r.recordDate,
+          amount: parseFloat(r.amount || '0'),
+          employeeName: r.employeeName || '',
+          companyName: r.companyName || '',
+          expenseReason: r.expenseReason || '',
+          taxCategory: r.taxCategory || '',
+        }));
+      }),
     // AJ账本资方：修改申请单的报销类目（税务分类名称）
     ajOwnerUpdateInvoiceCategory: protectedProcedure
       .input(z.object({
