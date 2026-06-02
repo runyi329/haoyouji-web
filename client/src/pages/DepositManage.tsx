@@ -844,8 +844,8 @@ export default function DepositManage() {
                               const marginBaseNum = parseFloat(savedMarginBase || "0") || 0;
                               // 盈亏净値 = (余额 - 初始金额) × 倍数
                               const pnl = autoBalanceNum !== null ? (autoBalanceNum - initialNum) * multiplierNum : null;
-                              // 剩余保证金 = 盈亏净値 - 已付保证金（折合人民币）
-                              const remainingMargin = pnl !== null ? pnl - rightTotalCNY : null;
+                              // 剩余保证金 = 盈亏净値 + 已付保证金（盈亏为负表示输给公司，加上保证金得剩余；盈亏为正表示赢了，加上保证金得总资产）
+                              const remainingMargin = pnl !== null ? pnl + rightTotalCNY : null;
                               // 保证金占基数比 = 剩余保证金 / 保证金基数
                               const marginBasePct = marginBaseNum > 0 && remainingMargin !== null ? (remainingMargin / marginBaseNum * 100) : null;
                               // 保证金占余额比（降级备用）
@@ -929,7 +929,7 @@ export default function DepositManage() {
                                               </div>
                                             </div>
                                             <div className="flex items-center justify-between mt-1">
-                                              <span className="text-xs text-gray-500">剩余保证金 (净値-已付保证金)</span>
+                                              <span className="text-xs text-gray-500">剩余保证金 (净値+已付保证金)</span>
                                               <div className="text-right">
                                                 <div className="text-sm font-bold" style={{ color: remainingMargin !== null && remainingMargin >= 0 ? "#D32F2F" : "#388E3C" }}>
                                                   {remainingMargin !== null ? `${remainingMargin >= 0 ? "+" : ""}${remainingMargin.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
