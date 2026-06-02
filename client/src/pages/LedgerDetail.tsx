@@ -3313,6 +3313,13 @@ export default function LedgerDetail() {
                     记录
                   </button>
                   <button
+                    onClick={() => setLocation('/work-log')}
+                    className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
+                    style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}
+                  >
+                    日志
+                  </button>
+                  <button
                     onClick={() => { sessionStorage.removeItem('ledger_back_from'); setLocation(backTarget); }}
                     className="flex-1 py-1.5 rounded-full text-sm font-medium text-center"
                     style={{ background: 'rgba(255,255,255,0.18)', border: '1px solid rgba(255,255,255,0.5)', color: '#FFF8F0' }}

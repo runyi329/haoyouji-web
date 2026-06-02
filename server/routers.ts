@@ -46,6 +46,7 @@ import { merchantRouter } from "./merchant-router";
 import { lotteryRouter } from "./lottery-router";
 import { predictionRouter } from "./prediction-router";
 import { okxTraderRouter } from "./okx-trader-router";
+import { getGitCommits } from "./git-utils";
 import * as dbMemo from "./db-memo";
 // 数据库初始化功能已禁用
 // import { initDatabase } from "./db-init";
@@ -160,6 +161,13 @@ function toBeijingTimeStr(val: any): string | null {
 }
 
 export const appRouter = router({
+  workLog: router({
+    getWorkLogs: publicProcedure
+      .query(async () => {
+        const commits = await getGitCommits();
+        return commits;
+      }),
+  }),
   wcOdds: wcOddsRouter,
   nbaOdds: nbaOddsRouter,
   pet: petRouter,
