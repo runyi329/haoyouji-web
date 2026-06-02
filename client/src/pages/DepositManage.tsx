@@ -942,11 +942,9 @@ export default function DepositManage() {
                           </div>
                           <div>
                             <div className="text-sm font-bold text-gray-800">{cat.name}</div>
-                            <div className="text-xs text-blue-500">
-                              {isSelected && rightMarginData.length > 0
-                                ? `${rightMarginData.length} 种币种 · ≈¥${rightTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}`
-                                : "点击查看/编辑保证金"}
-                            </div>
+                            {!isSelected && (
+                              <div className="text-xs text-blue-500">点击查看/编辑保证金</div>
+                            )}
                           </div>
                         </div>
                         {isSelected
