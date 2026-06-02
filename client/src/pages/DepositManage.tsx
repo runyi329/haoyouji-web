@@ -269,9 +269,10 @@ export default function DepositManage() {
   const [rightMarginEdits, setRightMarginEdits] = useState<Array<{ coin: string; amount: string }>>([]);
   const [rightEditMode, setRightEditMode] = useState(false);
   const [rightSaving, setRightSaving] = useState(false);
-  // 初始金额、倍数编辑状态（余额改为自动读取，不再手动登记）
+  // 初始金额、倍数、保证金基数编辑状态（余额改为自动读取，不再手动登记）
   const [rightInitialEdit, setRightInitialEdit] = useState("");
   const [rightMultiplierEdit, setRightMultiplierEdit] = useState("1");
+  const [rightMarginBaseEdit, setRightMarginBaseEdit] = useState("");
   const [rightBalanceEditMode, setRightBalanceEditMode] = useState(false);
 
   const { data: rightTagConfig, refetch: refetchRightTagConfig } = trpc.ledger.getTagConfig.useQuery(
@@ -334,7 +335,7 @@ export default function DepositManage() {
     });
   };
 
-  // 保存初始金额/倍数（余额改为自动读取，不再保存）
+  // 保存初始金额/倍数/保证金基数（余额改为自动读取，不再保存）
   const handleSaveBalanceInfo = () => {
     if (!selectedTagForRight) return;
     setRightSaving(true);
@@ -347,6 +348,7 @@ export default function DepositManage() {
       marginByCoin: marginByCoinJson,
       initialAmount: rightInitialEdit || undefined,
       accountMultiplier: rightMultiplierEdit || "1",
+      marginBase: rightMarginBaseEdit || undefined,
     });
     setRightBalanceEditMode(false);
   };
@@ -836,9 +838,15 @@ export default function DepositManage() {
 
                               const savedInitial = rightTagConfig?.initial_amount as string | undefined;
                               const savedMultiplier = rightTagConfig?.account_multiplier as string | undefined;
+                              const savedMarginBase = (rightTagConfig as any)?.margin_base as string | undefined;
                               const initialNum = parseFloat(savedInitial || "0") || 0;
                               const multiplierNum = parseFloat(savedMultiplier || "1") || 1;
-                              const pnl = autoBalanceNum !== null ? (autoBalanceNum - initialNum) * multiplierNum : null;
+                              const marginBaseNum = parseFloat(savedMarginBase || "0") || 0;
+                              // 盈亏净値 = (余额 - 初始金额) × 倍数 - 已付保证金（折合人民币）
+                              const pnl = autoBalanceNum !== null ? (autoBalanceNum - initialNum) * multiplierNum - rightTotalCNY : null;
+                              // 保证金占基数比 = 已付保证金 / 保证金基数
+                              const marginBasePct = marginBaseNum > 0 ? (rightTotalCNY / marginBaseNum * 100) : null;
+                              // 保证金占余额比（保留备用）
                               const marginPct = autoBalanceNum !== null && autoBalanceNum > 0 ? (rightTotalCNY / autoBalanceNum * 100) : null;
                               return (
                                 <div className="mt-3 rounded-xl p-3 space-y-2" style={{ backgroundColor: "#F8FBFF", border: "1px solid #DBEAFE" }}>
@@ -849,6 +857,7 @@ export default function DepositManage() {
                                         onClick={() => {
                                           setRightInitialEdit(savedInitial || "");
                                           setRightMultiplierEdit(savedMultiplier || "1");
+                                          setRightMarginBaseEdit(savedMarginBase || "");
                                           setRightBalanceEditMode(true);
                                         }}
                                         className="text-xs text-blue-500 flex items-center gap-0.5"
@@ -895,19 +904,25 @@ export default function DepositManage() {
                                         <span className="text-xs text-gray-500">倍数</span>
                                         <span className="text-sm font-semibold text-gray-700">{savedMultiplier || "1"}x</span>
                                       </div>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-xs text-gray-500">保证金基数</span>
+                                        <span className="text-sm font-semibold text-gray-700">
+                                          {savedMarginBase ? `¥${parseFloat(savedMarginBase).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
+                                        </span>
+                                      </div>
                                       {autoBalanceNum !== null && savedInitial && (
                                         <>
                                           <div style={{ borderTop: "1px solid #DBEAFE", paddingTop: 6 }}>
                                             <div className="flex items-center justify-between">
-                                              <span className="text-xs text-gray-500">盈亏差値 (余额-初始)×倍数</span>
+                                              <span className="text-xs text-gray-500">盈亏净値 (余额-初始)×倍数-保证金</span>
                                               <span className="text-sm font-bold" style={{ color: pnl !== null && pnl >= 0 ? "#D32F2F" : "#388E3C" }}>
                                                 {pnl !== null ? `${pnl >= 0 ? "+" : ""}${pnl.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
                                               </span>
                                             </div>
                                             <div className="flex items-center justify-between mt-1">
-                                              <span className="text-xs text-gray-500">保证金占余额比</span>
+                                              <span className="text-xs text-gray-500">保证金占基数比</span>
                                               <span className="text-sm font-bold text-blue-700">
-                                                {marginPct !== null ? `${marginPct.toFixed(1)}%` : "--"}
+                                                {marginBasePct !== null ? `${marginBasePct.toFixed(1)}%` : (marginPct !== null ? `${marginPct.toFixed(1)}%(余额)` : "--")}
                                               </span>
                                             </div>
                                           </div>
@@ -935,6 +950,17 @@ export default function DepositManage() {
                                           value={rightMultiplierEdit}
                                           onChange={e => setRightMultiplierEdit(e.target.value)}
                                           placeholder="默认1"
+                                          className="w-full text-sm border rounded-lg px-3 py-2 outline-none"
+                                          style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF" }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <div className="text-xs text-gray-500 mb-1">保证金基数 (元)，用于计算占比</div>
+                                        <input
+                                          type="number"
+                                          value={rightMarginBaseEdit}
+                                          onChange={e => setRightMarginBaseEdit(e.target.value)}
+                                          placeholder="请输入保证金基数"
                                           className="w-full text-sm border rounded-lg px-3 py-2 outline-none"
                                           style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF" }}
                                         />
