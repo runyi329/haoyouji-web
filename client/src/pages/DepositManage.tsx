@@ -3,9 +3,9 @@
  * 保证金管理页（仅 37 号账本 / owner+admin 可访问）
  * UI重设计：蓝色渐变主题，与订单管理/管理费明细风格统一
  *
- * 数据与初始金额管理完全联动：
- *   读取：ledger.adminGetAllInitialBalances → balancesMap[userId][tagName__margin / tagName__marginCoin]
- *   写入：ledger.adminSetMemberInitialBalances（保留所有其他字段，只更新 margin/marginCoin）
+ * 分为两个 tab：
+ *   左侧保证金：按成员×标签管理（原有逻辑）
+ *   右侧保证金：按标签管理，多币种，存储在 tag_config.margin_by_coin
  */
 import { useState, useMemo, useEffect } from "react";
 import React from "react";
@@ -21,6 +21,7 @@ import {
   ChevronUp,
   Eye,
   EyeOff,
+  Plus,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -53,9 +54,12 @@ export default function DepositManage() {
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 0;
 
+  // ── Tab 状态 ──
+  const [activeTab, setActiveTab] = useState<"left" | "right">("left");
+
+  // ── 左侧保证金状态 ──
   const [filterHasDeposit, setFilterHasDeposit] = useState(false);
   const [hideEmptyTags, setHideEmptyTags] = useState<Record<number, boolean>>({});
-  // 默认全部折叠，key=userId, true=展开
   const [expandedMembers, setExpandedMembers] = useState<Record<number, boolean>>({});
   const [searchText, setSearchText] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("amount");
@@ -260,12 +264,106 @@ export default function DepositManage() {
     });
   }, [members, editState, categories, filterHasDeposit, cryptoPrices, searchText, sortMode]);
 
+  // ── 右侧保证金状态 ──
+  const [selectedTagForRight, setSelectedTagForRight] = useState<string | null>(null);
+  const [rightMarginEdits, setRightMarginEdits] = useState<Array<{ coin: string; amount: string }>>([]);
+  const [rightEditMode, setRightEditMode] = useState(false);
+  const [rightSaving, setRightSaving] = useState(false);
+
+  const { data: rightTagConfig, refetch: refetchRightTagConfig } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId, tagName: selectedTagForRight ?? "" },
+    { enabled: !!ledgerId && !!selectedTagForRight }
+  );
+
+  const saveTagConfigMutation = trpc.ledger.saveTagConfig.useMutation({
+    onSuccess: () => {
+      toast.success("右侧保证金已保存");
+      setRightSaving(false);
+      setRightEditMode(false);
+      refetchRightTagConfig();
+    },
+    onError: (err) => {
+      toast.error((err as any).message || "保存失败");
+      setRightSaving(false);
+    },
+  });
+
+  // 切换标签时重置编辑状态
+  useEffect(() => {
+    setRightEditMode(false);
+    setRightMarginEdits([]);
+  }, [selectedTagForRight]);
+
+  const handleStartRightEditing = () => {
+    const savedMargin = rightTagConfig?.margin_by_coin
+      ? (() => { try { return JSON.parse(rightTagConfig.margin_by_coin as string); } catch { return null; } })()
+      : null;
+    const entries = savedMargin
+      ? Object.entries(savedMargin).map(([coin, amount]) => ({ coin, amount: String(amount) }))
+      : [{ coin: "ETH", amount: "" }];
+    setRightMarginEdits(entries);
+    setRightEditMode(true);
+  };
+
+  const handleSaveRightMargin = () => {
+    if (!selectedTagForRight) return;
+    setRightSaving(true);
+    const validEntries = rightMarginEdits.filter(e => e.amount && parseFloat(e.amount) > 0);
+    const marginByCoinJson = validEntries.length > 0
+      ? JSON.stringify(Object.fromEntries(validEntries.map(e => [e.coin || "元", parseFloat(e.amount) || 0])))
+      : undefined;
+    // 保留其他配置字段，只更新 marginByCoin
+    saveTagConfigMutation.mutate({
+      ledgerId,
+      tagName: selectedTagForRight,
+      marginByCoin: marginByCoinJson,
+    });
+  };
+
+  const handleClearRightMargin = () => {
+    if (!selectedTagForRight) return;
+    showConfirm(
+      "确认清空保证金",
+      `确定要清空 [${selectedTagForRight}] 的右侧保证金吗？`,
+      () => {
+        setRightSaving(true);
+        saveTagConfigMutation.mutate({
+          ledgerId,
+          tagName: selectedTagForRight,
+          marginByCoin: undefined,
+        });
+      }
+    );
+  };
+
+  // 右侧保证金汇总（所有标签）
+  const rightStats = useMemo(() => {
+    // 这里只能用已加载的单个标签数据，汇总需要遍历所有标签
+    // 简化：只显示当前选中标签的数据
+    return null;
+  }, []);
+
+  // 解析右侧保证金数据（当前选中标签）
+  const rightMarginData = useMemo(() => {
+    if (!rightTagConfig?.margin_by_coin) return [];
+    try {
+      const obj = JSON.parse(rightTagConfig.margin_by_coin as string);
+      return Object.entries(obj).map(([coin, amount]) => ({ coin, amount: Number(amount) }));
+    } catch { return []; }
+  }, [rightTagConfig]);
+
+  const rightTotalCNY = useMemo(() => {
+    return rightMarginData.reduce((sum, { coin, amount }) => {
+      return sum + toCNY(String(amount), coin, cryptoPrices);
+    }, 0);
+  }, [rightMarginData, cryptoPrices]);
+
   return (
     <div className="min-h-screen pb-10" style={{ backgroundColor: "#F0F4FF" }}>
       <PageTag code="P080" />
       {/* 蓝色渐变顶部 */}
       <div
-        className="sticky top-0 z-20 px-4 pt-4 pb-5"
+        className="sticky top-0 z-20 px-4 pt-4 pb-3"
         style={{ background: "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)" }}
       >
         <div className="flex items-center gap-3 mb-3">
@@ -278,271 +376,512 @@ export default function DepositManage() {
           </button>
           <div className="flex-1">
             <div className="text-base font-bold text-white">保证金管理</div>
-            <div className="text-xs text-blue-200">{members.length} 人 · {stats.totalCount} 笔</div>
-          </div>
-          <button
-            onClick={() => setFilterHasDeposit((v) => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
-            style={{
-              backgroundColor: filterHasDeposit ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.12)",
-              color: "white",
-              border: filterHasDeposit ? "1px solid rgba(255,255,255,0.5)" : "1px solid rgba(255,255,255,0.2)",
-            }}
-          >
-            {filterHasDeposit ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-            {filterHasDeposit ? "有保证金" : "全部"}
-          </button>
-        </div>
-        <div
-          className="rounded-2xl px-4 py-3 flex items-center justify-between"
-          style={{ backgroundColor: "rgba(255,255,255,0.12)" }}
-        >
-          <div>
-            <div className="text-xs text-blue-200 mb-0.5">总折合人民币</div>
-            <div className="text-2xl font-bold text-white">
-              ¥{stats.totalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
+            <div className="text-xs text-blue-200">
+              {activeTab === "left" ? `${members.length} 人 · ${stats.totalCount} 笔` : `${categories.length} 个标签`}
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-xs text-blue-200 mb-0.5">保证金笔数</div>
-            <div className="text-2xl font-bold text-white">{stats.totalCount}</div>
-          </div>
+          {activeTab === "left" && (
+            <button
+              onClick={() => setFilterHasDeposit((v) => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium"
+              style={{
+                backgroundColor: filterHasDeposit ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.12)",
+                color: "white",
+                border: filterHasDeposit ? "1px solid rgba(255,255,255,0.5)" : "1px solid rgba(255,255,255,0.2)",
+              }}
+            >
+              {filterHasDeposit ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+              {filterHasDeposit ? "有保证金" : "全部"}
+            </button>
+          )}
+        </div>
+
+        {/* Tab 切换 */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveTab("left")}
+            className="flex-1 py-2 rounded-xl text-sm font-semibold transition-all"
+            style={{
+              backgroundColor: activeTab === "left" ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)",
+              color: "white",
+              border: activeTab === "left" ? "1px solid rgba(255,255,255,0.5)" : "1px solid rgba(255,255,255,0.15)",
+            }}
+          >
+            左侧保证金
+          </button>
+          <button
+            onClick={() => setActiveTab("right")}
+            className="flex-1 py-2 rounded-xl text-sm font-semibold transition-all"
+            style={{
+              backgroundColor: activeTab === "right" ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.08)",
+              color: "white",
+              border: activeTab === "right" ? "1px solid rgba(255,255,255,0.5)" : "1px solid rgba(255,255,255,0.15)",
+            }}
+          >
+            右侧保证金
+          </button>
         </div>
       </div>
 
-      {/* 横向滚动币种统计卡片 */}
-      {Object.keys(stats.byCoin).length > 0 && (
-        <div className="mt-3 px-4">
-          <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-            {Object.entries(stats.byCoin)
-              .sort((a, b) => b[1].count - a[1].count)
-              .map(([coin, data]) => {
-                const cnyVal = coin === "元"
-                  ? data.total
-                  : coin === "USDT"
-                  ? data.total * CNY_RATE
-                  : data.total * (cryptoPrices[coin] ?? 0);
+      {/* ══════════════════════════════════════
+          左侧保证金 Tab
+      ══════════════════════════════════════ */}
+      {activeTab === "left" && (
+        <>
+          {/* 汇总卡片 */}
+          <div className="mx-4 mt-3">
+            <div
+              className="rounded-2xl px-4 py-3 flex items-center justify-between"
+              style={{ background: "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)" }}
+            >
+              <div>
+                <div className="text-xs text-blue-200 mb-0.5">总折合人民币</div>
+                <div className="text-2xl font-bold text-white">
+                  ¥{stats.totalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-blue-200 mb-0.5">保证金笔数</div>
+                <div className="text-2xl font-bold text-white">{stats.totalCount}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* 横向滚动币种统计卡片 */}
+          {Object.keys(stats.byCoin).length > 0 && (
+            <div className="mt-3 px-4">
+              <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                {Object.entries(stats.byCoin)
+                  .sort((a, b) => b[1].count - a[1].count)
+                  .map(([coin, data]) => {
+                    const cnyVal = coin === "元"
+                      ? data.total
+                      : coin === "USDT"
+                      ? data.total * CNY_RATE
+                      : data.total * (cryptoPrices[coin] ?? 0);
+                    return (
+                      <div
+                        key={coin}
+                        className="flex-shrink-0 rounded-2xl px-4 py-3 min-w-[110px]"
+                        style={{ background: "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)" }}
+                      >
+                        <div className="text-xs text-blue-200 mb-1">{coin}</div>
+                        <div className="text-base font-bold text-white">
+                          {data.total.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
+                        </div>
+                        <div className="text-xs text-blue-300 mt-0.5">{data.count} 笔</div>
+                        {coin !== "元" && cnyVal > 0 && (
+                          <div className="text-xs text-blue-200 mt-0.5">
+                            ≈¥{cnyVal.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
+          {/* 搜索栏 + 排序切换 */}
+          <div className="mx-4 mt-3 flex items-center gap-2">
+            <div
+              className="flex-1 flex items-center gap-2 rounded-xl px-3 py-2"
+              style={{ backgroundColor: "#FFFFFF" }}
+            >
+              <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+              <input
+                type="text"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                placeholder="搜索成员名称..."
+                className="flex-1 text-sm outline-none bg-transparent text-gray-700 placeholder-gray-400"
+              />
+              {searchText && (
+                <button onClick={() => setSearchText("")}>
+                  <X className="w-4 h-4 text-gray-400" />
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setSortMode((m) => m === "amount" ? "name" : "amount")}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium"
+              style={{ backgroundColor: "#FFFFFF", color: "#2563eb" }}
+            >
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              {sortMode === "amount" ? "按金额" : "按名称"}
+            </button>
+          </div>
+
+          {/* 成员列表 */}
+          <div className="mx-4 mt-3 space-y-3">
+            {filteredMembers.length === 0 ? (
+              <div className="text-center text-gray-400 text-sm mt-8">
+                {searchText ? "未找到匹配成员" : "暂无有保证金的成员"}
+              </div>
+            ) : (
+              filteredMembers.map((member: any) => {
+                const userEdit = editState[member.userId] ?? {};
+                const depositEntries = categories.filter((cat: any) => {
+                  const e = userEdit[cat.name];
+                  return e && parseFloat(e.margin) > 0;
+                });
+                const isHidingEmpty = hideEmptyTags[member.userId] !== false;
+                const visibleCats = isHidingEmpty
+                  ? categories.filter((cat: any) => {
+                      const e = userEdit[cat.name];
+                      return e && parseFloat(e.margin) > 0;
+                    })
+                  : categories;
+                const memberStats = stats.byMember[member.userId];
+                const memberTotalCNY = memberStats?.totalCNY ?? 0;
+                const isExpanded = expandedMembers[member.userId] === true;
+
                 return (
                   <div
-                    key={coin}
-                    className="flex-shrink-0 rounded-2xl px-4 py-3 min-w-[110px]"
-                    style={{ background: "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)" }}
+                    key={member.userId}
+                    className="rounded-2xl overflow-hidden shadow-sm"
+                    style={{ backgroundColor: "#FFFFFF" }}
                   >
-                    <div className="text-xs text-blue-200 mb-1">{coin}</div>
-                    <div className="text-base font-bold text-white">
-                      {data.total.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
-                    </div>
-                    <div className="text-xs text-blue-300 mt-0.5">{data.count} 笔</div>
-                    {coin !== "元" && cnyVal > 0 && (
-                      <div className="text-xs text-blue-200 mt-0.5">
-                        ≈¥{cnyVal.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
+                    <button
+                      className="w-full text-left px-4 py-3"
+                      style={{
+                        background: "linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)",
+                        borderBottom: isExpanded ? "1px solid #BFDBFE" : "none",
+                      }}
+                      onClick={() =>
+                        setExpandedMembers((prev) => ({ ...prev, [member.userId]: !isExpanded }))
+                      }
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <UserAvatar
+                            userId={member.userId}
+                            nickname={member.nickname || member.username}
+                            size={32}
+                          />
+                          <div>
+                            <div className="text-sm font-bold text-gray-800">
+                              {member.nickname || member.username || "未知"}
+                            </div>
+                            <div className="text-xs text-blue-500">
+                              {depositEntries.length > 0 ? `${depositEntries.length} 项保证金` : "暂无保证金"}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {memberTotalCNY > 0 ? (
+                            <div className="text-right">
+                              <div className="text-base font-bold text-blue-700">
+                                ¥{memberTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
+                              </div>
+                              <div className="text-xs text-blue-400">折合人民币</div>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-gray-400">—</div>
+                          )}
+                          {isExpanded
+                            ? <ChevronUp className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                            : <ChevronDown className="w-4 h-4 text-blue-400 flex-shrink-0" />}
+                        </div>
+                      </div>
+                    </button>
+
+                    {isExpanded && <div className="px-4 py-2">
+                      {categories.length > depositEntries.length && (
+                        <button
+                          onClick={() =>
+                            setHideEmptyTags((prev) => ({ ...prev, [member.userId]: !isHidingEmpty }))
+                          }
+                          className="flex items-center gap-1 text-xs text-blue-500 mb-2"
+                        >
+                          {isHidingEmpty ? (
+                            <><ChevronDown className="w-3 h-3" />展开全部标签</>
+                          ) : (
+                            <><ChevronUp className="w-3 h-3" />收起空标签</>
+                          )}
+                        </button>
+                      )}
+                      {visibleCats.length === 0 ? (
+                        <div className="text-xs text-gray-300 py-2 text-center">暂无保证金</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {visibleCats.map((cat: any) => {
+                            const entry = userEdit[cat.name] ?? { margin: "", marginCoin: "" };
+                            const hasValue = entry.margin && parseFloat(entry.margin) > 0;
+                            return (
+                              <div
+                                key={cat.id}
+                                className="flex items-center gap-2 py-1.5"
+                                style={{ borderBottom: "1px solid #F3F4F6" }}
+                              >
+                                <div className="flex items-center gap-1.5 w-20 flex-shrink-0">
+                                  <div
+                                    className="w-2 h-2 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: cat.color || "#2563eb" }}
+                                  />
+                                  <span className="text-xs text-gray-600 truncate">{cat.name}</span>
+                                </div>
+                                <div className="flex-1 flex items-center gap-1.5">
+                                  {hasValue ? (
+                                    <>
+                                      <span className="text-sm font-semibold text-gray-800">
+                                        {parseFloat(entry.margin).toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
+                                      </span>
+                                      <span className="text-xs text-gray-500">{normalizeCoin(entry.marginCoin)}</span>
+                                      {entry.marginCoin && entry.marginCoin !== "元" && (
+                                        <span className="text-xs text-gray-400">
+                                          {calcCNYStr(entry.margin, entry.marginCoin)}
+                                        </span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className="text-xs text-gray-300">未设置</span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <button
+                                    onClick={() =>
+                                      openEditSheet(
+                                        member.userId, cat.name,
+                                        member.nickname || member.username || "未知",
+                                        cat.color || "#2563eb"
+                                      )
+                                    }
+                                    className="w-7 h-7 flex items-center justify-center rounded-full"
+                                    style={{ backgroundColor: "#EFF6FF" }}
+                                  >
+                                    <Pencil className="w-3 h-3 text-blue-600" />
+                                  </button>
+                                  {hasValue && (
+                                    <button
+                                      onClick={() =>
+                                        clearCell(member.userId, cat.name, member.nickname || member.username || String(member.userId))
+                                      }
+                                      className="w-7 h-7 flex items-center justify-center rounded-full"
+                                      style={{ backgroundColor: "#FFF5F5" }}
+                                    >
+                                      <Trash2 className="w-3 h-3 text-red-400" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ══════════════════════════════════════
+          右侧保证金 Tab
+      ══════════════════════════════════════ */}
+      {activeTab === "right" && (
+        <>
+          {/* 标签选择列表 */}
+          <div className="mx-4 mt-3 space-y-2">
+            {categories.length === 0 ? (
+              <div className="text-center text-gray-400 text-sm mt-8">暂无标签</div>
+            ) : (
+              categories.map((cat: any) => {
+                const isSelected = selectedTagForRight === cat.name;
+                return (
+                  <div
+                    key={cat.id}
+                    className="rounded-2xl overflow-hidden shadow-sm"
+                    style={{ backgroundColor: "#FFFFFF" }}
+                  >
+                    {/* 标签头部 */}
+                    <button
+                      className="w-full text-left px-4 py-3"
+                      style={{
+                        background: isSelected
+                          ? "linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)"
+                          : "#FFFFFF",
+                        borderBottom: isSelected ? "1px solid #BFDBFE" : "none",
+                      }}
+                      onClick={() => setSelectedTagForRight(isSelected ? null : cat.name)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+                            style={{ backgroundColor: cat.color ? `${cat.color}22` : "#EFF6FF" }}
+                          >
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: cat.color || "#2563eb" }}
+                            />
+                          </div>
+                          <div>
+                            <div className="text-sm font-bold text-gray-800">{cat.name}</div>
+                            <div className="text-xs text-blue-500">
+                              {isSelected && rightMarginData.length > 0
+                                ? `${rightMarginData.length} 种币种 · ≈¥${rightTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}`
+                                : "点击查看/编辑保证金"}
+                            </div>
+                          </div>
+                        </div>
+                        {isSelected
+                          ? <ChevronUp className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                          : <ChevronDown className="w-4 h-4 text-blue-400 flex-shrink-0" />}
+                      </div>
+                    </button>
+
+                    {/* 展开内容 */}
+                    {isSelected && (
+                      <div className="px-4 py-3">
+                        {/* 查看模式 */}
+                        {!rightEditMode && (
+                          <>
+                            {rightMarginData.length === 0 ? (
+                              <div className="text-xs text-gray-400 py-2 text-center">暂未设置右侧保证金</div>
+                            ) : (
+                              <div className="space-y-2 mb-3">
+                                {rightMarginData.map(({ coin, amount }) => (
+                                  <div
+                                    key={coin}
+                                    className="flex items-center justify-between py-1.5"
+                                    style={{ borderBottom: "1px solid #F3F4F6" }}
+                                  >
+                                    <span className="text-sm font-semibold text-gray-800">
+                                      {amount.toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
+                                      <span className="text-xs text-gray-500 ml-1">{coin}</span>
+                                    </span>
+                                    {coin !== "元" && (
+                                      <span className="text-xs text-gray-400">
+                                        {calcCNYStr(String(amount), coin)}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                                <div className="flex items-center justify-between pt-1">
+                                  <span className="text-xs text-gray-500">折合人民币合计</span>
+                                  <span className="text-sm font-bold text-blue-700">
+                                    ¥{rightTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleStartRightEditing}
+                                className="flex-1 py-2 rounded-xl text-sm font-semibold text-white"
+                                style={{ background: "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)" }}
+                              >
+                                <Pencil className="w-3.5 h-3.5 inline mr-1" />
+                                编辑保证金
+                              </button>
+                              {rightMarginData.length > 0 && (
+                                <button
+                                  onClick={handleClearRightMargin}
+                                  className="w-10 h-9 flex items-center justify-center rounded-xl"
+                                  style={{ backgroundColor: "#FFF5F5" }}
+                                >
+                                  <Trash2 className="w-4 h-4 text-red-400" />
+                                </button>
+                              )}
+                            </div>
+                          </>
+                        )}
+
+                        {/* 编辑模式 */}
+                        {rightEditMode && (
+                          <>
+                            <div className="space-y-2 mb-3">
+                              {rightMarginEdits.map((entry, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  {/* 币种选择 */}
+                                  <div className="flex gap-1 flex-wrap">
+                                    {CRYPTO_COINS.map((c) => (
+                                      <button
+                                        key={c}
+                                        onClick={() => {
+                                          const next = [...rightMarginEdits];
+                                          next[idx] = { ...next[idx], coin: c };
+                                          setRightMarginEdits(next);
+                                        }}
+                                        className="px-2 py-1 rounded-lg text-xs font-medium"
+                                        style={{
+                                          backgroundColor: (entry.coin || "ETH") === c ? "#2563eb" : "#F0F4FF",
+                                          color: (entry.coin || "ETH") === c ? "#FFFFFF" : "#374151",
+                                        }}
+                                      >
+                                        {c}
+                                      </button>
+                                    ))}
+                                  </div>
+                                  {/* 数量输入 */}
+                                  <input
+                                    type="number"
+                                    value={entry.amount}
+                                    onChange={(e) => {
+                                      const next = [...rightMarginEdits];
+                                      next[idx] = { ...next[idx], amount: e.target.value };
+                                      setRightMarginEdits(next);
+                                    }}
+                                    placeholder="数量"
+                                    className="w-24 text-sm border rounded-lg px-2 py-1.5 outline-none"
+                                    style={{ borderColor: "#BFDBFE", backgroundColor: "#F8FBFF" }}
+                                  />
+                                  {/* 删除行 */}
+                                  {rightMarginEdits.length > 1 && (
+                                    <button
+                                      onClick={() => setRightMarginEdits(rightMarginEdits.filter((_, i) => i !== idx))}
+                                      className="w-7 h-7 flex items-center justify-center rounded-full flex-shrink-0"
+                                      style={{ backgroundColor: "#FFF5F5" }}
+                                    >
+                                      <X className="w-3 h-3 text-red-400" />
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                              {/* 添加币种行 */}
+                              <button
+                                onClick={() => setRightMarginEdits([...rightMarginEdits, { coin: "ETH", amount: "" }])}
+                                className="flex items-center gap-1 text-xs text-blue-500 mt-1"
+                              >
+                                <Plus className="w-3 h-3" />添加币种
+                              </button>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setRightEditMode(false)}
+                                className="flex-1 py-2 rounded-xl border text-sm text-gray-600 font-medium"
+                                style={{ borderColor: "#E5E7EB" }}
+                              >
+                                取消
+                              </button>
+                              <button
+                                onClick={handleSaveRightMargin}
+                                disabled={rightSaving}
+                                className="flex-1 py-2 rounded-xl text-white text-sm font-bold"
+                                style={{
+                                  background: "linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)",
+                                  opacity: rightSaving ? 0.7 : 1,
+                                }}
+                              >
+                                {rightSaving ? "保存中..." : "确认保存"}
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
                 );
-              })}
+              })
+            )}
           </div>
-        </div>
+        </>
       )}
 
-      {/* 搜索栏 + 排序切换 */}
-      <div className="mx-4 mt-3 flex items-center gap-2">
-        <div
-          className="flex-1 flex items-center gap-2 rounded-xl px-3 py-2"
-          style={{ backgroundColor: "#FFFFFF" }}
-        >
-          <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
-          <input
-            type="text"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            placeholder="搜索成员名称..."
-            className="flex-1 text-sm outline-none bg-transparent text-gray-700 placeholder-gray-400"
-          />
-          {searchText && (
-            <button onClick={() => setSearchText("")}>
-              <X className="w-4 h-4 text-gray-400" />
-            </button>
-          )}
-        </div>
-        <button
-          onClick={() => setSortMode((m) => m === "amount" ? "name" : "amount")}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium"
-          style={{ backgroundColor: "#FFFFFF", color: "#2563eb" }}
-        >
-          <ArrowUpDown className="w-3.5 h-3.5" />
-          {sortMode === "amount" ? "按金额" : "按名称"}
-        </button>
-      </div>
-
-      {/* 成员列表 */}
-      <div className="mx-4 mt-3 space-y-3">
-        {filteredMembers.length === 0 ? (
-          <div className="text-center text-gray-400 text-sm mt-8">
-            {searchText ? "未找到匹配成员" : "暂无有保证金的成员"}
-          </div>
-        ) : (
-          filteredMembers.map((member: any) => {
-            const userEdit = editState[member.userId] ?? {};
-            const depositEntries = categories.filter((cat: any) => {
-              const e = userEdit[cat.name];
-              return e && parseFloat(e.margin) > 0;
-            });
-            const isHidingEmpty = hideEmptyTags[member.userId] !== false;
-            const visibleCats = isHidingEmpty
-              ? categories.filter((cat: any) => {
-                  const e = userEdit[cat.name];
-                  return e && parseFloat(e.margin) > 0;
-                })
-              : categories;
-            const memberStats = stats.byMember[member.userId];
-            const memberTotalCNY = memberStats?.totalCNY ?? 0;
-
-            const isExpanded = expandedMembers[member.userId] === true;
-
-            return (
-              <div
-                key={member.userId}
-                className="rounded-2xl overflow-hidden shadow-sm"
-                style={{ backgroundColor: "#FFFFFF" }}
-              >
-                {/* 成员头部 — 点击展开/折叠 */}
-                <button
-                  className="w-full text-left px-4 py-3"
-                  style={{
-                    background: "linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)",
-                    borderBottom: isExpanded ? "1px solid #BFDBFE" : "none",
-                  }}
-                  onClick={() =>
-                    setExpandedMembers((prev) => ({ ...prev, [member.userId]: !isExpanded }))
-                  }
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <UserAvatar
-                        userId={member.userId}
-                        nickname={member.nickname || member.username}
-                        size={32}
-                      />
-                      <div>
-                        <div className="text-sm font-bold text-gray-800">
-                          {member.nickname || member.username || "未知"}
-                        </div>
-                        <div className="text-xs text-blue-500">
-                          {depositEntries.length > 0 ? `${depositEntries.length} 项保证金` : "暂无保证金"}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {memberTotalCNY > 0 ? (
-                        <div className="text-right">
-                          <div className="text-base font-bold text-blue-700">
-                            ¥{memberTotalCNY.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
-                          </div>
-                          <div className="text-xs text-blue-400">折合人民币</div>
-                        </div>
-                      ) : (
-                        <div className="text-xs text-gray-400">—</div>
-                      )}
-                      {isExpanded
-                        ? <ChevronUp className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                        : <ChevronDown className="w-4 h-4 text-blue-400 flex-shrink-0" />}
-                    </div>
-                  </div>
-                </button>
-
-                {/* 标签行 — 仅展开时显示 */}
-                {isExpanded && <div className="px-4 py-2">
-                  {categories.length > depositEntries.length && (
-                    <button
-                      onClick={() =>
-                        setHideEmptyTags((prev) => ({ ...prev, [member.userId]: !isHidingEmpty }))
-                      }
-                      className="flex items-center gap-1 text-xs text-blue-500 mb-2"
-                    >
-                      {isHidingEmpty ? (
-                        <><ChevronDown className="w-3 h-3" />展开全部标签</>
-                      ) : (
-                        <><ChevronUp className="w-3 h-3" />收起空标签</>
-                      )}
-                    </button>
-                  )}
-                  {visibleCats.length === 0 ? (
-                    <div className="text-xs text-gray-300 py-2 text-center">暂无保证金</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {visibleCats.map((cat: any) => {
-                        const entry = userEdit[cat.name] ?? { margin: "", marginCoin: "" };
-                        const hasValue = entry.margin && parseFloat(entry.margin) > 0;
-                        return (
-                          <div
-                            key={cat.id}
-                            className="flex items-center gap-2 py-1.5"
-                            style={{ borderBottom: "1px solid #F3F4F6" }}
-                          >
-                            <div className="flex items-center gap-1.5 w-20 flex-shrink-0">
-                              <div
-                                className="w-2 h-2 rounded-full flex-shrink-0"
-                                style={{ backgroundColor: cat.color || "#2563eb" }}
-                              />
-                              <span className="text-xs text-gray-600 truncate">{cat.name}</span>
-                            </div>
-                            <div className="flex-1 flex items-center gap-1.5">
-                              {hasValue ? (
-                                <>
-                                  <span className="text-sm font-semibold text-gray-800">
-                                    {parseFloat(entry.margin).toLocaleString("zh-CN", { maximumFractionDigits: 4 })}
-                                  </span>
-                                  <span className="text-xs text-gray-500">{normalizeCoin(entry.marginCoin)}</span>
-                                  {entry.marginCoin && entry.marginCoin !== "元" && (
-                                    <span className="text-xs text-gray-400">
-                                      {calcCNYStr(entry.margin, entry.marginCoin)}
-                                    </span>
-                                  )}
-                                </>
-                              ) : (
-                                <span className="text-xs text-gray-300">未设置</span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <button
-                                onClick={() =>
-                                  openEditSheet(
-                                    member.userId, cat.name,
-                                    member.nickname || member.username || "未知",
-                                    cat.color || "#2563eb"
-                                  )
-                                }
-                                className="w-7 h-7 flex items-center justify-center rounded-full"
-                                style={{ backgroundColor: "#EFF6FF" }}
-                              >
-                                <Pencil className="w-3 h-3 text-blue-600" />
-                              </button>
-                              {hasValue && (
-                                <button
-                                  onClick={() =>
-                                    clearCell(member.userId, cat.name, member.nickname || member.username || String(member.userId))
-                                  }
-                                  className="w-7 h-7 flex items-center justify-center rounded-full"
-                                  style={{ backgroundColor: "#FFF5F5" }}
-                                >
-                                  <Trash2 className="w-3 h-3 text-red-400" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>}
-              </div>
-            );
-          })
-        )}
-      </div>
-
-      {/* 底部Sheet编辑态 */}
+      {/* 底部Sheet编辑态（左侧保证金用） */}
       {editSheet?.open && (
         <div
           className="fixed inset-0 z-50 flex flex-col justify-end"
