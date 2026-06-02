@@ -11554,6 +11554,53 @@ ${klinesSummary}
         return list.length > 0 ? list[0] : null;
       }),
 
+    // 专用：只更新 pause_date，不影响其他字段
+    setTagPauseDate: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        tagName: z.string(),
+        pauseDate: z.string().nullable(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbLedgerMod = await import('./db-ledger');
+        const myMembership = await dbLedgerMod.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
+        }
+        const db = await getLedgerDb();
+        const existing = await db.execute(
+          sql`SELECT id FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName} LIMIT 1`
+        );
+        const existingList = (existing as any)[0] as any[];
+        if (existingList.length > 0) {
+          await db.execute(
+            sql`UPDATE ledger_tag_config SET pause_date = ${input.pauseDate} WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}`
+          );
+        } else {
+          await db.execute(
+            sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, pause_date, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.pauseDate}, ${ctx.user.id})`
+          );
+        }
+        return { success: true };
+      }),
+
+    // 批量获取账本所有标签配置
+    getAllTagsConfigByLedger: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const rows = await db.execute(
+          sql`SELECT * FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId}`
+        );
+        const list = (rows as any)[0] as any[];
+        // 以 tag_name 为 key 返回 map
+        const map: Record<string, any> = {};
+        for (const row of list) {
+          map[row.tag_name] = row;
+        }
+        return map;
+      }),
+
     // 保存标签配置
     saveTagConfig: protectedProcedure
       .input(z.object({

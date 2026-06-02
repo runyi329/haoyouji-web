@@ -94,7 +94,7 @@ export default function InterestManagePage() {
   );
 
   // 暂停 / 恢复 mutation
-  const saveTagConfigMutation = trpc.ledger.saveTagConfig.useMutation({
+  const setTagPauseDateMutation = trpc.ledger.setTagPauseDate.useMutation({
     onSuccess: () => {
       refetchTagsConfig();
       toast.success('已更新');
@@ -104,21 +104,21 @@ export default function InterestManagePage() {
 
   const handlePause = useCallback((tagName: string) => {
     const today = new Date().toISOString().slice(0, 10);
-    saveTagConfigMutation.mutate({
+    setTagPauseDateMutation.mutate({
       ledgerId: lid,
       tagName,
       pauseDate: today,
     });
     setConfirmPauseTag(null);
-  }, [lid, saveTagConfigMutation]);
+  }, [lid, setTagPauseDateMutation]);
 
   const handleResume = useCallback((tagName: string) => {
-    saveTagConfigMutation.mutate({
+    setTagPauseDateMutation.mutate({
       ledgerId: lid,
       tagName,
       pauseDate: null,
     });
-  }, [lid, saveTagConfigMutation]);
+  }, [lid, setTagPauseDateMutation]);
 
   // 新增分段
   const addPeriodMutation = trpc.ledger.addTagInterestPeriod.useMutation({
