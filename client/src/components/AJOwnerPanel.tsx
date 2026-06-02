@@ -1474,7 +1474,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   // 业务员详细统计（状态分布、金额分布、已发/待发津贴）
   const { data: employeeStats } = (trpc as any).ledger.ajOwnerGetEmployeeStats.useQuery(
     { ledgerId, companyId: selectedCompanyId!, employeeName: selectedEmployee, period },
-    { enabled: !!selectedEmployee && selectedCompanyId != null }
+    { enabled: selectedCompanyId != null }
   );
 
   // 统计数据
@@ -1625,8 +1625,8 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
               )}
             </div>
 
-            {/* 第二行：选中业务员时展开详细统计 */}
-            {selectedEmployee && (
+            {/* 第二行：选中公司时展开详细统计（全部或单个业务员） */}
+            {selectedCompanyId != null && (
               <div
                 style={{
                   marginTop: '10px',

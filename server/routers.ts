@@ -17372,6 +17372,8 @@ ${klinesSummary}
           dateParams.push(qStart.toISOString().split('T')[0]);
         } else if (input.period === 'year') { dateFilter = 'AND lr.recordDate >= ?'; dateParams.push(today.slice(0,4)+'-01-01'); }
         // 查询该业务员在该企业的所有记录（按状态分组）
+        const employeeFilter = input.employeeName ? 'AND (COALESCE(lm.nickname, u.name, u.username) = ?)' : '';
+        const employeeParams = input.employeeName ? [input.employeeName] : [];
         const [statusRows] = await (conn as any).execute(
           `SELECT
              COALESCE(lr.aj_status, 'pending') as status,
@@ -17381,19 +17383,21 @@ ${klinesSummary}
            LEFT JOIN users u ON u.id = lr.createdBy
            LEFT JOIN ledger_members lm ON lm.userId = lr.createdBy AND lm.ledgerId = lr.ledgerId
            WHERE lr.ledgerId=? AND lr.aj_company_id=? AND lr.deleted_at IS NULL ${dateFilter}
-             AND (COALESCE(lm.nickname, u.name, u.username) = ?)
+             ${employeeFilter}
            GROUP BY COALESCE(lr.aj_status, 'pending')`,
-          [input.ledgerId, input.companyId, ...dateParams, input.employeeName]
+          [input.ledgerId, input.companyId, ...dateParams, ...employeeParams]
         );
         // 查询已发津贴（af_manual_balances 中该业务员的成本津贴记录）
+        const bonusEmployeeFilter = input.employeeName ? 'AND (COALESCE(lm.nickname, u.name, u.username) = ?)' : '';
+        const bonusEmployeeParams = input.employeeName ? [input.employeeName] : [];
         const [bonusRows] = await (conn as any).execute(
           `SELECT COALESCE(SUM(amb.amount), 0) as totalBonus
            FROM af_manual_balances amb
            JOIN users u ON u.id = amb.user_id
            LEFT JOIN ledger_members lm ON lm.userId = u.id AND lm.ledgerId = ?
            WHERE amb.ledger_id = ? AND amb.note LIKE '成本津贴 #%' AND amb.amount > 0
-             AND (COALESCE(lm.nickname, u.name, u.username) = ?)`,
-          [input.ledgerId, input.ledgerId, input.employeeName]
+             ${bonusEmployeeFilter}`,
+          [input.ledgerId, input.ledgerId, ...bonusEmployeeParams]
         );
         const statusMap: Record<string, { count: number; amount: number }> = {};
         for (const row of statusRows as any[]) {
