@@ -2544,8 +2544,11 @@ export default function LedgerDetail() {
     const saved = localStorage.getItem('statsPeriod');
     return (saved as 'all' | 'day' | 'week' | 'month' | 'quarter' | 'year') || 'month';
   });
-  // AJ账本专用独立统计周期，不影响普通账本的statsPeriod
-  const [ajStatsPeriod, setAjStatsPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>('month');
+  // AJ账本专用独立统计周期，不影响普通账本的statsPeriod（持久化到localStorage）
+  const [ajStatsPeriod, setAjStatsPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>(() => {
+    const saved = localStorage.getItem(`ajStatsPeriod_ledger_${ledgerId}`);
+    return (saved as 'all' | 'day' | 'week' | 'month' | 'quarter' | 'year') || 'month';
+  });
   // AJ账本视角切换：企业负责人 / 业务负责人（仅isAdmin角色有此切换）
   // 优先读取 localStorage 中上次的选择，没有缓存时 funder/owner 默认资方，member 默认劳方
   const [ajViewMode, setAjViewMode] = useState<'owner' | 'salesman'>(() => {
@@ -2632,6 +2635,10 @@ export default function LedgerDetail() {
   useEffect(() => {
     localStorage.setItem('statsPeriod', statsPeriod);
   }, [statsPeriod]);
+  // 保存AJ账本统计周期到 localStorage
+  useEffect(() => {
+    localStorage.setItem(`ajStatsPeriod_ledger_${ledgerId}`, ajStatsPeriod);
+  }, [ajStatsPeriod, ledgerId]);
 
   // 记录最后访问的账本ID到localStorage
   useEffect(() => {

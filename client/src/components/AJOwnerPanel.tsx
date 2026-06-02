@@ -1365,10 +1365,16 @@ function CompanyForm({
 export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   const utils = trpc.useUtils();
   const [period, setPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>('all');
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(() => {
+    const saved = localStorage.getItem(`fvp_company_${ledgerId}`);
+    if (saved !== null) return Number(saved);
+    return null;
+  });
   const [searchText, setSearchText] = useState('');
   // 员工筛选
-  const [selectedEmployee, setSelectedEmployee] = useState<string>('');
+  const [selectedEmployee, setSelectedEmployee] = useState<string>(() => {
+    return localStorage.getItem(`fvp_employee_${ledgerId}`) || '';
+  });
   const [showEmployeeDropdown, setShowEmployeeDropdown] = useState(false);
   const [employeeNames, setEmployeeNames] = useState<string[]>([]);
   const [allInvoices, setAllInvoices] = useState<any[]>([]);
@@ -1467,9 +1473,19 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   const { data: myCompanies, isLoading: companiesLoading } = (trpc as any).ledger.ajOwnerGetMyCompanies.useQuery({ ledgerId });
   const companies: any[] = Array.isArray(myCompanies) ? myCompanies : [];
 
-  // 企业加载完成后自动选中第一个（如果只有一家公司则直接选中，否则默认选全部）
+  // 企业加载完成后自动选中：如果 localStorage 有缓存则验证其有效性，否则自动选第一个
   useEffect(() => {
     if (!companiesLoading && companies.length > 0 && selectedCompanyId === null) {
+      const saved = localStorage.getItem(`fvp_company_${ledgerId}`);
+      if (saved !== null) {
+        const savedId = Number(saved);
+        // 验证缓存的公司ID是否依然有效（savedId=0表示全部，始终有效）
+        if (savedId === 0 || companies.some((c: any) => c.id === savedId)) {
+          setSelectedCompanyId(savedId);
+          return;
+        }
+      }
+      // 没有缓存或缓存失效：单公司直接选中，多公司默认全部
       if (companies.length === 1) {
         setSelectedCompanyId(companies[0].id);
       } else {
@@ -1478,12 +1494,17 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
     }
   }, [companiesLoading, companies.length]);
 
-  // 切换企业时清空搜索和员工筛选
+  // 切换企业时清空搜索和员工筛选，并持久化到localStorage
   useEffect(() => {
     setSearchText('');
     setSelectedEmployee('');
     setEmployeeNames([]);
     setAllInvoices([]);
+    if (selectedCompanyId !== null) {
+      localStorage.setItem(`fvp_company_${ledgerId}`, String(selectedCompanyId));
+      // 切换公司时清空员工缓存
+      localStorage.removeItem(`fvp_employee_${ledgerId}`);
+    }
   }, [selectedCompanyId]);
 
   // 员工筛选时计算对应金额和条数
@@ -1666,7 +1687,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                         }}
                       >
                         <button
-                          onClick={() => { setSelectedEmployee(''); setShowEmployeeDropdown(false); }}
+                          onClick={() => { setSelectedEmployee(''); localStorage.removeItem(`fvp_employee_${ledgerId}`); setShowEmployeeDropdown(false); }}
                           style={{
                             display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left',
                             fontSize: '13px', fontWeight: selectedEmployee === '' ? 700 : 400,
@@ -1678,7 +1699,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                         {employeeNames.map(name => (
                           <button
                             key={name}
-                            onClick={() => { setSelectedEmployee(name); setShowEmployeeDropdown(false); }}
+                            onClick={() => { setSelectedEmployee(name); localStorage.setItem(`fvp_employee_${ledgerId}`, name); setShowEmployeeDropdown(false); }}
                             style={{
                               display: 'block', width: '100%', padding: '10px 16px', textAlign: 'left',
                               fontSize: '13px', fontWeight: selectedEmployee === name ? 700 : 400,
