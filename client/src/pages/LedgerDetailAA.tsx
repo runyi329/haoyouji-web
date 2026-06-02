@@ -1838,9 +1838,10 @@ export default function LedgerDetailAA({
               }
               const days = firstDate ? Math.max(1, Math.round((new Date(endDate).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 0;
               const latestPnl = tag.points[tag.points.length - 1]?.pnl ?? 0;
+              const latestDate = tag.points[tag.points.length - 1]?.date ?? null;
               const annualized = tag.marginCny > 0 && days > 0 ? (latestPnl / tag.marginCny / days) * 365 * 100 : null;
               const divAmt = dividendByTag[tag.name] ?? 0;
-              return { tag, days, latestPnl, annualized, divAmt, isLast: idx === visibleTags.length - 1, isPaused, firstDate, endDate };
+              return { tag, days, latestPnl, latestDate, annualized, divAmt, isLast: idx === visibleTags.length - 1, isPaused, firstDate, endDate };
             });
             // 排序逻辑
             const sortedTagData = overviewSort ? [...tagData].sort((a, b) => {
@@ -1900,7 +1901,14 @@ export default function LedgerDetailAA({
                   <span style={{ color: overviewSort?.col === 'dividend' ? '#1565C0' : '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px', fontSize: 10 }} onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>分红¥</span><SortArrow col="dividend" />
                 </div>
                 {/* 数据行 */}
-                {sortedTagData.map(({ tag, days, latestPnl, annualized, divAmt, isLast, isPaused, firstDate, endDate }) => {
+                {sortedTagData.map(({ tag, days, latestPnl, latestDate, annualized, divAmt, isLast, isPaused, firstDate, endDate }) => {
+                      // 判断是否需要灰色：北京时间交易日15:00后且最新数据不是今天
+                      const _nowBJ = new Date(Date.now() + 8 * 3600 * 1000);
+                      const _todayBJ = _nowBJ.toISOString().slice(0, 10);
+                      const _hourBJ = _nowBJ.getUTCHours();
+                      const _dowBJ = _nowBJ.getUTCDay(); // 0=周日,6=周六
+                      const _isTradeDay = _dowBJ >= 1 && _dowBJ <= 5;
+                      const _isStale = _isTradeDay && _hourBJ >= 15 && latestDate !== _todayBJ;
                   const rowBorder = isLast ? 'none' : '1px solid #F9F9F9';
                   return (
                     <>
@@ -1984,12 +1992,12 @@ export default function LedgerDetailAA({
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 回报 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: _isStale ? '#BDBDBD' : latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
                         {latestPnl !== 0 ? `${latestPnl < 0 ? '-' : ''}${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 年化 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: _isStale || annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}>
                         {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
