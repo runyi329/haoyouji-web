@@ -103,6 +103,8 @@ export default function WalletTransactions() {
             balanceAfter: history.balance != null ? Number(history.balance) : null,
           });
         } else if (history.type === 'reward') {
+          // 成本津贴已在 af_manual_balances（来源3）中展示，跳过避免重复
+          if (desc.startsWith('成本津贴')) return;
           transactions.push({
             id: `bh-${history.id}`, type: 'reward',
             amount: Math.abs(amt), status: 'completed',
