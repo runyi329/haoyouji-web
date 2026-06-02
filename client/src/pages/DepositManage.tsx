@@ -984,12 +984,21 @@ export default function DepositManage() {
                                         className="flex items-start justify-between py-2"
                                         style={{ borderBottom: '1px solid #E5E7EB' }}
                                       >
-                                        {/* 左：「保证金」和日期同一行 + 备注在下一行 */}
+                                        {/* 左：「保证金」 + 日期 + 增加/减少标签同一行 + 备注在下一行 */}
                                         <div className="flex flex-col">
                                           <div className="flex items-center gap-1.5">
                                             <span className="text-xs font-medium text-gray-700">保证金</span>
                                             <span className="text-xs" style={{ color: '#2563EB' }}>
                                               {date ? date.slice(5) : '--'}
+                                            </span>
+                                            <span
+                                              className="text-[10px] font-medium px-1 py-0.5 rounded"
+                                              style={{
+                                                backgroundColor: amount < 0 ? '#DCFCE7' : '#EFF6FF',
+                                                color: amount < 0 ? '#16A34A' : '#2563EB',
+                                              }}
+                                            >
+                                              {amount < 0 ? '减少' : '增加'}
                                             </span>
                                           </div>
                                           {label ? <span className="text-[10px] text-gray-400 mt-0.5">{label}</span> : null}
