@@ -17463,7 +17463,7 @@ ${klinesSummary}
         // 查询所有待审记录
         const [pendingRows] = await (conn as any).execute(
           `SELECT lr.id, lr.createdBy, lr.amount, lr.ledgerId,
-                  COALESCE(lr.reimbursementAmount, lr.amount) as reimbursementAmount
+                  COALESCE(lr.reimbursement_amount, lr.amount) as reimbursementAmount
            FROM ledger_records lr
            LEFT JOIN users u ON u.id = lr.createdBy
            LEFT JOIN ledger_members lm ON lm.userId = lr.createdBy AND lm.ledgerId = lr.ledgerId
@@ -17556,7 +17556,7 @@ ${klinesSummary}
         const employeeParams = input.employeeName ? [input.employeeName] : [];
         const [rows] = await (conn as any).execute(
           `SELECT lr.id, lr.recordDate,
-                  COALESCE(lr.reimbursementAmount, lr.amount) as amount,
+                  COALESCE(lr.reimbursement_amount, lr.amount) as amount,
                   COALESCE(lm.nickname, u.name, u.username) as employeeName,
                   c.name as companyName,
                   lr.aj_expense_reason as expenseReason,
