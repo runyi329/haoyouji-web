@@ -1872,7 +1872,8 @@ export default function LedgerDetailAA({
             const weightedAnnualized = weightedDenominator > 0 ? (totalPnl / weightedDenominator) * 100 : null;
             const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
             // Grid 列定义：名称固定52px，其他列 minmax 自适应
-            const gridCols = 'auto 1px auto 1px auto 1px auto 1px auto 1px auto 1px auto';
+            // 名称:auto 周期:36px 占比:auto 金额/回报/年化:1fr 分红:auto
+            const gridCols = 'auto 1px 36px 1px auto 1px 1fr 1px 1fr 1px 1fr 1px auto';
             const cellCls = 'px-1 py-1.5 text-[10px] font-medium text-center';
             const dataCellCls = 'px-1 py-2 text-right text-[11px]';
             const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
@@ -1931,7 +1932,7 @@ export default function LedgerDetailAA({
                       <div className={dataCellCls} style={{ borderBottom: rowBorder }}>
                         {isPaused ? (
                           <span
-                            style={{ display: 'inline-block', backgroundColor: '#1565C0', color: '#FFFFFF', borderRadius: 4, padding: '1px 5px', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                            style={{ display: 'inline-block', backgroundColor: '#1565C0', color: '#FFFFFF', borderRadius: 3, padding: '1px 2px', fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
                             onClick={() => {
                               if (!firstDate || !endDate) return;
                               const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
