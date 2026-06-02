@@ -921,22 +921,25 @@ export default function DepositManage() {
                 const isSelected = selectedTagForRight === cat.name;
 
                 // 计算该标签的保证金占基数比（用于折叠行显示）
+                // 仅在 cryptoPrices 已加载（有 USDT 汇率）时才计算，避免汇率未就绪导致计算错误
                 const tagSummaryData = allTagsMarginSummary?.[cat.name];
                 let collapseRatio: number | null = null;
-                if (tagSummaryData) {
+                const hasPrices = Object.keys(cryptoPrices).length > 0;
+                if (tagSummaryData && hasPrices) {
                   const marginBase = parseFloat(tagSummaryData.marginBase || '0') || 0;
                   if (marginBase > 0) {
-                    // 解析 marginByCoin 计算已付保证金
+                    // 解析 marginByCoin 计算已付保证金（与展开里 rightTotalCNY 逻辑完全一致）
                     let totalMarginCNY = 0;
                     if (tagSummaryData.marginByCoin) {
                       try {
                         const parsed = JSON.parse(tagSummaryData.marginByCoin);
                         if (Array.isArray(parsed)) {
-                          totalMarginCNY = parsed.reduce((s: number, e: any) => s + toCNY(e.amount, e.coin || '元', cryptoPrices), 0);
+                          // 与展开里 rightTotalCNY 一致：toCNY(String(amount), coin, cryptoPrices)
+                          totalMarginCNY = parsed.reduce((s: number, e: any) => s + toCNY(String(e.amount), e.coin, cryptoPrices), 0);
                         }
                       } catch {}
                     }
-                    // 盈亏净值
+                    // 盈亏净值（与展开里 pnl 逻辑完全一致）
                     const latestBal = tagSummaryData.latestBalance;
                     const balNum = latestBal ? parseFloat(String(latestBal.balance)) : 0;
                     const initialNum = parseFloat(tagSummaryData.initialAmount || '0') || 0;
@@ -1050,13 +1053,20 @@ export default function DepositManage() {
                                           </div>
                                           {label ? <span className="text-[10px] text-gray-400 mt-0.5">{label}</span> : null}
                                         </div>
-                                        {/* 右：上行原币金额，下行折合人民币 */}
+                                        {/* 右：上行原币金额，下行折合人民币（元）或折合 U（其他币种） */}
                                         <div className="flex flex-col items-end">
                                           <span className="text-sm font-semibold" style={{ color: amount < 0 ? '#388E3C' : '#1A2340' }}>
                                             {amount >= 0 ? '+' : ''}{amount.toLocaleString('zh-CN', { maximumFractionDigits: 4 })}
                                             <span className="text-xs text-gray-500 ml-1">{coin}</span>
                                           </span>
-                                          {coin !== '元' && (
+                                          {/* 元/人民币：显示折合 U */}
+                                          {(coin === '元' || coin === '人民币') && cryptoPrices['USDT'] > 0 && (
+                                            <span className="text-xs text-gray-400">
+                                              ≈{(Math.abs(amount) / cryptoPrices['USDT'] >= 0 ? (amount < 0 ? '-' : '') : '')}{(Math.abs(amount) / cryptoPrices['USDT']).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} U
+                                            </span>
+                                          )}
+                                          {/* 其他币种：显示折合人民币 */}
+                                          {coin !== '元' && coin !== '人民币' && (
                                             <span className="text-xs" style={{ color: amount < 0 ? '#388E3C' : '#6B7280' }}>
                                               {amount < 0 ? '-' : ''}¥{cnyVal.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
                                             </span>
