@@ -11665,6 +11665,59 @@ ${klinesSummary}
         };
       }),
 
+    // 批量获取账本所有标签的保证金配置和最新余额（用于列表行显示百分比）
+    getAllTagsMarginSummary: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getLedgerDb();
+        // 查询所有标签的配置
+        const configRows = await db.execute(
+          sql`SELECT tag_name, margin_by_coin, initial_amount, account_multiplier, margin_base FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId}`
+        );
+        const configs = (configRows as any)[0] as any[];
+        // 查询每个标签最新一条记录的余额
+        const latestRows = await db.execute(
+          sql`SELECT lc.name as tag_name, lr.amount, lr.recordDate
+              FROM ledger_records lr
+              INNER JOIN ledger_categories lc ON lc.id = lr.categoryId
+              WHERE lr.ledgerId = ${input.ledgerId}
+                AND lr.id IN (
+                  SELECT MAX(lr2.id) FROM ledger_records lr2
+                  INNER JOIN ledger_categories lc2 ON lc2.id = lr2.categoryId
+                  WHERE lr2.ledgerId = ${input.ledgerId}
+                  GROUP BY lc2.name
+                )`
+        );
+        const latestMap: Record<string, { balance: number; recordDate: string }> = {};
+        for (const row of (latestRows as any)[0] as any[]) {
+          latestMap[row.tag_name] = {
+            balance: parseFloat(row.amount),
+            recordDate: typeof row.recordDate === 'string' ? row.recordDate.slice(0, 10) : new Date(row.recordDate).toISOString().slice(0, 10),
+          };
+        }
+        // 组装结果
+        const result: Record<string, { marginByCoin: any; initialAmount: string | null; accountMultiplier: string | null; marginBase: string | null; latestBalance: { balance: number; recordDate: string } | null }> = {};
+        for (const cfg of configs) {
+          result[cfg.tag_name] = {
+            marginByCoin: cfg.margin_by_coin,
+            initialAmount: cfg.initial_amount,
+            accountMultiplier: cfg.account_multiplier,
+            marginBase: cfg.margin_base,
+            latestBalance: latestMap[cfg.tag_name] ?? null,
+          };
+        }
+        // 补充有余额但无配置的标签
+        for (const [tagName, lb] of Object.entries(latestMap)) {
+          if (!result[tagName]) {
+            result[tagName] = { marginByCoin: null, initialAmount: null, accountMultiplier: null, marginBase: null, latestBalance: lb };
+          }
+        }
+        return result;
+      }),
+
     // ===== 标签利息管理（37号账本专用）=====
 
     // 获取账本所有标签的利息设置

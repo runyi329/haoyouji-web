@@ -37,11 +37,11 @@ interface DepositEntry {
   marginCoin: string;
 }
 
-function toCNY(margin: string, coin: string, prices: Record<string, number>): number {
-  const num = parseFloat(margin);
-  if (isNaN(num) || num <= 0) return 0;
+function toCNY(margin: string | number, coin: string, prices: Record<string, number>): number {
+  const num = typeof margin === 'number' ? margin : parseFloat(margin);
+  if (isNaN(num) || num === 0) return 0;
   if (!coin || coin === "人民币" || coin === "元") return num;
-  // USDT 和其他币种都通过 prices 映射表计算（prices[“USDT”] 已是实时汇率）
+  // USDT 和其他币种都通过 prices 映射表计算（prices["USDT"] 已是实时汇率）
   const price = prices[coin];
   if (!price) return 0;
   return num * price;
@@ -460,6 +460,12 @@ export default function DepositManage() {
     { enabled: !!ledgerId && !!selectedTagForRight }
   );
 
+  // 批量查询所有标签的保证金摘要（用于折叠行右侧显示百分比）
+  const { data: allTagsMarginSummary, refetch: refetchAllTagsMarginSummary } = (trpc.ledger as any).getAllTagsMarginSummary.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId, refetchInterval: 30000 }
+  );
+
   const saveTagConfigMutation = trpc.ledger.saveTagConfig.useMutation({
     onSuccess: () => {
       toast.success("右侧保证金已保存");
@@ -467,6 +473,7 @@ export default function DepositManage() {
       setRightEditMode(false);
       refetchRightTagConfig();
       refetchRightTagSummary();
+      refetchAllTagsMarginSummary();
     },
     onError: (err) => {
       toast.error((err as any).message || "保存失败");
@@ -912,11 +919,43 @@ export default function DepositManage() {
             ) : (
               categories.map((cat: any) => {
                 const isSelected = selectedTagForRight === cat.name;
+
+                // 计算该标签的保证金占基数比（用于折叠行显示）
+                const tagSummaryData = allTagsMarginSummary?.[cat.name];
+                let collapseRatio: number | null = null;
+                if (tagSummaryData) {
+                  const marginBase = parseFloat(tagSummaryData.marginBase || '0') || 0;
+                  if (marginBase > 0) {
+                    // 解析 marginByCoin 计算已付保证金
+                    let totalMarginCNY = 0;
+                    if (tagSummaryData.marginByCoin) {
+                      try {
+                        const parsed = JSON.parse(tagSummaryData.marginByCoin);
+                        if (Array.isArray(parsed)) {
+                          totalMarginCNY = parsed.reduce((s: number, e: any) => s + toCNY(e.amount, e.coin || '元', cryptoPrices), 0);
+                        }
+                      } catch {}
+                    }
+                    // 盈亏净值
+                    const latestBal = tagSummaryData.latestBalance;
+                    const balNum = latestBal ? parseFloat(String(latestBal.balance)) : 0;
+                    const initialNum = parseFloat(tagSummaryData.initialAmount || '0') || 0;
+                    const multiplierNum = parseFloat(tagSummaryData.accountMultiplier || '1') || 1;
+                    const pnl = (balNum - initialNum) * multiplierNum;
+                    const remaining = pnl + totalMarginCNY;
+                    collapseRatio = marginBase > 0 ? (remaining / marginBase) * 100 : null;
+                  }
+                }
+                const isWarning = collapseRatio !== null && collapseRatio < 10;
+
                 return (
                   <div
                     key={cat.id}
                     className="rounded-2xl overflow-hidden shadow-sm"
-                    style={{ backgroundColor: "#FFFFFF" }}
+                    style={{
+                      backgroundColor: "#FFFFFF",
+                      border: isWarning ? "1.5px solid #F97316" : "1.5px solid transparent",
+                    }}
                   >
                     {/* 标签头部 */}
                     <button
@@ -924,7 +963,7 @@ export default function DepositManage() {
                       style={{
                         background: isSelected
                           ? "linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)"
-                          : "#FFFFFF",
+                          : isWarning ? "#FFF7ED" : "#FFFFFF",
                         borderBottom: isSelected ? "1px solid #BFDBFE" : "none",
                       }}
                       onClick={() => setSelectedTagForRight(isSelected ? null : cat.name)}
@@ -947,9 +986,19 @@ export default function DepositManage() {
                             )}
                           </div>
                         </div>
-                        {isSelected
-                          ? <ChevronUp className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                          : <ChevronDown className="w-4 h-4 text-blue-400 flex-shrink-0" />}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {!isSelected && collapseRatio !== null && (
+                            <span
+                              className="text-sm font-bold"
+                              style={{ color: isWarning ? "#EA580C" : "#16A34A" }}
+                            >
+                              {collapseRatio.toFixed(1)}%
+                            </span>
+                          )}
+                          {isSelected
+                            ? <ChevronUp className="w-4 h-4 text-blue-400" />
+                            : <ChevronDown className="w-4 h-4 text-blue-400" />}
+                        </div>
                       </div>
                     </button>
 
