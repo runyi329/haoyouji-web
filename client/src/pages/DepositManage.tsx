@@ -842,11 +842,13 @@ export default function DepositManage() {
                               const initialNum = parseFloat(savedInitial || "0") || 0;
                               const multiplierNum = parseFloat(savedMultiplier || "1") || 1;
                               const marginBaseNum = parseFloat(savedMarginBase || "0") || 0;
-                              // 盈亏净値 = (余额 - 初始金额) × 倍数 - 已付保证金（折合人民币）
-                              const pnl = autoBalanceNum !== null ? (autoBalanceNum - initialNum) * multiplierNum - rightTotalCNY : null;
-                              // 保证金占基数比 = 已付保证金 / 保证金基数
-                              const marginBasePct = marginBaseNum > 0 ? (rightTotalCNY / marginBaseNum * 100) : null;
-                              // 保证金占余额比（保留备用）
+                              // 盈亏净値 = (余额 - 初始金额) × 倍数
+                              const pnl = autoBalanceNum !== null ? (autoBalanceNum - initialNum) * multiplierNum : null;
+                              // 剩余保证金 = 盈亏净値 - 已付保证金（折合人民币）
+                              const remainingMargin = pnl !== null ? pnl - rightTotalCNY : null;
+                              // 保证金占基数比 = 剩余保证金 / 保证金基数
+                              const marginBasePct = marginBaseNum > 0 && remainingMargin !== null ? (remainingMargin / marginBaseNum * 100) : null;
+                              // 保证金占余额比（降级备用）
                               const marginPct = autoBalanceNum !== null && autoBalanceNum > 0 ? (rightTotalCNY / autoBalanceNum * 100) : null;
                               return (
                                 <div className="mt-3 rounded-xl p-3 space-y-2" style={{ backgroundColor: "#F8FBFF", border: "1px solid #DBEAFE" }}>
@@ -914,15 +916,35 @@ export default function DepositManage() {
                                         <>
                                           <div style={{ borderTop: "1px solid #DBEAFE", paddingTop: 6 }}>
                                             <div className="flex items-center justify-between">
-                                              <span className="text-xs text-gray-500">盈亏净値 (余额-初始)×倍数-保证金</span>
-                                              <span className="text-sm font-bold" style={{ color: pnl !== null && pnl >= 0 ? "#D32F2F" : "#388E3C" }}>
-                                                {pnl !== null ? `${pnl >= 0 ? "+" : ""}${pnl.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
-                                              </span>
+                                              <span className="text-xs text-gray-500">盈亏净値 (余额-初始)×倍数</span>
+                                              <div className="text-right">
+                                                <div className="text-sm font-bold" style={{ color: pnl !== null && pnl >= 0 ? "#D32F2F" : "#388E3C" }}>
+                                                  {pnl !== null ? `${pnl >= 0 ? "+" : ""}${pnl.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
+                                                </div>
+                                                {pnl !== null && CNY_RATE > 0 && (
+                                                  <div className="text-xs text-gray-400">
+                                                    ≈{(pnl / CNY_RATE >= 0 ? "+" : "")}{(pnl / CNY_RATE).toLocaleString("zh-CN", { maximumFractionDigits: 1 })} U
+                                                  </div>
+                                                )}
+                                              </div>
                                             </div>
                                             <div className="flex items-center justify-between mt-1">
-                                              <span className="text-xs text-gray-500">保证金占基数比</span>
+                                              <span className="text-xs text-gray-500">剩余保证金 (净値-已付保证金)</span>
+                                              <div className="text-right">
+                                                <div className="text-sm font-bold" style={{ color: remainingMargin !== null && remainingMargin >= 0 ? "#D32F2F" : "#388E3C" }}>
+                                                  {remainingMargin !== null ? `${remainingMargin >= 0 ? "+" : ""}${remainingMargin.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
+                                                </div>
+                                                {remainingMargin !== null && CNY_RATE > 0 && (
+                                                  <div className="text-xs text-gray-400">
+                                                    ≈{(remainingMargin / CNY_RATE >= 0 ? "+" : "")}{(remainingMargin / CNY_RATE).toLocaleString("zh-CN", { maximumFractionDigits: 1 })} U
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center justify-between mt-1">
+                                              <span className="text-xs text-gray-500">剩余保证金占基数比</span>
                                               <span className="text-sm font-bold text-blue-700">
-                                                {marginBasePct !== null ? `${marginBasePct.toFixed(1)}%` : (marginPct !== null ? `${marginPct.toFixed(1)}%(余额)` : "--")}
+                                                {marginBasePct !== null ? `${marginBasePct.toFixed(1)}%` : (marginPct !== null ? `${marginPct.toFixed(1)}%(占余额)` : "--")}
                                               </span>
                                             </div>
                                           </div>
