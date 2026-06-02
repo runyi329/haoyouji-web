@@ -1347,6 +1347,7 @@ function CompanyForm({
 
 // ========== 资方视角面板（重写） ==========
 export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
+  const utils = trpc.useUtils();
   const [period, setPeriod] = useState<'all' | 'day' | 'week' | 'month' | 'quarter' | 'year'>('all');
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [searchText, setSearchText] = useState('');
@@ -1494,6 +1495,13 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
       setBatchApproving(false);
       setShowBatchConfirm2(false);
       toast.success(`批量审核完成：${result.approved} 笔已通过，共 ${result.totalAmount.toFixed(2)} 元，共发放津贴 ${result.totalBonus.toFixed(4)} USDT`);
+      // 刷新所有相关数据，保持当前公司+业务员筛选状态不变
+      if (selectedCompanyId != null) {
+        utils.ledger.ajOwnerGetCompanyInvoices.invalidate({ ledgerId, companyId: selectedCompanyId, period });
+        utils.ledger.ajOwnerGetEmployeeStats.invalidate({ ledgerId, companyId: selectedCompanyId, employeeName: selectedEmployee, period });
+        utils.ledger.ajOwnerGetCompanyStats.invalidate({ ledgerId, companyId: selectedCompanyId, period });
+      }
+      refetchPendingList();
     },
     onError: (err: any) => {
       setBatchApproving(false);
