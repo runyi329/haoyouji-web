@@ -269,6 +269,11 @@ export default function DepositManage() {
   const [rightMarginEdits, setRightMarginEdits] = useState<Array<{ coin: string; amount: string }>>([]);
   const [rightEditMode, setRightEditMode] = useState(false);
   const [rightSaving, setRightSaving] = useState(false);
+  // 账户余额、初始金额、倍数编辑状态
+  const [rightBalanceEdit, setRightBalanceEdit] = useState("");
+  const [rightInitialEdit, setRightInitialEdit] = useState("");
+  const [rightMultiplierEdit, setRightMultiplierEdit] = useState("1");
+  const [rightBalanceEditMode, setRightBalanceEditMode] = useState(false);
 
   const { data: rightTagConfig, refetch: refetchRightTagConfig } = trpc.ledger.getTagConfig.useQuery(
     { ledgerId, tagName: selectedTagForRight ?? "" },
@@ -292,6 +297,7 @@ export default function DepositManage() {
   useEffect(() => {
     setRightEditMode(false);
     setRightMarginEdits([]);
+    setRightBalanceEditMode(false);
   }, [selectedTagForRight]);
 
   const handleStartRightEditing = () => {
@@ -317,7 +323,36 @@ export default function DepositManage() {
       ledgerId,
       tagName: selectedTagForRight,
       marginByCoin: marginByCoinJson,
+      accountBalance: rightTagConfig?.account_balance as string | undefined,
+      balanceDate: rightTagConfig?.balance_date as string | undefined,
+      initialAmount: rightTagConfig?.initial_amount as string | undefined,
+      accountMultiplier: rightTagConfig?.account_multiplier as string | undefined,
     });
+  };
+
+  // 保存账户余额/初始金额/倍数
+  const handleSaveBalanceInfo = () => {
+    if (!selectedTagForRight) return;
+    setRightSaving(true);
+    // 获取北京时间今天日期
+    const now = new Date();
+    const bjOffset = 8 * 60;
+    const bjTime = new Date(now.getTime() + (bjOffset - now.getTimezoneOffset()) * 60000);
+    const todayStr = bjTime.toISOString().slice(0, 10);
+    const validEntries = rightMarginData;
+    const marginByCoinJson = validEntries.length > 0
+      ? JSON.stringify(Object.fromEntries(validEntries.map(e => [e.coin, e.amount])))
+      : (rightTagConfig?.margin_by_coin as string | undefined);
+    saveTagConfigMutation.mutate({
+      ledgerId,
+      tagName: selectedTagForRight,
+      marginByCoin: marginByCoinJson,
+      accountBalance: rightBalanceEdit || undefined,
+      balanceDate: rightBalanceEdit ? todayStr : (rightTagConfig?.balance_date as string | undefined),
+      initialAmount: rightInitialEdit || undefined,
+      accountMultiplier: rightMultiplierEdit || "1",
+    });
+    setRightBalanceEditMode(false);
   };
 
   const handleClearRightMargin = () => {
@@ -787,6 +822,138 @@ export default function DepositManage() {
                                 </button>
                               )}
                             </div>
+
+                            {/* ── 账户余额 / 初始金额 / 倍数 区块 ── */}
+                            {(() => {
+                              const now = new Date();
+                              const bjOffset = 8 * 60;
+                              const bjTime = new Date(now.getTime() + (bjOffset - now.getTimezoneOffset()) * 60000);
+                              const todayStr = bjTime.toISOString().slice(0, 10);
+                              const savedBalance = rightTagConfig?.account_balance as string | undefined;
+                              const savedBalanceDate = rightTagConfig?.balance_date as string | undefined;
+                              const savedInitial = rightTagConfig?.initial_amount as string | undefined;
+                              const savedMultiplier = rightTagConfig?.account_multiplier as string | undefined;
+                              const isToday = savedBalanceDate === todayStr;
+                              const balanceNum = parseFloat(savedBalance || "0") || 0;
+                              const initialNum = parseFloat(savedInitial || "0") || 0;
+                              const multiplierNum = parseFloat(savedMultiplier || "1") || 1;
+                              const pnl = (balanceNum - initialNum) * multiplierNum;
+                              const marginPct = balanceNum > 0 ? (rightTotalCNY / balanceNum * 100) : null;
+                              return (
+                                <div className="mt-3 rounded-xl p-3 space-y-2" style={{ backgroundColor: "#F8FBFF", border: "1px solid #DBEAFE" }}>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs font-bold text-gray-600">账户余额登记</span>
+                                    {!rightBalanceEditMode ? (
+                                      <button
+                                        onClick={() => {
+                                          setRightBalanceEdit(savedBalance || "");
+                                          setRightInitialEdit(savedInitial || "");
+                                          setRightMultiplierEdit(savedMultiplier || "1");
+                                          setRightBalanceEditMode(true);
+                                        }}
+                                        className="text-xs text-blue-500 flex items-center gap-0.5"
+                                      >
+                                        <Pencil className="w-3 h-3" />登记
+                                      </button>
+                                    ) : (
+                                      <div className="flex gap-2">
+                                        <button onClick={() => setRightBalanceEditMode(false)} className="text-xs text-gray-400">取消</button>
+                                        <button onClick={handleSaveBalanceInfo} disabled={rightSaving} className="text-xs text-blue-600 font-bold">保存</button>
+                                      </div>
+                                    )}
+                                  </div>
+                                  {!rightBalanceEditMode ? (
+                                    <>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-xs text-gray-500">余额</span>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-sm font-bold text-gray-800">
+                                            {savedBalance ? `¥${parseFloat(savedBalance).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
+                                          </span>
+                                          {savedBalance && (
+                                            <span
+                                              className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+                                              style={{
+                                                backgroundColor: isToday ? "#DCFCE7" : "#FEF9C3",
+                                                color: isToday ? "#16A34A" : "#B45309",
+                                              }}
+                                            >
+                                              {isToday ? "✓ 最新" : `⚠️ ${savedBalanceDate || "未知日期"}`}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-xs text-gray-500">初始金额</span>
+                                        <span className="text-sm font-semibold text-gray-700">
+                                          {savedInitial ? `¥${parseFloat(savedInitial).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-xs text-gray-500">倍数</span>
+                                        <span className="text-sm font-semibold text-gray-700">{savedMultiplier || "1"}x</span>
+                                      </div>
+                                      {savedBalance && savedInitial && (
+                                        <>
+                                          <div style={{ borderTop: "1px solid #DBEAFE", paddingTop: 6 }}>
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-xs text-gray-500">盈亏差値 (余额-初始)×倍数</span>
+                                              <span className="text-sm font-bold" style={{ color: pnl >= 0 ? "#D32F2F" : "#388E3C" }}>
+                                                {pnl >= 0 ? "+" : ""}{pnl.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}
+                                              </span>
+                                            </div>
+                                            <div className="flex items-center justify-between mt-1">
+                                              <span className="text-xs text-gray-500">保证金占余额比</span>
+                                              <span className="text-sm font-bold text-blue-700">
+                                                {marginPct !== null ? `${marginPct.toFixed(1)}%` : "--"}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        </>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <div className="space-y-2">
+                                      <div>
+                                        <div className="text-xs text-gray-500 mb-1">账户余额 (元)</div>
+                                        <input
+                                          type="number"
+                                          value={rightBalanceEdit}
+                                          onChange={e => setRightBalanceEdit(e.target.value)}
+                                          placeholder="请输入当前余额"
+                                          className="w-full text-sm border rounded-lg px-3 py-2 outline-none"
+                                          style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF" }}
+                                          autoFocus
+                                        />
+                                      </div>
+                                      <div>
+                                        <div className="text-xs text-gray-500 mb-1">初始金额 (元)</div>
+                                        <input
+                                          type="number"
+                                          value={rightInitialEdit}
+                                          onChange={e => setRightInitialEdit(e.target.value)}
+                                          placeholder="请输入初始金额"
+                                          className="w-full text-sm border rounded-lg px-3 py-2 outline-none"
+                                          style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF" }}
+                                        />
+                                      </div>
+                                      <div>
+                                        <div className="text-xs text-gray-500 mb-1">倍数</div>
+                                        <input
+                                          type="number"
+                                          value={rightMultiplierEdit}
+                                          onChange={e => setRightMultiplierEdit(e.target.value)}
+                                          placeholder="默认1"
+                                          className="w-full text-sm border rounded-lg px-3 py-2 outline-none"
+                                          style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF" }}
+                                        />
+                                      </div>
+                                      <div className="text-xs text-gray-400">登记日期将自动设为今日 ({todayStr})</div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </>
                         )}
 
