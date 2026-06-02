@@ -667,7 +667,12 @@ const AddTransaction = () => {
       toast.success("记账成功！");
       // 使缓存失效，强制重新获取数据
       utils.ledger.getTransactions.invalidate({ ledgerId });
-      setLocation(`/ledger/${id}`);
+      if (fromPage === 'home') {
+        // 从首页智能会计进入：提交后留在004页，重载页面以重置表单
+        setLocation(`/ledger/${id}/add?from=home`);
+      } else {
+        setLocation(`/ledger/${id}`);
+      }
     },
     onError: (error) => {
       toast.error("记账失败：" + error.message);
