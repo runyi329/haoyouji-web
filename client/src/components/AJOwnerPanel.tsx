@@ -2102,47 +2102,85 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
               )}
             </div>
             {/* 明细列表 */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '8px 16px' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '4px 0 0' }}>
               {!pendingList ? (
                 <div style={{ textAlign: 'center', color: '#aaa', padding: '24px 0', fontSize: '13px' }}>加载中...</div>
               ) : pendingList.length === 0 ? (
                 <div style={{ textAlign: 'center', color: '#aaa', padding: '24px 0', fontSize: '13px' }}>暂无待审单</div>
-              ) : (
-                pendingList.map((item: any, idx: number) => (
-                  <div key={item.id} style={{
-                    padding: '10px 0',
-                    borderBottom: idx < pendingList.length - 1 ? '1px solid #f5f5f5' : 'none',
-                    display: 'flex', alignItems: 'flex-start', gap: '10px',
-                  }}>
+              ) : (() => {
+                // 按公司分组
+                const groups: Record<string, any[]> = {};
+                pendingList.forEach((item: any) => {
+                  const key = item.companyName || '未知公司';
+                  if (!groups[key]) groups[key] = [];
+                  groups[key].push(item);
+                });
+                // 检测金额相近（同组内差值 < 5%）
+                const similarSet = new Set<number>();
+                pendingList.forEach((a: any) => {
+                  pendingList.forEach((b: any) => {
+                    if (a.id !== b.id && Math.abs(a.amount - b.amount) / Math.max(a.amount, b.amount) < 0.05) {
+                      similarSet.add(a.id); similarSet.add(b.id);
+                    }
+                  });
+                });
+                const fmtDate = (d: any) => {
+                  const s = String(d).slice(0, 10);
+                  const parts = s.split('-');
+                  if (parts.length === 3) return `${parts[1]}月${parts[2]}日`;
+                  return s;
+                };
+                let globalIdx = 0;
+                return Object.entries(groups).map(([company, items]) => (
+                  <div key={company}>
+                    {/* 公司分组标题 */}
                     <div style={{
-                      width: '28px', height: '28px', borderRadius: '50%',
-                      background: '#f0fdf4', color: '#16a34a',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '11px', fontWeight: 700, flexShrink: 0,
-                    }}>{idx + 1}</div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#1A2B4A' }}>
-                          {item.employeeName || '未知业务员'}
-                          {item.companyName && <span style={{ fontSize: '11px', color: '#888', marginLeft: '6px' }}>{item.companyName}</span>}
-                        </div>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#16a34a' }}>
-                          ¥{item.amount.toFixed(2)}
-                        </div>
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px', display: 'flex', gap: '8px' }}>
-                        <span>{item.recordDate ? String(item.recordDate).slice(0, 10) : ''}</span>
-                        {item.taxCategory && <span>{item.taxCategory}</span>}
-                        {item.expenseReason && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>{item.expenseReason}</span>}
-                        <span style={{ color: '#bbb' }}># {item.id}</span>
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#86efac', marginTop: '1px' }}>
-                        预计津贴 +{(item.amount * 0.01 / 7.2).toFixed(4)} U
-                      </div>
+                      padding: '6px 16px 4px',
+                      fontSize: '11px', fontWeight: 700, color: '#16a34a',
+                      background: '#f0fdf4', borderTop: '1px solid #e8f5e9',
+                      letterSpacing: '0.5px',
+                    }}>{company}（{items.length} 笔）</div>
+                    {/* 表头 */}
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: '20px 1fr 60px 52px 60px',
+                      gap: '4px', padding: '3px 16px',
+                      fontSize: '10px', color: '#bbb', borderBottom: '1px solid #f5f5f5',
+                    }}>
+                      <span>#</span><span>业务员 · 日期 · 单号</span><span style={{textAlign:'right'}}>金额</span><span style={{textAlign:'right'}}>津贴</span><span style={{textAlign:'right'}}></span>
                     </div>
+                    {items.map((item: any) => {
+                      globalIdx++;
+                      const isSimilar = similarSet.has(item.id);
+                      return (
+                        <div key={item.id} style={{
+                          display: 'grid', gridTemplateColumns: '20px 1fr 60px 52px',
+                          gap: '4px', padding: '5px 16px',
+                          borderBottom: '1px solid #f9f9f9',
+                          alignItems: 'center',
+                          background: isSimilar ? '#fffbeb' : 'transparent',
+                        }}>
+                          <span style={{ fontSize: '10px', color: '#ccc' }}>{globalIdx}</span>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A2B4A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {item.employeeName || '未知'}
+                              {isSimilar && <span style={{ marginLeft: '4px', fontSize: '10px', color: '#d97706', fontWeight: 700 }}>相近</span>}
+                            </div>
+                            <div style={{ fontSize: '10px', color: '#aaa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {fmtDate(item.recordDate)}{item.expenseReason ? ` · ${item.expenseReason}` : ''} · #{item.id}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#16a34a', textAlign: 'right' }}>
+                            {item.amount.toFixed(0)}<span style={{ fontSize: '9px', color: '#aaa' }}>元</span>
+                          </div>
+                          <div style={{ fontSize: '10px', color: '#86efac', textAlign: 'right' }}>
+                            +{(item.amount * 0.01 / 7.2).toFixed(2)}<span style={{ fontSize: '9px' }}>U</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                ))
-              )}
+                ));
+              })()}
             </div>
             {/* 底部按鈕 */}
             {pendingList && pendingList.length > 0 && (
