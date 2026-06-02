@@ -1485,7 +1485,7 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
   // 待审单明细（批量审核确认弹窗用）
   const { data: pendingList, refetch: refetchPendingList } = (trpc as any).ledger.ajOwnerGetPendingList.useQuery(
     { ledgerId, companyId: selectedCompanyId ?? undefined, employeeName: selectedEmployee || undefined, period },
-    { enabled: showBatchConfirm, staleTime: 0 }
+    { enabled: selectedCompanyId != null, staleTime: 0, refetchOnWindowFocus: false, refetchOnMount: false }
   );
 
   // 批量审核 mutation
