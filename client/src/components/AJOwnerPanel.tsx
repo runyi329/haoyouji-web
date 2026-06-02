@@ -2126,6 +2126,8 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                   });
                 });
                 const fmtDate = (d: any) => {
+                  const dt = new Date(d);
+                  if (!isNaN(dt.getTime())) return `${dt.getMonth() + 1}月${dt.getDate()}日`;
                   const s = String(d).slice(0, 10);
                   const parts = s.split('-');
                   if (parts.length === 3) return `${parseInt(parts[1])}月${parseInt(parts[2])}日`;
@@ -2162,18 +2164,17 @@ export function FunderViewPanel({ ledgerId }: { ledgerId: number }) {
                           background: isSimilar ? '#fffbeb' : 'transparent',
                         }}>
                           <span style={{ fontSize: '10px', color: '#ccc' }}>{globalIdx}</span>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#1A2B4A', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'nowrap', overflow: 'hidden' }}>
-                              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 1 }}>{item.employeeName || '未知'}</span>
-                              {isSimilar && (
-                                <span style={{ fontSize: '9px', color: '#d97706', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, background: '#fef3c7', padding: '1px 4px', borderRadius: '4px' }}>
-                                  ≈#{similarIds!.join(' #')}
-                                </span>
-                              )}
-                            </div>
-                            <div style={{ fontSize: '10px', color: '#aaa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {fmtDate(item.recordDate)} · #{item.id}{item.expenseReason ? ` · ${item.expenseReason}` : ''}
-                            </div>
+                          <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: '3px', flexWrap: 'nowrap', overflow: 'hidden' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 600, color: '#1A2B4A', whiteSpace: 'nowrap', flexShrink: 0 }}>{item.employeeName || '未知'}</span>
+                            <span style={{ fontSize: '10px', color: '#ccc', whiteSpace: 'nowrap', flexShrink: 0 }}>·</span>
+                            <span style={{ fontSize: '10px', color: '#aaa', whiteSpace: 'nowrap', flexShrink: 0 }}>{fmtDate(item.recordDate)}</span>
+                            <span style={{ fontSize: '10px', color: '#ccc', whiteSpace: 'nowrap', flexShrink: 0 }}>·</span>
+                            <span style={{ fontSize: '10px', color: '#aaa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 1 }}>#{item.id}{item.expenseReason ? ` · ${item.expenseReason}` : ''}</span>
+                            {isSimilar && (
+                              <span style={{ fontSize: '9px', color: '#d97706', fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0, background: '#fef3c7', padding: '1px 4px', borderRadius: '4px' }}>
+                                ≈#{similarIds!.join(' #')}
+                              </span>
+                            )}
                           </div>
                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#16a34a', textAlign: 'right' }}>
                             {item.amount.toFixed(0)}<span style={{ fontSize: '9px', color: '#aaa' }}>元</span>
