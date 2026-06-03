@@ -342,10 +342,15 @@ const WorkLogPage: React.FC = () => {
         {/* 横幅统计条 */}
         {(() => {
           const allDates = Object.keys(gitDayStats);
-          const staticActiveDays = allDates.filter(d => Number(gitDayStats[d]) > 0).length;
           const staticTotal = allDates.reduce((s, d) => s + Number(gitDayStats[d]), 0);
-          const activeDays = dayStats.size > 0 ? dayStats.size : staticActiveDays;
           const totalCommits = commits.length > 0 ? commits.length : staticTotal;
+          // 项目天数：从最早有数据的日期到今天的自然日历天数
+          const datesWithData = allDates.filter(d => Number(gitDayStats[d]) > 0).sort();
+          const firstDate = datesWithData.length > 0 ? new Date(datesWithData[0]) : new Date();
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          firstDate.setHours(0, 0, 0, 0);
+          const activeDays = Math.floor((today.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
           const avgPerDay = activeDays > 0 ? (totalCommits / activeDays).toFixed(1) : '0';
           const stats = [
             { label: '项目天数', value: String(activeDays), unit: '天' },
