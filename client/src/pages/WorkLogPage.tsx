@@ -336,13 +336,20 @@ const WorkLogPage: React.FC = () => {
   const renderCalendarView = () => {
     return (
       <div className="space-y-4">
-        {/* 统计卡片 */}
+        {/* 统计卡片：优先用静态gitDayStats，不依赖接口加载 */}
         <div className="grid grid-cols-3 gap-2">
-          {[
-            { label: '活跃天数', value: isLoading ? '-' : String(dayStats.size) },
-            { label: '提交总数', value: isLoading ? '-' : String(commits.length) },
-            { label: '平均每天', value: isLoading ? '-' : dayStats.size > 0 ? (commits.length / dayStats.size).toFixed(1) : '0' },
-          ].map(({ label, value }) => (
+          {(() => {
+            const staticActiveDays = Object.keys(gitDayStats).filter(d => gitDayStats[d] > 0).length;
+            const staticTotal = Object.values(gitDayStats).reduce((s, n) => s + n, 0);
+            const activeDays = dayStats.size > 0 ? dayStats.size : staticActiveDays;
+            const totalCommits = commits.length > 0 ? commits.length : staticTotal;
+            const avgPerDay = activeDays > 0 ? (totalCommits / activeDays).toFixed(1) : '0';
+            return [
+              { label: '活跃天数', value: String(activeDays) },
+              { label: '提交总数', value: String(totalCommits) },
+              { label: '平均每天', value: avgPerDay },
+            ];
+          })().map(({ label, value }) => (
             <div key={label} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex flex-col items-center">
               <p className="text-[10px] text-gray-400 mb-1">{label}</p>
               <p style={{ color: '#D32F2F' }} className="text-2xl font-black">{value}</p>
