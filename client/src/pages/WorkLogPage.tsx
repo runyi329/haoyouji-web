@@ -442,7 +442,15 @@ const WorkLogPage: React.FC = () => {
             >
               返回
             </button>
-            <h1 className="text-lg font-bold text-gray-900">脉动网·项目进展</h1>
+            <div className="flex items-center gap-2">
+              <img
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/gZMsAzlHHuDFuUTJ.png"
+                alt="脉动网"
+                className="rounded-full object-cover flex-shrink-0"
+                style={{ width: 28, height: 28, border: '1.5px solid #e5e7eb' }}
+              />
+              <h1 className="text-lg font-bold text-gray-900">脉动网·项目进展</h1>
+            </div>
             <button
               onClick={() => window.location.reload()}
               className="text-sm font-medium"
