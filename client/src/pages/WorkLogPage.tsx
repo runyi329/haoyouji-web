@@ -479,108 +479,129 @@ const WorkLogPage: React.FC = () => {
         {renderCalendarView()}
       </div>
 
-      {/* 底部抽屉：弹出当天提交详情 */}
+      {/* 底部抽屉：弹出当天提交详情 - 报告风格 */}
       {drawerDate && (
         <div
           className="fixed inset-0 z-50"
-          style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+          style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
           onClick={() => setDrawerDate(null)}
         >
           <div
             className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl"
-            style={{ maxHeight: '75vh', overflowY: 'auto' }}
+            style={{ maxHeight: '82vh', overflowY: 'auto' }}
             onClick={e => e.stopPropagation()}
           >
-            {/* 抽屉标题 */}
-            <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100 sticky top-0 bg-white">
-              <h3 className="text-base font-bold text-gray-900">
-                {new Date(drawerDate + 'T00:00:00').toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })}
-              </h3>
-              <div className="flex items-center gap-2">
-                <span className="bg-red-50 text-red-600 px-2.5 py-1 rounded-full text-xs font-bold">
-                  {dayStats.get(drawerDate)?.count || gitDayStats[drawerDate] || 0} 次升级
-                </span>
-                <button
-                  onClick={() => setDrawerDate(null)}
-                  className="text-gray-400 text-xl leading-none w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100"
-                >
-                  ×
-                </button>
+            {/* 报告封面头部 */}
+            <div className="sticky top-0 z-10" style={{ background: '#1a1a1a' }}>
+              {/* 顶部拖动条 */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)' }} />
+              </div>
+              <div className="px-5 pb-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, letterSpacing: 2, marginBottom: 4 }}>脉动网 · 升级日报</p>
+                    <h2 style={{ color: '#fff', fontSize: 20, fontWeight: 800, lineHeight: 1.2, margin: 0 }}>
+                      {new Date(drawerDate + 'T00:00:00').toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
+                    </h2>
+                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 2 }}>
+                      {new Date(drawerDate + 'T00:00:00').toLocaleDateString('zh-CN', { weekday: 'long' })}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <button
+                      onClick={() => setDrawerDate(null)}
+                      style={{ color: 'rgba(255,255,255,0.5)', fontSize: 20, lineHeight: 1, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'rgba(255,255,255,0.1)' }}
+                    >×</button>
+                    <div style={{ backgroundColor: '#D32F2F', color: '#fff', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>
+                      {dayStats.get(drawerDate)?.count || gitDayStats[drawerDate] || 0} 次升级
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* 工作摘要区块（抽屉内） */}
+            {/* 工作摘要区块 */}
             {(() => {
               const logEntry = workLogData.find(e => e.date === drawerDate);
               if (!logEntry) return null;
               return (
-                <div className="px-4 pt-3 pb-2">
+                <div className="px-5 pt-4 pb-2">
                   {logEntry.highlights && (
-                    <div style={{ backgroundColor: '#fff8f8', border: '1px solid #fca5a5', borderRadius: 10, padding: '8px 12px', marginBottom: 10 }}>
-                      <p style={{ color: '#D32F2F', fontSize: 11, fontWeight: 700, marginBottom: 2 }}>当日亮点</p>
-                      <p style={{ color: '#333', fontSize: 13, lineHeight: 1.5 }}>{logEntry.highlights}</p>
+                    <div style={{ background: 'linear-gradient(135deg, #fff5f5 0%, #fff 100%)', border: '1.5px solid #D32F2F', borderRadius: 12, padding: '12px 14px', marginBottom: 14 }}>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <div style={{ width: 3, height: 14, backgroundColor: '#D32F2F', borderRadius: 2 }} />
+                        <p style={{ color: '#D32F2F', fontSize: 10, fontWeight: 800, letterSpacing: 1.5 }}>核心亮点</p>
+                      </div>
+                      <p style={{ color: '#1a1a1a', fontSize: 14, lineHeight: 1.6, fontWeight: 500 }}>{logEntry.highlights}</p>
                     </div>
                   )}
-                  <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wide mb-2">工作内容摘要</p>
-                  <div className="space-y-1.5 mb-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div style={{ width: 3, height: 14, backgroundColor: '#999', borderRadius: 2 }} />
+                    <p style={{ color: '#888', fontSize: 10, fontWeight: 700, letterSpacing: 1.5 }}>工作内容摘要</p>
+                  </div>
+                  <div className="space-y-2.5 mb-4">
                     {logEntry.summary.map((item, idx) => (
-                      <div key={idx} className="flex items-start gap-2">
-                        <span style={{ backgroundColor: '#D32F2F', color: '#fff', width: 16, height: 16, borderRadius: '50%', fontSize: 9, fontWeight: 700, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
+                      <div key={idx} className="flex items-start gap-3">
+                        <span style={{ backgroundColor: '#1a1a1a', color: '#fff', minWidth: 20, height: 20, borderRadius: 4, fontSize: 10, fontWeight: 800, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           {idx + 1}
                         </span>
-                        <p className="text-sm text-gray-700 leading-snug flex-1">{item}</p>
+                        <p style={{ color: '#333', fontSize: 13.5, lineHeight: 1.6, flex: 1, paddingTop: 1 }}>{item}</p>
                       </div>
                     ))}
                   </div>
-                  <div className="border-t border-gray-100 pt-2 mb-1">
-                    <p className="text-[11px] text-gray-400 font-medium uppercase tracking-wide">详细提交记录</p>
-                  </div>
+                  <div style={{ borderTop: '1px solid #eee', marginBottom: 4 }} />
                 </div>
               );
             })()}
 
-            {/* 提交列表 */}
-            <div className="px-4 py-3 space-y-3">
+            {/* 详细提交记录标题 */}
+            <div className="px-5 pt-3 pb-2 flex items-center gap-2">
+              <div style={{ width: 3, height: 14, backgroundColor: '#999', borderRadius: 2 }} />
+              <p style={{ color: '#888', fontSize: 10, fontWeight: 700, letterSpacing: 1.5 }}>详细升级记录</p>
+            </div>
+
+            {/* 提交列表 - 报告条目风格 */}
+            <div className="px-4 pb-4 space-y-2">
               {(() => {
-                // 优先用接口数据，接口没有时用静态数据兜底
                 const apiCommits = dayStats.has(drawerDate) ? dayStats.get(drawerDate)!.commits : null;
                 const staticCommits = gitCommitsByDay[drawerDate] || null;
                 const displayCommits = apiCommits || staticCommits;
                 if (!displayCommits || displayCommits.length === 0) {
                   return <p className="text-center text-gray-400 text-sm py-6">这一天没有修改记录</p>;
                 }
-                // 全局起始编号：最早提交为1，按天累计
                 const globalOffset = gitDayOffsets[drawerDate] || 1;
-                // 静态数据是倒序（最新在前），接口数据也是倒序，需要反转后再加编号
-                const orderedCommits = apiCommits ? [...displayCommits].reverse() : [...displayCommits].reverse();
+                const orderedCommits = [...displayCommits].reverse();
                 return orderedCommits.map((commit: any, idx: number) => {
                   const typeInfo = getTypeInfo(commit.type);
                   const globalNum = globalOffset + idx;
+                  const timeStr = new Date(commit.date).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
                   return (
-                    <div key={commit.hash || idx} className="flex gap-3 items-start">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-50 flex items-center justify-center">
-                        <span className="text-[11px] font-bold text-red-500">{globalNum}</span>
+                    <div key={commit.hash || idx} style={{ background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 10, padding: '10px 12px' }}>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        {/* 全局序号 */}
+                        <span style={{ backgroundColor: '#1a1a1a', color: '#fff', minWidth: 28, height: 18, borderRadius: 4, fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', letterSpacing: 0.5, flexShrink: 0 }}>
+                          #{globalNum}
+                        </span>
+                        {/* 类型标签 */}
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${typeInfo.color}`}>
+                          {typeInfo.label}
+                        </span>
+                        {/* 模块 */}
+                        {commit.scope && (
+                          <span style={{ color: '#aaa', fontSize: 10, backgroundColor: '#f0f0f0', padding: '1px 6px', borderRadius: 4 }}>@{commit.scope}</span>
+                        )}
+                        {/* 时间右对齐 */}
+                        <span style={{ color: '#bbb', fontSize: 10, marginLeft: 'auto', flexShrink: 0 }}>{timeStr}</span>
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${typeInfo.color}`}>
-                            {typeInfo.label}
-                          </span>
-                          {commit.scope && (
-                            <span className="text-[10px] text-gray-400">@{commit.scope}</span>
-                          )}
-                          <span className="text-[10px] text-gray-300 ml-auto">
-                            {new Date(commit.date).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-800 leading-snug">{commit.cleanMessage}</p>
-                      </div>
+                      {/* 提交内容 */}
+                      <p style={{ color: '#2a2a2a', fontSize: 13, lineHeight: 1.6, margin: 0 }}>{commit.cleanMessage}</p>
                     </div>
                   );
                 });
               })()}
             </div>
-            <div className="h-6"></div>
+            <div className="h-8"></div>
           </div>
         </div>
       )}
