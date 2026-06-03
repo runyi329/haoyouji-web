@@ -1904,7 +1904,7 @@ export default function LedgerDetailAA({
             const gridCols = '72px 1px 1fr 1px 1fr 1px 1.5fr 1px 1.5fr 1px 64px 1px 64px';
             // 表头行高与数据行一致：py-2
             const cellCls = 'px-1 py-2 font-medium text-center';
-            const dataCellCls = 'px-1 py-2 text-right';
+            const dataCellCls = 'px-1 py-2 text-center';
             const dataCellStyle = { whiteSpace: 'nowrap' as const };
             const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
             // 内容宽度：前5列占满屏幕，年化/分红固定64px共128px溢出到右侧
@@ -2023,7 +2023,7 @@ export default function LedgerDetailAA({
                       })()}
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 金额 */}
-                      <div className="px-1 py-2 flex flex-col items-end justify-center" style={{ borderBottom: rowBorder }}>
+                      <div className="px-1 py-2 flex flex-col items-center justify-center" style={{ borderBottom: rowBorder }}>
                         {tag.marginCny > 0 ? (
                           <>
                             <div style={{ fontSize: 13, lineHeight: 1, color: '#424242' }}>{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
@@ -2061,36 +2061,36 @@ export default function LedgerDetailAA({
                     {/* 站线要用 background 而非 border，这样才能覆盖 borderTop */}
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 周期 -- */}
-                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
                       <span style={{ fontSize: 13, color: '#BDBDBD' }}>--</span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 占比 -- */}
-                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
                       <span style={{ fontSize: 13, color: '#BDBDBD' }}>--</span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 金额：只显示人民币汇总，居中 */}
-                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 回报 */}
-                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
                         {totalPnl !== 0 ? `${totalPnl < 0 ? '-' : ''}${Math.abs(totalPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 年化 */}
-                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
+                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: weightedAnnualized === null ? '#BDBDBD' : weightedAnnualized >= 0 ? '#D32F2F' : '#388E3C' }}>
                         {weightedAnnualized === null ? '--' : `${weightedAnnualized >= 0 ? '+' : ''}${weightedAnnualized.toFixed(1)}%`}
                       </span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 分红 */}
-                    <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 16px 0' }}>
+                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 16px 0' }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: totalDividend > 0 ? '#D32F2F' : '#BDBDBD' }}>
                         {totalDividend > 0 ? `${totalDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </span>
