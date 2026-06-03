@@ -192,17 +192,17 @@ const WorkLogPage: React.FC = () => {
                 const dateObj = new Date(day.date);
                 const dayNum = dateObj.getDate();
                 const month = dateObj.getMonth() + 1;
-                const isFirstOfMonth = dayNum === 1;
                 const isSelected = selectedDate === day.date;
                 const isWeekend = dayIdx >= 5;
 
-                // 横条颜色
-                let barBg = 'bg-gray-100';
-                let barText = 'text-gray-400';
-                if (isSelected) { barBg = 'bg-red-600'; barText = 'text-white'; }
-                else if (day.isToday) { barBg = 'bg-red-500'; barText = 'text-white'; }
-                else if (day.count > 0) { barBg = 'bg-red-100'; barText = 'text-red-600'; }
-                else if (isWeekend) { barBg = 'bg-orange-50'; barText = 'text-orange-300'; }
+                // 横条颜色：苹果日历风格
+                // 平日：苹果蓝 #007AFF；周末：红色；今天：深蓝；选中：深红
+                let barStyle: React.CSSProperties = { backgroundColor: '#E8F0FE', color: '#1A73E8' };
+                if (isSelected) { barStyle = { backgroundColor: '#C62828', color: '#fff' }; }
+                else if (day.isToday) { barStyle = { backgroundColor: '#1565C0', color: '#fff' }; }
+                else if (isWeekend && day.count > 0) { barStyle = { backgroundColor: '#FFEBEE', color: '#C62828' }; }
+                else if (isWeekend) { barStyle = { backgroundColor: '#FFF3F3', color: '#EF9A9A' }; }
+                else if (day.count > 0) { barStyle = { backgroundColor: '#BBDEFB', color: '#1565C0' }; }
 
                 return (
                   <div
@@ -213,9 +213,9 @@ const WorkLogPage: React.FC = () => {
                     }`}
                   >
                     {/* 日期横条 */}
-                    <div className={`${barBg} flex items-center justify-center py-0.5`}>
-                      <span className={`text-[10px] font-bold leading-tight ${barText}`}>
-                        {isFirstOfMonth ? `${month}/${dayNum}` : dayNum}
+                    <div style={barStyle} className="flex items-center justify-center py-0.5">
+                      <span className="text-[10px] font-bold leading-tight">
+                        {month}月{dayNum}日
                       </span>
                     </div>
 
