@@ -23,16 +23,15 @@ const serverOutPath = path.resolve(rootDir, 'server/git-log.json');
 // 同时也写一份到根目录，方便 esbuild 打包后的 dist/index.js 找到
 
 try {
-  // 用 spawnSync 避免 ENOBUFS，限制最近 3000 条
+  // 导出全量提交记录（不限制条数），maxBuffer 扩大到 100MB 防止溢出
   const result = spawnSync('git', [
     'log', '--all',
     '--pretty=format:%H|%an|%ad|%s',
-    '--date=iso-strict',
-    '-n', '3000'
+    '--date=iso-strict'
   ], {
     cwd: rootDir,
     encoding: 'utf8',
-    maxBuffer: 20 * 1024 * 1024 // 20MB
+    maxBuffer: 100 * 1024 * 1024 // 100MB
   });
 
   if (result.error) throw result.error;
