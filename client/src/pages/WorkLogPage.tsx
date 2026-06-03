@@ -487,7 +487,7 @@ const WorkLogPage: React.FC = () => {
               </h3>
               <div className="flex items-center gap-2">
                 <span className="bg-red-50 text-red-600 px-2.5 py-1 rounded-full text-xs font-bold">
-                  {dayStats.get(drawerDate)?.count || 0} 条改动
+                  {dayStats.get(drawerDate)?.count || gitDayStats[drawerDate] || 0} 条改动
                 </span>
                 <button
                   onClick={() => setDrawerDate(null)}
