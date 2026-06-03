@@ -339,8 +339,9 @@ const WorkLogPage: React.FC = () => {
         {/* 统计卡片：优先用静态gitDayStats，不依赖接口加载 */}
         <div className="grid grid-cols-3 gap-2">
           {(() => {
-            const staticActiveDays = Object.keys(gitDayStats).filter(d => gitDayStats[d] > 0).length;
-            const staticTotal = Object.values(gitDayStats).reduce((s, n) => s + n, 0);
+            const allDates = Object.keys(gitDayStats);
+            const staticActiveDays = allDates.filter(d => Number(gitDayStats[d]) > 0).length;
+            const staticTotal = allDates.reduce((s, d) => s + Number(gitDayStats[d]), 0);
             const activeDays = dayStats.size > 0 ? dayStats.size : staticActiveDays;
             const totalCommits = commits.length > 0 ? commits.length : staticTotal;
             const avgPerDay = activeDays > 0 ? (totalCommits / activeDays).toFixed(1) : '0';
