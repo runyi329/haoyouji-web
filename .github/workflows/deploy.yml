@@ -64,7 +64,9 @@ jobs:
             pm2 save 2>/dev/null || true
             sleep 2
             echo "🔄 同步新代码到实际服务目录（先清理旧 dist 避免旧 JS 文件残留）..."
-            rm -rf /home/ubuntu/haoyouji-web/dist
+            fuser -km /home/ubuntu/haoyouji-web/dist 2>/dev/null || true
+            sleep 1
+            rm -rf /home/ubuntu/haoyouji-web/dist 2>/dev/null || rm -rf /home/ubuntu/haoyouji-web/dist/* 2>/dev/null || true
             mkdir -p /home/ubuntu/haoyouji-web/dist
             cp -r /root/haoyouji-web/dist/. /home/ubuntu/haoyouji-web/dist/
             cp /root/haoyouji-web/package.json /home/ubuntu/haoyouji-web/package.json
