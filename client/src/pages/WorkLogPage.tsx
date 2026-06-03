@@ -483,12 +483,12 @@ const WorkLogPage: React.FC = () => {
       {drawerDate && (
         <div
           className="fixed inset-0 z-50"
-          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)', touchAction: 'none' }}
           onClick={() => setDrawerDate(null)}
         >
           <div
             className="absolute bottom-0 left-0 right-0 bg-white"
-            style={{ maxHeight: '85vh', overflowY: 'auto', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}
+            style={{ maxHeight: '85vh', overflowY: 'auto', overflowX: 'hidden', borderTopLeftRadius: 12, borderTopRightRadius: 12, touchAction: 'pan-y' }}
             onClick={e => e.stopPropagation()}
           >
             {/* 正式报告头部 - 白色背景 */}
@@ -570,13 +570,17 @@ const WorkLogPage: React.FC = () => {
                 const globalOffset = gitDayOffsets[drawerDate] || 1;
                 const orderedCommits = [...displayCommits].reverse();
                 return (
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <table style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <colgroup>
+                      <col style={{ width: 48 }} />
+                      <col />
+                      <col style={{ width: 40 }} />
+                    </colgroup>
                     <thead>
                       <tr style={{ backgroundColor: '#2a2a2a' }}>
-                        <th style={{ width: 36, padding: '6px 4px', textAlign: 'center', color: '#ccc', fontSize: 10, fontWeight: 700, border: '1px solid #444' }}>编号</th>
-                        <th style={{ width: 38, padding: '6px 4px', textAlign: 'center', color: '#ccc', fontSize: 10, fontWeight: 700, border: '1px solid #444' }}>类型</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'center', color: '#ccc', fontSize: 10, fontWeight: 700, border: '1px solid #444' }}>编号/类型</th>
                         <th style={{ padding: '6px 8px', textAlign: 'left', color: '#ccc', fontSize: 10, fontWeight: 700, border: '1px solid #444' }}>升级内容</th>
-                        <th style={{ width: 38, padding: '6px 4px', textAlign: 'right', color: '#ccc', fontSize: 10, fontWeight: 700, border: '1px solid #444' }}>时间</th>
+                        <th style={{ padding: '6px 4px', textAlign: 'right', color: '#ccc', fontSize: 10, fontWeight: 700, border: '1px solid #444' }}>时间</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -586,12 +590,16 @@ const WorkLogPage: React.FC = () => {
                         const timeStr = new Date(commit.date).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
                         return (
                           <tr key={commit.hash || idx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
-                            <td style={{ padding: '7px 4px', textAlign: 'center', color: '#888', fontSize: 10, fontWeight: 600, border: '1px solid #efefef', verticalAlign: 'top' }}>{globalNum}</td>
-                            <td style={{ padding: '7px 4px', textAlign: 'center', border: '1px solid #efefef', verticalAlign: 'top' }}>
-                              <span className={`px-1 py-0.5 rounded text-[9px] font-bold ${typeInfo.color}`}>{typeInfo.label}</span>
+                            {/* 编号+类型合并一格，两行 */}
+                            <td style={{ padding: '6px 4px', textAlign: 'center', border: '1px solid #efefef', verticalAlign: 'middle' }}>
+                              <div style={{ color: '#888', fontSize: 10, fontWeight: 700, lineHeight: 1.3 }}>{globalNum}</div>
+                              <span className={`px-1 py-0.5 rounded text-[9px] font-bold ${typeInfo.color}`} style={{ display: 'inline-block', marginTop: 2 }}>{typeInfo.label}</span>
                             </td>
-                            <td style={{ padding: '7px 8px', color: '#222', lineHeight: 1.55, border: '1px solid #efefef', fontSize: 12 }}>{commit.cleanMessage}</td>
-                            <td style={{ padding: '7px 4px', textAlign: 'right', color: '#bbb', fontSize: 10, border: '1px solid #efefef', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{timeStr}</td>
+                            {/* 内容列：最多两行截断 */}
+                            <td style={{ padding: '6px 8px', color: '#222', border: '1px solid #efefef', verticalAlign: 'middle' }}>
+                              <div style={{ fontSize: 12, lineHeight: 1.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', wordBreak: 'break-all' }}>{commit.cleanMessage}</div>
+                            </td>
+                            <td style={{ padding: '6px 4px', textAlign: 'right', color: '#bbb', fontSize: 10, border: '1px solid #efefef', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>{timeStr}</td>
                           </tr>
                         );
                       })}
