@@ -156,6 +156,9 @@ export default function LedgerDetailAA({
   const previewIndexRef = useRef(0);
   const previewImagesRef = useRef<string[]>([]);
 
+  // 日历横向滚动容器 ref（用于默认定位到周一）
+  const calendarScrollRef = useRef<HTMLDivElement>(null);
+
   // 股票预览（普通成员点击有蓝点/紫点的日历格子时弹出）
   const [previewStocks, setPreviewStocks] = useState<Array<{code: string; name: string}>>([]);
   const [showStockPreview, setShowStockPreview] = useState(false);
@@ -693,16 +696,42 @@ export default function LedgerDetailAA({
     }));
   }, [filteredTransactions, cumulativeMap, calendarMode, calendarDate, dayMap, chartEffectiveStartDate]);
 
-  // ─── 当前月日历格子 ────────────────────────────────────────────────────────
-  const calendarCells = useMemo(() => {
+  // ─── 当前月日历格子（按周分组，周一为第一列）────────────────────────────────
+  // calendarWeeks: 每个元素是一周7天（周一到周日），null表示空位
+  const calendarWeeks = useMemo(() => {
     const { year, month } = calendarDate;
-    const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
+    // 计算本月1日是周几（0=周日，1=周一，...，6=周六）
+    // 转换为周一起始：周一=0，...，周日=6
+    const firstDayRaw = new Date(year, month, 1).getDay(); // 0=Sun
+    const firstDayMon = (firstDayRaw + 6) % 7; // 0=Mon,...,6=Sun
+    // 构建一维数组（周一起始）
     const cells: (number | null)[] = [];
-    for (let i = 0; i < firstDay; i++) cells.push(null);
+    for (let i = 0; i < firstDayMon; i++) cells.push(null);
     for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-    return cells;
+    // 补齐末尾使总数为7的倍数
+    while (cells.length % 7 !== 0) cells.push(null);
+    // 按7个一组切分成周数组
+    const weeks: (number | null)[][] = [];
+    for (let i = 0; i < cells.length; i += 7) {
+      weeks.push(cells.slice(i, i + 7));
+    }
+    return weeks;
   }, [calendarDate]);
+
+  // 兼容旧代码：calendarCells 保持为一维数组
+  const calendarCells = useMemo(() => calendarWeeks.flat(), [calendarWeeks]);
+
+  // 月份切换后自动滚动到周一（让周六周日在屏幕外）
+  useEffect(() => {
+    const el = calendarScrollRef.current;
+    if (!el) return;
+    // 每列宽度 = 总宽 / 7，周六在第6列（index=5），周日在第7列（index=6）
+    // 周一在第1列（index=0），默认滚动到使周一在最左边
+    // 即 scrollLeft = 0（周一已在最左），但容器宽度只显示5列
+    // 所以设 scrollLeft = 0 即可让周一在左边，周六周日在右侧屏幕外
+    el.scrollLeft = 0;
+  }, [calendarDate, calendarMode]);
 
   // ─── 辅助函数 ──────────────────────────────────────────────────────────────
   const formatMoney = (v: number) => {
@@ -1378,148 +1407,145 @@ export default function LedgerDetailAA({
           {/* 日视图 / 月视图 / 年视图 */}
           {(calendarMode === "balance" || calendarMode === "daily") && (
             <>
+              {/* 横向可滑动日历：默认显示周一到周五，周六周日在屏幕外 */}
+              <div
+                ref={calendarScrollRef}
+                style={{
+                  overflowX: 'auto',
+                  WebkitOverflowScrolling: 'touch',
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                  touchAction: 'pan-x pan-y',
+                }}
+              >
+                {/* 内容宽度 = 7/5 * 100% ≈ 140%，屏幕只显5列 */}
+                <div style={{ width: 'calc(7 / 5 * 100%)' }}>
               {/* 星期标题 */}
-              <div className="grid grid-cols-7 mb-0.5">
-                {["日", "一", "二", "三", "四", "五", "六"].map((d) => (
-                  <div key={d} className="text-center text-xs py-1" style={{ color: "#757575" }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: '2px' }}>
+                {["一", "二", "三", "四", "五", "六", "日"].map((d, i) => (
+                  <div key={d} className="text-center text-xs py-1" style={{ color: i >= 5 ? '#BDBDBD' : '#757575' }}>
                     {d}
                   </div>
                 ))}
               </div>
-              {/* 日历格子 */}
-              <div className="grid grid-cols-7 gap-0.5" style={{ gridAutoRows: '1fr' }}>
-                {calendarCells.map((day, idx) => {
-                  if (day === null) return <div key={`empty-${idx}`} style={{ height: '44px' }} />;
-                  const nonTradingLabel = getNonTradingLabel(day);
-                  const isNonTrading = nonTradingLabel !== null;
-                  const cellValue = getCellValue(day);
-                  const hasRecord = cellValue !== null;
-                  const todayMark = isToday(day);
-                  // 字体颜色逻辑
-                  let valueColor = "#D32F2F";
-                  if (hasRecord) {
-                    const dateStr = getDateStr(day);
-                    if (calendarMode === "daily") {
-                      // 日模式：当天金额与前一天差値的正负
-                      const todayData = dayMap.get(dateStr);
-                      const allDates = Array.from(dayMap.keys()).sort();
-                      const idx2 = allDates.indexOf(dateStr);
-                      if (todayData && idx2 > 0) {
-                        const prevData = dayMap.get(allDates[idx2 - 1])!;
-                        const diff = (todayData.expense + todayData.income) - (prevData.expense + prevData.income);
-                        valueColor = diff > 0 ? "#D32F2F" : diff < 0 ? "#4CAF50" : "#9E9E9E";
-                      } else {
-                        valueColor = "#9E9E9E";
+              {/* 日历格子 - 按周行渲染 */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {calendarWeeks.map((week, weekIdx) => (
+                  <div key={weekIdx} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
+                    {week.map((day, colIdx) => {
+                      if (day === null) return <div key={`empty-${weekIdx}-${colIdx}`} style={{ height: '36px' }} />;
+                      const nonTradingLabel = getNonTradingLabel(day);
+                      const isNonTrading = nonTradingLabel !== null;
+                      const cellValue = getCellValue(day);
+                      const hasRecord = cellValue !== null;
+                      const todayMark = isToday(day);
+                      // 字体颜色逻辑
+                      let valueColor = "#D32F2F";
+                      if (hasRecord) {
+                        const dateStr = getDateStr(day);
+                        if (calendarMode === "daily") {
+                          const todayData = dayMap.get(dateStr);
+                          const allDates = Array.from(dayMap.keys()).sort();
+                          const idx2 = allDates.indexOf(dateStr);
+                          if (todayData && idx2 > 0) {
+                            const prevData = dayMap.get(allDates[idx2 - 1])!;
+                            const diff = (todayData.expense + todayData.income) - (prevData.expense + prevData.income);
+                            valueColor = diff > 0 ? "#D32F2F" : diff < 0 ? "#4CAF50" : "#9E9E9E";
+                          } else {
+                            valueColor = "#9E9E9E";
+                          }
+                        } else {
+                          const allDates = Array.from(dayMap.keys()).sort();
+                          const idx2 = allDates.indexOf(dateStr);
+                          const tagStartDate = selectedTag?.name && initialBalancesData?.balances
+                            ? String(initialBalancesData.balances[`${selectedTag.name}__startDate`] ?? '')
+                            : '';
+                          const isFirstRecord = idx2 === 0;
+                          const isStartDate = tagStartDate && dateStr === tagStartDate;
+                          if (isFirstRecord || isStartDate) {
+                            valueColor = "#222222";
+                          } else if (idx2 > 0) {
+                            const todayData = dayMap.get(dateStr)!;
+                            const prevData = dayMap.get(allDates[idx2 - 1])!;
+                            const diff = (todayData.expense + todayData.income) - (prevData.expense + prevData.income);
+                            valueColor = diff > 0 ? "#D32F2F" : diff < 0 ? "#4CAF50" : "#9E9E9E";
+                          }
+                        }
                       }
-                    } else {
-                      // 余额模式：初始日黑色，之后每天与前一天比较
-                      const allDates = Array.from(dayMap.keys()).sort();
-                      const idx2 = allDates.indexOf(dateStr);
-                      // 判断是否为初始日：该标签的 startDate，或者是第一条数据
-                      const tagStartDate = selectedTag?.name && initialBalancesData?.balances
-                        ? String(initialBalancesData.balances[`${selectedTag.name}__startDate`] ?? '')
-                        : '';
-                      const isFirstRecord = idx2 === 0;
-                      const isStartDate = tagStartDate && dateStr === tagStartDate;
-                      if (isFirstRecord || isStartDate) {
-                        valueColor = "#222222"; // 初始日黑色
-                      } else if (idx2 > 0) {
-                        const todayData = dayMap.get(dateStr)!;
-                        const prevData = dayMap.get(allDates[idx2 - 1])!;
-                        const todayTotal = todayData.expense + todayData.income;
-                        const prevTotal = prevData.expense + prevData.income;
-                        const diff = todayTotal - prevTotal;
-                        valueColor = diff > 0 ? "#D32F2F" : diff < 0 ? "#4CAF50" : "#9E9E9E";
-                      }
-                    }
-                  }
-                  // 暂停日期判断（从用户自己的 initialBalancesData 读取）
-                  const pauseDateStr = selectedTagPauseDate;
-                  const endDateStr = selectedTagEndDate;
-                  const dayDateStr2 = getDateStr(day);
-                  const isPauseDay = !isNonTrading && pauseDateStr && dayDateStr2 === pauseDateStr;
-                  const isPausedAfter = !isNonTrading && pauseDateStr && dayDateStr2 > pauseDateStr;
-                  // 非交易日样式
-                  const cellBg = isNonTrading
-                    ? '#F0F0F0'
-                    : isPauseDay ? '#1565C0'
-                    : isPausedAfter ? '#F0F0F0'
-                    : todayMark ? '#FFF3E0' : '#F9F9F9';
-                  const cellBorder = isNonTrading
-                    ? '1px solid #E0E0E0'
-                    : isPauseDay ? '1.5px solid #1565C0'
-                    : isPausedAfter ? '1px solid #E0E0E0'
-                    : todayMark ? '1.5px solid #D32F2F' : '1px solid #F0F0F0';
-                  const dayNumColor = isNonTrading
-                    ? '#BDBDBD'
-                    : isPausedAfter ? '#BDBDBD'
-                    : todayMark ? '#D32F2F' : '#222222';
-
-                  // 检查该日期是否有图片和股票代码
-                  const dayDateStr = getDateStr(day);
-                  const dayData = dayMap.get(dayDateStr);
-                  const hasImages = !isNonTrading && dayData?.records?.some((r: any) => {
-                    if (r.images && Array.isArray(r.images) && r.images.length > 0) return true;
-                    if (r.imageUrl) return true;
-                    return false;
-                  });
-                  const hasStocks = !isNonTrading && dayData?.records?.some((r: any) => {
-                    return r.stockCodes && Array.isArray(r.stockCodes) && r.stockCodes.length > 0;
-                  });
-                  // 小点颜色：红=只有图片，蓝=只有股票，紫=两者都有
-                  const dotColor = (hasImages && hasStocks) ? '#7B1FA2' : hasImages ? '#D32F2F' : hasStocks ? '#1565C0' : null;
-
-                  return (
-                    <button
-                      key={day}
-                      onClick={() => isNonTrading ? undefined : handleDayClick(day)}
-                      disabled={isNonTrading}
-                      className="rounded-lg flex flex-col items-center justify-center transition-all active:scale-95"
-                      style={{
-                        height: '36px',
-                        backgroundColor: cellBg,
-                        border: cellBorder,
-                        padding: '2px 1px',
-                        cursor: isNonTrading ? 'default' : 'pointer',
-                        position: 'relative',
-                      }}
-                    >
-                      {isPauseDay ? (
-                        /* 暂停日期：整格显示暂停图标（两根竖线），无日期数字 */
-                        <PauseCircle style={{ width: '18px', height: '18px', color: '#FFFFFF' }} />
-                      ) : (
-                        <>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', marginBottom: '1px' }}>
-                            <span style={{ fontSize: '10px', fontWeight: 500, lineHeight: 1, color: dayNumColor }}>{day}</span>
-                            {/* 图片/股票标识：日期右边小点（红=图片，蓝=股票，紫=两者） */}
-                            {!isPausedAfter && dotColor && (
-                              <span
-                                style={{
-                                  width: '3px',
-                                  height: '3px',
-                                  borderRadius: '50%',
-                                  backgroundColor: dotColor,
-                                  flexShrink: 0,
-                                  display: 'inline-block',
-                                }}
-                              />
-                            )}
-                          </span>
-                          {isNonTrading ? (
-                            <span style={{ fontSize: '7px', fontWeight: 400, lineHeight: 1.1, color: '#BDBDBD', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
-                              {nonTradingLabel}
-                            </span>
-                          ) : !isPausedAfter && hasRecord ? (
-                            <span style={{ fontSize: '8px', fontWeight: 600, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
-                              {cellValue}
-                            </span>
-                          ) : null}
-                        </>
-                      )}
-                    </button>
-                  );
-                })}
+                      const pauseDateStr = selectedTagPauseDate;
+                      const endDateStr = selectedTagEndDate;
+                      const dayDateStr2 = getDateStr(day);
+                      const isPauseDay = !isNonTrading && pauseDateStr && dayDateStr2 === pauseDateStr;
+                      const isPausedAfter = !isNonTrading && pauseDateStr && dayDateStr2 > pauseDateStr;
+                      const cellBg = isNonTrading
+                        ? '#F0F0F0'
+                        : isPauseDay ? '#1565C0'
+                        : isPausedAfter ? '#F0F0F0'
+                        : todayMark ? '#FFF3E0' : '#F9F9F9';
+                      const cellBorder = isNonTrading
+                        ? '1px solid #E0E0E0'
+                        : isPauseDay ? '1.5px solid #1565C0'
+                        : isPausedAfter ? '1px solid #E0E0E0'
+                        : todayMark ? '1.5px solid #D32F2F' : '1px solid #F0F0F0';
+                      const dayNumColor = isNonTrading
+                        ? '#BDBDBD'
+                        : isPausedAfter ? '#BDBDBD'
+                        : todayMark ? '#D32F2F' : '#222222';
+                      const dayDateStr = getDateStr(day);
+                      const dayData = dayMap.get(dayDateStr);
+                      const hasImages = !isNonTrading && dayData?.records?.some((r: any) => {
+                        if (r.images && Array.isArray(r.images) && r.images.length > 0) return true;
+                        if (r.imageUrl) return true;
+                        return false;
+                      });
+                      const hasStocks = !isNonTrading && dayData?.records?.some((r: any) => {
+                        return r.stockCodes && Array.isArray(r.stockCodes) && r.stockCodes.length > 0;
+                      });
+                      const dotColor = (hasImages && hasStocks) ? '#7B1FA2' : hasImages ? '#D32F2F' : hasStocks ? '#1565C0' : null;
+                      return (
+                        <button
+                          key={day}
+                          onClick={() => isNonTrading ? undefined : handleDayClick(day)}
+                          disabled={isNonTrading}
+                          className="rounded-lg flex flex-col items-center justify-center transition-all active:scale-95"
+                          style={{
+                            height: '36px',
+                            backgroundColor: cellBg,
+                            border: cellBorder,
+                            padding: '2px 1px',
+                            cursor: isNonTrading ? 'default' : 'pointer',
+                            position: 'relative',
+                          }}
+                        >
+                          {isPauseDay ? (
+                            <PauseCircle style={{ width: '18px', height: '18px', color: '#FFFFFF' }} />
+                          ) : (
+                            <>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', marginBottom: '1px' }}>
+                                <span style={{ fontSize: '10px', fontWeight: 500, lineHeight: 1, color: dayNumColor }}>{day}</span>
+                                {!isPausedAfter && dotColor && (
+                                  <span style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: dotColor, flexShrink: 0, display: 'inline-block' }} />
+                                )}
+                              </span>
+                              {isNonTrading ? (
+                                <span style={{ fontSize: '7px', fontWeight: 400, lineHeight: 1.1, color: '#BDBDBD', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
+                                  {nonTradingLabel}
+                                </span>
+                              ) : !isPausedAfter && hasRecord ? (
+                                <span style={{ fontSize: '8px', fontWeight: 600, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
+                                  {cellValue}
+                                </span>
+                              ) : null}
+                            </>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
+              </div>{/* end 内容宽度容器 */}
+              </div>{/* end 横向滑动容器 */}
             </>
           )}
 
