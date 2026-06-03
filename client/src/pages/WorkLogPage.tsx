@@ -4,6 +4,7 @@ import { trpc } from '@/lib/trpc';
 import { workLogData, WorkLogEntry } from '@/data/workLogSummary';
 import { gitDayStats } from '@/data/gitDayStats';
 import { gitCommitsByDay } from '@/data/gitCommitsByDay';
+import { gitDayOffsets } from '@/data/gitDayOffsets';
 
 interface GitCommit {
   hash: string;
@@ -537,12 +538,17 @@ const WorkLogPage: React.FC = () => {
                 if (!displayCommits || displayCommits.length === 0) {
                   return <p className="text-center text-gray-400 text-sm py-6">这一天没有修改记录</p>;
                 }
-                return displayCommits.map((commit: any, idx: number) => {
+                // 全局起始编号：最早提交为1，按天累计
+                const globalOffset = gitDayOffsets[drawerDate] || 1;
+                // 静态数据是倒序（最新在前），接口数据也是倒序，需要反转后再加编号
+                const orderedCommits = apiCommits ? [...displayCommits].reverse() : [...displayCommits].reverse();
+                return orderedCommits.map((commit: any, idx: number) => {
                   const typeInfo = getTypeInfo(commit.type);
+                  const globalNum = globalOffset + idx;
                   return (
                     <div key={commit.hash || idx} className="flex gap-3 items-start">
                       <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-50 flex items-center justify-center">
-                        <span className="text-[11px] font-bold text-red-500">{idx + 1}</span>
+                        <span className="text-[11px] font-bold text-red-500">{globalNum}</span>
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
