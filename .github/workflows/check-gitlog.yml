@@ -1,0 +1,24 @@
+name: 检查git-log状态
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 设置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      - name: 检查生产服务器git-log.json
+        run: |
+          ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            echo "=== 检查git-log.json文件 ==="
+            ls -la /home/ubuntu/haoyouji-web/dist/git-log.json 2>/dev/null || echo "dist/git-log.json NOT FOUND"
+            ls -la /home/ubuntu/haoyouji-web/server/git-log.json 2>/dev/null || echo "server/git-log.json NOT FOUND"
+            echo "=== 文件行数 ==="
+            wc -l /home/ubuntu/haoyouji-web/dist/git-log.json 2>/dev/null || echo "dist/git-log.json 不存在"
+            wc -l /home/ubuntu/haoyouji-web/server/git-log.json 2>/dev/null || echo "server/git-log.json 不存在"
+            echo "=== 接口测试 ==="
+            curl -s http://localhost:3000/api/trpc/workLog.getWorkLogs 2>/dev/null | head -c 200 || echo "接口调用失败"
+ENDSSH
