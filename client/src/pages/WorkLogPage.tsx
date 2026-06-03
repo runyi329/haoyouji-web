@@ -416,7 +416,7 @@ const WorkLogPage: React.FC = () => {
                           {day.count}
                         </span>
                       ) : (
-                        <span style={{ color: '#ddd', fontSize: '1rem', fontWeight: 400 }}>0</span>
+                        <span style={{ color: '#ccc', fontSize: '1.3rem', fontWeight: 700, lineHeight: 1 }}>0</span>
                       )}
                     </div>
                   </div>
