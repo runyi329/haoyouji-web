@@ -1898,13 +1898,16 @@ export default function LedgerDetailAA({
             const weightedAnnualized = weightedDenominator > 0 ? (totalPnl / weightedDenominator) * 100 : null;
             const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
             // Grid 列定义：名称固定52px，其他列 minmax 自适应
-            // 名称:auto 周期:36px 占比:auto 金额/回报/年化:1fr 分红:auto
-            // 周期列改为auto，内容多少就占多少，不换行
+            // 横向可滑动概览表：默认显示名称/周期/占比/金额/回报，年化和分红隐藏在右侧
+            // 内容宽度 = 7/5 * 100%，屏幕只显5列
+            // 列定义：名称(auto) 周期(auto) 占比(auto) 金额(1fr) 回报(1fr) 年化(1fr) 分红(auto)
             const gridCols = 'auto 1px auto 1px auto 1px 1fr 1px 1fr 1px 1fr 1px auto';
-            const cellCls = 'px-1 py-1.5 text-[10px] font-medium text-center';
-            const dataCellCls = 'px-1 py-2 text-right text-[11px]';
+            const cellCls = 'px-1 py-1.5 font-medium text-center';
+            const dataCellCls = 'px-1 py-2 text-right';
             const dataCellStyle = { whiteSpace: 'nowrap' as const };
             const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
+            // 内容宽度：7列内容占屏幕宽度的 7/5，屏幕只显5列
+            const overviewInnerWidth = 'calc(7 / 5 * 100%)';
             // 排序箭头辅助
             const SortArrow = ({ col }: { col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend' }) => {
               if (!overviewSort || overviewSort.col !== col) return <span style={{ color: '#D0D0D0', fontSize: 7, marginLeft: 1 }}>▼</span>;
@@ -1912,22 +1915,32 @@ export default function LedgerDetailAA({
             };
             const sortHeaderCls = cellCls + ' cursor-pointer select-none';
             return (
+              <div
+                style={{
+                  overflowX: 'auto',
+                  WebkitOverflowScrolling: 'touch',
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                  touchAction: 'pan-x pan-y',
+                }}
+              >
+              <div style={{ width: overviewInnerWidth }}>
               <div style={{ display: 'grid', gridTemplateColumns: gridCols }}>
                 {/* 表头行 */}
-                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E', fontSize: 10 }}>名称</span></div>
+                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E', fontSize: 12 }}>名称</span></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E', fontSize: 10 }}>金额¥</span><SortArrow col="amount" /></div>
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E' }}>金额¥</span><SortArrow col="amount" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E', fontSize: 10 }}>回报¥</span><SortArrow col="pnl" /></div>
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E' }}>回报¥</span><SortArrow col="pnl" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={cellCls + ' cursor-pointer'} style={{ borderBottom: '1px solid #F5F5F5' }} onClick={() => { handleOverviewSort('dividend'); }}>
-                  <span style={{ color: overviewSort?.col === 'dividend' ? '#1565C0' : '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px', fontSize: 10 }} onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>分红¥</span><SortArrow col="dividend" />
+                <div className={cellCls + ' cursor-pointer'} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => { handleOverviewSort('dividend'); }}>
+                  <span style={{ color: overviewSort?.col === 'dividend' ? '#1565C0' : '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }} onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>分红¥</span><SortArrow col="dividend" />
                 </div>
                 {/* 数据行 */}
                 {sortedTagData.map(({ tag, days, latestPnl, latestDate, annualized, divAmt, isLast, isPaused, firstDate, endDate }) => {
@@ -1945,8 +1958,7 @@ export default function LedgerDetailAA({
                       <div key={`${tag.name}-name`} className="px-1 py-2 flex items-center justify-center gap-1" style={{ borderBottom: rowBorder, position: 'relative' }}>
                         <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
                         <span
-                          className="text-[11px] font-medium"
-                          style={{ color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 44, cursor: tag.name.length > 2 ? 'pointer' : 'default', textDecoration: tag.name.length > 2 ? 'underline' : 'none', textDecorationStyle: tag.name.length > 2 ? 'dashed' : undefined, textDecorationColor: tag.name.length > 2 ? '#999' : undefined, textUnderlineOffset: '2px' }}
+                          style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 52, cursor: tag.name.length > 2 ? 'pointer' : 'default', textDecoration: tag.name.length > 2 ? 'underline' : 'none', textDecorationStyle: tag.name.length > 2 ? 'dashed' : undefined, textDecorationColor: tag.name.length > 2 ? '#999' : undefined, textUnderlineOffset: '2px' }}
                           onClick={() => tag.name.length > 2 ? setTooltipTagName(tooltipTagName === tag.name ? null : tag.name) : undefined}
                         >{tag.name.length > 2 ? tag.name.slice(0, 2) + '…' : tag.name}</span>
                         {tooltipTagName === tag.name && (
@@ -1957,10 +1969,10 @@ export default function LedgerDetailAA({
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 周期 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap' }}>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13 }}>
                         {isPaused ? (
                           <span
-                            style={{ display: 'inline-block', backgroundColor: '#1565C0', color: '#FFFFFF', borderRadius: 3, padding: '1px 2px', fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                            style={{ display: 'inline-block', backgroundColor: '#1565C0', color: '#FFFFFF', borderRadius: 3, padding: '1px 3px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
                             onClick={() => {
                               if (!firstDate || !endDate) return;
                               const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
@@ -1968,7 +1980,7 @@ export default function LedgerDetailAA({
                             }}
                           >{days > 0 ? `${days}天` : '--'}</span>
                         ) : (
-                          <span style={{ color: '#424242', whiteSpace: 'nowrap' }}>{days > 0 ? `${days}天` : '--'}</span>
+                          <span style={{ color: '#424242', whiteSpace: 'nowrap', fontSize: 13 }}>{days > 0 ? `${days}天` : '--'}</span>
                         )}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
@@ -2012,26 +2024,26 @@ export default function LedgerDetailAA({
                       <div className="px-1 py-2 flex flex-col items-end justify-center" style={{ borderBottom: rowBorder }}>
                         {tag.marginCny > 0 ? (
                           <>
-                            <div className="text-[11px] leading-none" style={{ color: '#424242' }}>{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
+                            <div style={{ fontSize: 13, lineHeight: 1, color: '#424242' }}>{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
                             {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
-                              <div className="text-[8px] mt-1 leading-none" style={{ color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
+                              <div style={{ fontSize: 9, marginTop: 2, lineHeight: 1, color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
                             )}
                           </>
-                        ) : <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>}
+                        ) : <span style={{ fontSize: 13, color: '#BDBDBD' }}>--</span>}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 回报 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', color: _isStale ? '#BDBDBD' : latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13, color: _isStale ? '#BDBDBD' : latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
                         {latestPnl !== 0 ? `${latestPnl < 0 ? '-' : ''}${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 年化 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', color: _isStale || annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13, color: _isStale || annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}>
                         {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 分红 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', color: divAmt > 0 ? '#D32F2F' : '#BDBDBD' }}>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13, color: divAmt > 0 ? '#D32F2F' : '#BDBDBD' }}>
                         {divAmt > 0 ? `${divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </div>
                     </>
@@ -2042,48 +2054,50 @@ export default function LedgerDetailAA({
                   <>
                     {/* 合计-名称 */}
                     <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px' }}>
-                      <span className="text-[10px] font-semibold" style={{ color: '#9E9E9E' }}>合计</span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#9E9E9E' }}>合计</span>
                     </div>
                     {/* 站线要用 background 而非 border，这样才能覆盖 borderTop */}
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 周期 -- */}
                     <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
-                      <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>
+                      <span style={{ fontSize: 13, color: '#BDBDBD' }}>--</span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 占比 -- */}
                     <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
-                      <span className="text-[11px]" style={{ color: '#BDBDBD' }}>--</span>
+                      <span style={{ fontSize: 13, color: '#BDBDBD' }}>--</span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 金额：只显示人民币汇总，居中 */}
                     <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
-                      <span className="text-[11px] font-semibold" style={{ color: '#1A1A1A' }}>{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1A1A' }}>{totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 回报 */}
                     <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
-                      <span className="text-[11px] font-semibold" style={{ color: totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
                         {totalPnl !== 0 ? `${totalPnl < 0 ? '-' : ''}${Math.abs(totalPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 年化 */}
                     <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA' }}>
-                      <span className="text-[11px] font-semibold" style={{ color: weightedAnnualized === null ? '#BDBDBD' : weightedAnnualized >= 0 ? '#D32F2F' : '#388E3C' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: weightedAnnualized === null ? '#BDBDBD' : weightedAnnualized >= 0 ? '#D32F2F' : '#388E3C' }}>
                         {weightedAnnualized === null ? '--' : `${weightedAnnualized >= 0 ? '+' : ''}${weightedAnnualized.toFixed(1)}%`}
                       </span>
                     </div>
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 分红 */}
                     <div className="px-1 py-2 flex items-center justify-end" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 16px 0' }}>
-                      <span className="text-[11px] font-semibold" style={{ color: totalDividend > 0 ? '#D32F2F' : '#BDBDBD' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: totalDividend > 0 ? '#D32F2F' : '#BDBDBD' }}>
                         {totalDividend > 0 ? `${totalDividend.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </span>
                     </div>
                   </>
                 )}
-              </div>
+              </div>{/* end grid */}
+              </div>{/* end 内容宽度容器 */}
+              </div>{/* end 横向滑动容器 */}
             );
           })()}
           </div>
