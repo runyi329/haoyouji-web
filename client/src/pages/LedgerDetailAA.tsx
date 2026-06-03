@@ -1899,9 +1899,11 @@ export default function LedgerDetailAA({
             const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
             // Grid 列定义：名称固定52px，其他列 minmax 自适应
             // 名称:auto 周期:36px 占比:auto 金额/回报/年化:1fr 分红:auto
-            const gridCols = 'auto 1px 36px 1px auto 1px 1fr 1px 1fr 1px 1fr 1px auto';
+            // 周期列改为auto，内容多少就占多少，不换行
+            const gridCols = 'auto 1px auto 1px auto 1px 1fr 1px 1fr 1px 1fr 1px auto';
             const cellCls = 'px-1 py-1.5 text-[10px] font-medium text-center';
             const dataCellCls = 'px-1 py-2 text-right text-[11px]';
+            const dataCellStyle = { whiteSpace: 'nowrap' as const };
             const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
             // 排序箭头辅助
             const SortArrow = ({ col }: { col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend' }) => {
@@ -1955,7 +1957,7 @@ export default function LedgerDetailAA({
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 周期 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder }}>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap' }}>
                         {isPaused ? (
                           <span
                             style={{ display: 'inline-block', backgroundColor: '#1565C0', color: '#FFFFFF', borderRadius: 3, padding: '1px 2px', fontSize: 10, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
@@ -1966,7 +1968,7 @@ export default function LedgerDetailAA({
                             }}
                           >{days > 0 ? `${days}天` : '--'}</span>
                         ) : (
-                          <span style={{ color: '#424242' }}>{days > 0 ? `${days}天` : '--'}</span>
+                          <span style={{ color: '#424242', whiteSpace: 'nowrap' }}>{days > 0 ? `${days}天` : '--'}</span>
                         )}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
@@ -2019,17 +2021,17 @@ export default function LedgerDetailAA({
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 回报 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: _isStale ? '#BDBDBD' : latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', color: _isStale ? '#BDBDBD' : latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
                         {latestPnl !== 0 ? `${latestPnl < 0 ? '-' : ''}${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 年化 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: _isStale || annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', color: _isStale || annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}>
                         {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 分红 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, color: divAmt > 0 ? '#D32F2F' : '#BDBDBD' }}>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', color: divAmt > 0 ? '#D32F2F' : '#BDBDBD' }}>
                         {divAmt > 0 ? `${divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </div>
                     </>
