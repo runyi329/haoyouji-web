@@ -344,9 +344,8 @@ const WorkLogPage: React.FC = () => {
           const allDates = Object.keys(gitDayStats);
           const staticTotal = allDates.reduce((s, d) => s + Number(gitDayStats[d]), 0);
           const totalCommits = commits.length > 0 ? commits.length : staticTotal;
-          // 项目天数：从最早有数据的日期到今天的自然日历天数
-          const datesWithData = allDates.filter(d => Number(gitDayStats[d]) > 0).sort();
-          const firstDate = datesWithData.length > 0 ? new Date(datesWithData[0]) : new Date();
+          // 项目天数：固定从2026年1月22日（项目启动日）到今天的自然日历天数
+          const firstDate = new Date('2026-01-22');
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           firstDate.setHours(0, 0, 0, 0);
