@@ -1899,15 +1899,16 @@ export default function LedgerDetailAA({
             const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
             // Grid 列定义：名称固定52px，其他列 minmax 自适应
             // 横向可滑动概览表：默认显示名称/周期/占比/金额/回报，年化和分红隐藏在右侧
-            // 列定义：名称(72px固定=4汉字+色点) 周期(auto) 占比(auto) 金额(minmax) 回报(minmax) 年化(minmax) 分红(auto)
-            const gridCols = '72px 1px auto 1px auto 1px minmax(60px,1fr) 1px minmax(60px,1fr) 1px minmax(56px,1fr) 1px minmax(56px,1fr)';
+            // 前5列自动平分屏幕宽度，年化/分红固定宽度溢出到右侧可滑动查看
+            // 列定义：名称(72px) 周期(1fr) 占比(1fr) 金额(1.5fr) 回报(1.5fr) 年化(64px溢出) 分红(64px溢出)
+            const gridCols = '72px 1px 1fr 1px 1fr 1px 1.5fr 1px 1.5fr 1px 64px 1px 64px';
             // 表头行高与数据行一致：py-2
             const cellCls = 'px-1 py-2 font-medium text-center';
             const dataCellCls = 'px-1 py-2 text-right';
             const dataCellStyle = { whiteSpace: 'nowrap' as const };
             const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
-            // 内容宽度：用minWidth确保内容超出屏幕宽度，年化和分红自然溢出到右侧
-            const overviewInnerWidth = 'max-content';
+            // 内容宽度：前5列占满屏幕，年化/分红固定64px共128px溢出到右侧
+            const overviewInnerWidth = 'calc(100% + 130px)';
             // 排序箭头辅助
             const SortArrow = ({ col }: { col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend' }) => {
               if (!overviewSort || overviewSort.col !== col) return <span style={{ color: '#D0D0D0', fontSize: 7, marginLeft: 1 }}>▼</span>;
@@ -1995,6 +1996,7 @@ export default function LedgerDetailAA({
                           <div className={dataCellCls} style={{ borderBottom: rowBorder, position: 'relative' }}>
                             <span
                               style={{
+                                fontSize: 13,
                                 color: ratioNum !== null ? '#424242' : '#BDBDBD',
                                 cursor: ratioNum !== null ? 'pointer' : 'default',
                                 textDecoration: ratioNum !== null ? 'underline' : 'none',
