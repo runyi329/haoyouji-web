@@ -492,6 +492,11 @@ export default function AfOrderManage() {
                 const coinQty: Record<string, number> = {};
                 groupOrders.forEach((o: any) => {
                   if (o.coin) coinQty[o.coin] = (coinQty[o.coin] || 0) + (parseFloat(o.quantity) || 0);
+                  // 同时统计嵌套赠与单的币数
+                  const gifts: any[] = (o.giftOrders as any[]) || [];
+                  gifts.forEach((g: any) => {
+                    if (g.coin) coinQty[g.coin] = (coinQty[g.coin] || 0) + (parseFloat(g.quantity) || 0);
+                  });
                 });
                 const qtyStr = Object.entries(coinQty).map(([c, q]) => `${q.toFixed(4)} ${c}`).join(' / ');
                 return (
