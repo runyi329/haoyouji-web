@@ -1590,14 +1590,14 @@ export default function LedgerDetailAA({
                       key={m}
                       className="rounded-lg flex flex-col items-center justify-center py-2"
                       style={{
-                        height: '52px',
+                        height: '58px',
                         backgroundColor: hasData ? "#FFEBEE" : "#F9F9F9",
                         border: isCurrent ? "1.5px solid #D32F2F" : "1px solid #F0F0F0",
                       }}
                     >
-                      <span className="text-xs font-medium" style={{ color: isCurrent ? "#D32F2F" : "#222222" }}>{m}月</span>
+                      <span style={{ fontSize: '13px', fontWeight: 500, color: isCurrent ? "#D32F2F" : "#222222" }}>{m}月</span>
                       {diff !== null && (
-                        <span className="font-semibold mt-0.5" style={{ fontSize: "9px", color }}>
+                        <span className="font-semibold mt-0.5" style={{ fontSize: "12px", color }}>
                           {sign}{String(Math.floor(Math.abs(diff)))}
                         </span>
                       )}
@@ -1631,13 +1631,13 @@ export default function LedgerDetailAA({
                       key={y}
                       className="rounded-lg flex flex-col items-center justify-center py-2"
                       style={{
-                        height: '52px',
+                        height: '58px',
                         backgroundColor: "#F9F9F9",
                         border: y === nowY ? "1.5px solid #D32F2F" : "1px solid #F0F0F0",
                       }}
                     >
-                      <span className="text-xs font-medium" style={{ color: y === nowY ? "#D32F2F" : "#222222" }}>{y}年</span>
-                      <span className="font-semibold mt-0.5" style={{ fontSize: "9px", color }}>
+                      <span style={{ fontSize: '13px', fontWeight: 500, color: y === nowY ? "#D32F2F" : "#222222" }}>{y}年</span>
+                      <span className="font-semibold mt-0.5" style={{ fontSize: "12px", color }}>
                         {sign}{formatMoney(Math.abs(net))}
                       </span>
                     </div>
