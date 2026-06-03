@@ -442,7 +442,7 @@ const WorkLogPage: React.FC = () => {
             >
               返回
             </button>
-            <h1 className="text-lg font-bold text-gray-900">项目进展</h1>
+            <h1 className="text-lg font-bold text-gray-900">脉动网·项目进展</h1>
             <button
               onClick={() => window.location.reload()}
               className="text-sm font-medium"
