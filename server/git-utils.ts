@@ -1,7 +1,5 @@
-import { exec } from "child_process";
-import { promisify } from "util";
-
-const execAsync = promisify(exec);
+import * as fs from "fs";
+import * as path from "path";
 
 interface GitCommit {
   hash: string;
@@ -13,66 +11,36 @@ interface GitCommit {
   cleanMessage: string; // message without type and scope prefix
 }
 
-// 辅助函数：根据提交信息判断类型和范围
-function parseCommitMessage(message: string): { type: string; scope: string; cleanMessage: string } {
-  // 匹配 Conventional Commits 规范: type(scope): subject
-  const regex = /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(([^)]*)\))?:\s*(.*)/;
-  const match = message.match(regex);
-
-  if (match) {
-    return {
-      type: match[1],
-      scope: match[3] || "", // scope might be undefined
-      cleanMessage: match[4].trim(),
-    };
-  } else {
-    // 如果不符合 Conventional Commits 规范，则使用默认值
-    return {
-      type: "chore", // 默认归类为杂项
-      scope: "",
-      cleanMessage: message.trim(),
-    };
-  }
-}
-
 export async function getGitCommits(): Promise<GitCommit[]> {
   try {
-    // --pretty=format: 用于自定义输出格式
-    // %H: commit hash
-    // %an: author name
-    // %ad: author date (format: ISO 8601 strict)
-    // %s: subject (commit message title)
-    // %b: body (commit message body)
-    // %n: newline
-    const { stdout } = await execAsync(
-      `git log --all --pretty=format:"%H%n%an%n%ad%n%s%n%b%n---COMMIT-END---"`,
-      { cwd: "/home/ubuntu/haoyouji-web-full" } // 确保在正确的仓库目录下执行
-    );
+    // 读取构建时预生成的 git-log.json 文件
+    // 服务器运行目录为 /home/ubuntu/haoyouji-web，__dirname 为 dist/
+    const candidates = [
+      path.resolve(__dirname, "../server/git-log.json"),
+      path.resolve(__dirname, "./git-log.json"),
+      path.resolve(__dirname, "../git-log.json"),
+      "/home/ubuntu/haoyouji-web/server/git-log.json",
+      "/home/ubuntu/haoyouji-web/git-log.json",
+    ];
 
-    const commitStrings = stdout.split("---COMMIT-END---\n").filter(Boolean);
-    const commits: GitCommit[] = [];
-
-    for (const commitStr of commitStrings) {
-      const parts = commitStr.trim().split("\n");
-      if (parts.length >= 4) {
-        const [hash, author, date, subject, ...bodyLines] = parts;
-        const fullMessage = [subject, ...bodyLines].join("\n");
-        const { type, scope, cleanMessage } = parseCommitMessage(fullMessage);
-
-        commits.push({
-          hash,
-          author,
-          date,
-          message: fullMessage,
-          type,
-          scope,
-          cleanMessage,
-        });
+    let filePath: string | null = null;
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        filePath = p;
+        break;
       }
     }
+
+    if (!filePath) {
+      console.error("git-log.json not found. Searched:", candidates);
+      return [];
+    }
+
+    const raw = fs.readFileSync(filePath, "utf8");
+    const commits: GitCommit[] = JSON.parse(raw);
     return commits;
   } catch (error) {
-    console.error("Error getting git commits:", error);
+    console.error("Error reading git-log.json:", error);
     return [];
   }
 }
