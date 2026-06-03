@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
+import { PageTag } from '@/components/PageTag';
 import { trpc } from '@/lib/trpc';
 import { workLogData, WorkLogEntry } from '@/data/workLogSummary';
 import { gitDayStats } from '@/data/gitDayStats';
@@ -445,6 +446,7 @@ const WorkLogPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <PageTag code={`${viewMode === 'worklog' ? 'P210-A' : viewMode === 'calendar' ? 'P210-B' : 'P210-C'}`} />
       {/* 头部 */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-2xl mx-auto px-4 py-3">
