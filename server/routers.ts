@@ -23901,6 +23901,71 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
           return { latestDate, dataReady: !!latestDate };
         } finally { /* pool auto-manages connections */ }
       }),
+    /** 美股全市场基本信息列表（来自 us_stock_basic 表） */
+    getUsStockBasicList: publicProcedure
+      .input(z.object({
+        page: z.number().int().min(1).default(1),
+        pageSize: z.number().int().min(10).max(200).default(50),
+        keyword: z.string().optional(),
+        classify: z.string().optional(),
+        hasPrice: z.boolean().optional(),
+      }))
+      .query(async ({ input }) => {
+        const dbConn = await getDbConnection();
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        try {
+          const [tableCheck] = await dbConn.execute(
+            "SELECT COUNT(*) AS cnt FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'us_stock_basic'"
+          ) as any[];
+          if (Number((tableCheck as any[])[0]?.cnt) === 0) {
+            return { total: 0, page: input.page, pageSize: input.pageSize, list: [], dataReady: false };
+          }
+          const conditions: string[] = [];
+          const params: any[] = [];
+          if (input.keyword) {
+            conditions.push('(ts_code LIKE ? OR name LIKE ? OR enname LIKE ?)');
+            params.push(`%${input.keyword}%`, `%${input.keyword}%`, `%${input.keyword}%`);
+          }
+          if (input.classify) {
+            conditions.push('classify = ?');
+            params.push(input.classify);
+          }
+          if (input.hasPrice) {
+            conditions.push('last_close IS NOT NULL AND last_close > 0');
+          }
+          const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+          const [countRows] = await dbConn.execute(
+            `SELECT COUNT(*) AS cnt FROM us_stock_basic ${whereSql}`,
+            params
+          ) as any[];
+          const total = Number((countRows as any[])[0]?.cnt) || 0;
+          const offset = (input.page - 1) * input.pageSize;
+          const [rows] = await dbConn.execute(
+            `SELECT ts_code, name, enname, classify, exchange, list_date, delist_date, last_close, last_trade_date
+             FROM us_stock_basic ${whereSql}
+             ORDER BY last_close DESC, ts_code ASC
+             LIMIT ${Number(input.pageSize)} OFFSET ${Number(offset)}`,
+            params
+          ) as any[];
+          return {
+            total,
+            page: input.page,
+            pageSize: input.pageSize,
+            dataReady: true,
+            list: (rows as any[]).map(r => ({
+              tsCode: r.ts_code as string,
+              name: r.name as string | null,
+              enname: r.enname as string | null,
+              classify: r.classify as string,
+              exchange: r.exchange as string | null,
+              listDate: r.list_date as string | null,
+              delistDate: r.delist_date as string | null,
+              lastClose: r.last_close != null ? Number(r.last_close) : null,
+              lastTradeDate: r.last_trade_date as string | null,
+            })),
+          };
+        } finally { /* pool auto-manages connections */ }
+      }),
     /** 美股全生命周期涨跌天数列表 */
     usStockLifecycle: publicProcedure
       .input(z.object({

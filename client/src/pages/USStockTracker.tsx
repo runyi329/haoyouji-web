@@ -1,14 +1,16 @@
 /**
  * USStockTracker.tsx
- * 美股七巨头全景仪表盘 - 重新设计版 v3
- * 每张卡片4行紧凑展示，第一屏放下7张
+ * 美股全市场仪表盘 v4
+ * 顶部：七巨头快捷卡片 + 标普500
+ * 主体：全市场12000+只股票列表（搜索+分类Tab+分页）
+ * P032
  */
-import { useMemo } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, TrendingUp, TrendingDown, BarChart2, Search } from "lucide-react";
+import { ChevronLeft, TrendingUp, TrendingDown, Search, X, BarChart2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-
 import { PageTag } from "@/components/PageTag";
+
 // ─── 配色 ────────────────────────────────────────────────
 const BLUE = "#1565C0";
 const BLUE_DARK = "#0D47A1";
@@ -20,223 +22,153 @@ const MUTED = "#888888";
 const MUTED2 = "#AAAAAA";
 const RED = "#D32F2F";
 const GREEN = "#00B050";
-const GOLD = "#B8860B";
 const CARD_SHADOW = "0 1px 6px rgba(0,0,0,0.07)";
 
 // ─── 七巨头配置 ────────────────────────────────────────────
 const COS = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets";
 const MEGA_SEVEN = [
-  { symbol: "AAPL.US",  name: "Apple",     code: "AAPL",  sector: "科技", logo: `${COS}/logo_apple_3d_t_16b8b55f.png` },
-  { symbol: "MSFT.US",  name: "Microsoft", code: "MSFT",  sector: "科技", logo: `${COS}/logos/logo_microsoft_3d.png` },
-  { symbol: "NVDA.US",  name: "NVIDIA",    code: "NVDA",  sector: "半导体", logo: `${COS}/logo_nvidia_3d_t_d451eb3d.png` },
-  { symbol: "GOOGL.US", name: "Alphabet",  code: "GOOGL", sector: "科技", logo: `${COS}/logos/logo_google_3d.png` },
-  { symbol: "AMZN.US",  name: "Amazon",    code: "AMZN",  sector: "电商", logo: `${COS}/logo_amazon_3d_t_0c61d380.png` },
-  { symbol: "META.US",  name: "Meta",      code: "META",  sector: "社交", logo: `${COS}/logo_meta_3d_t_5b7237ab.png` },
-  { symbol: "TSLA.US",  name: "Tesla",     code: "TSLA",  sector: "新能源", logo: `${COS}/logo_tesla_3d_t_0d585ca4.png` },
+  { symbol: "AAPL.US", name: "Apple",     code: "AAPL",  sector: "科技",  logo: `${COS}/logo_apple_3d_t_16b8b55f.png` },
+  { symbol: "MSFT.US", name: "Microsoft", code: "MSFT",  sector: "科技",  logo: `${COS}/logos/logo_microsoft_3d.png` },
+  { symbol: "NVDA.US", name: "NVIDIA",    code: "NVDA",  sector: "半导体", logo: `${COS}/logo_nvidia_3d_t_d451eb3d.png` },
+  { symbol: "GOOGL.US",name: "Alphabet",  code: "GOOGL", sector: "科技",  logo: `${COS}/logos/logo_google_3d.png` },
+  { symbol: "AMZN.US", name: "Amazon",    code: "AMZN",  sector: "电商",  logo: `${COS}/logo_amazon_3d_t_0c61d380.png` },
+  { symbol: "META.US", name: "Meta",      code: "META",  sector: "社交",  logo: `${COS}/logo_meta_3d_t_5b7237ab.png` },
+  { symbol: "TSLA.US", name: "Tesla",     code: "TSLA",  sector: "新能源", logo: `${COS}/logo_tesla_3d_t_0d585ca4.png` },
 ];
 
-// 格式化成交量
-function fmtVol(v: number | null): string {
-  if (v == null) return "—";
-  if (v >= 1e8) return (v / 1e8).toFixed(1) + "亿";
-  if (v >= 1e4) return (v / 1e4).toFixed(0) + "万";
-  return v.toFixed(0);
-}
+// ─── 分类Tab ────────────────────────────────────────────
+const CLASSIFY_TABS = [
+  { key: "", label: "全部" },
+  { key: "EQ", label: "普通股" },
+  { key: "ADR", label: "ADR" },
+  { key: "ETF", label: "ETF" },
+  { key: "GDR", label: "GDR" },
+];
 
-// 格式化价格
+// ─── 工具函数 ────────────────────────────────────────────
 function fmtPrice(v: number | null): string {
-  if (v == null) return "—";
+  if (v == null || v <= 0) return "—";
+  if (v >= 1000) return "$" + v.toFixed(0);
+  if (v >= 100) return "$" + v.toFixed(1);
   return "$" + v.toFixed(2);
-}
-
-// 52周进度条
-function Week52Bar({ low, high, current }: { low: number; high: number; current: number }) {
-  const range = high - low;
-  const pct = range > 0 ? Math.max(0, Math.min(100, ((current - low) / range) * 100)) : 50;
-  const color = pct >= 70 ? RED : pct >= 40 ? GOLD : GREEN;
-  return (
-    <div style={{ flex: 1 }}>
-      <div style={{ position: "relative", height: 4, borderRadius: 2, background: "#E0E8F0", overflow: "visible" }}>
-        <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${pct}%`, borderRadius: 2, background: color, transition: "width 0.4s" }} />
-        <div style={{
-          position: "absolute",
-          top: -3, left: `calc(${pct}% - 4px)`,
-          width: 8, height: 8, borderRadius: "50%",
-          background: color, border: "1.5px solid #fff",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-        }} />
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-        <span style={{ fontSize: 8, color: MUTED2 }}>{fmtPrice(low)}</span>
-        <span style={{ fontSize: 8, color: color, fontWeight: 600 }}>{pct.toFixed(0)}%</span>
-        <span style={{ fontSize: 8, color: MUTED2 }}>{fmtPrice(high)}</span>
-      </div>
-    </div>
-  );
-}
-
-// 评级标签
-function RatingBadge({ rating }: { rating: string | null }) {
-  if (!rating) return null;
-  const r = rating.toUpperCase();
-  const color = r === "BUY" ? GREEN : r === "SELL" ? RED : GOLD;
-  const label = r === "BUY" ? "买入" : r === "SELL" ? "卖出" : "持有";
-  return (
-    <span style={{
-      fontSize: 9, fontWeight: 700, color: "#fff",
-      background: color, borderRadius: 3,
-      padding: "1px 4px", lineHeight: 1.4,
-    }}>{label}</span>
-  );
-}
-
-// 技术面方向标签
-function TrendBadge({ dir }: { dir: string | null }) {
-  if (!dir) return null;
-  const isBull = dir.toLowerCase().includes("bull");
-  return (
-    <span style={{
-      fontSize: 9, fontWeight: 600,
-      color: isBull ? RED : GREEN,
-      background: isBull ? "rgba(211,47,47,0.08)" : "rgba(0,176,80,0.08)",
-      borderRadius: 3, padding: "1px 4px", lineHeight: 1.4,
-    }}>{isBull ? "↑看多" : "↓看空"}</span>
-  );
-}
-
-// 估值标签
-function ValBadge({ desc, discount }: { desc: string | null; discount: string | null }) {
-  if (!desc) return null;
-  const isOver = desc.toLowerCase().includes("over");
-  const isFair = desc.toLowerCase().includes("fair");
-  const color = isOver ? RED : isFair ? GOLD : GREEN;
-  const label = isOver ? "高估" : isFair ? "合理" : "低估";
-  return (
-    <span style={{ fontSize: 9, color, fontWeight: 600 }}>
-      {label}{discount ? ` ${discount}` : ""}
-    </span>
-  );
 }
 
 // 骨架屏
 function Sk({ w = 40 }: { w?: number }) {
-  return <span style={{ display: "inline-block", width: w, height: 10, borderRadius: 3, background: "#E0E8F0", animation: "pulse 1.5s infinite" }} />;
+  return (
+    <span style={{
+      display: "inline-block", width: w, height: 10, borderRadius: 3,
+      background: "#E0E8F0", animation: "pulse 1.5s infinite",
+    }} />
+  );
 }
 
-// ─── 单只股票卡片（4行紧凑）────────────────────────────────
-function StockCard({
+// ─── 七巨头迷你卡片 ────────────────────────────────────────
+function MegaSevenCard({
   stock,
   priceData,
-  fundamentals,
   onClick,
-  isLast,
 }: {
   stock: typeof MEGA_SEVEN[0];
-  priceData?: { close: number; changePct: number | null; date: string; open?: number; high?: number; low?: number; volume?: number; amplitudePct?: number | null };
-  fundamentals?: {
-    week52High: number | null;
-    week52Low: number | null;
-    tradingDays?: number;
-  } | null;
+  priceData?: { close: number; changePct: number | null; date: string };
   onClick: () => void;
-  isLast: boolean;
 }) {
   const isUp = (priceData?.changePct ?? 0) >= 0;
   const changeColor = isUp ? RED : GREEN;
   const sign = isUp ? "+" : "";
 
-  const vol = priceData?.volume ?? null;
-  const w52H = fundamentals?.week52High ?? null;
-  const w52L = fundamentals?.week52Low ?? null;
-  const curPrice = priceData?.close ?? null;
-
   return (
     <div
       onClick={onClick}
       style={{
-        padding: "5px 10px",
-        borderBottom: isLast ? "none" : `1px solid ${BORDER}`,
-        cursor: "pointer",
+        minWidth: 80, padding: "6px 8px", borderRadius: 10,
+        background: CARD, border: `1px solid ${BORDER}`,
+        boxShadow: CARD_SHADOW, cursor: "pointer", flexShrink: 0,
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
       }}
     >
-      {/* ── 第一行：Logo + 公司名/代码/行业 + 价格 + 涨跌幅 ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        {/* Logo */}
-        <img
-          src={stock.logo}
-          alt={stock.name}
-          style={{ width: 28, height: 28, objectFit: "contain", flexShrink: 0, filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.12))" }}
-        />
-        {/* 公司名 + 代码 + 行业 */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: TEXT, lineHeight: 1.2 }}>{stock.name}</span>
-            <span style={{ fontSize: 9, color: "#fff", background: BLUE, borderRadius: 3, padding: "1px 4px", lineHeight: 1.4, flexShrink: 0 }}>{stock.sector}</span>
-          </div>
-          <span style={{ fontSize: 9, color: MUTED, lineHeight: 1.2 }}>{stock.code} · {priceData?.date ?? "—"}</span>
-        </div>
-        {/* 价格 + 涨跌幅 */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", flexShrink: 0 }}>
-          {priceData ? (
-            <>
-              <span style={{ fontSize: 14, fontWeight: 800, color: TEXT, lineHeight: 1.2 }}>${priceData.close.toFixed(2)}</span>
-              <span style={{
-                fontSize: 10, fontWeight: 700, color: changeColor,
-                background: isUp ? "rgba(211,47,47,0.08)" : "rgba(0,176,80,0.08)",
-                borderRadius: 4, padding: "1px 5px", marginTop: 1, lineHeight: 1.3,
-              }}>{sign}{priceData.changePct?.toFixed(2) ?? "—"}%</span>
-            </>
-          ) : (
-            <>
-              <Sk w={56} />
-              <div style={{ marginTop: 3 }}><Sk w={40} /></div>
-            </>
-          )}
-        </div>
-        <span style={{ color: MUTED2, fontSize: 12, marginLeft: 2 }}>›</span>
-      </div>
+      <img
+        src={stock.logo}
+        alt={stock.name}
+        style={{ width: 24, height: 24, objectFit: "contain", filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.1))" }}
+      />
+      <span style={{ fontSize: 10, fontWeight: 700, color: TEXT }}>{stock.code}</span>
+      {priceData ? (
+        <>
+          <span style={{ fontSize: 10, fontWeight: 700, color: TEXT }}>{fmtPrice(priceData.close)}</span>
+          <span style={{ fontSize: 9, fontWeight: 600, color: changeColor }}>
+            {sign}{priceData.changePct?.toFixed(2) ?? "—"}%
+          </span>
+        </>
+      ) : (
+        <>
+          <Sk w={44} />
+          <Sk w={32} />
+        </>
+      )}
+    </div>
+  );
+}
 
-      {/* ── 第二行：今日开高低量振幅 ── */}
-      <div style={{ display: "flex", gap: 0, marginTop: 3 }}>
-        {[
-          { label: "开", val: priceData?.open != null ? `$${priceData.open.toFixed(1)}` : "—" },
-          { label: "高", val: priceData?.high != null ? `$${priceData.high.toFixed(1)}` : "—" },
-          { label: "低", val: priceData?.low != null ? `$${priceData.low.toFixed(1)}` : "—" },
-          { label: "量", val: fmtVol(vol) },
-          { label: "振", val: priceData?.amplitudePct != null ? `${priceData.amplitudePct.toFixed(1)}%` : "—" },
-        ].map((item, i) => (
-          <div key={i} style={{ flex: 1, textAlign: "center" }}>
-            <div style={{ fontSize: 7.5, color: MUTED2, lineHeight: 1.2 }}>{item.label}</div>
-            <div style={{ fontSize: 9.5, fontWeight: 600, color: TEXT, lineHeight: 1.2 }}>{item.val}</div>
-          </div>
-        ))}
-      </div>
+// ─── 全市场股票行 ────────────────────────────────────────
+function StockRow({
+  item,
+  rank,
+}: {
+  item: {
+    tsCode: string;
+    name: string | null;
+    enname: string | null;
+    classify: string;
+    exchange: string | null;
+    lastClose: number | null;
+    lastTradeDate: string | null;
+  };
+  rank: number;
+}) {
+  // 从 ts_code 提取纯代码（去掉 .US 后缀）
+  const code = item.tsCode.replace(/\.US$/i, "");
+  const displayName = item.name || item.enname || code;
 
-      {/* ── 第三行：52周高低 + 进度条 ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 0, marginTop: 3 }}>
-        {fundamentals !== undefined ? (
-          w52H != null && w52L != null ? (
-            <>
-              <div style={{ flex: 1, textAlign: "center" }}>
-                <div style={{ fontSize: 7.5, color: MUTED2, lineHeight: 1.2 }}>52W高</div>
-                <div style={{ fontSize: 9.5, fontWeight: 700, color: RED, lineHeight: 1.2 }}>{fmtPrice(w52H)}</div>
-              </div>
-              <div style={{ flex: 1, textAlign: "center" }}>
-                <div style={{ fontSize: 7.5, color: MUTED2, lineHeight: 1.2 }}>52W低</div>
-                <div style={{ fontSize: 9.5, fontWeight: 700, color: GREEN, lineHeight: 1.2 }}>{fmtPrice(w52L)}</div>
-              </div>
-              {curPrice != null && w52H > w52L && (
-                <div style={{ flex: 3, paddingLeft: 8 }}>
-                  <Week52Bar low={w52L} high={w52H} current={curPrice} />
-                </div>
-              )}
-            </>
-          ) : (
-            <span style={{ fontSize: 9, color: MUTED2 }}>暂无年度数据</span>
-          )
-        ) : (
-          <Sk w={200} />
-        )}
+  const classifyColor: Record<string, string> = {
+    EQ: BLUE,
+    ADR: "#7B1FA2",
+    ETF: "#00695C",
+    GDR: "#E65100",
+  };
+  const tagColor = classifyColor[item.classify] || MUTED;
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", padding: "7px 12px",
+      borderBottom: `1px solid ${BORDER}`, gap: 8,
+    }}>
+      {/* 排名 */}
+      <span style={{ fontSize: 10, color: MUTED2, width: 24, textAlign: "right", flexShrink: 0 }}>
+        {rank}
+      </span>
+      {/* 代码 + 名称 */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: TEXT }}>{code}</span>
+          <span style={{
+            fontSize: 8, color: "#fff", background: tagColor,
+            borderRadius: 3, padding: "1px 3px", lineHeight: 1.4, flexShrink: 0,
+          }}>{item.classify}</span>
+        </div>
+        <span style={{
+          fontSize: 10, color: MUTED, lineHeight: 1.2,
+          display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>{displayName}</span>
+      </div>
+      {/* 价格 */}
+      <div style={{ textAlign: "right", flexShrink: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>
+          {fmtPrice(item.lastClose)}
+        </div>
+        <div style={{ fontSize: 9, color: MUTED2 }}>
+          {item.lastTradeDate || "—"}
+        </div>
       </div>
     </div>
   );
@@ -245,64 +177,103 @@ function StockCard({
 // ─── 主页面 ────────────────────────────────────────────────
 export default function USStockTracker() {
   const [, setLocation] = useLocation();
+  const [keyword, setKeyword] = useState("");
+  const [inputVal, setInputVal] = useState("");
+  const [classify, setClassify] = useState("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 50;
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 批量获取7只股票最新日线价格
-  const codes = useMemo(() => MEGA_SEVEN.map(s => s.code), []);
+  // 七巨头价格
+  const codes = MEGA_SEVEN.map(s => s.code);
   const { data: latestPrices } = trpc.cryptoData.getLatestPrices.useQuery(
     { symbols: codes },
     { refetchInterval: 60_000, staleTime: 30_000 }
   );
 
-  // 标普500指数
+  // 标普500
   const { data: sp500 } = trpc.stock.getSP500Index.useQuery(undefined, {
-    refetchInterval: 3000,
-    staleTime: 1000,
+    refetchInterval: 5000,
+    staleTime: 2000,
   });
-
   const sp500Up = (sp500?.changePercent ?? 0) >= 0;
+
+  // 全市场股票列表
+  const { data: stockList, isLoading } = trpc.stock.getUsStockBasicList.useQuery(
+    { page, pageSize: PAGE_SIZE, keyword: keyword || undefined, classify: classify || undefined },
+    { staleTime: 5 * 60_000, keepPreviousData: true }
+  );
+
+  const totalPages = stockList ? Math.ceil(stockList.total / PAGE_SIZE) : 0;
+
+  const handleSearch = useCallback((val: string) => {
+    setInputVal(val);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setKeyword(val.trim());
+      setPage(1);
+    }, 400);
+  }, []);
+
+  const handleClassify = (key: string) => {
+    setClassify(key);
+    setPage(1);
+  };
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: BG }}>
       <PageTag code="P032" />
 
       {/* ── 顶部导航 ── */}
-      <div
-        style={{
-          padding: "10px 16px 12px",
-          background: `linear-gradient(135deg, ${BLUE} 0%, ${BLUE_DARK} 100%)`,
-          flexShrink: 0,
-        }}
-      >
+      <div style={{
+        padding: "10px 16px 10px",
+        background: `linear-gradient(135deg, ${BLUE} 0%, ${BLUE_DARK} 100%)`,
+        flexShrink: 0,
+      }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
           <button
             onClick={() => setLocation("/")}
-            style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(255,255,255,0.2)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+            style={{
+              width: 28, height: 28, borderRadius: "50%",
+              background: "rgba(255,255,255,0.2)", border: "none",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", flexShrink: 0,
+            }}
           >
             <ChevronLeft style={{ width: 16, height: 16, color: "#fff" }} />
           </button>
           <div style={{ flex: 1 }}>
-            <p style={{ fontWeight: 700, fontSize: 16, color: "#fff", margin: 0, lineHeight: 1.2 }}>美股七巨头</p>
-            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", margin: 0, lineHeight: 1.3 }}>七大科技巨头 · 日线行情</p>
+            <p style={{ fontWeight: 700, fontSize: 16, color: "#fff", margin: 0, lineHeight: 1.2 }}>
+              美股全市场
+            </p>
+            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", margin: 0, lineHeight: 1.3 }}>
+              {stockList ? `${stockList.total.toLocaleString()} 只股票` : "全量行情数据"}
+            </p>
           </div>
           <button
             onClick={() => setLocation("/us-stock-tracker/stock-lifecycle")}
-            style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer" }}
+            style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "4px 10px", borderRadius: 20,
+              background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)",
+              color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer",
+            }}
           >
-            <Search style={{ width: 11, height: 11 }} />
-            全市场
-          </button>
-          <button
-            onClick={() => window.location.reload()}
-            style={{ padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)", color: "#fff", fontSize: 11, fontWeight: 500, cursor: "pointer" }}
-          >
-            刷新
+            <BarChart2 style={{ width: 11, height: 11 }} />
+            涨跌统计
           </button>
         </div>
 
-        {/* 标普500 指数条 */}
-        <div style={{ borderRadius: 10, padding: "6px 12px", background: "rgba(255,255,255,0.12)", display: "flex", alignItems: "center", gap: 10 }}>
+        {/* 标普500 */}
+        <div style={{
+          borderRadius: 10, padding: "6px 12px",
+          background: "rgba(255,255,255,0.12)",
+          display: "flex", alignItems: "center", gap: 10,
+        }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", lineHeight: 1.3 }}>标普500 S&P 500</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.7)", lineHeight: 1.3 }}>
+              标普500 S&P 500
+            </div>
             {sp500 ? (
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 1 }}>
                 <span style={{ fontSize: 17, fontWeight: 800, color: "#fff" }}>
@@ -316,98 +287,167 @@ export default function USStockTracker() {
               <div style={{ marginTop: 4 }}><Sk w={120} /></div>
             )}
           </div>
-          {sp500Up ? (
-            <TrendingUp style={{ width: 18, height: 18, color: "#FF8A80" }} />
-          ) : (
-            <TrendingDown style={{ width: 18, height: 18, color: "#69F0AE" }} />
+          {sp500Up
+            ? <TrendingUp style={{ width: 18, height: 18, color: "#FF8A80" }} />
+            : <TrendingDown style={{ width: 18, height: 18, color: "#69F0AE" }} />
+          }
+        </div>
+      </div>
+
+      {/* ── 七巨头横向滑动 ── */}
+      <div style={{ padding: "10px 12px 0", flexShrink: 0 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, marginBottom: 6 }}>
+          七巨头快捷行情
+        </div>
+        <div style={{
+          display: "flex", gap: 8, overflowX: "auto",
+          paddingBottom: 4,
+          scrollbarWidth: "none",
+        }}>
+          {MEGA_SEVEN.map(stock => (
+            <MegaSevenCard
+              key={stock.code}
+              stock={stock}
+              priceData={latestPrices?.[stock.code]}
+              onClick={() => setLocation(`/ledger/52/be-data?filter=stocks&symbol=${stock.symbol}`)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* ── 搜索框 ── */}
+      <div style={{ padding: "10px 12px 0", flexShrink: 0 }}>
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          background: CARD, borderRadius: 10, border: `1px solid ${BORDER}`,
+          padding: "6px 10px", boxShadow: CARD_SHADOW,
+        }}>
+          <Search style={{ width: 14, height: 14, color: MUTED, flexShrink: 0 }} />
+          <input
+            type="text"
+            value={inputVal}
+            onChange={e => handleSearch(e.target.value)}
+            placeholder="搜索代码或名称，如 AAPL / Apple"
+            style={{
+              flex: 1, border: "none", outline: "none",
+              fontSize: 13, color: TEXT, background: "transparent",
+            }}
+          />
+          {inputVal && (
+            <button
+              onClick={() => { setInputVal(""); setKeyword(""); setPage(1); }}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}
+            >
+              <X style={{ width: 14, height: 14, color: MUTED }} />
+            </button>
           )}
         </div>
       </div>
 
-      {/* ── 主内容区 ── */}
-      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 24 }}>
-
-        {/* 七巨头卡片列表 */}
-        <div style={{ padding: "10px 12px 0" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: TEXT }}>七巨头行情</span>
-            <span style={{ fontSize: 10, color: MUTED }}>点击查看日线详情</span>
-          </div>
-          <div style={{
-            borderRadius: 14,
-            background: CARD,
-            boxShadow: CARD_SHADOW,
-            border: `1px solid ${BORDER}`,
-            overflow: "hidden",
-          }}>
-            {MEGA_SEVEN.map((stock, idx) => {
-              const pd = latestPrices?.[stock.code];
-              return (
-                <StockCardWithFundamentals
-                  key={stock.symbol}
-                  stock={stock}
-                  priceData={pd}
-                  onClick={() => setLocation(`/ledger/52/be-data?filter=stocks&symbol=${stock.symbol}`)}
-                  isLast={idx === MEGA_SEVEN.length - 1}
-                />
-              );
-            })}
-          </div>
-          <div style={{ marginTop: 6, fontSize: 9, textAlign: "center", color: MUTED2 }}>
-            * 收盘价、量、振幅、52周高低均来自数据库 · 每日收盘后自动更新
-          </div>
-        </div>
-
-        {/* 功能入口 */}
-        <div style={{ padding: "10px 12px 0" }}>
-          <div
+      {/* ── 分类Tab ── */}
+      <div style={{
+        display: "flex", gap: 6, padding: "8px 12px 0",
+        overflowX: "auto", scrollbarWidth: "none", flexShrink: 0,
+      }}>
+        {CLASSIFY_TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => handleClassify(tab.key)}
             style={{
-              borderRadius: 12, padding: "10px 14px", cursor: "pointer",
-              background: CARD, boxShadow: CARD_SHADOW, border: `1px solid ${BORDER}`,
-              display: "flex", alignItems: "center", gap: 12,
+              padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 500,
+              border: `1px solid ${classify === tab.key ? BLUE : BORDER}`,
+              background: classify === tab.key ? BLUE : CARD,
+              color: classify === tab.key ? "#fff" : TEXT,
+              cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap",
             }}
-            onClick={() => setLocation("/ledger/52/be-data?filter=stocks")}
           >
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: `${BLUE}15`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <BarChart2 style={{ width: 18, height: 18, color: BLUE }} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>七巨头日线数据分析</div>
-              <div style={{ fontSize: 10, color: MUTED, marginTop: 1 }}>涨跌幅 · 振幅 · 连涨连跌 · 历史K线</div>
-            </div>
-            <span style={{ color: BLUE, fontSize: 16 }}>›</span>
-          </div>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── 列表区 ── */}
+      <div style={{ flex: 1, overflowY: "auto", paddingBottom: 80 }}>
+        {/* 列表头 */}
+        <div style={{
+          display: "flex", alignItems: "center", padding: "6px 12px",
+          borderBottom: `1px solid ${BORDER}`,
+          background: "#F5F8FF", flexShrink: 0,
+        }}>
+          <span style={{ fontSize: 10, color: MUTED, width: 24, textAlign: "right", marginRight: 8 }}>
+            #
+          </span>
+          <span style={{ flex: 1, fontSize: 10, color: MUTED }}>代码 / 名称</span>
+          <span style={{ fontSize: 10, color: MUTED }}>最新价</span>
         </div>
 
+        {/* 加载中 */}
+        {isLoading && (
+          <div style={{ padding: "24px 0", textAlign: "center", color: MUTED, fontSize: 13 }}>
+            加载中...
+          </div>
+        )}
+
+        {/* 无数据 */}
+        {!isLoading && stockList?.list.length === 0 && (
+          <div style={{ padding: "40px 0", textAlign: "center", color: MUTED, fontSize: 13 }}>
+            {keyword ? `未找到"${keyword}"相关股票` : "暂无数据"}
+          </div>
+        )}
+
+        {/* 数据行 */}
+        {!isLoading && stockList?.list.map((item, idx) => (
+          <StockRow
+            key={item.tsCode}
+            item={item}
+            rank={(page - 1) * PAGE_SIZE + idx + 1}
+          />
+        ))}
+
+        {/* 分页 */}
+        {totalPages > 1 && (
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            gap: 8, padding: "16px 12px",
+          }}>
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              style={{
+                padding: "5px 14px", borderRadius: 8, fontSize: 12,
+                border: `1px solid ${BORDER}`, background: page <= 1 ? "#F5F8FF" : CARD,
+                color: page <= 1 ? MUTED2 : TEXT, cursor: page <= 1 ? "default" : "pointer",
+              }}
+            >
+              上一页
+            </button>
+            <span style={{ fontSize: 12, color: MUTED }}>
+              {page} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              style={{
+                padding: "5px 14px", borderRadius: 8, fontSize: 12,
+                border: `1px solid ${BORDER}`, background: page >= totalPages ? "#F5F8FF" : CARD,
+                color: page >= totalPages ? MUTED2 : TEXT,
+                cursor: page >= totalPages ? "default" : "pointer",
+              }}
+            >
+              下一页
+            </button>
+          </div>
+        )}
+
+        {/* 底部说明 */}
+        {stockList && (
+          <div style={{ padding: "0 12px 16px", textAlign: "center" }}>
+            <span style={{ fontSize: 9, color: MUTED2 }}>
+              共 {stockList.total.toLocaleString()} 只 · 数据来源 Tushare · 每日收盘后更新
+            </span>
+          </div>
+        )}
       </div>
     </div>
-  );
-}
-
-// ─── 带基本面数据的卡片包装器（每只股票独立请求）────────────
-function StockCardWithFundamentals({
-  stock,
-  priceData,
-  onClick,
-  isLast,
-}: {
-  stock: typeof MEGA_SEVEN[0];
-  priceData?: { close: number; changePct: number | null; date: string; open?: number; high?: number; low?: number; volume?: number; amplitudePct?: number | null };
-  onClick: () => void;
-  isLast: boolean;
-}) {
-  const { data: fundamentals } = trpc.cryptoData.getStockFundamentals.useQuery(
-    { symbol: stock.code },
-    { staleTime: 5 * 60_000, refetchInterval: 10 * 60_000 }
-  );
-
-  return (
-    <StockCard
-      stock={stock}
-      priceData={priceData}
-      fundamentals={fundamentals}
-      onClick={onClick}
-      isLast={isLast}
-    />
   );
 }

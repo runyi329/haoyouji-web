@@ -1,5 +1,464 @@
 [
   {
+    "hash": "a20ccf08ac40284178bcb41e2341477b2689de07",
+    "author": "runyi329",
+    "date": "2026-06-03T14:11:00+00:00",
+    "message": "security: 工作日志数据脱敏，替换所有博彩/赌博相关词汇为中性词(383处)",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "security: 工作日志数据脱敏，替换所有博彩/赌博相关词汇为中性词(383处)"
+  },
+  {
+    "hash": "dd9e75f408c7f65fe5606660f6b4544119f3487f",
+    "author": "runyi329",
+    "date": "2026-06-03T14:02:38+00:00",
+    "message": "fix(worklog): 平均次数标签改为次/天，计算规则统一从1月22日到今天",
+    "type": "fix",
+    "scope": "worklog",
+    "cleanMessage": "平均次数标签改为次/天，计算规则统一从1月22日到今天"
+  },
+  {
+    "hash": "e2b6757c664524c30df76e049fc779a932a75b40",
+    "author": "runyi329",
+    "date": "2026-06-03T14:00:26+00:00",
+    "message": "fix(worklog): 项目天数固定从2026年1月22日起算到今天",
+    "type": "fix",
+    "scope": "worklog",
+    "cleanMessage": "项目天数固定从2026年1月22日起算到今天"
+  },
+  {
+    "hash": "efb74cdf14f555405ba17130a8c633f7bfb3cc0c",
+    "author": "runyi329",
+    "date": "2026-06-03T13:58:42+00:00",
+    "message": "fix(worklog): 项目天数改为从第一个有数据日期到今天的自然日历天数",
+    "type": "fix",
+    "scope": "worklog",
+    "cleanMessage": "项目天数改为从第一个有数据日期到今天的自然日历天数"
+  },
+  {
+    "hash": "a46eb4eb2759ef7239c7a98d6b79cd852edb0d7b",
+    "author": "runyi329",
+    "date": "2026-06-03T13:54:15+00:00",
+    "message": "data: 更新6月3日工作日志静态数据至最新(58条提交)",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "data: 更新6月3日工作日志静态数据至最新(58条提交)"
+  },
+  {
+    "hash": "b0843886bc24710c6aec29d4c79750aeeef9c592",
+    "author": "runyi329",
+    "date": "2026-06-03T13:48:05+00:00",
+    "message": "feat: 为WorkLogPage添加P210编号，支持三个视图Tab细粒度编号",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "为WorkLogPage添加P210编号，支持三个视图Tab细粒度编号"
+  },
+  {
+    "hash": "fdf0afc849bc6127381c8cdaf59754aa87358396",
+    "author": "runyi329",
+    "date": "2026-06-03T13:42:21+00:00",
+    "message": "fix: 修复LedgerDetail的PageTag变量名错误(activeTab->lotteryTab)",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复LedgerDetail的PageTag变量名错误(activeTab->lotteryTab)"
+  },
+  {
+    "hash": "a00072ac7946d854de018f58c7469e4772517956",
+    "author": "runyi329",
+    "date": "2026-06-03T13:36:48+00:00",
+    "message": "feat: 全面为有Tab切换的页面添加细粒度编号，同一页面不同Tab显示独立编号",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "全面为有Tab切换的页面添加细粒度编号，同一页面不同Tab显示独立编号"
+  },
+  {
+    "hash": "0c49759c5291bf8028e488bca2e0f69b78c9e573",
+    "author": "runyi329",
+    "date": "2026-06-03T13:06:52+00:00",
+    "message": "feat(ledger-aa): 概览表所有数据列改为居中对齐",
+    "type": "feat",
+    "scope": "ledger-aa",
+    "cleanMessage": "概览表所有数据列改为居中对齐"
+  },
+  {
+    "hash": "4ab2b62f18f609e89a6558652aa332c67e14d90c",
+    "author": "runyi329",
+    "date": "2026-06-03T13:02:26+00:00",
+    "message": "fix(ledger-aa): 占比字体统一13px，前5列自动撑满屏幕，年化分红130px溢出右侧",
+    "type": "fix",
+    "scope": "ledger-aa",
+    "cleanMessage": "占比字体统一13px，前5列自动撑满屏幕，年化分红130px溢出右侧"
+  },
+  {
+    "hash": "d117babfc6fb32ae57a58261ed55c103394bf739",
+    "author": "runyi329",
+    "date": "2026-06-03T12:48:20+00:00",
+    "message": "fix(ledger-aa): 名称列span改为flex:1撑满72px列宽，确保显示4个字",
+    "type": "fix",
+    "scope": "ledger-aa",
+    "cleanMessage": "名称列span改为flex:1撑满72px列宽，确保显示4个字"
+  },
+  {
+    "hash": "1519ada82a29d75750c03f30ec99d52d16d192d6",
+    "author": "runyi329",
+    "date": "2026-06-03T12:34:13+00:00",
+    "message": "fix(ledger-aa): 概览表名称列72px、内容宽max-content确保年化分红可滑动",
+    "type": "fix",
+    "scope": "ledger-aa",
+    "cleanMessage": "概览表名称列72px、内容宽max-content确保年化分红可滑动"
+  },
+  {
+    "hash": "a42a8c1c1453d872c3c656fc1495b386ef3fecaf",
+    "author": "runyi329",
+    "date": "2026-06-03T12:29:44+00:00",
+    "message": "feat(ledger-aa): 概览表名称列固定52px显示4字，表头行高与数据行统一",
+    "type": "feat",
+    "scope": "ledger-aa",
+    "cleanMessage": "概览表名称列固定52px显示4字，表头行高与数据行统一"
+  },
+  {
+    "hash": "c565d32e01d73f6c9449e4c53a55f3442c38b86a",
+    "author": "runyi329",
+    "date": "2026-06-03T12:24:53+00:00",
+    "message": "fix(ledger-aa): 修复概览表JSX注释语法错误",
+    "type": "fix",
+    "scope": "ledger-aa",
+    "cleanMessage": "修复概览表JSX注释语法错误"
+  },
+  {
+    "hash": "c748eb270aee1aba40dab5a4e633dc2962f77a69",
+    "author": "runyi329",
+    "date": "2026-06-03T12:21:55+00:00",
+    "message": "feat(ledger-aa): 概览表横向可滑动，年化/分红隐藏右侧，全表字体放大到13px",
+    "type": "feat",
+    "scope": "ledger-aa",
+    "cleanMessage": "概览表横向可滑动，年化/分红隐藏右侧，全表字体放大到13px"
+  },
+  {
+    "hash": "149fe1c5d347c6f58e7b025eac4e6e05dd692197",
+    "author": "runyi329",
+    "date": "2026-06-03T12:13:50+00:00",
+    "message": "ci: 重试部署 - 概览表周期列nowrap",
+    "type": "ci",
+    "scope": "",
+    "cleanMessage": "重试部署 - 概览表周期列nowrap"
+  },
+  {
+    "hash": "02248c5fa43ddcec6dcd3e3328d767105e4f3f48",
+    "author": "runyi329",
+    "date": "2026-06-03T12:11:03+00:00",
+    "message": "feat(ledger-aa): 概览表周期列改为auto宽度，所有数据列加nowrap防止换行",
+    "type": "feat",
+    "scope": "ledger-aa",
+    "cleanMessage": "概览表周期列改为auto宽度，所有数据列加nowrap防止换行"
+  },
+  {
+    "hash": "b7f5c312fb165f60eb59920bcea5ba525da4fb18",
+    "author": "runyi329",
+    "date": "2026-06-03T12:02:03+00:00",
+    "message": "feat(ledger-aa): 月视图和年视图字体统一放大，与日视图金额大小匹配",
+    "type": "feat",
+    "scope": "ledger-aa",
+    "cleanMessage": "月视图和年视图字体统一放大，与日视图金额大小匹配"
+  },
+  {
+    "hash": "6d38b39e09e87e65d6a48f85b12db8d49fb42e5d",
+    "author": "runyi329",
+    "date": "2026-06-03T11:56:27+00:00",
+    "message": "feat(ledger-aa): 日历金额字体再放大两号至12px，格子高度适配50px",
+    "type": "feat",
+    "scope": "ledger-aa",
+    "cleanMessage": "日历金额字体再放大两号至12px，格子高度适配50px"
+  },
+  {
+    "hash": "d14a6ce733b9e4ef2af63d49a503efb45bc088e3",
+    "author": "runyi329",
+    "date": "2026-06-03T11:49:35+00:00",
+    "message": "feat(ledger-aa): 日历格子金额字体放大两号，格子高度增加，整体适配",
+    "type": "feat",
+    "scope": "ledger-aa",
+    "cleanMessage": "日历格子金额字体放大两号，格子高度增加，整体适配"
+  },
+  {
+    "hash": "1a6cb2c7da33e21a8c93e422dfec52e5614366bf",
+    "author": "runyi329",
+    "date": "2026-06-03T11:45:13+00:00",
+    "message": "feat(ledger-aa): 日历改为横向可滑动，默认显示周一到周五，周六周日在屏幕外",
+    "type": "feat",
+    "scope": "ledger-aa",
+    "cleanMessage": "日历改为横向可滑动，默认显示周一到周五，周六周日在屏幕外"
+  },
+  {
+    "hash": "200001ec0bc20010f9854aa4258e65d72d15b5d2",
+    "author": "runyi329",
+    "date": "2026-06-03T11:20:09+00:00",
+    "message": "feat(worklog): 抽屉固定不移动，序号+类型合并一格，内容两行截断，禁止横向滚动",
+    "type": "feat",
+    "scope": "worklog",
+    "cleanMessage": "抽屉固定不移动，序号+类型合并一格，内容两行截断，禁止横向滚动"
+  },
+  {
+    "hash": "19c7db9485800b7c8ffe55cdd6ff3f6e4237309c",
+    "author": "runyi329",
+    "date": "2026-06-03T11:15:08+00:00",
+    "message": "feat(worklog): 抽屉改为正式表格样式，白色头部+方形按钮+表格布局",
+    "type": "feat",
+    "scope": "worklog",
+    "cleanMessage": "抽屉改为正式表格样式，白色头部+方形按钮+表格布局"
+  },
+  {
+    "hash": "638e7e17c59c9d06e7d80ccbd5b1a7653a03d9aa",
+    "author": "runyi329",
+    "date": "2026-06-03T11:07:07+00:00",
+    "message": "chore: 重新触发部署",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "重新触发部署"
+  },
+  {
+    "hash": "e867226ef63ef15c92d93ba15e9064aa6b99e1ca",
+    "author": "runyi329",
+    "date": "2026-06-03T11:04:12+00:00",
+    "message": "feat: 抽屉重新设计为正式报告风格，深色封面+卡片条目",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "抽屉重新设计为正式报告风格，深色封面+卡片条目"
+  },
+  {
+    "hash": "e0963ba5e7862708cbc8d7d0c0bf86d4a5ce4555",
+    "author": "runyi329",
+    "date": "2026-06-03T10:58:20+00:00",
+    "message": "chore: 重新触发部署",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "重新触发部署"
+  },
+  {
+    "hash": "4c4ea9f78d84bf7f58a47171acd544486acf78b3",
+    "author": "runyi329",
+    "date": "2026-06-03T10:54:13+00:00",
+    "message": "security: 对提交记录做脱敏处理，清除用户名/密码字段/IP地址等敏感信息",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "security: 对提交记录做脱敏处理，清除用户名/密码字段/IP地址等敏感信息"
+  },
+  {
+    "hash": "b2946cbdf220597ce95885922ca6b01738154605",
+    "author": "runyi329",
+    "date": "2026-06-03T10:43:47+00:00",
+    "message": "style: 抽屉右上角改动改为升级",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "抽屉右上角改动改为升级"
+  },
+  {
+    "hash": "aa1fbbcca09e877678f34b7426411a7c6d7c7a91",
+    "author": "runyi329",
+    "date": "2026-06-03T10:01:19+00:00",
+    "message": "style: 顶部统计改为红色横幅式，文案改为项目天数/升级次数/每天次",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "顶部统计改为红色横幅式，文案改为项目天数/升级次数/每天次"
+  },
+  {
+    "hash": "7dabeecfb83b15c96e39f33902198139f66b5151",
+    "author": "runyi329",
+    "date": "2026-06-03T09:51:04+00:00",
+    "message": "fix: 抽屉顶部条数改为从静态gitDayStats读取，不再显示0",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "抽屉顶部条数改为从静态gitDayStats读取，不再显示0"
+  },
+  {
+    "hash": "2687825e9911eeddb405a7cac89c02c7d663b98c",
+    "author": "runyi329",
+    "date": "2026-06-03T09:46:31+00:00",
+    "message": "chore: 重新触发部署",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "重新触发部署"
+  },
+  {
+    "hash": "06b51898e842bd947cdb3c90e6e5db1ad66aa6fb",
+    "author": "runyi329",
+    "date": "2026-06-03T09:41:38+00:00",
+    "message": "feat: 日历抽屉提交序号改为全局连续编号（最早提交为1）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "日历抽屉提交序号改为全局连续编号（最早提交为1）"
+  },
+  {
+    "hash": "640b33ac42327ea3cb9a411b135a3ff05a5846bc",
+    "author": "runyi329",
+    "date": "2026-06-03T09:29:11+00:00",
+    "message": "fix: 日历抽屉提交列表改用静态数据兜底，不再依赖后端接口",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "日历抽屉提交列表改用静态数据兜底，不再依赖后端接口"
+  },
+  {
+    "hash": "fa05ef2e7d5b2d3a648fcce59b9a178bbf80a47b",
+    "author": "runyi329",
+    "date": "2026-06-03T08:37:58+00:00",
+    "message": "fix: 持仓订单收起时统计币数包含赠与单数量",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "持仓订单收起时统计币数包含赠与单数量"
+  },
+  {
+    "hash": "5d1039927c8ed6f2e064d9eae7a5d96a9967bb30",
+    "author": "runyi329",
+    "date": "2026-06-03T08:31:31+00:00",
+    "message": "feat: 充值明细时间旁边加UTC+8时区标注",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "充值明细时间旁边加UTC+8时区标注"
+  },
+  {
+    "hash": "4548c569e8798a5587e7d5c8ba3e21ee82d75156",
+    "author": "runyi329",
+    "date": "2026-06-03T08:23:49+00:00",
+    "message": "fix: 充值明细只显示已完成(completed)的记录，过滤掉待支付/确认中状态",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "充值明细只显示已完成(completed)的记录，过滤掉待支付/确认中状态"
+  },
+  {
+    "hash": "7b1a4c9dcfa6053f7f97236b9a7a76d1b2431e76",
+    "author": "runyi329",
+    "date": "2026-06-03T08:16:16+00:00",
+    "message": "ci: 重新触发部署（充值匹配修复）",
+    "type": "ci",
+    "scope": "",
+    "cleanMessage": "重新触发部署（充值匹配修复）"
+  },
+  {
+    "hash": "8276b96cb57ffe2b440811340cd5124288e5ac4f",
+    "author": "runyi329",
+    "date": "2026-06-03T08:12:24+00:00",
+    "message": "fix: 充值匹配逻辑加入48小时时间限制，防止旧订单被新交易错误匹配",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "充值匹配逻辑加入48小时时间限制，防止旧订单被新交易错误匹配"
+  },
+  {
+    "hash": "e9ca319eab32f2e409e9cde20eaf42f9117f59f2",
+    "author": "runyi329",
+    "date": "2026-06-03T07:54:56+00:00",
+    "message": "ci: 重新触发部署（修复脉动网logo未生效）",
+    "type": "ci",
+    "scope": "",
+    "cleanMessage": "重新触发部署（修复脉动网logo未生效）"
+  },
+  {
+    "hash": "8e7959cb0111df6c9d22a70785436383787b2101",
+    "author": "runyi329",
+    "date": "2026-06-03T07:47:45+00:00",
+    "message": "style: 标题前加脉动网圆形logo图标",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "标题前加脉动网圆形logo图标"
+  },
+  {
+    "hash": "2cdcd03d6ccf2a78819a3d3a22418022ca876ea6",
+    "author": "runyi329",
+    "date": "2026-06-03T07:33:40+00:00",
+    "message": "style: 标题改为脉动网·项目进展，0与其他数字同字号同字重",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "标题改为脉动网·项目进展，0与其他数字同字号同字重"
+  },
+  {
+    "hash": "56efcedf10b84d58b2d241c019a14fee30108fdb",
+    "author": "runyi329",
+    "date": "2026-06-03T07:33:00+00:00",
+    "message": "style: 日历格子0与其他数字同字号同字重，仅颜色用灰色区分",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "日历格子0与其他数字同字号同字重，仅颜色用灰色区分"
+  },
+  {
+    "hash": "633f8aefe7bb6c878fac1cf6fc8f8d5cdab5ca94",
+    "author": "runyi329",
+    "date": "2026-06-03T07:24:40+00:00",
+    "message": "fix: 统计卡片加显式Number转换，确保数字运算不被TS推断为字符串拼接",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "统计卡片加显式Number转换，确保数字运算不被TS推断为字符串拼接"
+  },
+  {
+    "hash": "ffd1b506d362163c79cadb2bf5f6a047350c8f06",
+    "author": "runyi329",
+    "date": "2026-06-03T07:14:36+00:00",
+    "message": "fix: 统计卡片改用静态gitDayStats计算，与日历格子数据完全联动",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "统计卡片改用静态gitDayStats计算，与日历格子数据完全联动"
+  },
+  {
+    "hash": "4530c4003d9e61fcca949497a5fd1926cd10cb73",
+    "author": "runyi329",
+    "date": "2026-06-03T05:20:06+00:00",
+    "message": "style: 去掉日历下方选中日期详情卡片，点击只弹底部抽屉",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "去掉日历下方选中日期详情卡片，点击只弹底部抽屉"
+  },
+  {
+    "hash": "b17d6ab7a6127f67bc758b0a234ee9405de0fe3c",
+    "author": "runyi329",
+    "date": "2026-06-03T05:15:58+00:00",
+    "message": "style: 去掉顶部三个Tab，直接显示活跃日历视图",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "去掉顶部三个Tab，直接显示活跃日历视图"
+  },
+  {
+    "hash": "31b7cc2ddf90c82038556b984f47bdda0251a480",
+    "author": "runyi329",
+    "date": "2026-06-03T05:11:33+00:00",
+    "message": "style: 日历数字黑色统一字号 + 右上角添加刷新按钮",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "日历数字黑色统一字号 + 右上角添加刷新按钮"
+  },
+  {
+    "hash": "59bd159db6993cc910176d94ecb77dc7c155022e",
+    "author": "runyi329",
+    "date": "2026-06-03T05:06:41+00:00",
+    "message": "style: 日历数字改为黑色、统一字号1.3rem不再区分个位数",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "日历数字改为黑色、统一字号1.3rem不再区分个位数"
+  },
+  {
+    "hash": "e7ded7710afb88ffd971874922308f780ad04dcb",
+    "author": "runyi329",
+    "date": "2026-06-03T02:36:03+00:00",
+    "message": "fix: 日历格子数量改用静态gitDayStats，不再依赖接口加载，修复全部显示0的问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "日历格子数量改用静态gitDayStats，不再依赖接口加载，修复全部显示0的问题"
+  },
+  {
+    "hash": "cbb7e6be49a7cc2e4ecc44561f1f8826ee397be4",
+    "author": "runyi329",
+    "date": "2026-06-03T02:34:29+00:00",
+    "message": "chore: 添加git-log诊断workflow",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "添加git-log诊断workflow"
+  },
+  {
+    "hash": "91f786853339ecb3b551909f24aa6601f880660f",
+    "author": "runyi329",
+    "date": "2026-06-03T02:26:14+00:00",
+    "message": "fix: 去掉git-log导出3000条限制，改为全量6487条，修复日历数据缺失",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "去掉git-log导出3000条限制，改为全量6487条，修复日历数据缺失"
+  },
+  {
     "hash": "31bcb44c2efee16128d446e07209f5baf8d61aaf",
     "author": "runyi329",
     "date": "2026-06-03T02:20:03+00:00",
