@@ -1,5 +1,14 @@
 [
   {
+    "hash": "4c331f87f61def8259c0eb86bfd0498e6c1d90cb",
+    "author": "runyi329",
+    "date": "2026-06-03T01:20:49+00:00",
+    "message": "fix: 修复工作日志数据为0的问题，改为构建时生成git-log.json，并修复deploy.yml复制逻辑",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复工作日志数据为0的问题，改为构建时生成git-log.json，并修复deploy.yml复制逻辑"
+  },
+  {
     "hash": "fab8ce2357992b36fd259c10b539e2606259dde2",
     "author": "runyi329",
     "date": "2026-06-03T01:12:24+00:00",
@@ -26989,14 +26998,5 @@
     "type": "feat",
     "scope": "",
     "cleanMessage": "新成员加入账本时自动初始化默认拨比（YJH 33.4%，自己 66.6%），无需YJH点开触发"
-  },
-  {
-    "hash": "db9a180e551e57ffb7570d06001903fa5b3a47f1",
-    "author": "runyi329",
-    "date": "2026-04-03T08:48:19-04:00",
-    "message": "fix: 去掉不存在的topology表JOIN，修复拨比配置加载卡死问题",
-    "type": "fix",
-    "scope": "",
-    "cleanMessage": "去掉不存在的topology表JOIN，修复拨比配置加载卡死问题"
   }
 ]

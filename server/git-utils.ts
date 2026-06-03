@@ -13,14 +13,13 @@ interface GitCommit {
 
 export async function getGitCommits(): Promise<GitCommit[]> {
   try {
-    // 读取构建时预生成的 git-log.json 文件
-    // 服务器运行目录为 /home/ubuntu/haoyouji-web，__dirname 为 dist/
+    // 服务器运行时 __dirname 为 /home/ubuntu/haoyouji-web/dist
+    // git-log.json 被复制到 dist/git-log.json，即与 index.js 同目录
     const candidates = [
-      path.resolve(__dirname, "../server/git-log.json"),
-      path.resolve(__dirname, "./git-log.json"),
-      path.resolve(__dirname, "../git-log.json"),
-      "/home/ubuntu/haoyouji-web/server/git-log.json",
-      "/home/ubuntu/haoyouji-web/git-log.json",
+      path.resolve(__dirname, "./git-log.json"),           // dist/git-log.json (生产环境)
+      path.resolve(__dirname, "../dist/git-log.json"),     // 备用
+      path.resolve(__dirname, "../server/git-log.json"),   // 开发环境
+      "/home/ubuntu/haoyouji-web/dist/git-log.json",      // 绝对路径备用
     ];
 
     let filePath: string | null = null;

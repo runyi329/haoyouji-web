@@ -236,11 +236,11 @@ const WorkLogPage: React.FC = () => {
                     {/* 数字居中 */}
                     <div className="flex-1 flex items-center justify-center">
                       {day.count > 0 ? (
-                        <span style={{ fontSize: day.count >= 10 ? '1.5rem' : '2rem', fontWeight: 900, lineHeight: 1, color: isSelected ? '#b71c1c' : '#c0392b' }}>
+                        <span style={{ fontSize: day.count >= 10 ? '1.4rem' : '1.8rem', fontWeight: 900, lineHeight: 1, color: isSelected ? '#b71c1c' : '#c0392b' }}>
                           {day.count}
                         </span>
                       ) : (
-                        <span style={{ color: '#d0d0d0', fontSize: '1.2rem' }}>·</span>
+                        <span style={{ color: '#ddd', fontSize: '1rem', fontWeight: 400 }}>0</span>
                       )}
                     </div>
                   </div>

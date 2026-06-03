@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * 构建时执行：将 Git 提交历史导出为 JSON 文件
- * 输出到 server/git-log.json，供运行时直接读取
+ * 同时输出到 server/git-log.json 和 dist/git-log.json
+ * dist/ 目录会被 deploy.yml 复制到服务器，确保生产环境可读
  */
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -16,7 +17,10 @@ function parseCommitMessage(message) {
   return { type: 'chore', scope: '', cleanMessage: message.trim() };
 }
 
-const outPath = path.resolve(__dirname, '../server/git-log.json');
+const rootDir = path.resolve(__dirname, '..');
+const serverOutPath = path.resolve(rootDir, 'server/git-log.json');
+// dist/ 目录在 vite build 之后才存在，这里先写到 server/，vite build 后再复制
+// 同时也写一份到根目录，方便 esbuild 打包后的 dist/index.js 找到
 
 try {
   // 用 spawnSync 避免 ENOBUFS，限制最近 3000 条
@@ -26,7 +30,7 @@ try {
     '--date=iso-strict',
     '-n', '3000'
   ], {
-    cwd: path.resolve(__dirname, '..'),
+    cwd: rootDir,
     encoding: 'utf8',
     maxBuffer: 20 * 1024 * 1024 // 20MB
   });
@@ -51,9 +55,14 @@ try {
     commits.push({ hash, author, date, message: subject, type, scope, cleanMessage });
   }
 
-  fs.writeFileSync(outPath, JSON.stringify(commits, null, 2), 'utf8');
+  const jsonContent = JSON.stringify(commits, null, 2);
+
+  // 写入 server/ 目录
+  fs.writeFileSync(serverOutPath, jsonContent, 'utf8');
   console.log(`✓ git-log.json 已生成，共 ${commits.length} 条提交记录`);
+  console.log(`  → ${serverOutPath}`);
+
 } catch (err) {
   console.error('export-git-log 失败:', err.message);
-  fs.writeFileSync(outPath, '[]', 'utf8');
+  fs.writeFileSync(serverOutPath, '[]', 'utf8');
 }
