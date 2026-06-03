@@ -12716,9 +12716,9 @@ ${klinesSummary}
             targetUserId = input.viewAsUserId;
           }
         }
-        // 1. 充値订单（recharge_orders，全状态显示，全局不限账本）
+        // 1. 充値订单（recharge_orders，只显示已完成的充値到账记录，不显示待支付/确认中/过期/取消）
         const rechargeRows = await db.execute(
-          sql`SELECT id, amount, status, created_at FROM recharge_orders WHERE user_id = ${targetUserId} AND status NOT IN ('expired', 'cancelled') ORDER BY created_at DESC LIMIT 100`
+          sql`SELECT id, amount, status, created_at FROM recharge_orders WHERE user_id = ${targetUserId} AND status = 'completed' ORDER BY created_at DESC LIMIT 100`
         ) as any;
         const statusLabelMap: Record<string, string> = {
           completed: '充值到账',
