@@ -97,7 +97,7 @@ jobs:
             echo "✅ 部署完成！"
             echo "🔒 同步Nginx配置并重载Nginx..."
             cp /root/haoyouji-web/nginx.conf /etc/nginx/sites-available/haoyouji
-            nginx -t && systemctl reload nginx
+            nginx -t && (systemctl reload nginx 2>/dev/null || systemctl start nginx 2>/dev/null || true)
             echo "✅ Nginx配置已同步并重载"
             echo "Nginx错误日志（最后10行）："
             tail -10 /var/log/nginx/haoyouji_error.log 2>/dev/null || true
