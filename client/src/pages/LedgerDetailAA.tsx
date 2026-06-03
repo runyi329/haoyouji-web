@@ -2095,9 +2095,9 @@ export default function LedgerDetailAA({
                     </div>
                   </>
                 )}
-              </div>{/* end grid */}
-              </div>{/* end 内容宽度容器 */}
-              </div>{/* end 横向滑动容器 */}
+              </div>
+              </div>
+              </div>
             );
           })()}
           </div>
