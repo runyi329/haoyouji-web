@@ -483,39 +483,39 @@ const WorkLogPage: React.FC = () => {
       {drawerDate && (
         <div
           className="fixed inset-0 z-50"
-          style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
           onClick={() => setDrawerDate(null)}
         >
           <div
-            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl"
-            style={{ maxHeight: '82vh', overflowY: 'auto' }}
+            className="absolute bottom-0 left-0 right-0 bg-white"
+            style={{ maxHeight: '85vh', overflowY: 'auto', borderTopLeftRadius: 12, borderTopRightRadius: 12 }}
             onClick={e => e.stopPropagation()}
           >
-            {/* 报告封面头部 */}
-            <div className="sticky top-0 z-10" style={{ background: '#1a1a1a' }}>
-              {/* 顶部拖动条 */}
-              <div className="flex justify-center pt-3 pb-1">
-                <div style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)' }} />
+            {/* 正式报告头部 - 白色背景 */}
+            <div className="sticky top-0 z-10 bg-white" style={{ borderBottom: '2px solid #D32F2F' }}>
+              {/* 拖动条 */}
+              <div className="flex justify-center pt-2.5 pb-0.5">
+                <div style={{ width: 32, height: 3, borderRadius: 2, backgroundColor: '#ddd' }} />
               </div>
-              <div className="px-5 pb-4">
-                <div className="flex items-start justify-between">
+              <div className="px-4 py-2.5">
+                <div className="flex items-center justify-between">
                   <div>
-                    <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 10, letterSpacing: 2, marginBottom: 4 }}>脉动网 · 升级日报</p>
-                    <h2 style={{ color: '#fff', fontSize: 20, fontWeight: 800, lineHeight: 1.2, margin: 0 }}>
-                      {new Date(drawerDate + 'T00:00:00').toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}
+                    <p style={{ color: '#aaa', fontSize: 9, letterSpacing: 2, marginBottom: 2, textTransform: 'uppercase' }}>脉动网 MAIDONG · 升级日报</p>
+                    <h2 style={{ color: '#1a1a1a', fontSize: 17, fontWeight: 800, margin: 0, lineHeight: 1.25 }}>
+                      {new Date(drawerDate + 'T00:00:00').toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}
+                      <span style={{ color: '#999', fontSize: 12, fontWeight: 400, marginLeft: 6 }}>
+                        {new Date(drawerDate + 'T00:00:00').toLocaleDateString('zh-CN', { weekday: 'long' })}
+                      </span>
                     </h2>
-                    <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginTop: 2 }}>
-                      {new Date(drawerDate + 'T00:00:00').toLocaleDateString('zh-CN', { weekday: 'long' })}
-                    </p>
                   </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <button
-                      onClick={() => setDrawerDate(null)}
-                      style={{ color: 'rgba(255,255,255,0.5)', fontSize: 20, lineHeight: 1, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'rgba(255,255,255,0.1)' }}
-                    >×</button>
-                    <div style={{ backgroundColor: '#D32F2F', color: '#fff', padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 700 }}>
+                  <div className="flex items-center gap-2">
+                    <div style={{ border: '1.5px solid #D32F2F', color: '#D32F2F', padding: '3px 10px', borderRadius: 3, fontSize: 12, fontWeight: 700 }}>
                       {dayStats.get(drawerDate)?.count || gitDayStats[drawerDate] || 0} 次升级
                     </div>
+                    <button
+                      onClick={() => setDrawerDate(null)}
+                      style={{ color: '#666', fontSize: 16, width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 3, border: '1px solid #d0d0d0', background: '#f5f5f5', flexShrink: 0 }}
+                    >×</button>
                   </div>
                 </div>
               </div>
@@ -526,43 +526,40 @@ const WorkLogPage: React.FC = () => {
               const logEntry = workLogData.find(e => e.date === drawerDate);
               if (!logEntry) return null;
               return (
-                <div className="px-5 pt-4 pb-2">
+                <div className="px-4 pt-3 pb-2">
                   {logEntry.highlights && (
-                    <div style={{ background: 'linear-gradient(135deg, #fff5f5 0%, #fff 100%)', border: '1.5px solid #D32F2F', borderRadius: 12, padding: '12px 14px', marginBottom: 14 }}>
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <div style={{ width: 3, height: 14, backgroundColor: '#D32F2F', borderRadius: 2 }} />
-                        <p style={{ color: '#D32F2F', fontSize: 10, fontWeight: 800, letterSpacing: 1.5 }}>核心亮点</p>
-                      </div>
-                      <p style={{ color: '#1a1a1a', fontSize: 14, lineHeight: 1.6, fontWeight: 500 }}>{logEntry.highlights}</p>
+                    <div style={{ backgroundColor: '#fff8f8', borderLeft: '3px solid #D32F2F', padding: '9px 12px', marginBottom: 12 }}>
+                      <p style={{ color: '#D32F2F', fontSize: 9, fontWeight: 800, letterSpacing: 1.5, marginBottom: 3 }}>核心亮点</p>
+                      <p style={{ color: '#1a1a1a', fontSize: 13, lineHeight: 1.65, margin: 0 }}>{logEntry.highlights}</p>
                     </div>
                   )}
-                  <div className="flex items-center gap-2 mb-3">
-                    <div style={{ width: 3, height: 14, backgroundColor: '#999', borderRadius: 2 }} />
-                    <p style={{ color: '#888', fontSize: 10, fontWeight: 700, letterSpacing: 1.5 }}>工作内容摘要</p>
-                  </div>
-                  <div className="space-y-2.5 mb-4">
-                    {logEntry.summary.map((item, idx) => (
-                      <div key={idx} className="flex items-start gap-3">
-                        <span style={{ backgroundColor: '#1a1a1a', color: '#fff', minWidth: 20, height: 20, borderRadius: 4, fontSize: 10, fontWeight: 800, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {idx + 1}
-                        </span>
-                        <p style={{ color: '#333', fontSize: 13.5, lineHeight: 1.6, flex: 1, paddingTop: 1 }}>{item}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ borderTop: '1px solid #eee', marginBottom: 4 }} />
+                  {/* 工作摘要表格 */}
+                  <p style={{ color: '#aaa', fontSize: 9, fontWeight: 700, letterSpacing: 1.5, marginBottom: 4 }}>工作内容摘要</p>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, marginBottom: 4 }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f5f5f5' }}>
+                        <th style={{ width: 28, padding: '5px 6px', textAlign: 'center', color: '#666', fontSize: 10, fontWeight: 700, border: '1px solid #e8e8e8' }}>序</th>
+                        <th style={{ padding: '5px 8px', textAlign: 'left', color: '#666', fontSize: 10, fontWeight: 700, border: '1px solid #e8e8e8' }}>工作内容</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {logEntry.summary.map((item, idx) => (
+                        <tr key={idx}>
+                          <td style={{ padding: '7px 6px', textAlign: 'center', color: '#D32F2F', fontSize: 11, fontWeight: 700, border: '1px solid #f0f0f0', verticalAlign: 'top' }}>{idx + 1}</td>
+                          <td style={{ padding: '7px 8px', color: '#333', lineHeight: 1.6, border: '1px solid #f0f0f0', fontSize: 12.5 }}>{item}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               );
             })()}
 
-            {/* 详细提交记录标题 */}
-            <div className="px-5 pt-3 pb-2 flex items-center gap-2">
-              <div style={{ width: 3, height: 14, backgroundColor: '#999', borderRadius: 2 }} />
-              <p style={{ color: '#888', fontSize: 10, fontWeight: 700, letterSpacing: 1.5 }}>详细升级记录</p>
+            {/* 详细升级记录表格 */}
+            <div className="px-4 pt-1 pb-0.5">
+              <p style={{ color: '#aaa', fontSize: 9, fontWeight: 700, letterSpacing: 1.5 }}>详细升级记录</p>
             </div>
-
-            {/* 提交列表 - 报告条目风格 */}
-            <div className="px-4 pb-4 space-y-2">
+            <div className="px-4 pb-8">
               {(() => {
                 const apiCommits = dayStats.has(drawerDate) ? dayStats.get(drawerDate)!.commits : null;
                 const staticCommits = gitCommitsByDay[drawerDate] || null;
@@ -572,36 +569,37 @@ const WorkLogPage: React.FC = () => {
                 }
                 const globalOffset = gitDayOffsets[drawerDate] || 1;
                 const orderedCommits = [...displayCommits].reverse();
-                return orderedCommits.map((commit: any, idx: number) => {
-                  const typeInfo = getTypeInfo(commit.type);
-                  const globalNum = globalOffset + idx;
-                  const timeStr = new Date(commit.date).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-                  return (
-                    <div key={commit.hash || idx} style={{ background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 10, padding: '10px 12px' }}>
-                      <div className="flex items-center gap-2 mb-1.5">
-                        {/* 全局序号 */}
-                        <span style={{ backgroundColor: '#1a1a1a', color: '#fff', minWidth: 28, height: 18, borderRadius: 4, fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', letterSpacing: 0.5, flexShrink: 0 }}>
-                          #{globalNum}
-                        </span>
-                        {/* 类型标签 */}
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${typeInfo.color}`}>
-                          {typeInfo.label}
-                        </span>
-                        {/* 模块 */}
-                        {commit.scope && (
-                          <span style={{ color: '#aaa', fontSize: 10, backgroundColor: '#f0f0f0', padding: '1px 6px', borderRadius: 4 }}>@{commit.scope}</span>
-                        )}
-                        {/* 时间右对齐 */}
-                        <span style={{ color: '#bbb', fontSize: 10, marginLeft: 'auto', flexShrink: 0 }}>{timeStr}</span>
-                      </div>
-                      {/* 提交内容 */}
-                      <p style={{ color: '#2a2a2a', fontSize: 13, lineHeight: 1.6, margin: 0 }}>{commit.cleanMessage}</p>
-                    </div>
-                  );
-                });
+                return (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#2a2a2a' }}>
+                        <th style={{ width: 36, padding: '6px 4px', textAlign: 'center', color: '#ccc', fontSize: 10, fontWeight: 700, border: '1px solid #444' }}>编号</th>
+                        <th style={{ width: 38, padding: '6px 4px', textAlign: 'center', color: '#ccc', fontSize: 10, fontWeight: 700, border: '1px solid #444' }}>类型</th>
+                        <th style={{ padding: '6px 8px', textAlign: 'left', color: '#ccc', fontSize: 10, fontWeight: 700, border: '1px solid #444' }}>升级内容</th>
+                        <th style={{ width: 38, padding: '6px 4px', textAlign: 'right', color: '#ccc', fontSize: 10, fontWeight: 700, border: '1px solid #444' }}>时间</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orderedCommits.map((commit: any, idx: number) => {
+                        const typeInfo = getTypeInfo(commit.type);
+                        const globalNum = globalOffset + idx;
+                        const timeStr = new Date(commit.date).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+                        return (
+                          <tr key={commit.hash || idx} style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
+                            <td style={{ padding: '7px 4px', textAlign: 'center', color: '#888', fontSize: 10, fontWeight: 600, border: '1px solid #efefef', verticalAlign: 'top' }}>{globalNum}</td>
+                            <td style={{ padding: '7px 4px', textAlign: 'center', border: '1px solid #efefef', verticalAlign: 'top' }}>
+                              <span className={`px-1 py-0.5 rounded text-[9px] font-bold ${typeInfo.color}`}>{typeInfo.label}</span>
+                            </td>
+                            <td style={{ padding: '7px 8px', color: '#222', lineHeight: 1.55, border: '1px solid #efefef', fontSize: 12 }}>{commit.cleanMessage}</td>
+                            <td style={{ padding: '7px 4px', textAlign: 'right', color: '#bbb', fontSize: 10, border: '1px solid #efefef', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{timeStr}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                );
               })()}
             </div>
-            <div className="h-8"></div>
           </div>
         </div>
       )}
