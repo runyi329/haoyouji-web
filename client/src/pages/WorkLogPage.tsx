@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { workLogData, WorkLogEntry } from '@/data/workLogSummary';
+import { gitDayStats } from '@/data/gitDayStats';
 
 interface GitCommit {
   hash: string;
@@ -81,9 +82,12 @@ const WorkLogPage: React.FC = () => {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
 
-    // 找到最早的提交日期，如果没有提交记录则默认从当年开始
+    // 优先使用静态gitDayStats确定起始日期，不依赖接口加载
+    const staticDates = Object.keys(gitDayStats).sort();
     let earliestDate: Date;
-    if (dayStats.size > 0) {
+    if (staticDates.length > 0) {
+      earliestDate = new Date(staticDates[0] + 'T00:00:00');
+    } else if (dayStats.size > 0) {
       const allDates = Array.from(dayStats.keys()).sort();
       earliestDate = new Date(allDates[0] + 'T00:00:00');
     } else {
@@ -108,7 +112,8 @@ const WorkLogPage: React.FC = () => {
     const cur = new Date(alignedStart);
     while (cur <= alignedEnd) {
       const dateStr = cur.toISOString().split('T')[0];
-      const count = dayStats.get(dateStr)?.count || 0;
+      // 优先用接口返回的实时数据，接口未加载时用静态数据平底
+      const count = dayStats.get(dateStr)?.count ?? gitDayStats[dateStr] ?? 0;
       currentWeek.push({ date: dateStr, count, isToday: dateStr === todayStr });
       if (currentWeek.length === 7) {
         weeks.push(currentWeek);
