@@ -354,7 +354,7 @@ const WorkLogPage: React.FC = () => {
           const stats = [
             { label: '项目天数', value: String(activeDays), unit: '天' },
             { label: '升级次数', value: String(totalCommits), unit: '次' },
-            { label: '每天', value: avgPerDay, unit: '次' },
+            { label: '次/天', value: avgPerDay, unit: '次' },
           ];
           return (
             <div style={{ backgroundColor: '#D32F2F', borderRadius: 14 }} className="flex items-center px-4 py-3">
