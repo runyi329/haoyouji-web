@@ -123,7 +123,7 @@ export default function BankRatePage() {
 
   return (
     <div className="min-h-screen pb-10 max-w-md mx-auto relative" style={{ background: BG_PAGE, color: TEXT_MAIN }}>
-      <PageTag code="P064" />
+      <PageTag code={`${activeTab === 'deposit' ? 'P064-A' : activeTab === 'loan' ? 'P064-B' : activeTab === 'spread' ? 'P064-C' : 'P064-D'}`} />
       {/* ── 顶部导航 ── */}
       <div className="sticky top-0 z-20 flex items-center px-4 py-3" style={{ background: '#fff', borderBottom: `1px solid ${BORDER}` }}>
         <button onClick={() => navigate("/smart-finance")} className="flex items-center justify-center w-8 h-8 rounded-full mr-3" style={{ background: BG_SUBTLE }}>

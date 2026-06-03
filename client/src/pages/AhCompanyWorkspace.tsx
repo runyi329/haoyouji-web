@@ -294,7 +294,7 @@ export default function AhCompanyWorkspace() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F7FA' }}>
-      <PageTag code="P059" />
+      <PageTag code={`${activeTab === 'members' ? 'P059-A' : activeTab === 'tax' ? 'P059-B' : activeTab === 'social' ? 'P059-C' : 'P059-D'}`} />
       {/* 顶部蓝色区域 */}
       <div style={{
         background: 'linear-gradient(135deg, #1E3A8A 0%, #1A56DB 50%, #3B82F6 100%)',

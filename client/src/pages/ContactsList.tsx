@@ -1182,7 +1182,7 @@ export default function ContactsList() {
 
   return (
       <div ref={containerRef} className="max-w-md mx-auto shadow-2xl bg-[#FAF3ED] h-screen flex flex-col overflow-hidden" style={{ overscrollBehaviorX: 'none', touchAction: 'pan-y' }}>
-      <PageTag code="P015" />
+      <PageTag code={`${shareFilter === 'all' ? 'P015-A' : shareFilter === 'mine' ? 'P015-B' : 'P015-C'}`} />
       {/* 顶部深红色头部 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white px-4 pt-4 pb-4 rounded-b-3xl mb-3">
         {/* 第一行：返回 + 标题 + 人脉总数 */}

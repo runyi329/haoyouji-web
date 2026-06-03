@@ -1827,7 +1827,7 @@ export default function BeDataPage() {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: hideSymbolTabs ? "#EEF2F8" : "#F5F5F5" }}>
-      <PageTag code="P065" />
+      <PageTag code={`${activeTab === 'analysis' ? 'P065-A' : activeTab === 'data' ? 'P065-B' : activeTab === 'funding' ? 'P065-C' : 'P065-D'}`} />
 
       {/* 底部居中悬浮币种切换按鈕（仅数字币模式显示） */}
       {urlFilter === 'crypto' && (

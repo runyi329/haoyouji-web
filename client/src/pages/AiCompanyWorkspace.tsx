@@ -197,7 +197,7 @@ export default function AiCompanyWorkspace() {
 
   return (
     <div className="flex flex-col min-h-screen" style={{ backgroundColor: "#F5F7FF" }}>
-      <PageTag code="P060" />
+      <PageTag code={`${activeTab === 'brand' ? 'P060-A' : activeTab === 'overview' ? 'P060-B' : activeTab === 'shareholders' ? 'P060-C' : activeTab === 'dividends' ? 'P060-D' : 'P060-E'}`} />
       {/* 顶部渐变头部 */}
       <div
         className="px-4 pt-4 pb-6"

@@ -2291,7 +2291,7 @@ export default function CryptoPrediction() {
 
   return (
     <div className="min-h-screen pb-20" style={{ background: '#F0F4FF', color: '#1A2340' }}>
-      <PageTag code="P076" />
+      <PageTag code={`${tab === 'contract' ? 'P076-A' : tab === 'spot' ? 'P076-B' : tab === 'finance' ? 'P076-C' : tab === 'market' ? 'P076-D' : 'P076-E'}`} />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-50 px-4 pt-3 pb-2 flex items-center justify-between" style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}>
         <div className="flex items-center gap-2">

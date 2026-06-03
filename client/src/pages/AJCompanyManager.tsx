@@ -714,7 +714,7 @@ export default function AJCompanyManager() {
 
   return (
     <div className="min-h-screen bg-gray-50 max-w-md mx-auto">
-      <PageTag code="P039" />
+      <PageTag code={`${activeTab === 'companies' ? 'P039-A' : 'P039-B'}`} />
       {/* 顶部导航 */}
       <div className="bg-[#C0392B] text-white px-4 pt-12 pb-4">
         <div className="flex items-center gap-3">

@@ -389,7 +389,7 @@ export default function CNYDetailPage() {
 
   return (
     <div className="min-h-screen pb-20 max-w-md mx-auto" style={{ background: "#0f1117" }}>
-      <PageTag code="P034" />
+      <PageTag code={`${activeTab === 'analysis' ? 'P034-A' : 'P034-B'}`} />
       {/* 红色渐变头部区域（导航栏 + 双卡片 + AI分析）*/}
       <div style={{ background: "linear-gradient(135deg, #7b0000 0%, #cc0000 50%, #1a0000 100%)", borderRadius: "0 0 24px 24px", padding: "16px 16px 20px" }}>
         {/* 顶部导航栏 */}

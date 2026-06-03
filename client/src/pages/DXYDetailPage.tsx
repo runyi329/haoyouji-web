@@ -358,7 +358,7 @@ export default function DXYDetailPage() {
   // ── 渲染 ────────────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#EEF2F8" }}>
-      <PageTag code="D002" />
+      <PageTag code={`${activeTab === 'analysis' ? 'D002-A' : 'D002-B'}`} />
 
       {/* ── 蓝色渐变头部 ── */}
       <div style={{

@@ -39,7 +39,7 @@ export default function DataComparison() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <PageTag code="P018" />
+      <PageTag code={`${activeTab === 'all' ? 'P018-A' : activeTab === 'my' ? 'P018-B' : 'P018-C'}`} />
       {/* 顶部导航区 - 使用主题色渐变背景 */}
       <div 
         className="text-white"

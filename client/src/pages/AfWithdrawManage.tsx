@@ -168,7 +168,7 @@ export default function AfWithdrawManage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-10 max-w-md mx-auto">
-      <PageTag code="P056" />
+      <PageTag code={`${activeTab === 'orders' ? 'P056-A' : 'P056-B'}`} />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-10 flex items-center px-4 py-3"

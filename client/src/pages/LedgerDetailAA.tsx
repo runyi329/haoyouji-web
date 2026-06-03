@@ -965,7 +965,7 @@ export default function LedgerDetailAA({
   // ─── 渲染 ──────────────────────────────────────────────────────────────────
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: "#FAF3ED" }}>
-      <PageTag code="P117" />
+      <PageTag code={`${calendarView === 'balance' ? 'P117-A' : calendarView === 'daily' ? 'P117-B' : calendarView === 'monthly' ? 'P117-C' : 'P117-D'}`} />
       {/* ── 顶部红色区域 ── */}
       <div style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
         {/* 用户信息行 + 标签下拉（直接顶部，无返回栏） */}

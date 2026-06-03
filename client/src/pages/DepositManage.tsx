@@ -589,7 +589,7 @@ export default function DepositManage() {
 
   return (
     <div className="min-h-screen pb-10" style={{ backgroundColor: "#F0F4FF" }}>
-      <PageTag code="P080" />
+      <PageTag code={`${activeTab === 'left' ? 'P080-A' : 'P080-B'}`} />
       {/* 蓝色渐变顶部 */}
       <div
         className="sticky top-0 z-20 px-4 pt-4 pb-3"
