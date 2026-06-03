@@ -1423,7 +1423,7 @@ export default function LedgerDetailAA({
               {/* 星期标题 */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: '2px' }}>
                 {["一", "二", "三", "四", "五", "六", "日"].map((d, i) => (
-                  <div key={d} className="text-center text-xs py-1" style={{ color: i >= 5 ? '#BDBDBD' : '#757575' }}>
+                  <div key={d} className="text-center py-1" style={{ fontSize: '11px', fontWeight: 500, color: i >= 5 ? '#BDBDBD' : '#757575' }}>
                     {d}
                   </div>
                 ))}
@@ -1433,7 +1433,7 @@ export default function LedgerDetailAA({
                 {calendarWeeks.map((week, weekIdx) => (
                   <div key={weekIdx} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
                     {week.map((day, colIdx) => {
-                      if (day === null) return <div key={`empty-${weekIdx}-${colIdx}`} style={{ height: '36px' }} />;
+                      if (day === null) return <div key={`empty-${weekIdx}-${colIdx}`} style={{ height: '46px' }} />;
                       const nonTradingLabel = getNonTradingLabel(day);
                       const isNonTrading = nonTradingLabel !== null;
                       const cellValue = getCellValue(day);
@@ -1509,30 +1509,30 @@ export default function LedgerDetailAA({
                           disabled={isNonTrading}
                           className="rounded-lg flex flex-col items-center justify-center transition-all active:scale-95"
                           style={{
-                            height: '36px',
+                            height: '46px',
                             backgroundColor: cellBg,
                             border: cellBorder,
-                            padding: '2px 1px',
+                            padding: '3px 2px',
                             cursor: isNonTrading ? 'default' : 'pointer',
                             position: 'relative',
                           }}
                         >
                           {isPauseDay ? (
-                            <PauseCircle style={{ width: '18px', height: '18px', color: '#FFFFFF' }} />
+                            <PauseCircle style={{ width: '20px', height: '20px', color: '#FFFFFF' }} />
                           ) : (
                             <>
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', marginBottom: '1px' }}>
-                                <span style={{ fontSize: '10px', fontWeight: 500, lineHeight: 1, color: dayNumColor }}>{day}</span>
+                                <span style={{ fontSize: '12px', fontWeight: 500, lineHeight: 1, color: dayNumColor }}>{day}</span>
                                 {!isPausedAfter && dotColor && (
-                                  <span style={{ width: '3px', height: '3px', borderRadius: '50%', backgroundColor: dotColor, flexShrink: 0, display: 'inline-block' }} />
+                                  <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: dotColor, flexShrink: 0, display: 'inline-block' }} />
                                 )}
                               </span>
                               {isNonTrading ? (
-                                <span style={{ fontSize: '7px', fontWeight: 400, lineHeight: 1.1, color: '#BDBDBD', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
+                                <span style={{ fontSize: '9px', fontWeight: 400, lineHeight: 1.1, color: '#BDBDBD', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
                                   {nonTradingLabel}
                                 </span>
                               ) : !isPausedAfter && hasRecord ? (
-                                <span style={{ fontSize: '8px', fontWeight: 600, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
+                                <span style={{ fontSize: '10px', fontWeight: 700, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
                                   {cellValue}
                                 </span>
                               ) : null}
