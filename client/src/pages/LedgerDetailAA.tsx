@@ -1433,7 +1433,7 @@ export default function LedgerDetailAA({
                 {calendarWeeks.map((week, weekIdx) => (
                   <div key={weekIdx} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' }}>
                     {week.map((day, colIdx) => {
-                      if (day === null) return <div key={`empty-${weekIdx}-${colIdx}`} style={{ height: '46px' }} />;
+                      if (day === null) return <div key={`empty-${weekIdx}-${colIdx}`} style={{ height: '50px' }} />;
                       const nonTradingLabel = getNonTradingLabel(day);
                       const isNonTrading = nonTradingLabel !== null;
                       const cellValue = getCellValue(day);
@@ -1509,7 +1509,7 @@ export default function LedgerDetailAA({
                           disabled={isNonTrading}
                           className="rounded-lg flex flex-col items-center justify-center transition-all active:scale-95"
                           style={{
-                            height: '46px',
+                            height: '50px',
                             backgroundColor: cellBg,
                             border: cellBorder,
                             padding: '3px 2px',
@@ -1532,7 +1532,7 @@ export default function LedgerDetailAA({
                                   {nonTradingLabel}
                                 </span>
                               ) : !isPausedAfter && hasRecord ? (
-                                <span style={{ fontSize: '10px', fontWeight: 700, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 700, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
                                   {cellValue}
                                 </span>
                               ) : null}
