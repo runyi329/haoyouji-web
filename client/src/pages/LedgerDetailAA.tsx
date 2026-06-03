@@ -1900,9 +1900,10 @@ export default function LedgerDetailAA({
             // Grid 列定义：名称固定52px，其他列 minmax 自适应
             // 横向可滑动概览表：默认显示名称/周期/占比/金额/回报，年化和分红隐藏在右侧
             // 内容宽度 = 7/5 * 100%，屏幕只显5列
-            // 列定义：名称(auto) 周期(auto) 占比(auto) 金额(1fr) 回报(1fr) 年化(1fr) 分红(auto)
-            const gridCols = 'auto 1px auto 1px auto 1px 1fr 1px 1fr 1px 1fr 1px auto';
-            const cellCls = 'px-1 py-1.5 font-medium text-center';
+            // 列定义：名称(52px固定) 周期(auto) 占比(auto) 金额(1fr) 回报(1fr) 年化(1fr) 分红(auto)
+            const gridCols = '52px 1px auto 1px auto 1px 1fr 1px 1fr 1px 1fr 1px auto';
+            // 表头行高与数据行一致：py-2
+            const cellCls = 'px-1 py-2 font-medium text-center';
             const dataCellCls = 'px-1 py-2 text-right';
             const dataCellStyle = { whiteSpace: 'nowrap' as const };
             const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
@@ -1958,9 +1959,9 @@ export default function LedgerDetailAA({
                       <div key={`${tag.name}-name`} className="px-1 py-2 flex items-center justify-center gap-1" style={{ borderBottom: rowBorder, position: 'relative' }}>
                         <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
                         <span
-                          style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 52, cursor: tag.name.length > 2 ? 'pointer' : 'default', textDecoration: tag.name.length > 2 ? 'underline' : 'none', textDecorationStyle: tag.name.length > 2 ? 'dashed' : undefined, textDecorationColor: tag.name.length > 2 ? '#999' : undefined, textUnderlineOffset: '2px' }}
-                          onClick={() => tag.name.length > 2 ? setTooltipTagName(tooltipTagName === tag.name ? null : tag.name) : undefined}
-                        >{tag.name.length > 2 ? tag.name.slice(0, 2) + '…' : tag.name}</span>
+                          style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 44, cursor: tag.name.length > 4 ? 'pointer' : 'default', textDecoration: tag.name.length > 4 ? 'underline' : 'none', textDecorationStyle: tag.name.length > 4 ? 'dashed' : undefined, textDecorationColor: tag.name.length > 4 ? '#999' : undefined, textUnderlineOffset: '2px' }}
+                          onClick={() => tag.name.length > 4 ? setTooltipTagName(tooltipTagName === tag.name ? null : tag.name) : undefined}
+                        >{tag.name.length > 4 ? tag.name.slice(0, 4) + '…' : tag.name}</span>
                         {tooltipTagName === tag.name && (
                           <div style={{ position: 'absolute', zIndex: 50, background: '#333', color: '#fff', borderRadius: 6, padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', transform: 'translateY(-120%)', pointerEvents: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
                             {tag.name}
