@@ -1899,16 +1899,15 @@ export default function LedgerDetailAA({
             const totalDividend = Object.values(dividendByTag).reduce((s, v) => s + v, 0);
             // Grid 列定义：名称固定52px，其他列 minmax 自适应
             // 横向可滑动概览表：默认显示名称/周期/占比/金额/回报，年化和分红隐藏在右侧
-            // 内容宽度 = 7/5 * 100%，屏幕只显5列
-            // 列定义：名称(52px固定) 周期(auto) 占比(auto) 金额(1fr) 回报(1fr) 年化(1fr) 分红(auto)
-            const gridCols = '52px 1px auto 1px auto 1px 1fr 1px 1fr 1px 1fr 1px auto';
+            // 列定义：名称(72px固定=4汉字+色点) 周期(auto) 占比(auto) 金额(minmax) 回报(minmax) 年化(minmax) 分红(auto)
+            const gridCols = '72px 1px auto 1px auto 1px minmax(60px,1fr) 1px minmax(60px,1fr) 1px minmax(56px,1fr) 1px minmax(56px,1fr)';
             // 表头行高与数据行一致：py-2
             const cellCls = 'px-1 py-2 font-medium text-center';
             const dataCellCls = 'px-1 py-2 text-right';
             const dataCellStyle = { whiteSpace: 'nowrap' as const };
             const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
-            // 内容宽度：7列内容占屏幕宽度的 7/5，屏幕只显5列
-            const overviewInnerWidth = 'calc(7 / 5 * 100%)';
+            // 内容宽度：用minWidth确保内容超出屏幕宽度，年化和分红自然溢出到右侧
+            const overviewInnerWidth = 'max-content';
             // 排序箭头辅助
             const SortArrow = ({ col }: { col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend' }) => {
               if (!overviewSort || overviewSort.col !== col) return <span style={{ color: '#D0D0D0', fontSize: 7, marginLeft: 1 }}>▼</span>;
@@ -1925,7 +1924,7 @@ export default function LedgerDetailAA({
                   touchAction: 'pan-x pan-y',
                 }}
               >
-              <div style={{ width: overviewInnerWidth }}>
+              <div style={{ minWidth: '100%', width: overviewInnerWidth }}>
               <div style={{ display: 'grid', gridTemplateColumns: gridCols }}>
                 {/* 表头行 */}
                 <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E', fontSize: 12 }}>名称</span></div>
