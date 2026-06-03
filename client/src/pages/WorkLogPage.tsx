@@ -513,7 +513,13 @@ const WorkLogPage: React.FC = () => {
               返回
             </button>
             <h1 className="text-lg font-bold text-gray-900">项目进展</h1>
-            <div className="w-10"></div>
+            <button
+              onClick={() => window.location.reload()}
+              className="text-sm font-medium"
+              style={{ color: '#D32F2F' }}
+            >
+              刷新
+            </button>
           </div>
 
           <div className="flex gap-2">
