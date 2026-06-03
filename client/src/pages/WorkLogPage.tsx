@@ -63,33 +63,45 @@ const WorkLogPage: React.FC = () => {
     return typeMap[type] || { color: 'bg-gray-100 text-gray-800', label: type };
   };
 
-  // 生成12周日历（周一开始）
+  // 生成从今年1月1日到今天的日历（周一开始），倒序排列（新在上）
   const generateCalendarWeeks = () => {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
-    const todayDow = today.getDay();
-    const todayMon = (todayDow + 6) % 7; // 0=Mon,...,6=Sun
 
-    const totalWeeks = 12;
-    const startDate = new Date(today);
-    startDate.setDate(today.getDate() - todayMon - (totalWeeks - 1) * 7);
+    // 从今年1月1日开始
+    const yearStart = new Date(today.getFullYear(), 0, 1);
+    // 找到周一对齐的起始日
+    const startDow = yearStart.getDay();
+    const startMon = (startDow + 6) % 7;
+    const alignedStart = new Date(yearStart);
+    alignedStart.setDate(yearStart.getDate() - startMon);
+
+    // 找到本周周日结束
+    const todayDow = today.getDay();
+    const todaySun = (todayDow + 6) % 7;
+    const alignedEnd = new Date(today);
+    alignedEnd.setDate(today.getDate() + (6 - todaySun));
 
     const weeks: Array<Array<{ date: string; count: number; isToday: boolean } | null>> = [];
     let currentWeek: Array<{ date: string; count: number; isToday: boolean } | null> = [];
 
-    for (let i = 0; i < totalWeeks * 7; i++) {
-      const d = new Date(startDate);
-      d.setDate(startDate.getDate() + i);
-      const dateStr = d.toISOString().split('T')[0];
+    const cur = new Date(alignedStart);
+    while (cur <= alignedEnd) {
+      const dateStr = cur.toISOString().split('T')[0];
       const count = dayStats.get(dateStr)?.count || 0;
       currentWeek.push({ date: dateStr, count, isToday: dateStr === todayStr });
-
       if (currentWeek.length === 7) {
         weeks.push(currentWeek);
         currentWeek = [];
       }
+      cur.setDate(cur.getDate() + 1);
     }
-    return weeks;
+    if (currentWeek.length > 0) {
+      while (currentWeek.length < 7) currentWeek.push(null);
+      weeks.push(currentWeek);
+    }
+    // 倒序：新的在上，旧的在下
+    return weeks.reverse();
   };
 
   const calendarWeeks = generateCalendarWeeks();
@@ -195,14 +207,12 @@ const WorkLogPage: React.FC = () => {
                 const isSelected = selectedDate === day.date;
                 const isWeekend = dayIdx >= 5;
 
-                // 横条颜色：苹果日历风格
-                // 平日：苹果蓝 #007AFF；周末：红色；今天：深蓝；选中：深红
-                let barStyle: React.CSSProperties = { backgroundColor: '#E8F0FE', color: '#1A73E8' };
-                if (isSelected) { barStyle = { backgroundColor: '#C62828', color: '#fff' }; }
-                else if (day.isToday) { barStyle = { backgroundColor: '#1565C0', color: '#fff' }; }
-                else if (isWeekend && day.count > 0) { barStyle = { backgroundColor: '#FFEBEE', color: '#C62828' }; }
-                else if (isWeekend) { barStyle = { backgroundColor: '#FFF3F3', color: '#EF9A9A' }; }
-                else if (day.count > 0) { barStyle = { backgroundColor: '#BBDEFB', color: '#1565C0' }; }
+                // 横条颜色：平日暗淡红，双休日暗淡蓝，今天深色，选中深红
+                let barStyle: React.CSSProperties = { backgroundColor: '#e8e8e8', color: '#fff' };
+                if (isSelected) { barStyle = { backgroundColor: '#b71c1c', color: '#fff' }; }
+                else if (day.isToday) { barStyle = { backgroundColor: '#c62828', color: '#fff' }; }
+                else if (isWeekend) { barStyle = { backgroundColor: '#5c7fa3', color: '#fff' }; }
+                else { barStyle = { backgroundColor: '#b85c5c', color: '#fff' }; }
 
                 return (
                   <div
@@ -214,7 +224,7 @@ const WorkLogPage: React.FC = () => {
                   >
                     {/* 日期横条 */}
                     <div style={barStyle} className="flex items-center justify-center py-0.5">
-                      <span className="text-[10px] font-bold leading-tight">
+                      <span className="text-[9px] font-medium leading-tight">
                         {month}月{dayNum}日
                       </span>
                     </div>
