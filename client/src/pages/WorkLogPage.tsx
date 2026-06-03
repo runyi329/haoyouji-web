@@ -3,6 +3,7 @@ import { useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { workLogData, WorkLogEntry } from '@/data/workLogSummary';
 import { gitDayStats } from '@/data/gitDayStats';
+import { gitCommitsByDay } from '@/data/gitCommitsByDay';
 
 interface GitCommit {
   hash: string;
@@ -528,11 +529,18 @@ const WorkLogPage: React.FC = () => {
 
             {/* 提交列表 */}
             <div className="px-4 py-3 space-y-3">
-              {dayStats.has(drawerDate) ? (
-                dayStats.get(drawerDate)!.commits.map((commit, idx) => {
+              {(() => {
+                // 优先用接口数据，接口没有时用静态数据兜底
+                const apiCommits = dayStats.has(drawerDate) ? dayStats.get(drawerDate)!.commits : null;
+                const staticCommits = gitCommitsByDay[drawerDate] || null;
+                const displayCommits = apiCommits || staticCommits;
+                if (!displayCommits || displayCommits.length === 0) {
+                  return <p className="text-center text-gray-400 text-sm py-6">这一天没有修改记录</p>;
+                }
+                return displayCommits.map((commit: any, idx: number) => {
                   const typeInfo = getTypeInfo(commit.type);
                   return (
-                    <div key={commit.hash} className="flex gap-3 items-start">
+                    <div key={commit.hash || idx} className="flex gap-3 items-start">
                       <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-50 flex items-center justify-center">
                         <span className="text-[11px] font-bold text-red-500">{idx + 1}</span>
                       </div>
@@ -552,10 +560,8 @@ const WorkLogPage: React.FC = () => {
                       </div>
                     </div>
                   );
-                })
-              ) : (
-                <p className="text-center text-gray-400 text-sm py-6">这一天没有修改记录</p>
-              )}
+                });
+              })()}
             </div>
             <div className="h-6"></div>
           </div>
