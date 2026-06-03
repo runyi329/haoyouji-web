@@ -26,6 +26,7 @@ const WorkLogPage: React.FC = () => {
   const [commits, setCommits] = useState<GitCommit[]>([]);
   const [dayStats, setDayStats] = useState<Map<string, DayStats>>(new Map());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [drawerDate, setDrawerDate] = useState<string | null>(null);
 
   const { data: workLogs, isLoading } = trpc.workLog.getWorkLogs.useQuery();
 
@@ -217,7 +218,10 @@ const WorkLogPage: React.FC = () => {
                 return (
                   <div
                     key={day.date}
-                    onClick={() => setSelectedDate(isSelected ? null : day.date)}
+                    onClick={() => {
+                      setSelectedDate(isSelected ? null : day.date);
+                      if (day.count > 0) setDrawerDate(day.date);
+                    }}
                     className={`h-16 flex flex-col cursor-pointer transition-colors border-r border-gray-50 last:border-r-0 ${
                       isSelected ? 'bg-red-50' : 'hover:bg-gray-50/80'
                     }`}
@@ -232,11 +236,11 @@ const WorkLogPage: React.FC = () => {
                     {/* 数字居中 */}
                     <div className="flex-1 flex items-center justify-center">
                       {day.count > 0 ? (
-                        <span className={`text-xl font-black leading-none ${isSelected ? 'text-red-600' : 'text-red-500'}`}>
+                        <span style={{ fontSize: day.count >= 10 ? '1.5rem' : '2rem', fontWeight: 900, lineHeight: 1, color: isSelected ? '#b71c1c' : '#c0392b' }}>
                           {day.count}
                         </span>
                       ) : (
-                        <span className="text-gray-200 text-base">·</span>
+                        <span style={{ color: '#d0d0d0', fontSize: '1.2rem' }}>·</span>
                       )}
                     </div>
                   </div>
@@ -335,6 +339,72 @@ const WorkLogPage: React.FC = () => {
       <div className="max-w-2xl mx-auto px-4 py-4">
         {viewMode === 'timeline' ? renderTimelineView() : renderCalendarView()}
       </div>
+
+      {/* 底部抄屉：弹出当天提交详情 */}
+      {drawerDate && (
+        <div
+          className="fixed inset-0 z-50"
+          style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+          onClick={() => setDrawerDate(null)}
+        >
+          <div
+            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl"
+            style={{ maxHeight: '75vh', overflowY: 'auto' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 抄屉标题 */}
+            <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100 sticky top-0 bg-white">
+              <h3 className="text-base font-bold text-gray-900">
+                {new Date(drawerDate).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })}
+              </h3>
+              <div className="flex items-center gap-2">
+                <span className="bg-red-50 text-red-600 px-2.5 py-1 rounded-full text-xs font-bold">
+                  {dayStats.get(drawerDate)?.count || 0} 条改动
+                </span>
+                <button
+                  onClick={() => setDrawerDate(null)}
+                  className="text-gray-400 text-xl leading-none w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* 提交列表 */}
+            <div className="px-4 py-3 space-y-3">
+              {dayStats.has(drawerDate) ? (
+                dayStats.get(drawerDate)!.commits.map((commit, idx) => {
+                  const typeInfo = getTypeInfo(commit.type);
+                  return (
+                    <div key={commit.hash} className="flex gap-3 items-start">
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-50 flex items-center justify-center">
+                        <span className="text-[11px] font-bold text-red-500">{idx + 1}</span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${typeInfo.color}`}>
+                            {typeInfo.label}
+                          </span>
+                          {commit.scope && (
+                            <span className="text-[10px] text-gray-400">@{commit.scope}</span>
+                          )}
+                          <span className="text-[10px] text-gray-300 ml-auto">
+                            {new Date(commit.date).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-800 leading-snug">{commit.cleanMessage}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-center text-gray-400 text-sm py-6">这一天没有修改记录</p>
+              )}
+            </div>
+            <div className="h-6"></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
