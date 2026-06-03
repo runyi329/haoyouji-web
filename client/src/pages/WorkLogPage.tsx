@@ -76,17 +76,27 @@ const WorkLogPage: React.FC = () => {
     return typeMap[type] || { color: 'bg-gray-100 text-gray-800', label: type };
   };
 
-  // 生成从今年1月1日到今天的日历（周一开始），倒序排列（新在上）
+  // 生成从最早提交日期到今天的日历（周一开始），倒序排列（新在上）
   const generateCalendarWeeks = () => {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
 
-    const yearStart = new Date(today.getFullYear(), 0, 1);
-    const startDow = yearStart.getDay();
-    const startMon = (startDow + 6) % 7;
-    const alignedStart = new Date(yearStart);
-    alignedStart.setDate(yearStart.getDate() - startMon);
+    // 找到最早的提交日期，如果没有提交记录则默认从当年开始
+    let earliestDate: Date;
+    if (dayStats.size > 0) {
+      const allDates = Array.from(dayStats.keys()).sort();
+      earliestDate = new Date(allDates[0] + 'T00:00:00');
+    } else {
+      earliestDate = new Date(today.getFullYear(), 0, 1);
+    }
 
+    // 对齐到周一
+    const startDow = earliestDate.getDay();
+    const startMon = (startDow + 6) % 7;
+    const alignedStart = new Date(earliestDate);
+    alignedStart.setDate(earliestDate.getDate() - startMon);
+
+    // 对齐到本周周日
     const todayDow = today.getDay();
     const todaySun = (todayDow + 6) % 7;
     const alignedEnd = new Date(today);
