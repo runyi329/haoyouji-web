@@ -1955,10 +1955,10 @@ export default function LedgerDetailAA({
                   return (
                     <>
                       {/* 名称 */}
-                      <div key={`${tag.name}-name`} className="px-1 py-2 flex items-center justify-center gap-1" style={{ borderBottom: rowBorder, position: 'relative' }}>
-                        <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
+                      <div key={`${tag.name}-name`} className="py-2 flex items-center justify-start gap-1" style={{ borderBottom: rowBorder, position: 'relative', paddingLeft: 6, paddingRight: 2, overflow: 'hidden' }}>
+                        <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
                         <span
-                          style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 44, cursor: tag.name.length > 4 ? 'pointer' : 'default', textDecoration: tag.name.length > 4 ? 'underline' : 'none', textDecorationStyle: tag.name.length > 4 ? 'dashed' : undefined, textDecorationColor: tag.name.length > 4 ? '#999' : undefined, textUnderlineOffset: '2px' }}
+                          style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0, cursor: tag.name.length > 4 ? 'pointer' : 'default', textDecoration: tag.name.length > 4 ? 'underline' : 'none', textDecorationStyle: tag.name.length > 4 ? 'dashed' : undefined, textDecorationColor: tag.name.length > 4 ? '#999' : undefined, textUnderlineOffset: '2px' }}
                           onClick={() => tag.name.length > 4 ? setTooltipTagName(tooltipTagName === tag.name ? null : tag.name) : undefined}
                         >{tag.name.length > 4 ? tag.name.slice(0, 4) + '…' : tag.name}</span>
                         {tooltipTagName === tag.name && (
