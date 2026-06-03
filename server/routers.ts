@@ -23909,6 +23909,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         keyword: z.string().optional(),
         classify: z.string().optional(),
         hasPrice: z.boolean().optional(),
+        isSp500: z.boolean().optional(),
       }))
       .query(async ({ input }) => {
         const dbConn = await getDbConnection();
@@ -23933,6 +23934,9 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
           if (input.hasPrice) {
             conditions.push('last_close IS NOT NULL AND last_close > 0');
           }
+          if (input.isSp500) {
+            conditions.push('is_sp500 = 1');
+          }
           const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
           const [countRows] = await dbConn.execute(
             `SELECT COUNT(*) AS cnt FROM us_stock_basic ${whereSql}`,
@@ -23941,7 +23945,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
           const total = Number((countRows as any[])[0]?.cnt) || 0;
           const offset = (input.page - 1) * input.pageSize;
           const [rows] = await dbConn.execute(
-            `SELECT ts_code, name, enname, classify, exchange, list_date, delist_date, last_close, last_trade_date
+            `SELECT ts_code, name, enname, classify, exchange, list_date, delist_date, last_close, last_trade_date, is_sp500, sector
              FROM us_stock_basic ${whereSql}
              ORDER BY last_close DESC, ts_code ASC
              LIMIT ${Number(input.pageSize)} OFFSET ${Number(offset)}`,
@@ -23962,6 +23966,8 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
               delistDate: r.delist_date as string | null,
               lastClose: r.last_close != null ? Number(r.last_close) : null,
               lastTradeDate: r.last_trade_date as string | null,
+              isSp500: r.is_sp500 === 1,
+              sector: r.sector as string | null,
             })),
           };
         } finally { /* pool auto-manages connections */ }
