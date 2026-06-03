@@ -385,15 +385,22 @@ export async function findOrderByAmount(amount: number, txnHash?: string, blockT
   }
   // ===== 双重防护结束 =====
   
+  // 防护3：订单创建时间限制
+  // 只匹配最近48小时内创建的订单，防止旧的过期订单被新的链上交易错误匹配
+  // 48小时覆盖：12小时订单有效期 + 24小时链上确认延迟 + 12小时缓冲
+  const orderAgeLimitMs = 48 * 60 * 60 * 1000;
+  const orderAgeLimit = new Date(Date.now() - orderAgeLimitMs).toISOString().slice(0, 19).replace('T', ' ');
+
   // 按优先级搜索：先submitted，再pending
   // 注意：submitted 状态优先，因为用户已确认转账，即使订单过期也应尝试匹配
   const statusPriority = ['submitted', 'pending'] as const;
   
   for (const status of statusPriority) {
-    // 精确匹配（误差 ±0.01 USDT），且未被其他交易使用
+    // 精确匹配（误差 ±0.01 USDT），且未被其他交易使用，且订单在48小时内创建
     const exactConditions = [
       eq(rechargeOrders.status, status),
-      sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 0.01`
+      sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 0.01`,
+      sql`${rechargeOrders.createdAt} >= ${orderAgeLimit}`
     ];
     
     // 如果提供了txnHash，排除已被其他交易使用的订单
@@ -418,10 +425,11 @@ export async function findOrderByAmount(amount: number, txnHash?: string, blockT
     
     // 模糊匹配：双向容差 ≤1 USDT
     // 说明：欧易等平台提币后转入，实际到账可能略多或略少于订单金额（手续费差异）
-    // 例：订单100.134，到账100.4729（多0.34），或到账99.9（少0.234）均可匹配
+    // 例：订单100.134，到账100.4729（多0.34），或到账99.9（兵0.234）均可匹配
     const fuzzyConditions = [
       eq(rechargeOrders.status, status),
-      sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 1.0`
+      sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 1.0`,
+      sql`${rechargeOrders.createdAt} >= ${orderAgeLimit}`
     ];
     
     // 如果提供了txnHash，排除已被其他交易使用的订单
