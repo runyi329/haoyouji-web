@@ -521,46 +521,11 @@ const WorkLogPage: React.FC = () => {
               刷新
             </button>
           </div>
-
-          <div className="flex gap-2">
-            <button
-              onClick={() => setViewMode('worklog')}
-              style={viewMode === 'worklog'
-                ? { backgroundColor: '#D32F2F', color: '#fff' }
-                : { backgroundColor: '#f3f4f6', color: '#4b5563' }
-              }
-              className="px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
-            >
-              工作日志
-            </button>
-            <button
-              onClick={() => setViewMode('calendar')}
-              style={viewMode === 'calendar'
-                ? { backgroundColor: '#D32F2F', color: '#fff' }
-                : { backgroundColor: '#f3f4f6', color: '#4b5563' }
-              }
-              className="px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
-            >
-              活跃日历
-            </button>
-            <button
-              onClick={() => setViewMode('timeline')}
-              style={viewMode === 'timeline'
-                ? { backgroundColor: '#D32F2F', color: '#fff' }
-                : { backgroundColor: '#f3f4f6', color: '#4b5563' }
-              }
-              className="px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
-            >
-              时间线
-            </button>
-          </div>
         </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-4">
-        {viewMode === 'worklog' && renderWorkLogView()}
-        {viewMode === 'calendar' && renderCalendarView()}
-        {viewMode === 'timeline' && renderTimelineView()}
+        {renderCalendarView()}
       </div>
 
       {/* 底部抽屉：弹出当天提交详情 */}
