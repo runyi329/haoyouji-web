@@ -404,7 +404,7 @@ const WorkLogPage: React.FC = () => {
                     </div>
                     <div className="flex-1 flex items-center justify-center">
                       {day.count > 0 ? (
-                        <span style={{ fontSize: day.count >= 10 ? '1.4rem' : '1.8rem', fontWeight: 900, lineHeight: 1, color: isSelected ? '#b71c1c' : '#c0392b' }}>
+                        <span style={{ fontSize: '1.3rem', fontWeight: 700, lineHeight: 1, color: isSelected ? '#b71c1c' : '#1a1a1a' }}>
                           {day.count}
                         </span>
                       ) : (
