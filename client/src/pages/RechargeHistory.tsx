@@ -190,7 +190,7 @@ export default function RechargeHistory() {
                                 {label}
                               </span>
                             )}
-                            <div className="text-xs text-gray-500 mt-0.5">{formatDate(item.createdAt)}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">{formatDate(item.createdAt)} <span className="text-gray-600">UTC+8</span></div>
                           </div>
                         </div>
                         <span className={`font-semibold text-base ${isPositive ? 'text-green-400' : 'text-red-400'}`}>{amtDisplay}</span>
@@ -250,7 +250,7 @@ export default function RechargeHistory() {
                       </div>
                       <div className="flex items-center justify-between text-xs text-gray-600">
                         <span>订单号: {order.orderNo}</span>
-                        <span>{formatDate(order.createdAt)}</span>
+<span>{formatDate(order.createdAt)} <span className="text-gray-600">UTC+8</span></span>
                       </div>
                       {order.txnHash && (
                         <div className="text-xs text-gray-600 mt-1 truncate">
