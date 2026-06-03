@@ -338,27 +338,38 @@ const WorkLogPage: React.FC = () => {
   const renderCalendarView = () => {
     return (
       <div className="space-y-4">
-        {/* 统计卡片：优先用静态gitDayStats，不依赖接口加载 */}
-        <div className="grid grid-cols-3 gap-2">
-          {(() => {
-            const allDates = Object.keys(gitDayStats);
-            const staticActiveDays = allDates.filter(d => Number(gitDayStats[d]) > 0).length;
-            const staticTotal = allDates.reduce((s, d) => s + Number(gitDayStats[d]), 0);
-            const activeDays = dayStats.size > 0 ? dayStats.size : staticActiveDays;
-            const totalCommits = commits.length > 0 ? commits.length : staticTotal;
-            const avgPerDay = activeDays > 0 ? (totalCommits / activeDays).toFixed(1) : '0';
-            return [
-              { label: '活跃天数', value: String(activeDays) },
-              { label: '提交总数', value: String(totalCommits) },
-              { label: '平均每天', value: avgPerDay },
-            ];
-          })().map(({ label, value }) => (
-            <div key={label} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex flex-col items-center">
-              <p className="text-[10px] text-gray-400 mb-1">{label}</p>
-              <p style={{ color: '#D32F2F' }} className="text-2xl font-black">{value}</p>
+        {/* 横幅统计条 */}
+        {(() => {
+          const allDates = Object.keys(gitDayStats);
+          const staticActiveDays = allDates.filter(d => Number(gitDayStats[d]) > 0).length;
+          const staticTotal = allDates.reduce((s, d) => s + Number(gitDayStats[d]), 0);
+          const activeDays = dayStats.size > 0 ? dayStats.size : staticActiveDays;
+          const totalCommits = commits.length > 0 ? commits.length : staticTotal;
+          const avgPerDay = activeDays > 0 ? (totalCommits / activeDays).toFixed(1) : '0';
+          const stats = [
+            { label: '项目天数', value: String(activeDays), unit: '天' },
+            { label: '升级次数', value: String(totalCommits), unit: '次' },
+            { label: '每天', value: avgPerDay, unit: '次' },
+          ];
+          return (
+            <div style={{ backgroundColor: '#D32F2F', borderRadius: 14 }} className="flex items-center px-4 py-3">
+              {stats.map(({ label, value, unit }, i) => (
+                <React.Fragment key={label}>
+                  <div className="flex-1 flex flex-col items-center">
+                    <p className="text-[10px] text-red-200 font-medium mb-0.5">{label}</p>
+                    <div className="flex items-baseline gap-0.5">
+                      <span className="text-2xl font-black text-white leading-none">{value}</span>
+                      <span className="text-[11px] text-red-200 font-medium">{unit}</span>
+                    </div>
+                  </div>
+                  {i < stats.length - 1 && (
+                    <div style={{ width: 1, height: 32, backgroundColor: 'rgba(255,255,255,0.25)' }} />
+                  )}
+                </React.Fragment>
+              ))}
             </div>
-          ))}
-        </div>
+          );
+        })()}
 
         {/* 日历主体 */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
