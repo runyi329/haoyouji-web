@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
+import { workLogData, WorkLogEntry } from '@/data/workLogSummary';
 
 interface GitCommit {
   hash: string;
@@ -20,13 +21,24 @@ interface DayStats {
 
 const WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
+// 月份选项
+const MONTHS = [
+  { value: '02', label: '2月' },
+  { value: '03', label: '3月' },
+  { value: '04', label: '4月' },
+  { value: '05', label: '5月' },
+  { value: '06', label: '6月' },
+];
+
 const WorkLogPage: React.FC = () => {
   const [, setLocation] = useLocation();
-  const [viewMode, setViewMode] = useState<'timeline' | 'calendar'>('timeline');
+  const [viewMode, setViewMode] = useState<'worklog' | 'calendar' | 'timeline'>('worklog');
   const [commits, setCommits] = useState<GitCommit[]>([]);
   const [dayStats, setDayStats] = useState<Map<string, DayStats>>(new Map());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [drawerDate, setDrawerDate] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string>('02');
+  const [expandedDate, setExpandedDate] = useState<string | null>(null);
 
   const { data: workLogs, isLoading } = trpc.workLog.getWorkLogs.useQuery();
 
@@ -69,15 +81,12 @@ const WorkLogPage: React.FC = () => {
     const today = new Date();
     const todayStr = today.toISOString().split('T')[0];
 
-    // 从今年1月1日开始
     const yearStart = new Date(today.getFullYear(), 0, 1);
-    // 找到周一对齐的起始日
     const startDow = yearStart.getDay();
     const startMon = (startDow + 6) % 7;
     const alignedStart = new Date(yearStart);
     alignedStart.setDate(yearStart.getDate() - startMon);
 
-    // 找到本周周日结束
     const todayDow = today.getDay();
     const todaySun = (todayDow + 6) % 7;
     const alignedEnd = new Date(today);
@@ -101,11 +110,159 @@ const WorkLogPage: React.FC = () => {
       while (currentWeek.length < 7) currentWeek.push(null);
       weeks.push(currentWeek);
     }
-    // 倒序：新的在上，旧的在下
     return weeks.reverse();
   };
 
   const calendarWeeks = generateCalendarWeeks();
+
+  // 工作日志视图：按月份过滤，按天展示摘要卡片
+  const renderWorkLogView = () => {
+    const year = new Date().getFullYear();
+    const filteredLogs = workLogData
+      .filter(entry => entry.date.startsWith(`${year}-${selectedMonth}`))
+      .sort((a, b) => b.date.localeCompare(a.date)); // 倒序，新的在上
+
+    // 统计当月数据
+    const totalCommits = filteredLogs.reduce((sum, e) => sum + e.commitCount, 0);
+    const activeDays = filteredLogs.length;
+
+    const monthLabel = MONTHS.find(m => m.value === selectedMonth)?.label || selectedMonth + '月';
+
+    return (
+      <div className="space-y-4">
+        {/* 月份选择器 */}
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {MONTHS.map(m => (
+            <button
+              key={m.value}
+              onClick={() => { setSelectedMonth(m.value); setExpandedDate(null); }}
+              style={selectedMonth === m.value
+                ? { backgroundColor: '#D32F2F', color: '#fff', border: 'none' }
+                : { backgroundColor: '#fff', color: '#666', border: '1px solid #e5e7eb' }
+              }
+              className="flex-shrink-0 px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 月份统计 */}
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: '活跃天数', value: String(activeDays) },
+            { label: '部署次数', value: String(totalCommits) },
+            { label: '日均部署', value: activeDays > 0 ? (totalCommits / activeDays).toFixed(1) : '0' },
+          ].map(({ label, value }) => (
+            <div key={label} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex flex-col items-center">
+              <p className="text-[10px] text-gray-400 mb-1">{label}</p>
+              <p style={{ color: '#D32F2F' }} className="text-2xl font-black">{value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* 日志卡片列表 */}
+        {filteredLogs.length === 0 ? (
+          <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100">
+            <p className="text-gray-400 text-sm">{monthLabel}暂无工作日志</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredLogs.map((entry) => {
+              const dateObj = new Date(entry.date + 'T00:00:00');
+              const weekday = dateObj.toLocaleDateString('zh-CN', { weekday: 'short' });
+              const dayStr = dateObj.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
+              const isExpanded = expandedDate === entry.date;
+              const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+
+              return (
+                <div
+                  key={entry.date}
+                  className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
+                >
+                  {/* 卡片头部 */}
+                  <div
+                    className="flex items-center justify-between px-4 py-3 cursor-pointer"
+                    onClick={() => setExpandedDate(isExpanded ? null : entry.date)}
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* 日期圆圈 */}
+                      <div
+                        style={{
+                          backgroundColor: isWeekend ? '#3b5fa0' : '#D32F2F',
+                          color: '#fff',
+                          width: 44,
+                          height: 44,
+                          borderRadius: '50%',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <span style={{ fontSize: 16, fontWeight: 900, lineHeight: 1 }}>
+                          {dateObj.getDate()}
+                        </span>
+                        <span style={{ fontSize: 10, lineHeight: 1.2, opacity: 0.9 }}>{weekday}</span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">{dayStr}</p>
+                        {entry.highlights && (
+                          <p className="text-xs text-gray-500 mt-0.5 leading-tight">{entry.highlights}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <div
+                        style={{ backgroundColor: '#fff0f0', color: '#D32F2F' }}
+                        className="px-2.5 py-1 rounded-full text-xs font-bold"
+                      >
+                        {entry.commitCount} 次
+                      </div>
+                      <span style={{ color: '#ccc', fontSize: 18, transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                        ▾
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 展开内容：工作摘要 */}
+                  {isExpanded && (
+                    <div className="px-4 pb-4 border-t border-gray-50">
+                      <p className="text-xs text-gray-400 mt-3 mb-2 font-medium uppercase tracking-wide">本日工作内容</p>
+                      <div className="space-y-2">
+                        {entry.summary.map((item, idx) => (
+                          <div key={idx} className="flex items-start gap-2">
+                            <span
+                              style={{ backgroundColor: '#D32F2F', color: '#fff', width: 18, height: 18, borderRadius: '50%', fontSize: 10, fontWeight: 700, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1 }}
+                            >
+                              {idx + 1}
+                            </span>
+                            <p className="text-sm text-gray-700 leading-snug flex-1">{item}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* 查看详细提交记录按钮 */}
+                      {dayStats.has(entry.date) && (
+                        <button
+                          onClick={() => setDrawerDate(entry.date)}
+                          style={{ color: '#D32F2F', border: '1px solid #fca5a5', backgroundColor: '#fff' }}
+                          className="mt-3 w-full py-2 rounded-xl text-xs font-semibold"
+                        >
+                          查看全部 {dayStats.get(entry.date)?.count} 条提交记录
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderTimelineView = () => {
     if (isLoading) {
@@ -173,7 +330,7 @@ const WorkLogPage: React.FC = () => {
           ].map(({ label, value }) => (
             <div key={label} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex flex-col items-center">
               <p className="text-[10px] text-gray-400 mb-1">{label}</p>
-              <p className="text-2xl font-black text-red-600">{value}</p>
+              <p style={{ color: '#D32F2F' }} className="text-2xl font-black">{value}</p>
             </div>
           ))}
         </div>
@@ -208,7 +365,6 @@ const WorkLogPage: React.FC = () => {
                 const isSelected = selectedDate === day.date;
                 const isWeekend = dayIdx >= 5;
 
-                // 横条颜色：平日暗淡红，双休日暗淡蓝，今天深色，选中深红
                 let barStyle: React.CSSProperties = { backgroundColor: '#e8e8e8', color: '#fff' };
                 if (isSelected) { barStyle = { backgroundColor: '#b71c1c', color: '#fff' }; }
                 else if (day.isToday) { barStyle = { backgroundColor: '#c62828', color: '#fff' }; }
@@ -226,14 +382,11 @@ const WorkLogPage: React.FC = () => {
                       isSelected ? 'bg-red-50' : 'hover:bg-gray-50/80'
                     }`}
                   >
-                    {/* 日期横条 */}
                     <div style={barStyle} className="flex items-center justify-center py-0.5">
                       <span className="text-[9px] font-medium leading-tight">
                         {month}月{dayNum}日
                       </span>
                     </div>
-
-                    {/* 数字居中 */}
                     <div className="flex-1 flex items-center justify-center">
                       {day.count > 0 ? (
                         <span style={{ fontSize: day.count >= 10 ? '1.4rem' : '1.8rem', fontWeight: 900, lineHeight: 1, color: isSelected ? '#b71c1c' : '#c0392b' }}>
@@ -313,34 +466,46 @@ const WorkLogPage: React.FC = () => {
 
           <div className="flex gap-2">
             <button
-              onClick={() => setViewMode('timeline')}
-              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
-                viewMode === 'timeline'
-                  ? 'bg-red-500 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              onClick={() => setViewMode('worklog')}
+              style={viewMode === 'worklog'
+                ? { backgroundColor: '#D32F2F', color: '#fff' }
+                : { backgroundColor: '#f3f4f6', color: '#4b5563' }
+              }
+              className="px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
             >
-              时间线
+              工作日志
             </button>
             <button
               onClick={() => setViewMode('calendar')}
-              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
-                viewMode === 'calendar'
-                  ? 'bg-red-500 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
+              style={viewMode === 'calendar'
+                ? { backgroundColor: '#D32F2F', color: '#fff' }
+                : { backgroundColor: '#f3f4f6', color: '#4b5563' }
+              }
+              className="px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
             >
               活跃日历
+            </button>
+            <button
+              onClick={() => setViewMode('timeline')}
+              style={viewMode === 'timeline'
+                ? { backgroundColor: '#D32F2F', color: '#fff' }
+                : { backgroundColor: '#f3f4f6', color: '#4b5563' }
+              }
+              className="px-4 py-1.5 rounded-full text-sm font-semibold transition-all"
+            >
+              时间线
             </button>
           </div>
         </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 py-4">
-        {viewMode === 'timeline' ? renderTimelineView() : renderCalendarView()}
+        {viewMode === 'worklog' && renderWorkLogView()}
+        {viewMode === 'calendar' && renderCalendarView()}
+        {viewMode === 'timeline' && renderTimelineView()}
       </div>
 
-      {/* 底部抄屉：弹出当天提交详情 */}
+      {/* 底部抽屉：弹出当天提交详情 */}
       {drawerDate && (
         <div
           className="fixed inset-0 z-50"
@@ -352,10 +517,10 @@ const WorkLogPage: React.FC = () => {
             style={{ maxHeight: '75vh', overflowY: 'auto' }}
             onClick={e => e.stopPropagation()}
           >
-            {/* 抄屉标题 */}
+            {/* 抽屉标题 */}
             <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100 sticky top-0 bg-white">
               <h3 className="text-base font-bold text-gray-900">
-                {new Date(drawerDate).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })}
+                {new Date(drawerDate + 'T00:00:00').toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })}
               </h3>
               <div className="flex items-center gap-2">
                 <span className="bg-red-50 text-red-600 px-2.5 py-1 rounded-full text-xs font-bold">
