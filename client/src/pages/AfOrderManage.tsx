@@ -480,7 +480,7 @@ export default function AfOrderManage() {
                             <span className="font-semibold text-white">
                               {fmtQ(coin, raw)}
                               {hasDiscount && (
-                                <span className={`ml-1 ${color}`}>({fmtQ(coin, eff)} <span className="text-white/40">{pct}%</span>)</span>
+                                <span className="ml-1 text-white/80">({fmtQ(coin, eff)} <span className="text-white/40">{pct}%</span>)</span>
                               )}
                             </span>
                           </div>
