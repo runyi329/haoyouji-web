@@ -513,20 +513,20 @@ export default function AfOrderManage() {
                       const eff = effQty[coin];
                       const hasDiscount = Math.abs(eff - raw) > 0.00005;
                       const pct = hasDiscount ? Math.round((eff / raw) * 100) : null;
-                      const COIN_TEXT: Record<string, string> = { ETH: 'text-blue-500', BTC: 'text-orange-500', SOL: 'text-green-600' };
-                      const coinTextColor = COIN_TEXT[coin] || 'text-gray-600';
+                      // 布局辅助：左标题 + 虚线 + 右数值
+                      const DotRow = ({ label, value }: { label: React.ReactNode; value: React.ReactNode }) => (
+                        <div className="flex items-baseline w-full">
+                          <span className="text-gray-700 text-xs whitespace-nowrap">{label}</span>
+                          <span className="flex-1 mx-1.5 border-b border-dashed border-gray-200 mb-0.5" />
+                          <span className="text-gray-700 text-xs whitespace-nowrap text-right">{value}</span>
+                        </div>
+                      );
                       return (
                         <div key={coin} className={`text-xs ${coinIdx > 0 ? 'pt-2 mt-2 border-t border-gray-100' : ''}`}>
-                          <div className="flex items-baseline gap-1.5 flex-wrap">
-                            <span className={`font-semibold text-sm ${coinTextColor}`}>{coin}</span>
-                            <span className="font-semibold text-gray-800">{fmtQ(coin, raw)}</span>
-                            <span className={`text-[10px] ${coinTextColor} opacity-70`}>
-                              ({hasDiscount ? `折后${fmtQ(coin, eff)} ${pct}% ` : ''}
-                              {coinHolderSets[coin] ? `${coinHolderSets[coin].size}人 ` : ''}
-                              {normalCnt[coin] ? `${normalCnt[coin]}单` : ''}
-                              {giftCnt[coin] ? ` ${giftCnt[coin]}赠` : ''})
-                            </span>
-                          </div>
+                          <DotRow
+                            label={<span className="font-semibold">{coin} <span className="font-normal text-gray-400 text-[10px]">({hasDiscount ? `折后${fmtQ(coin, eff)} ${pct}% ` : ''}{coinHolderSets[coin] ? `${coinHolderSets[coin].size}人 ` : ''}{normalCnt[coin] ? `${normalCnt[coin]}单` : ''}{giftCnt[coin] ? ` ${giftCnt[coin]}赠` : ''})</span></span>}
+                            value={<span className="font-semibold">{fmtQ(coin, raw)}</span>}
+                          />
                           {weightedPriceSum[coin] && rawQty[coin] ? (() => {
                             const avgPrice = weightedPriceSum[coin] / rawQty[coin];
                             const feePerCoin = totalFeeUsdt[coin] ? totalFeeUsdt[coin] / rawQty[coin] : 0;
@@ -537,32 +537,31 @@ export default function AfOrderManage() {
                             const totalFee = totalFeeUsdt[coin] ?? 0;
                             const grossPnl = currentPrice > 0 ? (currentPrice - avgPrice) * effQ : null;
                             const netPnl = grossPnl !== null ? grossPnl - totalFee : null;
-                            // 红=盈利(正数) 绿=亏损(负数)
                             const pnlColor = netPnl === null ? '' : netPnl >= 0 ? 'text-red-500' : 'text-green-600';
                             return (
                               <>
-                                <div className="flex justify-between items-center mt-0.5">
-                                  <span className="text-gray-300 text-[10px]">盈亏平衡</span>
-                                  <span className="text-gray-400 text-[10px]">
-                                    ${avgPrice.toFixed(2)} + ${feePerCoin.toFixed(2)} = <span className="text-gray-600 font-medium">${breakEven.toFixed(2)}</span>
-                                  </span>
-                                </div>
+                                <DotRow
+                                  label="盈亏平衡"
+                                  value={<span>${avgPrice.toFixed(2)}+{feePerCoin.toFixed(2)}=<span className="font-semibold">${breakEven.toFixed(2)}</span></span>}
+                                />
                                 {netPnl !== null && (
-                                  <div className="flex justify-between items-center mt-0.5">
-                                    <span className="text-gray-300 text-[10px]">实时盈亏</span>
-                                    <span className="text-[10px] font-normal">
-                                      <span className={grossPnl! >= 0 ? 'text-red-400' : 'text-green-500'}>{grossPnl! >= 0 ? '+' : ''}{grossPnl!.toFixed(2)}</span>
-                                      <span className="text-gray-300 mx-0.5">-</span>
-                                      <span className="text-gray-400">{totalFee.toFixed(2)}</span>
-                                      <span className="text-gray-300 mx-0.5">=</span>
-                                      <span className={`font-bold ${pnlColor}`}>{netPnl >= 0 ? '+' : ''}{netPnl.toFixed(2)} U</span>
-                                    </span>
-                                  </div>
+                                  <DotRow
+                                    label="实时盈亏"
+                                    value={
+                                      <span>
+                                        <span className={grossPnl! >= 0 ? 'text-red-400' : 'text-green-500'}>{grossPnl! >= 0 ? '+' : ''}{grossPnl!.toFixed(2)}</span>
+                                        <span className="text-gray-300 mx-0.5">-</span>
+                                        <span>{totalFee.toFixed(2)}</span>
+                                        <span className="text-gray-300 mx-0.5">=</span>
+                                        <span className={`font-bold ${pnlColor}`}>{netPnl >= 0 ? '+' : ''}{netPnl.toFixed(2)}U</span>
+                                      </span>
+                                    }
+                                  />
                                 )}
-                                <div className="flex justify-between items-center mt-0.5">
-                                  <span className="text-gray-300 text-[10px]">最低止盈价</span>
-                                  <span className="text-gray-600 text-[10px] font-medium">${minTakeProfit.toFixed(2)} <span className="text-gray-300 font-normal">(平衡价×125%)</span></span>
-                                </div>
+                                <DotRow
+                                  label="最低止盈价"
+                                  value={<span className="font-semibold">${minTakeProfit.toFixed(2)}</span>}
+                                />
                               </>
                             );
                           })() : null}
