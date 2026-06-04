@@ -64,9 +64,8 @@ jobs:
             pm2 save 2>/dev/null || true
             sleep 2
             echo "🔄 同步新代码到实际服务目录（先清理旧 dist 避免旧 JS 文件残留）..."
-            rm -rf /home/ubuntu/haoyouji-web/dist 2>/dev/null || (rm -rf /home/ubuntu/haoyouji-web/dist/public /home/ubuntu/haoyouji-web/dist/index.js 2>/dev/null; true)
-            mkdir -p /home/ubuntu/haoyouji-web/dist
-            cp -r /root/haoyouji-web/dist/. /home/ubuntu/haoyouji-web/dist/
+            rm -rf /home/ubuntu/haoyouji-web/dist
+            cp -rf /root/haoyouji-web/dist /home/ubuntu/haoyouji-web/dist
             # 复制 git-log.json 到服务器运行目录（供 getWorkLogs 接口读取）
             mkdir -p /home/ubuntu/haoyouji-web/server
             cp /root/haoyouji-web/server/git-log.json /home/ubuntu/haoyouji-web/server/git-log.json 2>/dev/null || echo "⚠️ git-log.json 复制失败（非致命）"
