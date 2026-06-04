@@ -24698,6 +24698,40 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       }
     }),
 
+    // 竞猜名单墙：所有球队的竞猜人数和用户名单（公开，无需登录）
+    getLotteryBoard: publicProcedure.query(async () => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库未连接' });
+      try {
+        // 查询所有竞猜记录，关联用户名
+        const [rows] = await dbConn.execute(
+          `SELECT wl.team_code, wl.team_name, wl.created_at,
+                  COALESCE(u.name, u.username, CONCAT('用户', wl.user_id)) as display_name,
+                  u.avatar
+           FROM worldcup_lottery wl
+           LEFT JOIN users u ON u.id = wl.user_id
+           ORDER BY wl.team_name ASC, wl.created_at ASC`
+        );
+        const list = rows as any[];
+        // 按球队分组
+        const boardMap: Record<string, { teamCode: string; teamName: string; count: number; users: { name: string; avatar: string | null; createdAt: string }[] }> = {};
+        for (const r of list) {
+          const key = r.team_code;
+          if (!boardMap[key]) {
+            boardMap[key] = { teamCode: r.team_code, teamName: r.team_name, count: 0, users: [] };
+          }
+          boardMap[key].count++;
+          boardMap[key].users.push({ name: r.display_name, avatar: r.avatar || null, createdAt: String(r.created_at) });
+        }
+        // 按竞猜人数降序排列
+        const board = Object.values(boardMap).sort((a, b) => b.count - a.count);
+        const totalPicks = list.length;
+        return { board, totalPicks };
+      } catch (e: any) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: e?.message || '查询失败' });
+      }
+    }),
+
     // 提交竞猜（选择一支球队）
     submitPick: protectedProcedure
       .input(z.object({

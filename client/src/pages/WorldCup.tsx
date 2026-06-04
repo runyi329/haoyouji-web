@@ -1305,6 +1305,12 @@ export default function WorldCup() {
   });
   const [lotterySubmitting, setLotterySubmitting] = useState(false);
   const [lotteryMsg, setLotteryMsg] = useState<string | null>(null);
+  // 竞猜名单墙
+  const [showBoard, setShowBoard] = useState(false);
+  const { data: boardData, isLoading: boardLoading, refetch: refetchBoard } = trpc.worldCupLottery.getLotteryBoard.useQuery(undefined, {
+    enabled: showBoard,
+    refetchOnWindowFocus: false,
+  });
 
   // 从 P012 最新快照拉取实时赔率
   const { data: liveOddsData, isLoading: liveOddsLoading, refetch: refetchLiveOdds } = trpc.wcOdds.getLatestChampionOdds.useQuery();
@@ -2229,8 +2235,16 @@ export default function WorldCup() {
                       </>
                     )}
                   </div>
+                  {/* 竞猜名单墙入口 */}
                   <button
-                    className="w-full mt-4 py-3 rounded-2xl text-sm font-semibold"
+                    className="w-full mt-3 py-2 rounded-2xl text-sm font-semibold"
+                    style={{ backgroundColor: "rgba(255,215,0,0.12)", color: GOLD, border: `1px solid rgba(255,215,0,0.3)` }}
+                    onClick={() => { setShowBoard(true); refetchBoard(); }}
+                  >
+                    查看竞猜名单墙
+                  </button>
+                  <button
+                    className="w-full mt-3 py-3 rounded-2xl text-sm font-semibold"
                     style={{ backgroundColor: "rgba(255,255,255,0.08)", color: TEXT2 }}
                     onClick={() => { setSelectedTeam(null); setBuyQty(1); setLotteryMsg(null); }}
                   >
@@ -2242,6 +2256,79 @@ export default function WorldCup() {
           </div>
         );
       })()}
+
+      {/* ===== 竞猜名单墙弹层 ===== */}
+      {showBoard && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 9999, backgroundColor: "rgba(0,0,0,0.75)", display: "flex", alignItems: "flex-end" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowBoard(false); }}
+        >
+          <div style={{ width: "100%", maxHeight: "88vh", backgroundColor: BG2, borderRadius: "20px 20px 0 0", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            {/* 头部 */}
+            <div style={{ padding: "16px 20px 12px", borderBottom: `1px solid ${BORDER}`, flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: TEXT }}>2026 世界杯竞猜名单墙</div>
+                  <div style={{ fontSize: 12, color: TEXT2, marginTop: 2 }}>
+                    {boardLoading ? "加载中..." : boardData ? `共 ${boardData.totalPicks} 次竞猜 · ${boardData.board.length} 支球队` : ""}
+                  </div>
+                </div>
+                <button
+                  style={{ width: 32, height: 32, borderRadius: "50%", backgroundColor: "rgba(255,255,255,0.1)", color: TEXT2, fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer" }}
+                  onClick={() => setShowBoard(false)}
+                >×</button>
+              </div>
+            </div>
+            {/* 内容区 */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px 24px" }}>
+              {boardLoading ? (
+                <div style={{ textAlign: "center", color: TEXT2, padding: "40px 0", fontSize: 14 }}>加载中...</div>
+              ) : !boardData || boardData.board.length === 0 ? (
+                <div style={{ textAlign: "center", color: TEXT2, padding: "40px 0", fontSize: 14 }}>暂无竞猜记录</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {boardData.board.map((team, idx) => (
+                    <div key={team.teamCode} style={{ backgroundColor: BG3, borderRadius: 14, overflow: "hidden", border: idx === 0 ? `1px solid ${GOLD}` : `1px solid ${BORDER}` }}>
+                      {/* 球队标题行 */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: `1px solid ${BORDER}` }}>
+                        {/* 排名 */}
+                        <div style={{ width: 24, height: 24, borderRadius: "50%", backgroundColor: idx === 0 ? GOLD : idx === 1 ? "#C0C0C0" : idx === 2 ? "#CD7F32" : "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 900, color: idx < 3 ? "#0a1628" : TEXT2, flexShrink: 0 }}>
+                          {idx + 1}
+                        </div>
+                        {/* 国旗 */}
+                        <img src={`/flags/${team.teamCode.toLowerCase()}.png`} style={{ width: 28, height: 19, objectFit: "cover", borderRadius: 3, flexShrink: 0 }} alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                        {/* 球队名 */}
+                        <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: idx === 0 ? GOLD : TEXT }}>{team.teamName}</div>
+                        {/* 竞猜人次 */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <span style={{ fontSize: 20, fontWeight: 900, color: idx === 0 ? GOLD : TEXT }}>{team.count}</span>
+                          <span style={{ fontSize: 11, color: TEXT2 }}>人次</span>
+                        </div>
+                      </div>
+                      {/* 用户名单 */}
+                      <div style={{ padding: "10px 14px", display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {team.users.map((u, ui) => (
+                          <div key={ui} style={{ display: "flex", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 20, padding: "4px 10px 4px 4px" }}>
+                            {/* 头像 */}
+                            {u.avatar ? (
+                              <img src={u.avatar} style={{ width: 22, height: 22, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                            ) : (
+                              <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#0a1628", flexShrink: 0 }}>
+                                {u.name.charAt(0)}
+                              </div>
+                            )}
+                            <span style={{ fontSize: 12, color: TEXT }}>{u.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
