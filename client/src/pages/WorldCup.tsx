@@ -2201,6 +2201,8 @@ export default function WorldCup() {
                               disabled={lotterySubmitting}
                               onClick={async () => {
                                 if (!selectedTeam || lotterySubmitting) return;
+                                const confirmed = window.confirm(`确认竞猜「${selectedTeam.name}」？\n\n· 将消耗 1 次竞猜机会\n· 比赛结束后立即开奖\n· 提交后不可撤销`);
+                                if (!confirmed) return;
                                 setLotterySubmitting(true);
                                 setLotteryMsg(null);
                                 try {
