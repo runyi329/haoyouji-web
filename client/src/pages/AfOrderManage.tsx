@@ -474,7 +474,7 @@ export default function AfOrderManage() {
                           <span className="text-white/50">{coin}</span>
                           <div className="flex items-center gap-1.5">
                             <span className="text-white/30 text-[10px]">
-                              {normalCnt[coin] ? `${normalCnt[coin]}正` : ''}
+                              {normalCnt[coin] ? `${normalCnt[coin]}单` : ''}
                               {giftCnt[coin] ? ` ${giftCnt[coin]}赠` : ''}
                             </span>
                             <span className={`font-semibold ${color}`}>
