@@ -2176,6 +2176,8 @@ export default function WorldCup() {
                             <span style={{ fontSize: 11, color: TEXT2 }}>/ {lotteryInfo.totalChances} 次</span>
                           </div>
                         </div>
+                        {/* 获取竞猜机会提示 */}
+                        <div style={{ fontSize: 11, color: TEXT2, textAlign: "right", marginTop: -6, marginBottom: 8 }}>添加人脉可获得更多竞猜机会，最多10次</div>
                         {/* 已选球队列表 */}
                         {lotteryInfo.picks.length > 0 && (
                           <div style={{ marginBottom: 10 }}>
@@ -2203,7 +2205,7 @@ export default function WorldCup() {
                                 setLotteryMsg(null);
                                 try {
                                   await submitPickMutation.mutateAsync({ teamCode: selectedTeam.code, teamName: selectedTeam.name });
-                                  setLotteryMsg(`已成功押注 ${selectedTeam.name}`);
+                                  setLotteryMsg(`已成功竞猜 ${selectedTeam.name}`);
                                 } catch (e: any) {
                                   setLotteryMsg(e?.message || '提交失败，请重试');
                                 } finally {
@@ -2211,7 +2213,7 @@ export default function WorldCup() {
                                 }
                               }}
                             >
-                              {lotterySubmitting ? "提交中..." : `押注 ${selectedTeam?.name}`}
+                              {lotterySubmitting ? "提交中..." : `竞猜 ${selectedTeam?.name}`}
                             </button>
                             {lotteryMsg && (
                               <div style={{ marginTop: 8, textAlign: "center", fontSize: 12, color: lotteryMsg.startsWith("已成功") ? "#4ADE80" : "#F87171" }}>
