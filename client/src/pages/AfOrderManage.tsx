@@ -513,23 +513,19 @@ export default function AfOrderManage() {
                       const eff = effQty[coin];
                       const hasDiscount = Math.abs(eff - raw) > 0.00005;
                       const pct = hasDiscount ? Math.round((eff / raw) * 100) : null;
+                      const COIN_TEXT: Record<string, string> = { ETH: 'text-blue-500', BTC: 'text-orange-500', SOL: 'text-green-600' };
+                      const coinTextColor = COIN_TEXT[coin] || 'text-gray-600';
                       return (
                         <div key={coin} className={`text-xs ${coinIdx > 0 ? 'pt-2 mt-2 border-t border-gray-100' : ''}`}>
-                          <div className="flex justify-between items-center">
-                            <span className="text-gray-500 font-medium">{coin}</span>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-gray-300 text-[10px]">
-                                {coinHolderSets[coin] ? `${coinHolderSets[coin].size}人 ` : ''}
-                                {normalCnt[coin] ? `${normalCnt[coin]}单` : ''}
-                                {giftCnt[coin] ? ` ${giftCnt[coin]}赠` : ''}
-                              </span>
-                              <span className="font-semibold text-gray-800">
-                                {fmtQ(coin, raw)}
-                                {hasDiscount && (
-                                  <span className="ml-1 text-gray-500">({fmtQ(coin, eff)} <span className="text-gray-400">{pct}% -{fmtQ(coin, raw - eff)}</span>)</span>
-                                )}
-                              </span>
-                            </div>
+                          <div className="flex items-baseline gap-1.5 flex-wrap">
+                            <span className={`font-semibold text-sm ${coinTextColor}`}>{coin}</span>
+                            <span className="font-semibold text-gray-800">{fmtQ(coin, raw)}</span>
+                            <span className={`text-[10px] ${coinTextColor} opacity-70`}>
+                              ({hasDiscount ? `折后${fmtQ(coin, eff)} ${pct}% ` : ''}
+                              {coinHolderSets[coin] ? `${coinHolderSets[coin].size}人 ` : ''}
+                              {normalCnt[coin] ? `${normalCnt[coin]}单` : ''}
+                              {giftCnt[coin] ? ` ${giftCnt[coin]}赠` : ''})
+                            </span>
                           </div>
                           {weightedPriceSum[coin] && rawQty[coin] ? (() => {
                             const avgPrice = weightedPriceSum[coin] / rawQty[coin];
