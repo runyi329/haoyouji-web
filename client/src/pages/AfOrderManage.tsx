@@ -503,38 +503,30 @@ export default function AfOrderManage() {
               });
               const holderNames = Array.from(holderSet);
               return (
-                <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-white/55 text-xs">持仓中币种</p>
-                    <button
-                      onClick={() => setHoldersPopup(holderNames)}
-                      className="text-[10px] px-2 py-0.5 rounded-full active:opacity-70"
-                      style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)' }}
-                    >
-                      {holderNames.length}人
-                    </button>
+                <div className="rounded-2xl px-4 py-3 bg-white">
+                  <div className="mb-2">
+                    <p className="text-gray-400 text-xs">持仓中币种</p>
                   </div>
-                  <div className="space-y-1.5">
-                    {coins.map(coin => {
+                  <div className="space-y-0">
+                    {coins.map((coin, coinIdx) => {
                       const raw = rawQty[coin];
                       const eff = effQty[coin];
                       const hasDiscount = Math.abs(eff - raw) > 0.00005;
                       const pct = hasDiscount ? Math.round((eff / raw) * 100) : null;
-                      const color = COIN_COLOR[coin] || 'text-white/80';
                       return (
-                        <div key={coin} className="text-xs">
+                        <div key={coin} className={`text-xs ${coinIdx > 0 ? 'pt-2 mt-2 border-t border-gray-100' : ''}`}>
                           <div className="flex justify-between items-center">
-                            <span className="text-white/50">{coin}</span>
+                            <span className="text-gray-500 font-medium">{coin}</span>
                             <div className="flex items-center gap-1.5">
-                              <span className="text-white/30 text-[10px]">
+                              <span className="text-gray-300 text-[10px]">
                                 {coinHolderSets[coin] ? `${coinHolderSets[coin].size}人 ` : ''}
                                 {normalCnt[coin] ? `${normalCnt[coin]}单` : ''}
                                 {giftCnt[coin] ? ` ${giftCnt[coin]}赠` : ''}
                               </span>
-                              <span className="font-semibold text-white">
+                              <span className="font-semibold text-gray-800">
                                 {fmtQ(coin, raw)}
                                 {hasDiscount && (
-                                  <span className="ml-1 text-white/80">({fmtQ(coin, eff)} <span className="text-white/40">{pct}% -{fmtQ(coin, raw - eff)}</span>)</span>
+                                  <span className="ml-1 text-gray-500">({fmtQ(coin, eff)} <span className="text-gray-400">{pct}% -{fmtQ(coin, raw - eff)}</span>)</span>
                                 )}
                               </span>
                             </div>
@@ -543,33 +535,38 @@ export default function AfOrderManage() {
                             const avgPrice = weightedPriceSum[coin] / rawQty[coin];
                             const feePerCoin = totalFeeUsdt[coin] ? totalFeeUsdt[coin] / rawQty[coin] : 0;
                             const breakEven = avgPrice + feePerCoin;
+                            const minTakeProfit = breakEven * 1.25;
                             const currentPrice = livePrice[coin] ?? 0;
                             const effQ = effQty[coin] ?? rawQty[coin];
                             const totalFee = totalFeeUsdt[coin] ?? 0;
-                            // 实时盈亏 = (market - avgPrice) × effQ - totalFee
                             const grossPnl = currentPrice > 0 ? (currentPrice - avgPrice) * effQ : null;
                             const netPnl = grossPnl !== null ? grossPnl - totalFee : null;
-                            const pnlColor = netPnl === null ? '' : netPnl >= 0 ? 'text-green-300' : 'text-red-300';
+                            // 红=盈利(正数) 绿=亏损(负数)
+                            const pnlColor = netPnl === null ? '' : netPnl >= 0 ? 'text-red-500' : 'text-green-600';
                             return (
                               <>
                                 <div className="flex justify-between items-center mt-0.5">
-                                  <span className="text-white/25 text-[10px]">盈亏平衡</span>
-                                  <span className="text-white/50 text-[10px]">
-                                    ${avgPrice.toFixed(2)} + ${feePerCoin.toFixed(2)} = <span className="text-yellow-300/70">${breakEven.toFixed(2)}</span>
+                                  <span className="text-gray-300 text-[10px]">盈亏平衡</span>
+                                  <span className="text-gray-400 text-[10px]">
+                                    ${avgPrice.toFixed(2)} + ${feePerCoin.toFixed(2)} = <span className="text-gray-600 font-medium">${breakEven.toFixed(2)}</span>
                                   </span>
                                 </div>
                                 {netPnl !== null && (
                                   <div className="flex justify-between items-center mt-0.5">
-                                    <span className="text-white/25 text-[10px]">实时盈亏</span>
-                                    <span className="text-white/40 text-[10px] font-normal">
-                                      <span className={grossPnl! >= 0 ? 'text-green-300/70' : 'text-red-300/70'}>{grossPnl! >= 0 ? '+' : ''}{grossPnl!.toFixed(2)}</span>
-                                      <span className="mx-0.5">-</span>
-                                      <span className="text-orange-300/70">{totalFee.toFixed(2)}</span>
-                                      <span className="mx-0.5">=</span>
+                                    <span className="text-gray-300 text-[10px]">实时盈亏</span>
+                                    <span className="text-[10px] font-normal">
+                                      <span className={grossPnl! >= 0 ? 'text-red-400' : 'text-green-500'}>{grossPnl! >= 0 ? '+' : ''}{grossPnl!.toFixed(2)}</span>
+                                      <span className="text-gray-300 mx-0.5">-</span>
+                                      <span className="text-gray-400">{totalFee.toFixed(2)}</span>
+                                      <span className="text-gray-300 mx-0.5">=</span>
                                       <span className={`font-bold ${pnlColor}`}>{netPnl >= 0 ? '+' : ''}{netPnl.toFixed(2)} U</span>
                                     </span>
                                   </div>
                                 )}
+                                <div className="flex justify-between items-center mt-0.5">
+                                  <span className="text-gray-300 text-[10px]">最低止盈价</span>
+                                  <span className="text-gray-600 text-[10px] font-medium">${minTakeProfit.toFixed(2)} <span className="text-gray-300 font-normal">(平衡价×125%)</span></span>
+                                </div>
                               </>
                             );
                           })() : null}
@@ -587,16 +584,15 @@ export default function AfOrderManage() {
                         const avgP = weightedPriceSum[coin] / rawQty[coin];
                         const effQ = effQty[coin] ?? rawQty[coin];
                         const fee = totalFeeUsdt[coin] ?? 0;
-                        // 总盈亏 = (market - avgPrice) × effQ - totalFee
                         totalPnl += (cp - avgP) * effQ - fee;
                         hasPnl = true;
                       }
                     });
                     if (!hasPnl) return null;
-                    const pnlColor = totalPnl >= 0 ? 'text-green-300' : 'text-red-300';
+                    const pnlColor = totalPnl >= 0 ? 'text-red-500' : 'text-green-600';
                     return (
-                      <div className="mt-2 pt-2 border-t border-white/10 flex justify-between items-center">
-                        <span className="text-white/40 text-[10px]">总盈亏</span>
+                      <div className="mt-2 pt-2 border-t border-gray-100 flex justify-between items-center">
+                        <span className="text-gray-400 text-[10px]">总盈亏</span>
                         <span className={`text-sm font-bold ${pnlColor}`}>
                           {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(2)} U
                         </span>
