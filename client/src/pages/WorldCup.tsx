@@ -2192,9 +2192,9 @@ export default function WorldCup() {
                             <div style={{ fontSize: 11, color: TEXT2, marginBottom: 6 }}>已选球队</div>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                               {lotteryInfo.picks.map((p, i) => (
-                                <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, backgroundColor: "rgba(255,215,0,0.1)", border: `1px solid ${GOLD}`, borderRadius: 8, padding: "3px 8px" }}>
+                                <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.1)", border: `1px solid ${TEXT}`, borderRadius: 8, padding: "3px 8px" }}>
                                   <img src={`/flags/${p.teamCode.toLowerCase()}.png`} style={{ width: 18, height: 12, objectFit: "cover", borderRadius: 2 }} alt="" />
-                                  <span style={{ fontSize: 12, color: GOLD, fontWeight: 600 }}>{p.teamName}</span>
+                                  <span style={{ fontSize: 12, color: TEXT, fontWeight: 600 }}>{p.teamName}</span>
                                 </div>
                               ))}
                             </div>
@@ -2426,7 +2426,7 @@ export default function WorldCup() {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   {boardData.board.map((team, idx) => (
-                    <div key={team.teamCode} style={{ backgroundColor: BG3, borderRadius: 14, overflow: "hidden", border: idx === 0 ? `1px solid ${GOLD}` : `1px solid ${BORDER}` }}>
+                    <div key={team.teamCode} style={{ backgroundColor: BG3, borderRadius: 14, overflow: "hidden", border: idx === 0 ? `1px solid ${TEXT}` : `1px solid ${BORDER}` }}>
                       {/* 球队标题行 */}
                       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", borderBottom: `1px solid ${BORDER}` }}>
                         {/* 排名 */}
@@ -2436,10 +2436,10 @@ export default function WorldCup() {
                         {/* 国旗 */}
                         <img src={`/flags/${team.teamCode.toLowerCase()}.png`} style={{ width: 28, height: 19, objectFit: "cover", borderRadius: 3, flexShrink: 0 }} alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                         {/* 球队名 */}
-                        <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: idx === 0 ? GOLD : TEXT }}>{team.teamName}</div>
+                        <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: TEXT }}>{team.teamName}</div>
                         {/* 竞猜人次 */}
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                          <span style={{ fontSize: 20, fontWeight: 900, color: idx === 0 ? GOLD : TEXT }}>{team.count}</span>
+                          <span style={{ fontSize: 20, fontWeight: 900, color: TEXT }}>{team.count}</span>
                           <span style={{ fontSize: 11, color: TEXT2 }}>人次</span>
                         </div>
                       </div>
