@@ -2223,17 +2223,17 @@ export default function WorldCup() {
                         ) : (
                           <div style={{ textAlign: "center", fontSize: 12, color: TEXT2, padding: "6px 0" }}>竞猜次数已用完</div>
                         )}
+                        {/* 查看竞猜详情入口 */}
+                        <button
+                          className="w-full mt-3 py-2 rounded-2xl text-sm font-semibold"
+                          style={{ backgroundColor: "rgba(255,255,255,0.1)", color: TEXT, border: `1px solid rgba(255,255,255,0.3)` }}
+                          onClick={() => { setShowBoard(true); refetchBoard(); }}
+                        >
+                          查看竞猜详情
+                        </button>
                       </>
                     )}
                   </div>
-                  {/* 竞猜名单墙入口 */}
-                  <button
-                    className="w-full mt-3 py-2 rounded-2xl text-sm font-semibold"
-                    style={{ backgroundColor: "rgba(255,215,0,0.12)", color: GOLD, border: `1px solid rgba(255,215,0,0.3)` }}
-                    onClick={() => { setShowBoard(true); refetchBoard(); }}
-                  >
-                    查看竞猜名单墙
-                  </button>
                   <button
                     className="w-full mt-3 py-3 rounded-2xl text-sm font-semibold"
                     style={{ backgroundColor: "rgba(255,255,255,0.08)", color: TEXT2 }}
