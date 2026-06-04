@@ -515,9 +515,9 @@ export default function AfOrderManage() {
                       const pct = hasDiscount ? Math.round((eff / raw) * 100) : null;
                       // 布局辅助：左标题 + 虚线 + 右数值
                       const DotRow = ({ label, value }: { label: React.ReactNode; value: React.ReactNode }) => (
-                        <div className="flex items-baseline w-full">
+                        <div className="flex items-center w-full">
                           <span className="text-gray-700 text-xs whitespace-nowrap">{label}</span>
-                          <span className="flex-1 mx-1.5 border-b border-dashed border-gray-200 mb-0.5" />
+                          <span className="flex-1 mx-1.5 border-b border-dashed border-gray-200" style={{ marginTop: '1px' }} />
                           <span className="text-gray-700 text-xs whitespace-nowrap text-right">{value}</span>
                         </div>
                       );
