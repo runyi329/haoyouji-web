@@ -553,25 +553,34 @@ export default function AfOrderManage() {
                       return (
                         <button
                           onClick={() => toggleDate(dateKey)}
-                          className={`w-full flex items-center justify-between px-3 py-2 mb-1.5 rounded-xl transition-colors ${
+                          className={`w-full flex items-start justify-between px-3 py-2 mb-1.5 rounded-xl transition-colors ${
                             allSold
                               ? 'bg-gray-100 border border-gray-200 hover:bg-gray-150'
                               : 'bg-blue-50 border border-blue-100 hover:bg-blue-100'
                           }`}
                         >
-                          <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
-                            <span className={`text-sm font-bold shrink-0 ${allSold ? 'text-gray-400' : 'text-blue-700'}`}>{shortDate}</span>
-                            <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-blue-400'}`}>{normalCount}单</span>
-                            {giftCount > 0 && <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-orange-400'}`}>{giftCount}赠</span>}
-                            <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-gray-600'}`}>{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
-                            {sortedCoinParts.map(({ short, color, qStr, effStr }) => (
-                              <span key={short} className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : color}`}>
-                                {short}:{qStr}
-                                {effStr && <span>({effStr})</span>}
-                              </span>
-                            ))}
+                          <div className="flex flex-col gap-0.5 flex-1 min-w-0 overflow-hidden">
+                            {/* 第一行：日期 */}
+                            <span className={`text-base font-bold leading-tight ${allSold ? 'text-gray-400' : 'text-blue-700'}`}>{shortDate}</span>
+                            {/* 第二行：几单 / 赠单 / 金额 */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-blue-400'}`}>{normalCount}单</span>
+                              {giftCount > 0 && <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-orange-400'}`}>{giftCount}赠</span>}
+                              <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-gray-600'}`}>{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
+                            </div>
+                            {/* 第三行：币种数量 + 折后数量 */}
+                            {sortedCoinParts.length > 0 && (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {sortedCoinParts.map(({ short, color, qStr, effStr }) => (
+                                  <span key={short} className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : color}`}>
+                                    {short}:{qStr}
+                                    {effStr && <span>({effStr})</span>}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <span className={`transition-transform duration-200 shrink-0 ml-1 ${allSold ? 'text-gray-400' : 'text-blue-400'} ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                          <span className={`transition-transform duration-200 shrink-0 ml-1 mt-0.5 ${allSold ? 'text-gray-400' : 'text-blue-400'} ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                         </button>
                       );
                     })()}
