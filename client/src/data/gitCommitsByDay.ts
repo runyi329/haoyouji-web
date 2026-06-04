@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-04
+// 生成时间：2026-06-05
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -6842,5 +6842,11 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-04T11:38:28Z", type: "feat", cleanMessage: "持仓币种统计加入盈亏平衡价（均价+每单位管理费）" },
     { date: "2026-06-04T12:08:16Z", type: "feat", cleanMessage: "加入实时币价，显示每币种盈亏和总盈亏（每3秒更新）" },
     { date: "2026-06-04T12:17:34Z", type: "feat", cleanMessage: "实时盈亏显示完整公式（毛利-管理费=净盈亏），总盈亏同步修正" },
+    { date: "2026-06-04T12:35:45Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-04T12:44:00Z", type: "feat", cleanMessage: "持仓币种卡片改白色背景，红盈绿亏，加最低止盈价(平衡价×125%)" },
+    { date: "2026-06-04T12:51:00Z", type: "feat", cleanMessage: "持仓币种行重排，数量紧跟币种名，括号内显示折后/人数/单数/赠数" },
+    { date: "2026-06-04T12:56:15Z", type: "feat", cleanMessage: "持仓币种卡片统一黑灰色，左标题+虚线+右数值布局" },
+    { date: "2026-06-04T13:01:49Z", type: "fix", cleanMessage: "持仓币种统计改为只含已成交未卖出，不含委买中" },
+    { date: "2026-06-04T13:05:47Z", type: "fix", cleanMessage: "持仓币种卡片虚线垂直居中" },
   ],
 };
