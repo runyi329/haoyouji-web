@@ -1785,32 +1785,35 @@ export default function WorldCup() {
             {/* 规则卡片一：抽奖次数 */}
             <div style={{ backgroundColor: BG3, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "16px", marginBottom: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: GOLD, marginBottom: 12, borderBottom: `1px solid ${BORDER}`, paddingBottom: 8 }}>抽奖次数规则</div>
-              <div style={{ fontSize: 12, color: TEXT2, lineHeight: 1.8, marginBottom: 12 }}>抽奖次数由你在脉动网添加的<span style={{ color: TEXT, fontWeight: 700 }}>人脉数量</span>决定，最多可获得 <span style={{ color: GOLD, fontWeight: 900 }}>20 次</span>抽奖机会。</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div style={{ fontSize: 12, color: TEXT2, lineHeight: 1.8, marginBottom: 4 }}>抽奖次数由你在脉动网<span style={{ color: TEXT, fontWeight: 700 }}>自己添加</span>的人脉数量决定（<span style={{ color: TEXT2 }}>不含共享人脉</span>），最多可获得 <span style={{ color: GOLD, fontWeight: 900 }}>10 次</span>抽奖机会。</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
                 {[
-                  { contacts: 1, chances: 1, label: "首次添加" },
-                  { contacts: 5, chances: 2, label: "累计5人" },
-                  { contacts: 10, chances: 3, label: "累计10人" },
-                  { contacts: 15, chances: 4, label: "累计15人" },
-                  { contacts: 20, chances: 5, label: "累计20人" },
-                  { contacts: 25, chances: 6, label: "累计25人" },
-                  { contacts: 50, chances: 11, label: "累计50人" },
-                  { contacts: 100, chances: 20, label: "累计100人" },
+                  { contacts: 1, chances: 1, label: "首次添加", top: false },
+                  { contacts: 10, chances: 2, label: "累计10人", top: false },
+                  { contacts: 20, chances: 3, label: "累计20人", top: false },
+                  { contacts: 30, chances: 4, label: "累计30人", top: false },
+                  { contacts: 40, chances: 5, label: "累计40人", top: false },
+                  { contacts: 50, chances: 6, label: "累计50人", top: false },
+                  { contacts: 60, chances: 7, label: "累计60人", top: false },
+                  { contacts: 70, chances: 8, label: "累计70人", top: false },
+                  { contacts: 80, chances: 9, label: "累计80人", top: false },
+                  { contacts: 90, chances: 10, label: "累计90人", top: false },
+                  { contacts: 100, chances: 10, label: "累计100人（上限）", top: true },
                 ].map((row) => (
-                  <div key={row.contacts} style={{ backgroundColor: "rgba(22,44,66,0.7)", borderRadius: 10, padding: "8px 12px", border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div key={row.contacts} style={{ backgroundColor: "rgba(22,44,66,0.7)", borderRadius: 10, padding: "8px 12px", border: `1px solid ${row.top ? "rgba(255,215,0,0.4)" : BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div>
                       <div style={{ fontSize: 11, color: TEXT2 }}>{row.label}</div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>{row.contacts} 人脉</div>
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontSize: 11, color: TEXT2 }}>抽奖次数</div>
-                      <div style={{ fontSize: 18, fontWeight: 900, color: GOLD, lineHeight: 1 }}>{row.chances}</div>
+                      <div style={{ fontSize: 18, fontWeight: 900, color: row.top ? GOLD : TEXT, lineHeight: 1 }}>{row.chances}</div>
                     </div>
                   </div>
                 ))}
               </div>
               <div style={{ fontSize: 11, color: TEXT2, marginTop: 10, padding: "8px 10px", backgroundColor: "rgba(255,215,0,0.06)", borderRadius: 8, border: `1px solid rgba(255,215,0,0.15)` }}>
-                规则：第1个人脉获得1次机会，之后每满5个人脉额外获得1次，上限20次（对应100个人脉）。
+                规则：第1个人脉获得1次机会，之后每累计满10个人脉额外获得1次，上限10次（对应100个人脉）。仅计算自己添加的人脉，不含共享人脉。
               </div>
             </div>
 
@@ -1819,8 +1822,8 @@ export default function WorldCup() {
               <div style={{ fontSize: 13, fontWeight: 700, color: GOLD, marginBottom: 12, borderBottom: `1px solid ${BORDER}`, paddingBottom: 8 }}>抽奖玩法</div>
               {[
                 { step: "01", title: "选择球队", desc: "每次抽奖可选择 1 支球队作为你的夺冠竞猜对象，每次使用 1 个抽奖机会。" },
-                { step: "02", title: "最多持有3支", desc: "你最多可同时持有 3 支不同球队的竞猜名额，可分3次分别选择，也可一次选定。" },
-                { step: "03", title: "持续到决赛", desc: "竞猜有效期从参与之日起，持续至 2026年7月19日决赛开赛前截止，中途不可更换。" },
+                { step: "02", title: "无数量限制", desc: "没有持有球队数量的限制。有几次机会就可以选几支队，也可以将多张票全部押同一支球队。" },
+                { step: "03", title: "任意时间参与", desc: "参与时间不限，从现在起到 2026年7月19日决赛开赛前均可参与。已选择的球队中途不可更换。" },
                 { step: "04", title: "奖品（待定）", desc: "奖品内容正在规划中，敬请期待。持有夺冠球队竞猜名额的用户将获得对应奖励。" },
               ].map((item) => (
                 <div key={item.step} style={{ display: "flex", gap: 12, marginBottom: 14, alignItems: "flex-start" }}>
@@ -1840,10 +1843,10 @@ export default function WorldCup() {
               <div style={{ fontSize: 13, fontWeight: 700, color: GOLD, marginBottom: 12, borderBottom: `1px solid ${BORDER}`, paddingBottom: 8 }}>参与资格</div>
               {[
                 "脉动网注册用户均可参与",
-                "至少添加 1 个人脉即可获得首次抽奖机会",
-                "人脉数量越多，抽奖机会越多（上限20次）",
-                "每个账号最多持有 3 支球队的竞猜名额",
-                "截止时间：2026年7月19日决赛开赛前",
+                "至少自己添加 1 个人脉即可获得首次抽奖机会",
+                "人脉数量越多，抽奖机会越多（上限10次）",
+                "人脉仅计算自己添加的，共享人脉不计入",
+                "抽奖有效期：任意时间至 2026年7月19日决赛开赛前",
               ].map((item, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
                   <div style={{ flexShrink: 0, width: 5, height: 5, borderRadius: "50%", backgroundColor: GOLD, marginTop: 6 }} />
@@ -2344,40 +2347,43 @@ export function WorldCupEmbedded() {
             </div>
             <div style={{ backgroundColor: BG3, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "16px", marginBottom: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: GOLD, marginBottom: 12, borderBottom: `1px solid ${BORDER}`, paddingBottom: 8 }}>抽奖次数规则</div>
-              <div style={{ fontSize: 12, color: TEXT2, lineHeight: 1.8, marginBottom: 12 }}>抽奖次数由你在脉动网添加的<span style={{ color: TEXT, fontWeight: 700 }}>人脉数量</span>决定，最多可获得 <span style={{ color: GOLD, fontWeight: 900 }}>20 次</span>抽奖机会。</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div style={{ fontSize: 12, color: TEXT2, lineHeight: 1.8, marginBottom: 4 }}>抽奖次数由你在脉动网<span style={{ color: TEXT, fontWeight: 700 }}>自己添加</span>的人脉数量决定（<span style={{ color: TEXT2 }}>不含共享人脉</span>），最多可获得 <span style={{ color: GOLD, fontWeight: 900 }}>10 次</span>抽奖机会。</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
                 {[
-                  { contacts: 1, chances: 1, label: "首次添加" },
-                  { contacts: 5, chances: 2, label: "累计5人" },
-                  { contacts: 10, chances: 3, label: "累计10人" },
-                  { contacts: 15, chances: 4, label: "累计15人" },
-                  { contacts: 20, chances: 5, label: "累计20人" },
-                  { contacts: 25, chances: 6, label: "累计25人" },
-                  { contacts: 50, chances: 11, label: "累计50人" },
-                  { contacts: 100, chances: 20, label: "累计100人" },
+                  { contacts: 1, chances: 1, label: "首次添加", top: false },
+                  { contacts: 10, chances: 2, label: "累计10人", top: false },
+                  { contacts: 20, chances: 3, label: "累计20人", top: false },
+                  { contacts: 30, chances: 4, label: "累计30人", top: false },
+                  { contacts: 40, chances: 5, label: "累计40人", top: false },
+                  { contacts: 50, chances: 6, label: "累计50人", top: false },
+                  { contacts: 60, chances: 7, label: "累计60人", top: false },
+                  { contacts: 70, chances: 8, label: "累计70人", top: false },
+                  { contacts: 80, chances: 9, label: "累计80人", top: false },
+                  { contacts: 90, chances: 10, label: "累计90人", top: false },
+                  { contacts: 100, chances: 10, label: "累计100人（上限）", top: true },
                 ].map((row) => (
-                  <div key={row.contacts} style={{ backgroundColor: "rgba(22,44,66,0.7)", borderRadius: 10, padding: "8px 12px", border: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div key={row.contacts} style={{ backgroundColor: "rgba(22,44,66,0.7)", borderRadius: 10, padding: "8px 12px", border: `1px solid ${row.top ? "rgba(255,215,0,0.4)" : BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div>
                       <div style={{ fontSize: 11, color: TEXT2 }}>{row.label}</div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>{row.contacts} 人脉</div>
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontSize: 11, color: TEXT2 }}>抽奖次数</div>
-                      <div style={{ fontSize: 18, fontWeight: 900, color: GOLD, lineHeight: 1 }}>{row.chances}</div>
+                      <div style={{ fontSize: 18, fontWeight: 900, color: row.top ? GOLD : TEXT, lineHeight: 1 }}>{row.chances}</div>
                     </div>
                   </div>
                 ))}
               </div>
               <div style={{ fontSize: 11, color: TEXT2, marginTop: 10, padding: "8px 10px", backgroundColor: "rgba(255,215,0,0.06)", borderRadius: 8, border: `1px solid rgba(255,215,0,0.15)` }}>
-                规则：第1个人脉获得1次机会，之后每满5个人脉额外获得1次，上限20次（对应100个人脉）。
+                规则：第1个人脉获得1次机会，之后每累计满10个人脉额外获得1次，上限10次（对应100个人脉）。仅计算自己添加的人脉，不含共享人脉。
               </div>
             </div>
             <div style={{ backgroundColor: BG3, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "16px", marginBottom: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: GOLD, marginBottom: 12, borderBottom: `1px solid ${BORDER}`, paddingBottom: 8 }}>抽奖玩法</div>
               {[
                 { step: "01", title: "选择球队", desc: "每次抽奖可选择 1 支球队作为你的夺冠竞猜对象，每次使用 1 个抽奖机会。" },
-                { step: "02", title: "最多持有3支", desc: "你最多可同时持有 3 支不同球队的竞猜名额，可分3次分别选择，也可一次选定。" },
-                { step: "03", title: "持续到决赛", desc: "竞猜有效期从参与之日起，持续至 2026年7月19日决赛开赛前截止，中途不可更换。" },
+                { step: "02", title: "无数量限制", desc: "没有持有球队数量的限制。有几次机会就可以选几支队，也可以将多张票全部押同一支球队。" },
+                { step: "03", title: "任意时间参与", desc: "参与时间不限，从现在起到 2026年7月19日决赛开赛前均可参与。已选择的球队中途不可更换。" },
                 { step: "04", title: "奖品（待定）", desc: "奖品内容正在规划中，敬请期待。持有夺冠球队竞猜名额的用户将获得对应奖励。" },
               ].map((item) => (
                 <div key={item.step} style={{ display: "flex", gap: 12, marginBottom: 14, alignItems: "flex-start" }}>
@@ -2395,10 +2401,10 @@ export function WorldCupEmbedded() {
               <div style={{ fontSize: 13, fontWeight: 700, color: GOLD, marginBottom: 12, borderBottom: `1px solid ${BORDER}`, paddingBottom: 8 }}>参与资格</div>
               {[
                 "脉动网注册用户均可参与",
-                "至少添加 1 个人脉即可获得首次抽奖机会",
-                "人脉数量越多，抽奖机会越多（上限20次）",
-                "每个账号最多持有 3 支球队的竞猜名额",
-                "截止时间：2026年7月19日决赛开赛前",
+                "至少自己添加 1 个人脉即可获得首次抽奖机会",
+                "人脉数量越多，抽奖机会越多（上限10次）",
+                "人脉仅计算自己添加的，共享人脉不计入",
+                "抽奖有效期：任意时间至 2026年7月19日决赛开赛前",
               ].map((item, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
                   <div style={{ flexShrink: 0, width: 5, height: 5, borderRadius: "50%", backgroundColor: GOLD, marginTop: 6 }} />
