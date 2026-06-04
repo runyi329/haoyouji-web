@@ -437,6 +437,7 @@ export default function AfOrderManage() {
               const effQty: Record<string, number> = {};
               const normalCnt: Record<string, number> = {}; // 正单笔数
               const giftCnt: Record<string, number> = {};   // 赠单笔数
+              const coinHolderSets: Record<string, Set<string>> = {}; // 每个币种的持仓人员
               holdingOrders.forEach((o: any) => {
                 if (!o.coin) return;
                 const qty = parseFloat(o.quantity) || 0;
@@ -453,6 +454,12 @@ export default function AfOrderManage() {
                   gifts.forEach((g: any) => {
                     if (g.coin) giftCnt[g.coin] = (giftCnt[g.coin] || 0) + 1;
                   });
+                }
+                // 统计每个币种的持仓人数（排除赠单）
+                if (!o.isGift) {
+                  if (!coinHolderSets[o.coin]) coinHolderSets[o.coin] = new Set();
+                  const name = o.nickname || o.username || `用户${o.userId}`;
+                  coinHolderSets[o.coin].add(name);
                 }
               });
               const coins = Object.keys(rawQty).sort((a, b) => {
@@ -492,6 +499,7 @@ export default function AfOrderManage() {
                           <span className="text-white/50">{coin}</span>
                           <div className="flex items-center gap-1.5">
                             <span className="text-white/30 text-[10px]">
+                              {coinHolderSets[coin] ? `${coinHolderSets[coin].size}人 ` : ''}
                               {normalCnt[coin] ? `${normalCnt[coin]}单` : ''}
                               {giftCnt[coin] ? ` ${giftCnt[coin]}赠` : ''}
                             </span>
