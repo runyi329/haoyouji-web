@@ -532,6 +532,9 @@ export default function AfOrderManage() {
                       };
                       // 按 ETH→BTC→SOL 顺序排列
                       const COIN_ORDER = ['ETH', 'BTC', 'SOL'];
+                      // 各币种小数位数：SOL 1位、BTC 4位、ETH 2位，其他默认4位
+                      const COIN_DECIMALS: Record<string, number> = { SOL: 1, BTC: 4, ETH: 2 };
+                      const fmtCoinQty = (coin: string, num: number) => num.toFixed(COIN_DECIMALS[coin] ?? 4);
                       const sortedCoinParts = Object.entries(coinQty)
                         .sort(([a], [b]) => {
                           const ai = COIN_ORDER.indexOf(a);
@@ -541,14 +544,14 @@ export default function AfOrderManage() {
                         .map(([c, q]) => {
                           const cfg = COIN_CONFIG[c] || { short: c, color: 'text-gray-500' };
                           const qNum = q as number;
-                          const qStr = qNum >= 100 ? qNum.toFixed(2) : qNum >= 1 ? qNum.toFixed(3) : qNum.toFixed(4);
+                          const qStr = fmtCoinQty(c, qNum);
                           const effNum = coinQtyEffective[c] ?? qNum;
                           // 只有折后数量与原始数量不同时才显示括号（精度到4位小数比较）
                           const hasDiscount = Math.abs(effNum - qNum) > 0.00005;
-                          const effStr = hasDiscount
-                            ? (effNum >= 100 ? effNum.toFixed(2) : effNum >= 1 ? effNum.toFixed(3) : effNum.toFixed(4))
-                            : null;
-                          return { short: cfg.short, color: cfg.color, qStr, effStr };
+                          const effStr = hasDiscount ? fmtCoinQty(c, effNum) : null;
+                          // 折后占原始的百分比（不带小数）
+                          const pctStr = hasDiscount ? `${Math.round((effNum / qNum) * 100)}%` : null;
+                          return { short: cfg.short, color: cfg.color, qStr, effStr, pctStr };
                         });
                       return (
                         <button
@@ -572,10 +575,14 @@ export default function AfOrderManage() {
                             {/* 第二行：币种数量 + 折后数量 */}
                             {sortedCoinParts.length > 0 && (
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                {sortedCoinParts.map(({ short, color, qStr, effStr }) => (
+                                {sortedCoinParts.map(({ short, color, qStr, effStr, pctStr }) => (
                                   <span key={short} className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : color}`}>
                                     {short}:{qStr}
-                                    {effStr && <span>({effStr})</span>}
+                                    {effStr && (
+                                      <span>
+                                        ({effStr}<span className="text-gray-400 ml-0.5">{pctStr}</span>)
+                                      </span>
+                                    )}
                                   </span>
                                 ))}
                               </div>
