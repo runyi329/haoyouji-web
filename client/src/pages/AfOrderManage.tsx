@@ -438,12 +438,18 @@ export default function AfOrderManage() {
               const normalCnt: Record<string, number> = {}; // 正单笔数
               const giftCnt: Record<string, number> = {};   // 赠单笔数
               const coinHolderSets: Record<string, Set<string>> = {}; // 每个币种的持仓人员
+              const weightedPriceSum: Record<string, number> = {}; // 加权价格之和（价格×数量）
               holdingOrders.forEach((o: any) => {
                 if (!o.coin) return;
                 const qty = parseFloat(o.quantity) || 0;
                 rawQty[o.coin] = (rawQty[o.coin] || 0) + qty;
                 const rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
                 effQty[o.coin] = (effQty[o.coin] || 0) + qty * rate;
+                // 加权均价：使用 limitPrice（买入挂单价）
+                const price = parseFloat(o.limitPrice) || 0;
+                if (price > 0 && qty > 0) {
+                  weightedPriceSum[o.coin] = (weightedPriceSum[o.coin] || 0) + price * qty;
+                }
                 // 统计正单/赠单笔数
                 if (o.isGift === true || o.isGift === 1) {
                   giftCnt[o.coin] = (giftCnt[o.coin] || 0) + 1;
@@ -495,21 +501,29 @@ export default function AfOrderManage() {
                       const pct = hasDiscount ? Math.round((eff / raw) * 100) : null;
                       const color = COIN_COLOR[coin] || 'text-white/80';
                       return (
-                        <div key={coin} className="flex justify-between items-center text-xs">
-                          <span className="text-white/50">{coin}</span>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-white/30 text-[10px]">
-                              {coinHolderSets[coin] ? `${coinHolderSets[coin].size}人 ` : ''}
-                              {normalCnt[coin] ? `${normalCnt[coin]}单` : ''}
-                              {giftCnt[coin] ? ` ${giftCnt[coin]}赠` : ''}
-                            </span>
-                            <span className="font-semibold text-white">
-                              {fmtQ(coin, raw)}
-                              {hasDiscount && (
-                                <span className="ml-1 text-white/80">({fmtQ(coin, eff)} <span className="text-white/40">{pct}% -{fmtQ(coin, raw - eff)}</span>)</span>
-                              )}
-                            </span>
+                        <div key={coin} className="text-xs">
+                          <div className="flex justify-between items-center">
+                            <span className="text-white/50">{coin}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-white/30 text-[10px]">
+                                {coinHolderSets[coin] ? `${coinHolderSets[coin].size}人 ` : ''}
+                                {normalCnt[coin] ? `${normalCnt[coin]}单` : ''}
+                                {giftCnt[coin] ? ` ${giftCnt[coin]}赠` : ''}
+                              </span>
+                              <span className="font-semibold text-white">
+                                {fmtQ(coin, raw)}
+                                {hasDiscount && (
+                                  <span className="ml-1 text-white/80">({fmtQ(coin, eff)} <span className="text-white/40">{pct}% -{fmtQ(coin, raw - eff)}</span>)</span>
+                                )}
+                              </span>
+                            </div>
                           </div>
+                          {weightedPriceSum[coin] && rawQty[coin] ? (
+                            <div className="flex justify-between items-center mt-0.5">
+                              <span className="text-white/25 text-[10px]">均价</span>
+                              <span className="text-white/50 text-[10px]">${(weightedPriceSum[coin] / rawQty[coin]).toFixed(2)}</span>
+                            </div>
+                          ) : null}
                         </div>
                       );
                     })}
