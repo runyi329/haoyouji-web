@@ -2212,7 +2212,7 @@ export default function WorldCup() {
                                 setShowLotteryConfirm(true);
                               }}
                             >
-                              {lotterySubmitting ? "提交中..." : `竞猜 ${selectedTeam?.name}`}
+                              {lotterySubmitting ? "提交中..." : `我选${selectedTeam?.name}夺冠`}
                             </button>
                             {lotteryMsg && (
                               <div style={{ marginTop: 8, textAlign: "center", fontSize: 12, color: lotteryMsg.startsWith("已成功") ? "#4ADE80" : "#F87171" }}>
@@ -2387,7 +2387,7 @@ export default function WorldCup() {
                     }
                   }}
                 >
-                  {lotterySubmitting ? "提交中..." : "确认竞猜"}
+                  {lotterySubmitting ? "提交中..." : `我选${selectedTeam?.name}夺冠`}
                 </button>
               </div>
             </div>
