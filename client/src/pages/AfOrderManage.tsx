@@ -185,6 +185,14 @@ export default function AfOrderManage() {
     { enabled: !!ledgerId }
   );
 
+  // 实时币价（每3秒刷新，与全站规范一致）
+  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
+    refetchInterval: 3000,
+    staleTime: 0,
+    placeholderData: (prev: any) => prev,
+  });
+  const livePrice: Record<string, number> = (cryptoPricesRaw as any)?.prices ?? {};
+
   // 查询当前编辑订单的扣档记录（直接用订单ID，不再需要sourceOrderId）
   const editingOrder = orders?.find((o: any) => o.id === editingId);
   const { data: tierHistoryData } = trpc.ledger.afAdminGetTierHistory.useQuery(
@@ -535,19 +543,60 @@ export default function AfOrderManage() {
                             const avgPrice = weightedPriceSum[coin] / rawQty[coin];
                             const feePerCoin = totalFeeUsdt[coin] ? totalFeeUsdt[coin] / rawQty[coin] : 0;
                             const breakEven = avgPrice + feePerCoin;
+                            const currentPrice = livePrice[coin] ?? 0;
+                            const effQ = effQty[coin] ?? rawQty[coin];
+                            const pnl = currentPrice > 0 ? (currentPrice - breakEven) * effQ : null;
+                            const pnlColor = pnl === null ? '' : pnl >= 0 ? 'text-green-300' : 'text-red-300';
                             return (
-                              <div className="flex justify-between items-center mt-0.5">
-                                <span className="text-white/25 text-[10px]">盈亏平衡</span>
-                                <span className="text-white/50 text-[10px]">
-                                  ${avgPrice.toFixed(2)} + ${feePerCoin.toFixed(2)} = <span className="text-yellow-300/70">${breakEven.toFixed(2)}</span>
-                                </span>
-                              </div>
+                              <>
+                                <div className="flex justify-between items-center mt-0.5">
+                                  <span className="text-white/25 text-[10px]">盈亏平衡</span>
+                                  <span className="text-white/50 text-[10px]">
+                                    ${avgPrice.toFixed(2)} + ${feePerCoin.toFixed(2)} = <span className="text-yellow-300/70">${breakEven.toFixed(2)}</span>
+                                  </span>
+                                </div>
+                                {pnl !== null && (
+                                  <div className="flex justify-between items-center mt-0.5">
+                                    <span className="text-white/25 text-[10px]">实时盈亏</span>
+                                    <span className={`text-[10px] font-semibold ${pnlColor}`}>
+                                      {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} U
+                                      <span className="text-white/30 font-normal ml-1">@ ${currentPrice.toFixed(2)}</span>
+                                    </span>
+                                  </div>
+                                )}
+                              </>
                             );
                           })() : null}
                         </div>
                       );
                     })}
                   </div>
+                  {/* 总盈亏汇总 */}
+                  {(() => {
+                    let totalPnl = 0;
+                    let hasPnl = false;
+                    coins.forEach(coin => {
+                      const cp = livePrice[coin] ?? 0;
+                      if (cp > 0 && weightedPriceSum[coin] && rawQty[coin]) {
+                        const avgP = weightedPriceSum[coin] / rawQty[coin];
+                        const feeP = totalFeeUsdt[coin] ? totalFeeUsdt[coin] / rawQty[coin] : 0;
+                        const be = avgP + feeP;
+                        const effQ = effQty[coin] ?? rawQty[coin];
+                        totalPnl += (cp - be) * effQ;
+                        hasPnl = true;
+                      }
+                    });
+                    if (!hasPnl) return null;
+                    const pnlColor = totalPnl >= 0 ? 'text-green-300' : 'text-red-300';
+                    return (
+                      <div className="mt-2 pt-2 border-t border-white/10 flex justify-between items-center">
+                        <span className="text-white/40 text-[10px]">总盈亏</span>
+                        <span className={`text-sm font-bold ${pnlColor}`}>
+                          {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(2)} U
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })()}
