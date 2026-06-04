@@ -544,11 +544,12 @@ export default function AfOrderManage() {
                   const gifts: any[] = (o.giftOrders as any[]) || [];
                   return gifts.every((g: any) => g.sellStatus === 'sold');
                 });
-                // 统计：投入总额、各币种持仓数量
-                const totalAmount = groupOrders.reduce((s: number, o: any) => s + (parseFloat(o.amount) || 0), 0);
+                // 统计：投入总额、各币种持仓数量（过滤掉已撤单）
+                const activeOrders = groupOrders.filter((o: any) => o.status !== 'cancelled');
+                const totalAmount = activeOrders.reduce((s: number, o: any) => s + (parseFloat(o.amount) || 0), 0);
                 const coinQty: Record<string, number> = {};
                 const coinQtyEffective: Record<string, number> = {}; // 折后数量
-                groupOrders.forEach((o: any) => {
+                activeOrders.forEach((o: any) => {
                   if (o.coin) {
                     const qty = parseFloat(o.quantity) || 0;
                     coinQty[o.coin] = (coinQty[o.coin] || 0) + qty;
@@ -575,11 +576,11 @@ export default function AfOrderManage() {
                     {(() => {
                       // 月-日简写
                       const shortDate = dateKey.slice(5); // "05-28"
-                      // 正单数量（非赠单）
-                      const normalCount = groupOrders.filter((o: any) => !o.isGift).length;
-                      // 赠单数量：独立显示的赠单行 + 嵌套在正单giftOrders里的赠单
-                      const directGiftCount = groupOrders.filter((o: any) => o.isGift === true || o.isGift === 1).length;
-                      const nestedGiftCount = groupOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[] || []).length), 0);
+                      // 正单数量（非赠单，过滤掉已撤单）
+                      const normalCount = activeOrders.filter((o: any) => !o.isGift).length;
+                      // 赠单数量：独立显示的赠单行 + 嵌套在正单giftOrders里的赠单（过滤掉已撤单）
+                      const directGiftCount = activeOrders.filter((o: any) => o.isGift === true || o.isGift === 1).length;
+                      const nestedGiftCount = activeOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[] || []).length), 0);
                       const giftCount = directGiftCount + nestedGiftCount;
                       // 各币种简写和颜色：ETH→E(蓝色) BTC→B(橙色) SOL→S(绿色)
                       const COIN_CONFIG: Record<string, { short: string; color: string }> = {
