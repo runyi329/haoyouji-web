@@ -25519,7 +25519,7 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         return { error: e?.message || String(e) };
       }
     }),
-;
+});
 export type AppRouter = typeof appRouter;
 
 // 服务端定时刷新数字币价格（每5分钟）
