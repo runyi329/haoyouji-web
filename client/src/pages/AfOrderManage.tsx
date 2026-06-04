@@ -433,12 +433,25 @@ export default function AfOrderManage() {
               const fmtQ = (coin: string, num: number) => num.toFixed(COIN_DECIMALS_S[coin] ?? 4);
               const rawQty: Record<string, number> = {};
               const effQty: Record<string, number> = {};
+              const normalCnt: Record<string, number> = {}; // 正单笔数
+              const giftCnt: Record<string, number> = {};   // 赠单笔数
               holdingOrders.forEach((o: any) => {
                 if (!o.coin) return;
                 const qty = parseFloat(o.quantity) || 0;
                 rawQty[o.coin] = (rawQty[o.coin] || 0) + qty;
                 const rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
                 effQty[o.coin] = (effQty[o.coin] || 0) + qty * rate;
+                // 统计正单/赠单笔数
+                if (o.isGift === true || o.isGift === 1) {
+                  giftCnt[o.coin] = (giftCnt[o.coin] || 0) + 1;
+                } else {
+                  normalCnt[o.coin] = (normalCnt[o.coin] || 0) + 1;
+                  // 嵌套赠单
+                  const gifts: any[] = (o.giftOrders as any[]) || [];
+                  gifts.forEach((g: any) => {
+                    if (g.coin) giftCnt[g.coin] = (giftCnt[g.coin] || 0) + 1;
+                  });
+                }
               });
               const coins = Object.keys(rawQty).sort((a, b) => {
                 const ai = COIN_ORDER_S.indexOf(a); const bi = COIN_ORDER_S.indexOf(b);
@@ -459,12 +472,18 @@ export default function AfOrderManage() {
                       return (
                         <div key={coin} className="flex justify-between items-center text-xs">
                           <span className="text-white/50">{coin}</span>
-                          <span className={`font-semibold ${color}`}>
-                            {fmtQ(coin, raw)}
-                            {hasDiscount && (
-                              <span className="text-white/40 ml-1">({fmtQ(coin, eff)} <span className="text-white/30">{pct}%</span>)</span>
-                            )}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-white/30 text-[10px]">
+                              {normalCnt[coin] ? `${normalCnt[coin]}正` : ''}
+                              {giftCnt[coin] ? ` ${giftCnt[coin]}赠` : ''}
+                            </span>
+                            <span className={`font-semibold ${color}`}>
+                              {fmtQ(coin, raw)}
+                              {hasDiscount && (
+                                <span className="text-white/40 ml-1">({fmtQ(coin, eff)} <span className="text-white/30">{pct}%</span>)</span>
+                              )}
+                            </span>
+                          </div>
                         </div>
                       );
                     })}
