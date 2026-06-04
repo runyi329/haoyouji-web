@@ -421,6 +421,56 @@ export default function AfOrderManage() {
                 </div>
               </div>
             </div>
+            {/* 持仓中各币种数量统计 */}
+            {(() => {
+              const holdingOrders = (orders as any[] || []).filter(
+                (o: any) => o.status === 'completed' && !o.sellStatus
+              );
+              if (holdingOrders.length === 0) return null;
+              const COIN_ORDER_S = ['ETH', 'BTC', 'SOL'];
+              const COIN_DECIMALS_S: Record<string, number> = { SOL: 1, BTC: 4, ETH: 2 };
+              const fmtQ = (coin: string, num: number) => num.toFixed(COIN_DECIMALS_S[coin] ?? 4);
+              const rawQty: Record<string, number> = {};
+              const effQty: Record<string, number> = {};
+              holdingOrders.forEach((o: any) => {
+                if (!o.coin) return;
+                const qty = parseFloat(o.quantity) || 0;
+                rawQty[o.coin] = (rawQty[o.coin] || 0) + qty;
+                const rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
+                effQty[o.coin] = (effQty[o.coin] || 0) + qty * rate;
+              });
+              const coins = Object.keys(rawQty).sort((a, b) => {
+                const ai = COIN_ORDER_S.indexOf(a); const bi = COIN_ORDER_S.indexOf(b);
+                return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+              });
+              if (coins.length === 0) return null;
+              const COIN_COLOR: Record<string, string> = { ETH: 'text-blue-300', BTC: 'text-orange-300', SOL: 'text-green-300' };
+              return (
+                <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+                  <p className="text-white/55 text-xs mb-2">持仓中币种</p>
+                  <div className="space-y-1.5">
+                    {coins.map(coin => {
+                      const raw = rawQty[coin];
+                      const eff = effQty[coin];
+                      const hasDiscount = Math.abs(eff - raw) > 0.00005;
+                      const pct = hasDiscount ? Math.round((eff / raw) * 100) : null;
+                      const color = COIN_COLOR[coin] || 'text-white/80';
+                      return (
+                        <div key={coin} className="flex justify-between items-center text-xs">
+                          <span className="text-white/50">{coin}</span>
+                          <span className={`font-semibold ${color}`}>
+                            {fmtQ(coin, raw)}
+                            {hasDiscount && (
+                              <span className="text-white/40 ml-1">({fmtQ(coin, eff)} <span className="text-white/30">{pct}%</span>)</span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
