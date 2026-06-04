@@ -178,7 +178,7 @@ export default function AfOrderManage() {
     { ledgerId },
     { enabled: !!ledgerId }
   );
-  const { data: orders, isLoading } = trpc.ledger.afAdminGetOrders.useQuery(
+  const { data: orders, isLoading, refetch: refetchOrders } = trpc.ledger.afAdminGetOrders.useQuery(
     { ledgerId },
     { enabled: !!ledgerId }
   );
@@ -348,7 +348,14 @@ export default function AfOrderManage() {
           >
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
-          <span className="text-white font-semibold text-base">订单管理</span>
+          <span className="text-white font-semibold text-base flex-1">订单管理</span>
+          <button
+            onClick={() => { refetchOrders(); utils.ledger.afAdminGetStats.invalidate({ ledgerId }); }}
+            className="text-xs px-3 py-1 rounded-full active:opacity-70"
+            style={{ background: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.9)' }}
+          >
+            刷新
+          </button>
         </div>
 
         {/* 统计汇总 */}
