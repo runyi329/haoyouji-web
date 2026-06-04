@@ -537,6 +537,9 @@ export default function AfOrderManage() {
               const sortedDates = Object.keys(dateGroups).sort((a, b) => b.localeCompare(a));
               return sortedDates.map(dateKey => {
                 const groupOrders = dateGroups[dateKey];
+                // 如果该日期下没有任何有效订单（全是撤销单），则不渲染该日期分组
+                const hasActiveOrders = groupOrders.some((o: any) => o.status !== 'cancelled');
+                if (!hasActiveOrders) return null;
                 const isOpen = expandedDates[dateKey] ?? false;
                 // 是否该日期所有正单（含其嵌套赠与单）已全部卖出
                 const allSold = groupOrders.every((o: any) => {
