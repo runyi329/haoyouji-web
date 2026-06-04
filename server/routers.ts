@@ -24665,7 +24665,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
   worldCupLottery: router({
     // 获取当前用户的抽奖信息（次数/已用/已选球队）
     getLotteryInfo: protectedProcedure.query(async ({ ctx }) => {
-      const { dbConn } = ctx;
+      const dbConn = await getDbConnection();
       const userId = ctx.user.id;
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库未连接' });
       try {
@@ -24705,7 +24705,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         teamName: z.string().min(1).max(50),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { dbConn } = ctx;
+        const dbConn = await getDbConnection();
         const userId = ctx.user.id;
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库未连接' });
         try {
