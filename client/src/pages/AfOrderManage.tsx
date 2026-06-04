@@ -545,8 +545,11 @@ export default function AfOrderManage() {
                             const breakEven = avgPrice + feePerCoin;
                             const currentPrice = livePrice[coin] ?? 0;
                             const effQ = effQty[coin] ?? rawQty[coin];
-                            const pnl = currentPrice > 0 ? (currentPrice - breakEven) * effQ : null;
-                            const pnlColor = pnl === null ? '' : pnl >= 0 ? 'text-green-300' : 'text-red-300';
+                            const totalFee = totalFeeUsdt[coin] ?? 0;
+                            // 实时盈亏 = (market - avgPrice) × effQ - totalFee
+                            const grossPnl = currentPrice > 0 ? (currentPrice - avgPrice) * effQ : null;
+                            const netPnl = grossPnl !== null ? grossPnl - totalFee : null;
+                            const pnlColor = netPnl === null ? '' : netPnl >= 0 ? 'text-green-300' : 'text-red-300';
                             return (
                               <>
                                 <div className="flex justify-between items-center mt-0.5">
@@ -555,12 +558,15 @@ export default function AfOrderManage() {
                                     ${avgPrice.toFixed(2)} + ${feePerCoin.toFixed(2)} = <span className="text-yellow-300/70">${breakEven.toFixed(2)}</span>
                                   </span>
                                 </div>
-                                {pnl !== null && (
+                                {netPnl !== null && (
                                   <div className="flex justify-between items-center mt-0.5">
                                     <span className="text-white/25 text-[10px]">实时盈亏</span>
-                                    <span className={`text-[10px] font-semibold ${pnlColor}`}>
-                                      {pnl >= 0 ? '+' : ''}{pnl.toFixed(2)} U
-                                      <span className="text-white/30 font-normal ml-1">@ ${currentPrice.toFixed(2)}</span>
+                                    <span className="text-white/40 text-[10px] font-normal">
+                                      <span className={grossPnl! >= 0 ? 'text-green-300/70' : 'text-red-300/70'}>{grossPnl! >= 0 ? '+' : ''}{grossPnl!.toFixed(2)}</span>
+                                      <span className="mx-0.5">-</span>
+                                      <span className="text-orange-300/70">{totalFee.toFixed(2)}</span>
+                                      <span className="mx-0.5">=</span>
+                                      <span className={`font-bold ${pnlColor}`}>{netPnl >= 0 ? '+' : ''}{netPnl.toFixed(2)} U</span>
                                     </span>
                                   </div>
                                 )}
@@ -579,10 +585,10 @@ export default function AfOrderManage() {
                       const cp = livePrice[coin] ?? 0;
                       if (cp > 0 && weightedPriceSum[coin] && rawQty[coin]) {
                         const avgP = weightedPriceSum[coin] / rawQty[coin];
-                        const feeP = totalFeeUsdt[coin] ? totalFeeUsdt[coin] / rawQty[coin] : 0;
-                        const be = avgP + feeP;
                         const effQ = effQty[coin] ?? rawQty[coin];
-                        totalPnl += (cp - be) * effQ;
+                        const fee = totalFeeUsdt[coin] ?? 0;
+                        // 总盈亏 = (market - avgPrice) × effQ - totalFee
+                        totalPnl += (cp - avgP) * effQ - fee;
                         hasPnl = true;
                       }
                     });
