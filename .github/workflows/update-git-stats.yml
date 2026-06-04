@@ -1,0 +1,115 @@
+name: 每日自动更新工作日志静态数据
+
+on:
+  schedule:
+    # 北京时间 12:00 = UTC 04:00
+    - cron: '0 4 * * *'
+    # 北京时间 18:00 = UTC 10:00
+    - cron: '0 10 * * *'
+    # 北京时间 24:00 (次日00:00) = UTC 16:00
+    - cron: '0 16 * * *'
+  workflow_dispatch: # 支持手动触发
+
+jobs:
+  update-git-stats:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout 代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 必须获取完整 git 历史
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 生成 git 静态数据文件
+        run: |
+          node - << 'EOF'
+          const { execSync } = require('child_process');
+          const fs = require('fs');
+
+          // 读取完整 git log
+          const raw = execSync('git log --format="%H|%an|%aI|%s" --no-merges', { maxBuffer: 50*1024*1024 }).toString();
+          const lines = raw.trim().split('\n').filter(Boolean);
+
+          const commitsByDay = {};
+          const dayOffsets = {};
+          let globalIdx = 1;
+
+          // 正序处理（最早的先）
+          const allCommits = lines.map(line => {
+            const parts = line.split('|');
+            const hash = parts[0];
+            const author = parts[1];
+            const dateISO = parts[2];
+            const message = parts.slice(3).join('|');
+            const typeMatch = message.match(/^(feat|fix|docs|style|refactor|test|chore|ci|perf|build|security|data|revert)(\([^)]+\))?:/);
+            const type = typeMatch ? typeMatch[1] : 'other';
+            const cleanMessage = typeMatch ? message.replace(/^[^:]+:\s*/, '') : message;
+            // 转换为北京时间日期
+            const d = new Date(dateISO);
+            const bjDate = new Date(d.getTime() + 8*3600*1000);
+            const dateStr = bjDate.toISOString().slice(0,10);
+            return { hash: hash.slice(0,7), author, date: dateISO, dateStr, message, type, cleanMessage };
+          }).reverse(); // 正序
+
+          allCommits.forEach(c => {
+            if (!commitsByDay[c.dateStr]) {
+              commitsByDay[c.dateStr] = [];
+              dayOffsets[c.dateStr] = globalIdx;
+            }
+            commitsByDay[c.dateStr].push({ date: c.date, type: c.type, cleanMessage: c.cleanMessage });
+            globalIdx++;
+          });
+
+          const sortedDays = Object.keys(commitsByDay).sort();
+          const today = new Date(Date.now() + 8*3600*1000).toISOString().slice(0,10);
+
+          // 生成 gitCommitsByDay.ts
+          let out1 = '// 自动生成，勿手动修改\n';
+          out1 += `// 生成时间：${today}\n`;
+          out1 += 'export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {\n';
+          sortedDays.forEach(day => {
+            out1 += `  "${day}": [\n`;
+            commitsByDay[day].forEach(c => {
+              const msg = c.cleanMessage.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+              out1 += `    { date: "${c.date}", type: "${c.type}", cleanMessage: "${msg}" },\n`;
+            });
+            out1 += '  ],\n';
+          });
+          out1 += '};\n';
+          fs.writeFileSync('client/src/data/gitCommitsByDay.ts', out1);
+
+          // 生成 gitDayOffsets.ts
+          let out2 = '// 自动生成，勿手动修改\n';
+          out2 += 'export const gitDayOffsets: Record<string, number> = {\n';
+          sortedDays.forEach(day => {
+            out2 += `  "${day}": ${dayOffsets[day]},\n`;
+          });
+          out2 += '};\n';
+          fs.writeFileSync('client/src/data/gitDayOffsets.ts', out2);
+
+          // 生成 gitDayStats.ts
+          let out3 = `// 生成时间：${today}\n`;
+          out3 += 'export const gitDayStats: Record<string, number> = {\n';
+          sortedDays.forEach(day => {
+            out3 += `  "${day}": ${commitsByDay[day].length},\n`;
+          });
+          out3 += '};\n';
+          fs.writeFileSync('client/src/data/gitDayStats.ts', out3);
+
+          console.log(`生成完成：${sortedDays.length} 天，今日(${today})：${commitsByDay[today] ? commitsByDay[today].length : 0} 条`);
+          EOF
+
+      - name: 提交并推送（如有变更）
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add client/src/data/gitCommitsByDay.ts client/src/data/gitDayOffsets.ts client/src/data/gitDayStats.ts
+          if git diff --staged --quiet; then
+            echo "数据无变化，跳过提交"
+          else
+            git commit -m "chore(P210-A): 自动更新工作日志静态数据 [skip ci]"
+            git push
+          fi
