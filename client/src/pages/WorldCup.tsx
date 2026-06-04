@@ -2296,18 +2296,18 @@ export default function WorldCup() {
               <div style={{ fontSize: 22, fontWeight: 900, color: TEXT, marginBottom: 6 }}>{selectedTeam.name}</div>
               {/* AI夺冠概率 */}
               <div style={{
-                display: "inline-flex",
-                alignItems: "baseline",
-                gap: 4,
                 backgroundColor: "rgba(255,215,0,0.1)",
                 border: `1px solid rgba(255,215,0,0.3)`,
                 borderRadius: 10,
-                padding: "6px 16px",
-                marginBottom: 20
+                padding: "10px 20px",
+                marginBottom: 20,
+                textAlign: "center"
               }}>
-                <span style={{ fontSize: 11, color: TEXT2 }}>AI 预测夺冠概率</span>
-                <span style={{ fontSize: 26, fontWeight: 900, color: GOLD, lineHeight: 1, marginLeft: 6 }}>{selectedTeam.prob}</span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: GOLD2 }}>%</span>
+                <div style={{ fontSize: 11, color: TEXT2, marginBottom: 4, whiteSpace: "nowrap" }}>AI 预测夺冠概率</div>
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: 2 }}>
+                  <span style={{ fontSize: 32, fontWeight: 900, color: GOLD, lineHeight: 1 }}>{Number(selectedTeam.prob).toFixed(2)}</span>
+                  <span style={{ fontSize: 16, fontWeight: 700, color: GOLD2 }}>%</span>
+                </div>
               </div>
 
               {/* 提示信息卡片 */}
