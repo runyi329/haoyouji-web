@@ -1305,6 +1305,8 @@ export default function WorldCup() {
   });
   const [lotterySubmitting, setLotterySubmitting] = useState(false);
   const [lotteryMsg, setLotteryMsg] = useState<string | null>(null);
+  // 竞猜确认弹窗
+  const [showLotteryConfirm, setShowLotteryConfirm] = useState(false);
   // 竞猜名单墙
   const [showBoard, setShowBoard] = useState(false);
   const { data: boardData, isLoading: boardLoading, refetch: refetchBoard } = trpc.worldCupLottery.getLotteryBoard.useQuery(undefined, {
@@ -2205,20 +2207,9 @@ export default function WorldCup() {
                               className="w-full py-3 rounded-2xl text-sm font-bold"
                               style={{ backgroundColor: lotterySubmitting ? "rgba(255,215,0,0.3)" : GOLD, color: "#0a1628", opacity: lotterySubmitting ? 0.7 : 1 }}
                               disabled={lotterySubmitting}
-                              onClick={async () => {
+                              onClick={() => {
                                 if (!selectedTeam || lotterySubmitting) return;
-                                const confirmed = window.confirm(`确认竞猜「${selectedTeam.name}」？\n\n· 将消耗 1 次竞猜机会\n· 比赛结束后立即开奖\n· 提交后不可撤销`);
-                                if (!confirmed) return;
-                                setLotterySubmitting(true);
-                                setLotteryMsg(null);
-                                try {
-                                  await submitPickMutation.mutateAsync({ teamCode: selectedTeam.code, teamName: selectedTeam.name });
-                                  setLotteryMsg(`已成功竞猜 ${selectedTeam.name}`);
-                                } catch (e: any) {
-                                  setLotteryMsg(e?.message || '提交失败，请重试');
-                                } finally {
-                                  setLotterySubmitting(false);
-                                }
+                                setShowLotteryConfirm(true);
                               }}
                             >
                               {lotterySubmitting ? "提交中..." : `竞猜 ${selectedTeam?.name}`}
@@ -2256,6 +2247,153 @@ export default function WorldCup() {
           </div>
         );
       })()}
+
+      {/* ===== 竞猜确认弹窗 ===== */}
+      {showLotteryConfirm && selectedTeam && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 10000, backgroundColor: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowLotteryConfirm(false); }}
+        >
+          <div style={{
+            width: "100%",
+            maxWidth: 360,
+            backgroundColor: BG2,
+            borderRadius: 24,
+            border: `1px solid rgba(255,215,0,0.35)`,
+            overflow: "hidden",
+            boxShadow: "0 0 40px rgba(255,215,0,0.15), 0 20px 60px rgba(0,0,0,0.6)"
+          }}>
+            {/* 顶部金色渐变标题栏 */}
+            <div style={{
+              background: "linear-gradient(135deg, rgba(255,215,0,0.18) 0%, rgba(255,215,0,0.06) 100%)",
+              borderBottom: `1px solid rgba(255,215,0,0.2)`,
+              padding: "16px 20px 14px",
+              textAlign: "center"
+            }}>
+              <div style={{ fontSize: 11, color: TEXT2, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>WORLD CUP 2026</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: GOLD, letterSpacing: 1 }}>AI 竞猜确认</div>
+            </div>
+
+            {/* 球队主体展示区 */}
+            <div style={{ padding: "24px 20px 20px", textAlign: "center" }}>
+              {/* 国旗大图 */}
+              <div style={{
+                width: 88,
+                height: 60,
+                margin: "0 auto 14px",
+                borderRadius: 8,
+                overflow: "hidden",
+                border: `2px solid rgba(255,215,0,0.5)`,
+                boxShadow: "0 4px 20px rgba(255,215,0,0.2)"
+              }}>
+                <img
+                  src={`/flags/${selectedTeam.code.toLowerCase()}.png`}
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  alt={selectedTeam.name}
+                />
+              </div>
+              {/* 球队名称 */}
+              <div style={{ fontSize: 22, fontWeight: 900, color: TEXT, marginBottom: 6 }}>{selectedTeam.name}</div>
+              {/* AI夺冠概率 */}
+              <div style={{
+                display: "inline-flex",
+                alignItems: "baseline",
+                gap: 4,
+                backgroundColor: "rgba(255,215,0,0.1)",
+                border: `1px solid rgba(255,215,0,0.3)`,
+                borderRadius: 10,
+                padding: "6px 16px",
+                marginBottom: 20
+              }}>
+                <span style={{ fontSize: 11, color: TEXT2 }}>AI 预测夺冠概率</span>
+                <span style={{ fontSize: 26, fontWeight: 900, color: GOLD, lineHeight: 1, marginLeft: 6 }}>{selectedTeam.prob}</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: GOLD2 }}>%</span>
+              </div>
+
+              {/* 提示信息卡片 */}
+              <div style={{
+                backgroundColor: "rgba(255,255,255,0.04)",
+                border: `1px solid ${BORDER}`,
+                borderRadius: 12,
+                padding: "12px 16px",
+                marginBottom: 20,
+                textAlign: "left"
+              }}>
+                <div style={{ fontSize: 12, color: TEXT2, lineHeight: 1.8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", backgroundColor: GOLD, flexShrink: 0, display: "inline-block" }} />
+                    <span>将消耗 <span style={{ color: GOLD, fontWeight: 700 }}>1</span> 次竞猜机会</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", backgroundColor: GOLD, flexShrink: 0, display: "inline-block" }} />
+                    <span>比赛结束后立即开奖公示</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", backgroundColor: "#F87171", flexShrink: 0, display: "inline-block" }} />
+                    <span style={{ color: "#F87171" }}>提交后不可撤销</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 按钮区 */}
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  style={{
+                    flex: 1,
+                    padding: "13px 0",
+                    borderRadius: 14,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: TEXT2,
+                    backgroundColor: "rgba(255,255,255,0.07)",
+                    border: `1px solid ${BORDER}`,
+                    cursor: "pointer"
+                  }}
+                  onClick={() => setShowLotteryConfirm(false)}
+                >
+                  再想想
+                </button>
+                <button
+                  style={{
+                    flex: 2,
+                    padding: "13px 0",
+                    borderRadius: 14,
+                    fontSize: 15,
+                    fontWeight: 800,
+                    color: "#0a1628",
+                    background: lotterySubmitting
+                      ? "rgba(255,215,0,0.4)"
+                      : "linear-gradient(135deg, #FFD700 0%, #E8B800 100%)",
+                    border: "none",
+                    cursor: lotterySubmitting ? "not-allowed" : "pointer",
+                    boxShadow: lotterySubmitting ? "none" : "0 4px 16px rgba(255,215,0,0.35)",
+                    opacity: lotterySubmitting ? 0.7 : 1,
+                    letterSpacing: 1
+                  }}
+                  disabled={lotterySubmitting}
+                  onClick={async () => {
+                    if (!selectedTeam || lotterySubmitting) return;
+                    setLotterySubmitting(true);
+                    setLotteryMsg(null);
+                    try {
+                      await submitPickMutation.mutateAsync({ teamCode: selectedTeam.code, teamName: selectedTeam.name });
+                      setLotteryMsg(`已成功竞猜 ${selectedTeam.name}`);
+                      setShowLotteryConfirm(false);
+                    } catch (e: any) {
+                      setLotteryMsg(e?.message || '提交失败，请重试');
+                      setShowLotteryConfirm(false);
+                    } finally {
+                      setLotterySubmitting(false);
+                    }
+                  }}
+                >
+                  {lotterySubmitting ? "提交中..." : "确认竞猜"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ===== 竞猜名单墙弹层 ===== */}
       {showBoard && (
