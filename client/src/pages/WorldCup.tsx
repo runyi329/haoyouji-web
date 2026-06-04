@@ -1297,7 +1297,7 @@ export default function WorldCup() {
   const [selectedTeam, setSelectedTeam] = useState<{ name: string; code: string; prob: number } | null>(null);
   const [buyQty, setBuyQty] = useState(1);
   // 竞猜功能：获取用户抽奖信息
-  const { data: lotteryInfo, refetch: refetchLotteryInfo } = trpc.worldCupLottery.getLotteryInfo.useQuery(undefined, {
+  const { data: lotteryInfo, isLoading: lotteryLoading, refetch: refetchLotteryInfo } = trpc.worldCupLottery.getLotteryInfo.useQuery(undefined, {
     retry: false,
   });
   const submitPickMutation = trpc.worldCupLottery.submitPick.useMutation({
@@ -2154,8 +2154,8 @@ export default function WorldCup() {
 
                   {/* ===== 竞猜区块 ===== */}
                   <div style={{ marginTop: 16, borderRadius: 16, padding: "14px 16px", backgroundColor: "rgba(22,44,66,0.85)", border: `1px solid ${BORDER}` }}>
-                    {lotteryInfo === undefined ? (
-                      <div style={{ textAlign: "center", color: TEXT2, fontSize: 13, padding: "8px 0" }}>请先登录参与竞猜</div>
+                    {lotteryLoading ? (
+                      <div style={{ textAlign: "center", color: TEXT2, fontSize: 13, padding: "8px 0" }}>加载中...</div>
                     ) : lotteryInfo.totalChances === 0 ? (
                       <div style={{ textAlign: "center", color: TEXT2, fontSize: 13, padding: "8px 0" }}>
                         <div style={{ marginBottom: 4, fontWeight: 600, color: TEXT }}>世界杯竞猜</div>

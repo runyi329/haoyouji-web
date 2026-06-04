@@ -25443,7 +25443,8 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
   worldCupLottery: router({
     // 获取当前用户的抽奖信息（次数/已用/已选球队）
     getLotteryInfo: protectedProcedure.query(async ({ ctx }) => {
-      const { dbConn, userId } = ctx;
+      const { dbConn } = ctx;
+      const userId = ctx.user.id;
       if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库未连接' });
       try {
         const [contactRows] = await dbConn.execute(
@@ -25461,12 +25462,7 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         );
         const usedList = usedRows as any[];
         const usedCount = usedList.length;
-        const [userRows] = await dbConn.execute(
-          `SELECT username, name FROM users WHERE id = ?`,
-          [userId]
-        );
-        const user = (userRows as any[])[0];
-        const displayName = user?.name || user?.username || '用户';
+        const displayName = ctx.user.name || ctx.user.username || '用户';
         return {
           displayName,
           contactCount,
@@ -25487,7 +25483,8 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         teamName: z.string().min(1).max(50),
       }))
       .mutation(async ({ ctx, input }) => {
-        const { dbConn, userId } = ctx;
+        const { dbConn } = ctx;
+        const userId = ctx.user.id;
         if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库未连接' });
         try {
           const [contactRows] = await dbConn.execute(
