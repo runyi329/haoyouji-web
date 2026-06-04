@@ -2444,18 +2444,17 @@ export default function WorldCup() {
                         </div>
                       </div>
                       {/* 用户名单 */}
-                      <div style={{ padding: "10px 14px", display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      <div style={{ padding: "10px 14px", display: "flex", flexWrap: "wrap", gap: 6 }}>
                         {team.users.map((u, ui) => (
-                          <div key={ui} style={{ display: "flex", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 20, padding: "4px 10px 4px 4px" }}>
-                            {/* 头像 */}
+                          <div key={ui}>
+                            {/* 只显示头像 */}
                             {u.avatar ? (
-                              <img src={u.avatar} style={{ width: 22, height: 22, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                              <img src={u.avatar} style={{ width: 30, height: 30, borderRadius: "50%", objectFit: "cover", display: "block" }} alt="" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
                             ) : (
-                              <div style={{ width: 22, height: 22, borderRadius: "50%", backgroundColor: GOLD, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#0a1628", flexShrink: 0 }}>
+                              <div style={{ width: 30, height: 30, borderRadius: "50%", backgroundColor: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: TEXT }}>
                                 {u.name.charAt(0)}
                               </div>
                             )}
-                            <span style={{ fontSize: 12, color: TEXT }}>{u.name}</span>
                           </div>
                         ))}
                       </div>
