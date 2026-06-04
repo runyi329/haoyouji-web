@@ -490,12 +490,25 @@ export default function AfOrderManage() {
                 // 统计：投入总额、各币种持仓数量
                 const totalAmount = groupOrders.reduce((s: number, o: any) => s + (parseFloat(o.amount) || 0), 0);
                 const coinQty: Record<string, number> = {};
+                const coinQtyEffective: Record<string, number> = {}; // 折后数量
                 groupOrders.forEach((o: any) => {
-                  if (o.coin) coinQty[o.coin] = (coinQty[o.coin] || 0) + (parseFloat(o.quantity) || 0);
+                  if (o.coin) {
+                    const qty = parseFloat(o.quantity) || 0;
+                    coinQty[o.coin] = (coinQty[o.coin] || 0) + qty;
+                    const tier = o.equityTier || 0;
+                    const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                    coinQtyEffective[o.coin] = (coinQtyEffective[o.coin] || 0) + qty * rate;
+                  }
                   // 同时统计嵌套赠与单的币数
                   const gifts: any[] = (o.giftOrders as any[]) || [];
                   gifts.forEach((g: any) => {
-                    if (g.coin) coinQty[g.coin] = (coinQty[g.coin] || 0) + (parseFloat(g.quantity) || 0);
+                    if (g.coin) {
+                      const gQty = parseFloat(g.quantity) || 0;
+                      coinQty[g.coin] = (coinQty[g.coin] || 0) + gQty;
+                      const gTier = g.equityTier || 0;
+                      const gRate = EQUITY_DISCOUNT_RATES[gTier] ?? 1.0;
+                      coinQtyEffective[g.coin] = (coinQtyEffective[g.coin] || 0) + gQty * gRate;
+                    }
                   });
                 });
                 const qtyStr = Object.entries(coinQty).map(([c, q]) => `${q.toFixed(4)} ${c}`).join(' / ');
@@ -529,7 +542,13 @@ export default function AfOrderManage() {
                           const cfg = COIN_CONFIG[c] || { short: c, color: 'text-gray-500' };
                           const qNum = q as number;
                           const qStr = qNum >= 100 ? qNum.toFixed(2) : qNum >= 1 ? qNum.toFixed(3) : qNum.toFixed(4);
-                          return { short: cfg.short, color: cfg.color, qStr };
+                          const effNum = coinQtyEffective[c] ?? qNum;
+                          // 只有折后数量与原始数量不同时才显示括号（精度到4位小数比较）
+                          const hasDiscount = Math.abs(effNum - qNum) > 0.00005;
+                          const effStr = hasDiscount
+                            ? (effNum >= 100 ? effNum.toFixed(2) : effNum >= 1 ? effNum.toFixed(3) : effNum.toFixed(4))
+                            : null;
+                          return { short: cfg.short, color: cfg.color, qStr, effStr };
                         });
                       return (
                         <button
@@ -545,8 +564,11 @@ export default function AfOrderManage() {
                             <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-blue-400'}`}>{normalCount}单</span>
                             {giftCount > 0 && <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-orange-400'}`}>{giftCount}赠</span>}
                             <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-gray-600'}`}>{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
-                            {sortedCoinParts.map(({ short, color, qStr }) => (
-                              <span key={short} className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : color}`}>{short}:{qStr}</span>
+                            {sortedCoinParts.map(({ short, color, qStr, effStr }) => (
+                              <span key={short} className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : color}`}>
+                                {short}:{qStr}
+                                {effStr && <span>({effStr})</span>}
+                              </span>
                             ))}
                           </div>
                           <span className={`transition-transform duration-200 shrink-0 ml-1 ${allSold ? 'text-gray-400' : 'text-blue-400'} ${isOpen ? 'rotate-180' : ''}`}>▾</span>
