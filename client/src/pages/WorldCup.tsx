@@ -1983,7 +1983,7 @@ export default function WorldCup() {
                   {/* 费用卡片：左列两行 + 中间等号 + 右列圆图+1 */}
                   <div
                     className="rounded-2xl p-4"
-                    style={{ backgroundColor: "rgba(22,44,66,0.85)", border: `1px solid ${BORDER}`, backdropFilter: "blur(8px)" }}
+                    style={{ backgroundColor: "rgba(22,44,66,0.85)", border: `1px solid ${BORDER}`, backdropFilter: "blur(8px)", display: "none" }}
                   >
                     {/*
                       布局： [数字列(flex:1靠右)] [图标列(固定22px)] [等号(固定)] [1(固定)] [圆图(固定)]
