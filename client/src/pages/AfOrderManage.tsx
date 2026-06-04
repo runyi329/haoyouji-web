@@ -350,7 +350,7 @@ export default function AfOrderManage() {
           </button>
           <span className="text-white font-semibold text-base flex-1">订单管理</span>
           <button
-            onClick={() => { refetchOrders(); refetchStats(); }}
+            onClick={() => window.location.reload()}
             className="text-xs px-3 py-1 rounded-full active:opacity-70"
             style={{ background: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.9)' }}
           >
