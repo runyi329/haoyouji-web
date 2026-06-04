@@ -439,6 +439,9 @@ export default function AfOrderManage() {
               const giftCnt: Record<string, number> = {};   // 赠单笔数
               const coinHolderSets: Record<string, Set<string>> = {}; // 每个币种的持仓人员
               const weightedPriceSum: Record<string, number> = {}; // 加权价格之和（价格×数量）
+              const totalFeeUsdt: Record<string, number> = {}; // 每个币种累计管理费（USDT）
+              const todayBJ = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+              const todayStart = new Date(todayBJ.getFullYear(), todayBJ.getMonth(), todayBJ.getDate());
               holdingOrders.forEach((o: any) => {
                 if (!o.coin) return;
                 const qty = parseFloat(o.quantity) || 0;
@@ -449,6 +452,16 @@ export default function AfOrderManage() {
                 const price = parseFloat(o.limitPrice) || 0;
                 if (price > 0 && qty > 0) {
                   weightedPriceSum[o.coin] = (weightedPriceSum[o.coin] || 0) + price * qty;
+                }
+                // 计算该订单实时管理费
+                const amount = parseFloat(o.amount) || 0;
+                if (amount > 0) {
+                  const tradeValue = o.isGift ? amount : amount * 5.25;
+                  const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+                  const createdDate = o.createdAt ? new Date(o.createdAt) : new Date();
+                  const createdDay = new Date(createdDate.getFullYear(), createdDate.getMonth(), createdDate.getDate());
+                  const holdDays = Math.max(1, Math.floor((todayStart.getTime() - createdDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+                  totalFeeUsdt[o.coin] = (totalFeeUsdt[o.coin] || 0) + dailyFee * holdDays;
                 }
                 // 统计正单/赠单笔数
                 if (o.isGift === true || o.isGift === 1) {
@@ -518,12 +531,19 @@ export default function AfOrderManage() {
                               </span>
                             </div>
                           </div>
-                          {weightedPriceSum[coin] && rawQty[coin] ? (
-                            <div className="flex justify-between items-center mt-0.5">
-                              <span className="text-white/25 text-[10px]">均价</span>
-                              <span className="text-white/50 text-[10px]">${(weightedPriceSum[coin] / rawQty[coin]).toFixed(2)}</span>
-                            </div>
-                          ) : null}
+                          {weightedPriceSum[coin] && rawQty[coin] ? (() => {
+                            const avgPrice = weightedPriceSum[coin] / rawQty[coin];
+                            const feePerCoin = totalFeeUsdt[coin] ? totalFeeUsdt[coin] / rawQty[coin] : 0;
+                            const breakEven = avgPrice + feePerCoin;
+                            return (
+                              <div className="flex justify-between items-center mt-0.5">
+                                <span className="text-white/25 text-[10px]">盈亏平衡</span>
+                                <span className="text-white/50 text-[10px]">
+                                  ${avgPrice.toFixed(2)} + ${feePerCoin.toFixed(2)} = <span className="text-yellow-300/70">${breakEven.toFixed(2)}</span>
+                                </span>
+                              </div>
+                            );
+                          })() : null}
                         </div>
                       );
                     })}
