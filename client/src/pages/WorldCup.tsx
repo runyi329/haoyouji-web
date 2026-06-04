@@ -2156,6 +2156,8 @@ export default function WorldCup() {
                   <div style={{ marginTop: 16, borderRadius: 16, padding: "14px 16px", backgroundColor: "rgba(22,44,66,0.85)", border: `1px solid ${BORDER}` }}>
                     {lotteryLoading ? (
                       <div style={{ textAlign: "center", color: TEXT2, fontSize: 13, padding: "8px 0" }}>加载中...</div>
+                    ) : !lotteryInfo ? (
+                      <div style={{ textAlign: "center", color: TEXT2, fontSize: 13, padding: "8px 0" }}>加载中...</div>
                     ) : lotteryInfo.totalChances === 0 ? (
                       <div style={{ textAlign: "center", color: TEXT2, fontSize: 13, padding: "8px 0" }}>
                         <div style={{ marginBottom: 4, fontWeight: 600, color: TEXT }}>世界杯竞猜</div>
