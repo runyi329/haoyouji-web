@@ -1851,7 +1851,7 @@ export default function Home() {
             onClick={() => navigate('/world-cup')}
           >
             <img
-              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ai-companion-banner-worldcup2026.png"
+              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ai-companion-banner-worldcup2026.webp"
               alt="AI球伴·世界杯同行"
               className="w-full h-full object-cover"
               onError={(e) => {
