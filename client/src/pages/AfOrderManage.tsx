@@ -477,10 +477,10 @@ export default function AfOrderManage() {
                               {normalCnt[coin] ? `${normalCnt[coin]}单` : ''}
                               {giftCnt[coin] ? ` ${giftCnt[coin]}赠` : ''}
                             </span>
-                            <span className={`font-semibold ${color}`}>
+                            <span className="font-semibold text-white">
                               {fmtQ(coin, raw)}
                               {hasDiscount && (
-                                <span className="text-white/40 ml-1">({fmtQ(coin, eff)} <span className="text-white/30">{pct}%</span>)</span>
+                                <span className={`ml-1 ${color}`}>({fmtQ(coin, eff)} <span className="text-white/40">{pct}%</span>)</span>
                               )}
                             </span>
                           </div>
