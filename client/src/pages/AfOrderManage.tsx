@@ -171,6 +171,8 @@ export default function AfOrderManage() {
   const [expandedDates, setExpandedDates] = useState<Record<string, boolean>>({});
   const toggleDate = (dateKey: string) => setExpandedDates(prev => ({ ...prev, [dateKey]: !(prev[dateKey] ?? false) }));
   const toggleGiftOrders = (orderId: number) => setExpandedGiftOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
+  // 持仓人员弹窗
+  const [holdersPopup, setHoldersPopup] = useState<string[] | null>(null);
   // 管理费明细：跳转到独立页面
 
   const utils = trpc.useUtils();
@@ -459,9 +461,25 @@ export default function AfOrderManage() {
               });
               if (coins.length === 0) return null;
               const COIN_COLOR: Record<string, string> = { ETH: 'text-blue-300', BTC: 'text-orange-300', SOL: 'text-green-300' };
+              // 持仓人员（去重，排除赠单）
+              const holderSet = new Set<string>();
+              holdingOrders.filter((o: any) => !o.isGift).forEach((o: any) => {
+                const name = o.nickname || o.username || `用户${o.userId}`;
+                holderSet.add(name);
+              });
+              const holderNames = Array.from(holderSet);
               return (
                 <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-                  <p className="text-white/55 text-xs mb-2">持仓中币种</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-white/55 text-xs">持仓中币种</p>
+                    <button
+                      onClick={() => setHoldersPopup(holderNames)}
+                      className="text-[10px] px-2 py-0.5 rounded-full active:opacity-70"
+                      style={{ background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)' }}
+                    >
+                      {holderNames.length}人
+                    </button>
+                  </div>
                   <div className="space-y-1.5">
                     {coins.map(coin => {
                       const raw = rawQty[coin];
@@ -495,6 +513,33 @@ export default function AfOrderManage() {
         )}
       </div>
 
+      {/* 持仓人员弹窗 */}
+      {holdersPopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setHoldersPopup(null)}
+        >
+          <div
+            className="bg-white rounded-2xl px-5 py-4 mx-6 w-full max-w-xs"
+            onClick={e => e.stopPropagation()}
+          >
+            <p className="text-sm font-semibold text-gray-700 mb-3">持仓人员（{holdersPopup.length}人）</p>
+            <div className="space-y-1.5 max-h-60 overflow-y-auto">
+              {holdersPopup.map((name, i) => (
+                <div key={i} className="text-sm text-gray-600 py-1 border-b border-gray-100 last:border-0">{name}</div>
+              ))}
+            </div>
+            <button
+              onClick={() => setHoldersPopup(null)}
+              className="mt-4 w-full py-2 rounded-xl text-sm text-white font-medium"
+              style={{ background: '#2563eb' }}
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── 状态筛选Tab ── */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
