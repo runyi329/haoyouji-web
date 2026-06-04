@@ -423,8 +423,9 @@ export default function AfOrderManage() {
             </div>
             {/* 持仓中各币种数量统计 */}
             {(() => {
+              // 持仓中币种：排除已卖出和已撤销，包含委买中、持仓中、委卖中
               const holdingOrders = (orders as any[] || []).filter(
-                (o: any) => o.status === 'completed' && !o.sellStatus
+                (o: any) => o.status !== 'cancelled' && o.sellStatus !== 'sold'
               );
               if (holdingOrders.length === 0) return null;
               const COIN_ORDER_S = ['ETH', 'BTC', 'SOL'];
