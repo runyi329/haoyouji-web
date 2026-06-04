@@ -174,7 +174,7 @@ export default function AfOrderManage() {
   // 管理费明细：跳转到独立页面
 
   const utils = trpc.useUtils();
-  const { data: stats } = trpc.ledger.afAdminGetStats.useQuery(
+  const { data: stats, refetch: refetchStats } = trpc.ledger.afAdminGetStats.useQuery(
     { ledgerId },
     { enabled: !!ledgerId }
   );
@@ -350,7 +350,7 @@ export default function AfOrderManage() {
           </button>
           <span className="text-white font-semibold text-base flex-1">订单管理</span>
           <button
-            onClick={() => { refetchOrders(); utils.ledger.afAdminGetStats.invalidate({ ledgerId }); }}
+            onClick={() => { refetchOrders(); refetchStats(); }}
             className="text-xs px-3 py-1 rounded-full active:opacity-70"
             style={{ background: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.9)' }}
           >
