@@ -25439,7 +25439,89 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
       }
     }),
 
+  // ===== 世界杯抽奖竞猜 =====
+  worldCupLottery: router({
+    // 获取当前用户的抽奖信息（次数/已用/已选球队）
+    getLotteryInfo: protectedProcedure.query(async ({ ctx }) => {
+      const { dbConn, userId } = ctx;
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库未连接' });
+      try {
+        const [contactRows] = await dbConn.execute(
+          `SELECT COUNT(*) as cnt FROM contacts WHERE parentUserId = ?`,
+          [userId]
+        );
+        const contactCount = Number((contactRows as any[])[0]?.cnt ?? 0);
+        let totalChances = 0;
+        if (contactCount >= 1) {
+          totalChances = 1 + Math.min(Math.floor(contactCount / 10), 9);
+        }
+        const [usedRows] = await dbConn.execute(
+          `SELECT team_code, team_name, created_at FROM worldcup_lottery WHERE user_id = ? ORDER BY created_at ASC`,
+          [userId]
+        );
+        const usedList = usedRows as any[];
+        const usedCount = usedList.length;
+        const [userRows] = await dbConn.execute(
+          `SELECT username, name FROM users WHERE id = ?`,
+          [userId]
+        );
+        const user = (userRows as any[])[0];
+        const displayName = user?.name || user?.username || '用户';
+        return {
+          displayName,
+          contactCount,
+          totalChances,
+          usedCount,
+          remainingChances: Math.max(0, totalChances - usedCount),
+          picks: usedList.map((r: any) => ({ teamCode: r.team_code, teamName: r.team_name, createdAt: String(r.created_at) })),
+        };
+      } catch (e: any) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: e?.message || '查询失败' });
+      }
+    }),
 
+    // 提交竞猜（选择一支球队）
+    submitPick: protectedProcedure
+      .input(z.object({
+        teamCode: z.string().min(1).max(10),
+        teamName: z.string().min(1).max(50),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const { dbConn, userId } = ctx;
+        if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库未连接' });
+        try {
+          const [contactRows] = await dbConn.execute(
+            `SELECT COUNT(*) as cnt FROM contacts WHERE parentUserId = ?`,
+            [userId]
+          );
+          const contactCount = Number((contactRows as any[])[0]?.cnt ?? 0);
+          let totalChances = 0;
+          if (contactCount >= 1) {
+            totalChances = 1 + Math.min(Math.floor(contactCount / 10), 9);
+          }
+          const [usedRows] = await dbConn.execute(
+            `SELECT COUNT(*) as cnt FROM worldcup_lottery WHERE user_id = ?`,
+            [userId]
+          );
+          const usedCount = Number((usedRows as any[])[0]?.cnt ?? 0);
+          if (usedCount >= totalChances) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '竞猜次数已用完' });
+          }
+          const deadline = new Date('2026-07-19T00:00:00+08:00');
+          if (new Date() >= deadline) {
+            throw new TRPCError({ code: 'FORBIDDEN', message: '竞猜已截止（2026年7月19日决赛前）' });
+          }
+          await dbConn.execute(
+            `INSERT INTO worldcup_lottery (user_id, team_code, team_name) VALUES (?, ?, ?)`,
+            [userId, input.teamCode, input.teamName]
+          );
+          return { success: true, remainingChances: totalChances - usedCount - 1 };
+        } catch (e: any) {
+          if (e instanceof TRPCError) throw e;
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: e?.message || '提交失败' });
+        }
+      }),
+  }),
 });
 export type AppRouter = typeof appRouter;
 

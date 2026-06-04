@@ -1296,6 +1296,15 @@ export default function WorldCup() {
   // 点击国旗弹窗
   const [selectedTeam, setSelectedTeam] = useState<{ name: string; code: string; prob: number } | null>(null);
   const [buyQty, setBuyQty] = useState(1);
+  // 竞猜功能：获取用户抽奖信息
+  const { data: lotteryInfo, refetch: refetchLotteryInfo } = trpc.worldCupLottery.getLotteryInfo.useQuery(undefined, {
+    retry: false,
+  });
+  const submitPickMutation = trpc.worldCupLottery.submitPick.useMutation({
+    onSuccess: () => { refetchLotteryInfo(); },
+  });
+  const [lotterySubmitting, setLotterySubmitting] = useState(false);
+  const [lotteryMsg, setLotteryMsg] = useState<string | null>(null);
 
   // 从 P012 最新快照拉取实时赔率
   const { data: liveOddsData, isLoading: liveOddsLoading, refetch: refetchLiveOdds } = trpc.wcOdds.getLatestChampionOdds.useQuery();
@@ -2143,10 +2152,81 @@ export default function WorldCup() {
                     />
                   </div>
 
+                  {/* ===== 竞猜区块 ===== */}
+                  <div style={{ marginTop: 16, borderRadius: 16, padding: "14px 16px", backgroundColor: "rgba(22,44,66,0.85)", border: `1px solid ${BORDER}` }}>
+                    {lotteryInfo === undefined ? (
+                      <div style={{ textAlign: "center", color: TEXT2, fontSize: 13, padding: "8px 0" }}>请先登录参与竞猜</div>
+                    ) : lotteryInfo.totalChances === 0 ? (
+                      <div style={{ textAlign: "center", color: TEXT2, fontSize: 13, padding: "8px 0" }}>
+                        <div style={{ marginBottom: 4, fontWeight: 600, color: TEXT }}>世界杯竞猜</div>
+                        <div>添加 1 个人脉即可获得首次竞猜机会</div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* 用户信息行 */}
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                          <div style={{ fontSize: 13, color: TEXT, fontWeight: 700 }}>
+                            {lotteryInfo.displayName}
+                          </div>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                            <span style={{ fontSize: 11, color: TEXT2 }}>剩余</span>
+                            <span style={{ fontSize: 20, fontWeight: 900, color: GOLD, lineHeight: 1 }}>{lotteryInfo.remainingChances}</span>
+                            <span style={{ fontSize: 11, color: TEXT2 }}>/ {lotteryInfo.totalChances} 次</span>
+                          </div>
+                        </div>
+                        {/* 已选球队列表 */}
+                        {lotteryInfo.picks.length > 0 && (
+                          <div style={{ marginBottom: 10 }}>
+                            <div style={{ fontSize: 11, color: TEXT2, marginBottom: 6 }}>已选球队</div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                              {lotteryInfo.picks.map((p, i) => (
+                                <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, backgroundColor: "rgba(255,215,0,0.1)", border: `1px solid ${GOLD}`, borderRadius: 8, padding: "3px 8px" }}>
+                                  <img src={`/flags/${p.teamCode.toLowerCase()}.png`} style={{ width: 18, height: 12, objectFit: "cover", borderRadius: 2 }} alt="" />
+                                  <span style={{ fontSize: 12, color: GOLD, fontWeight: 600 }}>{p.teamName}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {/* 提交按钮 */}
+                        {lotteryInfo.remainingChances > 0 ? (
+                          <>
+                            <button
+                              className="w-full py-3 rounded-2xl text-sm font-bold"
+                              style={{ backgroundColor: lotterySubmitting ? "rgba(255,215,0,0.3)" : GOLD, color: "#0a1628", opacity: lotterySubmitting ? 0.7 : 1 }}
+                              disabled={lotterySubmitting}
+                              onClick={async () => {
+                                if (!selectedTeam || lotterySubmitting) return;
+                                setLotterySubmitting(true);
+                                setLotteryMsg(null);
+                                try {
+                                  await submitPickMutation.mutateAsync({ teamCode: selectedTeam.code, teamName: selectedTeam.name });
+                                  setLotteryMsg(`已成功押注 ${selectedTeam.name}`);
+                                } catch (e: any) {
+                                  setLotteryMsg(e?.message || '提交失败，请重试');
+                                } finally {
+                                  setLotterySubmitting(false);
+                                }
+                              }}
+                            >
+                              {lotterySubmitting ? "提交中..." : `押注 ${selectedTeam?.name}`}
+                            </button>
+                            {lotteryMsg && (
+                              <div style={{ marginTop: 8, textAlign: "center", fontSize: 12, color: lotteryMsg.startsWith("已成功") ? "#4ADE80" : "#F87171" }}>
+                                {lotteryMsg}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div style={{ textAlign: "center", fontSize: 12, color: TEXT2, padding: "6px 0" }}>竞猜次数已用完</div>
+                        )}
+                      </>
+                    )}
+                  </div>
                   <button
                     className="w-full mt-4 py-3 rounded-2xl text-sm font-semibold"
                     style={{ backgroundColor: "rgba(255,255,255,0.08)", color: TEXT2 }}
-                    onClick={() => { setSelectedTeam(null); setBuyQty(1); }}
+                    onClick={() => { setSelectedTeam(null); setBuyQty(1); setLotteryMsg(null); }}
                   >
                     关闭
                   </button>
