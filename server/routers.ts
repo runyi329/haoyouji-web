@@ -14883,9 +14883,26 @@ ${klinesSummary}
             }
           } catch {}
         }
+        // 查询每个订单的参与方数量
+        let participantCountMap: Record<number, number> = {};
+        if (conn && ordersWithParticipant.length > 0) {
+          try {
+            const orderIds = ordersWithParticipant.map((o: any) => Number(o.id));
+            const placeholders = orderIds.map(() => '?').join(',');
+            const pcRows = await conn.execute(
+              `SELECT order_id, COUNT(*) as cnt FROM funder_order_participants WHERE order_id IN (${placeholders}) GROUP BY order_id`,
+              orderIds
+            ) as any;
+            const pcArr = Array.isArray(pcRows[0]) ? pcRows[0] : (Array.isArray(pcRows) ? pcRows : []);
+            for (const row of pcArr) {
+              participantCountMap[Number(row.order_id)] = Number(row.cnt);
+            }
+          } catch {}
+        }
         const ordersWithPaid = ordersWithParticipant.map((o: any) => ({
           ...o,
           paidTotal: paidTotalMap[Number(o.id)] || null,
+          participantCount: participantCountMap[Number(o.id)] || 0,
         }));
         return { orders: ordersWithPaid, livePrices };
       }),

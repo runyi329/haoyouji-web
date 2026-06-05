@@ -458,7 +458,7 @@ function FunderOrderCard({
               className="px-2 py-1 text-xs rounded-lg font-medium transition-colors"
               style={{ backgroundColor: showParticipantsPanel === order.id ? '#059669' : '#ECFDF5', color: showParticipantsPanel === order.id ? '#fff' : '#059669' }}
             >
-              参与方
+              参与方{order.participantCount > 0 ? ` ${order.participantCount}` : ''}
             </button>
           )}
           <button
