@@ -943,15 +943,15 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   // 担保价值（在 assetOrdersData 定义后使用）——放到这里是为了先定义类型，实际计算在下方的 derivedCollateral 中
-  const { data: funderUsers, isLoading: usersLoading } = trpc.ledger.funderGetFunderUsers.useQuery(
-    { ledgerId },
-    { enabled: ledgerId > 0 }
-  );
-
   // 当前登录用户信息（用于备注权限控制）
   const { data: currentUser } = trpc.auth.me.useQuery();
   const { data: ledgerData } = trpc.ledger.getLedger.useQuery({ id: ledgerId }, { enabled: ledgerId > 0 });
   const isAdminUser = (ledgerData as any)?.userRole === 'owner' || (ledgerData as any)?.userRole === 'admin';
+
+  const { data: funderUsers, isLoading: usersLoading } = trpc.ledger.funderGetFunderUsers.useQuery(
+    { ledgerId },
+    { enabled: ledgerId > 0 && isAdminUser }
+  );
 
   const { data: assetOrdersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId, ...(selectedUserId ? { userId: selectedUserId } : {}) },
@@ -1390,7 +1390,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
       )}
 
       <div className="px-4 py-4">
-        {/* 用户选择下拉框 + 添加订单按钮（同一行） */}
+        {/* 用户选择下拉框 + 添加订单按钮（仅管理员可见） */}
+        {isAdminUser && (
         <div className="flex items-center gap-2 mb-4">
           {/* 下拉框 */}
           <div className="relative flex-1">
@@ -1469,6 +1470,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
             添加订单
           </button>
         </div>
+        )}
 
         {/* 订单列表 */}
         <div>
