@@ -27,7 +27,12 @@ export default function FinanceUnified() {
           <button onClick={() => setLocation(`/ledger/${ledgerId}/settings${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)} className="p-1 -ml-2">
             <ChevronLeft className="w-6 h-6 text-white" />
           </button>
-          <h1 className="text-lg font-semibold text-white">融资付息订单管理</h1>
+          <h1 className="text-lg font-semibold text-white flex-1">融资付息订单管理</h1>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-sm font-medium px-3 py-1 rounded-full"
+            style={{ color: 'rgba(255,255,255,0.9)', background: 'rgba(255,255,255,0.15)' }}
+          >刷新</button>
         </div>
         {/* Tab 切换 */}
         <div className="flex px-4 pb-0">
