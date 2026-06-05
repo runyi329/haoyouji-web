@@ -564,9 +564,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
 
         <div>
           <h2 className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">
-            {activeUserTab === 'all'
-              ? `融资订单列表 ${orders.length > 0 ? `· ${orders.length} 笔` : ''}`
-              : `${(realMembers.find((m: any) => m.userId === activeUserTab)?.nickname || realMembers.find((m: any) => m.userId === activeUserTab)?.username || '用户')} 的订单 · ${displayOrders.length} 笔`}
+            订单列表 {displayOrders.length > 0 ? `· ${displayOrders.length} 笔` : ''}
           </h2>
           {ordersLoading ? (
             <div className="text-center py-4 text-gray-400 text-sm">加载中...</div>

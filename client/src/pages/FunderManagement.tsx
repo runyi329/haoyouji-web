@@ -770,34 +770,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
           <h2 className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">
             订单列表 {assetOrders ? `· ${(assetOrders as any[]).length} 笔` : ''}
           </h2>
-          {/* 员工筛选按鈕（仅在有订单时显示） */}
-          {!ordersLoading && assetOrders && (assetOrders as any[]).length > 0 && (() => {
-            const names = Array.from(new Set(
-              (assetOrders as any[]).map((o: any) => o.userName || o.username || '').filter(Boolean)
-            )) as string[];
-            if (names.length <= 1) return null;
-            return (
-              <div className="flex gap-2 overflow-x-auto pb-1 mb-3">
-                <button
-                  onClick={() => setEmployeeNameFilter('')}
-                  className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
-                  style={employeeNameFilter === ''
-                    ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
-                    : { backgroundColor: '#fff', color: '#6B7280', border: '1px solid #E5E7EB' }}
-                >全部</button>
-                {names.map(name => (
-                  <button
-                    key={name}
-                    onClick={() => setEmployeeNameFilter(employeeNameFilter === name ? '' : name)}
-                    className="shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
-                    style={employeeNameFilter === name
-                      ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
-                      : { backgroundColor: '#fff', color: '#6B7280', border: '1px solid #E5E7EB' }}
-                  >{name}</button>
-                ))}
-              </div>
-            );
-          })()}
           {ordersLoading ? (
             <div className="text-center py-4 text-gray-400 text-sm">加载中...</div>
           ) : !assetOrders || (assetOrders as any[]).length === 0 ? (
@@ -806,13 +778,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
               <div className="text-gray-400 text-sm">暂无订单</div>
             </div>
           ) : (() => {
-            const keyword = employeeNameFilter.trim();
-            const filteredOrders = keyword
-              ? (assetOrders as any[]).filter((o: any) => (o.userName || o.username || '') === keyword)
-              : (assetOrders as any[]);
+            const filteredOrders = assetOrders as any[];
             return filteredOrders.length === 0 ? (
               <div className="text-center py-8 bg-white rounded-2xl shadow-sm">
-                <div className="text-gray-400 text-sm">该员工暂无订单</div>
+                <div className="text-gray-400 text-sm">暂无订单</div>
               </div>
             ) : (
             <div className="space-y-3">
