@@ -995,7 +995,7 @@ function FunderOrderCard({
             <button
               onClick={() => {
                 if (!paymentForm.amount || parseFloat(paymentForm.amount) <= 0) { toast.error('请填写结息金额'); return; }
-                addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: paymentForm.amount, currency: paymentForm.currency || 'U', exchangeRate: paymentForm.exchangeRate || '7.0', paymentDate: paymentForm.payDate, note: paymentForm.note || undefined });
+                addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat(paymentForm.amount), currency: paymentForm.currency || 'U', exchangeRate: parseFloat(paymentForm.exchangeRate || '7.0'), paymentDate: paymentForm.payDate || new Date().toISOString().slice(0, 10), note: paymentForm.note || undefined });
               }}
               disabled={addPaymentMutation.isPending}
               className="w-full py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50"
