@@ -1808,37 +1808,39 @@ export default function FunderManagement() {
                         )}
                       </div>
                       <div className="space-y-0.5 text-xs mt-1">
-                        {formData.buyPrice && (
+                        {displayConfig.buyPrice && formData.buyPrice && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">买入币价</span>
                             <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(formData.buyPrice).toLocaleString()} U</span>
                           </div>
                         )}
-                        {computedAmount && (
+                        {displayConfig.buyValue && computedAmount && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">买入价值</span>
                             <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(computedAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
                           </div>
                         )}
-                        {formData.interestBase && (
+                        {displayConfig.interestBase && formData.interestBase && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">计息基数</span>
                             <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(formData.interestBase).toLocaleString(undefined, { maximumFractionDigits: 2 })} {formData.interestBaseCurrency === 'CNY' ? '元' : 'U'}</span>
                           </div>
                         )}
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-400 shrink-0">当前币价</span>
-                          <span className="font-medium" style={{ color: (() => { const lp = formLivePrices[formData.coin]; const bp = formData.buyPrice ? parseFloat(formData.buyPrice) : null; if (lp && bp) { return lp > bp ? '#DC2626' : lp < bp ? '#16A34A' : '#4B5563'; } return '#4B5563'; })() }}>
-                            {formLivePrices[formData.coin] ? formLivePrices[formData.coin].toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U' : '获取中...'}
-                          </span>
-                        </div>
-                        {formData.buyDate && (
+                        {displayConfig.todayPrice && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400 shrink-0">当前币价</span>
+                            <span className="font-medium" style={{ color: (() => { const lp = formLivePrices[formData.coin]; const bp = formData.buyPrice ? parseFloat(formData.buyPrice) : null; if (lp && bp) { return lp > bp ? '#DC2626' : lp < bp ? '#16A34A' : '#4B5563'; } return '#4B5563'; })() }}>
+                              {formLivePrices[formData.coin] ? formLivePrices[formData.coin].toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U' : '获取中...'}
+                            </span>
+                          </div>
+                        )}
+                        {displayConfig.buyDate && formData.buyDate && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">开仓时间</span>
                             <span className="font-medium" style={{ color: '#4B5563' }}>{formData.buyDate}</span>
                           </div>
                         )}
-                        {formData.buyDate && (
+                        {displayConfig.holdDuration && formData.buyDate && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">持有时长</span>
                             <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -1852,7 +1854,7 @@ export default function FunderManagement() {
                             </span>
                           </div>
                         )}
-                        {editingOrder?.order_no && (
+                        {displayConfig.orderNo && editingOrder?.order_no && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">订单编号</span>
                             <span className="font-medium" style={{ color: '#4B5563' }}>{editingOrder.order_no}</span>
@@ -1864,7 +1866,7 @@ export default function FunderManagement() {
                     <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
                     {/* 右栏：待结利息 */}
                     <div className="w-40 p-3 pl-2 flex flex-col">
-                      {formData.interestRateAnnual && formData.interestBase && formData.interestStartDate ? (
+                      {displayConfig.accruedInterest && formData.interestRateAnnual && formData.interestBase && formData.interestStartDate ? (
                         <div>
                           <div className="h-4 flex items-center" style={{ color: '#F59E0B' }}>
                             <span className="text-xs font-medium">待结利息（年化 {parseFloat(formData.interestRateAnnual).toFixed(0)}%）</span>
@@ -1884,13 +1886,13 @@ export default function FunderManagement() {
                             </div>
                           </div>
                           <div className="space-y-0.5 text-xs mt-1">
-                            {previewPaidInterest > 0 && (
+                            {displayConfig.paidInterest && previewPaidInterest > 0 && (
                               <div className="flex items-center justify-between">
                                 <span className="text-gray-400 shrink-0">已结利息</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>{previewPaidInterest.toLocaleString(undefined, { maximumFractionDigits: 2 })} {previewPaidInterestCurrency === 'CNY' ? '元' : 'U'}</span>
                               </div>
                             )}
-                            {formData.interestStartDate && (
+                            {displayConfig.interestStartDate && formData.interestStartDate && (
                               <div className="flex items-center justify-between">
                                 <span className="text-gray-400 shrink-0">计息日期</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -1898,7 +1900,7 @@ export default function FunderManagement() {
                                 </span>
                               </div>
                             )}
-                            {collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
+                            {displayConfig.collateralCoin && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
                               <div className="flex items-center justify-between">
                                 <span className="text-gray-400 shrink-0">担保货币</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -1906,7 +1908,7 @@ export default function FunderManagement() {
                                 </span>
                               </div>
                             )}
-                            {computedCollateralValue !== null && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
+                            {displayConfig.collateralValue && computedCollateralValue !== null && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
                               <div>
                                 <div className="flex items-center justify-between">
                                   <span className="text-gray-400 shrink-0"></span>
@@ -1918,7 +1920,7 @@ export default function FunderManagement() {
                                 </div>
                               </div>
                             )}
-                            {computedCollateralValue !== null && computedAmount && parseFloat(computedAmount) > 0 && (
+                            {displayConfig.collateral && computedCollateralValue !== null && computedAmount && parseFloat(computedAmount) > 0 && (
                               <div className="flex items-center justify-between border-t pt-1" style={{ borderColor: '#E8EFFF' }}>
                                 <span className="text-gray-400 shrink-0">担保缺口</span>
                                 <span className="font-medium" style={{ color: (computedCollateralValue / parseFloat(computedAmount)) >= 1 ? '#16A34A' : '#DC2626' }}>
