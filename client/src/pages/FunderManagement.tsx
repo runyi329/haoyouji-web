@@ -301,6 +301,14 @@ interface FunderOrderCardProps {
   showParticipantsPanel: number | null;
   getPaymentLabel: (val: string) => string;
   isInvited: boolean;
+  participantsList: { userId: number; displayName: string; role: string; sortOrder: number }[];
+  setParticipantsList: (fn: (list: any[]) => any[]) => void;
+  ledgerMembers: { userId: number; displayName: string; memberRole?: string }[];
+  participantsLoading: boolean;
+  roleOptions: { value: string; label: string; color: string; defaultRateLabel: string }[];
+  handleAddParticipant: (role: any) => void;
+  handleSaveParticipants: (orderId: number) => void;
+  saveParticipantsMutation: any;
 }
 
 function FunderOrderCard({
@@ -329,6 +337,14 @@ function FunderOrderCard({
   showParticipantsPanel,
   getPaymentLabel,
   isInvited,
+  participantsList,
+  setParticipantsList,
+  ledgerMembers,
+  participantsLoading,
+  roleOptions,
+  handleAddParticipant,
+  handleSaveParticipants,
+  saveParticipantsMutation,
 }: FunderOrderCardProps) {
   const accrued = useAccruedInterestFunder(
     order.status === 'active' ? order.interest_base : null,
@@ -620,6 +636,84 @@ function FunderOrderCard({
       {order.admin_note && (
         <div className="px-4 pb-2 text-xs text-gray-400 border-t border-gray-100 pt-2">
           内部备注：{order.admin_note}
+        </div>
+      )}
+
+      {/* 参与方面板 */}
+      {showParticipantsPanel === order.id && (
+        <div className="px-4 pt-3 pb-3 border-t border-green-100">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs font-semibold text-green-700 flex items-center gap-1">
+              <Users2 className="w-3.5 h-3.5" />
+              多视角订单参与方
+            </div>
+            <div className="flex gap-1">
+              {roleOptions.map(r => (
+                <button
+                  key={r.value}
+                  onClick={() => handleAddParticipant(r.value)}
+                  className="px-2 py-0.5 text-xs rounded-full font-medium border"
+                  style={{ borderColor: r.color, color: r.color, backgroundColor: `${r.color}10` }}
+                >
+                  +{r.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {participantsLoading ? (
+            <div className="text-center py-3 text-xs text-gray-400">加载中...</div>
+          ) : participantsList.length === 0 ? (
+            <div className="text-center py-3 text-xs text-gray-400 bg-gray-50 rounded-xl">
+              暂无参与方配置，点击上方按钮添加
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {participantsList.map((p, idx) => {
+                const roleOpt = roleOptions.find(r => r.value === p.role)!;
+                return (
+                  <div key={idx} className="bg-gray-50 rounded-xl p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: roleOpt?.color || '#6B7280' }}>
+                        {roleOpt?.label || p.role}
+                      </span>
+                      <button
+                        onClick={() => setParticipantsList(list => list.filter((_, i) => i !== idx))}
+                        className="p-0.5 text-gray-300 hover:text-red-400"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div>
+                      <div className="text-xs text-gray-400 mb-0.5">选择账本成员 *</div>
+                      <select
+                        value={p.userId}
+                        onChange={e => {
+                          const uid = Number(e.target.value);
+                          const member = ledgerMembers.find(m => m.userId === uid);
+                          setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, userId: uid, displayName: member?.displayName || '' } : item));
+                        }}
+                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
+                      >
+                        <option value={0}>-- 请选择成员 --</option>
+                        {ledgerMembers.map(m => (
+                          <option key={m.userId} value={m.userId}>{m.displayName}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">配置（佣金率、计佣基数等）请在该成员的订单编辑页设置</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <button
+            onClick={() => handleSaveParticipants(order.id)}
+            disabled={saveParticipantsMutation.isPending}
+            className="mt-3 w-full py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg, #059669, #10B981)' }}
+          >
+            {saveParticipantsMutation.isPending ? '保存中...' : '保存参与方配置'}
+          </button>
         </div>
       )}
 
@@ -1434,6 +1528,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                     showParticipantsPanel={showParticipantsPanel}
                     getPaymentLabel={getPaymentLabel}
                     isInvited={isInvited}
+                    participantsList={participantsList}
+                    setParticipantsList={setParticipantsList}
+                    ledgerMembers={ledgerMembers}
+                    participantsLoading={participantsLoading}
+                    roleOptions={ROLE_OPTIONS}
+                    handleAddParticipant={handleAddParticipant}
+                    handleSaveParticipants={handleSaveParticipants}
+                    saveParticipantsMutation={saveParticipantsMutation}
                   />
                 );
               })}
