@@ -1891,7 +1891,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
 // ─── 主页面 ───────────────────────────────────────────────
 
 // ─── 备注折叠面板（与资方管理 FunderNoteRow 一致）────────────────
-interface FinanceNoteItem { text: string; time: string; }
+interface FinanceNoteItem { text: string; time: string; userId?: number; userName?: string; userAvatar?: string; }
 
 function parseFinanceNotes(raw: string): FinanceNoteItem[] {
   if (!raw) return [];
@@ -1900,6 +1900,13 @@ function parseFinanceNotes(raw: string): FinanceNoteItem[] {
     if (Array.isArray(parsed)) return parsed as FinanceNoteItem[];
   } catch {}
   return [{ text: raw, time: '' }];
+}
+function CPNoteAvatar({ name, avatar }: { name?: string; avatar?: string }) {
+  if (avatar) return <img src={avatar} alt={name || ''} className="w-5 h-5 rounded-full object-cover shrink-0" style={{ border: '1px solid #E0E7FF' }} />;
+  const initials = (name || '?').slice(0, 1).toUpperCase();
+  const colors = ['#6366F1','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6'];
+  const color = colors[(name || '').charCodeAt(0) % colors.length] || '#6366F1';
+  return <div className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: color }}>{initials}</div>;
 }
 
 function formatFinanceNoteTime(iso: string): string {
@@ -1920,11 +1927,13 @@ const FinanceEditIcon = () => (
   </svg>
 );
 
-function NoteRow({ orderId, ledgerId, initialNote, onSaved }: {
+function NoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, isAdmin }: {
   orderId: number;
   ledgerId: number;
   initialNote: string;
   onSaved: (note: string) => void;
+  currentUser?: { id: number; name?: string; username?: string; avatar?: string };
+  isAdmin?: boolean;
 }) {
   const [notes, setNotes] = useState<FinanceNoteItem[]>(() => parseFinanceNotes(initialNote));
   const [expanded, setExpanded] = useState(false);
@@ -1932,6 +1941,7 @@ function NoteRow({ orderId, ledgerId, initialNote, onSaved }: {
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
   const updateNote = trpc.ledger.financeUpdatePublicNote.useMutation();
+  const canEdit = (note: FinanceNoteItem) => isAdmin || (currentUser && note.userId === currentUser.id) || !note.userId;
 
   const saveNotes = async (newNotes: FinanceNoteItem[]) => {
     setSaving(true);
@@ -1948,18 +1958,22 @@ function NoteRow({ orderId, ledgerId, initialNote, onSaved }: {
   const handleSaveEdit = async (idx: number) => {
     if (!editValue.trim()) return;
     const newNotes = notes.map((n, i) =>
-      i === idx ? { text: editValue.trim(), time: new Date().toISOString() } : n
+      i === idx ? { ...n, text: editValue.trim(), time: new Date().toISOString() } : n
     );
     await saveNotes(newNotes);
     setEditingIdx(null);
   };
 
   const handleAddNote = () => {
-    const newNotes = [...notes, { text: '', time: new Date().toISOString() }];
+    const newNotes = [...notes, { text: '', time: new Date().toISOString(), userId: currentUser?.id, userName: currentUser?.name || currentUser?.username, userAvatar: currentUser?.avatar || undefined }];
     setNotes(newNotes);
     setEditingIdx(newNotes.length - 1);
     setEditValue('');
     setExpanded(true);
+  };
+
+  const handleDelete = async (idx: number) => {
+    await saveNotes(notes.filter((_, i) => i !== idx));
   };
 
   const handleSaveNew = async (idx: number) => {
@@ -1969,7 +1983,7 @@ function NoteRow({ orderId, ledgerId, initialNote, onSaved }: {
       return;
     }
     const newNotes = notes.map((n, i) =>
-      i === idx ? { text: editValue.trim(), time: new Date().toISOString() } : n
+      i === idx ? { ...n, text: editValue.trim(), time: new Date().toISOString() } : n
     );
     await saveNotes(newNotes);
     setEditingIdx(null);
@@ -2003,44 +2017,53 @@ function NoteRow({ orderId, ledgerId, initialNote, onSaved }: {
           {notes.map((note, idx) => (
             <div key={idx}>
               {idx > 0 && <div style={{ borderTop: '1px solid #E8EFFF' }} className="my-1" />}
-              <div className="flex items-center gap-1 py-0.5">
-                {editingIdx === idx ? (
-                  <>
-                    <input
-                      autoFocus
-                      className="flex-1 text-xs border rounded px-1.5 py-0.5 outline-none"
-                      style={{ borderColor: '#C7D7FF', color: '#1A2340', minWidth: 0 }}
-                      value={editValue}
-                      onChange={e => setEditValue(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') { note.text ? handleSaveEdit(idx) : handleSaveNew(idx); }
-                        if (e.key === 'Escape') { setEditingIdx(null); if (!note.text) setNotes(notes.filter((_, i) => i !== idx)); }
-                      }}
-                      placeholder="输入备注..."
-                      maxLength={200}
-                    />
-                    <button
-                      onClick={() => note.text ? handleSaveEdit(idx) : handleSaveNew(idx)}
-                      disabled={saving}
-                      className="shrink-0 text-xs px-2 py-0.5 rounded"
-                      style={{ background: '#3B82F6', color: '#fff' }}
-                    >{saving ? '...' : '保存'}</button>
-                    <button
-                      onClick={() => { setEditingIdx(null); if (!note.text) setNotes(notes.filter((_, i) => i !== idx)); }}
-                      className="shrink-0 text-xs px-1.5 py-0.5 rounded"
-                      style={{ background: '#F3F4F6', color: '#6B7280' }}
-                    >取消</button>
-                  </>
-                ) : (
-                  <>
-                    <span className="flex-1 truncate" style={{ color: '#4B5563' }}>{note.text}</span>
-                    {note.time && <span className="shrink-0 text-[10px]" style={{ color: '#C0C8D8' }}>{formatFinanceNoteTime(note.time)}</span>}
-                    <button onClick={() => { setEditingIdx(idx); setEditValue(note.text); }} className="shrink-0" title="编辑">
-                      <FinanceEditIcon />
-                    </button>
-                  </>
-                )}
-              </div>
+              {editingIdx === idx ? (
+                <div className="flex items-center gap-1 py-0.5">
+                  <input
+                    autoFocus
+                    className="flex-1 text-xs border rounded px-1.5 py-0.5 outline-none"
+                    style={{ borderColor: '#C7D7FF', color: '#1A2340', minWidth: 0 }}
+                    value={editValue}
+                    onChange={e => setEditValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { note.text ? handleSaveEdit(idx) : handleSaveNew(idx); }
+                      if (e.key === 'Escape') { setEditingIdx(null); if (!note.text) setNotes(notes.filter((_, i) => i !== idx)); }
+                    }}
+                    placeholder="输入备注..."
+                    maxLength={200}
+                  />
+                  <button
+                    onClick={() => note.text ? handleSaveEdit(idx) : handleSaveNew(idx)}
+                    disabled={saving}
+                    className="shrink-0 text-xs px-2 py-0.5 rounded"
+                    style={{ background: '#3B82F6', color: '#fff' }}
+                  >{saving ? '...' : '保存'}</button>
+                  <button
+                    onClick={() => { setEditingIdx(null); if (!note.text) setNotes(notes.filter((_, i) => i !== idx)); }}
+                    className="shrink-0 text-xs px-1.5 py-0.5 rounded"
+                    style={{ background: '#F3F4F6', color: '#6B7280' }}
+                  >取消</button>
+                </div>
+              ) : (
+                <div className="py-0.5">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <CPNoteAvatar name={note.userName} avatar={note.userAvatar} />
+                    <span className="text-[10px] font-medium" style={{ color: '#6B7280' }}>{note.userName || '未知用户'}</span>
+                    {note.time && <span className="text-[10px]" style={{ color: '#C0C8D8' }}>{formatFinanceNoteTime(note.time)}</span>}
+                    {canEdit(note) && (
+                      <div className="ml-auto flex items-center gap-1">
+                        <button onClick={() => { setEditingIdx(idx); setEditValue(note.text); }} className="p-0.5" title="编辑">
+                          <FinanceEditIcon />
+                        </button>
+                        <button onClick={() => handleDelete(idx)} className="p-0.5" title="删除">
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="pl-6 break-all" style={{ color: '#4B5563' }}>{note.text}</div>
+                </div>
+              )}
             </div>
           ))}
           {/* 添加按钮在最后一条下方 */}
@@ -3467,6 +3490,8 @@ export default function CryptoPrediction() {
                           order.public_note = newNote || null;
                           refetchFinanceOrders();
                         }}
+                        currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
+                        isAdmin={isOwner}
                       />
                     </div>
                   );

@@ -6,6 +6,26 @@
 import { useState, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 
+// 备注条目类型
+interface FOMNoteItem { text: string; time: string; userId?: number; userName?: string; userAvatar?: string; }
+function parseFOMNotes(raw: string): FOMNoteItem[] {
+  if (!raw) return [];
+  try { const p = JSON.parse(raw); if (Array.isArray(p)) return p as FOMNoteItem[]; } catch {}
+  return [{ text: raw, time: '' }];
+}
+function formatFOMNoteTime(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function FOMNoteAvatar({ name, avatar }: { name?: string; avatar?: string }) {
+  if (avatar) return <img src={avatar} alt={name || ''} className="w-5 h-5 rounded-full object-cover" style={{ border: '1px solid #E0E7FF' }} />;
+  const initials = (name || '?').slice(0, 1).toUpperCase();
+  const colors = ['#6366F1','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6'];
+  const color = colors[(name || '').charCodeAt(0) % colors.length] || '#6366F1';
+  return <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: color }}>{initials}</div>;
+}
+
 const COIN_COLORS: Record<string, string> = {
   BTC: '#F7931A',
   ETH: '#627EEA',
@@ -309,15 +329,29 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
             />
           )}
 
-          {/* 公开备注（资金方可见） */}
-          {order.public_note && (
-            <div>
-              <div className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">备注</div>
-              <div className="bg-gray-50 rounded-2xl px-4 py-3">
-                <p className="text-sm text-gray-700 leading-relaxed">{order.public_note}</p>
+          {/* 公开备注（资金方可见，显示备注人头像） */}
+          {(() => {
+            const notes = parseFOMNotes(order.public_note || '');
+            if (notes.length === 0) return null;
+            return (
+              <div>
+                <div className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">备注</div>
+                <div className="bg-gray-50 rounded-2xl px-4 py-3 space-y-3">
+                  {notes.map((note, idx) => (
+                    <div key={idx}>
+                      {idx > 0 && <div className="border-t border-gray-100 pt-3" />}
+                      <div className="flex items-center gap-2 mb-1">
+                        <FOMNoteAvatar name={note.userName} avatar={note.userAvatar} />
+                        <span className="text-xs font-medium text-gray-500">{note.userName || '未知用户'}</span>
+                        {note.time && <span className="text-[10px] text-gray-300 ml-auto">{formatFOMNoteTime(note.time)}</span>}
+                      </div>
+                      <div className="pl-7 text-sm text-gray-700 leading-relaxed break-all">{note.text}</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* 订单编号 */}
           <div className="text-center text-xs text-gray-300 pb-2">
