@@ -238,7 +238,7 @@ export default function FunderManagement() {
 
   const { data: assetOrdersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId, ...(selectedUserId ? { userId: selectedUserId } : {}) },
-    { enabled: ledgerId > 0 }
+    { enabled: ledgerId > 0, staleTime: 10000, refetchInterval: 10000 }
   );
   // funderGetAssetOrders 返回 { orders, livePrices }，取 orders 数组
   const assetOrders = (assetOrdersData as any)?.orders ?? assetOrdersData ?? [];
@@ -1201,7 +1201,7 @@ export default function FunderManagement() {
 
       {/* 创建/编辑弹窗 */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)', touchAction: 'none' }} onTouchMove={e => e.preventDefault()}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onTouchMove={e => { if (e.target === e.currentTarget) e.preventDefault(); }}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] flex flex-col overflow-x-hidden" style={{ overscrollBehavior: 'contain' }}>
             <div className="flex-shrink-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl" style={{ zIndex: 10 }}>
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>

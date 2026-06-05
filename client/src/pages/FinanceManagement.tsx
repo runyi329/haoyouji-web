@@ -280,7 +280,7 @@ export default function FinanceManagement() {
   // 实时价格（用于表单预览和保证金率计算）
   const { data: assetSummaryForm } = trpc.ledger.financeGetAssetSummary.useQuery(
     { ledgerId },
-    { enabled: !!ledgerId && showForm, staleTime: 30000, refetchInterval: 30000 }
+    { enabled: !!ledgerId && showForm, staleTime: 10000, refetchInterval: 10000 }
   );
   const formLivePrices: Record<string, number> = (assetSummaryForm as any)?.livePrices ?? {};
 
