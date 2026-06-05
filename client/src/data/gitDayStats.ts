@@ -127,4 +127,5 @@ export const gitDayStats: Record<string, number> = {
   "2026-06-02": 67,
   "2026-06-03": 70,
   "2026-06-04": 57,
+  "2026-06-05": 30,
 };
