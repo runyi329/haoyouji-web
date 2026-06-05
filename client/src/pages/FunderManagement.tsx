@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
@@ -346,6 +346,9 @@ function FunderOrderCard({
   handleSaveParticipants,
   saveParticipantsMutation,
 }: FunderOrderCardProps) {
+  const [showInterestTip, setShowInterestTip] = useState(false);
+  const tipBtnRef = useRef<HTMLButtonElement>(null);
+  const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
   const accrued = useAccruedInterestFunder(
     order.status === 'active' ? order.interest_base : null,
     order.status === 'active' ? (isInvited ? order.participantInfo?.commissionRate : order.interest_rate_annual) : null,
@@ -577,9 +580,72 @@ function FunderOrderCard({
 
         {/* 右栏：待结利息 */}
         <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
-          <div className="h-5 flex items-center gap-1">
+          <div className="h-5 flex items-center gap-1 relative">
             <span className="text-xs font-medium" style={{ color: isInvited ? '#059669' : '#3B82F6' }}>{isInvited ? '待结佣金' : '待结利息'}</span>
-            {rateAbs && <span className="text-xs text-gray-400">(年化 {rateSign}{rateAbs}%)</span>}
+            {rateAbs && <span className="text-xs text-gray-400">(年化 {rateAbs}%)</span>}
+            <button
+              ref={tipBtnRef}
+              type="button"
+              onClick={() => {
+                if (!showInterestTip && tipBtnRef.current) {
+                  const rect = tipBtnRef.current.getBoundingClientRect();
+                  setTipPos({ bottom: window.innerHeight - rect.top + 6, right: window.innerWidth - rect.right });
+                }
+                setShowInterestTip(v => !v);
+              }}
+              className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
+              style={{ backgroundColor: '#E5E7EB', color: '#6B7280' }}
+            >?</button>
+            {showInterestTip && (() => {
+              const startDate = (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) ? String(isInvited ? order.participantInfo.commissionStartDate : order.interest_start_date).slice(0, 10) : null;
+              const todayStr = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+              const elapsedMs = startDate ? Math.max(0, Date.now() - new Date(startDate + 'T00:00:00').getTime()) : 0;
+              const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
+              const elapsedHours = Math.floor((elapsedMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+              const elapsedMins = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
+              const elapsedSecs = Math.floor(elapsedMs / 1000);
+              const elapsedLabel = elapsedDays > 0
+                ? `${elapsedDays}天 ${elapsedHours}小时 ${elapsedMins}分`
+                : `${elapsedHours}小时 ${elapsedMins}分`;
+              const base = order.interest_base ? parseFloat(order.interest_base) : 0;
+              const rate = order.interest_rate_annual ? parseFloat(order.interest_rate_annual) : 0;
+              const altAccruedTip = convertAlt(displayAccrued);
+              const baseCurLabel = baseCur === 'CNY' ? '元' : 'U';
+              return (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestTip(false)}>
+                  <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-bold" style={{ color: '#1A2340' }}>计息说明</span>
+                      <button onClick={() => setShowInterestTip(false)} className="text-gray-400 text-lg leading-none">×</button>
+                    </div>
+                    <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
+                      <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                        <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 计息时间</div>
+                        <div className="space-y-1">
+                          <div className="flex justify-between"><span>开始日期</span><span className="font-mono font-medium">{startDate || '--'}</span></div>
+                          <div className="flex justify-between"><span>当前日期</span><span className="font-mono font-medium">{todayStr}</span></div>
+                          <div className="flex justify-between"><span>已过时间</span><span className="font-mono font-medium">{elapsedLabel}</span></div>
+                        </div>
+                      </div>
+                      <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                        <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 计算公式</div>
+                        <div>计息基数 × 年化利率 ÷ 365天 ÷ 24小时 ÷ 60分 ÷ 60秒 × 已过秒数</div>
+                        <div className="mt-1 font-mono">
+                          <span style={{ color: '#3B82F6' }}>{base.toLocaleString()}{baseCurLabel} × {rate}% ÷ 365天 ÷ 24小时 ÷ 60分 ÷ 60秒 × {elapsedSecs.toLocaleString()}秒</span>
+                        </div>
+                      </div>
+                      <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                        <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 计息结果</div>
+                        <div className="font-mono flex items-baseline gap-1">
+                          <span style={{ color: '#DC2626', fontSize: '1.5em', fontWeight: 700 }}>= {displayAccrued.toFixed(6)} {interestUnit}</span>
+                        </div>
+                        <div className="mt-1 font-mono" style={{ color: '#DC2626', fontSize: '1.5em', fontWeight: 700 }}>≈ {altAccruedTip.toFixed(2)} {altUnit}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-0.5">
@@ -633,9 +699,9 @@ function FunderOrderCard({
             )}
             {collateralAssets.length > 0 && (
               <div className="flex items-center justify-between">
-                <span className="text-gray-400">风险敢口</span>
+                <span className="text-gray-400">担保缺口</span>
                 <span className="font-medium" style={{ color: isSufficient ? '#4B5563' : '#16A34A' }}>
-                  {isSufficient ? '充足' : `-${(Math.abs(exposure)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
+                  {isSufficient ? '100%' : `-${(Math.abs(exposure)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
                 </span>
               </div>
             )}
