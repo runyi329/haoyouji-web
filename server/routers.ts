@@ -15414,7 +15414,44 @@ ${klinesSummary}
                   ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
         ) as any;
         const orders = ((rows[0] || rows) as any[]) || [];
-        return { orders };
+
+        // 打通：查询该用户作为参与者的资方订单（funder_asset_orders），合并到结果中
+        let participantFunderOrders: any[] = [];
+        if (!targetIsManager) {
+          const { getDbConnection } = await import('./db');
+          const conn = await getDbConnection();
+          if (conn) {
+            try {
+              const pRows = await conn.execute(
+                'SELECT DISTINCT order_id FROM funder_order_participants WHERE ledger_id = ? AND user_id = ?',
+                [input.ledgerId, targetUserId]
+              ) as any;
+              const pArr = Array.isArray(pRows[0]) ? pRows[0] : (Array.isArray(pRows) ? pRows : []);
+              const participantOrderIds = pArr.map((r: any) => Number(r.order_id)).filter(Boolean);
+              if (participantOrderIds.length > 0) {
+                const placeholders = participantOrderIds.map(() => '?').join(',');
+                const fRows = await conn.execute(
+                  `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar as userAvatar,
+                          p.role as participantRole, p.commission_rate, p.commission_base, p.commission_start_date, p.paid_commission
+                   FROM funder_asset_orders fo
+                   LEFT JOIN users u ON u.id = fo.user_id
+                   LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
+                   LEFT JOIN funder_order_participants p ON p.order_id = fo.id AND p.ledger_id = fo.ledger_id AND p.user_id = ?
+                   WHERE fo.ledger_id = ? AND fo.id IN (${placeholders})
+                   ORDER BY fo.created_at DESC`,
+                  [targetUserId, input.ledgerId, ...participantOrderIds]
+                ) as any;
+                const fArr = Array.isArray(fRows[0]) ? fRows[0] : (Array.isArray(fRows) ? fRows : []);
+                // 标记这些订单来自资方（前端可据此区分显示）
+                participantFunderOrders = fArr.map((o: any) => ({ ...o, _fromFunder: true }));
+              }
+            } catch (e) {
+              console.error('[financeGetOrders] 查询参与方资方订单失败:', e);
+            }
+          }
+        }
+
+        return { orders: [...orders, ...participantFunderOrders] };
       }),
 
     // 查询融资付息资产汇总
