@@ -1857,20 +1857,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                             <span className="font-medium" style={{ color: '#4B5563' }}>{formData.buyDate}</span>
                           </div>
                         )}
-                        {displayConfig.holdDuration && formData.buyDate && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-400 shrink-0">持有时长</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>
-                              {(() => {
-                                const elapsed = Date.now() - new Date(formData.buyDate + 'T00:00:00').getTime();
-                                if (elapsed < 0) return '---';
-                                const days = Math.floor(elapsed / (1000 * 60 * 60 * 24));
-                                const hours = Math.floor((elapsed % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                                return days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
-                              })()}
-                            </span>
-                          </div>
-                        )}
+
                         {displayConfig.orderNo && editingOrder?.order_no && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">订单编号</span>
@@ -1921,6 +1908,21 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                                 <span className="text-gray-400 shrink-0">计息日期</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>
                                   {formData.interestStartDate.replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
+                                </span>
+                              </div>
+                            )}
+                            {displayConfig.holdDuration && formData.buyDate && (
+                              <div className="flex items-center justify-between mt-0.5">
+                                <span className="text-gray-400 shrink-0">持有时长</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>
+                                  {(() => {
+                                    const elapsed = Date.now() - new Date(formData.buyDate + 'T00:00:00').getTime();
+                                    if (elapsed < 0) return '---';
+                                    const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
+                                    const days = Math.floor(totalHours / 24);
+                                    const hours = totalHours % 24;
+                                    return days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
+                                  })()}
                                 </span>
                               </div>
                             )}
