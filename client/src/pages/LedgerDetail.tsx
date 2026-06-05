@@ -1270,7 +1270,7 @@ function FunderOrderSmallCard({ order, livePrices }: { order: any; livePrices: R
 // 单张资金方订单卡片（左右两栏布局）
 // AItag Lottie动效数据直接内联，避免fetch/CORS问题
 
-function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidInterestDetails, onClick, canClick, priceDirection, viewMode }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; paidInterestDetails?: Array<{ currency: string; total: number; exchangeRate: number }>; onClick: () => void; canClick?: boolean; priceDirection?: Record<string, 'up' | 'down' | 'same'>; viewMode?: 'medium' | 'large' }) {
+function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidInterestDetails, onClick, canClick, priceDirection, viewMode, currentUser, membersData, isAdmin }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; paidInterestDetails?: Array<{ currency: string; total: number; exchangeRate: number }>; onClick: () => void; canClick?: boolean; priceDirection?: Record<string, 'up' | 'down' | 'same'>; viewMode?: 'medium' | 'large'; currentUser?: any; membersData?: any[]; isAdmin?: boolean }) {
   const [showAIPanel, setShowAIPanel] = useState(false);
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
   const coinNameMap: Record<string, string> = { BTC: '比特币', ETH: '以太坊', SOL: '索拉纳' };
@@ -1499,8 +1499,8 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
         ledgerId={ledgerId}
         initialNote={order.public_note || ''}
         onSaved={(note) => { order.public_note = note; }}
-        currentUser={user ? { id: (user as any).id, name: (user as any).name, username: (user as any).username, avatar: (user as any).avatar } : undefined}
-        isAdmin={isOwner || isAdmin}
+        currentUser={currentUser ? { id: currentUser.id, name: currentUser.name, username: currentUser.username, avatar: currentUser.avatar || (membersData as any[])?.find((m: any) => m.userId === currentUser.id)?.avatar || undefined } : undefined}
+        isAdmin={isAdmin}
       />
       {/* AI 智能服务面板 */}
       {showAIPanel && (() => {
@@ -4882,6 +4882,9 @@ export default function LedgerDetail() {
                       onClick={() => {}}
                       canClick={false}
                       priceDirection={funderPriceDirection}
+                      currentUser={user}
+                      membersData={membersData as any[]}
+                      isAdmin={isOwner || isAdmin}
                     />
                   );
                 })}
@@ -4908,6 +4911,9 @@ export default function LedgerDetail() {
                       canClick={false}
                       priceDirection={funderPriceDirection}
                       viewMode="large"
+                      currentUser={user}
+                      membersData={membersData as any[]}
+                      isAdmin={isOwner || isAdmin}
                     />
                   );
                 })}
