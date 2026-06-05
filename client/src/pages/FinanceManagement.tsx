@@ -232,7 +232,7 @@ function FNoteAvatar({ name, avatar }: { name?: string; avatar?: string }) {
   const color = colors[name.charCodeAt(0) % colors.length] || '#6366F1';
   return <div className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: color }}>{initials}</div>;
 }
-function FinanceNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, isAdmin }: { orderId: number; ledgerId: number; initialNote: string; onSaved: (note: string) => void; currentUser?: { id: number; name?: string; username?: string; avatar?: string }; isAdmin?: boolean; }) {
+function FinanceNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, isAdmin, membersData }: { orderId: number; ledgerId: number; initialNote: string; onSaved: (note: string) => void; currentUser?: { id: number; name?: string; username?: string; avatar?: string }; isAdmin?: boolean; membersData?: any[] }) {
   const [notes, setNotes] = useState<FNoteItem[]>(() => parseFNotes(initialNote));
   const [expanded, setExpanded] = useState(false);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
@@ -290,7 +290,7 @@ function FinanceNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, 
               ) : (
                 <div className="py-0.5">
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <FNoteAvatar name={note.userName} avatar={note.userAvatar} />
+                    <FNoteAvatar name={note.userName} avatar={note.userAvatar || (note.userId ? (membersData as any[])?.find((m: any) => m.userId === note.userId)?.avatar || undefined : undefined)} />
                     {note.userName && <span className="text-[10px] font-medium" style={{ color: '#6B7280' }}>{note.userName}</span>}
                     {note.time && <span className="text-[10px]" style={{ color: '#C0C8D8' }}>{formatFNoteTime(note.time)}</span>}
                     {canEdit(note) && (
@@ -971,8 +971,9 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                         ledgerId={ledgerId}
                         initialNote={order.public_note || ''}
                         onSaved={(raw) => { order.public_note = raw; }}
-                        currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
+                        currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar || (realMembers as any[])?.find((m: any) => m.userId === (currentUser as any).id)?.avatar || undefined } : undefined}
                         isAdmin={isAdminUser}
+                        membersData={realMembers as any[]}
                       />
                       </div>
                     </div>

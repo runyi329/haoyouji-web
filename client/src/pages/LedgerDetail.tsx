@@ -1051,13 +1051,14 @@ function LDNoteAvatar({ name, avatar }: { name?: string; avatar?: string }) {
   const color = colors[name.charCodeAt(0) % colors.length] || '#6366F1';
   return <div className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: color }}>{initials}</div>;
 }
-function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, isAdmin }: {
+function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, isAdmin, membersData }: {
   orderId: number;
   ledgerId: number;
   initialNote: string;
   onSaved: (note: string) => void;
   currentUser?: { id: number; name?: string; username?: string; avatar?: string };
   isAdmin?: boolean;
+  membersData?: any[];
 }) {
   const [notes, setNotes] = useState<NoteItem[]>(() => parseNotes(initialNote));
   const [expanded, setExpanded] = useState(false);
@@ -1174,7 +1175,7 @@ function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, i
               ) : (
                 <div className="py-0.5">
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <LDNoteAvatar name={note.userName} avatar={note.userAvatar} />
+                    <LDNoteAvatar name={note.userName} avatar={note.userAvatar || (note.userId ? (membersData as any[])?.find((m: any) => m.userId === note.userId)?.avatar || undefined : undefined)} />
                     {note.userName && <span className="text-[10px] font-medium" style={{ color: '#6B7280' }}>{note.userName}</span>}
                     {note.time && <span className="text-[10px]" style={{ color: '#C0C8D8' }}>{formatNoteTime(note.time)}</span>}
                     {canEdit(note) && (
@@ -1501,6 +1502,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
         onSaved={(note) => { order.public_note = note; }}
         currentUser={currentUser ? { id: currentUser.id, name: currentUser.name, username: currentUser.username, avatar: currentUser.avatar || (membersData as any[])?.find((m: any) => m.userId === currentUser.id)?.avatar || undefined } : undefined}
         isAdmin={isAdmin}
+        membersData={membersData}
       />
       {/* AI 智能服务面板 */}
       {showAIPanel && (() => {
