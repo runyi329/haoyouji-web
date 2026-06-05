@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
@@ -90,20 +90,31 @@ function CollateralMarginRateDisplay({ assets, interestBase, ledgerId }: {
   );
 }
 
+// 精确到秒的利息计数器 Hook
+function useAccruedInterest(interestBase: string | null, interestRateAnnual: string | null, interestStartDate: string | null) {
+  const [accrued, setAccrued] = useState<number>(0);
+  const computeAccrued = useCallback(() => {
+    const base = parseFloat(interestBase || '0');
+    const rate = Math.abs(parseFloat(interestRateAnnual || '0'));
+    if (!base || !rate || !interestStartDate) return 0;
+    const startTs = new Date(interestStartDate + 'T00:00:00').getTime();
+    if (isNaN(startTs)) return 0;
+    const elapsedSeconds = Math.max(0, (Date.now() - startTs) / 1000);
+    const perSecond = (base * rate / 100) / (365 * 24 * 3600);
+    return perSecond * elapsedSeconds;
+  }, [interestBase, interestRateAnnual, interestStartDate]);
+  useEffect(() => {
+    setAccrued(computeAccrued());
+    const timer = setInterval(() => setAccrued(computeAccrued()), 1000);
+    return () => clearInterval(timer);
+  }, [computeAccrued]);
+  return accrued;
+}
+
 const STATUS_OPTIONS = [
   { value: 'active', label: '持有中' },
   { value: 'settled', label: '已结算' },
   { value: 'cancelled', label: '已取消' },
-];
-
-const INTEREST_PAYMENT_OPTIONS = [
-  { value: 'monthly_pre', label: '月付先付' },
-  { value: 'monthly_post', label: '月付后付' },
-  { value: 'semi_pre', label: '半年付先付' },
-  { value: 'semi_post', label: '半年付后付' },
-  { value: 'annual_pre', label: '年付先付' },
-  { value: 'annual_post', label: '年付后付' },
-  { value: 'end_post', label: '结束后付' },
 ];
 
 const COIN_COLORS: Record<CoinType, string> = {
@@ -135,6 +146,475 @@ const COIN_COLORS: Record<CoinType, string> = {
   CL: '#8B4513',
   NG: '#4A90D9',
 };
+
+// ===== FinanceOrderCard 子组件（左右两栏布局，与 LedgerDetail FunderOrderCard 一致）=====
+interface FinanceOrderCardProps {
+  order: any;
+  livePrices: Record<string, number>;
+  totalPaid: number;
+  openedPaymentList: any[];
+  currentUser: any;
+  isAdmin: boolean;
+  realMembers: any[];
+  ledgerId: number;
+  showPaymentPanel: number | null;
+  setShowPaymentPanel: (v: number | null) => void;
+  paymentForm: { amount: string; payDate: string; note: string };
+  setPaymentForm: (fn: (f: any) => any) => void;
+  showPaymentDatePicker: boolean;
+  setShowPaymentDatePicker: (v: boolean | ((v: boolean) => boolean)) => void;
+  handleAddPayment: (orderId: number) => void;
+  deletePaymentMutation: any;
+  addPaymentMutation: any;
+  updateMutation: any;
+  openEdit: (order: any) => void;
+  setConfirmDeleteId: (id: number | null) => void;
+  getPaymentLabel: (val: string) => string;
+}
+
+function FinanceOrderCard({
+  order,
+  livePrices,
+  totalPaid,
+  openedPaymentList,
+  currentUser,
+  isAdmin,
+  realMembers,
+  ledgerId,
+  showPaymentPanel,
+  setShowPaymentPanel,
+  paymentForm,
+  setPaymentForm,
+  showPaymentDatePicker,
+  setShowPaymentDatePicker,
+  handleAddPayment,
+  deletePaymentMutation,
+  addPaymentMutation,
+  updateMutation,
+  openEdit,
+  setConfirmDeleteId,
+  getPaymentLabel,
+}: FinanceOrderCardProps) {
+  // 每张卡片独立调用 useAccruedInterest（Hook 必须在组件顶层）
+  const accrued = useAccruedInterest(
+    order.status === 'active' ? order.interest_base : null,
+    order.status === 'active' ? order.interest_rate_annual : null,
+    order.status === 'active' ? order.interest_start_date : null
+  );
+
+  const rateStr = String(order.interest_rate_annual || '');
+  const isNegRate = rateStr.startsWith('-');
+  const rateAbs = isNegRate ? rateStr.slice(1) : rateStr;
+  const rateSign = isNegRate ? '-' : '+';
+  const isSettled = String(order.admin_note || '').includes('[已结清]');
+  const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
+
+  // 计算担保物数组
+  let collateralAssets: { coin: string; qty: string }[] = [];
+  try { if (order.collateral_assets) collateralAssets = JSON.parse(order.collateral_assets); } catch(e) {}
+  if (collateralAssets.length === 0 && order.collateral_coin && order.collateral_qty) {
+    collateralAssets = [{ coin: order.collateral_coin, qty: String(parseFloat(order.collateral_qty)) }];
+  }
+
+  // 左栏数值计算
+  const qty = parseFloat(order.buy_quantity || '0');
+  const price = parseFloat(order.buy_price || '0');
+  const totalU = qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0');
+  const baseCur = order.interest_base_currency || 'USDT';
+  const interestUnit = baseCur === 'CNY' ? '元' : 'U';
+  // 利率货币（与计息基数货币一致）
+  const rateCur = baseCur;
+  const altUnit = rateCur === 'CNY' ? 'U' : '元';
+  // 折算：CNY 基数 → U 显示，或 U 基数 → 元 显示（按 1U=7元）
+  const convertAccrued = (val: number): number => val; // 同货币无需折算
+  const convertAlt = (val: number): number => rateCur === 'CNY' ? val / 7 : val * 7;
+  const displayAccrued = convertAccrued(accrued);
+  const displayPaid = convertAccrued(totalPaid);
+  const altAccrued = convertAlt(displayAccrued);
+  const altPaid = convertAlt(displayPaid);
+
+  // 持有时长
+  const holdDurationLabel = (() => {
+    if (!order.buy_date || order.status !== 'active') return null;
+    const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
+    if (elapsed < 0) return null;
+    const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    return days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
+  })();
+
+  // 担保价值计算（使用 livePrices）
+  let collateralValue = 0;
+  let collateralValueKnown = true;
+  const collateralItemValues: (number | null)[] = [];
+  for (const item of collateralAssets) {
+    const iq = parseFloat(item.qty);
+    if (!item.coin || isNaN(iq)) { collateralItemValues.push(null); collateralValueKnown = false; continue; }
+    if (item.coin === 'USDT') { collateralValue += iq; collateralItemValues.push(iq); }
+    else {
+      const p = livePrices[item.coin];
+      if (p) { collateralValue += iq * p; collateralItemValues.push(iq * p); }
+      else { collateralItemValues.push(null); collateralValueKnown = false; }
+    }
+  }
+
+  // 风险敞口计算
+  const interestBaseNum = order.interest_base ? Number(order.interest_base) : totalU;
+  const liveP = livePrices[order.coin] ?? null;
+  const currentValue = liveP !== null ? liveP * qty : null;
+  const floatPnl = currentValue !== null ? currentValue - interestBaseNum : null;
+  const exposure = floatPnl !== null
+    ? collateralValue + floatPnl - accrued + totalPaid
+    : collateralValue - accrued + totalPaid;
+  const isSufficient = exposure >= 0;
+
+  return (
+    <div
+      className="bg-white rounded-2xl overflow-hidden relative"
+      style={{ border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}
+    >
+      {isSettled && (
+        <div
+          className="absolute bottom-4 left-4 pointer-events-none select-none"
+          style={{ transform: 'rotate(-30deg)', zIndex: 10 }}
+        >
+          <div style={{ border: '2px solid rgba(220,38,38,0.5)', color: 'rgba(220,38,38,0.5)', borderRadius: '4px', padding: '2px 8px', fontSize: '13px', fontWeight: 700, letterSpacing: '3px', lineHeight: '1.4', whiteSpace: 'nowrap' }}>
+            已结清
+          </div>
+        </div>
+      )}
+
+      {/* 卡片顶部：标签行 + 操作按钮 */}
+      <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid #F3F4F6', backgroundColor: '#FAFBFF' }}>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: coinColor }}>
+            {order.coin}
+          </span>
+          <span className="text-xs text-gray-400">#{order.order_no}</span>
+          <span
+            className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+            style={
+              order.status === 'active'
+                ? { backgroundColor: '#EEF4FF', color: '#1A56DB' }
+                : order.status === 'settled'
+                ? { backgroundColor: '#F0FDF4', color: '#16A34A' }
+                : { backgroundColor: '#F9FAFB', color: '#9CA3AF' }
+            }
+          >
+            {STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status}
+          </span>
+        </div>
+        <div className="flex items-center gap-0.5">
+          <button
+            title={isSettled ? '取消已结清标记' : '标记已结清'}
+            onClick={() => {
+              const note = String(order.admin_note || '');
+              const newNote = isSettled ? note.replace('[已结清]', '').trim() : (note ? note + ' [已结清]' : '[已结清]');
+              updateMutation.mutate({ id: order.id, ledgerId, adminNote: newNote });
+            }}
+            className="px-2 py-1 text-xs rounded-lg font-medium transition-colors"
+            style={{ backgroundColor: isSettled ? '#FEE2E2' : '#F3F4F6', color: isSettled ? '#DC2626' : '#9CA3AF' }}
+          >
+            结清
+          </button>
+          <button onClick={() => openEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => setConfirmDeleteId(order.id)} className="p-1.5 ml-2 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* 主体：左右两栏布局 */}
+      <div className="flex" style={{ minHeight: '100px' }}>
+
+        {/* 左栏：持有资产 */}
+        <div className="flex-1 p-4 pr-3">
+          <div className="h-5 flex items-center gap-1" style={{ color: '#3B82F6' }}>
+            <span className="text-xs font-medium">持有资产</span>
+          </div>
+          {/* 持币量大数字 */}
+          <div className="min-h-9 flex flex-col justify-center">
+            <div className="flex items-baseline gap-1 flex-wrap">
+              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
+                {qty > 0 ? formatCoinQty(qty, order.coin) : '—'}
+              </span>
+              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
+            </div>
+            {liveP && qty > 0 && (
+              <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(qty * liveP).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
+            )}
+          </div>
+          {/* 订单信息列表 */}
+          <div className="space-y-0.5 text-xs">
+            {price > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 shrink-0">买入币价</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{price.toLocaleString()} U</span>
+              </div>
+            )}
+            {totalU > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 shrink-0">买入价值</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+              </div>
+            )}
+            {order.interest_base && parseFloat(order.interest_base) > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 shrink-0">计息基数</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>
+                  {parseFloat(order.interest_base).toLocaleString(undefined, { maximumFractionDigits: 2 })} {interestUnit}
+                </span>
+              </div>
+            )}
+            {order.coin !== 'CNY' && order.coin !== 'USDT' && liveP && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 shrink-0">当前币价</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</span>
+              </div>
+            )}
+            {order.buy_date && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 shrink-0">开仓时间</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
+              </div>
+            )}
+            {holdDurationLabel && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 shrink-0">持有时长</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{holdDurationLabel}</span>
+              </div>
+            )}
+            {order.order_no && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 shrink-0">订单编号</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{order.order_no}</span>
+              </div>
+            )}
+            {order.interest_payment_type && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 shrink-0">付息方式</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{getPaymentLabel(order.interest_payment_type)}</span>
+              </div>
+            )}
+            {order.storage_account && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 shrink-0">存放账号</span>
+                <span className="font-medium truncate ml-2" style={{ color: '#4B5563' }}>{order.storage_account}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 中间分隔线 */}
+        <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
+
+        {/* 右栏：待结利息 */}
+        <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
+          {/* 标题 */}
+          <div className="h-5 flex items-center gap-1">
+            <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>待结利息</span>
+            {rateAbs && <span className="text-xs text-gray-400">(年化 {rateSign}{rateAbs}%)</span>}
+          </div>
+          {/* 待结利息大数字 */}
+          <div className="min-h-9 flex flex-col justify-center">
+            <div className="flex items-baseline gap-0.5">
+              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                {displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
+            </div>
+            <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
+          </div>
+          {/* 明细行 */}
+          <div className="space-y-0.5 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400 whitespace-nowrap">已结利息</span>
+              <span className="font-medium" style={{ color: '#4B5563' }}>
+                {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
+              </span>
+            </div>
+            {displayPaid > 0 && (
+              <div className="flex justify-end">
+                <span className="text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
+              </div>
+            )}
+            {order.interest_start_date && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">计息日期</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>
+                  {String(order.interest_start_date).slice(0, 10).replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
+                </span>
+              </div>
+            )}
+            {/* 担保货币 */}
+            {collateralAssets.map((a, idx) => (
+              <div key={idx}>
+                <div className="flex items-center justify-between mt-0.5">
+                  <span className="text-gray-400">{collateralAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
+                  <span className="font-medium" style={{ color: '#4B5563' }}>{a.qty} {a.coin}</span>
+                </div>
+                {collateralItemValues[idx] !== null && collateralItemValues[idx] !== undefined && (
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span></span>
+                    <span className="font-medium" style={{ color: '#4B5563' }}>≈ {(collateralItemValues[idx] as number).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                  </div>
+                )}
+              </div>
+            ))}
+            {collateralAssets.length > 0 && collateralValueKnown && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">{collateralAssets.length > 1 ? '担保总值' : '担保价值'}</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+              </div>
+            )}
+            {/* 风险敞口 */}
+            {collateralAssets.length > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">风险敞口</span>
+                <span className="font-medium" style={{ color: isSufficient ? '#4B5563' : '#16A34A' }}>
+                  {isSufficient ? '充足' : `-${(Math.abs(exposure)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 内部备注 */}
+      {order.admin_note && (
+        <div className="px-4 pb-2 text-xs text-gray-400 border-t border-gray-100 pt-2">
+          内部备注：{order.admin_note}
+        </div>
+      )}
+
+      {/* 结息面板 + 备注区 */}
+      <div className="px-4 pt-3 pb-3 border-t border-blue-100">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-medium" style={{ color: '#1A2340' }}>
+            已结利息：<span style={{ color: '#16A34A' }}>{displayPaid.toFixed(2)} {interestUnit}</span>
+          </span>
+          <button
+            onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm(() => ({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
+            className="text-xs px-3 py-1 rounded-full font-medium"
+            style={{ backgroundColor: '#EEF4FF', color: '#1A56DB' }}
+          >
+            {showPaymentPanel === order.id ? '收起' : '+ 记录结息'}
+          </button>
+        </div>
+
+        {showPaymentPanel === order.id && (
+          <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">结息金额 ({interestUnit})</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={paymentForm.amount}
+                  onChange={e => setPaymentForm((f: any) => ({ ...f, amount: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="如：500"
+                  style={{ display: 'block', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">结息日期</label>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowPaymentDatePicker((v: boolean) => !v)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-left focus:outline-none"
+                    style={{ backgroundColor: '#fff', color: paymentForm.payDate ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
+                  >
+                    {paymentForm.payDate || '选择日期'}
+                  </button>
+                  {showPaymentDatePicker && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }} onClick={() => setShowPaymentDatePicker(false)}>
+                      <div className="bg-white rounded-xl shadow-2xl mx-4 w-full" style={{ maxWidth: 320 }} onClick={e => e.stopPropagation()}>
+                        <DatePicker value={paymentForm.payDate} onChange={v => { setPaymentForm((f: any) => ({ ...f, payDate: v })); setShowPaymentDatePicker(false); }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">备注（可选）</label>
+              <input
+                type="text"
+                value={paymentForm.note}
+                onChange={e => setPaymentForm((f: any) => ({ ...f, note: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="结息说明"
+                style={{ display: 'block', boxSizing: 'border-box' }}
+              />
+            </div>
+            <button
+              onClick={() => handleAddPayment(order.id)}
+              disabled={addPaymentMutation.isPending}
+              className="w-full py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+            >
+              {addPaymentMutation.isPending ? '提交中...' : '确认记录'}
+            </button>
+          </div>
+        )}
+
+        {showPaymentPanel === order.id && openedPaymentList.length > 0 && (
+          <div className="space-y-1.5">
+            {openedPaymentList.map((p: any) => (
+              <div key={p.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} {interestUnit}</span>
+                  {p.note && <span className="text-gray-400 ml-1 truncate">{p.note}</span>}
+                </div>
+                <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                  <span className="text-gray-400">{p.payment_date}</span>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('确认删除这条结息记录？')) {
+                        deletePaymentMutation.mutate({ ledgerId, paymentId: p.id });
+                      }
+                    }}
+                    className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+                    title="删除"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 公开备注区域 */}
+        <FinanceNoteRow
+          orderId={order.id}
+          ledgerId={ledgerId}
+          initialNote={order.public_note || ''}
+          onSaved={(raw) => { order.public_note = raw; }}
+          currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar || (realMembers as any[])?.find((m: any) => m.userId === (currentUser as any).id)?.avatar || undefined } : undefined}
+          isAdmin={isAdmin}
+          membersData={realMembers as any[]}
+        />
+      </div>
+    </div>
+  );
+}
+// ===== END FinanceOrderCard =====
+
+const INTEREST_PAYMENT_OPTIONS = [
+  { value: 'monthly_pre', label: '月付先付' },
+  { value: 'monthly_post', label: '月付后付' },
+  { value: 'semi_pre', label: '半年付先付' },
+  { value: 'semi_post', label: '半年付后付' },
+  { value: 'annual_pre', label: '年付先付' },
+  { value: 'annual_post', label: '年付后付' },
+  { value: 'end_post', label: '结束后付' },
+];
+
 
 function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const today = new Date();
@@ -419,12 +899,18 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     onError: (e) => toast.error(e.message),
   });
 
-  // 实时价格（用于表单预览和保证金率计算）
+  // 实时价格（常驻，用于订单列表卡片和表单预览）
+  const { data: assetSummaryData } = trpc.ledger.financeGetAssetSummary.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId, staleTime: 10000, refetchInterval: 10000 }
+  );
+  const livePrices: Record<string, number> = (assetSummaryData as any)?.livePrices ?? {};
+  // 表单预览复用同一份 livePrices
   const { data: assetSummaryForm } = trpc.ledger.financeGetAssetSummary.useQuery(
     { ledgerId },
     { enabled: !!ledgerId && showForm, staleTime: 10000, refetchInterval: 10000 }
   );
-  const formLivePrices: Record<string, number> = (assetSummaryForm as any)?.livePrices ?? {};
+  const formLivePrices: Record<string, number> = (assetSummaryForm as any)?.livePrices ?? livePrices;
 
   // 表单中担保物的实时总价值
   const formComputedCollateralValue = useMemo(() => {
@@ -693,291 +1179,31 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
             <div className="space-y-3">
               {displayOrders.map((order: any) => {
                 const totalPaid = (interestPaymentSummary as any)?.[order.id] ?? 0;
-                const rateStr = String(order.interest_rate_annual || '');
-                const isNegRate = rateStr.startsWith('-');
-                const rateAbs = isNegRate ? rateStr.slice(1) : rateStr;
-                const rateColor = isNegRate ? '#EF4444' : '#1A56DB';
-                const rateSign = isNegRate ? '-' : '+';
-                const memberName = realMembers.find((m: any) => m.userId === order.user_id);
-                const displayName = memberName ? (memberName.nickname || memberName.username || `用户${order.user_id}`) : `用户${order.user_id}`;
-                const isSettled = String(order.admin_note || '').includes('[已结清]');
-                const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
                 return (
-                  <div
+                  <FinanceOrderCard
                     key={order.id}
-                    className="bg-white rounded-2xl overflow-hidden relative"
-                    style={{ border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}
-                  >
-                    {isSettled && (
-                      <div
-                        className="absolute bottom-4 left-4 pointer-events-none select-none"
-                        style={{ transform: 'rotate(-30deg)', zIndex: 10 }}
-                      >
-                        <div style={{ border: '2px solid rgba(220,38,38,0.5)', color: 'rgba(220,38,38,0.5)', borderRadius: '4px', padding: '2px 8px', fontSize: '13px', fontWeight: 700, letterSpacing: '3px', lineHeight: '1.4', whiteSpace: 'nowrap' }}>
-                          已结清
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 卡片顶部：标签行 + 操作按钮 */}
-                    <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid #F3F4F6', backgroundColor: '#FAFBFF' }}>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: coinColor }}>
-                          {order.coin}
-                        </span>
-                        <span className="text-xs text-gray-400">#{order.order_no}</span>
-                        <span
-                          className="text-xs px-1.5 py-0.5 rounded-full font-medium"
-                          style={
-                            order.status === 'active'
-                              ? { backgroundColor: '#EEF4FF', color: '#1A56DB' }
-                              : order.status === 'settled'
-                              ? { backgroundColor: '#F0FDF4', color: '#16A34A' }
-                              : { backgroundColor: '#F9FAFB', color: '#9CA3AF' }
-                          }
-                        >
-                          {STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          title={isSettled ? '取消已结清标记' : '标记已结清'}
-                          onClick={() => {
-                            const note = String(order.admin_note || '');
-                            const newNote = isSettled ? note.replace('[已结清]', '').trim() : (note ? note + ' [已结清]' : '[已结清]');
-                            updateMutation.mutate({ id: order.id, ledgerId, adminNote: newNote });
-                          }}
-                          className="px-2 py-1 text-xs rounded-lg font-medium transition-colors"
-                          style={{ backgroundColor: isSettled ? '#FEE2E2' : '#F3F4F6', color: isSettled ? '#DC2626' : '#9CA3AF' }}
-                        >
-                          结清
-                        </button>
-                        <button onClick={() => openEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => setConfirmDeleteId(order.id)} className="p-1.5 ml-2 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="px-4 pt-3 pb-3">
-                      {/* 核心金额 + 年化利率 */}
-                      <div className="flex items-end justify-between mb-3">
-                        <div>
-                          <div className="text-xs text-gray-400 mb-0.5">{order.interest_base ? '计息基数' : '总价值'}</div>
-                          <div className="flex items-baseline gap-1">
-                            <span className="text-2xl font-bold" style={{ color: '#1A2340', letterSpacing: '-0.5px' }}>
-                              {order.interest_base ? parseFloat(order.interest_base).toLocaleString() : parseFloat(order.amount).toLocaleString()}
-                            </span>
-                            <span className="text-xs text-gray-400">
-                              {order.interest_base_currency === 'CNY' ? '元' : 'USDT'}
-                            </span>
-                          </div>
-                        </div>
-                        {rateAbs && (
-                          <div className="text-right">
-                            <div className="text-xs text-gray-400 mb-0.5">年化</div>
-                            <div className="text-lg font-bold" style={{ color: rateColor }}>{rateSign}{rateAbs}%</div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 详细字段：两列网格 */}
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
-                        {order.buy_price && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-400">买入价</span>
-                            <span className="font-medium text-gray-700">${parseFloat(order.buy_price).toLocaleString()}</span>
-                          </div>
-                        )}
-                        {order.buy_quantity && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-400">持币量</span>
-                            <span className="font-medium text-gray-700">{formatCoinQty(order.buy_quantity, order.coin)} {order.coin}</span>
-                          </div>
-                        )}
-                        {order.buy_date && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-400">买入日</span>
-                            <span className="font-medium text-gray-700">{order.buy_date}</span>
-                          </div>
-                        )}
-                        {order.interest_payment_type && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-400">付息方式</span>
-                            <span className="font-medium text-gray-700">{getPaymentLabel(order.interest_payment_type)}</span>
-                          </div>
-                        )}
-                        {order.interest_start_date && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-400">计息开始</span>
-                            <span className="font-medium text-gray-700">{order.interest_start_date}</span>
-                          </div>
-                        )}
-                        {order.storage_account && (
-                          <div className="flex items-center justify-between col-span-2">
-                            <span className="text-gray-400">存放账号</span>
-                            <span className="font-medium text-gray-700 truncate ml-2">{order.storage_account}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {(() => {
-                        // 多笔担保物：优先读 collateral_assets，兼容旧单笔字段
-                        let assets: { coin: string; qty: string }[] = [];
-                        try {
-                          if (order.collateral_assets) assets = JSON.parse(order.collateral_assets);
-                        } catch(e) {}
-                        if (assets.length === 0 && order.collateral_coin && order.collateral_qty) {
-                          assets = [{ coin: order.collateral_coin, qty: String(parseFloat(order.collateral_qty)) }];
-                        }
-                        if (assets.length === 0) return null;
-                        return (
-                          <div className="mt-2 pt-2 border-t border-gray-100 space-y-1">
-                            <span className="text-xs text-gray-400">担保物</span>
-                            {assets.map((a, i) => (
-                              <div key={i} className="flex items-center justify-between">
-                                <span className="text-xs font-semibold ml-2" style={{ color: '#1A2340' }}>{a.qty} {a.coin}</span>
-                                <CollateralValueDisplay coin={a.coin} qty={a.qty} ledgerId={ledgerId} />
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
-
-                      {/* 保证金率（担保物价值 / 融资本金） */}
-                      {(() => {
-                        if (!order.interest_base || parseFloat(order.interest_base) <= 0) return null;
-                        let assets: { coin: string; qty: string }[] = [];
-                        try { if (order.collateral_assets) assets = JSON.parse(order.collateral_assets); } catch(e) {}
-                        if (assets.length === 0 && order.collateral_coin && order.collateral_qty) {
-                          assets = [{ coin: order.collateral_coin, qty: String(parseFloat(order.collateral_qty)) }];
-                        }
-                        if (assets.length === 0) return null;
-                        // 用 financeGetAssetSummary 的 livePrices 计算担保物总价值
-                        // 这里通过 CollateralValueDisplay 已有价格，但无法直接取到，改为在卡片级别计算
-                        // 由于 livePrices 在组件外部不可用，此处显示占位，实际价值由 CollateralValueDisplay 已展示
-                        return null; // 占位，实际保证金率通过下方 CollateralMarginRate 组件显示
-                      })()}
-                      <CollateralMarginRateDisplay assets={(() => { let a: { coin: string; qty: string }[] = []; try { if (order.collateral_assets) a = JSON.parse(order.collateral_assets); } catch(e) {} if (a.length === 0 && order.collateral_coin && order.collateral_qty) a = [{ coin: order.collateral_coin, qty: String(parseFloat(order.collateral_qty)) }]; return a; })()} interestBase={order.interest_base} ledgerId={ledgerId} />
-
-                      {order.admin_note && (
-                        <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
-                          内部备注：{order.admin_note}
-                        </div>
-                      )}
-
-                      <div className="mt-3 pt-3 border-t border-blue-100">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium" style={{ color: '#1A2340' }}>
-                            已结利息：<span style={{ color: '#16A34A' }}>{totalPaid.toFixed(2)} USDT</span>
-                          </span>
-                          <button
-                            onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' }); }}
-                            className="text-xs px-3 py-1 rounded-full font-medium"
-                            style={{ backgroundColor: '#EEF4FF', color: '#1A56DB' }}
-                          >
-                            {showPaymentPanel === order.id ? '收起' : '+ 记录结息'}
-                          </button>
-                        </div>
-
-                        {showPaymentPanel === order.id && (
-                          <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
-                            <div className="flex gap-2">
-                              <div className="flex-1">
-                                <label className="block text-xs text-gray-500 mb-1">结息金额 (USDT)</label>
-                                <input
-                                  type="number"
-                                  inputMode="decimal"
-                                  value={paymentForm.amount}
-                                  onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
-                                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                  placeholder="如：500"
-                                  style={{ display: 'block', boxSizing: 'border-box' }}
-                                />
-                              </div>
-                              <div className="flex-1">
-                                <label className="block text-xs text-gray-500 mb-1">结息日期</label>
-                                <div className="relative">
-                                  <button
-                                    onClick={() => setShowPaymentDatePicker(v => !v)}
-                                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-left focus:outline-none"
-                                    style={{ backgroundColor: '#fff', color: paymentForm.payDate ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
-                                  >
-                                    {paymentForm.payDate || '选择日期'}
-                                  </button>
-                                  {showPaymentDatePicker && (
-                                    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }} onClick={() => setShowPaymentDatePicker(false)}>
-                                      <div className="bg-white rounded-xl shadow-2xl mx-4 w-full" style={{ maxWidth: 320 }} onClick={e => e.stopPropagation()}>
-                                        <DatePicker value={paymentForm.payDate} onChange={v => { setPaymentForm(f => ({ ...f, payDate: v })); setShowPaymentDatePicker(false); }} />
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-1">备注（可选）</label>
-                              <input
-                                type="text"
-                                value={paymentForm.note}
-                                onChange={e => setPaymentForm(f => ({ ...f, note: e.target.value }))}
-                                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                placeholder="结息说明"
-                                style={{ display: 'block', boxSizing: 'border-box' }}
-                              />
-                            </div>
-                            <button
-                              onClick={() => handleAddPayment(order.id)}
-                              disabled={addPaymentMutation.isPending}
-                              className="w-full py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50"
-                              style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
-                            >
-                              {addPaymentMutation.isPending ? '提交中...' : '确认记录'}
-                            </button>
-                          </div>
-                        )}
-
-                        {showPaymentPanel === order.id && openedPaymentList.length > 0 && (
-                          <div className="space-y-1.5">
-                            {openedPaymentList.map((p: any) => (
-                              <div key={p.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
-                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                  <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} USDT</span>
-                                  {p.note && <span className="text-gray-400 ml-1 truncate">{p.note}</span>}
-                                </div>
-                                <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                  <span className="text-gray-400">{p.payment_date}</span>
-                                  <button
-                                    onClick={() => {
-                                      if (window.confirm('确认删除这条结息记录？')) {
-                                        deletePaymentMutation.mutate({ ledgerId, paymentId: p.id });
-                                      }
-                                    }}
-                                    className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
-                                    title="删除"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      {/* 公开备注区域 */}
-                      <FinanceNoteRow
-                        orderId={order.id}
-                        ledgerId={ledgerId}
-                        initialNote={order.public_note || ''}
-                        onSaved={(raw) => { order.public_note = raw; }}
-                        currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar || (realMembers as any[])?.find((m: any) => m.userId === (currentUser as any).id)?.avatar || undefined } : undefined}
-                        isAdmin={isAdminUser}
-                        membersData={realMembers as any[]}
-                      />
-                      </div>
-                    </div>
-                  </div>
+                    order={order}
+                    livePrices={livePrices}
+                    totalPaid={totalPaid}
+                    openedPaymentList={showPaymentPanel === order.id ? openedPaymentList : []}
+                    currentUser={currentUser}
+                    isAdmin={isAdminUser}
+                    realMembers={realMembers}
+                    ledgerId={ledgerId}
+                    showPaymentPanel={showPaymentPanel}
+                    setShowPaymentPanel={setShowPaymentPanel}
+                    paymentForm={paymentForm}
+                    setPaymentForm={setPaymentForm}
+                    showPaymentDatePicker={showPaymentDatePicker}
+                    setShowPaymentDatePicker={setShowPaymentDatePicker}
+                    handleAddPayment={handleAddPayment}
+                    deletePaymentMutation={deletePaymentMutation}
+                    addPaymentMutation={addPaymentMutation}
+                    updateMutation={updateMutation}
+                    openEdit={openEdit}
+                    setConfirmDeleteId={setConfirmDeleteId}
+                    getPaymentLabel={getPaymentLabel}
+                  />
                 );
               })}
             </div>
