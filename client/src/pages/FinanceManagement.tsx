@@ -265,6 +265,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   const [activeUserTab, setActiveUserTab] = useState<number | 'all'>('all');
   const [paymentForm, setPaymentForm] = useState({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   // 查询
   const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.financeGetOrders.useQuery(
@@ -584,7 +585,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                 const rateSign = isNegRate ? '-' : '+';
                 const memberName = realMembers.find((m: any) => m.userId === order.user_id);
                 const displayName = memberName ? (memberName.nickname || memberName.username || `用户${order.user_id}`) : `用户${order.user_id}`;
-                const isSold = String(order.admin_note || '').includes('[已卖出]');
+                const isSettled = String(order.admin_note || '').includes('[已结清]');
                 const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
                 return (
                   <div
@@ -592,13 +593,13 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     className="bg-white rounded-2xl overflow-hidden relative"
                     style={{ border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}
                   >
-                    {isSold && (
+                    {isSettled && (
                       <div
                         className="absolute bottom-4 left-4 pointer-events-none select-none"
                         style={{ transform: 'rotate(-30deg)', zIndex: 10 }}
                       >
                         <div style={{ border: '2px solid rgba(220,38,38,0.5)', color: 'rgba(220,38,38,0.5)', borderRadius: '4px', padding: '2px 8px', fontSize: '13px', fontWeight: 700, letterSpacing: '3px', lineHeight: '1.4', whiteSpace: 'nowrap' }}>
-                          已卖出
+                          已结清
                         </div>
                       </div>
                     )}
@@ -625,21 +626,21 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                       </div>
                       <div className="flex items-center gap-0.5">
                         <button
-                          title={isSold ? '取消已卖出标记' : '标记已卖出'}
+                          title={isSettled ? '取消已结清标记' : '标记已结清'}
                           onClick={() => {
                             const note = String(order.admin_note || '');
-                            const newNote = isSold ? note.replace('[已卖出]', '').trim() : (note ? note + ' [已卖出]' : '[已卖出]');
+                            const newNote = isSettled ? note.replace('[已结清]', '').trim() : (note ? note + ' [已结清]' : '[已结清]');
                             updateMutation.mutate({ id: order.id, ledgerId, adminNote: newNote });
                           }}
                           className="px-2 py-1 text-xs rounded-lg font-medium transition-colors"
-                          style={{ backgroundColor: isSold ? '#FEE2E2' : '#F3F4F6', color: isSold ? '#DC2626' : '#9CA3AF' }}
+                          style={{ backgroundColor: isSettled ? '#FEE2E2' : '#F3F4F6', color: isSettled ? '#DC2626' : '#9CA3AF' }}
                         >
-                          卖出
+                          结清
                         </button>
-                        <button onClick={() => openEdit(order)} className="p-1.5 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
+                        <button onClick={() => openEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => { if (confirm('确认删除此订单？')) deleteMutation.mutate({ id: order.id, ledgerId }); }} className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors">
+                        <button onClick={() => setConfirmDeleteId(order.id)} className="p-1.5 ml-2 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -1638,6 +1639,39 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                 style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
               >
                 {(createMutation.isPending || updateMutation.isPending) ? '提交中...' : (editingOrder ? '保存修改' : '确认添加')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 删除二次确认弹窗 */}
+      {confirmDeleteId !== null && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setConfirmDeleteId(null)}>
+          <div className="bg-white rounded-t-2xl w-full max-w-md px-5 pt-5 pb-8" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
+            <div className="text-center mb-5">
+              <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
+                <Trash2 className="w-6 h-6 text-red-400" />
+              </div>
+              <div className="text-base font-semibold text-gray-800 mb-1">确认删除订单？</div>
+              <div className="text-sm text-gray-400">删除后无法恢复，请谨慎操作</div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="flex-1 py-3 rounded-xl text-sm font-medium"
+                style={{ backgroundColor: '#F3F4F6', color: '#374151' }}
+              >
+                取消
+              </button>
+              <button
+                onClick={() => { deleteMutation.mutate({ id: confirmDeleteId, ledgerId }); setConfirmDeleteId(null); }}
+                disabled={deleteMutation.isPending}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
+                style={{ backgroundColor: '#EF4444' }}
+              >
+                {deleteMutation.isPending ? '删除中...' : '确认删除'}
               </button>
             </div>
           </div>
