@@ -341,8 +341,8 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
                     <div key={idx}>
                       {idx > 0 && <div className="border-t border-gray-100 pt-3" />}
                       <div className="flex items-center gap-2 mb-1">
-                        <FOMNoteAvatar name={note.userName} avatar={note.userAvatar} />
-                        <span className="text-xs font-medium text-gray-500">{note.userName || '未知用户'}</span>
+                        {note.userName && <FOMNoteAvatar name={note.userName} avatar={note.userAvatar} />}
+                        {note.userName && <span className="text-xs font-medium text-gray-500">{note.userName}</span>}
                         {note.time && <span className="text-[10px] text-gray-300 ml-auto">{formatFOMNoteTime(note.time)}</span>}
                       </div>
                       <div className="pl-7 text-sm text-gray-700 leading-relaxed break-all">{note.text}</div>
