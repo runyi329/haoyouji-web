@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
+import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageTag } from "@/components/PageTag";
 
@@ -146,6 +146,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
   const trpcUtils = trpc.useUtils();
 
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [userSearchText, setUserSearchText] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -677,57 +679,72 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
       )}
 
       <div className="px-4 py-4">
-        {/* 资金方用户列表 */}
-        <div className="mb-4">
-          <h2 className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">选择资金方</h2>
-          {usersLoading ? (
-            <div className="text-center py-4 text-gray-400 text-sm">加载中...</div>
-          ) : !funderUsers || (funderUsers as any[]).length === 0 ? (
-            <div className="text-center py-8 bg-white rounded-2xl shadow-sm">
-              <User className="w-10 h-10 text-gray-200 mx-auto mb-2" />
-              <div className="text-gray-400 text-sm">暂无资金方用户</div>
-              <div className="text-gray-300 text-xs mt-1">请先在成员管理中将用户设为资金方角色</div>
-            </div>
-          ) : (
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              <button
-                onClick={() => setSelectedUserId(null)}
-                className="shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all"
-                style={selectedUserId === null
-                  ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
-                  : { backgroundColor: '#fff', color: '#6B7280', border: '1px solid #E5E7EB' }}
-              >
-                全部
-              </button>
-              {(funderUsers as any[]).map((u: any) => (
-                <button
-                  key={u.userId}
-                  onClick={() => setSelectedUserId(u.userId)}
-                  className="shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all"
-                  style={selectedUserId === u.userId
-                    ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
-                    : { backgroundColor: '#fff', color: '#6B7280', border: '1px solid #E5E7EB' }}
-                >
-                  {u.nickname || u.name || u.username}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 新增订单按钮 */}
-        {selectedUserId && (
-          <div className="mb-4">
+        {/* 用户选择下拉框 + 添加订单按钮（同一行） */}
+        <div className="flex items-center gap-2 mb-4">
+          {/* 下拉框 */}
+          <div className="relative flex-1">
             <button
-              onClick={() => handleOpenCreate(selectedUserId)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full text-white text-sm font-medium shadow-md"
-              style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+              onClick={() => { setShowUserDropdown(!showUserDropdown); setUserSearchText(''); }}
+              className="w-full flex items-center justify-between px-4 py-2.5 rounded-full text-sm font-medium bg-white border border-gray-200 shadow-sm"
+              style={{ color: '#374151' }}
             >
-              <Plus className="w-4 h-4" />
-              添加订单
+              <span>
+                {selectedUserId === null
+                  ? '全部资金方'
+                  : (funderUsers as any[])?.find((u: any) => u.userId === selectedUserId)
+                    ? ((funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.nickname ||
+                       (funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.name ||
+                       (funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.username)
+                    : '选择资金方'}
+              </span>
+              <ChevronDown className="w-4 h-4 text-gray-400 ml-1 shrink-0" />
             </button>
+            {showUserDropdown && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-2xl shadow-lg border border-gray-100 z-50 overflow-hidden">
+                {(funderUsers as any[])?.length > 10 && (
+                  <div className="px-3 pt-2 pb-1">
+                    <input
+                      type="text"
+                      value={userSearchText}
+                      onChange={e => setUserSearchText(e.target.value)}
+                      placeholder="搜索资金方..."
+                      className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none"
+                      autoFocus
+                    />
+                  </div>
+                )}
+                <div className="max-h-52 overflow-y-auto">
+                  <button
+                    onClick={() => { setSelectedUserId(null); setShowUserDropdown(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors"
+                    style={{ color: selectedUserId === null ? '#1A56DB' : '#374151', fontWeight: selectedUserId === null ? 600 : 400 }}
+                  >全部资金方</button>
+                  {(funderUsers as any[])?.filter((u: any) => {
+                    if (!userSearchText) return true;
+                    const name = u.nickname || u.name || u.username || '';
+                    return name.includes(userSearchText);
+                  }).map((u: any) => (
+                    <button
+                      key={u.userId}
+                      onClick={() => { setSelectedUserId(u.userId); setShowUserDropdown(false); }}
+                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors"
+                      style={{ color: selectedUserId === u.userId ? '#1A56DB' : '#374151', fontWeight: selectedUserId === u.userId ? 600 : 400 }}
+                    >{u.nickname || u.name || u.username}</button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
+          {/* 添加订单按钮 */}
+          <button
+            onClick={() => selectedUserId ? handleOpenCreate(selectedUserId) : setShowUserDropdown(true)}
+            className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-white text-sm font-medium shadow-md"
+            style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+          >
+            <Plus className="w-4 h-4" />
+            添加订单
+          </button>
+        </div>
 
         {/* 订单列表 */}
         <div>
@@ -802,9 +819,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                             {order.asset_type === 'stock' ? '股票' : '数字币'}
                           </span>
                         )}
-                        <span className="text-sm font-medium text-gray-700">
-                          {order.userName || order.username}
-                        </span>
                         <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: `${statusColor}18`, color: statusColor }}>
                           {statusLabel}
                         </span>

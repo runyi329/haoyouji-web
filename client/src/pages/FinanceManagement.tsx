@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
-import { ChevronLeft, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
+import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
 import { toast } from "sonner";
 import { PageTag } from "@/components/PageTag";
 
@@ -252,6 +252,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [userSearchText, setUserSearchText] = useState('');
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  // 列表筛选下拉框
+  const [showListDropdown, setShowListDropdown] = useState(false);
 
   // 日期选择器
   const [showBuyDatePicker, setShowBuyDatePicker] = useState(false);
@@ -505,57 +507,62 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       )}
 
       <div className="px-4 py-4">
-        <div className="mb-4">
+        {/* 用户选择下拉框 + 添加订单按钮（同一行） */}
+        <div className="flex items-center gap-2 mb-4">
+          {/* 下拉框 */}
+          <div className="relative flex-1">
+            <button
+              onClick={() => setShowListDropdown(!showListDropdown)}
+              className="w-full flex items-center justify-between px-4 py-2.5 rounded-full text-sm font-medium bg-white border border-gray-200 shadow-sm"
+              style={{ color: '#374151' }}
+            >
+              <span>
+                {activeUserTab === 'all'
+                  ? `全部借方${orders.length > 0 ? ` (${orders.length})` : ''}`
+                  : (() => {
+                      const m = realMembers.find((m: any) => m.userId === activeUserTab);
+                      const name = m ? (m.nickname || m.username || `用户${activeUserTab}`) : `用户${activeUserTab}`;
+                      return `${name} (${displayOrders.length})`;
+                    })()}
+              </span>
+              <ChevronDown className="w-4 h-4 text-gray-400 ml-1 shrink-0" />
+            </button>
+            {showListDropdown && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-2xl shadow-lg border border-gray-100 z-50 overflow-hidden">
+                <div className="max-h-52 overflow-y-auto">
+                  <button
+                    onClick={() => { setActiveUserTab('all'); setShowListDropdown(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors"
+                    style={{ color: activeUserTab === 'all' ? '#1A56DB' : '#374151', fontWeight: activeUserTab === 'all' ? 600 : 400 }}
+                  >全部借方 {orders.length > 0 ? `(${orders.length})` : ''}</button>
+                  {usersWithOrders.map((m: any) => {
+                    const name = m.nickname || m.username || `用户${m.userId}`;
+                    const count = orders.filter((o: any) => o.user_id === m.userId).length;
+                    return (
+                      <button
+                        key={m.userId}
+                        onClick={() => { setActiveUserTab(m.userId); setShowListDropdown(false); }}
+                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors"
+                        style={{ color: activeUserTab === m.userId ? '#1A56DB' : '#374151', fontWeight: activeUserTab === m.userId ? 600 : 400 }}
+                      >{name} ({count})</button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+          {/* 添加订单按钮 */}
           <button
             onClick={openCreate}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-full text-white text-sm font-medium shadow-md"
+            className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-white text-sm font-medium shadow-md"
             style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
           >
             <Plus className="w-4 h-4" />
-            添加融资订单
+            添加订单
           </button>
         </div>
 
         <div>
-          {/* 用户 Tab：有多个用户有订单时才显示 */}
-          {usersWithOrders.length > 1 && (
-            <div className="flex gap-2 mb-3 overflow-x-auto pb-1 scrollbar-none">
-              <button
-                onClick={() => setActiveUserTab('all')}
-                className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
-                style={
-                  activeUserTab === 'all'
-                    ? { background: '#1A56DB', color: '#fff', boxShadow: '0 2px 6px rgba(26,86,219,0.3)' }
-                    : { background: '#fff', color: '#6B7280', border: '1px solid #E5E7EB' }
-                }
-              >
-                全部 {orders.length > 0 ? `(${orders.length})` : ''}
-              </button>
-              {usersWithOrders.map((m: any) => {
-                const name = m.nickname || m.username || `用户${m.userId}`;
-                const count = orders.filter((o: any) => o.user_id === m.userId).length;
-                const isActive = activeUserTab === m.userId;
-                return (
-                  <button
-                    key={m.userId}
-                    onClick={() => setActiveUserTab(m.userId)}
-                    className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all"
-                    style={
-                      isActive
-                        ? { background: '#1A56DB', color: '#fff', boxShadow: '0 2px 6px rgba(26,86,219,0.3)' }
-                        : { background: '#fff', color: '#6B7280', border: '1px solid #E5E7EB' }
-                    }
-                  >
-                    {m.avatar && (
-                      <img src={m.avatar} alt="" className="w-4 h-4 rounded-full object-cover flex-shrink-0" />
-                    )}
-                    {name}
-                    {count > 0 && <span className="opacity-70">({count})</span>}
-                  </button>
-                );
-              })}
-            </div>
-          )}
           <h2 className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">
             {activeUserTab === 'all'
               ? `融资订单列表 ${orders.length > 0 ? `· ${orders.length} 笔` : ''}`
@@ -669,12 +676,6 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     </div>
 
                     <div className="px-4 py-3">
-                      <div className="flex items-baseline gap-1 mb-2">
-                        <span className="text-xs text-gray-400">归属用户：</span>
-                        <span className="text-xs font-medium" style={{ color: '#1A2340' }}>{displayName}</span>
-
-                      </div>
-
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
                         {order.buy_price && (
                           <div className="flex items-center gap-1">
