@@ -1532,7 +1532,7 @@ export default function LedgerDetailAA({
                                   {nonTradingLabel}
                                 </span>
                               ) : !isPausedAfter && hasRecord ? (
-                                <span style={{ fontSize: '12px', fontWeight: 700, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
+                                <span style={{ fontSize: (() => { const len = (cellValue || '').length; if (len <= 5) return '12px'; if (len <= 7) return '10px'; return '9px'; })(), fontWeight: 700, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'visible', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
                                   {cellValue}
                                 </span>
                               ) : null}
