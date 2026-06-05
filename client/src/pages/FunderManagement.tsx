@@ -1982,7 +1982,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                             <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(formData.interestBase).toLocaleString(undefined, { maximumFractionDigits: 2 })} {formData.interestBaseCurrency === 'CNY' ? '元' : 'U'}</span>
                           </div>
                         )}
-                        {displayConfig.todayPrice && (
+                        {displayConfig.todayPrice && formData.coin !== 'CNY' && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">当前币价</span>
                             <span className="font-medium" style={{ color: (() => { const lp = formLivePrices[formData.coin]; const bp = formData.buyPrice ? parseFloat(formData.buyPrice) : null; if (lp && bp) { return lp > bp ? '#DC2626' : lp < bp ? '#16A34A' : '#4B5563'; } return '#4B5563'; })() }}>

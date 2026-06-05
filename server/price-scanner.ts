@@ -268,6 +268,8 @@ async function scanPrices() {
 export function getLatestPrice(coin: string): number | null {
   // USDT 是稳定币，固定价格为 1 美元
   if (coin.toUpperCase() === 'USDT') return 1.0;
+  // CNY 是法币，固定价格为 1（1元人民币 = 1元人民币）
+  if (coin.toUpperCase() === 'CNY') return 1.0;
   const entry = latestPrices[coin.toUpperCase()];
   if (!entry) return null;
   // 只要有缓存价格就返回，不设过期限制
