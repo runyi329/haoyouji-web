@@ -14802,7 +14802,15 @@ ${klinesSummary}
             );
           }
         }
-        const rawOrders = ((rows[0] || rows) as any[]) || [];
+        const rawOrdersRaw = ((rows[0] || rows) as any[]) || [];
+        // 按 id 去重，防止同一订单因 OR 条件或数据异常出现多次
+        const seenIds = new Set<number>();
+        const rawOrders = rawOrdersRaw.filter((o: any) => {
+          const id = Number(o.id);
+          if (seenIds.has(id)) return false;
+          seenIds.add(id);
+          return true;
+        });
         // 把 Date 对象统一序列化为 yyyy-MM-dd 字符串，防止前端 .replace() 崩溃
         const orders = rawOrders.map((o: any) => {
           const result = { ...o };
