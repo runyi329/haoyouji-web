@@ -272,7 +272,9 @@ function FinanceOrderCard({
   return (
     <div
       className="bg-white rounded-2xl overflow-hidden relative"
-      style={{ border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}
+      style={order._fromFunder
+        ? { border: '1px solid #86EFAC', boxShadow: '0 1px 6px rgba(34,197,94,0.08)' }
+        : { border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}
     >
       {isSettled && (
         <div
@@ -286,7 +288,7 @@ function FinanceOrderCard({
       )}
 
       {/* 卡片顶部：标签行 + 操作按钮 */}
-      <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid #F3F4F6', backgroundColor: '#FAFBFF' }}>
+      <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid #F3F4F6', backgroundColor: order._fromFunder ? '#F0FDF4' : '#FAFBFF' }}>
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: coinColor }}>
             {order.coin}
