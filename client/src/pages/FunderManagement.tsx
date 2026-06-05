@@ -415,7 +415,13 @@ function FunderOrderCard({
 
   // 担保物
   let collateralAssets: { coin: string; qty: string }[] = [];
-  try { if (order.collateral_assets) collateralAssets = JSON.parse(order.collateral_assets); } catch {}
+  try {
+    const rawCA = order.collateral_assets;
+    if (rawCA) {
+      const parsed = typeof rawCA === 'string' ? JSON.parse(rawCA) : rawCA;
+      if (Array.isArray(parsed)) collateralAssets = parsed;
+    }
+  } catch {}
   let collateralValue = 0;
   let collateralValueKnown = true;
   const collateralItemValues: (number | null)[] = [];
