@@ -3076,7 +3076,7 @@ export default function CryptoPrediction() {
                   const interestBaseRaw = parseFloat(order.interest_base || order.principal || '0');
                   // FG6127 特殊：interest_base 仅为50%部分，利息按全额（×2）计算；其他订单不变
                   const interestBase = order.order_no === 'FG6127' ? interestBaseRaw * 2 : interestBaseRaw;
-                  const startDate = order.interest_start_date || order.startDate || null;
+                  const startDate = order.interest_start_date || order.startDate ? String(order.interest_start_date || order.startDate) : null;
                   const coinQty = parseFloat(order.buy_quantity || order.coinQuantity || '0');
                   const buyPrice = parseFloat(order.buy_price || '0');
                   const buyValue = parseFloat(order.amount || '0');
@@ -3491,7 +3491,7 @@ export default function CryptoPrediction() {
                           order.public_note = newNote || null;
                           refetchFinanceOrders();
                         }}
-                        currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
+                        currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar || (order as any).userAvatar || undefined } : undefined}
                         isAdmin={isOwner}
                       />
                     </div>
