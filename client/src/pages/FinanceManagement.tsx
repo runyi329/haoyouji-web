@@ -584,144 +584,125 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                 const rateSign = isNegRate ? '-' : '+';
                 const memberName = realMembers.find((m: any) => m.userId === order.user_id);
                 const displayName = memberName ? (memberName.nickname || memberName.username || `用户${order.user_id}`) : `用户${order.user_id}`;
+                const isSold = String(order.admin_note || '').includes('[已卖出]');
+                const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
                 return (
                   <div
                     key={order.id}
-                    className="bg-white rounded-2xl shadow-sm overflow-hidden relative"
-                    style={{ border: '1px solid #E8EDFF' }}
+                    className="bg-white rounded-2xl overflow-hidden relative"
+                    style={{ border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}
                   >
-                    {String(order.admin_note || '').includes('[已卖出]') && (
+                    {isSold && (
                       <div
                         className="absolute bottom-4 left-4 pointer-events-none select-none"
                         style={{ transform: 'rotate(-30deg)', zIndex: 10 }}
                       >
-                        <div
-                          style={{
-                            border: '2px solid rgba(220,38,38,0.5)',
-                            color: 'rgba(220,38,38,0.5)',
-                            borderRadius: '4px',
-                            padding: '2px 8px',
-                            fontSize: '13px',
-                            fontWeight: 700,
-                            letterSpacing: '3px',
-                            lineHeight: '1.4',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
+                        <div style={{ border: '2px solid rgba(220,38,38,0.5)', color: 'rgba(220,38,38,0.5)', borderRadius: '4px', padding: '2px 8px', fontSize: '13px', fontWeight: 700, letterSpacing: '3px', lineHeight: '1.4', whiteSpace: 'nowrap' }}>
                           已卖出
                         </div>
                       </div>
                     )}
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-50">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-2 h-2 rounded-full"
-                          style={{ backgroundColor: COIN_COLORS[order.coin as CoinType] || '#999' }}
-                        />
-                        <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>
-                          {order.coin} · {order.amount} USDT
+
+                    {/* 卡片顶部：标签行 + 操作按钮 */}
+                    <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid #F3F4F6', backgroundColor: '#FAFBFF' }}>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: coinColor }}>
+                          {order.coin}
                         </span>
                         <span className="text-xs text-gray-400">#{order.order_no}</span>
+                        <span
+                          className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+                          style={
+                            order.status === 'active'
+                              ? { backgroundColor: '#EEF4FF', color: '#1A56DB' }
+                              : order.status === 'settled'
+                              ? { backgroundColor: '#F0FDF4', color: '#16A34A' }
+                              : { backgroundColor: '#F9FAFB', color: '#9CA3AF' }
+                          }
+                        >
+                          {STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <div className="flex items-center gap-1">
-                          <span
-                            className="text-xs px-2 py-0.5 rounded-full font-medium"
-                            style={
-                              order.status === 'active'
-                                ? { backgroundColor: '#EEF4FF', color: '#1A56DB' }
-                                : order.status === 'settled'
-                                ? { backgroundColor: '#F0FDF4', color: '#16A34A' }
-                                : { backgroundColor: '#F9FAFB', color: '#9CA3AF' }
-                            }
-                          >
-                            {STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status}
-                          </span>
-                        </div>
+                      <div className="flex items-center gap-0.5">
                         <button
-                          title={String(order.admin_note || '').includes('[已卖出]') ? '取消已卖出标记' : '标记已卖出'}
+                          title={isSold ? '取消已卖出标记' : '标记已卖出'}
                           onClick={() => {
                             const note = String(order.admin_note || '');
-                            const isSold = note.includes('[已卖出]');
-                            const newNote = isSold
-                              ? note.replace('[已卖出]', '').trim()
-                              : (note ? note + ' [已卖出]' : '[已卖出]');
+                            const newNote = isSold ? note.replace('[已卖出]', '').trim() : (note ? note + ' [已卖出]' : '[已卖出]');
                             updateMutation.mutate({ id: order.id, ledgerId, adminNote: newNote });
                           }}
-                          className="p-1.5 rounded-lg hover:bg-orange-50"
+                          className="px-2 py-1 text-xs rounded-lg font-medium transition-colors"
+                          style={{ backgroundColor: isSold ? '#FEE2E2' : '#F3F4F6', color: isSold ? '#DC2626' : '#9CA3AF' }}
                         >
-                          <span style={{
-                            fontSize: '10px',
-                            fontWeight: 700,
-                            color: String(order.admin_note || '').includes('[已卖出]') ? '#DC2626' : '#9CA3AF',
-                            letterSpacing: '0px',
-                            lineHeight: 1,
-                          }}>卖</span>
+                          卖出
                         </button>
-                        <button
-                          onClick={() => openEdit(order)}
-                          className="p-1.5 rounded-lg hover:bg-blue-50"
-                        >
-                          <Pencil className="w-3.5 h-3.5 text-blue-400" />
+                        <button onClick={() => openEdit(order)} className="p-1.5 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
+                          <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => { if (confirm('确认删除此订单？')) deleteMutation.mutate({ id: order.id, ledgerId }); }}
-                          className="p-1.5 rounded-lg hover:bg-red-50"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                        <button onClick={() => { if (confirm('确认删除此订单？')) deleteMutation.mutate({ id: order.id, ledgerId }); }} className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
 
-                    <div className="px-4 py-3">
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                    <div className="px-4 pt-3 pb-3">
+                      {/* 核心金额 + 年化利率 */}
+                      <div className="flex items-end justify-between mb-3">
+                        <div>
+                          <div className="text-xs text-gray-400 mb-0.5">{order.interest_base ? '计息基数' : '总价值'}</div>
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-2xl font-bold" style={{ color: '#1A2340', letterSpacing: '-0.5px' }}>
+                              {order.interest_base ? parseFloat(order.interest_base).toLocaleString() : parseFloat(order.amount).toLocaleString()}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {order.interest_base_currency === 'CNY' ? '元' : 'USDT'}
+                            </span>
+                          </div>
+                        </div>
+                        {rateAbs && (
+                          <div className="text-right">
+                            <div className="text-xs text-gray-400 mb-0.5">年化</div>
+                            <div className="text-lg font-bold" style={{ color: rateColor }}>{rateSign}{rateAbs}%</div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 详细字段：两列网格 */}
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
                         {order.buy_price && (
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center justify-between">
                             <span className="text-gray-400">买入价</span>
-                            <span className="font-medium" style={{ color: '#1A2340' }}>${parseFloat(order.buy_price).toLocaleString()}</span>
+                            <span className="font-medium text-gray-700">${parseFloat(order.buy_price).toLocaleString()}</span>
                           </div>
                         )}
                         {order.buy_quantity && (
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center justify-between">
                             <span className="text-gray-400">持币量</span>
-                            <span className="font-medium" style={{ color: '#1A2340' }}>{formatCoinQty(order.buy_quantity, order.coin)} {order.coin}</span>
+                            <span className="font-medium text-gray-700">{formatCoinQty(order.buy_quantity, order.coin)} {order.coin}</span>
                           </div>
                         )}
                         {order.buy_date && (
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center justify-between">
                             <span className="text-gray-400">买入日</span>
-                            <span className="font-medium" style={{ color: '#1A2340' }}>{order.buy_date}</span>
+                            <span className="font-medium text-gray-700">{order.buy_date}</span>
                           </div>
                         )}
-                        {order.storage_account && (
-                          <div className="flex items-center gap-1">
-                            <span className="text-gray-400">存放账号</span>
-                            <span className="font-medium truncate" style={{ color: '#1A2340' }}>{order.storage_account}</span>
-                          </div>
-                        )}
-                        {rateAbs && (
-                          <div className="flex items-center gap-1 col-span-2">
-                            <span className="text-gray-400">年化利率</span>
-                            <span className="font-semibold" style={{ color: rateColor }}>{rateSign}{rateAbs}%</span>
-                            {order.interest_payment_type && (
-                              <span className="text-gray-400 ml-1">· {getPaymentLabel(order.interest_payment_type)}</span>
-                            )}
-                          </div>
-                        )}
-                        {order.interest_base && (
-                          <div className="flex items-center gap-1">
-                            <span className="text-gray-400">计息基数</span>
-                            <span className="font-medium" style={{ color: '#1A2340' }}>
-                              {order.interest_base_currency === 'CNY'
-                                ? `人民币 ${parseFloat(order.interest_base).toLocaleString()} 元`
-                                : `${parseFloat(order.interest_base).toLocaleString()} USDT`}
-                            </span>
+                        {order.interest_payment_type && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400">付息方式</span>
+                            <span className="font-medium text-gray-700">{getPaymentLabel(order.interest_payment_type)}</span>
                           </div>
                         )}
                         {order.interest_start_date && (
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center justify-between">
                             <span className="text-gray-400">计息开始</span>
-                            <span className="font-medium" style={{ color: '#1A2340' }}>{order.interest_start_date}</span>
+                            <span className="font-medium text-gray-700">{order.interest_start_date}</span>
+                          </div>
+                        )}
+                        {order.storage_account && (
+                          <div className="flex items-center justify-between col-span-2">
+                            <span className="text-gray-400">存放账号</span>
+                            <span className="font-medium text-gray-700 truncate ml-2">{order.storage_account}</span>
                           </div>
                         )}
                       </div>
