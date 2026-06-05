@@ -734,12 +734,28 @@ export default function LedgerDetailAA({
   }, [calendarDate, calendarMode]);
 
   // ─── 辅助函数 ──────────────────────────────────────────────────────────────
-  const formatMoney = (v: number) => {
-    // 日历格子：超过1万用「万」缩写，保留2位小数
+  // formatMoney: 日历格子金额格式化，prefix 为符号前缀（如 "+" "-"），总长度不超过 6 字符（含前缀）
+  const formatMoney = (v: number, prefix = '') => {
     const abs = Math.abs(v);
-    if (abs >= 100000000) return (abs / 100000000).toFixed(2) + '亿';
-    if (abs >= 10000) return (abs / 10000).toFixed(2) + '万';
-    return abs.toFixed(2);
+    const maxLen = 6 - prefix.length; // 去掉前缀后剩余可用字符数
+    const adaptDecimals = (str: string, suffix: string): string => {
+      const full = str + suffix;
+      if (full.length <= maxLen) return full;
+      const dot = str.indexOf('.');
+      if (dot !== -1) {
+        const one = str.slice(0, dot + 2) + suffix;
+        if (one.length <= maxLen) return one;
+        return str.slice(0, dot) + suffix;
+      }
+      return full;
+    };
+    if (abs >= 100000000) return prefix + adaptDecimals((abs / 100000000).toFixed(2), '亿');
+    if (abs >= 10000) return prefix + adaptDecimals((abs / 10000).toFixed(2), '万');
+    const base = abs.toFixed(2);
+    if (base.length <= maxLen) return prefix + base;
+    const one = abs.toFixed(1);
+    if (one.length <= maxLen) return prefix + one;
+    return prefix + abs.toFixed(0);
   };
 
   const getDateStr = (day: number) => {
@@ -794,7 +810,7 @@ export default function LedgerDetailAA({
       const prevTotal = prevData.expense + prevData.income;
       const diff = todayTotal - prevTotal;
       const sign = diff > 0 ? "+" : diff < 0 ? "-" : "";
-      return sign + formatMoney(Math.abs(diff));
+      return formatMoney(Math.abs(diff), sign);
     }
     if (calendarMode === "monthly") {
       const { year, month } = calendarDate;
@@ -1532,7 +1548,7 @@ export default function LedgerDetailAA({
                                   {nonTradingLabel}
                                 </span>
                               ) : !isPausedAfter && hasRecord ? (
-                                <span style={{ fontSize: (() => { const len = (cellValue || '').length; if (len <= 5) return '12px'; if (len <= 7) return '10px'; return '9px'; })(), fontWeight: 700, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'visible', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 700, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'visible', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
                                   {cellValue}
                                 </span>
                               ) : null}
@@ -1638,7 +1654,7 @@ export default function LedgerDetailAA({
                     >
                       <span style={{ fontSize: '13px', fontWeight: 500, color: y === nowY ? "#D32F2F" : "#222222" }}>{y}年</span>
                       <span className="font-semibold mt-0.5" style={{ fontSize: "12px", color }}>
-                        {sign}{formatMoney(Math.abs(net))}
+                        {formatMoney(Math.abs(net), sign)}
                       </span>
                     </div>
                   );
