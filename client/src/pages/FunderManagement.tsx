@@ -251,6 +251,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
   // funderGetAssetOrders 返回 { orders, livePrices }，取 orders 数组
   const assetOrders = (assetOrdersData as any)?.orders ?? assetOrdersData ?? [];
   const formLivePrices: Record<string, number> = (assetOrdersData as any)?.livePrices ?? {};
+  // 全量订单（不带 userId 过滤），专用于下拉框统计每个用户的订单数量
+  const { data: allOrdersData } = trpc.ledger.funderGetAssetOrders.useQuery(
+    { ledgerId },
+    { enabled: ledgerId > 0, staleTime: 30000 }
+  );
+  const allOrders: any[] = (allOrdersData as any)?.orders ?? allOrdersData ?? [];
 
   // 强制转成数字，避免 MySQL 返回字符串导致 tRPC z.number() 校验失败
   const editingOrderId: number | null = editingOrder?.id ? Number(editingOrder.id) : null;
@@ -723,14 +729,27 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                     if (!userSearchText) return true;
                     const name = u.nickname || u.name || u.username || '';
                     return name.includes(userSearchText);
-                  }).map((u: any) => (
+                  }).map((u: any) => {
+                    const userOrders = allOrders.filter((o: any) => o.userId === u.userId || o.user_id === u.userId);
+                    const activeCount = userOrders.filter((o: any) => o.status === 'active').length;
+                    const settledCount = userOrders.filter((o: any) => o.status === 'settled' || o.status === 'cancelled').length;
+                    return (
                     <button
                       key={u.userId}
                       onClick={() => { setSelectedUserId(u.userId); setShowUserDropdown(false); }}
-                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors"
+                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
                       style={{ color: selectedUserId === u.userId ? '#1A56DB' : '#374151', fontWeight: selectedUserId === u.userId ? 600 : 400 }}
-                    >{u.nickname || u.name || u.username}</button>
-                  ))}
+                    >
+                      <span>{u.nickname || u.name || u.username}</span>
+                      <span className="text-xs ml-2 shrink-0" style={{ color: '#9CA3AF', fontWeight: 400 }}>
+                        {activeCount > 0 && <span style={{ color: '#22C55E' }}>进行中 {activeCount}</span>}
+                        {activeCount > 0 && settledCount > 0 && <span style={{ color: '#D1D5DB' }}> / </span>}
+                        {settledCount > 0 && <span style={{ color: '#9CA3AF' }}>已结束 {settledCount}</span>}
+                        {activeCount === 0 && settledCount === 0 && <span>暂无订单</span>}
+                      </span>
+                    </button>
+                    );
+                  })}
                 </div>
               </div>
             )}
