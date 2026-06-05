@@ -1928,6 +1928,14 @@ export default function FunderManagement() {
                                 </span>
                               </div>
                             )}
+                            {displayConfig.marginRate && computedCollateralValue !== null && computedAmount && parseFloat(computedAmount) > 0 && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-gray-400 shrink-0">保证金率</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>
+                                  {(computedCollateralValue / parseFloat(computedAmount) * 100).toFixed(1)}%
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ) : (
@@ -1937,6 +1945,21 @@ export default function FunderManagement() {
                       )}
                     </div>
                   </div>
+                  {/* 收益分成区 */}
+                  {displayConfig.profitShare && formData.showProfitShare && (
+                    <div className="border-t px-3 py-2" style={{ borderColor: '#E8EFFF' }}>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-gray-400">收益分成</span>
+                        <span className="font-medium" style={{ color: '#3B82F6' }}>已开启</span>
+                      </div>
+                      {displayConfig.commissionShare && formData.commissionShare && (
+                        <div className="flex items-center justify-between text-xs mt-0.5">
+                          <span className="text-gray-400">佣金分成</span>
+                          <span className="font-medium" style={{ color: '#4B5563' }}>{formData.commissionShare}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

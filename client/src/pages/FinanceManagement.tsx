@@ -1574,6 +1574,15 @@ export default function FinanceManagement() {
                             </div>
                           </div>
                           <div className="space-y-0.5 text-xs mt-1">
+                            {displayConfig.paidInterest && editingOrder && (() => {
+                              const totalPaid = (interestPaymentSummary as any)?.[editingOrder.id] ?? 0;
+                              return totalPaid > 0 ? (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-400 shrink-0">已结利息</span>
+                                  <span className="font-medium" style={{ color: '#4B5563' }}>{totalPaid.toLocaleString(undefined, { maximumFractionDigits: 2 })} {formData.interestBaseCurrency === 'CNY' ? '元' : 'U'}</span>
+                                </div>
+                              ) : null;
+                            })()}
                             {displayConfig.interestStartDate && formData.interestStartDate && (
                               <div className="flex items-center justify-between">
                                 <span className="text-gray-400 shrink-0">计息日期</span>
@@ -1607,6 +1616,14 @@ export default function FinanceManagement() {
                                 <span className="text-gray-400 shrink-0">担保缺口</span>
                                 <span className="font-medium" style={{ color: (formComputedCollateralValue / formComputedAmount) >= 1 ? '#16A34A' : '#DC2626' }}>
                                   {(formComputedCollateralValue / formComputedAmount) >= 1 ? '超过100%' : `${(formComputedCollateralValue / formComputedAmount * 100).toFixed(0)}%`}
+                                </span>
+                              </div>
+                            )}
+                            {displayConfig.marginRate && formComputedCollateralValue !== null && formComputedAmount && formComputedAmount > 0 && (
+                              <div className="flex items-center justify-between">
+                                <span className="text-gray-400 shrink-0">保证金率</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>
+                                  {(formComputedCollateralValue / formComputedAmount * 100).toFixed(1)}%
                                 </span>
                               </div>
                             )}
