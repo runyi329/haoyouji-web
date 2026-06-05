@@ -208,6 +208,7 @@ export default function FunderManagement() {
     collateralCoin: true,
     collateralValue: true,
     collateral: true,
+    marginRate: true,
     profitShare: true,
     commissionShare: true,
     aiIcon: false,
@@ -1733,6 +1734,7 @@ export default function FunderManagement() {
                       { key: 'collateralCoin', label: '担保货币' },
                       { key: 'collateralValue', label: '担保价值' },
                       { key: 'collateral', label: '担保缺口' },
+                      { key: 'marginRate', label: '保证金率' },
                     ].map(({ key, label }) => (
                       <div key={key} className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">{label}</span>
@@ -1966,6 +1968,16 @@ export default function FunderManagement() {
                                 </span>
                               </div>
                             )}
+                            {displayConfig.marginRate && computedCollateralValue !== null && computedAmount && parseFloat(computedAmount) > 0 && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400">保证金率</span>
+                                <span className="text-xs font-medium" style={{
+                                  color: (computedCollateralValue / parseFloat(computedAmount)) >= 1 ? '#16A34A' : (computedCollateralValue / parseFloat(computedAmount)) >= 0.5 ? '#D97706' : '#DC2626'
+                                }}>
+                                  {(computedCollateralValue / parseFloat(computedAmount) * 100).toFixed(1)}%
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ) : (
@@ -2004,6 +2016,16 @@ export default function FunderManagement() {
                                 <span className="text-gray-400">担保缺口</span>
                                 <span className="text-xs font-medium" style={{ color: previewExposure !== null && previewExposure >= 0 ? '#4B5563' : '#16A34A' }}>
                                   {previewExposure === null ? '---' : previewExposure >= 0 ? '100%' : `-${Math.abs(previewExposure).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
+                                </span>
+                              </div>
+                            )}
+                            {displayConfig.marginRate && computedCollateralValue !== null && computedAmount && parseFloat(computedAmount) > 0 && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400">保证金率</span>
+                                <span className="text-xs font-medium" style={{
+                                  color: (computedCollateralValue / parseFloat(computedAmount)) >= 1 ? '#16A34A' : (computedCollateralValue / parseFloat(computedAmount)) >= 0.5 ? '#D97706' : '#DC2626'
+                                }}>
+                                  {(computedCollateralValue / parseFloat(computedAmount) * 100).toFixed(1)}%
                                 </span>
                               </div>
                             )}
