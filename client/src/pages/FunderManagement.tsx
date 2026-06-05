@@ -403,6 +403,16 @@ function FunderOrderCard({
     return days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
   })();
 
+  // 读取 display_config（与 LedgerDetail show() 函数一致：默认全部显示，除非明确设为 false）
+  const dc: Record<string, boolean> | null = (() => {
+    try {
+      const raw = order.display_config;
+      if (!raw) return null;
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch { return null; }
+  })();
+  const show = (key: string) => dc ? (dc[key] !== false) : true;
+
   // 担保物
   let collateralAssets: { coin: string; qty: string }[] = [];
   try { if (order.collateral_assets) collateralAssets = JSON.parse(order.collateral_assets); } catch {}
@@ -657,6 +667,8 @@ function FunderOrderCard({
             <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
           </div>
           <div className="space-y-0.5 text-xs">
+            {show('paidInterest') && (
+            <>
             <div className="flex items-center justify-between">
               <span className="text-gray-400 whitespace-nowrap">{isInvited ? '已结佣金' : '已结利息'}</span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -668,7 +680,9 @@ function FunderOrderCard({
                 <span className="text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
               </div>
             )}
-            {(isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) && (
+            </>
+            )}
+            {show('interestStartDate') && (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">{isInvited ? '计佣日期' : '计息日期'}</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -676,28 +690,37 @@ function FunderOrderCard({
                 </span>
               </div>
             )}
-            {/* 担保货币 */}
-            {collateralAssets.map((a, idx) => (
-              <div key={idx}>
-                <div className="flex items-center justify-between mt-0.5">
-                  <span className="text-gray-400">{collateralAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
-                  <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(a.qty).toLocaleString()} {a.coin}</span>
-                </div>
-                {collateralItemValues[idx] !== null && collateralItemValues[idx] !== undefined && (
-                  <div className="flex items-center justify-between mt-0.5">
-                    <span></span>
-                    <span className="font-medium" style={{ color: '#4B5563' }}>≈ {(collateralItemValues[idx] as number).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+            {/* 担保货币（与 LedgerDetail 前端完全一致：受 display_config 开关控制） */}
+            {show('collateralCoin') && (
+              collateralAssets.length === 0
+                ? (
+                  <div className="flex items-center justify-between text-xs mt-0.5">
+                    <span className="text-gray-400">担保货币</span>
+                    <span className="font-medium" style={{ color: '#4B5563' }}>0</span>
                   </div>
-                )}
-              </div>
-            ))}
-            {collateralAssets.length > 0 && collateralValueKnown && (
+                )
+                : collateralAssets.map((a, idx) => (
+                  <div key={idx}>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <span className="text-gray-400">{collateralAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
+                      <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(a.qty).toLocaleString()} {a.coin}</span>
+                    </div>
+                    {collateralItemValues[idx] !== null && collateralItemValues[idx] !== undefined && (
+                      <div className="flex items-center justify-between mt-0.5">
+                        <span></span>
+                        <span className="font-medium" style={{ color: '#4B5563' }}>≈ {(collateralItemValues[idx] as number).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                      </div>
+                    )}
+                  </div>
+                ))
+            )}
+            {show('collateralValue') && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">{collateralAssets.length > 1 ? '担保总值' : '担保价值'}</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
               </div>
             )}
-            {collateralAssets.length > 0 && (
+            {show('collateral') && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">担保缺口</span>
                 <span className="font-medium" style={{ color: isSufficient ? '#4B5563' : '#16A34A' }}>
