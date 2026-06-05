@@ -147,9 +147,10 @@ function formatNoteTime(iso: string): string {
 }
 function NoteAvatar({ name, avatar }: { name?: string; avatar?: string }) {
   if (avatar) return <img src={avatar} alt={name || ''} className="w-5 h-5 rounded-full object-cover shrink-0" style={{ border: '1px solid #E0E7FF' }} />;
-  const initials = (name || '?').slice(0, 1).toUpperCase();
+  if (!name) return <div className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center" style={{ backgroundColor: '#E5E7EB' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>;
+  const initials = name.slice(0, 1).toUpperCase();
   const colors = ['#6366F1','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6'];
-  const color = colors[(name || '').charCodeAt(0) % colors.length] || '#6366F1';
+  const color = colors[name.charCodeAt(0) % colors.length] || '#6366F1';
   return <div className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: color }}>{initials}</div>;
 }
 function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, isAdmin }: { orderId: number; ledgerId: number; initialNote: string; onSaved: (note: string) => void; currentUser?: { id: number; name?: string; username?: string; avatar?: string }; isAdmin?: boolean; }) {
@@ -210,7 +211,7 @@ function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, i
               ) : (
                 <div className="py-0.5">
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    {note.userName && <NoteAvatar name={note.userName} avatar={note.userAvatar} />}
+                    <NoteAvatar name={note.userName} avatar={note.userAvatar} />
                     {note.userName && <span className="text-[10px] font-medium" style={{ color: '#6B7280' }}>{note.userName}</span>}
                     {note.time && <span className="text-[10px]" style={{ color: '#C0C8D8' }}>{formatNoteTime(note.time)}</span>}
                     {canEdit(note) && (

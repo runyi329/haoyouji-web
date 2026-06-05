@@ -20,9 +20,10 @@ function formatFOMNoteTime(iso: string): string {
 }
 function FOMNoteAvatar({ name, avatar }: { name?: string; avatar?: string }) {
   if (avatar) return <img src={avatar} alt={name || ''} className="w-5 h-5 rounded-full object-cover" style={{ border: '1px solid #E0E7FF' }} />;
-  const initials = (name || '?').slice(0, 1).toUpperCase();
+  if (!name) return <div className="w-5 h-5 rounded-full flex items-center justify-center" style={{ backgroundColor: '#E5E7EB' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>;
+  const initials = name.slice(0, 1).toUpperCase();
   const colors = ['#6366F1','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6'];
-  const color = colors[(name || '').charCodeAt(0) % colors.length] || '#6366F1';
+  const color = colors[name.charCodeAt(0) % colors.length] || '#6366F1';
   return <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: color }}>{initials}</div>;
 }
 
@@ -341,7 +342,7 @@ export default function FunderOrderDetailModal({ order, ledgerId, onClose }: Pro
                     <div key={idx}>
                       {idx > 0 && <div className="border-t border-gray-100 pt-3" />}
                       <div className="flex items-center gap-2 mb-1">
-                        {note.userName && <FOMNoteAvatar name={note.userName} avatar={note.userAvatar} />}
+                        <FOMNoteAvatar name={note.userName} avatar={note.userAvatar} />
                         {note.userName && <span className="text-xs font-medium text-gray-500">{note.userName}</span>}
                         {note.time && <span className="text-[10px] text-gray-300 ml-auto">{formatFOMNoteTime(note.time)}</span>}
                       </div>
