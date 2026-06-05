@@ -278,6 +278,7 @@ function useAccruedInterestFunder(interestBase: string | null, interestRateAnnua
 interface FunderOrderCardProps {
   order: any;
   livePrices: Record<string, number>;
+  priceDirection: Record<string, 'up' | 'down' | 'same'>;
   currentUser: any;
   isAdmin: boolean;
   membersData: any[];
@@ -314,6 +315,7 @@ interface FunderOrderCardProps {
 function FunderOrderCard({
   order,
   livePrices,
+  priceDirection,
   currentUser,
   isAdmin,
   membersData,
@@ -557,7 +559,22 @@ function FunderOrderCard({
             {order.coin !== 'CNY' && order.coin !== 'USDT' && liveP && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">当前币价</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</span>
+                {(() => {
+                  const buyPrice = order.buy_price ? parseFloat(order.buy_price) : null;
+                  let priceColor = '#4B5563';
+                  if (liveP != null && buyPrice != null) {
+                    if (liveP > buyPrice) priceColor = '#DC2626';
+                    else if (liveP < buyPrice) priceColor = '#16A34A';
+                  }
+                  const dir = priceDirection?.[order.coin] ?? 'same';
+                  return (
+                    <span className="font-medium flex items-center gap-0.5" style={{ color: priceColor }}>
+                      {dir === 'up' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#DC2626', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
+                      {dir === 'down' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#16A34A', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
+                      {liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
+                    </span>
+                  );
+                })()}
               </div>
             )}
             {order.buy_date && (
@@ -1140,6 +1157,26 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
   // funderGetAssetOrders 返回 { orders, livePrices }，取 orders 数组
   const assetOrders = (assetOrdersData as any)?.orders ?? assetOrdersData ?? [];
   const formLivePrices: Record<string, number> = (assetOrdersData as any)?.livePrices ?? {};
+  // 涨跌方向计算：用 localStorage 存储上一次价格（与 LedgerDetail 一致）
+  const PREV_PRICE_CACHE_KEY = `funder_prev_prices_p095_${ledgerId}`;
+  const [priceDirection, setPriceDirection] = useState<Record<string, 'up' | 'down' | 'same'>>({});
+  useEffect(() => {
+    if (Object.keys(formLivePrices).length === 0) return;
+    let prevPrices: Record<string, number> = {};
+    try { prevPrices = JSON.parse(localStorage.getItem(PREV_PRICE_CACHE_KEY) || '{}'); } catch {}
+    const newDir: Record<string, 'up' | 'down' | 'same'> = {};
+    for (const coin of Object.keys(formLivePrices)) {
+      const prev = prevPrices[coin];
+      const curr = formLivePrices[coin];
+      if (!prev || prev === 0) { newDir[coin] = 'same'; }
+      else if (curr > prev) { newDir[coin] = 'up'; }
+      else if (curr < prev) { newDir[coin] = 'down'; }
+      else { newDir[coin] = 'same'; }
+    }
+    setPriceDirection(newDir);
+    try { localStorage.setItem(PREV_PRICE_CACHE_KEY, JSON.stringify(formLivePrices)); } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(formLivePrices)]);
   // 全量订单（不带 userId 过滤），专用于下拉框统计每个用户的订单数量
   const { data: allOrdersData } = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId },
@@ -1679,6 +1716,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                     key={order.id}
                     order={order}
                     livePrices={(assetOrdersData as any)?.livePrices ?? {}}
+                    priceDirection={priceDirection}
                     currentUser={currentUser}
                     isAdmin={isAdminUser}
                     membersData={funderUsers as any[]}
@@ -2379,9 +2417,23 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                         {displayConfig.todayPrice && formData.coin !== 'CNY' && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">当前币价</span>
-                            <span className="font-medium" style={{ color: (() => { const lp = formLivePrices[formData.coin]; const bp = formData.buyPrice ? parseFloat(formData.buyPrice) : null; if (lp && bp) { return lp > bp ? '#DC2626' : lp < bp ? '#16A34A' : '#4B5563'; } return '#4B5563'; })() }}>
-                              {formLivePrices[formData.coin] ? formLivePrices[formData.coin].toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U' : '获取中...'}
-                            </span>
+                            {(() => {
+                              const lp = formLivePrices[formData.coin];
+                              const bp = formData.buyPrice ? parseFloat(formData.buyPrice) : null;
+                              let priceColor = '#4B5563';
+                              if (lp && bp) {
+                                if (lp > bp) priceColor = '#DC2626';
+                                else if (lp < bp) priceColor = '#16A34A';
+                              }
+                              const dir = priceDirection?.[formData.coin] ?? 'same';
+                              return (
+                                <span className="font-medium flex items-center gap-0.5" style={{ color: priceColor }}>
+                                  {dir === 'up' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#DC2626', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
+                                  {dir === 'down' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#16A34A', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
+                                  {lp ? lp.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U' : '获取中...'}
+                                </span>
+                              );
+                            })()}
                           </div>
                         )}
                         {displayConfig.buyDate && formData.buyDate && (
