@@ -1108,7 +1108,7 @@ function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, i
       return;
     }
     const newNotes = notes.map((n, i) =>
-      i === idx ? { text: editValue.trim(), time: new Date().toISOString() } : n
+      i === idx ? { ...n, text: editValue.trim(), time: new Date().toISOString() } : n
     );
     await saveNotes(newNotes);
     setEditingIdx(null);
