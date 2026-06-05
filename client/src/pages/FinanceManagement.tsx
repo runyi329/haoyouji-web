@@ -204,7 +204,7 @@ function FinanceOrderCard({
 
   const rateStr = String(order.interest_rate_annual || '');
   const isNegRate = rateStr.startsWith('-');
-  const rateAbs = isNegRate ? rateStr.slice(1) : rateStr;
+  const rateAbs = isNegRate ? parseFloat(rateStr.slice(1)).toFixed(0) : (rateStr ? parseFloat(rateStr).toFixed(0) : '');
   const rateSign = isNegRate ? '-' : '+';
   const isSettled = String(order.admin_note || '').includes('[已结清]');
   const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
