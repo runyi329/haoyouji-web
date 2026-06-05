@@ -347,6 +347,7 @@ function FunderOrderCard({
   saveParticipantsMutation,
 }: FunderOrderCardProps) {
   const [showInterestTip, setShowInterestTip] = useState(false);
+  const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const tipBtnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
   const accrued = useAccruedInterestFunder(
@@ -425,14 +426,15 @@ function FunderOrderCard({
   let collateralValue = 0;
   let collateralValueKnown = true;
   const collateralItemValues: (number | null)[] = [];
+  const collateralItemPrices: (number | null)[] = [];
   for (const item of collateralAssets) {
     const iq = parseFloat(item.qty);
-    if (!item.coin || isNaN(iq)) { collateralItemValues.push(null); collateralValueKnown = false; continue; }
-    if (item.coin === 'USDT') { collateralValue += iq; collateralItemValues.push(iq); }
+    if (!item.coin || isNaN(iq)) { collateralItemValues.push(null); collateralItemPrices.push(null); collateralValueKnown = false; continue; }
+    if (item.coin === 'USDT') { collateralValue += iq; collateralItemValues.push(iq); collateralItemPrices.push(1); }
     else {
       const p = livePrices[item.coin];
-      if (p) { collateralValue += iq * p; collateralItemValues.push(iq * p); }
-      else { collateralItemValues.push(null); collateralValueKnown = false; }
+      if (p) { collateralValue += iq * p; collateralItemValues.push(iq * p); collateralItemPrices.push(p); }
+      else { collateralItemValues.push(null); collateralItemPrices.push(null); collateralValueKnown = false; }
     }
   }
 
@@ -727,12 +729,84 @@ function FunderOrderCard({
               </div>
             )}
             {show('collateral') && (
+              <>
+              {showCollateralInfo && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowCollateralInfo(false)}>
+                  <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-bold" style={{ color: '#1A2340' }}>担保缺口计算说明</span>
+                      <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
+                    </div>
+                    <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
+                      <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                        <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动盈亏</div>
+                        <div>= 当前市值 - 计息基数（正数为浮盈，负数为亏损）</div>
+                        <div className="mt-1 font-mono">
+                          {floatPnl !== null
+                            ? <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {interestBaseNum.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} U{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
+                            : <span className="text-gray-400">当前市值暂无实时价格，暂无法计算浮动盈亏</span>
+                          }
+                        </div>
+                      </div>
+                      <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                        <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 担保价值</div>
+                        {collateralAssets.length === 0
+                          ? <div className="font-mono mt-1" style={{ color: '#9CA3AF' }}>0.00 U（无担保物）</div>
+                          : <>
+                              {collateralAssets.map((a, idx) => {
+                                const itemVal = collateralItemValues[idx];
+                                return (
+                                  <div key={idx} className="mt-1 flex justify-between">
+                                    <span className="font-mono" style={{ color: '#6B7280' }}>{a.qty} {a.coin}</span>
+                                    {itemVal !== null
+                                      ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{itemVal.toFixed(2)} U</span>
+                                      : <span className="font-mono" style={{ color: '#D1D5DB' }}>暂无实时价</span>
+                                    }
+                                  </div>
+                                );
+                              })}
+                              {collateralAssets.length > 1 && (
+                                <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
+                                  合计 {collateralValue.toFixed(2)} U
+                                </div>
+                              )}
+                            </>
+                        }
+                      </div>
+                      <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
+                        <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敢口</div>
+                        <div>担保物 + 浮动盈亏 − 代结利息 + 已结利息（正数充足，负数缺口）</div>
+                        <div className="mt-1 font-mono">
+                          {floatPnl !== null
+                            ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} + {totalPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                            : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} + {totalPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                          }
+                        </div>
+                        <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
+                          {isSufficient
+                            ? `担保物充足，还有 ${exposure.toFixed(2)} U 的余量空间`
+                            : `担保物不足，还需补充 ${Math.abs(exposure).toFixed(2)} U 才能覆盖风险`
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="flex items-center justify-between">
-                <span className="text-gray-400">担保缺口</span>
+                <div className="flex items-center gap-0.5">
+                  <span className="text-gray-400">担保缺口</span>
+                  <button
+                    onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
+                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                    style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                  >?</button>
+                </div>
                 <span className="font-medium" style={{ color: isSufficient ? '#4B5563' : '#16A34A' }}>
                   {isSufficient ? '100%' : `-${(Math.abs(exposure)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
                 </span>
               </div>
+              </>
             )}
           </div>
         </div>
@@ -1061,7 +1135,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
 
   const { data: assetOrdersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId, ...(selectedUserId ? { userId: selectedUserId } : {}) },
-    { enabled: ledgerId > 0, staleTime: 10000, refetchInterval: 10000 }
+    { enabled: ledgerId > 0, staleTime: 3000, refetchInterval: 3000 }
   );
   // funderGetAssetOrders 返回 { orders, livePrices }，取 orders 数组
   const assetOrders = (assetOrdersData as any)?.orders ?? assetOrdersData ?? [];
