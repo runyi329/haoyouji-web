@@ -381,7 +381,7 @@ function FunderOrderCard({
   const isSettled = String(order.admin_note || '').includes('[已结清]');
   const rateStr = String(isInvited ? (order.participantInfo?.commissionRate || '') : (order.interest_rate_annual || ''));
   const isNegRate = rateStr.startsWith('-');
-  const rateAbs = isNegRate ? rateStr.slice(1) : rateStr;
+  const rateAbs = isNegRate ? parseFloat(rateStr.slice(1)).toFixed(0) : (rateStr ? parseFloat(rateStr).toFixed(0) : '');
   const rateSign = isNegRate ? '-' : '+';
 
   // 左栏数值
@@ -935,7 +935,7 @@ function FunderOrderCard({
       <div className="px-4 pt-3 pb-3 border-t border-blue-100">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium" style={{ color: '#1A2340' }}>
-            {isInvited ? '已结佣金' : '已结利息'}：<span style={{ color: '#16A34A' }}>{displayPaid.toFixed(2)} {interestUnit}</span>
+            {isInvited ? '已结佣金' : '已结利息'}：<span style={{ color: '#16A34A' }}>{Math.round(displayPaid).toLocaleString()} {interestUnit}</span>
           </span>
           <button
             onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm(() => ({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
@@ -1422,6 +1422,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
       refetchPayments();
       refetchEditingPayments();
       refetchAllPaidSummary();
+      refetchOrders();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -1433,6 +1434,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
       refetchPayments();
       refetchEditingPayments();
       refetchAllPaidSummary();
+      refetchOrders();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -1442,6 +1444,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
       refetchPayments();
       refetchEditingPayments();
       refetchAllPaidSummary();
+      refetchOrders();
     },
     onError: (err) => toast.error(err.message),
   });
