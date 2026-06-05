@@ -951,6 +951,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   );
 
   const filteredMembers = realMembers.filter((m: any) => {
+    // 右侧借方页面不显示资方(funder)角色的用户
+    if (m.role === 'funder') return false;
     const name = (m.nickname || m.username || '').toLowerCase();
     return name.includes(userSearchText.toLowerCase());
   });
