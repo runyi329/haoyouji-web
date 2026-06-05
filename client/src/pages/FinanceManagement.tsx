@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
@@ -211,6 +211,95 @@ const emptyForm = {
   collateralAssets: [] as { coin: string; qty: string }[],
   financeType: '保本分成' as '保本分成' | '自负盈亏',
 };
+
+// ===== 订单公开备注组件 =====
+interface FNoteItem { text: string; time: string; }
+function parseFNotes(raw: string): FNoteItem[] {
+  if (!raw) return [];
+  try { const p = JSON.parse(raw); if (Array.isArray(p)) return p as FNoteItem[]; } catch {}
+  return [{ text: raw, time: '' }];
+}
+function formatFNoteTime(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return `${d.getMonth()+1}月${d.getDate()}日 ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function FinanceNoteRow({ orderId, ledgerId, initialNote, onSaved }: { orderId: number; ledgerId: number; initialNote: string; onSaved: (note: string) => void; }) {
+  const [notes, setNotes] = useState<FNoteItem[]>(() => parseFNotes(initialNote));
+  const [expanded, setExpanded] = useState(false);
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const updateNote = trpc.ledger.financeUpdatePublicNote.useMutation();
+  const saveNotes = async (newNotes: FNoteItem[]) => {
+    setSaving(true);
+    try {
+      const raw = JSON.stringify(newNotes);
+      await updateNote.mutateAsync({ id: orderId, ledgerId, publicNote: raw });
+      setNotes(newNotes);
+      onSaved(raw);
+    } finally { setSaving(false); }
+  };
+  const handleSaveEdit = async (idx: number) => {
+    if (!editValue.trim()) return;
+    await saveNotes(notes.map((n, i) => i === idx ? { text: editValue.trim(), time: new Date().toISOString() } : n));
+    setEditingIdx(null);
+  };
+  const handleAddNote = () => {
+    const newNotes = [...notes, { text: '', time: new Date().toISOString() }];
+    setNotes(newNotes); setEditingIdx(newNotes.length - 1); setEditValue(''); setExpanded(true);
+  };
+  const handleSaveNew = async (idx: number) => {
+    if (!editValue.trim()) { setNotes(notes.filter((_, i) => i !== idx)); setEditingIdx(null); return; }
+    await saveNotes(notes.map((n, i) => i === idx ? { text: editValue.trim(), time: new Date().toISOString() } : n));
+    setEditingIdx(null);
+  };
+  return (
+    <div className="px-3 py-2 text-xs mt-2 rounded-xl" style={{ backgroundColor: '#F8FBFF', border: '1px solid #DBEAFE' }} onClick={e => e.stopPropagation()}>
+      <div className="flex items-center justify-between cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
+        <div className="flex items-center gap-1.5">
+          <span className="shrink-0 text-xs font-bold" style={{ color: '#6B7280' }}>公开备注</span>
+          {notes.length > 0 && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#EEF2FF', color: '#6366F1' }}>{notes.length}</span>}
+        </div>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9" /></svg>
+      </div>
+      {expanded && (
+        <div className="mt-1.5">
+          {notes.length === 0 && <div style={{ color: '#C0C8D8' }} className="py-1">暂无备注</div>}
+          {notes.map((note, idx) => (
+            <div key={idx}>
+              {idx > 0 && <div style={{ borderTop: '1px solid #E8EFFF' }} className="my-1" />}
+              <div className="flex items-center gap-1 py-0.5">
+                {editingIdx === idx ? (
+                  <>
+                    <input autoFocus className="flex-1 text-xs border rounded px-1.5 py-0.5 outline-none" style={{ borderColor: '#C7D7FF', color: '#1A2340', minWidth: 0 }} value={editValue} onChange={e => setEditValue(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { note.text ? handleSaveEdit(idx) : handleSaveNew(idx); } if (e.key === 'Escape') { setEditingIdx(null); if (!note.text) setNotes(notes.filter((_, i) => i !== idx)); } }} placeholder="输入备注..." maxLength={200} />
+                    <button onClick={() => note.text ? handleSaveEdit(idx) : handleSaveNew(idx)} disabled={saving} className="shrink-0 text-xs px-2 py-0.5 rounded" style={{ background: '#3B82F6', color: '#fff' }}>{saving ? '...' : '保存'}</button>
+                    <button onClick={() => { setEditingIdx(null); if (!note.text) setNotes(notes.filter((_, i) => i !== idx)); }} className="shrink-0 text-xs px-1.5 py-0.5 rounded" style={{ background: '#F3F4F6', color: '#6B7280' }}>取消</button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 break-all" style={{ color: '#4B5563' }}>{note.text}</span>
+                    {note.time && <span className="shrink-0 text-[10px]" style={{ color: '#C0C8D8' }}>{formatFNoteTime(note.time)}</span>}
+                    <button onClick={() => { setEditingIdx(idx); setEditValue(note.text); }} className="shrink-0 p-0.5" title="编辑">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+          <div style={{ borderTop: notes.length > 0 ? '1px solid #E8EFFF' : 'none' }} className="mt-1 pt-1">
+            <button type="button" onClick={handleAddNote} className="flex items-center gap-1" style={{ color: '#9CA3AF' }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              <span style={{ fontSize: '11px' }}>添加备注</span>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+// ===== END FinanceNoteRow =====
 
 interface FinanceManagementProps {
   ledgerIdProp?: number;
@@ -747,18 +836,9 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                       })()}
                       <CollateralMarginRateDisplay assets={(() => { let a: { coin: string; qty: string }[] = []; try { if (order.collateral_assets) a = JSON.parse(order.collateral_assets); } catch(e) {} if (a.length === 0 && order.collateral_coin && order.collateral_qty) a = [{ coin: order.collateral_coin, qty: String(parseFloat(order.collateral_qty)) }]; return a; })()} interestBase={order.interest_base} ledgerId={ledgerId} />
 
-                      {(order.public_note || order.admin_note) && (
-                        <div className="mt-2 pt-2 border-t border-gray-100 space-y-1">
-                          {order.public_note && (
-                            <div className="text-xs text-gray-400">
-                              公开备注：{order.public_note}
-                            </div>
-                          )}
-                          {order.admin_note && (
-                            <div className="text-xs text-gray-400">
-                              内部备注：{order.admin_note}
-                            </div>
-                          )}
+                      {order.admin_note && (
+                        <div className="mt-2 pt-2 border-t border-gray-100 text-xs text-gray-400">
+                          内部备注：{order.admin_note}
                         </div>
                       )}
 
@@ -859,6 +939,13 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                             ))}
                           </div>
                         )}
+                      {/* 公开备注区域 */}
+                      <FinanceNoteRow
+                        orderId={order.id}
+                        ledgerId={ledgerId}
+                        initialNote={order.public_note || ''}
+                        onSaved={(raw) => { order.public_note = raw; }}
+                      />
                       </div>
                     </div>
                   </div>
