@@ -14757,40 +14757,16 @@ ${klinesSummary}
         } else {
           // 管理员：全部 or 按 targetUserId 过滤
           if (targetUserId) {
-            // 管理员选了某个用户：显示该用户名下订单 + 以该用户为参与方的订单
-            let pIds: number[] = [];
-            if (conn) {
-              try {
-                const pR = await conn.execute(
-                  'SELECT DISTINCT order_id FROM funder_order_participants WHERE ledger_id = ? AND user_id = ?',
-                  [input.ledgerId, targetUserId]
-                ) as any;
-                const pArr = Array.isArray(pR[0]) ? pR[0] : (Array.isArray(pR) ? pR : []);
-                pIds = pArr.map((r: any) => Number(r.order_id)).filter(Boolean);
-              } catch {}
-            }
-            if (pIds.length > 0) {
-              const ph = pIds.map(() => '?').join(',');
-              rows = await conn!.execute(
-                `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
-                 FROM funder_asset_orders fo
-                 LEFT JOIN users u ON u.id = fo.user_id
-                 LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-                 WHERE fo.ledger_id = ? AND (fo.user_id = ? OR fo.id IN (${ph}))
-                 ORDER BY fo.created_at DESC`,
-                [input.ledgerId, targetUserId, ...pIds]
-              );
-            } else {
-              rows = await conn!.execute(
-                `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
-                 FROM funder_asset_orders fo
-                 LEFT JOIN users u ON u.id = fo.user_id
-                 LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-                 WHERE fo.ledger_id = ? AND fo.user_id = ?
-                 ORDER BY fo.created_at DESC`,
-                [input.ledgerId, targetUserId]
-              );
-            }
+            // 管理员选了某个用户：只显示该用户名下（owner）的订单
+            rows = await conn!.execute(
+              `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
+               FROM funder_asset_orders fo
+               LEFT JOIN users u ON u.id = fo.user_id
+               LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
+               WHERE fo.ledger_id = ? AND fo.user_id = ?
+               ORDER BY fo.created_at DESC`,
+              [input.ledgerId, targetUserId]
+            );
           } else {
             rows = await db.execute(
               sql`SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
