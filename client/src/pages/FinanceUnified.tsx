@@ -36,7 +36,7 @@ export default function FinanceUnified() {
             className="flex-1 py-2 text-sm font-medium text-center transition-all relative"
             style={{ color: activeTab === 'funder' ? '#fff' : 'rgba(255,255,255,0.6)' }}
           >
-            资方管理
+            左侧（资方）
             {activeTab === 'funder' && (
               <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-0.5 bg-white rounded-full" />
             )}
@@ -46,7 +46,7 @@ export default function FinanceUnified() {
             className="flex-1 py-2 text-sm font-medium text-center transition-all relative"
             style={{ color: activeTab === 'finance' ? '#fff' : 'rgba(255,255,255,0.6)' }}
           >
-            融资付息
+            右侧（借方）
             {activeTab === 'finance' && (
               <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-0.5 bg-white rounded-full" />
             )}
