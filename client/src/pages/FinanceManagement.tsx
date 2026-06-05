@@ -1233,10 +1233,12 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
 
             <div className="px-5 py-4 space-y-5 overflow-y-auto overflow-x-hidden flex-1">
 
+              {/* 用户 + 币种 同一行 */}
+              <div className="flex gap-3 items-start">
               {/* 选择用户 */}
-              <div>
+              <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-600 mb-2">
-                  {editingOrder ? '订单归属用户' : '为哪位用户添加'} <span className="text-red-400 ml-0.5">*</span>
+                  {editingOrder ? '归属用户' : '用户'} <span className="text-red-400 ml-0.5">*</span>
                 </label>
                 <div className="relative">
                   {selectedUser ? (
@@ -1309,26 +1311,20 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                 </div>
               </div>
 
-              {/* 对手方 */}
-              {/* 币种 */}
-              <div>
+              {/* 币种下拉 */}
+              <div style={{ width: '120px' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">币种 <span className="text-red-400 ml-0.5">*</span></label>
-                <div className="flex flex-wrap gap-2">
-                  {COIN_OPTIONS.map(c => (
-                    <button
-                      key={c}
-                      onClick={() => setFormData(d => ({ ...d, coin: c }))}
-                      className="px-4 py-2.5 rounded-xl text-sm font-semibold transition-all"
-                      style={
-                        formData.coin === c
-                          ? { backgroundColor: COIN_COLORS[c], color: '#fff' }
-                          : { backgroundColor: '#F3F4F6', color: '#6B7280' }
-                      }
-                    >
-                      {c}
-                    </button>
+                <select
+                  value={formData.coin}
+                  onChange={e => setFormData(d => ({ ...d, coin: e.target.value }))}
+                  className="w-full px-3 py-3 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
+                  style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.coin as keyof typeof COIN_COLORS] || '#1A2340' }}
+                >
+                  {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
+                    <option key={c} value={c}>{c}</option>
                   ))}
-                </div>
+                </select>
+              </div>
               </div>
 
               {/* 融资金额 / 买入价格 / 买入数量 三字段联动 */}

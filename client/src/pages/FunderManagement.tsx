@@ -1590,71 +1590,101 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                 </div>
               )}
 
-              {/* 币种 */}
+              {/* 币种下拉 */}
               <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">币种</label>
-                <div className="flex gap-2">
-                  {COIN_OPTIONS.map(c => (
-                    <button
-                      key={c}
-                      onClick={() => setFormData(d => ({ ...d, coin: c }))}
-                      className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all"
-                      style={
-                        formData.coin === c
-                          ? { backgroundColor: COIN_COLORS[c], color: '#fff', boxShadow: `0 4px 12px ${COIN_COLORS[c]}40` }
-                          : { backgroundColor: '#F3F4F6', color: '#6B7280' }
-                      }
-                    >
-                      {c}
-                    </button>
+                <select
+                  value={formData.coin}
+                  onChange={e => setFormData(d => ({ ...d, coin: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
+                  style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.coin as keyof typeof COIN_COLORS] || '#1A2340' }}
+                >
+                  {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
+                    <option key={c} value={c}>{c}</option>
                   ))}
+                </select>
+              </div>
+
+              {/* 融资金额 / 买入价格 / 币数 三字段联动 */}
+              <div className="rounded-2xl border border-gray-200 overflow-hidden" style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
+                <div className="px-4 pt-3 pb-1">
+                  <span className="text-xs text-gray-400">输入任意两个，第三个自动计算 · 融资金额 = 买入价格 × 币数</span>
                 </div>
-              </div>
-
-              {/* 买入价格 */}
-              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  买入价格（USDT）<span className="text-red-400 ml-0.5">*</span>
-                </label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={formData.buyPrice}
-                  onChange={e => setFormData(d => ({ ...d, buyPrice: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="如：65000"
-                  style={{ display: 'block', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              {/* 买入数量 */}
-              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  买入数量（{formData.coin}）<span className="text-red-400 ml-0.5">*</span>
-                </label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={formData.buyQuantity}
-                  onChange={e => setFormData(d => ({ ...d, buyQuantity: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="如：0.5"
-                  style={{ display: 'block', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              {/* 自动折算总金额 */}
-              <div className="rounded-xl px-4 py-3" style={{ backgroundColor: '#EEF4FF', border: '1px solid #C7D9FF' }}>
-                <div className="text-xs text-gray-400 mb-0.5">自动折算总金额（USDT）</div>
-                <div className="text-xl font-bold" style={{ color: '#1A56DB' }}>
-                  {computedAmount ? parseFloat(computedAmount).toLocaleString() : '—'}
-                  {computedAmount && <span className="text-sm font-normal text-blue-400 ml-1">USDT</span>}
+                {/* 融资金额 */}
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">融资金额 (USDT)</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={computedAmount || ''}
+                    onChange={e => {
+                      // 融资金额不直接存储，但允许用户输入后反算
+                    }}
+                    onBlur={e => {
+                      const amt = parseFloat(e.target.value);
+                      if (isNaN(amt) || amt <= 0) return;
+                      setFormData(d => {
+                        const price = parseFloat(d.buyPrice);
+                        const qty = parseFloat(d.buyQuantity);
+                        if (!isNaN(price) && price > 0) {
+                          const calcQty = amt / price;
+                          return { ...d, buyQuantity: INTEGER_COINS.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
+                        }
+                        if (!isNaN(qty) && qty > 0) {
+                          return { ...d, buyPrice: (amt / qty).toFixed(2) };
+                        }
+                        return d;
+                      });
+                    }}
+                    className="w-full bg-transparent text-base focus:outline-none"
+                    placeholder="如：100000"
+                  />
                 </div>
-                {computedAmount && (
-                  <div className="text-xs text-gray-400 mt-0.5">
-                    {formData.buyQuantity} {formData.coin} × {formData.buyPrice} USDT
-                  </div>
-                )}
+                {/* 买入价格 */}
+                <div className="px-4 py-3 border-b border-gray-100">
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">买入价格 (USD/枚)</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={formData.buyPrice}
+                    onChange={e => setFormData(d => ({ ...d, buyPrice: e.target.value }))}
+                    onBlur={e => {
+                      const price = e.target.value;
+                      setFormData(d => {
+                        const qty = parseFloat(d.buyQuantity);
+                        const p = parseFloat(price);
+                        if (!price || isNaN(p) || p <= 0) return d;
+                        if (!isNaN(qty) && qty > 0) return d; // 两个都有值，不自动计算
+                        return d;
+                      });
+                    }}
+                    className="w-full bg-transparent text-base focus:outline-none"
+                    placeholder="如：95000"
+                    step="any"
+                  />
+                </div>
+                {/* 币数 */}
+                <div className="px-4 py-3">
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">币数 ({formData.coin})</label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={formData.buyQuantity}
+                    onChange={e => setFormData(d => ({ ...d, buyQuantity: e.target.value }))}
+                    onBlur={e => {
+                      const qty = e.target.value;
+                      setFormData(d => {
+                        const price = parseFloat(d.buyPrice);
+                        const q = parseFloat(qty);
+                        if (!qty || isNaN(q) || q <= 0) return d;
+                        if (!isNaN(price) && price > 0) return d; // 两个都有值，不自动计算
+                        return d;
+                      });
+                    }}
+                    className="w-full bg-transparent text-base focus:outline-none"
+                    placeholder="如：1.05"
+                  />
+                </div>
               </div>
 
               {/* 买入日期 */}
