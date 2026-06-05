@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
@@ -48,6 +48,44 @@ function CollateralValueDisplay({ coin, qty, ledgerId }: { coin: string; qty: st
           {coin} 单价 ${price.toLocaleString('en-US', { maximumFractionDigits: 2 })} × {qtyNum}
         </div>
       )}
+    </div>
+  );
+}
+
+function CollateralMarginRateDisplay({ assets, interestBase, ledgerId }: {
+  assets: { coin: string; qty: string }[];
+  interestBase: string | number;
+  ledgerId: number;
+}) {
+  const { data: summary } = trpc.ledger.financeGetAssetSummary.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId && assets.length > 0, staleTime: 30000, refetchInterval: 30000 }
+  );
+  const livePrices: Record<string, number> = (summary as any)?.livePrices ?? {};
+
+  const base = parseFloat(String(interestBase));
+  if (!base || base <= 0 || assets.length === 0) return null;
+
+  let totalCollateral = 0;
+  let allPricesAvailable = true;
+  for (const a of assets) {
+    const p = livePrices[a.coin];
+    const q = parseFloat(a.qty);
+    if (!p || !q) { allPricesAvailable = false; break; }
+    totalCollateral += p * q;
+  }
+
+  if (!allPricesAvailable) return null;
+
+  const ratio = totalCollateral / base;
+  const color = ratio >= 1 ? '#16A34A' : ratio >= 0.5 ? '#D97706' : '#DC2626';
+
+  return (
+    <div className="flex items-center justify-between px-4 py-2 border-t border-gray-100">
+      <span className="text-xs text-gray-500">保证金率</span>
+      <span className="text-xs font-bold" style={{ color }}>
+        {(ratio * 100).toFixed(1)}%
+      </span>
     </div>
   );
 }
@@ -238,6 +276,29 @@ export default function FinanceManagement() {
     onSuccess: () => { toast.success('结息记录已删除'); refetchOrders(); },
     onError: (e) => toast.error(e.message),
   });
+
+  // 实时价格（用于表单预览和保证金率计算）
+  const { data: assetSummaryForm } = trpc.ledger.financeGetAssetSummary.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId && showForm, staleTime: 30000, refetchInterval: 30000 }
+  );
+  const formLivePrices: Record<string, number> = (assetSummaryForm as any)?.livePrices ?? {};
+
+  // 表单中担保物的实时总价值
+  const formComputedCollateralValue = useMemo(() => {
+    const validAssets = formData.collateralAssets.filter(a => a.coin && a.qty !== '' && parseFloat(a.qty) > 0);
+    if (validAssets.length === 0) return null;
+    let total = 0;
+    for (const a of validAssets) {
+      const p = formLivePrices[a.coin];
+      if (!p) return null;
+      total += p * parseFloat(a.qty);
+    }
+    return total;
+  }, [formData.collateralAssets, formLivePrices]);
+
+  // 表单中融资本金（计息基数）
+  const formComputedAmount = formData.interestBase ? parseFloat(formData.interestBase) : null;
 
   const realMembers = (members as any[] || []).filter((m: any) => !m.isAiClone);
   // 当前登录用户在账本中的角色（通过 orders 返回的 user_id 推断：管理员能看到多个用户的订单）
@@ -662,6 +723,22 @@ export default function FinanceManagement() {
                           </div>
                         );
                       })()}
+
+                      {/* 保证金率（担保物价值 / 融资本金） */}
+                      {(() => {
+                        if (!order.interest_base || parseFloat(order.interest_base) <= 0) return null;
+                        let assets: { coin: string; qty: string }[] = [];
+                        try { if (order.collateral_assets) assets = JSON.parse(order.collateral_assets); } catch(e) {}
+                        if (assets.length === 0 && order.collateral_coin && order.collateral_qty) {
+                          assets = [{ coin: order.collateral_coin, qty: String(parseFloat(order.collateral_qty)) }];
+                        }
+                        if (assets.length === 0) return null;
+                        // 用 financeGetAssetSummary 的 livePrices 计算担保物总价值
+                        // 这里通过 CollateralValueDisplay 已有价格，但无法直接取到，改为在卡片级别计算
+                        // 由于 livePrices 在组件外部不可用，此处显示占位，实际价值由 CollateralValueDisplay 已展示
+                        return null; // 占位，实际保证金率通过下方 CollateralMarginRate 组件显示
+                      })()}
+                      <CollateralMarginRateDisplay assets={(() => { let a: { coin: string; qty: string }[] = []; try { if (order.collateral_assets) a = JSON.parse(order.collateral_assets); } catch(e) {} if (a.length === 0 && order.collateral_coin && order.collateral_qty) a = [{ coin: order.collateral_coin, qty: String(parseFloat(order.collateral_qty)) }]; return a; })()} interestBase={order.interest_base} ledgerId={ledgerId} />
 
                       {(order.public_note || order.admin_note) && (
                         <div className="mt-2 pt-2 border-t border-gray-100 space-y-1">
@@ -1305,6 +1382,46 @@ export default function FinanceManagement() {
               )}
 
             </div>
+
+            {/* 实时预览卡片 */}
+            {showForm && formData.collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && formComputedCollateralValue !== null && formComputedAmount && formComputedAmount > 0 && (
+              <div className="px-5 pb-4">
+                <div className="text-xs font-medium text-gray-400 mb-2">实时预览</div>
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500">担保物总价值</span>
+                    <span className="font-semibold text-blue-700">{formComputedCollateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500">融资本金（计息基数）</span>
+                    <span className="font-medium text-gray-700">{formComputedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} {formData.interestBaseCurrency === 'CNY' ? '元' : 'U'}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs border-t border-blue-200 pt-1.5">
+                    <span className="text-gray-500">保证金率</span>
+                    <span className="font-bold text-sm" style={{
+                      color: (formComputedCollateralValue / formComputedAmount) >= 1 ? '#16A34A' : (formComputedCollateralValue / formComputedAmount) >= 0.5 ? '#D97706' : '#DC2626'
+                    }}>
+                      {(formComputedCollateralValue / formComputedAmount * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  {formData.interestRateAnnual && formData.interestBase && formData.interestStartDate && (
+                    <div className="flex items-center justify-between text-xs border-t border-blue-200 pt-1.5">
+                      <span className="text-gray-500">待结利息（估算）</span>
+                      <span className="font-medium text-gray-700">
+                        {(() => {
+                          const base = parseFloat(formData.interestBase);
+                          const rate = Math.abs(parseFloat(formData.interestRateAnnual)) / 100;
+                          const start = new Date(formData.interestStartDate + 'T00:00:00');
+                          const days = Math.max(0, Math.floor((Date.now() - start.getTime()) / 86400000));
+                          const accrued = base * rate / 365 * days;
+                          return accrued.toLocaleString(undefined, { maximumFractionDigits: 2 }) + (formData.interestBaseCurrency === 'CNY' ? ' 元' : ' U');
+                        })()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="sticky bottom-0 bg-white px-5 py-4 border-t border-gray-100">
               <button
