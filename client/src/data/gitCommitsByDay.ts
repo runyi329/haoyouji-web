@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-05
+// 生成时间：2026-06-06
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -6891,5 +6891,22 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-05T09:48:55Z", type: "feat", cleanMessage: "管理员借方也显示参与者资方订单 + 已卖出订单下沉排序" },
     { date: "2026-06-05T09:55:21Z", type: "feat", cleanMessage: "参与者关联订单淡绿色背景区分" },
     { date: "2026-06-05T10:08:16Z", type: "feat", cleanMessage: "统一左右两侧添加订单表单 - 币种改为下拉选择器(CNY第一位) - 用户+币种同行 - 三字段联动统一" },
+    { date: "2026-06-05T12:29:20Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-05T14:24:58Z", type: "feat", cleanMessage: "P095借方实时预览右栏与前端P076-C完全对齐" },
+    { date: "2026-06-05T14:30:07Z", type: "fix", cleanMessage: "P095借方实时预览持有时长移至右栏(与P076-C一致)" },
+    { date: "2026-06-05T14:50:38Z", type: "fix", cleanMessage: "P095资方卡片+实时预览右栏利息货币逻辑对齐LedgerDetail" },
+    { date: "2026-06-05T14:58:47Z", type: "fix", cleanMessage: "P095资方卡片右栏细节对齐LedgerDetail前端" },
+    { date: "2026-06-05T15:04:58Z", type: "fix", cleanMessage: "P095资方卡片右栏完全对齐LedgerDetail前端" },
+    { date: "2026-06-05T15:12:38Z", type: "fix", cleanMessage: "P095卡片collateral_assets解析兼容字符串和数组格式" },
+    { date: "2026-06-05T15:18:31Z", type: "fix", cleanMessage: "P095卡片担保缺口添加问号弹窗+币价3秒刷新" },
+    { date: "2026-06-05T15:26:14Z", type: "fix", cleanMessage: "P095当前币价颜色和箭头与前端完全一致" },
+    { date: "2026-06-05T15:35:46Z", type: "fix", cleanMessage: "P095备注布局重构" },
+  ],
+  "2026-06-06": [
+    { date: "2026-06-05T17:25:40Z", type: "fix", cleanMessage: "funderGetAssetOrders 按id去重，防止同一订单重复显示" },
+    { date: "2026-06-05T17:33:49Z", type: "fix", cleanMessage: "P095右侧选择用户时只显示该用户名下(owner)的订单" },
+    { date: "2026-06-05T17:41:24Z", type: "fix", cleanMessage: "右侧借方页面不再显示资方订单(funder_asset_orders)" },
+    { date: "2026-06-05T17:42:29Z", type: "fix", cleanMessage: "右侧借方页面用户下拉框排除funder角色用户" },
+    { date: "2026-06-05T17:48:01Z", type: "fix", cleanMessage: "P095待结利息/已结利息显示为整数，去掉小数点" },
   ],
 };
