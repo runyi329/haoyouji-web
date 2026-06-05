@@ -365,16 +365,27 @@ function FunderOrderCard({
   const qty = parseFloat(order.buy_quantity || '0');
   const price = parseFloat(order.buy_price || '0');
   const totalU = qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0');
-  const baseCur = order.interest_base_currency || 'USDT';
-  const interestUnit = (['CNY', 'RMB', 'cny', 'rmb', '人民币'].includes(baseCur)) ? '元' : 'U';
-  const rateCur = baseCur;
+  // 利息货币逻辑与 LedgerDetail FunderOrderCardRight 完全一致
+  const baseCur = order.interest_base_currency || 'USDT'; // 计息基数货币
+  const rateCur = order.interest_rate_currency || 'USDT'; // 约定利息货币（决定主显示单位）
+  const interestUnit = rateCur === 'CNY' ? '元' : 'U';
   const altUnit = rateCur === 'CNY' ? 'U' : '元';
-  const convertAlt = (val: number): number => rateCur === 'CNY' ? val / 7 : val * 7;
+  // 折算：计息基数和利息货币不一致时按 1U=7元 折算
+  const convertAccrued = (val: number): number => {
+    if (baseCur === rateCur) return val;
+    if (baseCur === 'USDT' && rateCur === 'CNY') return val * 7; // U计息基数，元显示
+    if (baseCur === 'CNY' && rateCur === 'USDT') return val / 7; // 元计息基数，U显示
+    return val;
+  };
+  const convertAlt = (val: number): number => {
+    if (rateCur === 'CNY') return val / 7; // 主显示元，副显示U
+    return val * 7; // 主显示U，副显示元
+  };
 
   // 已结利息
   const totalPaid = (order as any).paidTotal ? parseFloat((order as any).paidTotal.amount || '0') : 0;
-  const displayAccrued = accrued;
-  const displayPaid = totalPaid;
+  const displayAccrued = convertAccrued(accrued);
+  const displayPaid = convertAccrued(totalPaid);
   const altAccrued = convertAlt(displayAccrued);
   const altPaid = convertAlt(displayPaid);
 
@@ -2234,80 +2245,139 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                     </div>
                     {/* 中间分隔线 */}
                     <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
-                    {/* 右栏：待结利息 */}
+                    {/* 右栏：待结利息（与 LedgerDetail FunderOrderCardRight 完全一致） */}
                     <div className="w-40 p-3 pl-2 flex flex-col">
                       {displayConfig.accruedInterest && formData.interestRateAnnual && formData.interestBase && formData.interestStartDate ? (
-                        <div>
-                          <div className="h-4 flex items-center" style={{ color: '#F59E0B' }}>
-                            <span className="text-xs font-medium">待结利息（年化 {parseFloat(formData.interestRateAnnual).toFixed(0)}%）</span>
-                          </div>
-                          <div className="min-h-7 flex flex-col justify-center mt-0.5">
-                            <div className="flex items-baseline gap-0.5 flex-wrap">
-                              <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                                {(() => {
-                                  const base = parseFloat(formData.interestBase);
-                                  const rate = Math.abs(parseFloat(formData.interestRateAnnual)) / 100;
-                                  const start = new Date(formData.interestStartDate + 'T00:00:00');
-                                  const days = Math.max(0, Math.floor((Date.now() - start.getTime()) / 86400000));
-                                  return (base * rate / 365 * days).toLocaleString(undefined, { maximumFractionDigits: 2 });
+                        (() => {
+                          // 利息货币逻辑与 LedgerDetail / FunderOrderCard 完全一致
+                          const prevBaseCur = formData.interestBaseCurrency || 'USDT';
+                          const prevRateCur = formData.interestRateCurrency || 'USDT';
+                          const prevInterestUnit = prevRateCur === 'CNY' ? '元' : 'U';
+                          const prevAltUnit = prevRateCur === 'CNY' ? 'U' : '元';
+                          const prevConvertAccrued = (val: number): number => {
+                            if (prevBaseCur === prevRateCur) return val;
+                            if (prevBaseCur === 'USDT' && prevRateCur === 'CNY') return val * 7;
+                            if (prevBaseCur === 'CNY' && prevRateCur === 'USDT') return val / 7;
+                            return val;
+                          };
+                          const prevConvertAlt = (val: number): number => {
+                            if (prevRateCur === 'CNY') return val / 7;
+                            return val * 7;
+                          };
+                          // 计算应计利息（按秒，与前端一致）
+                          const base = parseFloat(formData.interestBase);
+                          const rate = Math.abs(parseFloat(formData.interestRateAnnual)) / 100;
+                          const start = new Date(formData.interestStartDate + 'T00:00:00');
+                          const elapsedSecs = Math.max(0, (Date.now() - start.getTime()) / 1000);
+                          const rawAccrued = base * rate / 365 / 24 / 3600 * elapsedSecs;
+                          const prevDisplayAccrued = prevConvertAccrued(rawAccrued);
+                          const prevAltAccrued = prevConvertAlt(prevDisplayAccrued);
+                          const prevDisplayPaid = prevConvertAccrued(previewPaidInterest);
+                          const prevAltPaid = prevConvertAlt(prevDisplayPaid);
+                          return (
+                            <div>
+                              <div className="h-4 flex items-center gap-1">
+                                <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>待结利息</span>
+                                <span className="text-xs text-gray-400">(年化 {parseFloat(formData.interestRateAnnual).toFixed(0)}%)</span>
+                              </div>
+                              <div className="min-h-7 flex flex-col justify-center mt-0.5">
+                                <div className="flex items-baseline gap-0.5">
+                                  <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                                    {prevDisplayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                  <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{prevInterestUnit}</span>
+                                </div>
+                                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{prevAltAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {prevAltUnit}</div>
+                              </div>
+                              <div className="space-y-0.5 text-xs mt-1">
+                                {displayConfig.paidInterest && (
+                                  <>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-gray-400 whitespace-nowrap">已结利息</span>
+                                      <span className="font-medium" style={{ color: '#4B5563' }}>
+                                        {prevDisplayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {prevInterestUnit}
+                                      </span>
+                                    </div>
+                                    {prevDisplayPaid > 0 && (
+                                      <div className="flex justify-end">
+                                        <span className="text-gray-400">≈{prevAltPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {prevAltUnit}</span>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                                {displayConfig.interestStartDate && formData.interestStartDate && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-400">计息日期</span>
+                                    <span className="font-medium" style={{ color: '#4B5563' }}>
+                                      {formData.interestStartDate.replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
+                                    </span>
+                                  </div>
+                                )}
+                                {displayConfig.holdDuration && formData.buyDate && (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-gray-400">持有时长</span>
+                                    <span className="font-medium" style={{ color: '#4B5563' }}>
+                                      {(() => {
+                                        const elapsed = Date.now() - new Date(formData.buyDate + 'T00:00:00').getTime();
+                                        if (elapsed < 0) return '---';
+                                        const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
+                                        const days = Math.floor(totalHours / 24);
+                                        const hours = totalHours % 24;
+                                        return days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
+                                      })()}
+                                    </span>
+                                  </div>
+                                )}
+                                {/* 担保货币逐笔展示 */}
+                                {displayConfig.collateralCoin && collateralAssets.filter(a => a.coin && a.qty !== '').map((a, idx) => {
+                                  const iq = parseFloat(a.qty);
+                                  const ap = formLivePrices[a.coin] || 0;
+                                  const av = a.coin === 'USDT' ? iq : iq * ap;
+                                  return (
+                                    <div key={idx}>
+                                      <div className="flex items-center justify-between mt-0.5">
+                                        <span className="text-gray-400">{collateralAssets.filter(x => x.coin && x.qty !== '').length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
+                                        <span className="font-medium" style={{ color: '#4B5563' }}>{a.qty} {a.coin}</span>
+                                      </div>
+                                      {ap > 0 && a.coin !== 'USDT' && (
+                                        <div className="flex items-center justify-between">
+                                          <span></span>
+                                          <span className="font-medium" style={{ color: '#4B5563' }}>≈ {av.toLocaleString(undefined, { maximumFractionDigits: 0 })} U</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                {displayConfig.collateralValue && computedCollateralValue !== null && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
+                                  <div className="flex items-center justify-between mt-0.5">
+                                    <span className="text-gray-400">{collateralAssets.filter(x => x.coin && x.qty !== '').length > 1 ? '担保价值(合计)' : '担保价值'}</span>
+                                    <span className="font-medium" style={{ color: '#4B5563' }}>{computedCollateralValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U</span>
+                                  </div>
+                                )}
+                                {displayConfig.collateral && computedCollateralValue !== null && (() => {
+                                  // 风险敞口计算与卡片一致
+                                  const interestBaseNum = parseFloat(formData.interestBase) || 0;
+                                  const liveP = formLivePrices[formData.coin] ?? null;
+                                  const coinQty = parseFloat(formData.buyQuantity || '0');
+                                  const currentVal = liveP !== null && coinQty > 0 ? liveP * coinQty : null;
+                                  const floatPnl = currentVal !== null ? currentVal - interestBaseNum : null;
+                                  const exp = floatPnl !== null
+                                    ? computedCollateralValue + floatPnl - rawAccrued + previewPaidInterest
+                                    : computedCollateralValue - rawAccrued + previewPaidInterest;
+                                  const sufficient = exp >= 0;
+                                  return (
+                                    <div className="flex items-center justify-between mt-0.5">
+                                      <span className="text-gray-400">担保缺口</span>
+                                      <span className="font-medium" style={{ color: sufficient ? '#4B5563' : '#EF4444' }}>
+                                        {sufficient ? '超过100%' : `${exp.toLocaleString(undefined, { maximumFractionDigits: 0 })} U`}
+                                      </span>
+                                    </div>
+                                  );
                                 })()}
-                              </span>
-                              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{formData.interestBaseCurrency === 'CNY' ? '元' : 'USDT'}</span>
+                              </div>
                             </div>
-                          </div>
-                          <div className="space-y-0.5 text-xs mt-1">
-                            {displayConfig.paidInterest && previewPaidInterest > 0 && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-gray-400 shrink-0">已结利息</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>{previewPaidInterest.toLocaleString(undefined, { maximumFractionDigits: 2 })} {previewPaidInterestCurrency === 'CNY' ? '元' : 'U'}</span>
-                              </div>
-                            )}
-                            {displayConfig.interestStartDate && formData.interestStartDate && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-gray-400 shrink-0">计息日期</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>
-                                  {formData.interestStartDate.replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
-                                </span>
-                              </div>
-                            )}
-                            {displayConfig.collateralCoin && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-gray-400 shrink-0">担保货币</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>
-                                  {collateralAssets.filter(a => a.coin && a.qty !== '').map(a => `${a.qty} ${a.coin}`).join(', ')}
-                                </span>
-                              </div>
-                            )}
-                            {displayConfig.collateralValue && computedCollateralValue !== null && collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
-                              <div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-gray-400 shrink-0"></span>
-                                  <span className="font-medium" style={{ color: '#4B5563' }}>≈ {computedCollateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-gray-400 shrink-0">担保价值</span>
-                                  <span className="font-medium" style={{ color: '#4B5563' }}>{computedCollateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
-                                </div>
-                              </div>
-                            )}
-                            {displayConfig.collateral && computedCollateralValue !== null && computedAmount && parseFloat(computedAmount) > 0 && (
-                              <div className="flex items-center justify-between border-t pt-1" style={{ borderColor: '#E8EFFF' }}>
-                                <span className="text-gray-400 shrink-0">担保缺口</span>
-                                <span className="font-medium" style={{ color: (computedCollateralValue / parseFloat(computedAmount)) >= 1 ? '#16A34A' : '#DC2626' }}>
-                                  {(computedCollateralValue / parseFloat(computedAmount)) >= 1 ? '超过100%' : `${(computedCollateralValue / parseFloat(computedAmount) * 100).toFixed(0)}%`}
-                                </span>
-                              </div>
-                            )}
-                            {displayConfig.marginRate && computedCollateralValue !== null && computedAmount && parseFloat(computedAmount) > 0 && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-gray-400 shrink-0">保证金率</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>
-                                  {(computedCollateralValue / parseFloat(computedAmount) * 100).toFixed(1)}%
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
+                          );
+                        })()
                       ) : (
                         <div className="flex items-center justify-center h-full">
                           <span className="text-gray-300 text-xs">填写利息信息后显示</span>
