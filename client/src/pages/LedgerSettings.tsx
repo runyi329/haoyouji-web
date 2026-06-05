@@ -703,10 +703,7 @@ export default function LedgerSettings() {
  {ledgerId !== 37 && <SettingItem label="图片查看" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />}
  <SettingItem label={ledgerData?.type === 'diet' ? '减肥教练管理' : '账本管理员管理'} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/admin-management`)} />
  {ledgerData?.type === 'custom_af' && (
-   <SettingItem label="资方管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/funder-management`)} />
- )}
- {ledgerData?.type === 'custom_af' && (
-   <SettingItem label="融资付息订单管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/finance-management${_viewAsSuffix}`)} />
+   <SettingItem label="融资付息订单管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/finance-unified${_viewAsSuffix}`)} />
  )}
  {ledgerData?.type === 'custom_af' && (
    <SettingItem label="邮件模板管理" showIcon onClick={() => setLocation('/admin/email-templates')} />

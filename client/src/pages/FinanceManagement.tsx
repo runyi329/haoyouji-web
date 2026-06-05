@@ -212,10 +212,16 @@ const emptyForm = {
   financeType: '保本分成' as '保本分成' | '自负盈亏',
 };
 
-export default function FinanceManagement() {
+interface FinanceManagementProps {
+  ledgerIdProp?: number;
+  hideHeader?: boolean;
+}
+
+export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceManagementProps = {}) {
   const [, params] = useRoute("/ledger/:id/finance-management");
+  const [, routeParams2] = useRoute("/ledger/:id/finance-unified");
   const [, setLocation] = useLocation();
-  const ledgerId = params?.id ? parseInt(params.id) : 0;
+  const ledgerId = ledgerIdProp || (params?.id ? parseInt(params.id) : (routeParams2?.id ? parseInt(routeParams2.id) : 0));
   // 观察视角：从 URL ?viewAs=xxx 读取
   const urlSearchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
   const viewAsUserId = urlSearchParams.get('viewAs') ? parseInt(urlSearchParams.get('viewAs')!) : undefined;
@@ -484,8 +490,9 @@ export default function FinanceManagement() {
   const getPaymentLabel = (val: string) => INTEREST_PAYMENT_OPTIONS.find(o => o.value === val)?.label || val;
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#F0F4FF' }}>
-      <PageTag code="P095" />
+    <div className={hideHeader ? '' : 'min-h-screen'} style={{ backgroundColor: '#F0F4FF' }}>
+      {!hideHeader && <PageTag code="P095" />}
+      {!hideHeader && (
       <div
         className="sticky top-0 z-10 px-4 py-3 flex items-center gap-3"
         style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
@@ -495,6 +502,7 @@ export default function FinanceManagement() {
         </button>
         <h1 className="text-lg font-semibold text-white">融资付息订单管理</h1>
       </div>
+      )}
 
       <div className="px-4 py-4">
         <div className="mb-4">

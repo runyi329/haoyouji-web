@@ -133,10 +133,16 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
-export default function FunderManagement() {
+interface FunderManagementProps {
+  ledgerIdProp?: number;
+  hideHeader?: boolean;
+}
+
+export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderManagementProps = {}) {
   const [, params] = useRoute("/ledger/:id/funder-management");
+  const [, routeParams2] = useRoute("/ledger/:id/finance-unified");
   const [, setLocation] = useLocation();
-  const ledgerId = params?.id ? parseInt(params.id) : 0;
+  const ledgerId = ledgerIdProp || (params?.id ? parseInt(params.id) : (routeParams2?.id ? parseInt(routeParams2.id) : 0));
   const trpcUtils = trpc.useUtils();
 
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -655,9 +661,10 @@ export default function FunderManagement() {
   const getPaymentLabel = (val: string) => INTEREST_PAYMENT_OPTIONS.find(o => o.value === val)?.label || val;
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#F0F4FF' }}>
-      <PageTag code="P096" />
+    <div className={hideHeader ? '' : 'min-h-screen'} style={{ backgroundColor: '#F0F4FF' }}>
+      {!hideHeader && <PageTag code="P096" />}
       {/* 顶部导航 */}
+      {!hideHeader && (
       <div
         className="sticky top-0 z-10 px-4 py-3 flex items-center gap-3"
         style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
@@ -667,6 +674,7 @@ export default function FunderManagement() {
         </button>
         <h1 className="text-lg font-semibold text-white">资方管理</h1>
       </div>
+      )}
 
       <div className="px-4 py-4">
         {/* 资金方用户列表 */}
