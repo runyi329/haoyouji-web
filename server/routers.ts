@@ -15415,17 +15415,24 @@ ${klinesSummary}
         ) as any;
         const orders = ((rows[0] || rows) as any[]) || [];
 
-        // 打通：查询该用户作为参与者的资方订单（funder_asset_orders），合并到结果中
+        // 打通：查询参与者关联的资方订单（funder_asset_orders），合并到结果中
+        // 管理员查全部参与者订单，普通用户只查自己参与的
         let participantFunderOrders: any[] = [];
-        if (!targetIsManager) {
+        {
           const { getDbConnection } = await import('./db');
           const conn = await getDbConnection();
           if (conn) {
             try {
-              const pRows = await conn.execute(
-                'SELECT DISTINCT order_id FROM funder_order_participants WHERE ledger_id = ? AND user_id = ?',
-                [input.ledgerId, targetUserId]
-              ) as any;
+              // 管理员查全部参与者订单，普通用户只查自己参与的
+              const pRows = targetIsManager
+                ? await conn.execute(
+                    'SELECT DISTINCT order_id FROM funder_order_participants WHERE ledger_id = ?',
+                    [input.ledgerId]
+                  ) as any
+                : await conn.execute(
+                    'SELECT DISTINCT order_id FROM funder_order_participants WHERE ledger_id = ? AND user_id = ?',
+                    [input.ledgerId, targetUserId]
+                  ) as any;
               const pArr = Array.isArray(pRows[0]) ? pRows[0] : (Array.isArray(pRows) ? pRows : []);
               const participantOrderIds = pArr.map((r: any) => Number(r.order_id)).filter(Boolean);
               if (participantOrderIds.length > 0) {
@@ -15436,10 +15443,10 @@ ${klinesSummary}
                    FROM funder_asset_orders fo
                    LEFT JOIN users u ON u.id = fo.user_id
                    LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-                   LEFT JOIN funder_order_participants p ON p.order_id = fo.id AND p.ledger_id = fo.ledger_id AND p.user_id = ?
+                   LEFT JOIN funder_order_participants p ON p.order_id = fo.id AND p.ledger_id = fo.ledger_id ${targetIsManager ? '' : 'AND p.user_id = ?'}
                    WHERE fo.ledger_id = ? AND fo.id IN (${placeholders})
                    ORDER BY fo.created_at DESC`,
-                  [targetUserId, input.ledgerId, ...participantOrderIds]
+                  targetIsManager ? [input.ledgerId, ...participantOrderIds] : [targetUserId, input.ledgerId, ...participantOrderIds]
                 ) as any;
                 const fArr = Array.isArray(fRows[0]) ? fRows[0] : (Array.isArray(fRows) ? fRows : []);
                 // 标记这些订单来自资方（前端可据此区分显示）
@@ -15451,7 +15458,23 @@ ${klinesSummary}
           }
         }
 
-        return { orders: [...orders, ...participantFunderOrders] };
+        // 合并后排序：已卖出下沉，未卖出按时间倒序（最新在最上面）
+        const allOrders = [...orders, ...participantFunderOrders].sort((a: any, b: any) => {
+          // 先按“已卖出”标记下沉
+          const aSold = String(a.admin_note || '').includes('[已卖出]') ? 1 : 0;
+          const bSold = String(b.admin_note || '').includes('[已卖出]') ? 1 : 0;
+          if (aSold !== bSold) return aSold - bSold;
+          // 再按状态排序：active > completed/settled > cancelled
+          const statusOrder: Record<string, number> = { active: 0, completed: 1, settled: 1, cancelled: 2 };
+          const aStatus = statusOrder[a.status] ?? 9;
+          const bStatus = statusOrder[b.status] ?? 9;
+          if (aStatus !== bStatus) return aStatus - bStatus;
+          // 同状态按 created_at 倒序
+          const aTime = new Date(a.created_at).getTime();
+          const bTime = new Date(b.created_at).getTime();
+          return bTime - aTime;
+        });
+        return { orders: allOrders };
       }),
 
     // 查询融资付息资产汇总
