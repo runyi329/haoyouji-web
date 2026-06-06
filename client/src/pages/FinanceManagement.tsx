@@ -519,7 +519,11 @@ function FinanceOrderCard({
                 {/* 担保缺口计算弹窗（与资方担保缺口弹窗居中弹窗风格一致） */}
                 {/* 保证金率：担保物当前价値 ÷ 计息基数 x 100% */}
                 {orderDc.marginRate !== false && collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0 && (() => {
-                  const marginRatio = collateralValue / interestBaseNum;
+                  // 新公式：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数
+                  const effectiveCollateral = floatPnl !== null
+                    ? collateralValue + floatPnl - accrued + totalPaid
+                    : collateralValue - accrued + totalPaid;
+                  const marginRatio = effectiveCollateral / interestBaseNum;
                   const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
                   // 预警阈值判断
                   const alertThreshold = typeof orderDc.marginAlertThreshold === 'number' ? orderDc.marginAlertThreshold : null;
@@ -551,9 +555,9 @@ function FinanceOrderCard({
                               {/* 公式说明 */}
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                                 <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 公式</div>
-                                <div>保证金率 = 担保物当前市值 ÷ 计息基数 × 100%</div>
-                                <div className="mt-1 font-mono">
-                                  <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} U ÷ {interestBaseNum.toFixed(2)} U × 100% = </span>
+                                <div>保证金率 = (担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100%</div>
+                                <div className="mt-1 font-mono text-[10px]">
+                                  <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ''} − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}) ÷ {interestBaseNum.toFixed(2)} × 100% = </span>
                                   <strong style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</strong>
                                 </div>
                               </div>
@@ -2346,7 +2350,21 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                             {/* 保证金率：担保物当前价値 ÷ 计息基数 x 100% */}
                             {displayConfig.marginRate && formComputedCollateralValue !== null && formComputedCollateralValue > 0 && formData.interestBase && parseFloat(formData.interestBase) > 0 && (() => {
                               const base = parseFloat(formData.interestBase);
-                              const marginRatio = formComputedCollateralValue / base;
+                              // 新公式：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数
+                              const previewRate = Math.abs(parseFloat(formData.interestRateAnnual)) / 100;
+                              const previewStart = new Date(formData.interestStartDate + 'T00:00:00');
+                              const previewElapsed = Math.max(0, (Date.now() - previewStart.getTime()) / 1000);
+                              const previewAccrued = base * previewRate / (365 * 24 * 3600) * previewElapsed;
+                              const previewTotalPaid = editingOrder ? ((interestPaymentSummary as any)?.[editingOrder.id] ?? 0) : 0;
+                              const previewCoinQty = parseFloat(formData.buyQuantity || '0');
+                              const previewCoinPrice = formLivePrices[formData.coin] || 0;
+                              const previewMarketValue = previewCoinQty * previewCoinPrice;
+                              const previewBuyValue = parseFloat(formData.amount || '0');
+                              const previewFloatPnl = formData.coin === 'USDT' ? 0 : (previewCoinPrice > 0 ? previewMarketValue - previewBuyValue : null);
+                              const previewEffective = previewFloatPnl !== null
+                                ? formComputedCollateralValue + previewFloatPnl - previewAccrued + previewTotalPaid
+                                : formComputedCollateralValue - previewAccrued + previewTotalPaid;
+                              const marginRatio = previewEffective / base;
                               const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
                               const previewAlertThreshold = marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? parseFloat(marginAlertThreshold) : null;
                               const previewIsAlerting = previewAlertThreshold !== null && (marginRatio * 100) < previewAlertThreshold;
