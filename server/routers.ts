@@ -15383,21 +15383,46 @@ ${klinesSummary}
           const targetRole = (targetRoleRows[0]?.[0] ?? targetRoleRows[0])?.role;
           targetIsManager = targetRole === 'owner' || targetRole === 'admin';
         }
-        // 管理员看所有，普通用户只看自己的（active 排前，completed/cancelled 排后）
-        const rows = await db.execute(
-          targetIsManager
-            ? sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
-                  FROM finance_interest_orders fo
-                  LEFT JOIN users u ON u.id = fo.user_id
-                  WHERE fo.ledger_id = ${input.ledgerId}
-                  ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
-            : sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
-                  FROM finance_interest_orders fo
-                  LEFT JOIN users u ON u.id = fo.user_id
-                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.user_id = ${targetUserId}
-                  ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
-        ) as any;
-        const orders = ((rows[0] || rows) as any[]) || [];
+        // 管理员看所有，普通用户看自己的订单 + 被添加为参与方的订单
+        let orders: any[] = [];
+        if (targetIsManager) {
+          const rows = await db.execute(
+            sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
+                FROM finance_interest_orders fo
+                LEFT JOIN users u ON u.id = fo.user_id
+                WHERE fo.ledger_id = ${input.ledgerId}
+                ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
+          ) as any;
+          orders = ((rows[0] || rows) as any[]) || [];
+        } else {
+          // 先查自己的订单
+          const myRows = await db.execute(
+            sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
+                FROM finance_interest_orders fo
+                LEFT JOIN users u ON u.id = fo.user_id
+                WHERE fo.ledger_id = ${input.ledgerId} AND fo.user_id = ${targetUserId}
+                ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
+          ) as any;
+          orders = ((myRows[0] || myRows) as any[]) || [];
+          // 再查参与方订单（排除自己的订单）
+          try {
+            const participantConn = await getLedgerDb();
+            const participantOrderRows = await (participantConn as any).execute(
+              `SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
+               FROM finance_interest_orders fo
+               LEFT JOIN users u ON u.id = fo.user_id
+               INNER JOIN finance_order_participants p ON p.order_id = fo.id
+               WHERE fo.ledger_id = ? AND p.ledger_id = ? AND p.user_id = ? AND fo.user_id != ?`,
+              [input.ledgerId, input.ledgerId, targetUserId, targetUserId]
+            ) as any;
+            const participantOrders = ((participantOrderRows[0] || participantOrderRows) as any[]) || [];
+            // 标记这些订单为参与方订单
+            for (const o of participantOrders) {
+              (o as any)._isParticipant = true;
+            }
+            orders = [...orders, ...participantOrders];
+          } catch (_e) { /* 如果表不存在则忽略 */ }
+        }
 
         // 排序：已卖出下沉，未卖出按时间倒序（最新在最上面）
         const allOrders = [...orders].sort((a: any, b: any) => {
@@ -15415,6 +15440,26 @@ ${klinesSummary}
           const bTime = new Date(b.created_at).getTime();
           return bTime - aTime;
         });
+        // 查询当前用户是否是某些订单的参与方，并标记 _isParticipant
+        if (!targetIsManager && allOrders.length > 0) {
+          try {
+            const orderIds = allOrders.map((o: any) => o.id);
+            const placeholders = orderIds.map(() => '?').join(',');
+            const conn = await getLedgerDb();
+            const participantRows = await (conn as any).execute(
+              `SELECT DISTINCT order_id FROM finance_order_participants WHERE ledger_id = ? AND user_id = ? AND order_id IN (${placeholders})`,
+              [input.ledgerId, targetUserId, ...orderIds]
+            ) as any;
+            const participantOrderIds = new Set(
+              ((participantRows[0] || participantRows) as any[]).map((r: any) => r.order_id)
+            );
+            for (const o of allOrders) {
+              if (participantOrderIds.has(o.id)) {
+                (o as any)._isParticipant = true;
+              }
+            }
+          } catch (_e) { /* 如果表不存在则忽略 */ }
+        }
         return { orders: allOrders };
       }),
 
@@ -15858,6 +15903,95 @@ ${klinesSummary}
           'UPDATE funder_order_participants SET paid_commission = ?, updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND user_id = ?',
           [input.paidCommission, input.orderId, input.ledgerId, input.userId]
         );
+        return { success: true };
+      }),
+    // ========== 借方订单参与方接口 ==========
+    // 获取借方订单的参与方列表（供管理员配置）
+    financeGetOrderParticipants: protectedProcedure
+      .input(z.object({ orderId: z.number(), ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        await db.execute(sql`CREATE TABLE IF NOT EXISTS finance_order_participants (
+          id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+          order_id int NOT NULL,
+          ledger_id int NOT NULL,
+          user_id int NOT NULL,
+          role varchar(20) NOT NULL,
+          sort_order int DEFAULT 0,
+          created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          updated_at timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+          INDEX fop_order_idx (order_id),
+          INDEX fop_ledger_idx (ledger_id),
+          INDEX fop_user_idx (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        const isManager = role === 'owner' || role === 'admin';
+        if (!isManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看参与方配置' });
+        const rows = await db.execute(
+          sql`SELECT p.*, u.username, u.name as userName, u.avatar, lm.nickname
+              FROM finance_order_participants p
+              LEFT JOIN users u ON u.id = p.user_id
+              LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = ${input.ledgerId}
+              WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId}
+              ORDER BY p.sort_order ASC, p.id ASC`
+        ) as any;
+        const memberRows = await db.execute(
+          sql`SELECT lm.userId, lm.nickname, lm.role as memberRole, u.username, u.name as userName, u.avatar
+              FROM ledger_members lm
+              LEFT JOIN users u ON u.id = lm.userId
+              WHERE lm.ledgerId = ${input.ledgerId}
+              ORDER BY lm.id ASC`
+        ) as any;
+        return {
+          participants: ((rows[0] || rows) as any[]) || [],
+          members: ((memberRows[0] || memberRows) as any[]) || [],
+        };
+      }),
+    // 保存（覆盖）借方订单的所有参与方
+    financeSaveOrderParticipants: protectedProcedure
+      .input(z.object({
+        orderId: z.number(),
+        ledgerId: z.number(),
+        participants: z.array(z.object({
+          userId: z.number(),
+          role: z.enum(['funder', 'borrower', 'broker']),
+          sortOrder: z.number().optional(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        const isManager = role === 'owner' || role === 'admin';
+        if (!isManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可配置参与方' });
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        await conn.execute(`CREATE TABLE IF NOT EXISTS finance_order_participants (
+          id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+          order_id int NOT NULL,
+          ledger_id int NOT NULL,
+          user_id int NOT NULL,
+          role varchar(20) NOT NULL,
+          sort_order int DEFAULT 0,
+          created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          updated_at timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
+          INDEX fop_order_idx (order_id),
+          INDEX fop_ledger_idx (ledger_id),
+          INDEX fop_user_idx (user_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+        await conn.execute('DELETE FROM finance_order_participants WHERE order_id = ? AND ledger_id = ?', [input.orderId, input.ledgerId]);
+        for (const p of input.participants) {
+          await conn.execute(
+            'INSERT INTO finance_order_participants (order_id, ledger_id, user_id, role, sort_order) VALUES (?, ?, ?, ?, ?)',
+            [input.orderId, input.ledgerId, p.userId, p.role, p.sortOrder ?? 0]
+          );
+        }
         return { success: true };
       }),
         // ========== 资方订单 AI 邮件预警接口 ==========

@@ -3120,8 +3120,8 @@ export default function CryptoPrediction() {
                     <div
                       key={order.id}
                       className="rounded-2xl shadow-sm relative"
-                      style={order._fromFunder
-                        ? { backgroundColor: '#FFFFFF', border: '1px solid #86EFAC', boxShadow: '0 2px 8px rgba(34,197,94,0.08)', overflow: 'hidden' }
+                      style={(order._fromFunder || order._isParticipant)
+                        ? { backgroundColor: '#F0FDF4', border: '1px solid #86EFAC', boxShadow: '0 2px 8px rgba(34,197,94,0.12)', overflow: 'hidden' }
                         : { backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)', overflow: 'hidden' }}
                     >
                       {String(order.admin_note || '').includes('[已卖出]') && (

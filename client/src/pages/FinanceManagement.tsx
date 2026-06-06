@@ -170,6 +170,17 @@ interface FinanceOrderCardProps {
   openEdit: (order: any) => void;
   setConfirmDeleteId: (id: number | null) => void;
   getPaymentLabel: (val: string) => string;
+  // 参与方相关
+  showParticipantsPanel: number | null;
+  handleOpenParticipants: (orderId: number) => void;
+  handleAddParticipant: (role: 'funder' | 'borrower' | 'broker') => void;
+  handleSaveParticipants: (orderId: number) => void;
+  participantsList: { userId: number; displayName: string; role: 'funder' | 'borrower' | 'broker'; sortOrder: number }[];
+  setParticipantsList: (fn: (list: any[]) => any[]) => void;
+  ledgerMembers: { userId: number; displayName: string; memberRole: string }[];
+  participantsLoading: boolean;
+  saveParticipantsMutation: any;
+  ROLE_OPTIONS: { value: 'funder' | 'borrower' | 'broker'; label: string; color: string }[];
 }
 
 function FinanceOrderCard({
@@ -194,6 +205,16 @@ function FinanceOrderCard({
   openEdit,
   setConfirmDeleteId,
   getPaymentLabel,
+  showParticipantsPanel,
+  handleOpenParticipants,
+  handleAddParticipant,
+  handleSaveParticipants,
+  participantsList,
+  setParticipantsList,
+  ledgerMembers,
+  participantsLoading,
+  saveParticipantsMutation,
+  ROLE_OPTIONS,
 }: FinanceOrderCardProps) {
   const [showStatusSheet, setShowStatusSheet] = useState(false);
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
@@ -347,6 +368,24 @@ function FinanceOrderCard({
           })()}
         </div>
         <div className="flex items-center gap-0.5">
+          {isAdmin && (
+            <button
+              onClick={() => handleOpenParticipants(order.id)}
+              className="p-1 ml-0.5 rounded-full transition-colors"
+              style={{
+                background: showParticipantsPanel === order.id ? '#1A56DB' : '#E0E7FF',
+                color: showParticipantsPanel === order.id ? '#fff' : '#1A56DB',
+              }}
+              title="参与方设置"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </button>
+          )}
           <button onClick={() => openEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
             <Pencil className="w-3.5 h-3.5" />
           </button>
@@ -819,6 +858,71 @@ function FinanceOrderCard({
         />
       </div>
 
+      {/* 参与方配置面板 */}
+      {showParticipantsPanel === order.id && (
+        <div className="mx-4 mb-3 rounded-2xl border border-blue-100 bg-blue-50 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold" style={{ color: '#1A56DB' }}>参与方设置</span>
+            <button onClick={() => handleOpenParticipants(order.id)} className="text-gray-400 hover:text-gray-600 text-xs">关闭</button>
+          </div>
+          {participantsLoading ? (
+            <div className="text-xs text-gray-400 py-2 text-center">加载中...</div>
+          ) : (
+            <>
+              {participantsList.length === 0 ? (
+                <div className="text-xs text-gray-400 py-1">暂无参与方，点击下方按鈕添加</div>
+              ) : (
+                <div className="space-y-1.5 mb-2">
+                  {participantsList.map((p, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <select
+                        value={p.userId}
+                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, userId: parseInt(e.target.value), displayName: ledgerMembers.find(m => m.userId === parseInt(e.target.value))?.displayName || '' } : item))}
+                        className="flex-1 text-xs px-2 py-1 rounded-lg border border-gray-200 bg-white"
+                      >
+                        {ledgerMembers.map(m => (
+                          <option key={m.userId} value={m.userId}>{m.displayName}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={p.role}
+                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, role: e.target.value as any } : item))}
+                        className="text-xs px-2 py-1 rounded-lg border border-gray-200 bg-white"
+                      >
+                        {ROLE_OPTIONS.map(r => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                      </select>
+                      <button onClick={() => setParticipantsList(list => list.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600 text-xs px-1">×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-1.5 mb-2">
+                {ROLE_OPTIONS.map(r => (
+                  <button
+                    key={r.value}
+                    onClick={() => handleAddParticipant(r.value)}
+                    className="text-xs px-2 py-1 rounded-lg border font-medium"
+                    style={{ borderColor: r.color, color: r.color, backgroundColor: `${r.color}10` }}
+                  >
+                    + {r.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => handleSaveParticipants(order.id)}
+                disabled={saveParticipantsMutation.isPending}
+                className="w-full py-2 rounded-xl text-xs font-semibold text-white"
+                style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+              >
+                {saveParticipantsMutation.isPending ? '保存中...' : '保存参与方'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* 状态操作底部弹窗 */}
       {showStatusSheet && (
         <div className="fixed inset-0 z-[300] flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setShowStatusSheet(false)}>
@@ -1125,6 +1229,67 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   const [paymentForm, setPaymentForm] = useState({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+
+  const trpcUtils = trpc.useUtils();
+
+  // 参与方相关 state
+  const [showParticipantsPanel, setShowParticipantsPanel] = useState<number | null>(null);
+  type ParticipantRole = 'funder' | 'borrower' | 'broker';
+  type ParticipantItem = { userId: number; displayName: string; role: ParticipantRole; sortOrder: number };
+  type LedgerMember = { userId: number; displayName: string; memberRole: string };
+  const [participantsList, setParticipantsList] = useState<ParticipantItem[]>([]);
+  const [ledgerMembers, setLedgerMembers] = useState<LedgerMember[]>([]);
+  const [participantsLoading, setParticipantsLoading] = useState(false);
+  const ROLE_OPTIONS: { value: ParticipantRole; label: string; color: string }[] = [
+    { value: 'funder', label: '资金方', color: '#1A56DB' },
+    { value: 'borrower', label: '借款人', color: '#D97706' },
+    { value: 'broker', label: '中间人', color: '#059669' },
+  ];
+  const saveParticipantsMutation = trpc.ledger.financeSaveOrderParticipants.useMutation({
+    onSuccess: async () => {
+      toast.success('参与方配置已保存');
+      setShowParticipantsPanel(null);
+      trpcUtils.ledger.financeGetOrders.invalidate({ ledgerId });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const handleOpenParticipants = async (orderId: number) => {
+    if (showParticipantsPanel === orderId) { setShowParticipantsPanel(null); return; }
+    setShowParticipantsPanel(orderId);
+    setParticipantsLoading(true);
+    try {
+      const result = await trpcUtils.ledger.financeGetOrderParticipants.fetch({ orderId, ledgerId });
+      const mapped = (result.participants || []).map((p: any) => ({
+        userId: p.user_id,
+        displayName: p.nickname || p.userName || p.username || `用户${p.user_id}`,
+        role: p.role as ParticipantRole,
+        sortOrder: p.sort_order || 0,
+      }));
+      setParticipantsList(mapped);
+      const mappedMembers = (result.members || []).map((m: any) => ({
+        userId: m.userId,
+        displayName: m.nickname || m.userName || m.username || `用户${m.userId}`,
+        memberRole: m.memberRole,
+      }));
+      setLedgerMembers(mappedMembers);
+    } catch (e) {
+      toast.error('加载参与方失败');
+      setParticipantsList([]);
+    } finally {
+      setParticipantsLoading(false);
+    }
+  };
+  const handleAddParticipant = (role: ParticipantRole) => {
+    setParticipantsList(list => {
+      const usedIds = list.map(p => p.userId);
+      const firstAvail = ledgerMembers.find(m => !usedIds.includes(m.userId));
+      return [...list, { userId: firstAvail?.userId ?? 0, displayName: firstAvail?.displayName ?? '', role, sortOrder: list.length }];
+    });
+  };
+  const handleSaveParticipants = (orderId: number) => {
+    const valid = participantsList.filter(p => p.userId > 0);
+    saveParticipantsMutation.mutate({ orderId, ledgerId, participants: valid.map((p, i) => ({ userId: p.userId, role: p.role, sortOrder: i })) });
+  };
 
   // 当前登录用户信息（用于备注权限控制）
   const { data: currentUser } = trpc.auth.me.useQuery();
@@ -1503,6 +1668,16 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     openEdit={openEdit}
                     setConfirmDeleteId={setConfirmDeleteId}
                     getPaymentLabel={getPaymentLabel}
+                    showParticipantsPanel={showParticipantsPanel}
+                    handleOpenParticipants={handleOpenParticipants}
+                    handleAddParticipant={handleAddParticipant}
+                    handleSaveParticipants={handleSaveParticipants}
+                    participantsList={participantsList}
+                    setParticipantsList={setParticipantsList}
+                    ledgerMembers={ledgerMembers}
+                    participantsLoading={participantsLoading}
+                    saveParticipantsMutation={saveParticipantsMutation}
+                    ROLE_OPTIONS={ROLE_OPTIONS}
                   />
                 );
               })}
