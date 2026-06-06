@@ -817,7 +817,7 @@ function FunderOrderCard({
                         }
                       </div>
                       <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
-                        <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敢口</div>
+                        <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敞口</div>
                         <div>担保物 + 浮动盈亏 − 待收利息 + 已收利息（正数充足，负数缺口）</div>
                         <div className="mt-1 font-mono">
                           {floatPnl !== null
