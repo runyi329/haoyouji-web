@@ -15387,32 +15387,19 @@ ${klinesSummary}
         let orders: any[] = [];
         if (targetIsManager) {
           const rows = await db.execute(
-            sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
+            sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar,
+                COALESCE(pc.cnt, 0) as _participantCount
                 FROM finance_interest_orders fo
                 LEFT JOIN users u ON u.id = fo.user_id
+                LEFT JOIN (
+                  SELECT order_id, COUNT(*) as cnt
+                  FROM finance_order_participants
+                  GROUP BY order_id
+                ) pc ON pc.order_id = fo.id
                 WHERE fo.ledger_id = ${input.ledgerId}
                 ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
           ) as any;
           orders = ((rows[0] || rows) as any[]) || [];
-          // 附加每个订单的参与方数量
-          if (orders.length > 0) {
-            try {
-              const orderIds = orders.map((o: any) => o.id);
-              const placeholders = orderIds.map(() => '?').join(',');
-              const cntConn = await getLedgerDb();
-              const cntRows = await (cntConn as any).execute(
-                `SELECT order_id, COUNT(*) as cnt FROM finance_order_participants WHERE order_id IN (${placeholders}) GROUP BY order_id`,
-                orderIds
-              ) as any;
-              const cntMap: Record<number, number> = {};
-              for (const r of ((cntRows[0] || cntRows) as any[])) {
-                cntMap[r.order_id] = Number(r.cnt);
-              }
-              for (const o of orders) {
-                (o as any)._participantCount = cntMap[o.id] ?? 0;
-              }
-            } catch (_e) { /* 如果表不存在则忽略 */ }
-          }
         } else {
           // 先查自己的订单
           const myRows = await db.execute(
