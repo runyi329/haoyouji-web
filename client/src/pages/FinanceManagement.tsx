@@ -417,23 +417,23 @@ function FinanceOrderCard({
         <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
           {/* 标题 */}
           <div className="h-5 flex items-center gap-1">
-            <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>待结利息</span>
+            <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>待付利息</span>
             {rateAbs && <span className="text-xs text-gray-400">(年化 {rateSign}{rateAbs}%)</span>}
           </div>
           {/* 待结利息大数字 */}
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-0.5">
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                {displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {displayAccrued > 0 ? '-' : ''}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
             </div>
-            <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
+            <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued > 0 ? '-' : ''}{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
           </div>
           {/* 明细行 */}
           <div className="space-y-0.5 text-xs">
             <div className="flex items-center justify-between">
-              <span className="text-gray-400 whitespace-nowrap">已结利息</span>
+              <span className="text-gray-400 whitespace-nowrap">已付利息</span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
                 {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
               </span>
@@ -496,7 +496,7 @@ function FinanceOrderCard({
       <div className="px-4 pt-3 pb-3 border-t border-blue-100">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium" style={{ color: '#1A2340' }}>
-            已结利息：<span style={{ color: '#16A34A' }}>{displayPaid.toFixed(2)} {interestUnit}</span>
+            已付利息：<span style={{ color: '#16A34A' }}>{displayPaid.toFixed(2)} {interestUnit}</span>
           </span>
           <button
             onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm(() => ({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
@@ -1771,7 +1771,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                       <div className="space-y-2">
                         {[
                           { key: 'accruedInterest', label: '待付利息（标题+大数字）' },
-                          { key: 'paidInterest', label: '已结利息' },
+                          { key: 'paidInterest', label: '已付利息' },
                           { key: 'interestStartDate', label: '计息日期' },
                           { key: 'collateralCoin', label: '担保货币' },
                           { key: 'collateralValue', label: '担保价值' },
@@ -1889,7 +1889,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                                   const start = new Date(formData.interestStartDate + 'T00:00:00');
                                   const elapsed = Math.max(0, (Date.now() - start.getTime()) / 1000);
                                   const interest = base * rate / (365 * 24 * 3600) * elapsed;
-                                  return interest.toLocaleString(undefined, { maximumFractionDigits: 2 });
+                                  return (interest > 0 ? '-' : '') + interest.toLocaleString(undefined, { maximumFractionDigits: 2 });
                                 })()}
                               </span>
                               <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>USDT</span>
