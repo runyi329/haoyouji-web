@@ -547,8 +547,8 @@ function FunderOrderCard({
 
         {/* 左栏：持有资产 */}
         <div className="flex-1 p-4 pr-3">
-          <div className="h-5 flex items-center gap-1" style={{ color: isInvited ? '#16A34A' : '#3B82F6' }}>
-            <span className="text-xs font-medium">{isInvited ? '订单资产' : '持有资产'}</span>
+          <div className="flex items-center gap-0.5 mb-0.5">
+            <span className="text-[10px] font-medium" style={{ color: isInvited ? '#16A34A' : '#3B82F6' }}>{isInvited ? '订单资产' : '持有资产'}</span>
           </div>
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-1 flex-wrap">
@@ -618,7 +618,7 @@ function FunderOrderCard({
             {order.order_no && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">订单编号</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{order.order_no}</span>
+                <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
               </div>
             )}
             {order.interest_payment_type && (
@@ -641,9 +641,9 @@ function FunderOrderCard({
 
         {/* 右栏：待结利息 */}
         <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
-          <div className="h-5 flex items-center gap-1 relative">
-            <span className="text-xs font-medium" style={{ color: isInvited ? '#059669' : '#3B82F6' }}>{isInvited ? '待结佣金' : '待收利息'}</span>
-            {rateAbs && <span className="text-xs text-gray-400">(年化 {rateAbs}%)</span>}
+          <div className="flex items-center gap-1 mb-0.5 relative" style={{ height: '16px' }}>
+            <span className="text-[10px]" style={{ color: isInvited ? '#059669' : '#3B82F6' }}>{isInvited ? '待结佣金' : '待收利息'}</span>
+            {rateAbs && <span className="text-[10px] text-gray-400">(年化 {rateAbs}%)</span>}
             <button
               ref={tipBtnRef}
               type="button"

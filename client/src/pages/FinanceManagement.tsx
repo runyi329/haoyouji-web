@@ -346,9 +346,9 @@ function FinanceOrderCard({
 
         {/* 左栏：持有资产 */}
         <div className="flex-1 p-4 pr-3">
-          <div className="h-5 flex items-center gap-1" style={{ color: '#3B82F6' }}>
-            <span className="text-xs font-medium">融资资产</span>
-            <span className="text-xs text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span>
+          <div className="flex items-center gap-0.5 mb-0.5">
+            <span className="text-[10px] font-medium" style={{ color: '#3B82F6' }}>融资资产</span>
+            <span className="text-[10px] text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span>
           </div>
           {/* 持币量大数字 */}
           <div className="min-h-9 flex flex-col justify-center">
@@ -405,7 +405,7 @@ function FinanceOrderCard({
             {order.order_no && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">订单编号</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{order.order_no}</span>
+                <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
               </div>
             )}
             {order.interest_payment_type && (
@@ -429,9 +429,9 @@ function FinanceOrderCard({
         {/* 右栏：待结利息 */}
         <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
           {/* 标题 */}
-          <div className="h-5 flex items-center gap-1">
-            <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>待付利息</span>
-            {rateAbs && <span className="text-xs text-gray-400">(年化 {rateSign}{rateAbs}%)</span>}
+          <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
+            <span className="text-[10px]" style={{ color: '#3B82F6' }}>待付利息</span>
+            {rateAbs && <span className="text-[10px] text-gray-400">(年化 {rateSign}{rateAbs}%)</span>}
           </div>
           {/* 待结利息大数字 */}
           <div className="min-h-9 flex flex-col justify-center">
