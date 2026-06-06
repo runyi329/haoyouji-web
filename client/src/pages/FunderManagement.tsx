@@ -2428,11 +2428,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                   {/* 两栏主体 */}
                   <div className="flex" style={{ minHeight: '100px' }}>
                     {/* 左栏：持有资产 */}
-                    <div className="flex-1 p-3 pr-2">
-                      <div className="h-4 flex items-center gap-1" style={{ color: '#3B82F6' }}>
-                        <span className="text-xs font-medium">持有资产</span>
-                        {displayConfig.aiIcon && <span className="text-[10px] px-1 rounded" style={{ backgroundColor: '#EEF2FF', color: '#6366F1' }}>AI</span>}
-                      </div>
+                     <div className="flex-1 p-4 pr-3">
+                       <div className="flex items-center gap-0.5 mb-0.5">
+                         <span className="text-[10px] font-medium" style={{ color: '#3B82F6' }}>持有资产</span>
+                         {displayConfig.aiIcon && <span className="text-[10px] px-1 rounded" style={{ backgroundColor: '#EEF2FF', color: '#6366F1' }}>AI</span>}
+                       </div>
                       <div className="min-h-7 flex flex-col justify-center mt-0.5">
                         <div className="flex items-baseline gap-1 flex-wrap">
                           <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
@@ -2518,7 +2518,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                     {/* 中间分隔线 */}
                     <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
                     {/* 右栏：待结利息（与 LedgerDetail FunderOrderCardRight 完全一致） */}
-                    <div className="w-40 p-3 pl-2 flex flex-col">
+                    <div className="w-44 p-4 pl-3 flex flex-col">
                       {displayConfig.accruedInterest && formData.interestRateAnnual && formData.interestBase && formData.interestStartDate ? (
                         (() => {
                           // 利息货币逻辑与 LedgerDetail / FunderOrderCard 完全一致
@@ -2548,9 +2548,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                           const prevAltPaid = prevConvertAlt(prevDisplayPaid);
                           return (
                             <div>
-                              <div className="h-4 flex items-center gap-1">
-                                <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>待收利息</span>
-                                <span className="text-xs text-gray-400">(年化 {parseFloat(formData.interestRateAnnual).toFixed(0)}%)</span>
+                              <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
+                                <span className="text-[10px]" style={{ color: '#3B82F6' }}>待收利息</span>
+                                <span className="text-[10px] text-gray-400">(年化 {parseFloat(formData.interestRateAnnual).toFixed(0)}%)</span>
                               </div>
                               <div className="min-h-7 flex flex-col justify-center mt-0.5">
                                 <div className="flex items-baseline gap-0.5">
