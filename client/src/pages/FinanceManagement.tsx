@@ -335,7 +335,8 @@ function FinanceOrderCard({
         {/* 左栏：持有资产 */}
         <div className="flex-1 p-4 pr-3">
           <div className="h-5 flex items-center gap-1" style={{ color: '#3B82F6' }}>
-            <span className="text-xs font-medium">持有资产</span>
+            <span className="text-xs font-medium">融资资产</span>
+            <span className="text-xs text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span>
           </div>
           {/* 持币量大数字 */}
           <div className="min-h-9 flex flex-col justify-center">
