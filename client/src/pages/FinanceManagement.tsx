@@ -306,6 +306,16 @@ function FinanceOrderCard({
           >
             {STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status}
           </span>
+          {(() => {
+            const m = (realMembers as any[])?.find((m: any) => m.userId === order.user_id);
+            const name = m ? (m.nickname || m.username) : null;
+            if (!name) return null;
+            return (
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#F3F4F6', color: '#374151' }}>
+                {name}
+              </span>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-0.5">
           <button
