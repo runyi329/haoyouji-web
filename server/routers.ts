@@ -15487,6 +15487,10 @@ ${klinesSummary}
         collateralQty: z.string().optional(),
         collateralAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
         financeType: z.enum(['保本分成', '自负盈亏']).optional(),
+        showProfitShare: z.boolean().optional(),
+        commissionShare: z.string().optional(),
+        displayConfig: z.record(z.boolean()).optional(),
+        assetType: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -15495,7 +15499,7 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-        // 自动建表时添加 collateral_coin / collateral_qty / finance_type / collateral_assets 列（如果不存在）
+        // 自动建表时添加 collateral_coin / collateral_qty / finance_type / collateral_assets / show_profit_share / commission_share / display_config / asset_type 列（如果不存在）
         try {
           const mysql = await import('mysql2/promise');
           const dbUrl = process.env.DATABASE_URL || '';
@@ -15509,6 +15513,10 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS collateral_qty DECIMAL(20,8) DEFAULT NULL`);
           await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS finance_type VARCHAR(20) DEFAULT '保本分成'`);
           await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS collateral_assets TEXT DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS show_profit_share TINYINT(1) DEFAULT 1`);
+          await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS commission_share TEXT DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS display_config TEXT DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS asset_type VARCHAR(20) DEFAULT NULL`);
           await conn.end();
         } catch(e) {}
         // 生成唯一订单号
@@ -15525,8 +15533,8 @@ ${klinesSummary}
           if (!exists) isUnique = true;
         }
         await db.execute(
-          sql`INSERT INTO finance_interest_orders (order_no, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, created_by)
-              VALUES (${orderNo}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${ctx.user.id})`
+          sql`INSERT INTO finance_interest_orders (order_no, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, show_profit_share, commission_share, display_config, asset_type, created_by)
+              VALUES (${orderNo}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${ctx.user.id})\`
         );
         return { success: true };
       }),
@@ -15556,6 +15564,10 @@ ${klinesSummary}
         collateralQty: z.string().optional(),
         collateralAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
         financeType: z.enum(['保本分成', '自负盈亏']).optional(),
+        showProfitShare: z.boolean().optional(),
+        commissionShare: z.string().optional(),
+        displayConfig: z.record(z.boolean()).optional(),
+        assetType: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -15575,6 +15587,11 @@ ${klinesSummary}
           collateralCoin: 'collateral_coin', collateralQty: 'collateral_qty',
           financeType: 'finance_type',
         };
+        // 特殊处理 showProfitShare
+        if (input.showProfitShare !== undefined) { updateCols.push('show_profit_share = ?'); updateVals.push(input.showProfitShare ? 1 : 0); }
+        if (input.commissionShare !== undefined) { updateCols.push('commission_share = ?'); updateVals.push(input.commissionShare || null); }
+        if (input.displayConfig !== undefined) { updateCols.push('display_config = ?'); updateVals.push(input.displayConfig ? JSON.stringify(input.displayConfig) : null); }
+        if (input.assetType !== undefined) { updateCols.push('asset_type = ?'); updateVals.push(input.assetType || null); }
         // 特殊处理 collateralAssets（JSON 序列化）
         // 判断是否正在清空担保物（collateralAssets 为空数组）
         const isClearingCollateral = input.collateralAssets !== undefined && input.collateralAssets.length === 0;
@@ -15620,6 +15637,10 @@ ${klinesSummary}
         // 确保 collateral_assets 等新字段存在（兼容旧表结构）
         try {
           await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS collateral_assets TEXT DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS show_profit_share TINYINT(1) DEFAULT 1`);
+          await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS commission_share TEXT DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS display_config TEXT DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE finance_interest_orders ADD COLUMN IF NOT EXISTS asset_type VARCHAR(20) DEFAULT NULL`);
         } catch(e) {}
         await conn.execute(`UPDATE finance_interest_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
         await conn.end();

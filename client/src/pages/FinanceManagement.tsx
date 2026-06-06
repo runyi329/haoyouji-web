@@ -584,6 +584,22 @@ function FinanceOrderCard({
         </div>
       </div>
 
+      {/* 收益分成区 */}
+      {order.show_profit_share !== 0 && order.show_profit_share !== false && order.show_profit_share !== null && (
+        <div className="border-t px-4 py-2" style={{ borderColor: '#E8EFFF' }}>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-400">收益分成</span>
+            <span className="font-medium" style={{ color: '#3B82F6' }}>已开启</span>
+          </div>
+          {order.commission_share && (
+            <div className="flex items-center justify-between text-xs mt-0.5">
+              <span className="text-gray-400">佣金分成</span>
+              <span className="font-medium" style={{ color: '#4B5563' }}>{order.commission_share}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 内部备注 */}
       {order.admin_note && (
         <div className="px-4 pb-2 text-xs text-gray-400 border-t border-gray-100 pt-2">
@@ -791,6 +807,8 @@ const emptyForm = {
   collateralQty: '',
   collateralAssets: [] as { coin: string; qty: string }[],
   financeType: '保本分成' as '保本分成' | '自负盈亏',
+  showProfitShare: true,
+  commissionShare: '',
 };
 
 // ===== 订单公开备注组件 =====
@@ -932,6 +950,10 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     collateralValue: true,
     collateral: true,
     marginRate: true,
+    profitShare: true,
+    commissionShare: true,
+    aiIcon: false,
+    assetType: true,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean>>(DEFAULT_DISPLAY_CONFIG);
 
@@ -1109,7 +1131,16 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         return [];
       })(),
       financeType: (order.finance_type || '保本分成') as '保本分成' | '自负盈亏',
+      showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
+      commissionShare: order.commission_share || '',
     });
+    // 加载字段展示配置
+    if (order.display_config) {
+      try {
+        const dc = typeof order.display_config === 'string' ? JSON.parse(order.display_config) : order.display_config;
+        setDisplayConfig(prev => ({ ...prev, ...dc }));
+      } catch(e) {}
+    }
     setSelectedUserId(order.user_id || null);
     const u = realMembers.find((m: any) => m.userId === order.user_id);
     setUserSearchText(u ? (u.nickname || u.username || '') : '');
@@ -1149,6 +1180,11 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         // 编辑模式：始终传 collateralAssets（空数组表示用户明确清空）
         collateralAssets: formData.collateralAssets,
         financeType: formData.financeType,
+        showProfitShare: formData.showProfitShare,
+        commissionShare: formData.commissionShare || undefined,
+        displayConfig: Object.fromEntries(
+          Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')
+        ) as Record<string, boolean>,
       });
     } else {
       createMutation.mutate({
@@ -1172,6 +1208,11 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         collateralQty: formData.collateralQty || undefined,
         collateralAssets: formData.collateralAssets.length > 0 ? formData.collateralAssets : undefined,
         financeType: formData.financeType,
+        showProfitShare: formData.showProfitShare,
+        commissionShare: formData.commissionShare || undefined,
+        displayConfig: Object.fromEntries(
+          Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')
+        ) as Record<string, boolean>,
       });
     }
   }
@@ -1768,6 +1809,37 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                 </div>
               </div>
 
+              {/* 收益分成开关 */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-600">收益分成</label>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(d => ({ ...d, showProfitShare: !d.showProfitShare }))}
+                    className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                      formData.showProfitShare ? 'bg-blue-500' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                      formData.showProfitShare ? 'translate-x-5' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+                {formData.showProfitShare && (
+                  <div className="mt-3">
+                    <label className="block text-sm font-medium text-gray-600 mb-1">佣金分成说明</label>
+                    <input
+                      type="text"
+                      value={formData.commissionShare}
+                      onChange={e => setFormData(d => ({ ...d, commissionShare: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="例如：年化收益的20%"
+                      style={{ display: 'block', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-gray-100" />
                 <span className="text-xs text-gray-400 shrink-0">备注</span>
@@ -1845,6 +1917,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                           { key: 'todayPrice', label: '今日币价' },
                           { key: 'holdDuration', label: '持有时长' },
                           { key: 'orderNo', label: '订单编号' },
+                          { key: 'aiIcon', label: 'AI图标（融资资产右上角）' },
+                          { key: 'assetType', label: '资产类型（股票/数字币）' },
                         ].map(({ key, label }) => (
                           <div key={key} className="flex items-center justify-between">
                             <span className="text-sm text-gray-600">{label}</span>
@@ -1893,6 +1967,32 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                           </div>
                         ))}
                       </div>
+                    </div>
+                  </div>
+                  <div className="mx-4 h-px bg-gray-100 my-2" />
+                  {/* 右栏下半：收益分成区 */}
+                  <div className="px-4 pb-3">
+                    <div className="text-xs font-medium text-blue-500 mb-2">右栏下半：收益分成区</div>
+                    <div className="space-y-2">
+                      {[
+                        { key: 'profitShare', label: '收益分成（开启后显示下半区）' },
+                        { key: 'commissionShare', label: '佣金分成' },
+                      ].map(({ key, label }) => (
+                        <div key={key} className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">{label}</span>
+                          <button
+                            type="button"
+                            onClick={() => setDisplayConfig(c => ({ ...c, [key]: !c[key] }))}
+                            className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                              displayConfig[key] ? 'bg-blue-500' : 'bg-gray-200'
+                            }`}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                              displayConfig[key] ? 'translate-x-5' : 'translate-x-1'
+                            }`} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -2100,6 +2200,27 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                       )}
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* 预览：收益分成区 */}
+            {displayConfig.profitShare && formData.showProfitShare && (
+              <div className="mx-4 mt-2 rounded-xl overflow-hidden" style={{ border: '1px solid #E8EFFF' }}>
+                <div className="px-3 py-2 border-b" style={{ borderColor: '#E8EFFF', backgroundColor: '#F8FBFF' }}>
+                  <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>右栏下半：收益分成区</span>
+                </div>
+                <div className="px-3 py-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-400">收益分成</span>
+                    <span className="font-medium" style={{ color: '#3B82F6' }}>已开启</span>
+                  </div>
+                  {displayConfig.commissionShare && formData.commissionShare && (
+                    <div className="flex items-center justify-between text-xs mt-0.5">
+                      <span className="text-gray-400">佣金分成</span>
+                      <span className="font-medium" style={{ color: '#4B5563' }}>{formData.commissionShare}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
