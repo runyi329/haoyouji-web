@@ -2650,10 +2650,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                                 {displayConfig.profitShare && formData.showProfitShare && (
                                   <>
                                     <div className="border-t mt-1 pt-1" style={{ borderColor: '#E8EFFF' }}>
-                                      <div className="text-[10px] font-medium mb-0.5" style={{ color: '#3B82F6' }}>收益分成区</div>
-                                      <div className="flex items-center justify-between">
-                                        <span className="text-gray-400 shrink-0">收益分成</span>
-                                        <span className="font-medium" style={{ color: '#3B82F6' }}>已开启</span>
+                                      <div className="h-4 flex items-center" style={{ color: '#3B82F6' }}>
+                                        <span className="text-xs font-medium">收益分成</span>
                                       </div>
                                       {displayConfig.commissionShare && formData.commissionShare && (
                                         <div className="flex items-center justify-between mt-0.5">
