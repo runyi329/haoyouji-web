@@ -175,6 +175,8 @@ interface FinanceOrderCardProps {
   handleOpenParticipants: (orderId: number) => void;
   handleAddParticipant: (role: 'funder' | 'borrower' | 'broker') => void;
   handleSaveParticipants: (orderId: number) => void;
+  handleRemoveSaved: (orderId: number, userId: number) => void;
+  savedParticipants: { userId: number; displayName: string; role: 'funder' | 'borrower' | 'broker'; sortOrder: number }[];
   participantsList: { userId: number; displayName: string; role: 'funder' | 'borrower' | 'broker'; sortOrder: number }[];
   setParticipantsList: (fn: (list: any[]) => any[]) => void;
   ledgerMembers: { userId: number; displayName: string; memberRole: string }[];
@@ -209,6 +211,8 @@ function FinanceOrderCard({
   handleOpenParticipants,
   handleAddParticipant,
   handleSaveParticipants,
+  handleRemoveSaved,
+  savedParticipants,
   participantsList,
   setParticipantsList,
   ledgerMembers,
@@ -871,68 +875,99 @@ function FinanceOrderCard({
       {/* 参与方配置面板 */}
       {showParticipantsPanel === order.id && (
         <div className="mx-4 mb-3 rounded-2xl border border-blue-100 bg-blue-50 p-3">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-semibold" style={{ color: '#1A56DB' }}>参与方设置</span>
-              {!participantsLoading && participantsList.length > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#DCFCE7', color: '#16A34A' }}>已保存 {participantsList.length} 位</span>
-              )}
-            </div>
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-semibold" style={{ color: '#1A56DB' }}>参与方设置</span>
             <button onClick={() => handleOpenParticipants(order.id)} className="text-gray-400 hover:text-gray-600 text-xs">关闭</button>
           </div>
           {participantsLoading ? (
             <div className="text-xs text-gray-400 py-2 text-center">加载中...</div>
           ) : (
             <>
-              {participantsList.length === 0 ? (
-                <div className="text-xs text-gray-400 py-1">暂无参与方，点击下方按鈕添加</div>
-              ) : (
-                <div className="space-y-1.5 mb-2">
-                  {participantsList.map((p, idx) => (
-                    <div key={idx} className="flex items-center gap-1.5">
-                      <select
-                        value={p.userId}
-                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, userId: parseInt(e.target.value), displayName: ledgerMembers.find(m => m.userId === parseInt(e.target.value))?.displayName || '' } : item))}
-                        className="flex-1 text-xs px-2 py-1 rounded-lg border border-gray-200 bg-white"
-                      >
-                        {ledgerMembers.map(m => (
-                          <option key={m.userId} value={m.userId}>{m.displayName}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={p.role}
-                        onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, role: e.target.value as any } : item))}
-                        className="text-xs px-2 py-1 rounded-lg border border-gray-200 bg-white"
-                      >
-                        {ROLE_OPTIONS.map(r => (
-                          <option key={r.value} value={r.value}>{r.label}</option>
-                        ))}
-                      </select>
-                      <button onClick={() => setParticipantsList(list => list.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-600 text-xs px-1">×</button>
-                    </div>
-                  ))}
+              {/* 已保存的参与方列表（只读展示） */}
+              {savedParticipants.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-[10px] text-gray-400 mb-1.5">已添加</div>
+                  <div className="space-y-1.5">
+                    {savedParticipants.map((p) => {
+                      const roleOpt = ROLE_OPTIONS.find(r => r.value === p.role);
+                      return (
+                        <div key={p.userId} className="flex items-center justify-between px-2.5 py-1.5 rounded-xl bg-white border border-gray-100">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-gray-700">{p.displayName}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: `${roleOpt?.color}18`, color: roleOpt?.color }}>{roleOpt?.label}</span>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveSaved(order.id, p.userId)}
+                            disabled={saveParticipantsMutation.isPending}
+                            className="text-gray-300 hover:text-red-400 transition-colors text-sm leading-none px-1"
+                          >×</button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
-              <div className="flex gap-1.5 mb-2">
+              {/* 新增行（空白输入框） */}
+              {participantsList.length > 0 && (
+                <div className="mb-2">
+                  <div className="text-[10px] text-gray-400 mb-1.5">新增</div>
+                  <div className="space-y-1.5">
+                    {participantsList.map((p, idx) => (
+                      <div key={idx} className="flex items-center gap-1.5">
+                        <select
+                          value={p.userId || ''}
+                          onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, userId: parseInt(e.target.value), displayName: ledgerMembers.find(m => m.userId === parseInt(e.target.value))?.displayName || '' } : item))}
+                          className="flex-1 text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
+                        >
+                          <option value="">选择成员...</option>
+                          {ledgerMembers
+                            .filter(m => !savedParticipants.some(s => s.userId === m.userId) && !participantsList.some((q, qi) => qi !== idx && q.userId === m.userId))
+                            .map(m => (
+                              <option key={m.userId} value={m.userId}>{m.displayName}</option>
+                            ))}
+                        </select>
+                        <select
+                          value={p.role}
+                          onChange={e => setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, role: e.target.value as any } : item))}
+                          className="text-xs px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
+                        >
+                          {ROLE_OPTIONS.map(r => (
+                            <option key={r.value} value={r.value}>{r.label}</option>
+                          ))}
+                        </select>
+                        <button onClick={() => setParticipantsList(list => list.filter((_, i) => i !== idx))} className="text-gray-300 hover:text-red-400 text-sm px-1">×</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* 添加按鈕 */}
+              <div className="flex gap-1.5 mb-2.5">
                 {ROLE_OPTIONS.map(r => (
                   <button
                     key={r.value}
                     onClick={() => handleAddParticipant(r.value)}
-                    className="text-xs px-2 py-1 rounded-lg border font-medium"
+                    className="text-xs px-2.5 py-1 rounded-lg border font-medium"
                     style={{ borderColor: r.color, color: r.color, backgroundColor: `${r.color}10` }}
                   >
                     + {r.label}
                   </button>
                 ))}
               </div>
-              <button
-                onClick={() => handleSaveParticipants(order.id)}
-                disabled={saveParticipantsMutation.isPending}
-                className="w-full py-2 rounded-xl text-xs font-semibold text-white"
-                style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
-              >
-                {saveParticipantsMutation.isPending ? '保存中...' : '保存参与方'}
-              </button>
+              {/* 仅有新增行时才显示保存按鈕 */}
+              {participantsList.length > 0 && (
+                <button
+                  onClick={() => handleSaveParticipants(order.id)}
+                  disabled={saveParticipantsMutation.isPending}
+                  className="w-full py-2 rounded-xl text-xs font-semibold text-white"
+                  style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+                >
+                  {saveParticipantsMutation.isPending ? '保存中...' : '保存参与方'}
+                </button>
+              )}
+              {savedParticipants.length === 0 && participantsList.length === 0 && (
+                <div className="text-xs text-gray-400 py-1 text-center">暂无参与方，点击上方按鈕添加</div>
+              )}
             </>
           )}
         </div>
@@ -1252,6 +1287,9 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   type ParticipantRole = 'funder' | 'borrower' | 'broker';
   type ParticipantItem = { userId: number; displayName: string; role: ParticipantRole; sortOrder: number };
   type LedgerMember = { userId: number; displayName: string; memberRole: string };
+  // savedParticipants: 从数据库加载的已保存参与方（只读展示）
+  const [savedParticipants, setSavedParticipants] = useState<ParticipantItem[]>([]);
+  // participantsList: 当前编辑中的新增行（空白输入框）
   const [participantsList, setParticipantsList] = useState<ParticipantItem[]>([]);
   const [ledgerMembers, setLedgerMembers] = useState<LedgerMember[]>([]);
   const [participantsLoading, setParticipantsLoading] = useState(false);
@@ -1264,8 +1302,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     onSuccess: async (_, variables) => {
       toast.success('参与方配置已保存');
       setShowParticipantsPanel(null);
+      setSavedParticipants([]);
       setParticipantsList([]);
-      // 清除参与方缓存，确保下次打开时重新从数据库加载
       trpcUtils.ledger.financeGetOrderParticipants.invalidate({ orderId: variables.orderId, ledgerId });
       trpcUtils.ledger.financeGetOrders.invalidate({ ledgerId });
     },
@@ -1274,10 +1312,10 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   const handleOpenParticipants = async (orderId: number) => {
     if (showParticipantsPanel === orderId) { setShowParticipantsPanel(null); return; }
     setShowParticipantsPanel(orderId);
-    setParticipantsList([]);
+    setSavedParticipants([]);
+    setParticipantsList([]); // 新增行清空
     setParticipantsLoading(true);
     try {
-      // 强制绕过缓存，每次打开都从数据库重新加载
       await trpcUtils.ledger.financeGetOrderParticipants.invalidate({ orderId, ledgerId });
       const result = await trpcUtils.ledger.financeGetOrderParticipants.fetch({ orderId, ledgerId });
       const mapped = (result.participants || []).map((p: any) => ({
@@ -1286,7 +1324,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         role: p.role as ParticipantRole,
         sortOrder: p.sort_order || 0,
       }));
-      setParticipantsList(mapped);
+      setSavedParticipants(mapped); // 已保存的只读展示
+      setParticipantsList([]);      // 新增行始终保持空白
       const mappedMembers = (result.members || []).map((m: any) => ({
         userId: m.userId,
         displayName: m.nickname || m.userName || m.username || `用户${m.userId}`,
@@ -1295,6 +1334,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       setLedgerMembers(mappedMembers);
     } catch (e) {
       toast.error('加载参与方失败');
+      setSavedParticipants([]);
       setParticipantsList([]);
     } finally {
       setParticipantsLoading(false);
@@ -1302,14 +1342,28 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   };
   const handleAddParticipant = (role: ParticipantRole) => {
     setParticipantsList(list => {
-      const usedIds = list.map(p => p.userId);
+      const usedIds = [...savedParticipants.map(p => p.userId), ...list.map(p => p.userId)];
       const firstAvail = ledgerMembers.find(m => !usedIds.includes(m.userId));
       return [...list, { userId: firstAvail?.userId ?? 0, displayName: firstAvail?.displayName ?? '', role, sortOrder: list.length }];
     });
   };
+  const handleRemoveSaved = (orderId: number, userId: number) => {
+    // 从已保存列表中删除一个，立即保存剩余的
+    const remaining = savedParticipants.filter(p => p.userId !== userId);
+    saveParticipantsMutation.mutate({
+      orderId,
+      ledgerId,
+      participants: remaining.map((p, i) => ({ userId: p.userId, role: p.role, sortOrder: i })),
+    });
+  };
   const handleSaveParticipants = (orderId: number) => {
-    const valid = participantsList.filter(p => p.userId > 0);
-    saveParticipantsMutation.mutate({ orderId, ledgerId, participants: valid.map((p, i) => ({ userId: p.userId, role: p.role, sortOrder: i })) });
+    // 已保存的 + 新增的，合并保存
+    const newValid = participantsList.filter(p => p.userId > 0);
+    const all = [
+      ...savedParticipants.map((p, i) => ({ userId: p.userId, role: p.role, sortOrder: i })),
+      ...newValid.map((p, i) => ({ userId: p.userId, role: p.role, sortOrder: savedParticipants.length + i })),
+    ];
+    saveParticipantsMutation.mutate({ orderId, ledgerId, participants: all });
   };
 
   // 当前登录用户信息（用于备注权限控制）
@@ -1693,6 +1747,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     handleOpenParticipants={handleOpenParticipants}
                     handleAddParticipant={handleAddParticipant}
                     handleSaveParticipants={handleSaveParticipants}
+                    handleRemoveSaved={handleRemoveSaved}
+                    savedParticipants={savedParticipants}
                     participantsList={participantsList}
                     setParticipantsList={setParticipantsList}
                     ledgerMembers={ledgerMembers}
