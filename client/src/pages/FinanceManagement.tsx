@@ -211,6 +211,14 @@ function FinanceOrderCard({
   const isSettled = order.status === 'settled';
   const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
 
+  // 解析 display_config
+  const orderDc: Record<string, boolean> = (() => {
+    try {
+      if (!order.display_config) return {};
+      return typeof order.display_config === 'string' ? JSON.parse(order.display_config) : order.display_config;
+    } catch(e) { return {}; }
+  })();
+
   // 计算担保物数组
   let collateralAssets: { coin: string; qty: string }[] = [];
   try { if (order.collateral_assets) collateralAssets = JSON.parse(order.collateral_assets); } catch(e) {}
@@ -508,6 +516,17 @@ function FinanceOrderCard({
                   </span>
                 </div>
                 {/* 担保缺口计算弹窗（与资方担保缺口弹窗居中弹窗风格一致） */}
+                {/* 保证金率：担保物当前价値 ÷ 计息基数 x 100% */}
+                {orderDc.marginRate !== false && collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0 && (() => {
+                  const marginRatio = collateralValue / interestBaseNum;
+                  const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
+                  return (
+                    <div className="flex items-center justify-between mt-0.5">
+                      <span className="text-gray-400">保证金率</span>
+                      <span className="font-bold" style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</span>
+                    </div>
+                  );
+                })()}
                 {showCollateralInfo && (
                   <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowCollateralInfo(false)}>
                     <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
@@ -2209,6 +2228,18 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                                   </span>
                                 </div>
                               ) : null;
+                            })()}
+                            {/* 保证金率：担保物当前价値 ÷ 计息基数 x 100% */}
+                            {displayConfig.marginRate && formComputedCollateralValue !== null && formComputedCollateralValue > 0 && formData.interestBase && parseFloat(formData.interestBase) > 0 && (() => {
+                              const base = parseFloat(formData.interestBase);
+                              const marginRatio = formComputedCollateralValue / base;
+                              const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
+                              return (
+                                <div className="flex items-center justify-between mt-0.5">
+                                  <span className="text-gray-400 shrink-0">保证金率</span>
+                                  <span className="font-bold" style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</span>
+                                </div>
+                              );
                             })()}
                           {/* 收益分成区（右栏下半） */}
                           {displayConfig.profitShare && formData.showProfitShare && (
