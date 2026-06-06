@@ -15489,7 +15489,7 @@ ${klinesSummary}
         financeType: z.enum(['保本分成', '自负盈亏']).optional(),
         showProfitShare: z.boolean().optional(),
         commissionShare: z.string().optional(),
-        displayConfig: z.record(z.boolean()).optional(),
+        displayConfig: z.record(z.string(), z.boolean()).optional(),
         assetType: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -15566,7 +15566,7 @@ ${klinesSummary}
         financeType: z.enum(['保本分成', '自负盈亏']).optional(),
         showProfitShare: z.boolean().optional(),
         commissionShare: z.string().optional(),
-        displayConfig: z.record(z.boolean()).optional(),
+        displayConfig: z.record(z.string(), z.boolean()).optional(),
         assetType: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
