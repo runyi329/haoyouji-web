@@ -447,6 +447,9 @@ export default function LedgerSettings() {
 
  {/* */}
  <div className="bg-white mt-3">
+ {ledgerData?.type === 'custom_af' && (
+   <SettingItem label="融资付息订单管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/finance-unified${_viewAsSuffix}`)} />
+ )}
  <SettingItem 
  label={ledgerData?.type === 'opinion_book' ? '店铺名称' : ['diet', 'custom_ac'].includes(ledgerData?.type) ? '减肥账本名称' : '账本名称'} 
  value={ledgerData.name} 
@@ -702,9 +705,7 @@ export default function LedgerSettings() {
 
  {ledgerId !== 37 && <SettingItem label="图片查看" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/images`)} />}
  <SettingItem label={ledgerData?.type === 'diet' ? '减肥教练管理' : '账本管理员管理'} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/admin-management`)} />
- {ledgerData?.type === 'custom_af' && (
-   <SettingItem label="融资付息订单管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/finance-unified${_viewAsSuffix}`)} />
- )}
+ 
  {ledgerData?.type === 'custom_af' && (
    <SettingItem label="邮件模板管理" showIcon onClick={() => setLocation('/admin/email-templates')} />
  )}
