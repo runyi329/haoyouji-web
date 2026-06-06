@@ -14975,7 +14975,7 @@ ${klinesSummary}
         showProfitShare: z.boolean().optional(),
         commissionShare: z.string().optional(),
         collateralAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
-        displayConfig: z.record(z.string(), z.boolean()).optional(),
+        displayConfig: z.record(z.string(), z.union([z.boolean(), z.number()])).optional(),
         assetType: z.enum(['stock', 'crypto', '']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -15040,7 +15040,7 @@ ${klinesSummary}
         showProfitShare: z.boolean().optional(),
         commissionShare: z.string().optional(),
         collateralAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
-        displayConfig: z.record(z.string(), z.boolean()).optional(),
+        displayConfig: z.record(z.string(), z.union([z.boolean(), z.number()])).optional(),
         assetType: z.enum(['stock', 'crypto', '']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -15489,7 +15489,7 @@ ${klinesSummary}
         financeType: z.enum(['保本分成', '自负盈亏']).optional(),
         showProfitShare: z.boolean().optional(),
         commissionShare: z.string().optional(),
-        displayConfig: z.record(z.string(), z.boolean()).optional(),
+        displayConfig: z.record(z.string(), z.union([z.boolean(), z.number()])).optional(),
         assetType: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -15566,7 +15566,7 @@ ${klinesSummary}
         financeType: z.enum(['保本分成', '自负盈亏']).optional(),
         showProfitShare: z.boolean().optional(),
         commissionShare: z.string().optional(),
-        displayConfig: z.record(z.string(), z.boolean()).optional(),
+        displayConfig: z.record(z.string(), z.union([z.boolean(), z.number()])).optional(),
         assetType: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
