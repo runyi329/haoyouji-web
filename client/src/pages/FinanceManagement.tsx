@@ -213,7 +213,7 @@ function FinanceOrderCard({
   const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
 
   // 解析 display_config
-  const orderDc: Record<string, boolean> = (() => {
+  const orderDc: Record<string, boolean | number> = (() => {
     try {
       if (!order.display_config) return {};
       return typeof order.display_config === 'string' ? JSON.parse(order.display_config) : order.display_config;
@@ -521,18 +521,24 @@ function FinanceOrderCard({
                 {orderDc.marginRate !== false && collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0 && (() => {
                   const marginRatio = collateralValue / interestBaseNum;
                   const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
+                  // 预警阈值判断
+                  const alertThreshold = typeof orderDc.marginAlertThreshold === 'number' ? orderDc.marginAlertThreshold : null;
+                  const isAlerting = alertThreshold !== null && (marginRatio * 100) < alertThreshold;
                   return (
                     <>
                       <div className="flex items-center justify-between mt-0.5">
                         <div className="flex items-center gap-1">
                           <span className="text-gray-400">保证金率</span>
+                          {isAlerting && (
+                            <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-white text-[8px] font-bold flex-shrink-0 animate-pulse" style={{ background: '#EF4444', lineHeight: 1 }}>❗</span>
+                          )}
                           <button
                             onClick={(e) => { e.stopPropagation(); setShowMarginInfo(true); }}
                             className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-white text-[9px] font-bold flex-shrink-0"
                             style={{ background: '#9CA3AF', lineHeight: 1 }}
                           >?</button>
                         </div>
-                        <span className="font-bold" style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</span>
+                        <span className="font-bold" style={{ color: isAlerting ? '#EF4444' : marginColor }}>{(marginRatio * 100).toFixed(1)}%{isAlerting ? ' ⚠' : ''}</span>
                       </div>
                       {showMarginInfo && (
                         <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowMarginInfo(false)}>
@@ -1068,7 +1074,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   const urlSearchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
   const viewAsUserId = urlSearchParams.get('viewAs') ? parseInt(urlSearchParams.get('viewAs')!) : undefined;
 
-  const DEFAULT_DISPLAY_CONFIG: Record<string, boolean> = {
+  const DEFAULT_DISPLAY_CONFIG: Record<string, boolean | number> = {
     buyPrice: true,
     buyValue: true,
     interestBase: true,
@@ -1088,7 +1094,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     aiIcon: false,
     assetType: true,
   };
-  const [displayConfig, setDisplayConfig] = useState<Record<string, boolean>>(DEFAULT_DISPLAY_CONFIG);
+  const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | number>>(DEFAULT_DISPLAY_CONFIG);
+  const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
 
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<any>(null);
@@ -1272,7 +1279,15 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       try {
         const dc = typeof order.display_config === 'string' ? JSON.parse(order.display_config) : order.display_config;
         setDisplayConfig(prev => ({ ...prev, ...dc }));
-      } catch(e) {}
+        // 加载保证金率预警阈值
+        if (dc.marginAlertThreshold !== undefined && dc.marginAlertThreshold !== null) {
+          setMarginAlertThreshold(String(dc.marginAlertThreshold));
+        } else {
+          setMarginAlertThreshold('');
+        }
+      } catch(e) { setMarginAlertThreshold(''); }
+    } else {
+      setMarginAlertThreshold('');
     }
     setSelectedUserId(order.user_id || null);
     const u = realMembers.find((m: any) => m.userId === order.user_id);
@@ -1315,9 +1330,10 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         financeType: formData.financeType,
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
-        displayConfig: Object.fromEntries(
-          Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')
-        ) as Record<string, boolean>,
+        displayConfig: {
+          ...Object.fromEntries(Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')),
+          ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
+        } as Record<string, boolean>,
       });
     } else {
       createMutation.mutate({
@@ -1343,9 +1359,10 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         financeType: formData.financeType,
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
-        displayConfig: Object.fromEntries(
-          Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')
-        ) as Record<string, boolean>,
+        displayConfig: {
+          ...Object.fromEntries(Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')),
+          ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
+        } as Record<string, boolean>,
       });
     }
   }
@@ -2061,19 +2078,42 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                           { key: 'collateral', label: '担保缺口' },
                           { key: 'marginRate', label: '保证金率' },
                         ].map(({ key, label }) => (
-                          <div key={key} className="flex items-center justify-between">
-                            <span className="text-sm text-gray-600">{label}</span>
-                            <button
-                              type="button"
-                              onClick={() => setDisplayConfig(c => ({ ...c, [key]: !c[key] }))}
-                              className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                                displayConfig[key] ? 'bg-blue-500' : 'bg-gray-200'
-                              }`}
-                            >
-                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                                displayConfig[key] ? 'translate-x-5' : 'translate-x-1'
-                              }`} />
-                            </button>
+                          <div key={key}>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-gray-600">{label}</span>
+                              <button
+                                type="button"
+                                onClick={() => setDisplayConfig(c => ({ ...c, [key]: !c[key] }))}
+                                className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                                  displayConfig[key] ? 'bg-blue-500' : 'bg-gray-200'
+                                }`}
+                              >
+                                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                                  displayConfig[key] ? 'translate-x-5' : 'translate-x-1'
+                                }`} />
+                              </button>
+                            </div>
+                            {/* 保证金率预警阈值输入框（仅在保证金率开关打开时显示） */}
+                            {key === 'marginRate' && displayConfig.marginRate && (
+                              <div className="mt-1.5 flex items-center gap-2 pl-1">
+                                <span className="text-xs text-gray-400 shrink-0">低于</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="200"
+                                  step="1"
+                                  value={marginAlertThreshold}
+                                  onChange={e => setMarginAlertThreshold(e.target.value)}
+                                  placeholder="如：80"
+                                  className="w-16 text-xs text-center border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-orange-400"
+                                  style={{ color: '#D97706' }}
+                                />
+                                <span className="text-xs text-gray-400 shrink-0">% 时预警</span>
+                                {marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 && (
+                                  <span className="text-xs text-orange-500 font-medium">已设置</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -2308,10 +2348,17 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                               const base = parseFloat(formData.interestBase);
                               const marginRatio = formComputedCollateralValue / base;
                               const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
+                              const previewAlertThreshold = marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? parseFloat(marginAlertThreshold) : null;
+                              const previewIsAlerting = previewAlertThreshold !== null && (marginRatio * 100) < previewAlertThreshold;
                               return (
                                 <div className="flex items-center justify-between mt-0.5">
-                                  <span className="text-gray-400 shrink-0">保证金率</span>
-                                  <span className="font-bold" style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</span>
+                                  <div className="flex items-center gap-1">
+                                    <span className="text-gray-400 shrink-0">保证金率</span>
+                                    {previewIsAlerting && (
+                                      <span className="inline-flex items-center justify-center w-3 h-3 rounded-full text-white text-[7px] font-bold flex-shrink-0" style={{ background: '#EF4444', lineHeight: 1 }}>❗</span>
+                                    )}
+                                  </div>
+                                  <span className="font-bold" style={{ color: previewIsAlerting ? '#EF4444' : marginColor }}>{(marginRatio * 100).toFixed(1)}%{previewIsAlerting ? ' ⚠' : ''}</span>
                                 </div>
                               );
                             })()}
