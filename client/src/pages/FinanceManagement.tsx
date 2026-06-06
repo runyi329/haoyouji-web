@@ -2033,7 +2033,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     {/* 左栏：融资资产 */}
                     <div className="flex-1 p-3 pr-2">
                       <div className="h-4 flex items-center gap-1" style={{ color: '#3B82F6' }}>
-                        <span className="text-xs font-medium">融资资产（{formData.financeType === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'}）</span>
+                        <span className="text-xs font-medium">融资资产</span>
+                        <span className="text-[10px]" style={{ color: '#9CA3AF' }}>（{formData.financeType === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'}）</span>
                         {displayConfig.aiIcon && <span className="text-[10px] px-1 rounded" style={{ backgroundColor: '#EEF2FF', color: '#6366F1' }}>AI</span>}
                       </div>
                       <div className="min-h-7 flex flex-col justify-center mt-0.5">
