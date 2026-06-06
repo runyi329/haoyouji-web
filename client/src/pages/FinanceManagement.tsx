@@ -2023,7 +2023,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
 
               {/* 实时预览卡片 - 两栏大数字样式（与前端订单卡片一致） */}
               {showForm && (
-                <div className="px-5 pb-4">
+                <div>
                   <div className="text-xs font-medium text-gray-400 mb-2">实时预览</div>
                   <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#E8EFFF', background: '#FFFFFF' }}>
                   {/* 顶部色条 */}
