@@ -595,25 +595,26 @@ function FinanceOrderCard({
                 )}
               </>
             )}
+            {/* 收益分成（右栏下半） */}
+            {orderDc.profitShare !== false && order.show_profit_share !== 0 && order.show_profit_share !== false && order.show_profit_share !== null && (
+              <>
+                <div className="flex items-center justify-between mt-0.5">
+                  <span className="text-gray-400">收益分成</span>
+                  <span className="font-medium" style={{ color: '#3B82F6' }}>已开启</span>
+                </div>
+                {order.commission_share && orderDc.commissionShare !== false && (
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="text-gray-400">佣金分成</span>
+                    <span className="font-medium" style={{ color: '#4B5563' }}>{order.commission_share}</span>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* 收益分成区 */}
-      {order.show_profit_share !== 0 && order.show_profit_share !== false && order.show_profit_share !== null && (
-        <div className="border-t px-4 py-2" style={{ borderColor: '#E8EFFF' }}>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-400">收益分成</span>
-            <span className="font-medium" style={{ color: '#3B82F6' }}>已开启</span>
-          </div>
-          {order.commission_share && (
-            <div className="flex items-center justify-between text-xs mt-0.5">
-              <span className="text-gray-400">佣金分成</span>
-              <span className="font-medium" style={{ color: '#4B5563' }}>{order.commission_share}</span>
-            </div>
-          )}
-        </div>
-      )}
+
 
       {/* 内部备注 */}
       {order.admin_note && (
