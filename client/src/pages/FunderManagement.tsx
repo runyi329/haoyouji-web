@@ -160,7 +160,7 @@ function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, i
   const [editValue, setEditValue] = useState('');
   const [saving, setSaving] = useState(false);
   const updateNote = trpc.ledger.funderUpdatePublicNote.useMutation();
-  const canEdit = (note: NoteItem) => isAdmin || (currentUser && note.userId === currentUser.id) || !note.userId;
+  const canEdit = (note: NoteItem) => isAdmin || (currentUser && note.userId && note.userId === currentUser.id);
   const saveNotes = async (newNotes: NoteItem[]) => {
     setSaving(true);
     try {
