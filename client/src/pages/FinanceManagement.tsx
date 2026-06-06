@@ -472,14 +472,102 @@ function FinanceOrderCard({
                 <span className="font-medium" style={{ color: '#4B5563' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
               </div>
             )}
-            {/* 风险敞口 */}
+            {/* 担保缺口 */}
             {collateralAssets.length > 0 && (
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">风险敞口</span>
-                <span className="font-medium" style={{ color: isSufficient ? '#4B5563' : '#16A34A' }}>
-                  {isSufficient ? '充足' : `-${(Math.abs(exposure)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
-                </span>
-              </div>
+              <>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-400">担保缺口</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const modal = document.getElementById(`fin_gap_modal_${order.id}`);
+                        if (modal) modal.style.display = 'flex';
+                      }}
+                      className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-white text-[9px] font-bold flex-shrink-0"
+                      style={{ background: '#9CA3AF', lineHeight: 1 }}
+                    >
+                      ?
+                    </button>
+                  </div>
+                  <span className="font-medium" style={{ color: isSufficient ? '#4B5563' : '#EF4444' }}>
+                    {isSufficient ? '超过100%' : `${exposure.toLocaleString(undefined, { maximumFractionDigits: 0 })} U`}
+                  </span>
+                </div>
+                {/* 担保缺口计算弹窗 */}
+                <div
+                  id={`fin_gap_modal_${order.id}`}
+                  style={{ display: 'none', position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.45)', alignItems: 'flex-end', justifyContent: 'center' }}
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget) (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                >
+                  <div style={{ width: '100%', background: '#fff', borderRadius: '16px 16px 0 0', padding: '20px 16px 32px' }}>
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="font-semibold text-sm" style={{ color: '#1A2340' }}>担保缺口计算过程</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const modal = document.getElementById(`fin_gap_modal_${order.id}`);
+                          if (modal) modal.style.display = 'none';
+                        }}
+                        className="text-gray-400 text-lg font-light leading-none"
+                        style={{ lineHeight: 1 }}
+                      >x</button>
+                    </div>
+                    <div className="space-y-2 text-sm" style={{ color: '#6B7280' }}>
+                      {/* 当前市值 */}
+                      {order.coin !== 'USDT' && liveP !== null && (
+                        <div className="p-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                          <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>当前市值 = 持币数量 x 实时币价</div>
+                          <div style={{ color: '#1F2937' }}>{qty} {order.coin} x {liveP.toLocaleString(undefined, { maximumFractionDigits: 2 })} U = <span style={{ color: '#D97706', fontWeight: 600 }}>{(currentValue ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                        </div>
+                      )}
+                      {/* 担保价值 */}
+                      <div className="p-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                        <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>担保价值 = 担保数量 x 实时币价</div>
+                        {collateralAssets.map((a, i) => {
+                          const iv = collateralItemValues[i];
+                          return iv !== null ? (
+                            <div key={i} style={{ color: '#1F2937' }}>{parseFloat(a.qty)} {a.coin} x {(iv / parseFloat(a.qty)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U = <span style={{ color: '#D97706', fontWeight: 600 }}>{iv.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                          ) : null;
+                        })}
+                        {collateralAssets.length > 1 && <div style={{ color: '#1F2937', borderTop: '1px solid #E5E7EB', marginTop: 4, paddingTop: 4, fontWeight: 600 }}>合计 <span style={{ color: '#D97706' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>}
+                      </div>
+                      {/* 买入价值/计息基数 */}
+                      <div className="p-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                        <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>计息基数 (买入价值)</div>
+                        <div style={{ color: '#1F2937' }}><span style={{ color: '#D97706', fontWeight: 600 }}>{interestBaseNum.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div>
+                      </div>
+                      {/* 待付利息 */}
+                      <div className="p-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                        <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>待付利息</div>
+                        <div style={{ color: '#1F2937' }}><span style={{ color: '#EF4444', fontWeight: 600 }}>{accrued.toFixed(2)} {interestUnit}</span></div>
+                      </div>
+                      {/* 已付利息 */}
+                      {totalPaid > 0 && (
+                        <div className="p-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                          <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>已付利息</div>
+                          <div style={{ color: '#1F2937' }}><span style={{ color: '#059669', fontWeight: 600 }}>{totalPaid.toFixed(2)} {interestUnit}</span></div>
+                        </div>
+                      )}
+                      {/* 最终结果 */}
+                      <div className="p-3 rounded-lg" style={{ background: isSufficient ? '#F0FDF4' : '#FEF2F2', border: `1px solid ${isSufficient ? '#BBF7D0' : '#FECACA'}` }}>
+                        <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>
+                          {order.coin === 'USDT'
+                            ? '担保缺口 = 担保价值 - 计息基数 - 待付利息 + 已付利息'
+                            : '担保缺口 = 当前市值 + 担保价值 - 计息基数 - 待付利息 + 已付利息'}
+                        </div>
+                        <div style={{ color: isSufficient ? '#059669' : '#EF4444', fontWeight: 700, fontSize: '15px' }}>
+                          {order.coin === 'USDT'
+                            ? `${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - ${interestBaseNum.toLocaleString(undefined, { maximumFractionDigits: 2 })} - ${accrued.toFixed(2)} + ${totalPaid.toFixed(2)} = ${exposure.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`
+                            : `${(currentValue ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} + ${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} - ${interestBaseNum.toLocaleString(undefined, { maximumFractionDigits: 2 })} - ${accrued.toFixed(2)} + ${totalPaid.toFixed(2)} = ${exposure.toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </div>
