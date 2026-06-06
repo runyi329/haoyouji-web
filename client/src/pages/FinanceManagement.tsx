@@ -197,6 +197,7 @@ function FinanceOrderCard({
 }: FinanceOrderCardProps) {
   const [showStatusSheet, setShowStatusSheet] = useState(false);
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
+  const [showMarginInfo, setShowMarginInfo] = useState(false);
   // 每张卡片独立调用 useAccruedInterest（Hook 必须在组件顶层）
   const accrued = useAccruedInterest(
     order.status === 'active' ? order.interest_base : null,
@@ -521,10 +522,82 @@ function FinanceOrderCard({
                   const marginRatio = collateralValue / interestBaseNum;
                   const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
                   return (
-                    <div className="flex items-center justify-between mt-0.5">
-                      <span className="text-gray-400">保证金率</span>
-                      <span className="font-bold" style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</span>
-                    </div>
+                    <>
+                      <div className="flex items-center justify-between mt-0.5">
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400">保证金率</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setShowMarginInfo(true); }}
+                            className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-white text-[9px] font-bold flex-shrink-0"
+                            style={{ background: '#9CA3AF', lineHeight: 1 }}
+                          >?</button>
+                        </div>
+                        <span className="font-bold" style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</span>
+                      </div>
+                      {showMarginInfo && (
+                        <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowMarginInfo(false)}>
+                          <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="text-sm font-bold" style={{ color: '#1A2340' }}>保证金率计算说明</span>
+                              <button onClick={() => setShowMarginInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
+                            </div>
+                            <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
+                              {/* 公式说明 */}
+                              <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 公式</div>
+                                <div>保证金率 = 担保物当前市值 ÷ 计息基数 × 100%</div>
+                                <div className="mt-1 font-mono">
+                                  <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} U ÷ {interestBaseNum.toFixed(2)} U × 100% = </span>
+                                  <strong style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</strong>
+                                </div>
+                              </div>
+                              {/* 担保物明细 */}
+                              <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 担保物当前市值</div>
+                                {collateralAssets.map((a, idx) => {
+                                  const itemVal = collateralItemValues[idx];
+                                  return (
+                                    <div key={idx} className="mt-1 flex justify-between">
+                                      <span className="font-mono" style={{ color: '#6B7280' }}>{a.qty} {a.coin}</span>
+                                      {itemVal !== null
+                                        ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{(itemVal as number).toFixed(2)} U</span>
+                                        : <span className="font-mono" style={{ color: '#D1D5DB' }}>暂无实时价</span>
+                                      }
+                                    </div>
+                                  );
+                                })}
+                                {collateralAssets.length > 1 && (
+                                  <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
+                                    合计 {collateralValue.toFixed(2)} U
+                                  </div>
+                                )}
+                              </div>
+                              {/* 评估标准 */}
+                              <div className="p-2.5 rounded-lg" style={{ background: marginRatio >= 1 ? '#F0FDF4' : marginRatio >= 0.5 ? '#FFFBEB' : '#FFF1F1' }}>
+                                <div className="font-semibold mb-1" style={{ color: marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626' }}>③ 风险评估</div>
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <span style={{ color: '#16A34A' }}>≥ 100%</span>
+                                    <span>担保充足，风险可控</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span style={{ color: '#D97706' }}>50% ~ 100%</span>
+                                    <span>担保偏低，建议补充</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span style={{ color: '#DC2626' }}>&lt; 50%</span>
+                                    <span>担保严重不足，高风险</span>
+                                  </div>
+                                </div>
+                                <div className="mt-2 font-semibold" style={{ color: marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626' }}>
+                                  当前状态：{marginRatio >= 1 ? '担保充足' : marginRatio >= 0.5 ? '担保偏低，建议补充' : '担保严重不足，高风险'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   );
                 })()}
                 {showCollateralInfo && (
