@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-06
+// 生成时间：2026-06-07
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -6945,5 +6945,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-06T09:09:56Z", type: "fix", cleanMessage: "displayConfig schema 支持 number 类型，修复 marginAlertThreshold 保存报错" },
     { date: "2026-06-06T09:18:03Z", type: "fix", cleanMessage: "修正保证金率计算公式 = (担保物市值+浮动盈亏-应付利息+已付利息)÷计息基数×100%" },
     { date: "2026-06-06T09:29:50Z", type: "fix", cleanMessage: "保证金率浮动盈亏改用买入价值(数量×买入币价)而非计息基数" },
+    { date: "2026-06-06T11:14:00Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-06T11:21:47Z", type: "feat", cleanMessage: "借方订单参与方功能 - 管理员可添加参与方，被添加者可看到绿色边框订单" },
+    { date: "2026-06-06T12:45:05Z", type: "fix", cleanMessage: "参与方面板保存后正确关闭，再次打开时强制从数据库重新加载" },
+    { date: "2026-06-06T12:51:29Z", type: "feat", cleanMessage: "参与方按钮显示数量徽章，面板顶部显示已保存状态" },
   ],
 };
