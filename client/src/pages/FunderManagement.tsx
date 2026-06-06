@@ -1781,7 +1781,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                 <div className="text-gray-400 text-sm">暂无订单</div>
               </div>
             ) : (
-            <div className="space-y-3 -mx-4">
+            <div className="space-y-3">
               {filteredOrders.map((order: any) => {
                 const isInvited = !!order.participantInfo;
                 return (
@@ -2420,8 +2420,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
               </div>
 
               {/* 实时预览卡片 - 两栏大数字样式（与前端订单卡片一致） */}
-              <div className="-mx-5">
-                <div className="text-xs font-medium text-gray-400 mb-2 px-5">实时预览</div>
+              <div>
+                <div className="text-xs font-medium text-gray-400 mb-2">实时预览</div>
                 <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#E8EFFF', background: '#FFFFFF' }}>
                   {/* 顶部色条 */}
                   <div className="h-1" style={{ background: `linear-gradient(90deg, ${COIN_COLORS[formData.coin] || '#3B82F6'}, ${(COIN_COLORS[formData.coin] || '#3B82F6')}55)` }} />
