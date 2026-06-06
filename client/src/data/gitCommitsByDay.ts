@@ -6940,5 +6940,10 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-06T03:21:08Z", type: "fix", cleanMessage: "financeCreate/financeUpdate displayConfig schema z.record(z.boolean()) → z.record(z.string(), z.boolean())，修复保存时 invalid_key 报错" },
     { date: "2026-06-06T03:48:20Z", type: "fix", cleanMessage: "收益分成移入右栏下半部分（担保缺口行之后），与实时预览和前端一致" },
     { date: "2026-06-06T03:55:50Z", type: "feat", cleanMessage: "保证金率旁添加问号弹窗，详细说明计算公式（①公式 ②担保物明细 ③风险评估）" },
+    { date: "2026-06-06T06:55:01Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-06T09:00:22Z", type: "feat", cleanMessage: "保证金率预警阈值设置 - 编辑页可设置低于X%时预警，卡片和预览同步显示预警状态" },
+    { date: "2026-06-06T09:09:56Z", type: "fix", cleanMessage: "displayConfig schema 支持 number 类型，修复 marginAlertThreshold 保存报错" },
+    { date: "2026-06-06T09:18:03Z", type: "fix", cleanMessage: "修正保证金率计算公式 = (担保物市值+浮动盈亏-应付利息+已付利息)÷计息基数×100%" },
+    { date: "2026-06-06T09:29:50Z", type: "fix", cleanMessage: "保证金率浮动盈亏改用买入价值(数量×买入币价)而非计息基数" },
   ],
 };
