@@ -1246,9 +1246,12 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     { value: 'broker', label: '中间人', color: '#059669' },
   ];
   const saveParticipantsMutation = trpc.ledger.financeSaveOrderParticipants.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (_, variables) => {
       toast.success('参与方配置已保存');
       setShowParticipantsPanel(null);
+      setParticipantsList([]);
+      // 清除参与方缓存，确保下次打开时重新从数据库加载
+      trpcUtils.ledger.financeGetOrderParticipants.invalidate({ orderId: variables.orderId, ledgerId });
       trpcUtils.ledger.financeGetOrders.invalidate({ ledgerId });
     },
     onError: (err) => toast.error(err.message),
@@ -1256,8 +1259,11 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   const handleOpenParticipants = async (orderId: number) => {
     if (showParticipantsPanel === orderId) { setShowParticipantsPanel(null); return; }
     setShowParticipantsPanel(orderId);
+    setParticipantsList([]);
     setParticipantsLoading(true);
     try {
+      // 强制绕过缓存，每次打开都从数据库重新加载
+      await trpcUtils.ledger.financeGetOrderParticipants.invalidate({ orderId, ledgerId });
       const result = await trpcUtils.ledger.financeGetOrderParticipants.fetch({ orderId, ledgerId });
       const mapped = (result.participants || []).map((p: any) => ({
         userId: p.user_id,
