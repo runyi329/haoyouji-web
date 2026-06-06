@@ -2429,8 +2429,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                   <div className="flex" style={{ minHeight: '100px' }}>
                     {/* 左栏：持有资产 */}
                     <div className="flex-1 p-3 pr-2">
-                      <div className="h-4 flex items-center" style={{ color: '#3B82F6' }}>
+                      <div className="h-4 flex items-center gap-1" style={{ color: '#3B82F6' }}>
                         <span className="text-xs font-medium">持有资产</span>
+                        {displayConfig.aiIcon && <span className="text-[10px] px-1 rounded" style={{ backgroundColor: '#EEF2FF', color: '#6366F1' }}>AI</span>}
                       </div>
                       <div className="min-h-7 flex flex-col justify-center mt-0.5">
                         <div className="flex items-baseline gap-1 flex-wrap">

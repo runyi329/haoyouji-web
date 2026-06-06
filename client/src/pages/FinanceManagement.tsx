@@ -2030,10 +2030,11 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                   <div className="h-1" style={{ background: `linear-gradient(90deg, ${COIN_COLORS[formData.coin] || '#3B82F6'}, ${(COIN_COLORS[formData.coin] || '#3B82F6')}55)` }} />
                   {/* 两栏主体 */}
                   <div className="flex" style={{ minHeight: '100px' }}>
-                    {/* 左栏：持有资产 */}
+                    {/* 左栏：融资资产 */}
                     <div className="flex-1 p-3 pr-2">
-                      <div className="h-4 flex items-center" style={{ color: '#3B82F6' }}>
-                        <span className="text-xs font-medium">融资资产（自负盈亏 100%部分）</span>
+                      <div className="h-4 flex items-center gap-1" style={{ color: '#3B82F6' }}>
+                        <span className="text-xs font-medium">融资资产（{formData.financeType === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'}）</span>
+                        {displayConfig.aiIcon && <span className="text-[10px] px-1 rounded" style={{ backgroundColor: '#EEF2FF', color: '#6366F1' }}>AI</span>}
                       </div>
                       <div className="min-h-7 flex flex-col justify-center mt-0.5">
                         <div className="flex items-baseline gap-1 flex-wrap">
@@ -2206,7 +2207,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                                 gap = marketValue + formComputedCollateralValue - buyValue - unpaidInterest + totalPaid;
                               }
                               return gap !== null ? (
-                                <div className="flex items-center justify-between border-t pt-1 mt-0.5" style={{ borderColor: '#E8EFFF' }}>
+                                <div className="flex items-center justify-between mt-0.5">
                                   <span className="text-gray-400 shrink-0">担保缺口</span>
                                   <span className="font-medium" style={{ color: gap >= 0 ? '#4B5563' : '#EF4444' }}>
                                     {gap >= 0 ? '超过100%' : `${gap.toLocaleString(undefined, { maximumFractionDigits: 0 })} U`}
@@ -2214,6 +2215,24 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                                 </div>
                               ) : null;
                             })()}
+                          {/* 收益分成区（右栏下半） */}
+                          {displayConfig.profitShare && formData.showProfitShare && (
+                            <>
+                              <div className="border-t mt-1 pt-1" style={{ borderColor: '#E8EFFF' }}>
+                                <div className="text-[10px] font-medium mb-0.5" style={{ color: '#3B82F6' }}>收益分成区</div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-400 shrink-0">收益分成</span>
+                                  <span className="font-medium" style={{ color: '#3B82F6' }}>已开启</span>
+                                </div>
+                                {displayConfig.commissionShare && formData.commissionShare && (
+                                  <div className="flex items-center justify-between mt-0.5">
+                                    <span className="text-gray-400 shrink-0">佣金分成</span>
+                                    <span className="font-medium" style={{ color: '#4B5563' }}>{formData.commissionShare}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
                           </div>
                         </div>
                       ) : (
@@ -2223,27 +2242,6 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                       )}
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* 预览：收益分成区 */}
-            {displayConfig.profitShare && formData.showProfitShare && (
-              <div className="mx-4 mt-2 rounded-xl overflow-hidden" style={{ border: '1px solid #E8EFFF' }}>
-                <div className="px-3 py-2 border-b" style={{ borderColor: '#E8EFFF', backgroundColor: '#F8FBFF' }}>
-                  <span className="text-xs font-medium" style={{ color: '#3B82F6' }}>右栏下半：收益分成区</span>
-                </div>
-                <div className="px-3 py-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-400">收益分成</span>
-                    <span className="font-medium" style={{ color: '#3B82F6' }}>已开启</span>
-                  </div>
-                  {displayConfig.commissionShare && formData.commissionShare && (
-                    <div className="flex items-center justify-between text-xs mt-0.5">
-                      <span className="text-gray-400">佣金分成</span>
-                      <span className="font-medium" style={{ color: '#4B5563' }}>{formData.commissionShare}</span>
-                    </div>
-                  )}
                 </div>
               </div>
             )}
