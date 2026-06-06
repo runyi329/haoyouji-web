@@ -274,7 +274,9 @@ function FinanceOrderCard({
   const interestBaseNum = order.interest_base ? Number(order.interest_base) : totalU;
   const liveP = livePrices[order.coin] ?? null;
   const currentValue = liveP !== null ? liveP * qty : null;
-  const floatPnl = currentValue !== null ? currentValue - interestBaseNum : null;
+  // 浮动盈亏 = 当前持仓市值(数量×当前币价) - 买入价值(数量×买入币价)
+  const buyValue = totalU; // qty * buy_price，即买入价值
+  const floatPnl = currentValue !== null ? currentValue - buyValue : null;
   const exposure = floatPnl !== null
     ? collateralValue + floatPnl - accrued + totalPaid
     : collateralValue - accrued + totalPaid;
@@ -2359,7 +2361,11 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                               const previewCoinQty = parseFloat(formData.buyQuantity || '0');
                               const previewCoinPrice = formLivePrices[formData.coin] || 0;
                               const previewMarketValue = previewCoinQty * previewCoinPrice;
-                              const previewBuyValue = parseFloat(formData.amount || '0');
+                              // 买入价值 = 数量 × 买入币价（即用户输入的买入币价）
+                              const previewBuyPrice = parseFloat(formData.buyPrice || '0');
+                              const previewBuyValue = previewCoinQty > 0 && previewBuyPrice > 0
+                                ? previewCoinQty * previewBuyPrice
+                                : parseFloat(formData.amount || '0');
                               const previewFloatPnl = formData.coin === 'USDT' ? 0 : (previewCoinPrice > 0 ? previewMarketValue - previewBuyValue : null);
                               const previewEffective = previewFloatPnl !== null
                                 ? formComputedCollateralValue + previewFloatPnl - previewAccrued + previewTotalPaid
