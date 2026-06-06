@@ -2646,6 +2646,24 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                                     </div>
                                   );
                                 })()}
+                                {/* 收益分成区（右栏下半） */}
+                                {displayConfig.profitShare && formData.showProfitShare && (
+                                  <>
+                                    <div className="border-t mt-1 pt-1" style={{ borderColor: '#E8EFFF' }}>
+                                      <div className="text-[10px] font-medium mb-0.5" style={{ color: '#3B82F6' }}>收益分成区</div>
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-gray-400 shrink-0">收益分成</span>
+                                        <span className="font-medium" style={{ color: '#3B82F6' }}>已开启</span>
+                                      </div>
+                                      {displayConfig.commissionShare && formData.commissionShare && (
+                                        <div className="flex items-center justify-between mt-0.5">
+                                          <span className="text-gray-400 shrink-0">佣金分成</span>
+                                          <span className="font-medium" style={{ color: '#4B5563' }}>{formData.commissionShare}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
                               </div>
                             </div>
                           );
@@ -2657,21 +2675,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                       )}
                     </div>
                   </div>
-                  {/* 收益分成区 */}
-                  {displayConfig.profitShare && formData.showProfitShare && (
-                    <div className="border-t px-3 py-2" style={{ borderColor: '#E8EFFF' }}>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-gray-400">收益分成</span>
-                        <span className="font-medium" style={{ color: '#3B82F6' }}>已开启</span>
-                      </div>
-                      {displayConfig.commissionShare && formData.commissionShare && (
-                        <div className="flex items-center justify-between text-xs mt-0.5">
-                          <span className="text-gray-400">佣金分成</span>
-                          <span className="font-medium" style={{ color: '#4B5563' }}>{formData.commissionShare}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
