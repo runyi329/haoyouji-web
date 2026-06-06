@@ -370,6 +370,7 @@ function FunderOrderCard({
 }: FunderOrderCardProps) {
   const [showInterestTip, setShowInterestTip] = useState(false);
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
+  const [showStatusSheet, setShowStatusSheet] = useState(false);
   const tipBtnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
   const accrued = useAccruedInterestFunder(
@@ -381,7 +382,7 @@ function FunderOrderCard({
   const statusLabel = STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status;
   const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
   const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
-  const isSettled = String(order.admin_note || '').includes('[已结清]');
+  const isSettled = order.status === 'settled';
   const rateStr = String(isInvited ? (order.participantInfo?.commissionRate || '') : (order.interest_rate_annual || ''));
   const isNegRate = rateStr.startsWith('-');
   const rateAbs = isNegRate ? parseFloat(rateStr.slice(1)).toFixed(0) : (rateStr ? parseFloat(rateStr).toFixed(0) : '');
@@ -496,9 +497,19 @@ function FunderOrderCard({
               {order.asset_type === 'stock' ? '股票' : '数字币'}
             </span>
           )}
-          <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: `${statusColor}15`, color: statusColor }}>
-            {statusLabel}
-          </span>
+          {isAdmin ? (
+            <button
+              onClick={() => setShowStatusSheet(true)}
+              className="text-xs px-1.5 py-0.5 rounded-full font-medium transition-opacity hover:opacity-70"
+              style={{ backgroundColor: `${statusColor}15`, color: statusColor }}
+            >
+              {statusLabel}
+            </button>
+          ) : (
+            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: `${statusColor}15`, color: statusColor }}>
+              {statusLabel}
+            </span>
+          )}
           {isInvited && (
             <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#ECFDF5', color: '#059669', border: '1px solid #A7F3D0' }}>
               受邀
@@ -525,23 +536,8 @@ function FunderOrderCard({
               参与方{order.participantCount > 0 ? ` ${order.participantCount}` : ''}
             </button>
           )}
-          <button
-            title={isSettled ? '取消已结清标记' : '标记已结清'}
-            onClick={() => {
-              const note = String(order.admin_note || '');
-              const newNote = isSettled ? note.replace('[已结清]', '').trim() : (note ? note + ' [已结清]' : '[已结清]');
-              updateMutation.mutate({ id: order.id, ledgerId, adminNote: newNote });
-            }}
-            className="px-2 py-1 text-xs rounded-lg font-medium transition-colors"
-            style={{ backgroundColor: isSettled ? '#FEE2E2' : '#F3F4F6', color: isSettled ? '#DC2626' : '#9CA3AF' }}
-          >
-            结清
-          </button>
           <button onClick={() => handleOpenEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
             <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={() => handleDelete(order.id)} className="p-1.5 ml-2 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors">
-            <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -1057,6 +1053,50 @@ function FunderOrderCard({
           membersData={membersData as any[]}
         />
       </div>
+
+      {/* 状态操作底部弹窗 */}
+      {showStatusSheet && (
+        <div className="fixed inset-0 z-[300] flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setShowStatusSheet(false)}>
+          <div className="bg-white rounded-t-2xl w-full max-w-md px-5 pt-5 pb-8" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
+            <div className="text-sm font-semibold text-gray-700 mb-4 text-center">订单操作</div>
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  updateMutation.mutate({ id: order.id, ledgerId, status: 'active' });
+                  setShowStatusSheet(false);
+                }}
+                className="w-full py-3 rounded-xl text-sm font-medium transition-colors"
+                style={{ backgroundColor: order.status === 'active' ? '#DCFCE7' : '#F3F4F6', color: order.status === 'active' ? '#16A34A' : '#374151' }}
+              >
+                持有中{order.status === 'active' ? '（当前）' : ''}
+              </button>
+              <button
+                onClick={() => {
+                  updateMutation.mutate({ id: order.id, ledgerId, status: 'settled' });
+                  setShowStatusSheet(false);
+                }}
+                className="w-full py-3 rounded-xl text-sm font-medium transition-colors"
+                style={{ backgroundColor: order.status === 'settled' ? '#DBEAFE' : '#F3F4F6', color: order.status === 'settled' ? '#1D4ED8' : '#374151' }}
+              >
+                已结清{order.status === 'settled' ? '（当前）' : ''}（利息停止计算）
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm('确认永久删除这张订单？此操作不可恢复。')) {
+                    handleDelete(order.id);
+                    setShowStatusSheet(false);
+                  }
+                }}
+                className="w-full py-3 rounded-xl text-sm font-medium"
+                style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}
+              >
+                删除订单（不可恢复）
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2278,29 +2318,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                 />
               </div>}
 
-              {/* 状态（编辑时） - 受邀订单隐藏 */}
-              {editingOrder && !editingOrder.participantInfo && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-2">订单状态</label>
-                  <div className="flex gap-2">
-                    {STATUS_OPTIONS.map(s => (
-                      <button
-                        key={s.value}
-                        onClick={() => setFormData(d => ({ ...d, status: s.value }))}
-                        className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
-                        style={
-                          formData.status === s.value
-                            ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
-                            : { backgroundColor: '#F3F4F6', color: '#6B7280' }
-                        }
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* 分隔线：字段展示控制 */}
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-gray-100" />
@@ -2673,38 +2690,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
         </div>
       )}
 
-      {/* 删除二次确认弹窗 */}
-      {confirmDeleteId !== null && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setConfirmDeleteId(null)}>
-          <div className="bg-white rounded-t-2xl w-full max-w-md px-5 pt-5 pb-8" onClick={e => e.stopPropagation()}>
-            <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
-            <div className="text-center mb-5">
-              <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
-                <Trash2 className="w-6 h-6 text-red-400" />
-              </div>
-              <div className="text-base font-semibold text-gray-800 mb-1">确认删除订单？</div>
-              <div className="text-sm text-gray-400">删除后无法恢复，请谨慎操作</div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setConfirmDeleteId(null)}
-                className="flex-1 py-3 rounded-xl text-sm font-medium"
-                style={{ backgroundColor: '#F3F4F6', color: '#374151' }}
-              >
-                取消
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                disabled={deleteMutation.isPending}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
-                style={{ backgroundColor: '#EF4444' }}
-              >
-                {deleteMutation.isPending ? '删除中...' : '确认删除'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

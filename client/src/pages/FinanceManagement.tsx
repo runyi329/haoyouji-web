@@ -195,6 +195,7 @@ function FinanceOrderCard({
   setConfirmDeleteId,
   getPaymentLabel,
 }: FinanceOrderCardProps) {
+  const [showStatusSheet, setShowStatusSheet] = useState(false);
   // 每张卡片独立调用 useAccruedInterest（Hook 必须在组件顶层）
   const accrued = useAccruedInterest(
     order.status === 'active' ? order.interest_base : null,
@@ -206,7 +207,7 @@ function FinanceOrderCard({
   const isNegRate = rateStr.startsWith('-');
   const rateAbs = isNegRate ? parseFloat(rateStr.slice(1)).toFixed(0) : (rateStr ? parseFloat(rateStr).toFixed(0) : '');
   const rateSign = isNegRate ? '-' : '+';
-  const isSettled = String(order.admin_note || '').includes('[已结清]');
+  const isSettled = order.status === 'settled';
   const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
 
   // 计算担保物数组
@@ -294,18 +295,34 @@ function FinanceOrderCard({
             {order.coin}
           </span>
           <span className="text-xs text-gray-400">#{order.order_no}</span>
-          <span
-            className="text-xs px-1.5 py-0.5 rounded-full font-medium"
-            style={
-              order.status === 'active'
-                ? { backgroundColor: '#EEF4FF', color: '#1A56DB' }
-                : order.status === 'settled'
-                ? { backgroundColor: '#F0FDF4', color: '#16A34A' }
-                : { backgroundColor: '#F9FAFB', color: '#9CA3AF' }
-            }
-          >
-            {STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status}
-          </span>
+          {isAdmin ? (
+            <button
+              onClick={() => setShowStatusSheet(true)}
+              className="text-xs px-1.5 py-0.5 rounded-full font-medium transition-opacity hover:opacity-70"
+              style={
+                order.status === 'active'
+                  ? { backgroundColor: '#EEF4FF', color: '#1A56DB' }
+                  : order.status === 'settled'
+                  ? { backgroundColor: '#F0FDF4', color: '#16A34A' }
+                  : { backgroundColor: '#F9FAFB', color: '#9CA3AF' }
+              }
+            >
+              {STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status}
+            </button>
+          ) : (
+            <span
+              className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+              style={
+                order.status === 'active'
+                  ? { backgroundColor: '#EEF4FF', color: '#1A56DB' }
+                  : order.status === 'settled'
+                  ? { backgroundColor: '#F0FDF4', color: '#16A34A' }
+                  : { backgroundColor: '#F9FAFB', color: '#9CA3AF' }
+              }
+            >
+              {STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status}
+            </span>
+          )}
           {(() => {
             const m = (realMembers as any[])?.find((m: any) => m.userId === order.user_id);
             const name = m ? (m.nickname || m.username) : null;
@@ -318,23 +335,8 @@ function FinanceOrderCard({
           })()}
         </div>
         <div className="flex items-center gap-0.5">
-          <button
-            title={isSettled ? '取消已结清标记' : '标记已结清'}
-            onClick={() => {
-              const note = String(order.admin_note || '');
-              const newNote = isSettled ? note.replace('[已结清]', '').trim() : (note ? note + ' [已结清]' : '[已结清]');
-              updateMutation.mutate({ id: order.id, ledgerId, adminNote: newNote });
-            }}
-            className="px-2 py-1 text-xs rounded-lg font-medium transition-colors"
-            style={{ backgroundColor: isSettled ? '#FEE2E2' : '#F3F4F6', color: isSettled ? '#DC2626' : '#9CA3AF' }}
-          >
-            结清
-          </button>
           <button onClick={() => openEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
             <Pencil className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={() => setConfirmDeleteId(order.id)} className="p-1.5 ml-2 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors">
-            <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -717,6 +719,50 @@ function FinanceOrderCard({
           membersData={realMembers as any[]}
         />
       </div>
+
+      {/* 状态操作底部弹窗 */}
+      {showStatusSheet && (
+        <div className="fixed inset-0 z-[300] flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setShowStatusSheet(false)}>
+          <div className="bg-white rounded-t-2xl w-full max-w-md px-5 pt-5 pb-8" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
+            <div className="text-sm font-semibold text-gray-700 mb-4 text-center">订单操作</div>
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  updateMutation.mutate({ id: order.id, ledgerId, status: 'active' });
+                  setShowStatusSheet(false);
+                }}
+                className="w-full py-3 rounded-xl text-sm font-medium transition-colors"
+                style={{ backgroundColor: order.status === 'active' ? '#DBEAFE' : '#F3F4F6', color: order.status === 'active' ? '#1D4ED8' : '#374151' }}
+              >
+                持有中{order.status === 'active' ? '（当前）' : ''}
+              </button>
+              <button
+                onClick={() => {
+                  updateMutation.mutate({ id: order.id, ledgerId, status: 'settled' });
+                  setShowStatusSheet(false);
+                }}
+                className="w-full py-3 rounded-xl text-sm font-medium transition-colors"
+                style={{ backgroundColor: order.status === 'settled' ? '#DCFCE7' : '#F3F4F6', color: order.status === 'settled' ? '#16A34A' : '#374151' }}
+              >
+                已结清{order.status === 'settled' ? '（当前）' : ''}（利息停止计算）
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm('确认永久删除这张订单？此操作不可恢复。')) {
+                    setConfirmDeleteId(order.id);
+                    setShowStatusSheet(false);
+                  }
+                }}
+                className="w-full py-3 rounded-xl text-sm font-medium"
+                style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}
+              >
+                删除订单（不可恢复）
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1877,29 +1923,6 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                   style={{ display: 'block', boxSizing: 'border-box', resize: 'none' }}
                 />
               </div>
-
-              {/* 状态（编辑时） */}
-              {editingOrder && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-2">订单状态</label>
-                  <div className="flex gap-2">
-                    {STATUS_OPTIONS.map(s => (
-                      <button
-                        key={s.value}
-                        onClick={() => setFormData(d => ({ ...d, status: s.value }))}
-                        className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
-                        style={
-                          formData.status === s.value
-                            ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
-                            : { backgroundColor: '#F3F4F6', color: '#6B7280' }
-                        }
-                      >
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* 字段开关面板 */}
               {showForm && (
