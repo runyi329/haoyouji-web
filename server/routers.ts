@@ -15394,6 +15394,25 @@ ${klinesSummary}
                 ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
           ) as any;
           orders = ((rows[0] || rows) as any[]) || [];
+          // 附加每个订单的参与方数量
+          if (orders.length > 0) {
+            try {
+              const orderIds = orders.map((o: any) => o.id);
+              const placeholders = orderIds.map(() => '?').join(',');
+              const cntConn = await getLedgerDb();
+              const cntRows = await (cntConn as any).execute(
+                `SELECT order_id, COUNT(*) as cnt FROM finance_order_participants WHERE order_id IN (${placeholders}) GROUP BY order_id`,
+                orderIds
+              ) as any;
+              const cntMap: Record<number, number> = {};
+              for (const r of ((cntRows[0] || cntRows) as any[])) {
+                cntMap[r.order_id] = Number(r.cnt);
+              }
+              for (const o of orders) {
+                (o as any)._participantCount = cntMap[o.id] ?? 0;
+              }
+            } catch (_e) { /* 如果表不存在则忽略 */ }
+          }
         } else {
           // 先查自己的订单
           const myRows = await db.execute(

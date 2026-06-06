@@ -369,22 +369,32 @@ function FinanceOrderCard({
         </div>
         <div className="flex items-center gap-0.5">
           {isAdmin && (
-            <button
-              onClick={() => handleOpenParticipants(order.id)}
-              className="p-1 ml-0.5 rounded-full transition-colors"
-              style={{
-                background: showParticipantsPanel === order.id ? '#1A56DB' : '#E0E7FF',
-                color: showParticipantsPanel === order.id ? '#fff' : '#1A56DB',
-              }}
-              title="参与方设置"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-                <circle cx="9" cy="7" r="4"/>
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-              </svg>
-            </button>
+            <div className="relative inline-flex items-center">
+              <button
+                onClick={() => handleOpenParticipants(order.id)}
+                className="p-1 ml-0.5 rounded-full transition-colors"
+                style={{
+                  background: showParticipantsPanel === order.id ? '#1A56DB' : (order._participantCount > 0 ? '#DCFCE7' : '#E0E7FF'),
+                  color: showParticipantsPanel === order.id ? '#fff' : (order._participantCount > 0 ? '#16A34A' : '#1A56DB'),
+                }}
+                title="参与方设置"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                  <circle cx="9" cy="7" r="4"/>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                </svg>
+              </button>
+              {(order._participantCount ?? 0) > 0 && showParticipantsPanel !== order.id && (
+                <span
+                  className="absolute -top-1 -right-1 text-[9px] font-bold rounded-full flex items-center justify-center"
+                  style={{ minWidth: '14px', height: '14px', backgroundColor: '#16A34A', color: '#fff', lineHeight: 1, padding: '0 2px' }}
+                >
+                  {order._participantCount}
+                </span>
+              )}
+            </div>
           )}
           <button onClick={() => openEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
             <Pencil className="w-3.5 h-3.5" />
@@ -862,7 +872,12 @@ function FinanceOrderCard({
       {showParticipantsPanel === order.id && (
         <div className="mx-4 mb-3 rounded-2xl border border-blue-100 bg-blue-50 p-3">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold" style={{ color: '#1A56DB' }}>参与方设置</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-semibold" style={{ color: '#1A56DB' }}>参与方设置</span>
+              {!participantsLoading && participantsList.length > 0 && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#DCFCE7', color: '#16A34A' }}>已保存 {participantsList.length} 位</span>
+              )}
+            </div>
             <button onClick={() => handleOpenParticipants(order.id)} className="text-gray-400 hover:text-gray-600 text-xs">关闭</button>
           </div>
           {participantsLoading ? (
