@@ -431,7 +431,7 @@ function FinanceOrderCard({
           {/* 标题 */}
           <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
             <span className="text-[10px]" style={{ color: '#3B82F6' }}>待付利息</span>
-            {rateAbs && <span className="text-[10px] text-gray-400">(年化 {rateSign}{rateAbs}%)</span>}
+            {rateAbs && <span className="text-[10px] text-gray-400">(年化 {isNegRate ? '-' : ''}{rateAbs}%)</span>}
           </div>
           {/* 待结利息大数字 */}
           <div className="min-h-9 flex flex-col justify-center">

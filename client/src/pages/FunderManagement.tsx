@@ -2550,7 +2550,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                             <div>
                               <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
                                 <span className="text-[10px]" style={{ color: '#3B82F6' }}>待收利息</span>
-                                <span className="text-[10px] text-gray-400">(年化 {parseFloat(formData.interestRateAnnual).toFixed(0)}%)</span>
+                                <span className="text-[10px] text-gray-400">(年化 {Math.abs(parseFloat(formData.interestRateAnnual)).toFixed(0)}%)</span>
                               </div>
                               <div className="min-h-7 flex flex-col justify-center mt-0.5">
                                 <div className="flex items-baseline gap-0.5">
