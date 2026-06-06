@@ -772,7 +772,7 @@ function FinanceNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, 
               ) : (
                 <div className="py-0.5">
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <FNoteAvatar name={note.userName} avatar={note.userAvatar || (note.userId ? (membersData as any[])?.find((m: any) => m.userId === note.userId)?.avatar || undefined : undefined)} />
+                    <FNoteAvatar name={note.userName || (!note.userId ? ((membersData as any[])?.find((m: any) => m.role === 'owner')?.nickname || (membersData as any[])?.find((m: any) => m.role === 'owner')?.username || '') : '')} avatar={note.userAvatar || (note.userId ? (membersData as any[])?.find((m: any) => m.userId === note.userId)?.avatar || undefined : ((membersData as any[])?.find((m: any) => m.role === 'owner')?.avatar || currentUser?.avatar || undefined))} />
                     {note.userName && <span className="text-[10px] font-medium" style={{ color: '#6B7280' }}>{note.userName}</span>}
                     {note.time && <span className="text-[10px]" style={{ color: '#C0C8D8' }}>{formatFNoteTime(note.time)}</span>}
                     {canEdit(note) && (

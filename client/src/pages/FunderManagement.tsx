@@ -212,17 +212,20 @@ function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, i
                 <div className="flex gap-2 py-0.5">
                   {/* 左侧头像，占两行高度 */}
                   <div className="shrink-0 self-start mt-0.5">
-                    {(note.userAvatar || (note.userId ? (membersData as any[])?.find((m: any) => m.userId === note.userId)?.avatar : null))
-                      ? <img src={note.userAvatar || (membersData as any[])?.find((m: any) => m.userId === note.userId)?.avatar} alt="" className="w-7 h-7 rounded-full object-cover" style={{ border: '1px solid #E0E7FF' }} />
-                      : (() => {
-                          const name = note.userName || '';
-                          if (!name) return <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#E5E7EB' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>;
-                          const initials = name.slice(0, 1).toUpperCase();
-                          const colors = ['#6366F1','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6'];
-                          const color = colors[name.charCodeAt(0) % colors.length] || '#6366F1';
-                          return <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: color }}>{initials}</div>;
-                        })()
-                    }
+                    {(() => {
+                      const avatarUrl = note.userAvatar || (note.userId ? (membersData as any[])?.find((m: any) => m.userId === note.userId)?.avatar : null);
+                      // 旧备注（无 userId）：使用 owner 头像
+                      const ownerMember = !note.userId ? (membersData as any[])?.find((m: any) => m.role === 'owner') : null;
+                      const fallbackAvatar = ownerMember?.avatar || currentUser?.avatar;
+                      const finalAvatar = avatarUrl || (!note.userId ? fallbackAvatar : null);
+                      if (finalAvatar) return <img src={finalAvatar} alt="" className="w-7 h-7 rounded-full object-cover" style={{ border: '1px solid #E0E7FF' }} />;
+                      const name = note.userName || (!note.userId ? (ownerMember?.nickname || ownerMember?.username || currentUser?.name || currentUser?.username || '') : '');
+                      if (!name) return <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#E5E7EB' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>;
+                      const initials = name.slice(0, 1).toUpperCase();
+                      const colors = ['#6366F1','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6'];
+                      const color = colors[name.charCodeAt(0) % colors.length] || '#6366F1';
+                      return <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white" style={{ backgroundColor: color }}>{initials}</div>;
+                    })()}
                   </div>
                   {/* 右侧内容 */}
                   <div className="flex-1 min-w-0">
@@ -1739,7 +1742,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                     priceDirection={priceDirection}
                     currentUser={currentUser}
                     isAdmin={isAdminUser}
-                    membersData={funderUsers as any[]}
+                    membersData={((ledgerData as any)?.members || funderUsers) as any[]}
                     ledgerId={ledgerId}
                     showPaymentPanel={showPaymentPanel}
                     setShowPaymentPanel={setShowPaymentPanel}

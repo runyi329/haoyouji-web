@@ -1928,12 +1928,13 @@ const FinanceEditIcon = () => (
   </svg>
 );
 
-function NoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, isAdmin }: {
+function NoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, ownerUser, isAdmin }: {
   orderId: number;
   ledgerId: number;
   initialNote: string;
   onSaved: (note: string) => void;
   currentUser?: { id: number; name?: string; username?: string; avatar?: string };
+  ownerUser?: { name?: string; avatar?: string };
   isAdmin?: boolean;
 }) {
   const [notes, setNotes] = useState<FinanceNoteItem[]>(() => parseFinanceNotes(initialNote));
@@ -2048,8 +2049,8 @@ function NoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, isAdmin
               ) : (
                 <div className="py-0.5">
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <CPNoteAvatar name={note.userId ? note.userName : (currentUser?.name || currentUser?.username)} avatar={note.userId ? note.userAvatar : currentUser?.avatar} />
-                    {(note.userId ? note.userName : (currentUser?.name || currentUser?.username)) && <span className="text-[10px] font-medium" style={{ color: '#6B7280' }}>{note.userId ? note.userName : (currentUser?.name || currentUser?.username)}</span>}
+                    <CPNoteAvatar name={note.userId ? note.userName : (ownerUser?.name || currentUser?.name || currentUser?.username)} avatar={note.userId ? note.userAvatar : (ownerUser?.avatar || currentUser?.avatar)} />
+                    {(note.userId ? note.userName : (ownerUser?.name || currentUser?.name || currentUser?.username)) && <span className="text-[10px] font-medium" style={{ color: '#6B7280' }}>{note.userId ? note.userName : (ownerUser?.name || currentUser?.name || currentUser?.username)}</span>}
                     {note.time && <span className="text-[10px]" style={{ color: '#C0C8D8' }}>{formatFinanceNoteTime(note.time)}</span>}
                     {canEdit(note) && (
                       <div className="ml-auto flex items-center gap-1">
@@ -3494,6 +3495,7 @@ export default function CryptoPrediction() {
                           refetchFinanceOrders();
                         }}
                         currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar || (order as any).userAvatar || undefined } : undefined}
+                        ownerUser={(() => { const owner = ((ledgerInfo as any)?.members || []).find((m: any) => m.role === 'owner'); return owner ? { name: owner.nickname || owner.username, avatar: owner.avatar } : undefined; })()}
                         isAdmin={isOwner}
                       />
                     </div>
