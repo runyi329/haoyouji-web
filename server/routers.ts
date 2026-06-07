@@ -15030,12 +15030,12 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-        // 验证目标用户是资金方
+        // 验证目标用户是资金方或管理员（管理员可作为任何一边的目标用户）
         const targetRoleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${input.userId} LIMIT 1`
         ) as any;
         const targetRole = (targetRoleRows[0]?.[0] ?? targetRoleRows[0])?.role;
-        if (targetRole !== 'funder') throw new TRPCError({ code: 'BAD_REQUEST', message: '目标用户不是资金方角色' });
+        if (targetRole !== 'funder' && targetRole !== 'owner' && targetRole !== 'admin') throw new TRPCError({ code: 'BAD_REQUEST', message: '目标用户不是资金方角色' });
         // 生成唯一订单号（2个大写字母 + 4个数字）
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         const digits = '0123456789';
