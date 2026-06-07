@@ -493,7 +493,7 @@ function FunderOrderCard({
             {order.coin}
           </span>
           {order.asset_type && show('assetType') && (
-            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: order.asset_type === 'stock' ? '#FEF3C7' : '#EFF6FF', color: order.asset_type === 'stock' ? '#92400E' : '#1D4ED8' }}>
+            <span className="text-xs px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
               {order.asset_type === 'stock' ? '股票' : '数字币'}
             </span>
           )}
@@ -516,12 +516,14 @@ function FunderOrderCard({
             </span>
           )}
           {show('showOwnerName') && (() => {
-            const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
-            const name = m ? (m.nickname || m.username) : null;
-            if (!name) return null;
+            const label = (order as any).owner_label || (() => {
+              const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
+              return m ? (m.nickname || m.username) : null;
+            })();
+            if (!label) return null;
             return (
-              <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#F3F4F6', color: '#374151' }}>
-                {name}
+              <span className="text-xs font-medium px-1.5 py-0.5" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
+                {label}
               </span>
             );
           })()}
@@ -1165,8 +1167,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
     commissionBase: '',
     commissionStartDate: '',
     assetType: '' as '' | 'stock' | 'crypto',
+    ownerLabel: '',
+    ownerLabelMode: 'member' as 'member' | 'manual',
   });
-
   // 担保货币列表：[{ coin: 'BTC', qty: '' }, ...]
   const [collateralAssets, setCollateralAssets] = useState<{ coin: string; qty: string }[]>([]);
 
@@ -1527,6 +1530,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
       commissionBase: '',
       commissionStartDate: '',
       assetType: '' as '' | 'stock' | 'crypto',
+      ownerLabel: '',
+      ownerLabelMode: 'member' as 'member' | 'manual',
     });
     setCollateralAssets([]);
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
@@ -1560,6 +1565,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
       commissionBase: order.participantInfo?.commissionBase ? String(order.participantInfo.commissionBase) : '',
       commissionStartDate: order.participantInfo?.commissionStartDate ? String(order.participantInfo.commissionStartDate).slice(0, 10) : '',
       assetType: (order.asset_type || '') as '' | 'stock' | 'crypto',
+      ownerLabel: order.owner_label || '',
+      ownerLabelMode: (order.owner_label ? 'manual' : 'member') as 'member' | 'manual',
     });
     // 加载担保货币
     try {
@@ -1645,6 +1652,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
         Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')
       ) as Record<string, boolean>,
       assetType: formData.assetType || undefined,
+      ownerLabel: formData.ownerLabel || undefined,
     };
     if (editingOrder) {
       updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...payload });
@@ -1882,6 +1890,46 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                 </div>
               )}
 
+              {/* 归属用户 */}
+              {!editingOrder?.participantInfo && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-600">归属用户<span className="ml-1.5 text-xs text-gray-400 font-normal">可选</span></label>
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => setFormData(d => ({ ...d, ownerLabelMode: 'member', ownerLabel: '' }))}
+                        className="text-xs px-2 py-0.5 rounded-lg transition-all"
+                        style={formData.ownerLabelMode === 'member' ? { background: '#1A56DB', color: '#fff' } : { background: '#F3F4F6', color: '#6B7280' }}>
+                        选账本成员
+                      </button>
+                      <button type="button" onClick={() => setFormData(d => ({ ...d, ownerLabelMode: 'manual' }))}
+                        className="text-xs px-2 py-0.5 rounded-lg transition-all"
+                        style={formData.ownerLabelMode === 'manual' ? { background: '#1A56DB', color: '#fff' } : { background: '#F3F4F6', color: '#6B7280' }}>
+                        手动输入
+                      </button>
+                    </div>
+                  </div>
+                  {formData.ownerLabelMode === 'member' ? (
+                    <select
+                      value={formData.ownerLabel}
+                      onChange={e => setFormData(d => ({ ...d, ownerLabel: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white"
+                    >
+                      <option value="">-- 不指定 --</option>
+                      {ledgerMembers.map(m => (
+                        <option key={m.userId} value={m.displayName}>{m.displayName}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={formData.ownerLabel}
+                      onChange={e => setFormData(d => ({ ...d, ownerLabel: e.target.value }))}
+                      placeholder="输入显示名称，如：英姐、张总..."
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    />
+                  )}
+                </div>
+              )}
               {/* 币种下拉 */}
               <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">币种</label>
