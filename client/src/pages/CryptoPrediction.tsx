@@ -2827,11 +2827,11 @@ export default function CryptoPrediction() {
                                 order.status === 'cancelled' ? 'text-gray-400' :
                                 'text-[#F59E0B]'
                               }`}>
-                                {(order as any).sellStatus === 'sold' ? '已卖出' :
-                                 (order as any).sellStatus === 'selling' ? '委卖中' :
-                                 order.status === 'completed' ? '持仓中' :
+                                {(order as any).sellStatus === 'sold' ? '已卖' :
+                                 (order as any).sellStatus === 'selling' ? '委卖' :
+                                 order.status === 'completed' ? '持仓' :
                                  order.status === 'cancelled' ? '已撒' :
-                                 '委买中'}
+                                 '委买'}
                               </span>
                             </td>
                             {/* 详情列 */}
