@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-07
+// 生成时间：2026-06-08
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7009,5 +7009,13 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-07T10:45:46Z", type: "feat", cleanMessage: "添加回收站功能 - 软删除、恢复、永久删除" },
     { date: "2026-06-07T11:23:40Z", type: "fix", cleanMessage: "回收站按钮仅管理员可见，删除按钮文案改为移入回收站" },
     { date: "2026-06-07T11:38:11Z", type: "fix", cleanMessage: "将回收站按钮移到P095页面(FinanceUnified)顶部导航栏" },
+    { date: "2026-06-07T11:40:21Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-07T12:17:36Z", type: "feat", cleanMessage: "手动输入归属用户时自动锁定订单归属为管理员" },
+    { date: "2026-06-07T12:58:48Z", type: "fix", cleanMessage: "允许管理员(owner/admin)作为资方订单的目标用户" },
+    { date: "2026-06-07T13:04:25Z", type: "feat", cleanMessage: "回收站弹窗订单卡片改为详细两栏布局（与主列表风格一致）" },
+    { date: "2026-06-07T13:21:29Z", type: "feat", cleanMessage: "添加订单自定义标签功能 - 编辑表单中可添加/删除标签 - 订单卡片帽子区域显示标签（样式与类型/用户名一致） - 后端创建/更新API支持tags字段" },
+    { date: "2026-06-07T13:31:59Z", type: "feat", cleanMessage: "在所有联动页面的帽子区域显示自定义标签 - 回收站弹窗订单卡片 - 借方侧(CryptoPrediction)订单卡片" },
+    { date: "2026-06-07T13:58:51Z", type: "feat", cleanMessage: "在 LedgerDetail 拥有者首页的订单卡片帽子区域显示自定义标签" },
+    { date: "2026-06-07T14:07:24Z", type: "fix", cleanMessage: "LedgerDetail 资方账本首页利率显示改为最多2位小数" },
   ],
 };
