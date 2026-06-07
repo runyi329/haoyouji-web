@@ -15415,6 +15415,27 @@ ${klinesSummary}
                 ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
           ) as any;
           orders = ((rows[0] || rows) as any[]) || [];
+          // 管理员查询时，附加每个订单的参与方用户ID列表
+          if (orders.length > 0) {
+            try {
+              const allOrderIds = orders.map((o: any) => o.id);
+              const ph = allOrderIds.map(() => '?').join(',');
+              const pConn = await getLedgerDb();
+              const pRows = await (pConn as any).execute(
+                `SELECT order_id, user_id FROM finance_order_participants WHERE ledger_id = ? AND order_id IN (${ph})`,
+                [input.ledgerId, ...allOrderIds]
+              ) as any;
+              const pList = ((pRows[0] || pRows) as any[]) || [];
+              const pMap: Record<number, number[]> = {};
+              for (const r of pList) {
+                if (!pMap[r.order_id]) pMap[r.order_id] = [];
+                pMap[r.order_id].push(r.user_id);
+              }
+              for (const o of orders) {
+                (o as any)._participantUserIds = pMap[o.id] || [];
+              }
+            } catch (_e) { /* 表不存在则忽略 */ }
+          }
         } else {
           // 先查自己的订单
           const myRows = await db.execute(
