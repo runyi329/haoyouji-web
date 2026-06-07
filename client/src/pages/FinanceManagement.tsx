@@ -1461,7 +1461,15 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   // 按 activeUserTab 筛选订单
   const displayOrders = activeUserTab === 'all'
     ? orders
-    : orders.filter((o: any) => Number(o.user_id) === Number(activeUserTab) || (o._participantUserIds && o._participantUserIds.map(Number).includes(Number(activeUserTab))))
+    : orders.filter((o: any) => {
+        const isOwner = Number(o.user_id) === Number(activeUserTab);
+        const isParticipant = o._participantUserIds && o._participantUserIds.map(Number).includes(Number(activeUserTab));
+        // 跨角色订单（资方订单在借方页面）：只在参与方的Tab下显示，不在订单所有者的Tab下显示
+        if (o._isParticipant && o.order_role && o.order_role !== 'finance') {
+          return isParticipant;
+        }
+        return isOwner || isParticipant;
+      })
       .map((o: any) => {
         if (Number(o.user_id) !== Number(activeUserTab) && o._participantUserIds && o._participantUserIds.map(Number).includes(Number(activeUserTab))) {
           return { ...o, _isParticipant: true };
@@ -1469,8 +1477,16 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         return o;
       });
   // 获取有订单的用户列表（用于 Tab 展示）
+  // 跨角色订单（_isParticipant 且 order_role != 'finance'）只让参与方出现在Tab，不让订单所有者出现
   const usersWithOrders = realMembers.filter((m: any) =>
-    orders.some((o: any) => o.user_id === m.userId || (o._participantUserIds && o._participantUserIds.includes(m.userId)))
+    orders.some((o: any) => {
+      // 如果是跨角色订单（资方订单出现在借方页面），只通过参与方关系匹配
+      if (o._isParticipant && o.order_role && o.order_role !== 'finance') {
+        return o._participantUserIds && o._participantUserIds.map(Number).includes(Number(m.userId));
+      }
+      // 普通 finance 订单：订单所有者或参与方都可以出现
+      return Number(o.user_id) === Number(m.userId) || (o._participantUserIds && o._participantUserIds.map(Number).includes(Number(m.userId)));
+    })
   );
 
   const filteredMembers = realMembers.filter((m: any) => {
