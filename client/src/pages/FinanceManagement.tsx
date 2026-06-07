@@ -393,11 +393,13 @@ function FinanceOrderCard({
               )}
             </button>
           )}
-          {!(order._isParticipant || order._fromFunder) && (
-            <button onClick={() => openEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <button
+            onClick={() => openEdit(order)}
+            className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors"
+            style={{ display: (order._isParticipant || order._fromFunder) ? 'none' : 'inline-flex' }}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
