@@ -207,8 +207,8 @@ export async function runFunderScan(targetOrderId?: number) {
       const lowStr = low.toString();
 
       // 2. 查询该币种所有持有中的资金方订单
-      let ordersQuery = `SELECT id, buy_price, buy_quantity FROM funder_asset_orders
-         WHERE coin = ? AND status = 'active' AND buy_price IS NOT NULL AND buy_quantity IS NOT NULL`;
+      let ordersQuery = `SELECT id, buy_price, buy_quantity FROM ledger_orders
+         WHERE coin = ? AND order_role = 'funder' AND status = 'active' AND buy_price IS NOT NULL AND buy_quantity IS NOT NULL`;
       const queryParams: any[] = [coin];
 
       if (targetOrderId) {
