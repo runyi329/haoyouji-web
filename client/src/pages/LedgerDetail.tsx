@@ -628,7 +628,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
         {/* 区块标题（固定高度与左栏对齐） */}
         <div className="h-5 flex items-center gap-1 relative">
           <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`} style={{ color: '#3B82F6' }}>待结利息</span>
-          <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} text-gray-400`}>(年化 {order.interest_rate_annual || 0}%)</span>
+          <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} text-gray-400`}>(年化 {parseFloat(String(order.interest_rate_annual || 0)).toFixed(2).replace(/\.?0+$/, '')}%)</span>
           <button
             ref={tipBtnRef}
             type="button"
