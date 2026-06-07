@@ -3119,6 +3119,15 @@ export default function CryptoPrediction() {
                     const _m = _adminNoteForInterest.match(/\[代付:([\d.]+)\]/);
                     if (_m) unpaidInterest = parseFloat(_m[1]);
                   }
+                  // 解析 display_config 开关（与 FunderManagement 保持一致：默认全部显示）
+                  const _dcRaw = order.display_config;
+                  const _dc: Record<string, boolean> | null = (() => {
+                    try {
+                      if (!_dcRaw) return null;
+                      return typeof _dcRaw === 'string' ? JSON.parse(_dcRaw) : _dcRaw;
+                    } catch { return null; }
+                  })();
+                  const showField = (key: string) => _dc ? (_dc[key] !== false) : true;
                   // 持有时长
                   const holdingLabel = (() => {
                     if (!order.buy_date || order.status !== 'active') return null;
@@ -3167,13 +3176,23 @@ export default function CryptoPrediction() {
                       )}
                       {/* 顶部色条 */}
                       <div className="h-1" style={{ background: `linear-gradient(90deg, ${cc}, ${cc}55)` }} />
+                      {/* 帽子区域：资产类型标签 + 所有者名字 */}
+                      {(showField('assetType') && order.asset_type) || (showField('showOwnerName') && (order.userName || order.username) && order._isParticipant) ? (
+                        <div className="flex items-center gap-1.5 flex-wrap px-4 pt-2">
+                          {showField('assetType') && order.asset_type && (
+                            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: order.asset_type === 'stock' ? '#FEF3C7' : '#EFF6FF', color: order.asset_type === 'stock' ? '#92400E' : '#1D4ED8' }}>
+                              {order.asset_type === 'stock' ? '股票' : '数字币'}
+                            </span>
+                          )}
+                        </div>
+                      ) : null}
 
                       {/* 主体：左右两栏 */}
                       <div className="flex" style={{ minHeight: '100px' }}>
 
                         {/* 左栏：订单信息 */}
                         <div className="flex-1 p-4 pr-3">
-                          {/* 标题：融资资产 / 参与方显示订单资产(所有者名) */}                          <div className="text-[10px] mb-0.5" style={{ color: order._isParticipant ? '#16A34A' : '#3B82F6' }}>{order._isParticipant ? '订单资产' : '融资资产'}{order._isParticipant && (order.userName || order.username) ? <span className="text-gray-400"> ({order.userName || order.username})</span> : !order._isParticipant ? <span className="text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span> : null}</div>
+                          {/* 标题：融资资产 / 参与方显示订单资产(所有者名) */}                          <div className="text-[10px] mb-0.5" style={{ color: order._isParticipant ? '#16A34A' : '#3B82F6' }}>{order._isParticipant ? '订单资产' : '融资资产'}{order._isParticipant && showField('showOwnerName') && (order.userName || order.username) ? <span className="text-gray-400"> ({order.userName || order.username})</span> : !order._isParticipant ? <span className="text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span> : null}</div>
                           {/* 持币数量（大字突出） */}
                           <div className="flex items-baseline gap-1 mb-1">
                             <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>

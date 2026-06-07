@@ -492,7 +492,7 @@ function FunderOrderCard({
           <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: coinColor }}>
             {order.coin}
           </span>
-          {order.asset_type && (
+          {order.asset_type && show('assetType') && (
             <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: order.asset_type === 'stock' ? '#FEF3C7' : '#EFF6FF', color: order.asset_type === 'stock' ? '#92400E' : '#1D4ED8' }}>
               {order.asset_type === 'stock' ? '股票' : '数字币'}
             </span>
@@ -515,7 +515,7 @@ function FunderOrderCard({
               受邀
             </span>
           )}
-          {(() => {
+          {show('showOwnerName') && (() => {
             const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
             const name = m ? (m.nickname || m.username) : null;
             if (!name) return null;
@@ -1191,6 +1191,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
     commissionShare: true,
     aiIcon: false,
     assetType: true,
+    showOwnerName: true,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean>>(DEFAULT_DISPLAY_CONFIG);
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT'];
@@ -2341,7 +2342,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                       { key: 'holdDuration', label: '持有时长' },
                       { key: 'orderNo', label: '订单编号' },
                       { key: 'aiIcon', label: 'AI图标（持有资产右上角）' },
-                      { key: 'assetType', label: '资产类型（股票/数字币）' },
+                      { key: 'assetType', label: '资产类型标签（股票/数字币）' },
+                      { key: 'showOwnerName', label: '显示订单所有者名字' },
                     ].map(({ key, label }) => (
                       <div key={key} className="flex items-center justify-between">
                         <span className="text-sm text-gray-600">{label}</span>
