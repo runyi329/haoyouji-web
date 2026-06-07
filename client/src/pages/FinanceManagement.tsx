@@ -393,7 +393,7 @@ function FinanceOrderCard({
               )}
             </button>
           )}
-          {!order._isParticipant && (
+          {!(order._isParticipant || order._fromFunder) && (
             <button onClick={() => openEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
               <Pencil className="w-3.5 h-3.5" />
             </button>
@@ -1450,9 +1450,9 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   // 按 activeUserTab 筛选订单
   const displayOrders = activeUserTab === 'all'
     ? orders
-    : orders.filter((o: any) => o.user_id === activeUserTab || (o._participantUserIds && o._participantUserIds.includes(activeUserTab)))
+    : orders.filter((o: any) => Number(o.user_id) === Number(activeUserTab) || (o._participantUserIds && o._participantUserIds.map(Number).includes(Number(activeUserTab))))
       .map((o: any) => {
-        if (o.user_id !== activeUserTab && o._participantUserIds && o._participantUserIds.includes(activeUserTab)) {
+        if (Number(o.user_id) !== Number(activeUserTab) && o._participantUserIds && o._participantUserIds.map(Number).includes(Number(activeUserTab))) {
           return { ...o, _isParticipant: true };
         }
         return o;
