@@ -538,9 +538,11 @@ function FunderOrderCard({
               参与方{order.participantCount > 0 ? ` ${order.participantCount}` : ''}
             </button>
           )}
-          <button onClick={() => handleOpenEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
+          {!isInvited && (
+            <button onClick={() => handleOpenEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
