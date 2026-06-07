@@ -2792,7 +2792,7 @@ export default function CryptoPrediction() {
                             </td>
                             {/* 赠列 */}
                             <td className="py-2 px-1 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
-                              {(order as any).isGift ? <span className="text-[#ef5350] font-bold">赠</span> : null}
+                              {(order as any).isGift ? <span className="text-[#ef5350] font-bold">赠</span> : <span className="text-[#1A56DB] font-bold">买</span>}
                             </td>
                             {/* 档位列 */}
                             <td className="py-2 px-1 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
