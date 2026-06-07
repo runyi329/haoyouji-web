@@ -1508,9 +1508,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
     onError: (err) => toast.error(err.message),
   });
 
-  const handleOpenCreate = (userId: number) => {
+  // 表单内用户选择相关状态
+  const [formUserDropdown, setFormUserDropdown] = useState(false);
+  const [formUserSearch, setFormUserSearch] = useState('');
+
+  const handleOpenCreate = () => {
     setFormData({
-      userId,
+      userId: 0,
       coin: 'BTC',
       buyPrice: '',
       buyQuantity: '',
@@ -1617,6 +1621,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
         commissionBase: formData.commissionBase || undefined,
         commissionStartDate: formData.commissionStartDate || undefined,
       });
+      return;
+    }
+    // 新建模式必须选择用户
+    if (!editingOrder && !formData.userId) {
+      toast.error('请选择用户');
       return;
     }
     // 编辑模式下，如果买入价/数量为空，使用原订单金额；新建模式必须填
@@ -1763,7 +1772,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
           </div>
           {/* 添加订单按钮 */}
           <button
-            onClick={() => selectedUserId ? handleOpenCreate(selectedUserId) : setShowUserDropdown(true)}
+            onClick={() => handleOpenCreate()}
             className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-white text-sm font-medium shadow-md"
             style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
           >
@@ -1930,6 +1939,100 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                       className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                     />
                   )}
+                </div>
+              )}
+              {/* 用户选择（从账本所有成员中选） */}
+              {!editingOrder?.participantInfo && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">
+                    用户 <span className="text-red-400 ml-0.5">*</span>
+                  </label>
+                  <div className="relative">
+                    {formData.userId > 0 ? (
+                      <div
+                        className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-blue-300 bg-blue-50 cursor-pointer"
+                        onClick={() => { setFormUserDropdown(true); setFormUserSearch(''); }}
+                      >
+                        <div
+                          className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                          style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+                        >
+                          {(() => {
+                            const allMembers = ((ledgerData as any)?.members || []) as any[];
+                            const m = allMembers.find((m: any) => m.userId === formData.userId);
+                            return (m?.nickname || m?.name || m?.username || '?')[0].toUpperCase();
+                          })()}
+                        </div>
+                        <span className="text-sm font-medium flex-1" style={{ color: '#1A2340' }}>
+                          {(() => {
+                            const allMembers = ((ledgerData as any)?.members || []) as any[];
+                            const m = allMembers.find((m: any) => m.userId === formData.userId);
+                            return m?.nickname || m?.name || m?.username || `用户${formData.userId}`;
+                          })()}
+                        </span>
+                        <button
+                          onClick={e => { e.stopPropagation(); setFormData(d => ({ ...d, userId: 0 })); setFormUserSearch(''); }}
+                          className="text-gray-400 hover:text-gray-600 text-base leading-none px-1"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <input
+                        type="text"
+                        value={formUserSearch}
+                        onChange={e => { setFormUserSearch(e.target.value); setFormUserDropdown(true); }}
+                        onFocus={() => setFormUserDropdown(true)}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        placeholder="搜索或选择用户..."
+                        style={{ display: 'block', boxSizing: 'border-box' }}
+                      />
+                    )}
+                    {formUserDropdown && formData.userId === 0 && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-10"
+                          onClick={() => setFormUserDropdown(false)}
+                        />
+                        <div
+                          className="absolute top-full left-0 right-0 z-20 mt-1 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden"
+                          style={{ maxHeight: 200, overflowY: 'auto' }}
+                        >
+                          {(() => {
+                            const allMembers = ((ledgerData as any)?.members || []) as any[];
+                            const filtered = allMembers.filter((m: any) => {
+                              if (!formUserSearch) return true;
+                              const name = (m.nickname || m.name || m.username || '').toLowerCase();
+                              return name.includes(formUserSearch.toLowerCase());
+                            });
+                            if (filtered.length === 0) {
+                              return <div className="px-4 py-3 text-sm text-gray-400 text-center">无匹配用户</div>;
+                            }
+                            return filtered.map((m: any) => (
+                              <button
+                                key={m.userId}
+                                onClick={() => { setFormData(d => ({ ...d, userId: m.userId })); setFormUserSearch(m.nickname || m.name || m.username || ''); setFormUserDropdown(false); }}
+                                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 text-left"
+                              >
+                                <div
+                                  className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                                  style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+                                >
+                                  {(m.nickname || m.name || m.username || '?')[0].toUpperCase()}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-medium truncate" style={{ color: '#1A2340' }}>
+                                    {m.nickname || m.name || m.username}
+                                  </div>
+                                  <div className="text-xs text-gray-400">{m.role}</div>
+                                </div>
+                              </button>
+                            ));
+                          })()}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
               {/* 币种下拉 */}
