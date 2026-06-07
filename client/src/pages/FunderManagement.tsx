@@ -2930,46 +2930,137 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
                 <p className="text-center text-gray-400 py-8">回收站为空</p>
               ) : (
                 <div className="space-y-3">
-                  {(deletedOrdersData as any[]).map((order: any) => (
-                    <div key={order.id} className="bg-gray-50 rounded-xl p-3 border border-gray-200">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-600 font-medium">{order.coin}</span>
-                          <span className="text-sm font-medium text-gray-700">#{order.order_no}</span>
-                          <span className="text-xs text-gray-400">{order.user_display_name || order.username}</span>
+                  {(deletedOrdersData as any[]).map((order: any) => {
+                    const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
+                    const statusLabel = STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status;
+                    const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
+                    const qty = parseFloat(order.buy_quantity || '0');
+                    const price = parseFloat(order.buy_price || '0');
+                    const totalU = qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0');
+                    const baseCur = order.interest_base_currency || 'USDT';
+                    const rateCur = order.interest_rate_currency || 'USDT';
+                    const interestUnit = rateCur === 'CNY' ? '元' : 'U';
+                    const rateStr = order.interest_rate_annual || '';
+                    const rateAbs = rateStr ? parseFloat(rateStr).toFixed(0) : '';
+                    return (
+                      <div key={order.id} className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}>
+                        {/* 帽子：标签行 */}
+                        <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid #F3F4F6', backgroundColor: '#FAFBFF' }}>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: coinColor }}>
+                              {order.coin}
+                            </span>
+                            {order.asset_type && (
+                              <span className="text-xs px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
+                                {order.asset_type === 'stock' ? '股票' : '数字币'}
+                              </span>
+                            )}
+                            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: `${statusColor}15`, color: statusColor }}>
+                              {statusLabel}
+                            </span>
+                            {(order.owner_label || order.user_display_name || order.username) && (
+                              <span className="text-xs font-medium px-1.5 py-0.5" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
+                                {order.owner_label || order.user_display_name || order.username}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-400 whitespace-nowrap">
+                            {order.deleted_at ? new Date(order.deleted_at).toLocaleDateString('zh-CN') + ' 删除' : ''}
+                          </span>
                         </div>
-                        <span className="text-xs text-gray-400">
-                          {order.deleted_at ? new Date(order.deleted_at).toLocaleDateString('zh-CN') : ''}
-                        </span>
+
+                        {/* 主体：左右两栏 */}
+                        <div className="flex" style={{ minHeight: '80px' }}>
+                          {/* 左栏：持有资产 */}
+                          <div className="flex-1 p-3 pr-2">
+                            <div className="text-[10px] font-medium mb-0.5" style={{ color: '#3B82F6' }}>持有资产</div>
+                            <div className="flex items-baseline gap-1 flex-wrap mb-1">
+                              <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
+                                {totalU > 0 ? totalU.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}
+                              </span>
+                              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{baseCur === 'CNY' ? 'CNY' : order.coin}</span>
+                            </div>
+                            <div className="space-y-0.5 text-xs">
+                              {order.interest_base && parseFloat(order.interest_base) > 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-400">计息基数</span>
+                                  <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(order.interest_base).toLocaleString()} {interestUnit}</span>
+                                </div>
+                              )}
+                              {order.buy_date && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-400">开仓时间</span>
+                                  <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
+                                </div>
+                              )}
+                              {order.order_no && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-400">订单编号</span>
+                                  <span className="font-mono" style={{ color: '#9CA3AF' }}>{order.order_no}</span>
+                                </div>
+                              )}
+                              {order.interest_payment_type && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-400">付息方式</span>
+                                  <span className="font-medium" style={{ color: '#4B5563' }}>{order.interest_payment_type === 'monthly_prepaid' ? '月付先付' : order.interest_payment_type === 'monthly_postpaid' ? '月付后付' : order.interest_payment_type === 'quarterly' ? '季付' : order.interest_payment_type === 'maturity' ? '到期付' : order.interest_payment_type}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 中间分隔线 */}
+                          <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
+
+                          {/* 右栏：利息信息 */}
+                          <div className="w-36 p-3 pl-2 flex flex-col">
+                            <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>待收利息{rateAbs ? ` (年化 ${rateAbs}%)` : ''}</div>
+                            {price > 0 && (
+                              <div className="flex items-center justify-between text-xs mt-1">
+                                <span className="text-gray-400">买入价</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>{price.toLocaleString()} U</span>
+                              </div>
+                            )}
+                            {qty > 0 && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400">数量</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>{qty}</span>
+                              </div>
+                            )}
+                            {order.interest_start_date && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400">计息日</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>{String(order.interest_start_date).slice(5)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 底部操作按钮 */}
+                        <div className="flex gap-2 px-4 pb-3">
+                          <button
+                            onClick={() => {
+                              if (window.confirm('确认恢复该订单？')) {
+                                restoreMutation.mutate({ id: order.id, ledgerId });
+                              }
+                            }}
+                            className="flex-1 py-2 rounded-xl text-sm font-medium bg-green-50 text-green-600 border border-green-200"
+                          >
+                            恢复
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm('确认永久删除？此操作不可恢复！')) {
+                                permanentDeleteMutation.mutate({ id: order.id, ledgerId });
+                              }
+                            }}
+                            className="flex-1 py-2 rounded-xl text-sm font-medium bg-red-50 text-red-600 border border-red-200"
+                          >
+                            永久删除
+                          </button>
+                        </div>
                       </div>
-                      <div className="text-sm text-gray-600 mb-2">
-                        <span>金额: {Number(order.amount).toLocaleString()} {order.interest_base_currency === 'CNY' ? '元' : 'U'}</span>
-                        {order.buy_price && <span className="ml-3">买入价: {order.buy_price} U</span>}
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            if (window.confirm('确认恢复该订单？')) {
-                              restoreMutation.mutate({ id: order.id, ledgerId });
-                            }
-                          }}
-                          className="flex-1 py-1.5 rounded-lg text-sm font-medium bg-green-50 text-green-600 border border-green-200"
-                        >
-                          恢复
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (window.confirm('确认永久删除？此操作不可恢复！')) {
-                              permanentDeleteMutation.mutate({ id: order.id, ledgerId });
-                            }
-                          }}
-                          className="flex-1 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-600 border border-red-200"
-                        >
-                          永久删除
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
