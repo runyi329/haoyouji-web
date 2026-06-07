@@ -2427,6 +2427,21 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                 <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#E8EFFF', background: '#FFFFFF' }}>
                   {/* 顶部色条 */}
                   <div className="h-1" style={{ background: `linear-gradient(90deg, ${COIN_COLORS[formData.coin] || '#3B82F6'}, ${(COIN_COLORS[formData.coin] || '#3B82F6')}55)` }} />
+                  {/* 帽子区域：资产类型标签 + 所有者名字（受开关控制） */}
+                  {(displayConfig.assetType || displayConfig.showOwnerName) && (
+                    <div className="flex items-center gap-1.5 px-4 py-1.5 flex-wrap" style={{ borderBottom: '1px solid #F3F4F6', backgroundColor: '#FAFBFF' }}>
+                      {displayConfig.assetType && formData.assetType && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: formData.assetType === '股票' ? '#FEF3C7' : '#E0E7FF', color: formData.assetType === '股票' ? '#D97706' : '#4F46E5' }}>
+                          {formData.assetType}
+                        </span>
+                      )}
+                      {displayConfig.showOwnerName && editingOrder?.userName && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#F0FDF4', color: '#16A34A' }}>
+                          {editingOrder.userName}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {/* 两栏主体 */}
                   <div className="flex" style={{ minHeight: '100px' }}>
                     {/* 左栏：持有资产 */}
