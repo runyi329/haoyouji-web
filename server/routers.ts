@@ -15124,6 +15124,14 @@ ${klinesSummary}
         const { getDbConnection } = await import('./db');
         const conn = await getDbConnection();
         if (conn) await conn.execute(rawQuery, allVals);
+        // display_config 联动：同步到同账本同 order_role 的所有订单
+        if (input.displayConfig !== undefined && conn) {
+          const dcJson = input.displayConfig ? JSON.stringify(input.displayConfig) : null;
+          await conn.execute(
+            `UPDATE ledger_orders SET display_config = ? WHERE ledger_id = ? AND order_role = 'funder' AND id != ?`,
+            [dcJson, input.ledgerId, input.id]
+          );
+        }
         return { success: true };
       }),
 
@@ -15753,11 +15761,18 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS display_config TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS asset_type VARCHAR(20) DEFAULT NULL`);
         } catch(e) {}
-        await conn.execute(`UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
+                await conn.execute(`UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
+        // display_config 联动：同步到同账本同 order_role 的所有订单
+        if (input.displayConfig !== undefined) {
+          const dcJson = input.displayConfig ? JSON.stringify(input.displayConfig) : null;
+          await conn.execute(
+            `UPDATE ledger_orders SET display_config = ? WHERE ledger_id = ? AND order_role = 'finance' AND id != ?`,
+            [dcJson, input.ledgerId, input.id]
+          );
+        }
         await conn.end();
         return { success: true };
       }),
-
     // 任意可见用户更新融资订单公开备注
     financeUpdatePublicNote: protectedProcedure
       .input(z.object({

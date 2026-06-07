@@ -1246,6 +1246,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     commissionShare: true,
     aiIcon: false,
     assetType: true,
+    showOwnerName: true,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | number>>(DEFAULT_DISPLAY_CONFIG);
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
@@ -2303,6 +2304,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                           { key: 'orderNo', label: '订单编号' },
                           { key: 'aiIcon', label: 'AI图标（融资资产右上角）' },
                           { key: 'assetType', label: '资产类型（股票/数字币）' },
+                          { key: 'showOwnerName', label: '显示订单所有者名字' },
                         ].map(({ key, label }) => (
                           <div key={key} className="flex items-center justify-between">
                             <span className="text-sm text-gray-600">{label}</span>
