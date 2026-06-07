@@ -2431,8 +2431,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                   {(displayConfig.assetType || displayConfig.showOwnerName) && (
                     <div className="flex items-center gap-1.5 px-4 py-1.5 flex-wrap" style={{ borderBottom: '1px solid #F3F4F6', backgroundColor: '#FAFBFF' }}>
                       {displayConfig.assetType && formData.assetType && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: formData.assetType === '股票' ? '#FEF3C7' : '#E0E7FF', color: formData.assetType === '股票' ? '#D97706' : '#4F46E5' }}>
-                          {formData.assetType}
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: formData.assetType === 'stock' ? '#FEF3C7' : '#E0E7FF', color: formData.assetType === 'stock' ? '#92400E' : '#1D4ED8' }}>
+                          {formData.assetType === 'stock' ? '股票' : '数字币'}
                         </span>
                       )}
                       {displayConfig.showOwnerName && editingOrder?.userName && (

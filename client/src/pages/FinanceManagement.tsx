@@ -1101,6 +1101,7 @@ const emptyForm = {
   financeType: '保本分成' as '保本分成' | '自负盈亏',
   showProfitShare: true,
   commissionShare: '',
+  assetType: '' as '' | 'stock' | 'crypto',
 };
 
 // ===== 订单公开备注组件 =====
@@ -1519,6 +1520,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       financeType: (order.finance_type || '保本分成') as '保本分成' | '自负盈亏',
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
       commissionShare: order.commission_share || '',
+      assetType: (order.asset_type || '') as '' | 'stock' | 'crypto',
     });
     // 加载字段展示配置
     if (order.display_config) {
@@ -1576,6 +1578,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         financeType: formData.financeType,
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
+        assetType: formData.assetType || undefined,
         displayConfig: {
           ...Object.fromEntries(Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')),
           ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
@@ -1605,6 +1608,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         financeType: formData.financeType,
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
+        assetType: formData.assetType || undefined,
         displayConfig: {
           ...Object.fromEntries(Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')),
           ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
@@ -2008,6 +2012,28 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                   placeholder="填写存放的交易所或钱包账号"
                   style={{ display: 'block', boxSizing: 'border-box' }}
                 />
+              </div>
+
+              {/* 资产类型 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">类型<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
+                <div className="flex gap-2">
+                  {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setFormData(d => ({ ...d, assetType: d.assetType === opt.value ? '' : opt.value }))}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
+                      style={
+                        formData.assetType === opt.value
+                          ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                          : { backgroundColor: '#F3F4F6', color: '#6B7280' }
+                      }
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* 融资类型 */}
