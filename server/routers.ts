@@ -15453,6 +15453,33 @@ ${klinesSummary}
                 ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
           ) as any;
           orders = ((rows[0] || rows) as any[]) || [];
+          // 额外查询通过参与方关联的非 finance 订单（如资方订单添加了借方参与方）
+          try {
+            const crossRoleRows = await db.execute(
+              sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar,
+                  COALESCE(pc.cnt, 0) as _participantCount
+                  FROM ledger_orders fo
+                  LEFT JOIN users u ON u.id = fo.user_id
+                  LEFT JOIN (
+                    SELECT order_id, COUNT(*) as cnt
+                    FROM ledger_order_participants
+                    GROUP BY order_id
+                  ) pc ON pc.order_id = fo.id
+                  INNER JOIN ledger_order_participants p ON p.order_id = fo.id AND p.ledger_id = ${input.ledgerId}
+                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role != 'finance'
+                  ORDER BY fo.created_at DESC`
+            ) as any;
+            const crossOrders = ((crossRoleRows[0] || crossRoleRows) as any[]) || [];
+            // 标记为参与方订单并去重
+            const existingIds = new Set(orders.map((o: any) => o.id));
+            for (const o of crossOrders) {
+              if (!existingIds.has(o.id)) {
+                (o as any)._isParticipant = true;
+                orders.push(o);
+                existingIds.add(o.id);
+              }
+            }
+          } catch (_e) { /* 忽略 */ }
           // 管理员查询时，附加每个订单的参与方用户ID列表
           if (orders.length > 0) {
             try {

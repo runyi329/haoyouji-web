@@ -1,5 +1,14 @@
 [
   {
+    "hash": "0bcee87eb6f075aed512d6d70228887e7610571e",
+    "author": "runyi329",
+    "date": "2026-06-07T08:46:26+00:00",
+    "message": "fix: 右侧借方页面参与方可看到资方订单",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "右侧借方页面参与方可看到资方订单"
+  },
+  {
     "hash": "a3a7e8982b704d7bc7c4d8c1c2e98fe9239db24c",
     "author": "runyi329",
     "date": "2026-06-07T08:37:59+00:00",
