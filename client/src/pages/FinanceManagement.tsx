@@ -1801,6 +1801,67 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
 
             <div className="px-5 py-4 space-y-5 overflow-y-auto overflow-x-hidden flex-1">
 
+              {/* 资产类型 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">类型<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
+                <div className="flex gap-2">
+                  {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setFormData(d => ({ ...d, assetType: d.assetType === opt.value ? '' : opt.value }))}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
+                      style={
+                        formData.assetType === opt.value
+                          ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                          : { backgroundColor: '#F3F4F6', color: '#6B7280' }
+                      }
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 归属用户（手动标注） */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-600">归属用户<span className="ml-1.5 text-xs text-gray-400 font-normal">可选</span></label>
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => setFormData(d => ({ ...d, ownerLabelMode: 'member', ownerLabel: '' }))}
+                      className="text-xs px-2 py-0.5 rounded-full transition-all"
+                      style={formData.ownerLabelMode === 'member' ? { background: '#1A56DB', color: '#fff' } : { background: '#F3F4F6', color: '#6B7280' }}>
+                      选账本成员
+                    </button>
+                    <button type="button" onClick={() => setFormData(d => ({ ...d, ownerLabelMode: 'manual' }))}
+                      className="text-xs px-2 py-0.5 rounded-full transition-all"
+                      style={formData.ownerLabelMode === 'manual' ? { background: '#1A56DB', color: '#fff' } : { background: '#F3F4F6', color: '#6B7280' }}>
+                      手动输入
+                    </button>
+                  </div>
+                </div>
+                {formData.ownerLabelMode === 'member' ? (
+                  <select
+                    value={formData.ownerLabel}
+                    onChange={e => setFormData(d => ({ ...d, ownerLabel: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  >
+                    <option value="">不指定</option>
+                    {realMembers.map((m: any) => (
+                      <option key={m.userId} value={m.nickname || m.username}>{m.nickname || m.username}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    value={formData.ownerLabel}
+                    onChange={e => setFormData(d => ({ ...d, ownerLabel: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    placeholder="输入显示名称，如：英姐"
+                  />
+                )}
+              </div>
+
               {/* 用户 + 币种 同一行 */}
               <div className="flex gap-3 items-start">
               {/* 选择用户 */}
@@ -2028,66 +2089,6 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                 />
               </div>
 
-              {/* 资产类型 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">类型<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
-                <div className="flex gap-2">
-                  {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }] as const).map(opt => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setFormData(d => ({ ...d, assetType: d.assetType === opt.value ? '' : opt.value }))}
-                      className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
-                      style={
-                        formData.assetType === opt.value
-                          ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
-                          : { backgroundColor: '#F3F4F6', color: '#6B7280' }
-                      }
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* 归属用户（手动标注） */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-600">归属用户<span className="ml-1.5 text-xs text-gray-400 font-normal">可选</span></label>
-                  <div className="flex gap-1">
-                    <button type="button" onClick={() => setFormData(d => ({ ...d, ownerLabelMode: 'member', ownerLabel: '' }))}
-                      className="text-xs px-2 py-0.5 rounded-full transition-all"
-                      style={formData.ownerLabelMode === 'member' ? { background: '#1A56DB', color: '#fff' } : { background: '#F3F4F6', color: '#6B7280' }}>
-                      选账本成员
-                    </button>
-                    <button type="button" onClick={() => setFormData(d => ({ ...d, ownerLabelMode: 'manual' }))}
-                      className="text-xs px-2 py-0.5 rounded-full transition-all"
-                      style={formData.ownerLabelMode === 'manual' ? { background: '#1A56DB', color: '#fff' } : { background: '#F3F4F6', color: '#6B7280' }}>
-                      手动输入
-                    </button>
-                  </div>
-                </div>
-                {formData.ownerLabelMode === 'member' ? (
-                  <select
-                    value={formData.ownerLabel}
-                    onChange={e => setFormData(d => ({ ...d, ownerLabel: e.target.value }))}
-                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  >
-                    <option value="">不指定</option>
-                    {realMembers.map((m: any) => (
-                      <option key={m.userId} value={m.nickname || m.username}>{m.nickname || m.username}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={formData.ownerLabel}
-                    onChange={e => setFormData(d => ({ ...d, ownerLabel: e.target.value }))}
-                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                    placeholder="输入显示名称，如：英姐"
-                  />
-                )}
-              </div>
               {/* 融资类型 */}
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">融资类型</label>
