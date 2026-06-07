@@ -1444,7 +1444,13 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   // 按 activeUserTab 筛选订单
   const displayOrders = activeUserTab === 'all'
     ? orders
-    : orders.filter((o: any) => o.user_id === activeUserTab || (o._participantUserIds && o._participantUserIds.includes(activeUserTab)));
+    : orders.filter((o: any) => o.user_id === activeUserTab || (o._participantUserIds && o._participantUserIds.includes(activeUserTab)))
+      .map((o: any) => {
+        if (o.user_id !== activeUserTab && o._participantUserIds && o._participantUserIds.includes(activeUserTab)) {
+          return { ...o, _isParticipant: true };
+        }
+        return o;
+      });
   // 获取有订单的用户列表（用于 Tab 展示）
   const usersWithOrders = realMembers.filter((m: any) =>
     orders.some((o: any) => o.user_id === m.userId || (o._participantUserIds && o._participantUserIds.includes(m.userId)))
