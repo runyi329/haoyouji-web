@@ -1087,7 +1087,7 @@ function FunderOrderCard({
               </button>
               <button
                 onClick={() => {
-                  if (window.confirm('确认永久删除这张订单？此操作不可恢复。')) {
+                  if (window.confirm('确认删除这张订单？订单将移入回收站，可随时恢复。')) {
                     handleDelete(order.id);
                     setShowStatusSheet(false);
                   }
@@ -1095,7 +1095,7 @@ function FunderOrderCard({
                 className="w-full py-3 rounded-xl text-sm font-medium"
                 style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}
               >
-                删除订单（不可恢复）
+                删除订单（移入回收站）
               </button>
             </div>
           </div>
@@ -1719,9 +1719,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
           <ChevronLeft className="w-6 h-6 text-white" />
         </button>
         <h1 className="text-lg font-semibold text-white flex-1">资方管理</h1>
-        <button onClick={() => setShowRecycleBin(true)} className="p-1" title="回收站">
-          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-        </button>
+        {isAdminUser && (
+          <button onClick={() => setShowRecycleBin(true)} className="p-1" title="回收站">
+            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          </button>
+        )}
       </div>
       )}
 
