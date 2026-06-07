@@ -15447,20 +15447,18 @@ ${klinesSummary}
           if (orders.length > 0) {
             try {
               const allOrderIds = orders.map((o: any) => o.id);
-              const ph = allOrderIds.map(() => '?').join(',');
-              const pConn = await getLedgerDb();
-              const pRows = await (pConn as any).execute(
-                `SELECT order_id, user_id FROM finance_order_participants WHERE ledger_id = ? AND order_id IN (${ph})`,
-                [input.ledgerId, ...allOrderIds]
+              const idPlaceholders = allOrderIds.map((id: number) => sql`${id}`);
+              const pRows = await db.execute(
+                sql`SELECT order_id, user_id FROM finance_order_participants WHERE ledger_id = ${input.ledgerId} AND order_id IN (${sql.join(idPlaceholders, sql`, `)})`
               ) as any;
               const pList = ((pRows[0] || pRows) as any[]) || [];
               const pMap: Record<number, number[]> = {};
               for (const r of pList) {
                 if (!pMap[r.order_id]) pMap[r.order_id] = [];
-                pMap[r.order_id].push(r.user_id);
+                pMap[r.order_id].push(Number(r.user_id));
               }
               for (const o of orders) {
-                (o as any)._participantUserIds = pMap[o.id] || [];
+                (o as any)._participantUserIds = pMap[Number(o.id)] || [];
               }
             } catch (_e) { /* 表不存在则忽略 */ }
           }
@@ -15476,14 +15474,12 @@ ${klinesSummary}
           orders = ((myRows[0] || myRows) as any[]) || [];
           // 再查参与方订单（排除自己的订单）
           try {
-            const participantConn = await getLedgerDb();
-            const participantOrderRows = await (participantConn as any).execute(
-              `SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
+            const participantOrderRows = await db.execute(
+              sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
                FROM finance_interest_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                INNER JOIN finance_order_participants p ON p.order_id = fo.id
-               WHERE fo.ledger_id = ? AND p.ledger_id = ? AND p.user_id = ? AND fo.user_id != ?`,
-              [input.ledgerId, input.ledgerId, targetUserId, targetUserId]
+               WHERE fo.ledger_id = ${input.ledgerId} AND p.ledger_id = ${input.ledgerId} AND p.user_id = ${targetUserId} AND fo.user_id != ${targetUserId}`
             ) as any;
             const participantOrders = ((participantOrderRows[0] || participantOrderRows) as any[]) || [];
             // 标记这些订单为参与方订单
