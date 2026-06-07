@@ -1,5 +1,14 @@
 [
   {
+    "hash": "48dbddceff19d74501edefccafbeb010492e4682",
+    "author": "runyi329",
+    "date": "2026-06-07T10:20:09+00:00",
+    "message": "fix: 资方P095利息数字统一保留两位小数，与其他页面一致",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "资方P095利息数字统一保留两位小数，与其他页面一致"
+  },
+  {
     "hash": "2a6e2dbbf23c41d14729ebb8b67cf98f950e8608",
     "author": "runyi329",
     "date": "2026-06-07T10:12:03+00:00",

@@ -1673,7 +1673,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
   };
 
   const handleDelete = (orderId: number) => {
-    setConfirmDeleteId(orderId);
+    deleteMutation.mutate({ id: orderId, ledgerId });
   };
   const handleConfirmDelete = () => {
     if (confirmDeleteId === null) return;
