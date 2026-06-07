@@ -15482,14 +15482,14 @@ ${klinesSummary}
                 ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
           ) as any;
           orders = ((myRows[0] || myRows) as any[]) || [];
-          // 再查参与方订单（排除自己的订单）
+          // 再查参与方订单（排除自己的订单，不限 order_role，资方订单也能看到）
           try {
             const participantOrderRows = await db.execute(
               sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                INNER JOIN ledger_order_participants p ON p.order_id = fo.id
-               WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role = 'finance' AND p.ledger_id = ${input.ledgerId} AND p.user_id = ${targetUserId} AND fo.user_id != ${targetUserId}`
+               WHERE fo.ledger_id = ${input.ledgerId} AND p.ledger_id = ${input.ledgerId} AND p.user_id = ${targetUserId} AND fo.user_id != ${targetUserId}`
             ) as any;
             const participantOrders = ((participantOrderRows[0] || participantOrderRows) as any[]) || [];
             // 标记这些订单为参与方订单

@@ -1,5 +1,14 @@
 [
   {
+    "hash": "a3a7e8982b704d7bc7c4d8c1c2e98fe9239db24c",
+    "author": "runyi329",
+    "date": "2026-06-07T08:37:59+00:00",
+    "message": "fix: 修复多担保物显示问题 - collateral_assets 兼容对象和字符串格式",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复多担保物显示问题 - collateral_assets 兼容对象和字符串格式"
+  },
+  {
     "hash": "e70258dcc5c271af9ac7e42e33248ff18fdf3369",
     "author": "runyi329",
     "date": "2026-06-07T08:23:15+00:00",
