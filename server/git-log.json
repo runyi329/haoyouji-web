@@ -1,5 +1,14 @@
 [
   {
+    "hash": "ae7502c4071e6a9f88633ffbc69408ed03d1a19e",
+    "author": "runyi329",
+    "date": "2026-06-07T09:06:28+00:00",
+    "message": "fix: 跨角色订单不让订单所有者出现在借方Tab列表",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "跨角色订单不让订单所有者出现在借方Tab列表"
+  },
+  {
     "hash": "3681e7299c1456705c27adbb77a10da1f1f27c0e",
     "author": "runyi329",
     "date": "2026-06-07T08:58:01+00:00",

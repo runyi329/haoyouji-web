@@ -3093,6 +3093,11 @@ export default function CryptoPrediction() {
                   const paidInterest = (financeInterestSummary as any)?.[order.id] ?? 0;
                   const annualRate = parseFloat(order.interest_rate_annual || order.annualInterestRate || '0');
                   const isNegativeRate = true; // 融资付息页面用户均为付息方，利息一律显示为负数
+                  // 利息货币与约等于换算
+                  const _baseCur = order.interest_base_currency || 'USDT';
+                  const _interestUnit = _baseCur === 'CNY' ? '元' : 'U';
+                  const _altUnit = _baseCur === 'CNY' ? 'U' : '元';
+                  const _convertAlt = (val: number): number => _baseCur === 'CNY' ? val / 7 : val * 7;
                   const interestBaseRaw = parseFloat(order.interest_base || order.principal || '0');
                   // FG6127 特殊：interest_base 仅为50%部分，利息按全额（×2）计算；其他订单不变
                   const interestBase = order.order_no === 'FG6127' ? interestBaseRaw * 2 : interestBaseRaw;
@@ -3216,10 +3221,15 @@ export default function CryptoPrediction() {
                               </div>
                             )}
                             {buyValue > 0 && (
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-400 shrink-0">买入价值</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>{buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
-                              </div>
+                              <>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-gray-400 shrink-0">买入价值</span>
+                                  <span className="font-medium" style={{ color: '#4B5563' }}>{buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                                </div>
+                                <div className="flex justify-end text-xs">
+                                  <span className="text-gray-400">≈{(buyValue * 7).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>
+                                </div>
+                              </>
                             )}
                             {order.buy_date && (
                               <div className="flex items-center justify-between text-xs">
@@ -3267,19 +3277,25 @@ export default function CryptoPrediction() {
                                 </span>
                                 <span className="text-[10px] text-gray-400">{isNegativeRate ? '(整体部分年化12%)' : `(年化 ${Math.abs(annualRate)}%)`}</span>
                               </div>
-                              <div className="flex items-baseline gap-0.5 mb-1">
+                              <div className="flex items-baseline gap-0.5">
                                 <span
                                   className="text-2xl font-bold tabular-nums leading-tight"
                                   style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                                 >
                                   {unpaidInterest > 0 ? '-' : ''}{unpaidInterest.toFixed(2)}
                                 </span>
-                                <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>USDT</span>
+                                <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{_interestUnit}</span>
                               </div>
+                              <div className="text-xs font-medium leading-tight mb-1" style={{ color: '#4B5563' }}>≈{unpaidInterest > 0 ? '-' : ''}{_convertAlt(unpaidInterest).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {_altUnit}</div>
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400">{isNegativeRate ? '已付利息' : '已收利息'}</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>{paidInterest.toFixed(2)} USDT</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>{paidInterest.toFixed(2)} {_interestUnit}</span>
                               </div>
+                              {paidInterest > 0 && (
+                                <div className="flex justify-end text-xs">
+                                  <span className="text-gray-400">≈{_convertAlt(paidInterest).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {_altUnit}</span>
+                                </div>
+                              )}
                               {startDate && (
                                 <div className="flex items-center justify-between text-xs">
                                   <span className="text-gray-400">计息日期</span>
