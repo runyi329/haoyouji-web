@@ -2809,7 +2809,13 @@ export default function CryptoPrediction() {
                             {/* 数量列（占满剩余宽度，靠右） */}
                             <td className="py-2 px-2 text-right" style={{ width: '99%', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
                               <span className="tabular-nums" style={{ color: '#1A2340' }}>
-                                {(() => { const q = parseFloat(order.quantity); return q % 1 === 0 ? q.toString() : q.toFixed(8).replace(/0+$/, '').replace(/\.$/, ''); })()}
+                                {(() => {
+                                  const q = parseFloat(order.quantity);
+                                  if (q === 0) return '0';
+                                  const intDigits = Math.max(1, Math.floor(Math.abs(q)).toString().length);
+                                  const decDigits = Math.max(0, 4 - intDigits);
+                                  return decDigits > 0 ? q.toFixed(decDigits) : Math.round(q).toString();
+                                })()}
                               </span>
                             </td>
                             {/* 状态列 */}
