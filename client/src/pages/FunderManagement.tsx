@@ -1144,6 +1144,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
   const [paymentForm, setPaymentForm] = useState({ amount: '', currency: 'U' as 'CNY' | 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
   const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null); // 正在编辑的结息记录id
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
+  const [showRecycleBin, setShowRecycleBin] = useState(false);
 
   const [formData, setFormData] = useState({
     userId: 0,
@@ -1386,9 +1387,31 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
   });
   const deleteMutation = trpc.ledger.funderDeleteAssetOrder.useMutation({
     onSuccess: () => {
-      toast.success('删除成功');
+      toast.success('已移入回收站');
       refetchOrders();
       trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+      refetchDeletedOrders();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  // 回收站相关
+  const { data: deletedOrdersData, refetch: refetchDeletedOrders } = trpc.ledger.funderGetDeletedOrders.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId }
+  );
+  const restoreMutation = trpc.ledger.funderRestoreOrder.useMutation({
+    onSuccess: () => {
+      toast.success('订单已恢复');
+      refetchDeletedOrders();
+      refetchOrders();
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const permanentDeleteMutation = trpc.ledger.funderPermanentDeleteOrder.useMutation({
+    onSuccess: () => {
+      toast.success('已永久删除');
+      refetchDeletedOrders();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -1695,7 +1718,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
         <button onClick={() => setLocation(`/ledger/${ledgerId}/settings`)} className="p-1 -ml-2">
           <ChevronLeft className="w-6 h-6 text-white" />
         </button>
-        <h1 className="text-lg font-semibold text-white">资方管理</h1>
+        <h1 className="text-lg font-semibold text-white flex-1">资方管理</h1>
+        <button onClick={() => setShowRecycleBin(true)} className="p-1" title="回收站">
+          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+        </button>
       </div>
       )}
 
@@ -2857,6 +2883,72 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
               >
                 {(createMutation.isPending || updateMutation.isPending) ? '提交中...' : (editingOrder ? '保存修改' : '确认添加')}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 回收站弹窗 */}
+      {showRecycleBin && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setShowRecycleBin(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="relative w-full max-w-lg bg-white rounded-t-2xl max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 bg-white px-4 py-3 border-b flex items-center justify-between z-10">
+              <h3 className="text-lg font-semibold">回收站</h3>
+              <button onClick={() => setShowRecycleBin(false)} className="p-1">
+                <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="p-4">
+              {(!deletedOrdersData || (deletedOrdersData as any[]).length === 0) ? (
+                <p className="text-center text-gray-400 py-8">回收站为空</p>
+              ) : (
+                <div className="space-y-3">
+                  {(deletedOrdersData as any[]).map((order: any) => (
+                    <div key={order.id} className="bg-gray-50 rounded-xl p-3 border border-gray-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs px-2 py-0.5 rounded bg-red-100 text-red-600 font-medium">{order.coin}</span>
+                          <span className="text-sm font-medium text-gray-700">#{order.order_no}</span>
+                          <span className="text-xs text-gray-400">{order.user_display_name || order.username}</span>
+                        </div>
+                        <span className="text-xs text-gray-400">
+                          {order.deleted_at ? new Date(order.deleted_at).toLocaleDateString('zh-CN') : ''}
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-600 mb-2">
+                        <span>金额: {Number(order.amount).toLocaleString()} {order.interest_base_currency === 'CNY' ? '元' : 'U'}</span>
+                        {order.buy_price && <span className="ml-3">买入价: {order.buy_price} U</span>}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            if (window.confirm('确认恢复该订单？')) {
+                              restoreMutation.mutate({ id: order.id, ledgerId });
+                            }
+                          }}
+                          className="flex-1 py-1.5 rounded-lg text-sm font-medium bg-green-50 text-green-600 border border-green-200"
+                        >
+                          恢复
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm('确认永久删除？此操作不可恢复！')) {
+                              permanentDeleteMutation.mutate({ id: order.id, ledgerId });
+                            }
+                          }}
+                          className="flex-1 py-1.5 rounded-lg text-sm font-medium bg-red-50 text-red-600 border border-red-200"
+                        >
+                          永久删除
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

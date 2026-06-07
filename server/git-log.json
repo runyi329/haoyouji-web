@@ -1,5 +1,14 @@
 [
   {
+    "hash": "2232468f94871f76cfe4f1deeb7eebe55d53c453",
+    "author": "runyi329",
+    "date": "2026-06-07T10:29:53+00:00",
+    "message": "fix: 修复资方P095删除订单按钮无反应的问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复资方P095删除订单按钮无反应的问题"
+  },
+  {
     "hash": "48dbddceff19d74501edefccafbeb010492e4682",
     "author": "runyi329",
     "date": "2026-06-07T10:20:09+00:00",

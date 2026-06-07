@@ -14738,7 +14738,7 @@ ${klinesSummary}
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-               WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND (fo.user_id = ? OR fo.id IN (${placeholders}))
+               WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND fo.deleted_at IS NULL AND (fo.user_id = ? OR fo.id IN (${placeholders}))
                ORDER BY fo.created_at DESC`,
               [input.ledgerId, targetUserId, ...participantOrderIds]
             );
@@ -14748,7 +14748,7 @@ ${klinesSummary}
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-               WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND fo.user_id = ?
+               WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND fo.deleted_at IS NULL AND fo.user_id = ?
                ORDER BY fo.created_at DESC`,
               [input.ledgerId, targetUserId]
             );
@@ -14764,7 +14764,7 @@ ${klinesSummary}
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-               WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND fo.id IN (${placeholders})
+               WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND fo.deleted_at IS NULL AND fo.id IN (${placeholders})
                ORDER BY fo.created_at DESC`,
               [input.ledgerId, ...participantOrderIds]
             );
@@ -14790,7 +14790,7 @@ ${klinesSummary}
                  FROM ledger_orders fo
                  LEFT JOIN users u ON u.id = fo.user_id
                  LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-                 WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND (fo.user_id = ? OR fo.id IN (${ph}))
+                 WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND fo.deleted_at IS NULL AND (fo.user_id = ? OR fo.id IN (${ph}))
                  ORDER BY fo.created_at DESC`,
                 [input.ledgerId, targetUserId, ...targetParticipantOrderIds]
               );
@@ -14800,7 +14800,7 @@ ${klinesSummary}
                  FROM ledger_orders fo
                  LEFT JOIN users u ON u.id = fo.user_id
                  LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-                 WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND fo.user_id = ?
+                 WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND fo.deleted_at IS NULL AND fo.user_id = ?
                  ORDER BY fo.created_at DESC`,
                 [input.ledgerId, targetUserId]
               );
@@ -14811,7 +14811,7 @@ ${klinesSummary}
                   FROM ledger_orders fo
                   LEFT JOIN users u ON u.id = fo.user_id
                   LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role = 'funder'
+                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role = 'funder' AND fo.deleted_at IS NULL
                   ORDER BY fo.created_at DESC`
             );
           }
@@ -14960,7 +14960,7 @@ ${klinesSummary}
         // 查询目标用户的所有活跃资产订单
         const rows = await db.execute(
           sql`SELECT coin, amount, buy_quantity as quantity, buy_price, status FROM ledger_orders
-              WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} AND order_role = 'funder' AND status = 'active'`
+              WHERE ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} AND order_role = 'funder' AND status = 'active' AND deleted_at IS NULL`
         ) as any;
         const orders = ((rows[0] || rows) as any[]) || [];
         // 汇总
@@ -15204,7 +15204,55 @@ ${klinesSummary}
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         await db.execute(
-          sql`DELETE FROM ledger_orders WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
+          sql`UPDATE ledger_orders SET deleted_at = NOW() WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND deleted_at IS NULL`
+        );
+        return { success: true };
+      }),
+
+    // 获取已删除的订单（回收站）
+    funderGetDeletedOrders: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        const rows = await db.execute(
+          sql`SELECT fo.*, u.username, u.name as user_display_name FROM ledger_orders fo LEFT JOIN users u ON fo.user_id = u.id WHERE fo.ledger_id = ${input.ledgerId} AND fo.deleted_at IS NOT NULL ORDER BY fo.deleted_at DESC`
+        ) as any;
+        return (rows[0] ?? rows) as any[];
+      }),
+
+    // 恢复已删除的订单
+    funderRestoreOrder: protectedProcedure
+      .input(z.object({ id: z.number(), ledgerId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        await db.execute(
+          sql`UPDATE ledger_orders SET deleted_at = NULL WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
+        );
+        return { success: true };
+      }),
+
+    // 永久删除订单（从回收站彻底删除）
+    funderPermanentDeleteOrder: protectedProcedure
+      .input(z.object({ id: z.number(), ledgerId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        await db.execute(
+          sql`DELETE FROM ledger_orders WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND deleted_at IS NOT NULL`
         );
         return { success: true };
       }),
@@ -15449,7 +15497,7 @@ ${klinesSummary}
                   FROM ledger_order_participants
                   GROUP BY order_id
                 ) pc ON pc.order_id = fo.id
-                WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role = 'finance'
+                WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role = 'finance' AND fo.deleted_at IS NULL
                 ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
           ) as any;
           orders = ((rows[0] || rows) as any[]) || [];
@@ -15466,7 +15514,7 @@ ${klinesSummary}
                     GROUP BY order_id
                   ) pc ON pc.order_id = fo.id
                   INNER JOIN ledger_order_participants p ON p.order_id = fo.id AND p.ledger_id = ${input.ledgerId}
-                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role != 'finance'
+                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role != 'finance' AND fo.deleted_at IS NULL
                   ORDER BY fo.created_at DESC`
             ) as any;
             const crossOrders = ((crossRoleRows[0] || crossRoleRows) as any[]) || [];
@@ -15505,7 +15553,7 @@ ${klinesSummary}
             sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
                 FROM ledger_orders fo
                 LEFT JOIN users u ON u.id = fo.user_id
-                WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role = 'finance' AND fo.user_id = ${targetUserId}
+                WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role = 'finance' AND fo.deleted_at IS NULL AND fo.user_id = ${targetUserId}
                 ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
           ) as any;
           orders = ((myRows[0] || myRows) as any[]) || [];
@@ -15516,7 +15564,7 @@ ${klinesSummary}
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                INNER JOIN ledger_order_participants p ON p.order_id = fo.id
-               WHERE fo.ledger_id = ${input.ledgerId} AND p.ledger_id = ${input.ledgerId} AND p.user_id = ${targetUserId} AND fo.user_id != ${targetUserId}`
+               WHERE fo.ledger_id = ${input.ledgerId} AND fo.deleted_at IS NULL AND p.ledger_id = ${input.ledgerId} AND p.user_id = ${targetUserId} AND fo.user_id != ${targetUserId}`
             ) as any;
             const participantOrders = ((participantOrderRows[0] || participantOrderRows) as any[]) || [];
             // 标记这些订单为参与方订单
@@ -15580,9 +15628,9 @@ ${klinesSummary}
         const rows = await db.execute(
           isManager
             ? sql`SELECT coin, amount, buy_quantity, buy_price, status FROM ledger_orders
-                  WHERE ledger_id = ${input.ledgerId} AND order_role = 'finance' AND status = 'active'`
+                  WHERE ledger_id = ${input.ledgerId} AND order_role = 'finance' AND status = 'active' AND deleted_at IS NULL`
             : sql`SELECT coin, amount, buy_quantity, buy_price, status FROM ledger_orders
-                  WHERE ledger_id = ${input.ledgerId} AND order_role = 'finance' AND user_id = ${ctx.user.id} AND status = 'active'`
+                  WHERE ledger_id = ${input.ledgerId} AND order_role = 'finance' AND user_id = ${ctx.user.id} AND status = 'active' AND deleted_at IS NULL`
         ) as any;
         const orders = ((rows[0] || rows) as any[]) || [];
         const coinBreakdown: Record<string, { quantity: number; totalAmount: number; avgCost: number }> = {};
@@ -16393,7 +16441,7 @@ ${klinesSummary}
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         await db.execute(
-          sql`DELETE FROM ledger_orders WHERE id = ${input.id} AND ledger_id = ${input.ledgerId}`
+          sql`UPDATE ledger_orders SET deleted_at = NOW() WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND deleted_at IS NULL`
         );
         return { success: true };
       }),
