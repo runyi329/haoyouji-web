@@ -2749,7 +2749,7 @@ export default function CryptoPrediction() {
                         const yy = String(createdAt.getFullYear()).slice(2);
                         const mo = String(createdAt.getMonth()+1).padStart(2,'0');
                         const d = String(createdAt.getDate()).padStart(2,'0');
-                        return `${yy}-${mo}-${d}`;
+                        return `${yy}.${mo}.${d}`;
                       })() : '--';
                       const timeStr = createdAt ? (() => {
                         const y = createdAt.getFullYear();
