@@ -2729,7 +2729,7 @@ export default function CryptoPrediction() {
                           <button onClick={() => handleOrderSort('time')} className="flex items-center gap-0.5">日期 {orderSortKey === 'time' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</button>
                         </th>
                         <th className="text-center pb-1.5 px-2" style={{ color: orderSortKey === 'coin' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'coin' ? 600 : 400, whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF' }}>
-                          <button onClick={() => handleOrderSort('coin')} className="flex items-center gap-0.5 mx-auto">币种 {orderSortKey === 'coin' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</button>
+                          <button onClick={() => handleOrderSort('coin')} className="flex items-center gap-0.5 mx-auto">币 {orderSortKey === 'coin' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</button>
                         </th>
                         <th className="text-center pb-1.5 px-1" style={{ color: '#9CA3AF', whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF' }}>赠</th>
                         <th className="text-center pb-1.5 px-1" style={{ color: '#9CA3AF', whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF' }}>档</th>
@@ -2788,7 +2788,7 @@ export default function CryptoPrediction() {
                             </td>
                             {/* 币种列 */}
                             <td className="py-2 px-2 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
-                              <span className="font-medium" style={{ color: '#1A2340' }}>{order.coin}</span>
+                              <span className="font-medium" style={{ color: '#1A2340' }}>{order.coin?.charAt(0) || ''}</span>
                             </td>
                             {/* 赠列 */}
                             <td className="py-2 px-1 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
