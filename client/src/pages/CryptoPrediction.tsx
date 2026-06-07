@@ -2845,7 +2845,7 @@ export default function CryptoPrediction() {
                           </tr>
                           {orderDetailId === order.id && (
                             <tr key={`detail-${order.id}`}>
-                              <td colSpan={5} style={{ padding: 0 }}>
+                              <td colSpan={7} style={{ padding: 0 }}>
                                 <OrderDetail order={order} timeStr={timeStr} ledgerId={ledgerId} viewAsUserId={viewAsUserId} />
                               </td>
                             </tr>
