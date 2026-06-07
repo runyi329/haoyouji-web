@@ -1726,7 +1726,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                     const name = u.nickname || u.name || u.username || '';
                     return name.includes(userSearchText);
                   }).map((u: any) => {
-                    const userOrders = allOrders.filter((o: any) => o.userId === u.userId || o.user_id === u.userId);
+                    const userOrders = allOrders.filter((o: any) => o.userId === u.userId || o.user_id === u.userId || (o._participantUserIds && o._participantUserIds.includes(u.userId)));
                     const activeCount = userOrders.filter((o: any) => o.status === 'active').length;
                     const settledCount = userOrders.filter((o: any) => o.status === 'settled' || o.status === 'cancelled').length;
                     return (

@@ -14772,16 +14772,39 @@ ${klinesSummary}
         } else {
           // 管理员：全部 or 按 targetUserId 过滤
           if (targetUserId) {
-            // 管理员选了某个用户：只显示该用户名下（owner）的订单
-            rows = await conn!.execute(
-              `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
-               FROM funder_asset_orders fo
-               LEFT JOIN users u ON u.id = fo.user_id
-               LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-               WHERE fo.ledger_id = ? AND fo.user_id = ?
-               ORDER BY fo.created_at DESC`,
-              [input.ledgerId, targetUserId]
-            );
+            // 管理员选了某个用户：显示该用户名下的订单 + 该用户作为参与方的订单
+            // 先查该用户作为参与方的订单ID
+            let targetParticipantOrderIds: number[] = [];
+            try {
+              const tpRows = await conn!.execute(
+                'SELECT DISTINCT order_id FROM funder_order_participants WHERE ledger_id = ? AND user_id = ?',
+                [input.ledgerId, targetUserId]
+              ) as any;
+              const tpArr = Array.isArray(tpRows[0]) ? tpRows[0] : (Array.isArray(tpRows) ? tpRows : []);
+              targetParticipantOrderIds = tpArr.map((r: any) => Number(r.order_id)).filter(Boolean);
+            } catch {}
+            if (targetParticipantOrderIds.length > 0) {
+              const ph = targetParticipantOrderIds.map(() => '?').join(',');
+              rows = await conn!.execute(
+                `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
+                 FROM funder_asset_orders fo
+                 LEFT JOIN users u ON u.id = fo.user_id
+                 LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
+                 WHERE fo.ledger_id = ? AND (fo.user_id = ? OR fo.id IN (${ph}))
+                 ORDER BY fo.created_at DESC`,
+                [input.ledgerId, targetUserId, ...targetParticipantOrderIds]
+              );
+            } else {
+              rows = await conn!.execute(
+                `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
+                 FROM funder_asset_orders fo
+                 LEFT JOIN users u ON u.id = fo.user_id
+                 LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
+                 WHERE fo.ledger_id = ? AND fo.user_id = ?
+                 ORDER BY fo.created_at DESC`,
+                [input.ledgerId, targetUserId]
+              );
+            }
           } else {
             rows = await db.execute(
               sql`SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
@@ -14882,19 +14905,23 @@ ${klinesSummary}
             }
           } catch {}
         }
-        // 查询每个订单的参与方数量
+        // 查询每个订单的参与方数量和用户ID列表
         let participantCountMap: Record<number, number> = {};
+        let participantUserIdsMap: Record<number, number[]> = {};
         if (conn && ordersWithParticipant.length > 0) {
           try {
             const orderIds = ordersWithParticipant.map((o: any) => Number(o.id));
             const placeholders = orderIds.map(() => '?').join(',');
             const pcRows = await conn.execute(
-              `SELECT order_id, COUNT(*) as cnt FROM funder_order_participants WHERE order_id IN (${placeholders}) GROUP BY order_id`,
+              `SELECT order_id, user_id FROM funder_order_participants WHERE order_id IN (${placeholders})`,
               orderIds
             ) as any;
             const pcArr = Array.isArray(pcRows[0]) ? pcRows[0] : (Array.isArray(pcRows) ? pcRows : []);
             for (const row of pcArr) {
-              participantCountMap[Number(row.order_id)] = Number(row.cnt);
+              const oid = Number(row.order_id);
+              participantCountMap[oid] = (participantCountMap[oid] || 0) + 1;
+              if (!participantUserIdsMap[oid]) participantUserIdsMap[oid] = [];
+              participantUserIdsMap[oid].push(Number(row.user_id));
             }
           } catch {}
         }
@@ -14902,6 +14929,7 @@ ${klinesSummary}
           ...o,
           paidTotal: paidTotalMap[Number(o.id)] || null,
           participantCount: participantCountMap[Number(o.id)] || 0,
+          _participantUserIds: participantUserIdsMap[Number(o.id)] || [],
         }));
         return { orders: ordersWithPaid, livePrices };
       }),
