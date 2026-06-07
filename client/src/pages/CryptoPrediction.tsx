@@ -3173,7 +3173,7 @@ export default function CryptoPrediction() {
 
                         {/* 左栏：订单信息 */}
                         <div className="flex-1 p-4 pr-3">
-                          {/* 标题：融资资产 */}                          <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>融资资产<span className="text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span></div>
+                          {/* 标题：融资资产 / 参与方显示订单资产(所有者名) */}                          <div className="text-[10px] mb-0.5" style={{ color: order._isParticipant ? '#16A34A' : '#3B82F6' }}>{order._isParticipant ? '订单资产' : '融资资产'}{order._isParticipant && (order.userName || order.username) ? <span className="text-gray-400"> ({order.userName || order.username})</span> : !order._isParticipant ? <span className="text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span> : null}</div>
                           {/* 持币数量（大字突出） */}
                           <div className="flex items-baseline gap-1 mb-1">
                             <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>
