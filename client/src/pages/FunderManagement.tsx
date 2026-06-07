@@ -566,19 +566,19 @@ function FunderOrderCard({
             )}
           </div>
           <div className="space-y-0.5 text-xs">
-            {price > 0 && (
+            {show('buyPrice') && price > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">买入币价</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{price.toLocaleString()} U</span>
               </div>
             )}
-            {totalU > 0 && (
+            {show('buyValue') && totalU > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">买入价值</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
               </div>
             )}
-            {order.interest_base && parseFloat(order.interest_base) > 0 && (
+            {show('interestBase') && order.interest_base && parseFloat(order.interest_base) > 0 && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">{isInvited ? '计佣基数' : '计息基数'}</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -586,7 +586,7 @@ function FunderOrderCard({
                 </span>
               </div>
             )}
-            {order.coin !== 'CNY' && order.coin !== 'USDT' && liveP && (
+            {show('todayPrice') && order.coin !== 'CNY' && order.coin !== 'USDT' && liveP && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">当前币价</span>
                 {(() => {
@@ -607,19 +607,19 @@ function FunderOrderCard({
                 })()}
               </div>
             )}
-            {order.buy_date && (
+            {show('buyDate') && order.buy_date && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">开仓时间</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
               </div>
             )}
-            {holdDurationLabel && (
+            {show('holdDuration') && holdDurationLabel && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">持有时长</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{holdDurationLabel}</span>
               </div>
             )}
-            {order.order_no && (
+            {show('orderNo') && order.order_no && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">订单编号</span>
                 <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
