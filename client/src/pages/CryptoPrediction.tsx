@@ -3093,11 +3093,11 @@ export default function CryptoPrediction() {
                   const paidInterest = (financeInterestSummary as any)?.[order.id] ?? 0;
                   const annualRate = parseFloat(order.interest_rate_annual || order.annualInterestRate || '0');
                   const isNegativeRate = true; // 融资付息页面用户均为付息方，利息一律显示为负数
-                  // 利息货币与约等于换算
-                  const _baseCur = order.interest_base_currency || 'USDT';
-                  const _interestUnit = _baseCur === 'CNY' ? '元' : 'U';
-                  const _altUnit = _baseCur === 'CNY' ? 'U' : '元';
-                  const _convertAlt = (val: number): number => _baseCur === 'CNY' ? val / 7 : val * 7;
+                  // 利息货币与约等于换算（用 interest_rate_currency 决定主显示单位，与后端P095一致）
+                  const _rateCur = order.interest_rate_currency || 'USDT';
+                  const _interestUnit = _rateCur === 'CNY' ? '元' : 'U';
+                  const _altUnit = _rateCur === 'CNY' ? 'U' : '元';
+                  const _convertAlt = (val: number): number => _rateCur === 'CNY' ? val / 7 : val * 7;
                   const interestBaseRaw = parseFloat(order.interest_base || order.principal || '0');
                   // FG6127 特殊：interest_base 仅为50%部分，利息按全额（×2）计算；其他订单不变
                   const interestBase = order.order_no === 'FG6127' ? interestBaseRaw * 2 : interestBaseRaw;
@@ -3112,11 +3112,20 @@ export default function CryptoPrediction() {
                   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
                   const cc = coinColorMap[order.coin] || '#6B7280';
                   // 精确计息（秒级）
+                  const _baseCur = order.interest_base_currency || 'USDT';
                   const nowTs = Date.now();
                   const startTs = startDate ? new Date(startDate + (startDate.includes('T') ? '' : 'T00:00:00')).getTime() : 0;
                   const elapsedSeconds = startTs > 0 ? Math.max(0, (nowTs - startTs) / 1000) : 0;
                   const perSecond = interestBase && annualRate ? (interestBase * Math.abs(annualRate) / 100) / (365 * 24 * 3600) : 0;
-                  const accruedInterest = perSecond * elapsedSeconds;
+                  const accruedInterestRaw = perSecond * elapsedSeconds;
+                  // 折算：计息基数货币与利率货币不一致时，按 1U=7元 折算
+                  const _convertToDisplay = (val: number): number => {
+                    if (_baseCur === _rateCur) return val;
+                    if (_baseCur === 'CNY' && _rateCur === 'USDT') return val / 7;
+                    if (_baseCur === 'USDT' && _rateCur === 'CNY') return val * 7;
+                    return val;
+                  };
+                  const accruedInterest = _convertToDisplay(accruedInterestRaw);
                   let unpaidInterest = accruedInterest; // 代付利息=应计总额，与已付利息独立展示，不做减法
                   // 已卖出标记：从 admin_note 中读取 [代付:xxx] 固定代付利息值
                   const _adminNoteForInterest = String(order.admin_note || '');
