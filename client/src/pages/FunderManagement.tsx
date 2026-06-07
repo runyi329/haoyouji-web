@@ -3028,6 +3028,17 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
                                 {order.owner_label || order.user_display_name || order.username}
                               </span>
                             )}
+                            {(() => {
+                              try {
+                                const t = order.tags;
+                                const tags: string[] = Array.isArray(t) ? t : (typeof t === 'string' && t ? JSON.parse(t) : []);
+                                return tags.map((tag: string, i: number) => (
+                                  <span key={i} className="text-xs font-medium px-1.5 py-0.5" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
+                                    {tag}
+                                  </span>
+                                ));
+                              } catch { return null; }
+                            })()}
                           </div>
                           <span className="text-xs text-gray-400 whitespace-nowrap">
                             {order.deleted_at ? new Date(order.deleted_at).toLocaleDateString('zh-CN') + ' 删除' : ''}

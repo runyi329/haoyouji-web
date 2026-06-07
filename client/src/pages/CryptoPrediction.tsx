@@ -3202,6 +3202,17 @@ export default function CryptoPrediction() {
                             {order.userName || order.username}
                           </span>
                         )}
+                        {(() => {
+                          try {
+                            const t = (order as any).tags;
+                            const tags: string[] = Array.isArray(t) ? t : (typeof t === 'string' && t ? JSON.parse(t) : []);
+                            return tags.map((tag: string, i: number) => (
+                              <span key={i} className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A', backgroundColor: 'transparent' }}>
+                                {tag}
+                              </span>
+                            ));
+                          } catch { return null; }
+                        })()}
                       </div>
 
                       {/* 主体：左右两栏 */}
