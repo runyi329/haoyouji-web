@@ -715,11 +715,11 @@ function FunderOrderCard({
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-0.5">
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                {Math.round(displayAccrued).toLocaleString()}
+                {displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
             </div>
-            <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{Math.round(altAccrued).toLocaleString()} {altUnit}</div>
+            <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
           </div>
           <div className="space-y-0.5 text-xs">
             {show('paidInterest') && (
@@ -727,12 +727,12 @@ function FunderOrderCard({
             <div className="flex items-center justify-between">
               <span className="text-gray-400 whitespace-nowrap">{isInvited ? '已结佣金' : '已收利息'}</span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
-                {Math.round(displayPaid).toLocaleString()} {interestUnit}
+                {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
               </span>
             </div>
             {displayPaid > 0 && (
               <div className="flex justify-end">
-                <span className="text-gray-400">≈{Math.round(altPaid).toLocaleString()} {altUnit}</span>
+                <span className="text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
               </div>
             )}
             </>
@@ -948,7 +948,7 @@ function FunderOrderCard({
       <div className="px-4 pt-3 pb-3 border-t border-blue-100">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium" style={{ color: '#1A2340' }}>
-            {isInvited ? '已结佣金' : '已收利息'}：<span style={{ color: '#16A34A' }}>{Math.round(displayPaid).toLocaleString()} {interestUnit}</span>
+            {isInvited ? '已结佣金' : '已收利息'}：<span style={{ color: '#16A34A' }}>{displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
           </span>
           <button
             onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm(() => ({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
@@ -2725,11 +2725,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                               <div className="min-h-7 flex flex-col justify-center mt-0.5">
                                 <div className="flex items-baseline gap-0.5">
                                   <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                                    {Math.round(prevDisplayAccrued).toLocaleString()}
+                                    {prevDisplayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                   </span>
                                   <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{prevInterestUnit}</span>
                                 </div>
-                                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{Math.round(prevAltAccrued).toLocaleString()} {prevAltUnit}</div>
+                                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{prevAltAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {prevAltUnit}</div>
                               </div>
                               <div className="space-y-0.5 text-xs mt-1">
                                 {displayConfig.paidInterest && (
@@ -2737,12 +2737,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
                                     <div className="flex items-center justify-between">
                                       <span className="text-gray-400 whitespace-nowrap">已收利息</span>
                                       <span className="font-medium" style={{ color: '#4B5563' }}>
-                                        {Math.round(prevDisplayPaid).toLocaleString()} {prevInterestUnit}
+                                        {prevDisplayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {prevInterestUnit}
                                       </span>
                                     </div>
                                     {prevDisplayPaid > 0 && (
                                       <div className="flex justify-end">
-                                        <span className="text-gray-400">≈{Math.round(prevAltPaid).toLocaleString()} {prevAltUnit}</span>
+                                        <span className="text-gray-400">≈{prevAltPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {prevAltUnit}</span>
                                       </div>
                                     )}
                                   </>

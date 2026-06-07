@@ -1,5 +1,14 @@
 [
   {
+    "hash": "2a6e2dbbf23c41d14729ebb8b67cf98f950e8608",
+    "author": "runyi329",
+    "date": "2026-06-07T10:12:03+00:00",
+    "message": "fix: 客户前端利息单位改用 interest_rate_currency 并加折算逻辑，与后端P095一致",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "客户前端利息单位改用 interest_rate_currency 并加折算逻辑，与后端P095一致"
+  },
+  {
     "hash": "d9c125e99cbb0c81d94e5bf6636b9c9e58cb13c8",
     "author": "runyi329",
     "date": "2026-06-07T09:56:27+00:00",
