@@ -12990,6 +12990,19 @@ ${klinesSummary}
         const allOrders = (Array.isArray(rows) ? rows : []) as any[];
         
 
+        // 批量查询每个订单的最高档位
+        let tierMap: Record<number, number> = {};
+        if (allOrders.length > 0) {
+          try {
+            const orderIds = allOrders.map((o: any) => o.id);
+            const tierRows = await db.execute(
+              sql`SELECT order_id, COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id IN (${sql.join(orderIds.map((id: number) => sql`${id}`), sql`,`)}) GROUP BY order_id`
+            ) as any;
+            for (const r of ((tierRows[0] || tierRows) as any[])) {
+              tierMap[r.order_id] = parseInt(r.maxTier?.toString() || '0') || 0;
+            }
+          } catch (_e) { /* 表不存在则忽略 */ }
+        }
         const list = allOrders.map((r: any) => ({
           id: r.id,
           coin: r.coin,
@@ -13016,6 +13029,8 @@ ${klinesSummary}
           confirmedAt: toBeijingTimeStr(r.confirmed_at),
           // 兼容旧字段：是否已在委托卖中
           hasPendingSell: r.sell_status === 'selling',
+          // 档位信息
+          currentTier: tierMap[r.id] ?? 0,
         }));
         return list;
       }),

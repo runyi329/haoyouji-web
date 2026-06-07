@@ -2732,6 +2732,7 @@ export default function CryptoPrediction() {
                           <button onClick={() => handleOrderSort('coin')} className="flex items-center gap-0.5 mx-auto">币种 {orderSortKey === 'coin' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</button>
                         </th>
                         <th className="text-center pb-1.5 px-1" style={{ color: '#9CA3AF', whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF' }}>赠</th>
+                        <th className="text-center pb-1.5 px-1" style={{ color: '#9CA3AF', whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF' }}>档</th>
                         <th className="text-right pb-1.5 px-2" style={{ color: orderSortKey === 'amount' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'amount' ? 600 : 400, whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', width: '99%' }}>
                           <button onClick={() => handleOrderSort('amount')} className="flex items-center gap-0.5 ml-auto">数量 {orderSortKey === 'amount' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</button>
                         </th>
@@ -2792,6 +2793,18 @@ export default function CryptoPrediction() {
                             {/* 赠列 */}
                             <td className="py-2 px-1 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
                               {(order as any).isGift ? <span className="text-[#ef5350] font-bold">赠</span> : null}
+                            </td>
+                            {/* 档位列 */}
+                            <td className="py-2 px-1 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
+                              {(() => {
+                                const tier = (order as any).currentTier ?? 0;
+                                // 颜色从绿(0档)到红(9档)渐变
+                                const tierColors = ['#0EA56A', '#4CAF50', '#8BC34A', '#CDDC39', '#FFC107', '#FF9800', '#FF5722', '#F44336', '#D32F2F', '#B71C1C'];
+                                const color = tierColors[Math.min(tier, 9)];
+                                return order.status === 'completed' ? (
+                                  <span className="font-bold text-[11px]" style={{ color }}>{tier}</span>
+                                ) : null;
+                              })()}
                             </td>
                             {/* 数量列（占满剩余宽度，靠右） */}
                             <td className="py-2 px-2 text-right" style={{ width: '99%', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
