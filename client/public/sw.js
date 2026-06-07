@@ -1,6 +1,6 @@
 // Service Worker for 脉动 PWA
 // 版本号：每次更新 SW 时需要修改此版本号以触发更新
-const CACHE_VERSION = 'v2.2.0';
+const CACHE_VERSION = 'v2.3.0';
 const CACHE_NAME = `maidong-cache-${CACHE_VERSION}`;
 
 // 需要缓存的静态资源（不缓存 index.html，避免部署后旧缓存导致白屏）
