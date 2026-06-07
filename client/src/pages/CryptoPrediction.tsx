@@ -2763,7 +2763,7 @@ export default function CryptoPrediction() {
                       const isDateOpen = expandedDateId === order.id;
                       return (
                         <>
-                          <tr key={order.id} style={{ borderBottom: '1px solid #EEF2FF' }}>
+                          <tr key={order.id} style={{ borderBottom: '1px solid #EEF2FF', backgroundColor: (order as any).sellStatus === 'sold' ? '#F3F4F6' : undefined }}>
                             {/* 日期列 */}
                             <td className="py-2 pr-2" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', paddingLeft: 0, verticalAlign: 'middle' }}>
                               <div className="relative inline-block">
@@ -2788,7 +2788,7 @@ export default function CryptoPrediction() {
                             </td>
                             {/* 币种列 */}
                             <td className="py-2 px-2 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
-                              <span className="font-medium" style={{ color: '#1A2340' }}>{order.coin?.charAt(0) || ''}</span>
+                              <span className="font-medium" style={{ color: (order as any).sellStatus === 'sold' ? '#9CA3AF' : '#1A2340' }}>{order.coin?.charAt(0) || ''}</span>
                             </td>
                             {/* 赠列 */}
                             <td className="py-2 px-1 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
@@ -2808,7 +2808,7 @@ export default function CryptoPrediction() {
                             </td>
                             {/* 数量列（占满剩余宽度，靠右） */}
                             <td className="py-2 px-2 text-right" style={{ width: '99%', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
-                              <span className="tabular-nums" style={{ color: '#1A2340' }}>
+                              <span className="tabular-nums" style={{ color: (order as any).sellStatus === 'sold' ? '#9CA3AF' : '#1A2340' }}>
                                 {(() => {
                                   const q = parseFloat(order.quantity);
                                   if (q === 0) return '0';
