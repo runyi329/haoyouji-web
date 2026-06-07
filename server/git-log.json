@@ -1,5 +1,14 @@
 [
   {
+    "hash": "31ccb1fa3e91e7451b0fec0fb67a76208147ebf3",
+    "author": "runyi329",
+    "date": "2026-06-07T09:39:19+00:00",
+    "message": "fix: 卡片页左栏字段尊重 display_config 开关控制",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "卡片页左栏字段尊重 display_config 开关控制"
+  },
+  {
     "hash": "a5a6835c73287c4bc63ffe0e6f63decda00ef485",
     "author": "runyi329",
     "date": "2026-06-07T09:25:04+00:00",
