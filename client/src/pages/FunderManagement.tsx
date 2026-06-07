@@ -1110,9 +1110,10 @@ function FunderOrderCard({
 interface FunderManagementProps {
   ledgerIdProp?: number;
   hideHeader?: boolean;
+  onRecycleBinRef?: (openFn: () => void) => void;
 }
 
-export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderManagementProps = {}) {
+export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBinRef }: FunderManagementProps = {}) {
   const [, params] = useRoute("/ledger/:id/funder-management");
   const [, routeParams2] = useRoute("/ledger/:id/finance-unified");
   const [, setLocation] = useLocation();
@@ -1145,6 +1146,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader }: FunderMan
   const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null); // 正在编辑的结息记录id
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
   const [showRecycleBin, setShowRecycleBin] = useState(false);
+
+  // 将打开回收站的方法暴露给父组件
+  useEffect(() => {
+    if (onRecycleBinRef) {
+      onRecycleBinRef(() => setShowRecycleBin(true));
+    }
+  }, [onRecycleBinRef]);
 
   const [formData, setFormData] = useState({
     userId: 0,

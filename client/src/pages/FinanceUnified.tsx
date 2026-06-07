@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
@@ -15,6 +15,12 @@ export default function FinanceUnified() {
   const urlSearchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
   const viewAsUserId = urlSearchParams.get('viewAs') ? parseInt(urlSearchParams.get('viewAs')!) : undefined;
 
+  // 回收站打开函数引用
+  const openRecycleBinRef = useRef<(() => void) | null>(null);
+  const handleRecycleBinRef = useCallback((openFn: () => void) => {
+    openRecycleBinRef.current = openFn;
+  }, []);
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F0F4FF' }}>
       <PageTag code="P095" />
@@ -28,6 +34,14 @@ export default function FinanceUnified() {
             <ChevronLeft className="w-6 h-6 text-white" />
           </button>
           <h1 className="text-lg font-semibold text-white flex-1">融资付息订单管理</h1>
+          <button
+            onClick={() => openRecycleBinRef.current?.()}
+            className="p-1.5 rounded-full"
+            style={{ background: 'rgba(255,255,255,0.15)' }}
+            title="回收站"
+          >
+            <svg className="w-4.5 h-4.5 text-white" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          </button>
           <button
             onClick={() => window.location.reload()}
             className="text-sm font-medium px-3 py-1 rounded-full"
@@ -62,7 +76,7 @@ export default function FinanceUnified() {
       {/* Tab 内容 */}
       <div>
         {activeTab === 'funder' && (
-          <FunderManagement ledgerIdProp={ledgerId} hideHeader />
+          <FunderManagement ledgerIdProp={ledgerId} hideHeader onRecycleBinRef={handleRecycleBinRef} />
         )}
         {activeTab === 'finance' && (
           <FinanceManagement ledgerIdProp={ledgerId} hideHeader />
