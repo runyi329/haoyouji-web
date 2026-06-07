@@ -2733,7 +2733,7 @@ export default function CryptoPrediction() {
                         </th>
                         <th className="text-center pb-1.5 px-1" style={{ color: '#9CA3AF', whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF' }}>赠</th>
                         <th className="text-center pb-1.5 px-1" style={{ color: '#9CA3AF', whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF' }}>档</th>
-                        <th className="text-right pb-1.5 px-2" style={{ color: orderSortKey === 'amount' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'amount' ? 600 : 400, whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', width: '100%' }}>
+                        <th className="text-right pb-1.5 px-2" style={{ color: orderSortKey === 'amount' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'amount' ? 600 : 400, whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF' }}>
                           <button onClick={() => handleOrderSort('amount')} className="flex items-center gap-0.5 ml-auto">数量 {orderSortKey === 'amount' ? (orderSortDir === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</button>
                         </th>
                         <th className="text-center pb-1.5 px-2" style={{ color: orderSortKey === 'status' ? '#2563EB' : '#9CA3AF', fontWeight: orderSortKey === 'status' ? 600 : 400, whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF' }}>
