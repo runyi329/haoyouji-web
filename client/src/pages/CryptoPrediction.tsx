@@ -2763,7 +2763,7 @@ export default function CryptoPrediction() {
                       const isDateOpen = expandedDateId === order.id;
                       return (
                         <>
-                          <tr key={order.id} style={{ borderBottom: '1px solid #EEF2FF', backgroundColor: (order as any).sellStatus === 'sold' ? '#F3F4F6' : undefined }}>
+                          <tr key={order.id} style={{ borderBottom: '1px solid #EEF2FF', backgroundColor: (order as any).sellStatus === 'sold' ? '#E8EDF5' : undefined }}>
                             {/* 日期列 */}
                             <td className="py-2 pr-2" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', paddingLeft: 0, verticalAlign: 'middle' }}>
                               <div className="relative inline-block">
