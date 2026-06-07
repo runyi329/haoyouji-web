@@ -15021,6 +15021,7 @@ ${klinesSummary}
         displayConfig: z.record(z.string(), z.union([z.boolean(), z.number()])).optional(),
         assetType: z.enum(['stock', 'crypto', '']).optional(),
         ownerLabel: z.string().optional(),
+        tags: z.array(z.string()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -15050,8 +15051,8 @@ ${klinesSummary}
           if (!exists) isUnique = true;
         }
         const insertResult = await db.execute(
-          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, show_profit_share, commission_share, collateral_assets, display_config, asset_type, created_by)
-              VALUES (${orderNo}, 'funder', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, show_profit_share, commission_share, collateral_assets, display_config, asset_type, tags, created_by)
+              VALUES (${orderNo}, 'funder', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${ctx.user.id})`
         ) as any;
         // 新订单创建后触发即时扫描
         const newOrderId = insertResult?.insertId || (insertResult?.[0] as any)?.insertId;
@@ -15086,6 +15087,7 @@ ${klinesSummary}
         collateralAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
         displayConfig: z.record(z.string(), z.union([z.boolean(), z.number()])).optional(),
         assetType: z.enum(['stock', 'crypto', '']).optional(),
+        tags: z.array(z.string()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -15118,6 +15120,7 @@ ${klinesSummary}
         if (input.collateralAssets !== undefined) { sets.push('collateral_assets = ?'); vals.push(input.collateralAssets && input.collateralAssets.length > 0 ? JSON.stringify(input.collateralAssets) : null); }
         if (input.displayConfig !== undefined) { sets.push('display_config = ?'); vals.push(input.displayConfig ? JSON.stringify(input.displayConfig) : null); }
         if (input.assetType !== undefined) { sets.push('asset_type = ?'); vals.push(input.assetType || null); }
+        if (input.tags !== undefined) { sets.push('tags = ?'); vals.push(input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null); }
         if (input.ownerLabel !== undefined) { sets.push('owner_label = ?'); vals.push(input.ownerLabel || null); }
         if (sets.length === 0) return { success: true };
         const setClause = sets.join(', ');

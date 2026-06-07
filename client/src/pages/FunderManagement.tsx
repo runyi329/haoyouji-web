@@ -527,6 +527,17 @@ function FunderOrderCard({
               </span>
             );
           })()}
+          {(() => {
+            try {
+              const t = (order as any).tags;
+              const tags: string[] = Array.isArray(t) ? t : (typeof t === 'string' && t ? JSON.parse(t) : []);
+              return tags.map((tag, i) => (
+                <span key={i} className="text-xs font-medium px-1.5 py-0.5" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
+                  {tag}
+                </span>
+              ));
+            } catch { return null; }
+          })()}
         </div>
         <div className="flex items-center gap-0.5">
           {!isInvited && (
@@ -1180,7 +1191,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
     assetType: '' as '' | 'stock' | 'crypto',
     ownerLabel: '',
     ownerLabelMode: 'member' as 'member' | 'manual',
+    tags: [] as string[],
   });
+  // 标签输入状态
+  const [tagInput, setTagInput] = useState('');
   // 担保货币列表：[{ coin: 'BTC', qty: '' }, ...]
   const [collateralAssets, setCollateralAssets] = useState<{ coin: string; qty: string }[]>([]);
 
@@ -1569,7 +1583,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
       assetType: '' as '' | 'stock' | 'crypto',
       ownerLabel: '',
       ownerLabelMode: 'member' as 'member' | 'manual',
+      tags: [] as string[],
     });
+    setTagInput('');
     setCollateralAssets([]);
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
     setEditingOrder(null);
@@ -1604,7 +1620,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
       assetType: (order.asset_type || '') as '' | 'stock' | 'crypto',
       ownerLabel: order.owner_label || '',
       ownerLabelMode: (order.owner_label ? 'manual' : 'member') as 'member' | 'manual',
+      tags: (() => { try { const t = order.tags; return Array.isArray(t) ? t : (typeof t === 'string' ? JSON.parse(t) : []); } catch { return []; } })(),
     });
+    setTagInput('');
     // 加载担保货币
     try {
       const ca = order.collateral_assets;
@@ -1695,6 +1713,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
       ) as Record<string, boolean>,
       assetType: formData.assetType || undefined,
       ownerLabel: formData.ownerLabel || undefined,
+      tags: formData.tags.length > 0 ? formData.tags : undefined,
     };
     if (editingOrder) {
       updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...payload });
@@ -1933,6 +1952,52 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
                         {opt.label}
                       </button>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 自定义标签 */}
+              {!editingOrder?.participantInfo && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">标签<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，可添加多个</span></label>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {formData.tags.map((tag, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium" style={{ backgroundColor: '#E8F0FE', color: '#1A56DB' }}>
+                        {tag}
+                        <button type="button" onClick={() => setFormData(d => ({ ...d, tags: d.tags.filter((_, i) => i !== idx) }))} className="text-blue-400 hover:text-red-500 text-sm leading-none">&times;</button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={tagInput}
+                      onChange={e => setTagInput(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && tagInput.trim()) {
+                          e.preventDefault();
+                          if (!formData.tags.includes(tagInput.trim())) {
+                            setFormData(d => ({ ...d, tags: [...d.tags, tagInput.trim()] }));
+                          }
+                          setTagInput('');
+                        }
+                      }}
+                      placeholder="输入标签名称，按回车添加"
+                      className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
+                          setFormData(d => ({ ...d, tags: [...d.tags, tagInput.trim()] }));
+                        }
+                        setTagInput('');
+                      }}
+                      className="px-4 py-2.5 rounded-xl text-sm font-medium text-white"
+                      style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+                    >
+                      添加
+                    </button>
                   </div>
                 </div>
               )}
