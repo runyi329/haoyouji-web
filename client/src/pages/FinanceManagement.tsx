@@ -183,6 +183,7 @@ interface FinanceOrderCardProps {
   participantsLoading: boolean;
   saveParticipantsMutation: any;
   ROLE_OPTIONS: { value: 'funder' | 'borrower' | 'broker'; label: string; color: string }[];
+  activeUserTab: number | 'all';
 }
 
 function FinanceOrderCard({
@@ -213,6 +214,7 @@ function FinanceOrderCard({
   handleSaveParticipants,
   handleRemoveSaved,
   savedParticipants,
+  activeUserTab,
   participantsList,
   setParticipantsList,
   ledgerMembers,
@@ -393,13 +395,14 @@ function FinanceOrderCard({
               )}
             </button>
           )}
-          <button
-            onClick={() => openEdit(order)}
-            className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors"
-            style={{ display: (order._isParticipant || order._fromFunder) ? 'none' : 'inline-flex' }}
-          >
-            <Pencil className="w-3.5 h-3.5" />
-          </button>
+          {(activeUserTab === 'all' || Number(order.user_id) === Number(activeUserTab)) && (
+            <button
+              onClick={() => openEdit(order)}
+              className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -1744,6 +1747,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     isAdmin={isAdminUser}
                     realMembers={realMembers}
                     ledgerId={ledgerId}
+                    activeUserTab={activeUserTab}
                     showPaymentPanel={showPaymentPanel}
                     setShowPaymentPanel={setShowPaymentPanel}
                     paymentForm={paymentForm}
