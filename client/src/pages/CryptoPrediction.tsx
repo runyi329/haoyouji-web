@@ -3214,13 +3214,13 @@ export default function CryptoPrediction() {
                           </div>
                           {/* 订单详情列表 */}
                           <div className="space-y-0.5">
-                            {buyPrice > 0 && (
+                            {showField('buyPrice') && buyPrice > 0 && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400 shrink-0">买入币价</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>{buyPrice.toLocaleString()} U</span>
                               </div>
                             )}
-                            {buyValue > 0 && (
+                            {showField('buyValue') && buyValue > 0 && (
                               <>
                                 <div className="flex items-center justify-between text-xs">
                                   <span className="text-gray-400 shrink-0">买入价值</span>
@@ -3231,13 +3231,13 @@ export default function CryptoPrediction() {
                                 </div>
                               </>
                             )}
-                            {order.buy_date && (
+                            {showField('buyDate') && order.buy_date && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400 shrink-0">开仓时间</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
                               </div>
                             )}
-                            {!String(order.admin_note || '').includes('[已卖出]') && (
+                            {showField('todayPrice') && !String(order.admin_note || '').includes('[已卖出]') && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400 shrink-0">今日币价</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -3245,7 +3245,7 @@ export default function CryptoPrediction() {
                                 </span>
                               </div>
                             )}
-                            {!String(order.admin_note || '').includes('[已卖出]') && (
+                            {showField('currentValue') && !String(order.admin_note || '').includes('[已卖出]') && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400 shrink-0">当前价值</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -3254,7 +3254,7 @@ export default function CryptoPrediction() {
                               </div>
                             )}
 
-                            {order.order_no && (
+                            {showField('orderNo') && order.order_no && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400 shrink-0">订单编号</span>
                                 <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
@@ -3307,7 +3307,7 @@ export default function CryptoPrediction() {
                                   </span>
                                 </div>
                               )}
-                              {holdingLabel && (
+                              {showField('holdDuration') && holdingLabel && (
                                 <div className="flex items-center justify-between mt-0.5 text-xs">
                                   <span className="text-gray-400">持有时长</span>
                                   <span className="font-medium" style={{ color: '#4B5563' }}>{holdingLabel}</span>

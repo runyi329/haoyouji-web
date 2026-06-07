@@ -1,5 +1,14 @@
 [
   {
+    "hash": "a0c07ceb8a2cac3255956222e909e137c0d45836",
+    "author": "runyi329",
+    "date": "2026-06-07T09:44:14+00:00",
+    "message": "fix: 右侧借方卡片页也尊重 display_config 开关控制",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "右侧借方卡片页也尊重 display_config 开关控制"
+  },
+  {
     "hash": "31ccb1fa3e91e7451b0fec0fb67a76208147ebf3",
     "author": "runyi329",
     "date": "2026-06-07T09:39:19+00:00",
