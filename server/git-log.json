@@ -1,5 +1,14 @@
 [
   {
+    "hash": "e70258dcc5c271af9ac7e42e33248ff18fdf3369",
+    "author": "runyi329",
+    "date": "2026-06-07T08:23:15+00:00",
+    "message": "feat: hide collateral gap for ended/settled orders in LedgerDetail, FinanceManagement, CryptoPrediction",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "hide collateral gap for ended/settled orders in LedgerDetail, FinanceManagement, CryptoPrediction"
+  },
+  {
     "hash": "c8976a312e596ce8ddce87f03f133fb36d69805c",
     "author": "runyi329",
     "date": "2026-06-07T08:04:31+00:00",

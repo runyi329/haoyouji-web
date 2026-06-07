@@ -3331,8 +3331,12 @@ export default function CryptoPrediction() {
                                 // 多笔担保物：优先读 collateral_assets，兼容旧单笔字段
                                 let collAssets: { coin: string; qty: string }[] = [];
                                 try {
-                                  if (order.collateral_assets) collAssets = JSON.parse(order.collateral_assets);
-                                } catch(e) {}
+                                  const rawCA = order.collateral_assets;
+                                  if (rawCA) {
+                                    const parsed = typeof rawCA === 'string' ? JSON.parse(rawCA) : rawCA;
+                                    if (Array.isArray(parsed)) collAssets = parsed;
+                                  }
+                                } catch {}
                                 if (collAssets.length === 0 && order.collateral_coin && order.collateral_qty) {
                                   collAssets = [{ coin: order.collateral_coin, qty: String(parseFloat(order.collateral_qty)) }];
                                 }

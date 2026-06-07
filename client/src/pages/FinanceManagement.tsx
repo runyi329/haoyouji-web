@@ -249,7 +249,13 @@ function FinanceOrderCard({
 
   // 计算担保物数组
   let collateralAssets: { coin: string; qty: string }[] = [];
-  try { if (order.collateral_assets) collateralAssets = JSON.parse(order.collateral_assets); } catch(e) {}
+  try {
+    const rawCA = order.collateral_assets;
+    if (rawCA) {
+      const parsed = typeof rawCA === 'string' ? JSON.parse(rawCA) : rawCA;
+      if (Array.isArray(parsed)) collateralAssets = parsed;
+    }
+  } catch {}
   if (collateralAssets.length === 0 && order.collateral_coin && order.collateral_qty) {
     collateralAssets = [{ coin: order.collateral_coin, qty: String(parseFloat(order.collateral_qty)) }];
   }
@@ -1518,8 +1524,12 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       collateralQty: order.collateral_qty ? String(parseFloat(order.collateral_qty)) : '',
       collateralAssets: (() => {
         try {
-          if (order.collateral_assets) return JSON.parse(order.collateral_assets);
-        } catch(e) {}
+          const rawCA = order.collateral_assets;
+          if (rawCA) {
+            const parsed = typeof rawCA === 'string' ? JSON.parse(rawCA) : rawCA;
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+        } catch {}
         // 兼容旧数据：将单笔 collateral_coin/qty 转为数组
         if (order.collateral_coin && order.collateral_qty) {
           return [{ coin: order.collateral_coin, qty: String(parseFloat(order.collateral_qty)) }];
