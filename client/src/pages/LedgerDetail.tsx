@@ -1335,23 +1335,28 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
       )}
       {/* 顶部色条 */}
       <div className="h-1" style={{ background: isEnded ? '#D1D5DB' : `linear-gradient(90deg, ${cc}, ${cc}55)` }} />
+      {/* 帽檐区域：始终显示，资产类型标签 + 所有者名字（受开关控制） */}
+      <div className="flex items-center gap-1.5 flex-wrap px-4 py-1.5" style={{ borderBottom: '1px solid #EBEBEB', minHeight: '28px' }}>
+        {dc.assetType && order.asset_type && (
+          <span className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A', backgroundColor: 'transparent' }}>
+            {order.asset_type === 'stock' ? '股票' : '数字币'}
+          </span>
+        )}
+        {dc.showOwnerName !== false && isParticipantOrder && (order.userName || order.username) && (
+          <span className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A', backgroundColor: 'transparent' }}>
+            {order.userName || order.username}
+          </span>
+        )}
+      </div>
 
-      {/* 主体：大图=单列，中图=左右两栏 */}
+      {/* 主体：大图=单列，中图=左右两栏 */
       <div className={viewMode === 'large' ? 'flex flex-col' : 'flex'} style={{ minHeight: '100px' }}>
 
         {/* 左栏/上半：订单信息 */}
         <div className={viewMode === 'large' ? 'p-4 pb-2' : 'flex-1 p-4 pr-3'} style={{ position: 'relative' }}>
-          {/* 标题：持有资产/订单资产（受邀订单显示「订单资产」+资金方名字） */}
+          {/* 标题：持有资产/订单资产 */}
           <div className="h-5 flex items-center gap-1" style={{ color: isParticipantOrder ? '#16A34A' : '#3B82F6' }}>
             <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`}>{isParticipantOrder ? '订单资产' : '持有资产'}</span>
-            {isParticipantOrder && (order.userName || order.username) && (
-              <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} text-gray-400`}>
-                ({order.userName || order.username})
-              </span>
-            )}
-            {dc.assetType && order.asset_type && (
-              <span className="text-xs text-gray-400">({order.asset_type === 'stock' ? '股票' : '数字币'})</span>
-            )}
           </div>
           {dc.aiIcon && (
             <button
