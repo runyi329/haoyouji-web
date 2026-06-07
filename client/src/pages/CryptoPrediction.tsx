@@ -3370,6 +3370,7 @@ export default function CryptoPrediction() {
                                 }
                                 const _isSoldOrder = String(order.admin_note || '').includes('[已卖出]');
                                 if (_isSoldOrder) return null;
+                                if (order.status !== 'active') return null;
                                 return hasCollateral ? (
                                   <>
                                     {/* 多笔担保物逐行展示：数量一行，折算价值另起一行 */}

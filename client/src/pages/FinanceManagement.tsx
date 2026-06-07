@@ -551,7 +551,7 @@ function FinanceOrderCard({
               </div>
             )}
             {/* 担保缺口 */}
-            {collateralAssets.length > 0 && (
+            {collateralAssets.length > 0 && order.status === 'active' && (
               <>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">

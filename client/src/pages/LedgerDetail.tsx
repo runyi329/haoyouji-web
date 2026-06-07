@@ -902,7 +902,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
                   <span className="font-medium" style={{ color: '#4B5563' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
                 </div>
               )}
-              {show('collateral') && (
+              {show('collateral') && order.status === 'active' && (
                 <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
                   <div className="flex items-center gap-0.5">
                     <span className="text-gray-400">担保缺口</span>
