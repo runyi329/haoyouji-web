@@ -1349,7 +1349,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
         )}
       </div>
 
-      {/* 主体：大图=单列，中图=左右两栏 */
+      {/* 主体：大图=单列，中图=左右两栏 */}
       <div className={viewMode === 'large' ? 'flex flex-col' : 'flex'} style={{ minHeight: '100px' }}>
 
         {/* 左栏/上半：订单信息 */}
