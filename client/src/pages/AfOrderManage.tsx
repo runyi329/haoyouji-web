@@ -823,16 +823,15 @@ export default function AfOrderManage() {
                 const coinQty: Record<string, number> = {};
                 const coinQtyEffective: Record<string, number> = {}; // 折后数量
                 activeOrders.forEach((o: any) => {
-                  // 排除已卖出的订单，不计入币种持仓统计
-                  if (o.sellStatus === 'sold') return;
-                  if (o.coin) {
+                  // 正单本身：排除已卖出的，不计入币种持仓统计
+                  if (o.sellStatus !== 'sold' && o.coin) {
                     const qty = parseFloat(o.quantity) || 0;
                     coinQty[o.coin] = (coinQty[o.coin] || 0) + qty;
                     const tier = o.equityTier || 0;
                     const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
                     coinQtyEffective[o.coin] = (coinQtyEffective[o.coin] || 0) + qty * rate;
                   }
-                  // 同时统计嵌套赠与单的币数（排除已卖出的赠单）
+                  // 嵌套赠与单：无论正单是否已卖出，都遍历赠单（排除已卖出的赠单）
                   const gifts: any[] = (o.giftOrders as any[]) || [];
                   gifts.forEach((g: any) => {
                     if (g.sellStatus === 'sold') return;
