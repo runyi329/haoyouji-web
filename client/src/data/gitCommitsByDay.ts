@@ -7018,4 +7018,18 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-07T13:58:51Z", type: "feat", cleanMessage: "在 LedgerDetail 拥有者首页的订单卡片帽子区域显示自定义标签" },
     { date: "2026-06-07T14:07:24Z", type: "fix", cleanMessage: "LedgerDetail 资方账本首页利率显示改为最多2位小数" },
   ],
+  "2026-06-08": [
+    { date: "2026-06-07T17:16:46Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-08T01:16:32Z", type: "feat", cleanMessage: "持仓币种统计卡片添加按档位展开详情功能" },
+    { date: "2026-06-08T01:24:46Z", type: "feat", cleanMessage: "优化档位详情弹窗-每个用户一行显示持币x折扣率=折后数" },
+    { date: "2026-06-08T01:45:52Z", type: "fix", cleanMessage: "统一口径-日期分组排除已卖出订单,持仓卡片和弹窗纳入嵌套赠单" },
+    { date: "2026-06-08T01:53:36Z", type: "fix", cleanMessage: "修复重复统计-持仓卡片和弹窗不展开嵌套赠单(顶层已含独立赠单行)" },
+    { date: "2026-06-08T02:24:50Z", type: "fix", cleanMessage: "日期分组-正单已卖出时仍遍历其未卖出的嵌套赠单统计币数" },
+    { date: "2026-06-08T02:58:02Z", type: "fix", cleanMessage: "融资金额单位跟随币种动态变化+修复iOS输入框无法聚焦" },
+    { date: "2026-06-08T03:13:17Z", type: "fix", cleanMessage: "融资金额支持手动输入+单位跟随币种动态变化+修复iOS聚焦" },
+    { date: "2026-06-08T05:36:43Z", type: "fix", cleanMessage: "修复 INTEGER_COINS 未定义错误，改用 INTEGER_COINS_FUNDER" },
+    { date: "2026-06-08T05:46:48Z", type: "feat", cleanMessage: "股票类型时买入价格/币数禁用变灰+买入价格去掉单位+融资金额显示≈USDT换算" },
+    { date: "2026-06-08T05:52:54Z", type: "fix", cleanMessage: "股票/CNY类型预览卡片隐藏≈U换算和买入币价，买入价值显示正确单位" },
+    { date: "2026-06-08T06:36:35Z", type: "fix", cleanMessage: "修复iOS拍照上传失败 - 使用FileReader读取dataURL替代objectURL，兼容HEIC格式" },
+  ],
 };
