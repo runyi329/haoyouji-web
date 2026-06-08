@@ -126,12 +126,18 @@ export const autoCompressImage = async (
   const config = IMAGE_COMPRESS_CONFIG[type];
   const { maxSize, quality } = config;
 
+  // 先用 FileReader 读取为 dataURL（兼容 iOS 拍照 HEIC 格式）
+  const dataUrl = await new Promise<string>((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = () => res(reader.result as string);
+    reader.onerror = () => rej(new Error('文件读取失败'));
+    reader.readAsDataURL(input);
+  });
+
   return new Promise((resolve, reject) => {
     const img = new Image();
-    const url = URL.createObjectURL(input);
 
     img.onload = () => {
-      URL.revokeObjectURL(url);
 
       // 计算目标尺寸（保持比例）
       let width = img.width;
@@ -203,11 +209,10 @@ export const autoCompressImage = async (
     };
 
     img.onerror = () => {
-      URL.revokeObjectURL(url);
       reject(new Error('图片加载失败'));
     };
 
-    img.src = url;
+    img.src = dataUrl;
   });
 };
 
