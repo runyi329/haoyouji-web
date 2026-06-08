@@ -7031,5 +7031,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-08T05:46:48Z", type: "feat", cleanMessage: "股票类型时买入价格/币数禁用变灰+买入价格去掉单位+融资金额显示≈USDT换算" },
     { date: "2026-06-08T05:52:54Z", type: "fix", cleanMessage: "股票/CNY类型预览卡片隐藏≈U换算和买入币价，买入价值显示正确单位" },
     { date: "2026-06-08T06:36:35Z", type: "fix", cleanMessage: "修复iOS拍照上传失败 - 使用FileReader读取dataURL替代objectURL，兼容HEIC格式" },
+    { date: "2026-06-08T08:57:00Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-08T11:53:59Z", type: "feat", cleanMessage: "新增提现/入金记录功能，交互方式与保证金一致" },
+    { date: "2026-06-08T11:54:10Z", type: "chore", cleanMessage: "remove accidentally committed dist-test" },
+    { date: "2026-06-08T12:27:08Z", type: "feat", cleanMessage: "37账本添加账目页增加提现/入金类型选项" },
   ],
 };
