@@ -640,12 +640,21 @@ export default function LedgerDetailAA({
       const sd = initialBalancesData.balances[`${selectedTag.name}__startDate`];
       if (sd) startDate = String(sd);
     }
-    // 负债视角：最新余额变大表示亏损（-），变小表示盈利（+），乘以权重
-    const rawPnl = initialBalance - latestBalance;
+    // 本金变动净额（从 capitalHistory 计算）
+    const capitalNetChange = capitalHistory.reduce((sum: number, r: any) => {
+      const amt = Number(r.amount) || 0;
+      return r.description?.startsWith('capital_add') ? sum + amt : sum - amt;
+    }, 0);
+    // 当前本金 = 初始本金 + 本金净变动
+    const currentCapital = initialBalance + capitalNetChange;
+    // 总资产 = 当前余额 + 累计提现
+    const totalAsset = latestBalance + totalWithdraw;
+    // 负债视角盈亏：当前本金 - 总资产，乘以权重
+    const rawPnl = currentCapital - totalAsset;
     const totalPnl = rawPnl * ratio;
-    const returnRate = initialBalance > 0 ? (rawPnl / initialBalance) * 100 : 0;
-    return { latestBalance, latestDate, returnRate, recordDays, totalPnl, initialBalance, startDate };
-  }, [filteredTransactions, cumulativeMap, ledgerData, initialBalancesData, selectedTag]);
+    const returnRate = currentCapital > 0 ? (rawPnl / currentCapital) * 100 : 0;
+    return { latestBalance, latestDate, returnRate, recordDays, totalPnl, initialBalance, currentCapital, startDate };
+  }, [filteredTransactions, cumulativeMap, ledgerData, initialBalancesData, selectedTag, capitalHistory, totalWithdraw]);
 
    // ─── 余额曲线数据（根据日历模式生成对应时间范围内所有日期点） ─────
   // 计算走势图的有效开始日期（startDate前一天），与日历同步
@@ -1381,9 +1390,29 @@ export default function LedgerDetailAA({
                 if (!tagName || !initialBalancesData?.balances) return '未设置';
                 const val = initialBalancesData.balances[tagName];
                 if (val === undefined || val === null) return '未设置';
-                return '¥' + Number(val).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const initialVal = Number(val);
+                // 如果有本金变动，显示当前本金（初始 + 净变动）
+                if (capitalHistory.length > 0) {
+                  const netChange = capitalHistory.reduce((sum: number, r: any) => {
+                    const amt = Number(r.amount) || 0;
+                    return r.description?.startsWith('capital_add') ? sum + amt : sum - amt;
+                  }, 0);
+                  const currentCapital = initialVal + netChange;
+                  return '¥' + currentCapital.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                }
+                return '¥' + initialVal.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
               })()}
             </div>
+            {capitalHistory.length > 0 && (() => {
+              const tagName = selectedTag?.name;
+              const val = tagName && initialBalancesData?.balances ? initialBalancesData.balances[tagName] : null;
+              if (val === undefined || val === null) return null;
+              return (
+                <div className="text-[10px] opacity-50 mt-0.5">
+                  初始: ¥{Number(val).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                </div>
+              );
+            })()}
             {stats.startDate && (
               <div className="text-xs opacity-60 mt-0.5">
                 {(() => {
