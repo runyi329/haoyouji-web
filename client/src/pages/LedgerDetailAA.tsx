@@ -391,8 +391,20 @@ export default function LedgerDetailAA({
 
   // 当前用户的交易数据
   const activeMemberTransactions = useMemo(() => {
-    // 过滤掉 income=0 且 expense=0 的无效记录（误输入空值/0值后删除导致）
-    return (transactionsData || []).filter((d) => {
+    // 过滤掉 income=0 且 expense=0 的无效记录，并排除 transfer 类型记录（提现/本金变动不显示在日历上）
+    return (transactionsData || []).map((day) => {
+      const nonTransferRecords = day.records?.filter((r: any) => r.type !== 'transfer') || day.records;
+      if (nonTransferRecords !== day.records) {
+        // 重新计算 income/expense
+        let income = 0, expense = 0;
+        nonTransferRecords.forEach((r: any) => {
+          if (r.type === 'income') income += r.amount;
+          else if (r.type === 'expense') expense += r.amount;
+        });
+        return { ...day, records: nonTransferRecords, income, expense, balance: income - expense };
+      }
+      return day;
+    }).filter((d) => {
       const total = (d.income || 0) + (d.expense || 0);
       return total > 0;
     });
@@ -405,9 +417,9 @@ export default function LedgerDetailAA({
     if (!tagName) return activeMemberTransactions;
 
     return (activeMemberTransactions || []).map((day) => {
-      // 筛选该标签下的记录（category 字段包含标签名）
+      // 筛选该标签下的记录（category 字段包含标签名），排除 transfer 类型（提现/本金变动不显示在日历上）
       const filtered = day.records.filter((r: any) =>
-        r.category && r.category.includes(tagName)
+        r.category && r.category.includes(tagName) && r.type !== 'transfer'
       );
       if (filtered.length === 0) return null;
 
