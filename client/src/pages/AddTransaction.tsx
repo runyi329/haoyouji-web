@@ -6,11 +6,14 @@ import {
   ArrowLeft,
   Calendar,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Image as ImageIcon,
   Link2,
+  Minus,
   Plus,
+  Trash2,
   User,
   X,
   ZoomIn,
@@ -257,6 +260,82 @@ const AddTransaction = () => {
       setStockInputs(prev => prev.map((s, i) => i === index ? { ...s, name: '查询失败', loading: false } : s));
     }
   };
+
+  // ===== 历史出入金面板（独立于余额记录） =====
+  const [transferPanelOpen, setTransferPanelOpen] = useState(false);
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferSubType, setTransferSubType] = useState<'withdraw' | 'deposit'>('deposit');
+  const [transferNote, setTransferNote] = useState('');
+  const [transferDate, setTransferDate] = useState(new Date());
+
+  // 查询历史 transfer 记录
+  const { data: transferHistory = [], refetch: refetchTransfers } = trpc.ledger.getTransactions.useQuery(
+    { ledgerId, type: 'transfer', limit: 100 },
+    { enabled: isCustomAA }
+  );
+
+  // 计算累计出入金
+  const transferSummary = useMemo(() => {
+    let totalDeposit = 0;
+    let totalWithdraw = 0;
+    const allRecords: any[] = [];
+    (transferHistory as any[]).forEach((group: any) => {
+      group.records?.forEach((r: any) => {
+        allRecords.push(r);
+        if (r.description?.startsWith('deposit')) {
+          totalDeposit += Number(r.amount);
+        } else {
+          totalWithdraw += Number(r.amount);
+        }
+      });
+    });
+    return { totalDeposit, totalWithdraw, net: totalDeposit - totalWithdraw, records: allRecords };
+  }, [transferHistory]);
+
+  // 添加出入金 mutation（独立）
+  const addTransferMutation = trpc.ledger.addTransaction.useMutation({
+    onSuccess: () => {
+      toast.success(transferSubType === 'deposit' ? '入金记录已添加' : '提现记录已添加');
+      setTransferAmount('');
+      setTransferNote('');
+      refetchTransfers();
+      utils.ledger.getTransactions.invalidate({ ledgerId });
+    },
+    onError: (error) => {
+      toast.error('添加失败：' + error.message);
+    },
+  });
+
+  // 删除出入金记录
+  const deleteTransferMutation = trpc.ledger.deleteTransaction.useMutation({
+    onSuccess: () => {
+      toast.success('记录已删除');
+      refetchTransfers();
+      utils.ledger.getTransactions.invalidate({ ledgerId });
+    },
+    onError: (error) => {
+      toast.error('删除失败：' + error.message);
+    },
+  });
+
+  const handleSaveTransfer = () => {
+    if (!transferAmount || parseFloat(transferAmount) <= 0) {
+      toast.error('请输入金额');
+      return;
+    }
+    const y = transferDate.getFullYear();
+    const m = String(transferDate.getMonth() + 1).padStart(2, '0');
+    const d = String(transferDate.getDate()).padStart(2, '0');
+    addTransferMutation.mutate({
+      ledgerId,
+      amount: parseFloat(transferAmount),
+      type: 'transfer',
+      categoryId: 2,
+      transactionDate: `${y}-${m}-${d}`,
+      description: transferNote ? `${transferSubType}:${transferNote}` : transferSubType,
+    });
+  };
+  // ===== 历史出入金面板结束 =====
   
   // 加载编辑数据
   // 当账本数据加载后，同步默认统计模式（仅在非编辑模式且未选择待结类型时）
@@ -701,13 +780,9 @@ const AddTransaction = () => {
 
   // 处理保存
   const handleSave = () => {
-    // transfer 类型（提现/入金）不需要分类，但需要金额
-    if (transactionType !== 'transfer' && selectedCategoryPath.length === 0) {
+    // 余额记录保存（底部按钮仅用于余额记录，提现/入金已在折叠面板中独立处理）
+    if (selectedCategoryPath.length === 0) {
       toast.error("请选择分类");
-      return;
-    }
-    if (transactionType === 'transfer' && (!amount || parseFloat(amount) <= 0)) {
-      toast.error("请输入金额");
       return;
     }
     // 允许零金额提交
@@ -724,11 +799,11 @@ const AddTransaction = () => {
     const payload: any = {
       ledgerId,
       amount: parseFloat(amount) || 0,
-      type: transactionType,
-      categoryId: transactionType === 'transfer' ? (selectedCategoryPath[selectedCategoryPath.length - 1] || 2) : selectedCategoryPath[selectedCategoryPath.length - 1],
+      type: 'expense' as const,
+      categoryId: selectedCategoryPath[selectedCategoryPath.length - 1],
       transactionDate: formattedDate,
-      description: (transactionType === 'transfer' ? (note || undefined) : (note || undefined)),
-      images: uploadedImages.length > 0 ? uploadedImages : undefined, // 使用images数组
+      description: note || undefined,
+      images: uploadedImages.length > 0 ? uploadedImages : undefined,
       stockCodes: isCustomAA ? stockInputs.filter(s => s.code.trim()).map(s => ({ code: s.code.trim(), name: s.name })) : undefined,
       reimbursementStatus, // 添加报销状态
       pendingType: pendingType || undefined, // 添加待结类型
@@ -1192,48 +1267,132 @@ const AddTransaction = () => {
         </div>
       ) : isCustomAA ? (
         <div className="flex-1 overflow-y-auto flex flex-col bg-[#F4F6F9]">
+          {/* ===== 历史出入金折叠面板（独立于余额记录） ===== */}
           <div className="bg-white mx-3 mt-3 rounded-2xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #F0E8E0' }}>
+            {/* 折叠头部 */}
+            <button
+              className="w-full px-5 py-4 flex items-center justify-between active:bg-gray-50 transition-colors"
+              onClick={() => setTransferPanelOpen(!transferPanelOpen)}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-[#1A2B4A]">历史出入金</span>
+                <span className="text-xs text-gray-400">
+                  {transferSummary.records.length > 0 ? `${transferSummary.records.length}笔` : '暂无记录'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {transferSummary.net !== 0 && (
+                  <span className={`text-sm font-semibold ${transferSummary.net > 0 ? 'text-[#2E7D32]' : 'text-[#E53935]'}`}>
+                    {transferSummary.net > 0 ? '+' : ''}{transferSummary.net.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                )}
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${transferPanelOpen ? 'rotate-180' : ''}`} />
+              </div>
+            </button>
 
-            {/* 类型切换区（余额记录 / 提现 / 入金） */}
-            <div className="px-5 pt-4 pb-3" style={{ borderBottom: '1px solid #F5F5F5' }}>
-              <div className="text-xs text-gray-400 mb-2 font-medium tracking-widest uppercase">记录类型</div>
-              <div className="flex gap-2">
-                <button
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                    transactionType === 'expense'
-                      ? 'bg-[#1A2B4A] text-white shadow-sm'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}
-                  onClick={() => setTransactionType('expense')}
-                >
-                  余额记录
-                </button>
-                <button
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                    transactionType === 'transfer' && note === 'withdraw'
-                      ? 'bg-[#E53935] text-white shadow-sm'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}
-                  onClick={() => { setTransactionType('transfer'); setNote('withdraw'); }}
-                >
-                  提现
-                </button>
-                <button
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                    transactionType === 'transfer' && note === 'deposit'
-                      ? 'bg-[#2E7D32] text-white shadow-sm'
-                      : 'bg-gray-100 text-gray-600'
-                  }`}
-                  onClick={() => { setTransactionType('transfer'); setNote('deposit'); }}
-                >
-                  入金
-                </button>
+            {/* 折叠内容 */}
+            <div className={`overflow-hidden transition-all duration-300 ${transferPanelOpen ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+              <div style={{ borderTop: '1px solid #F5F5F5' }}>
+                {/* 汇总信息 */}
+                <div className="px-5 py-3 flex gap-4 text-xs text-gray-500" style={{ borderBottom: '1px solid #F5F5F5' }}>
+                  <span>入金: <span className="text-[#2E7D32] font-semibold">+{transferSummary.totalDeposit.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span></span>
+                  <span>提现: <span className="text-[#E53935] font-semibold">-{transferSummary.totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span></span>
+                </div>
+
+                {/* 历史记录列表 */}
+                {transferSummary.records.length > 0 && (
+                  <div className="max-h-[200px] overflow-y-auto">
+                    {transferSummary.records.map((record: any) => {
+                      const isDeposit = record.description?.startsWith('deposit');
+                      const noteText = record.description?.includes(':') ? record.description.split(':').slice(1).join(':') : '';
+                      return (
+                        <div key={record.id} className="px-5 py-2.5 flex items-center gap-3" style={{ borderBottom: '1px solid #FAFAFA' }}>
+                          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isDeposit ? 'bg-[#2E7D32]' : 'bg-[#E53935]'}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs font-medium text-gray-700">{isDeposit ? '入金' : '提现'}</span>
+                              {noteText && <span className="text-[11px] text-gray-400 truncate">- {noteText}</span>}
+                            </div>
+                            <span className="text-[11px] text-gray-400">{record.recordDate || ''}</span>
+                          </div>
+                          <span className={`text-sm font-semibold ${isDeposit ? 'text-[#2E7D32]' : 'text-[#E53935]'}`}>
+                            {isDeposit ? '+' : '-'}{Number(record.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                          </span>
+                          <button
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 active:bg-red-50 active:text-red-500 flex-shrink-0"
+                            onClick={(e) => { e.stopPropagation(); deleteTransferMutation.mutate({ recordId: record.id }); }}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* 添加新出入金 */}
+                <div className="px-5 py-4" style={{ borderTop: '1px solid #F5F5F5' }}>
+                  <div className="text-xs text-gray-400 mb-3 font-medium">添加出入金</div>
+                  {/* 类型切换 */}
+                  <div className="flex gap-2 mb-3">
+                    <button
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                        transferSubType === 'deposit' ? 'bg-[#2E7D32] text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                      onClick={() => setTransferSubType('deposit')}
+                    >
+                      入金
+                    </button>
+                    <button
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                        transferSubType === 'withdraw' ? 'bg-[#E53935] text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                      onClick={() => setTransferSubType('withdraw')}
+                    >
+                      提现
+                    </button>
+                  </div>
+                  {/* 金额输入 */}
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={transferAmount}
+                      placeholder="输入金额"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (/^\d*\.?\d{0,2}$/.test(val) || val === '') setTransferAmount(val);
+                      }}
+                      className="flex-1 text-sm bg-gray-50 rounded-xl px-3 py-2.5 outline-none text-gray-700 placeholder-gray-300"
+                    />
+                    <button
+                      className={`px-5 py-2.5 rounded-xl text-sm font-medium text-white active:opacity-80 ${
+                        transferSubType === 'deposit' ? 'bg-[#2E7D32]' : 'bg-[#E53935]'
+                      }`}
+                      onClick={handleSaveTransfer}
+                    >
+                      {transferSubType === 'deposit' ? '确认入金' : '确认提现'}
+                    </button>
+                  </div>
+                  {/* 备注 */}
+                  <input
+                    type="text"
+                    value={transferNote}
+                    placeholder="备注（选填）"
+                    onChange={(e) => setTransferNote(e.target.value)}
+                    className="w-full text-xs bg-gray-50 rounded-xl px-3 py-2 outline-none text-gray-600 placeholder-gray-300"
+                  />
+                </div>
               </div>
             </div>
+          </div>
+
+          {/* ===== 余额记录区（独立） ===== */}
+          <div className="bg-white mx-3 mt-3 rounded-2xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #F0E8E0' }}>
 
             {/* 金额输入区 */}
             <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
-              <div className="text-xs text-gray-400 mb-2 font-medium tracking-widest uppercase">{transactionType === 'transfer' ? (note === 'withdraw' ? '提现金额' : '入金金额') : '金额'}</div>
+              <div className="text-xs text-gray-400 mb-2 font-medium tracking-widest uppercase">余额记录</div>
               <div className="inline-flex items-end w-full">
                 <input
                   type="text"
@@ -1260,8 +1419,8 @@ const AddTransaction = () => {
               </div>
             </div>
 
-            {/* 分类选择区（提现/入金时隐藏） */}
-            {transactionType !== 'transfer' && <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
+            {/* 分类选择区 */}
+            <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
               <div className="text-xs text-gray-400 mb-3 font-medium tracking-widest uppercase">分类</div>
               {categoryLevels.map((cats, level) => {
                 // custom_aa管理员模式：URL中有categoryId时，只显示该单个标签（不显示其他用户标签）
@@ -1306,26 +1465,7 @@ const AddTransaction = () => {
                 );
               })}
               {isLoadingTop && <div className="text-xs text-gray-400 mt-2">加载分类中...</div>}
-            </div>}
-
-            {/* 提现/入金时显示备注输入框 */}
-            {transactionType === 'transfer' && (
-              <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
-                <div className="text-xs text-gray-400 mb-2 font-medium tracking-widest uppercase">备注（选填）</div>
-                <input
-                  type="text"
-                  value={note === 'withdraw' || note === 'deposit' ? '' : note}
-                  placeholder="输入备注信息..."
-                  onChange={(e) => {
-                    // 保留 transfer 子类型信息在前缀
-                    const subType = (note === 'withdraw' || note === 'deposit') ? note : (note?.startsWith('withdraw:') ? 'withdraw' : note?.startsWith('deposit:') ? 'deposit' : 'withdraw');
-                    const val = e.target.value;
-                    setNote(val ? `${subType}:${val}` : subType);
-                  }}
-                  className="w-full text-sm bg-gray-50 rounded-xl px-3 py-2.5 outline-none text-gray-700 placeholder-gray-300"
-                />
-              </div>
-            )}
+            </div>
 
             {/* 日期选择区 */}
             <button
@@ -1887,20 +2027,14 @@ const AddTransaction = () => {
       </>
       )}
 
-      {/* 底部保存按鈕（custom_aa 专用，固定在底部） */}
+      {/* 底部保存按鈕（custom_aa 专用，固定在底部，仅用于余额记录） */}
       {isCustomAA && (
         <div className="flex-shrink-0 p-4 bg-white" style={{ borderTop: '1px solid #F0E8E0' }}>
           <button
-            className={`w-full text-white py-4 rounded-2xl text-base font-semibold shadow-sm active:opacity-80 ${
-              transactionType === 'transfer'
-                ? (note === 'withdraw' || note?.startsWith('withdraw') ? 'bg-[#E53935]' : 'bg-[#2E7D32]')
-                : 'bg-[#D32F2F]'
-            }`}
+            className="w-full text-white py-4 rounded-2xl text-base font-semibold shadow-sm active:opacity-80 bg-[#D32F2F]"
             onClick={handleSave}
           >
-            {transactionType === 'transfer'
-              ? (note === 'withdraw' || note?.startsWith('withdraw') ? '确认提现' : '确认入金')
-              : '保存'}
+            保存
           </button>
         </div>
       )}
