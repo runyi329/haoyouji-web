@@ -646,28 +646,33 @@ export default function AfOrderManage() {
         const holdingOrders = (orders as any[] || []).filter(
           (o: any) => o.status === 'completed' && o.sellStatus !== 'sold' && o.coin === targetCoin
         );
-        // 按 limitPrice 档位分组
-        const tierMap: Record<string, { price: number; orders: any[]; rawQty: number; effQty: number; users: Set<string>; giftCount: number; normalCount: number }> = {};
+        // 按 limitPrice 档位分组，每个档位内再按用户分组
+        interface UserDetail { name: string; rawQty: number; effQty: number; orderCount: number; isGift: boolean; equityTier: number; rate: number }
+        interface TierGroup { price: number; rawQty: number; effQty: number; orderCount: number; giftCount: number; users: Record<string, UserDetail> }
+        const tierMap: Record<string, TierGroup> = {};
         holdingOrders.forEach((o: any) => {
           const price = parseFloat(o.limitPrice) || 0;
           const key = price.toFixed(2);
           if (!tierMap[key]) {
-            tierMap[key] = { price, orders: [], rawQty: 0, effQty: 0, users: new Set(), giftCount: 0, normalCount: 0 };
+            tierMap[key] = { price, rawQty: 0, effQty: 0, orderCount: 0, giftCount: 0, users: {} };
           }
           const tier = tierMap[key];
           const qty = parseFloat(o.quantity) || 0;
-          const rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
-          tier.orders.push(o);
+          const eqTier = o.equityTier || 0;
+          const rate = EQUITY_DISCOUNT_RATES[eqTier] ?? 1.0;
           tier.rawQty += qty;
           tier.effQty += qty * rate;
+          tier.orderCount += 1;
           const isGift = o.isGift === true || o.isGift === 1;
-          if (isGift) {
-            tier.giftCount += 1;
-          } else {
-            tier.normalCount += 1;
-            const name = o.nickname || o.username || `用户${o.userId}`;
-            tier.users.add(name);
+          if (isGift) tier.giftCount += 1;
+          const name = o.nickname || o.username || `用户${o.userId}`;
+          const userKey = `${name}_${isGift ? 'gift' : 'normal'}_${eqTier}`;
+          if (!tier.users[userKey]) {
+            tier.users[userKey] = { name, rawQty: 0, effQty: 0, orderCount: 0, isGift, equityTier: eqTier, rate };
           }
+          tier.users[userKey].rawQty += qty;
+          tier.users[userKey].effQty += qty * rate;
+          tier.users[userKey].orderCount += 1;
         });
         const tiers = Object.values(tierMap).sort((a, b) => a.price - b.price);
         const COIN_DECIMALS_D: Record<string, number> = { SOL: 1, BTC: 4, ETH: 2 };
@@ -685,31 +690,42 @@ export default function AfOrderManage() {
               onClick={e => e.stopPropagation()}
             >
               <p className="text-sm font-semibold text-gray-700 mb-3">{targetCoin} 持仓档位详情（{tiers.length}个档位）</p>
-              <div className="space-y-2 overflow-y-auto flex-1">
-                {tiers.map((tier) => (
-                  <div key={tier.price} className="bg-gray-50 rounded-xl p-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-semibold text-gray-800">${tier.price.toFixed(2)}</span>
-                      <span className="text-[10px] text-gray-400">{tier.normalCount}单{tier.giftCount > 0 ? ` ${tier.giftCount}赠` : ''}</span>
+              <div className="space-y-2.5 overflow-y-auto flex-1">
+                {tiers.map((tier) => {
+                  const userList = Object.values(tier.users).sort((a, b) => b.rawQty - a.rawQty);
+                  return (
+                    <div key={tier.price} className="bg-gray-50 rounded-xl p-3">
+                      {/* 档位汇总行 */}
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-gray-800">${tier.price.toFixed(2)}</span>
+                        <span className="text-gray-500">
+                          {tier.orderCount}单{tier.giftCount > 0 ? `(${tier.giftCount}赠)` : ''}
+                          <span className="mx-1 text-gray-300">|</span>
+                          {fmtD(tier.rawQty)}
+                          <span className="mx-1 text-gray-300">/</span>
+                          <span className="text-blue-600 font-medium">{fmtD(tier.effQty)}</span>
+                        </span>
+                      </div>
+                      {/* 每个用户一行明细 */}
+                      <div className="mt-1.5 pt-1.5 border-t border-gray-100 space-y-0.5">
+                        {userList.map((u, ui) => (
+                          <div key={ui} className="flex items-center text-[11px] leading-5">
+                            <span className="text-gray-700 font-medium truncate max-w-[72px]">{u.name}</span>
+                            {u.isGift && <span className="ml-1 text-[9px] text-amber-500">赠</span>}
+                            <span className="flex-1 mx-1 border-b border-dotted border-gray-200" />
+                            <span className="text-gray-600 whitespace-nowrap">
+                              {fmtD(u.rawQty)}
+                              <span className="text-gray-300 mx-0.5">x</span>
+                              <span className="text-gray-400">{Math.round(u.rate * 100)}%</span>
+                              <span className="text-gray-300 mx-0.5">=</span>
+                              <span className="text-blue-600 font-medium">{fmtD(u.effQty)}</span>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">持币</span>
-                        <span className="text-gray-700 font-medium">{fmtD(tier.rawQty)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">折后</span>
-                        <span className="text-gray-700 font-medium">{fmtD(tier.effQty)}</span>
-                      </div>
-                    </div>
-                    {tier.users.size > 0 && (
-                      <div className="mt-1.5 pt-1.5 border-t border-gray-100">
-                        <p className="text-[10px] text-gray-400 mb-0.5">持仓人（{tier.users.size}）</p>
-                        <p className="text-[11px] text-gray-600 leading-relaxed">{Array.from(tier.users).join('、')}</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <div className="mt-3 pt-2 border-t border-gray-100 flex justify-between items-center text-xs text-gray-500">
                 <span>合计 {fmtD(totalRaw)} {targetCoin}</span>
