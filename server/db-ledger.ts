@@ -3108,7 +3108,8 @@ export async function addTransaction(data: {
   
   // UPSERT逻辑：仅37号账本（日历型定制账本）同一标签同一日期只保留一条，后录入覆盖前一条
   // 其他普通账本允许同一天同一类目多条记录
-  const existingRecord = data.ledgerId === 37 ? await db
+  // transfer类型（提现/增减本金）不参与UPSERT，允许同一天多条
+  const existingRecord = (data.ledgerId === 37 && data.type !== 'transfer') ? await db
     .select({ id: ledgerRecords.id })
     .from(ledgerRecords)
     .where(
