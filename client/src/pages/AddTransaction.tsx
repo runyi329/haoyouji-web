@@ -268,10 +268,10 @@ const AddTransaction = () => {
   const [transferNote, setTransferNote] = useState('');
   const [transferDate, setTransferDate] = useState(new Date());
 
-  // 查询历史 transfer 记录
+  // 查询历史 transfer 记录（按当前选中标签过滤）
   const { data: transferHistory = [], refetch: refetchTransfers } = trpc.ledger.getTransactions.useQuery(
-    { ledgerId, type: 'transfer', limit: 100 },
-    { enabled: isCustomAA }
+    { ledgerId, type: 'transfer', categoryId: currentCategoryId, limit: 100 },
+    { enabled: isCustomAA && !!currentCategoryId }
   );
 
   // 计算累计提现（排除 capital_ 开头的本金变动记录）
@@ -351,7 +351,7 @@ const AddTransaction = () => {
       ledgerId,
       amount: parseFloat(capitalAmount),
       type: 'transfer',
-      categoryId: 2,
+      categoryId: currentCategoryId!,
       transactionDate: `${y}-${m}-${d}`,
       description: capitalNote ? `${capitalSubType}:${capitalNote}` : capitalSubType,
     });
@@ -393,7 +393,7 @@ const AddTransaction = () => {
       ledgerId,
       amount: parseFloat(transferAmount),
       type: 'transfer',
-      categoryId: 2,
+      categoryId: currentCategoryId!,
       transactionDate: `${y}-${m}-${d}`,
       description: transferNote ? `${transferSubType}:${transferNote}` : transferSubType,
     });
