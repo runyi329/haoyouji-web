@@ -558,7 +558,7 @@ function FunderOrderCard({
       </div>
 
       {/* 主体：左右两栏布局 */}
-      <div className="flex" style={{ minHeight: '100px' }}>
+      <div className="flex">
 
         {/* 左栏：持有资产 */}
         <div className="flex-1 p-4 pr-3">
@@ -655,7 +655,7 @@ function FunderOrderCard({
         <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
 
         {/* 右栏：待结利息 */}
-        <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
+        <div className="p-4 pl-3 flex flex-col shrink-0" style={{ width: 'auto', minWidth: '160px', maxWidth: '200px' }}>
           <div className="flex items-center gap-1 mb-0.5 relative" style={{ height: '16px' }}>
             <span className="text-[10px]" style={{ color: isInvited ? '#059669' : '#3B82F6' }}>{isInvited ? '待结佣金' : '待收利息'}</span>
             {rateAbs && <span className="text-[10px] text-gray-400">(年化 {rateAbs}%)</span>}
@@ -2734,8 +2734,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
                       )}
                     </div>
                   )}
-                  {/* 两栏主体 */}
-                  <div className="flex" style={{ minHeight: '100px' }}>
+                   {/* 两栏主体 */}
+                   <div className="flex">
                     {/* 左栏：持有资产 */}
                      <div className="flex-1 p-4 pr-3">
                        <div className="flex items-center gap-0.5 mb-0.5">
@@ -2829,8 +2829,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
                     </div>
                     {/* 中间分隔线 */}
                     <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
-                    {/* 右栏：待结利息（与 LedgerDetail FunderOrderCardRight 完全一致） */}
-                    <div className="w-44 p-4 pl-3 flex flex-col">
+                     {/* 右栏：待结利息（与 LedgerDetail FunderOrderCardRight 完全一致） */}
+                     <div className="p-4 pl-3 flex flex-col shrink-0" style={{ width: 'auto', minWidth: '160px', maxWidth: '200px' }}>
                       {displayConfig.accruedInterest && formData.interestRateAnnual && formData.interestBase && formData.interestStartDate ? (
                         (() => {
                           // 利息货币逻辑与 LedgerDetail / FunderOrderCard 完全一致

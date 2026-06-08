@@ -3216,7 +3216,7 @@ export default function CryptoPrediction() {
                       </div>
 
                       {/* 主体：左右两栏 */}
-                      <div className="flex" style={{ minHeight: '100px' }}>
+                       <div className="flex">
 
                         {/* 左栏：订单信息 */}
                         <div className="flex-1 p-4 pr-3">
@@ -3287,8 +3287,8 @@ export default function CryptoPrediction() {
                         <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
 
                         {/* 右栏：利息信息 */}
-                        <div className="w-44 p-4 pl-3 flex flex-col" style={{ alignSelf: 'stretch' }}>
-                          <div className="flex flex-col h-full">
+                        <div className="p-4 pl-3 flex flex-col shrink-0" style={{ width: 'auto', minWidth: '160px', maxWidth: '200px' }}>
+                          <div className="flex flex-col">
                             {/* 待付/待收利息 */}
                             <div className="flex flex-col justify-start">
                               <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>

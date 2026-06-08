@@ -519,8 +519,8 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
   const displayCommissionBase = convertCommission(commissionBase);
   if (isParticipantView) {
     return (
-      <div className="flex flex-col h-full">
-        <div className="flex-1 flex flex-col justify-start">
+      <div className="flex flex-col">
+        <div className="flex flex-col justify-start">
           <div className="h-5 flex items-center gap-1 relative">
             <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`} style={{ color: '#16A34A' }}>待结佣金</span>
             <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} text-gray-400`}>(年化{commissionRate}%)</span>
@@ -622,9 +622,9 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
     );
   }
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col">
       {/* 上半：代结利息 */}
-      <div className="flex-1 flex flex-col justify-start">
+      <div className="flex flex-col justify-start">
         {/* 区块标题（固定高度与左栏对齐） */}
         <div className="h-5 flex items-center gap-1 relative">
           <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`} style={{ color: '#3B82F6' }}>待结利息</span>
@@ -928,7 +928,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
       )}
       {/* 下半：收益分成 - 受 show_profit_share 和 dc.profitShare 双重控制 */}
       {order.show_profit_share !== 0 && order.show_profit_share !== false && show('profitShare') && (
-      <div className="flex-1 flex flex-col justify-start pt-2">
+      <div className="flex flex-col justify-start pt-2">
         {/* 收益分成标题（固定高度与左栏对齐） */}
         <div className="h-5 flex items-center gap-1">
           <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`} style={{ color: '#3B82F6' }}>收益分成</span>
@@ -1361,7 +1361,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
       </div>
 
       {/* 主体：大图=单列，中图=左右两栏 */}
-      <div className={viewMode === 'large' ? 'flex flex-col' : 'flex'} style={{ minHeight: '100px' }}>
+      <div className={viewMode === 'large' ? 'flex flex-col' : 'flex'} style={{ minHeight: viewMode === 'large' ? '100px' : undefined }}>
 
         {/* 左栏/上半：订单信息 */}
         <div className={viewMode === 'large' ? 'p-4 pb-2' : 'flex-1 p-4 pr-3'} style={{ position: 'relative' }}>
@@ -1499,7 +1499,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
         }
 
         {/* 右栏/下半：利息 + 收益分成 */}
-        <div className={viewMode === 'large' ? 'p-4 pt-2' : 'w-44 p-4 pl-3 flex flex-col'} style={viewMode === 'large' ? {} : { alignSelf: 'stretch' }}>
+        <div className={viewMode === 'large' ? 'p-4 pt-2' : 'p-4 pl-3 flex flex-col shrink-0'} style={viewMode === 'large' ? {} : { width: 'auto', minWidth: '160px', maxWidth: '200px' }}>
           {hasInterest ? (
             <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} paidInterest={paidInterest ?? 0} paidInterestDetails={paidInterestDetails} livePrices={livePrices} dc={dc} viewMode={viewMode} />
           ) : (
