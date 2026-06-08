@@ -9016,7 +9016,7 @@ ${klinesSummary}
     checkDuplicateTransaction: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
-        type: z.enum(['income', 'expense']),
+        type: z.enum(['income', 'expense', 'transfer']),
         amount: z.number().optional(),
         categoryId: z.number().optional(),
         date: z.string(), // YYYY-MM-DD
@@ -9069,7 +9069,7 @@ ${klinesSummary}
     addTransaction: protectedProcedure
       .input(z.object({
         ledgerId: z.number(),
-        type: z.enum(['income', 'expense']),
+        type: z.enum(['income', 'expense', 'transfer']),
         amount: z.number().min(0),
         categoryId: z.number(),
         subcategoryId: z.number().optional(),
@@ -9106,7 +9106,7 @@ ${klinesSummary}
         ledgerId: z.number(),
         startDate: z.string().optional(),
         endDate: z.string().optional(),
-        type: z.enum(['income', 'expense']).optional(),
+        type: z.enum(['income', 'expense', 'transfer']).optional(),
         categoryId: z.number().optional(),
         memberId: z.number().optional(),
         amountMin: z.string().optional(),
@@ -9444,7 +9444,7 @@ ${klinesSummary}
     updateTransaction: protectedProcedure
       .input(z.object({
         recordId: z.number(),
-        type: z.enum(['income', 'expense']).optional(),
+        type: z.enum(['income', 'expense', 'transfer']).optional(),
         amount: z.number().min(0).optional(),
         categoryId: z.number().optional(),
         subcategoryId: z.number().optional(),

@@ -1095,7 +1095,7 @@ export async function joinLedger(ledgerId: number, userId: number, invitedBy: nu
 export async function getLedgerCategories(
   ledgerId: number,
   userId?: number,
-  type?: 'income' | 'expense',
+  type?: 'income' | 'expense' | 'transfer',
   parentId?: number | null
 ) {
   const db = await getLedgerDb();
@@ -3040,7 +3040,7 @@ export async function getDayRecords(
 export async function addTransaction(data: {
   ledgerId: number;
   userId: number;
-  type: 'income' | 'expense';
+  type: 'income' | 'expense' | 'transfer';
   amount: number;
   categoryId: number;
   subcategoryId?: number;
@@ -3225,7 +3225,7 @@ export async function getTransactionsList(
   options?: {
     startDate?: string;
     endDate?: string;
-    type?: 'income' | 'expense';
+    type?: 'income' | 'expense' | 'transfer';
     categoryId?: number;
     memberId?: number;
     amountMin?: string;
@@ -4052,7 +4052,7 @@ export async function updateTransaction(
   recordId: number,
   userId: number,
   data: {
-    type?: 'income' | 'expense';
+    type?: 'income' | 'expense' | 'transfer';
     amount?: number;
     categoryId?: number;
     subcategoryId?: number;

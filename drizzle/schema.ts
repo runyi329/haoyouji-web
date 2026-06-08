@@ -529,7 +529,7 @@ export const ledgerMembers = mysqlTable("ledger_members", {
 export const ledgerRecords = mysqlTable("ledger_records", {
 	id: int().autoincrement().notNull(),
 	ledgerId: int().notNull(),
-	type: mysqlEnum(['income','expense']).notNull(),
+	type: mysqlEnum(['income','expense','transfer']).notNull(),
 	amount: decimal({ precision: 10, scale: 2 }).notNull(),
 	categoryId: int(),
 	description: text(),

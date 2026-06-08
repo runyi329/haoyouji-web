@@ -38,7 +38,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { autoCompressImage } from "@/utils/imageUtils";
 import { PageTag } from "@/components/PageTag";
 
-type TransactionType = "expense" | "income";
+type TransactionType = "expense" | "income" | "transfer";
 
 interface Category {
   id: number;
@@ -701,8 +701,13 @@ const AddTransaction = () => {
 
   // 处理保存
   const handleSave = () => {
-    if (selectedCategoryPath.length === 0) {
+    // transfer 类型（提现/入金）不需要分类，但需要金额
+    if (transactionType !== 'transfer' && selectedCategoryPath.length === 0) {
       toast.error("请选择分类");
+      return;
+    }
+    if (transactionType === 'transfer' && (!amount || parseFloat(amount) <= 0)) {
+      toast.error("请输入金额");
       return;
     }
     // 允许零金额提交
@@ -720,9 +725,9 @@ const AddTransaction = () => {
       ledgerId,
       amount: parseFloat(amount) || 0,
       type: transactionType,
-      categoryId: selectedCategoryPath[selectedCategoryPath.length - 1], // 使用最后一级分类ID
+      categoryId: transactionType === 'transfer' ? (selectedCategoryPath[selectedCategoryPath.length - 1] || 2) : selectedCategoryPath[selectedCategoryPath.length - 1],
       transactionDate: formattedDate,
-      description: note || undefined,
+      description: (transactionType === 'transfer' ? (note || undefined) : (note || undefined)),
       images: uploadedImages.length > 0 ? uploadedImages : undefined, // 使用images数组
       stockCodes: isCustomAA ? stockInputs.filter(s => s.code.trim()).map(s => ({ code: s.code.trim(), name: s.name })) : undefined,
       reimbursementStatus, // 添加报销状态
@@ -1189,9 +1194,46 @@ const AddTransaction = () => {
         <div className="flex-1 overflow-y-auto flex flex-col bg-[#F4F6F9]">
           <div className="bg-white mx-3 mt-3 rounded-2xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #F0E8E0' }}>
 
+            {/* 类型切换区（余额记录 / 提现 / 入金） */}
+            <div className="px-5 pt-4 pb-3" style={{ borderBottom: '1px solid #F5F5F5' }}>
+              <div className="text-xs text-gray-400 mb-2 font-medium tracking-widest uppercase">记录类型</div>
+              <div className="flex gap-2">
+                <button
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    transactionType === 'expense'
+                      ? 'bg-[#1A2B4A] text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}
+                  onClick={() => setTransactionType('expense')}
+                >
+                  余额记录
+                </button>
+                <button
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    transactionType === 'transfer' && note === 'withdraw'
+                      ? 'bg-[#E53935] text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}
+                  onClick={() => { setTransactionType('transfer'); setNote('withdraw'); }}
+                >
+                  提现
+                </button>
+                <button
+                  className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    transactionType === 'transfer' && note === 'deposit'
+                      ? 'bg-[#2E7D32] text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}
+                  onClick={() => { setTransactionType('transfer'); setNote('deposit'); }}
+                >
+                  入金
+                </button>
+              </div>
+            </div>
+
             {/* 金额输入区 */}
             <div className="px-5 pt-5 pb-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
-              <div className="text-xs text-gray-400 mb-2 font-medium tracking-widest uppercase">金额</div>
+              <div className="text-xs text-gray-400 mb-2 font-medium tracking-widest uppercase">{transactionType === 'transfer' ? (note === 'withdraw' ? '提现金额' : '入金金额') : '金额'}</div>
               <div className="inline-flex items-end w-full">
                 <input
                   type="text"
@@ -1218,8 +1260,8 @@ const AddTransaction = () => {
               </div>
             </div>
 
-            {/* 分类选择区 */}
-            <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
+            {/* 分类选择区（提现/入金时隐藏） */}
+            {transactionType !== 'transfer' && <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
               <div className="text-xs text-gray-400 mb-3 font-medium tracking-widest uppercase">分类</div>
               {categoryLevels.map((cats, level) => {
                 // custom_aa管理员模式：URL中有categoryId时，只显示该单个标签（不显示其他用户标签）
@@ -1264,7 +1306,26 @@ const AddTransaction = () => {
                 );
               })}
               {isLoadingTop && <div className="text-xs text-gray-400 mt-2">加载分类中...</div>}
-            </div>
+            </div>}
+
+            {/* 提现/入金时显示备注输入框 */}
+            {transactionType === 'transfer' && (
+              <div className="px-5 py-4" style={{ borderBottom: '1px solid #F5F5F5' }}>
+                <div className="text-xs text-gray-400 mb-2 font-medium tracking-widest uppercase">备注（选填）</div>
+                <input
+                  type="text"
+                  value={note === 'withdraw' || note === 'deposit' ? '' : note}
+                  placeholder="输入备注信息..."
+                  onChange={(e) => {
+                    // 保留 transfer 子类型信息在前缀
+                    const subType = (note === 'withdraw' || note === 'deposit') ? note : (note?.startsWith('withdraw:') ? 'withdraw' : note?.startsWith('deposit:') ? 'deposit' : 'withdraw');
+                    const val = e.target.value;
+                    setNote(val ? `${subType}:${val}` : subType);
+                  }}
+                  className="w-full text-sm bg-gray-50 rounded-xl px-3 py-2.5 outline-none text-gray-700 placeholder-gray-300"
+                />
+              </div>
+            )}
 
             {/* 日期选择区 */}
             <button
@@ -1830,10 +1891,16 @@ const AddTransaction = () => {
       {isCustomAA && (
         <div className="flex-shrink-0 p-4 bg-white" style={{ borderTop: '1px solid #F0E8E0' }}>
           <button
-            className="w-full bg-[#D32F2F] text-white py-4 rounded-2xl text-base font-semibold active:bg-[#B71C1C] shadow-sm"
+            className={`w-full text-white py-4 rounded-2xl text-base font-semibold shadow-sm active:opacity-80 ${
+              transactionType === 'transfer'
+                ? (note === 'withdraw' || note?.startsWith('withdraw') ? 'bg-[#E53935]' : 'bg-[#2E7D32]')
+                : 'bg-[#D32F2F]'
+            }`}
             onClick={handleSave}
           >
-            保存
+            {transactionType === 'transfer'
+              ? (note === 'withdraw' || note?.startsWith('withdraw') ? '确认提现' : '确认入金')
+              : '保存'}
           </button>
         </div>
       )}

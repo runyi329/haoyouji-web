@@ -469,7 +469,7 @@ exports.ledgerMembers = (0, mysql_core_1.mysqlTable)("ledger_members", {
 exports.ledgerRecords = (0, mysql_core_1.mysqlTable)("ledger_records", {
     id: (0, mysql_core_1.int)().autoincrement().notNull(),
     ledgerId: (0, mysql_core_1.int)().notNull(),
-    type: (0, mysql_core_1.mysqlEnum)(['income', 'expense']).notNull(),
+    type: (0, mysql_core_1.mysqlEnum)(['income', 'expense', 'transfer']).notNull(),
     amount: (0, mysql_core_1.decimal)({ precision: 10, scale: 2 }).notNull(),
     categoryId: (0, mysql_core_1.int)(),
     description: (0, mysql_core_1.text)(),

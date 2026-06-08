@@ -238,14 +238,23 @@ const AdminTransactionList = () => {
                   <div className="flex-shrink-0 text-right mr-2">
                     <span
                       className={`text-sm font-semibold ${
-                        record.type === "income" ? "text-[#D32F2F]" : "text-[#4CAF50]"
+                        record.type === "income" ? "text-[#D32F2F]"
+                          : record.type === "transfer" ? (record.description?.startsWith('deposit') ? "text-[#2E7D32]" : "text-[#E53935]")
+                          : "text-[#4CAF50]"
                       }`}
                     >
-                      {record.type === "income" ? "+" : "-"}¥
+                      {record.type === "income" ? "+"
+                        : record.type === "transfer" ? (record.description?.startsWith('deposit') ? '+' : '-')
+                        : "-"}¥
                       {Number(record.amount).toLocaleString("zh-CN", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}
+                      {record.type === "transfer" && (
+                        <span className="text-[10px] ml-1 opacity-70">
+                          {record.description?.startsWith('deposit') ? '入金' : '提现'}
+                        </span>
+                      )}
                     </span>
                   </div>
 
