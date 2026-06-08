@@ -264,7 +264,7 @@ const AddTransaction = () => {
   // ===== 历史出入金面板（独立于余额记录） =====
   const [transferPanelOpen, setTransferPanelOpen] = useState(false);
   const [transferAmount, setTransferAmount] = useState('');
-  const [transferSubType, setTransferSubType] = useState<'withdraw' | 'deposit'>('deposit');
+  const [transferSubType, setTransferSubType] = useState<'withdraw'>('withdraw');
   const [transferNote, setTransferNote] = useState('');
   const [transferDate, setTransferDate] = useState(new Date());
 
@@ -274,9 +274,8 @@ const AddTransaction = () => {
     { enabled: isCustomAA }
   );
 
-  // 计算累计出入金（排除 capital_ 开头的本金变动记录）
+  // 计算累计提现（排除 capital_ 开头的本金变动记录）
   const transferSummary = useMemo(() => {
-    let totalDeposit = 0;
     let totalWithdraw = 0;
     const allRecords: any[] = [];
     (transferHistory as any[]).forEach((group: any) => {
@@ -284,14 +283,10 @@ const AddTransaction = () => {
         // 排除本金变动记录
         if (r.description?.startsWith('capital_')) return;
         allRecords.push(r);
-        if (r.description?.startsWith('deposit')) {
-          totalDeposit += Number(r.amount);
-        } else {
-          totalWithdraw += Number(r.amount);
-        }
+        totalWithdraw += Number(r.amount);
       });
     });
-    return { totalDeposit, totalWithdraw, net: totalDeposit - totalWithdraw, records: allRecords };
+    return { totalWithdraw, records: allRecords };
   }, [transferHistory]);
 
   // ===== 增减本金面板（独立于出入利润） =====
@@ -367,7 +362,7 @@ const AddTransaction = () => {
   // 添加出入金 mutation（独立）
   const addTransferMutation = trpc.ledger.addTransaction.useMutation({
     onSuccess: () => {
-      toast.success(transferSubType === 'deposit' ? '入金记录已添加' : '提现记录已添加');
+      toast.success('提现记录已添加');
       setTransferAmount('');
       setTransferNote('');
       refetchTransfers();
@@ -1347,15 +1342,15 @@ const AddTransaction = () => {
               onClick={() => setTransferPanelOpen(!transferPanelOpen)}
             >
               <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-[#1A2B4A]">历史出入金</span>
+                <span className="text-sm font-semibold text-[#1A2B4A]">历史提现</span>
                 <span className="text-xs text-gray-400">
                   {transferSummary.records.length > 0 ? `${transferSummary.records.length}笔` : '暂无记录'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {transferSummary.net !== 0 && (
-                  <span className={`text-sm font-semibold ${transferSummary.net > 0 ? 'text-[#2E7D32]' : 'text-[#E53935]'}`}>
-                    {transferSummary.net > 0 ? '+' : ''}{transferSummary.net.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {transferSummary.totalWithdraw > 0 && (
+                  <span className="text-sm font-semibold text-[#E53935]">
+                    -{transferSummary.totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 )}
                 <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${transferPanelOpen ? 'rotate-180' : ''}`} />
@@ -1366,29 +1361,27 @@ const AddTransaction = () => {
             <div className={`overflow-hidden transition-all duration-300 ${transferPanelOpen ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}>
               <div style={{ borderTop: '1px solid #F5F5F5' }}>
                 {/* 汇总信息 */}
-                <div className="px-5 py-3 flex gap-4 text-xs text-gray-500" style={{ borderBottom: '1px solid #F5F5F5' }}>
-                  <span>入金: <span className="text-[#2E7D32] font-semibold">+{transferSummary.totalDeposit.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span></span>
-                  <span>提现: <span className="text-[#E53935] font-semibold">-{transferSummary.totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span></span>
+                <div className="px-5 py-3 text-xs text-gray-500" style={{ borderBottom: '1px solid #F5F5F5' }}>
+                  <span>累计提现: <span className="text-[#E53935] font-semibold">-{transferSummary.totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span></span>
                 </div>
 
                 {/* 历史记录列表 */}
                 {transferSummary.records.length > 0 && (
                   <div className="max-h-[200px] overflow-y-auto">
                     {transferSummary.records.map((record: any) => {
-                      const isDeposit = record.description?.startsWith('deposit');
                       const noteText = record.description?.includes(':') ? record.description.split(':').slice(1).join(':') : '';
                       return (
                         <div key={record.id} className="px-5 py-2.5 flex items-center gap-3" style={{ borderBottom: '1px solid #FAFAFA' }}>
-                          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isDeposit ? 'bg-[#2E7D32]' : 'bg-[#E53935]'}`} />
+                          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-[#E53935]" />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1">
-                              <span className="text-xs font-medium text-gray-700">{isDeposit ? '入金' : '提现'}</span>
+                              <span className="text-xs font-medium text-gray-700">提现</span>
                               {noteText && <span className="text-[11px] text-gray-400 truncate">- {noteText}</span>}
                             </div>
                             <span className="text-[11px] text-gray-400">{record.recordDate || ''}</span>
                           </div>
-                          <span className={`text-sm font-semibold ${isDeposit ? 'text-[#2E7D32]' : 'text-[#E53935]'}`}>
-                            {isDeposit ? '+' : '-'}{Number(record.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                          <span className="text-sm font-semibold text-[#E53935]">
+                            -{Number(record.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
                           </span>
                           <button
                             className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 active:bg-red-50 active:text-red-500 flex-shrink-0"
@@ -1402,35 +1395,16 @@ const AddTransaction = () => {
                   </div>
                 )}
 
-                {/* 添加新出入金 */}
+                {/* 添加提现 */}
                 <div className="px-5 py-4" style={{ borderTop: '1px solid #F5F5F5' }}>
-                  <div className="text-xs text-gray-400 mb-3 font-medium">添加出入金</div>
-                  {/* 类型切换 */}
-                  <div className="flex gap-2 mb-3">
-                    <button
-                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                        transferSubType === 'deposit' ? 'bg-[#2E7D32] text-white' : 'bg-gray-100 text-gray-600'
-                      }`}
-                      onClick={() => setTransferSubType('deposit')}
-                    >
-                      入金
-                    </button>
-                    <button
-                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                        transferSubType === 'withdraw' ? 'bg-[#E53935] text-white' : 'bg-gray-100 text-gray-600'
-                      }`}
-                      onClick={() => setTransferSubType('withdraw')}
-                    >
-                      提现
-                    </button>
-                  </div>
+                  <div className="text-xs text-gray-400 mb-3 font-medium">添加提现记录</div>
                   {/* 金额输入 */}
                   <div className="flex gap-2 mb-2">
                     <input
                       type="text"
                       inputMode="decimal"
                       value={transferAmount}
-                      placeholder="输入金额"
+                      placeholder="输入提现金额"
                       onChange={(e) => {
                         const val = e.target.value;
                         if (/^\d*\.?\d{0,2}$/.test(val) || val === '') setTransferAmount(val);
@@ -1438,12 +1412,10 @@ const AddTransaction = () => {
                       className="flex-1 text-sm bg-gray-50 rounded-xl px-3 py-2.5 outline-none text-gray-700 placeholder-gray-300"
                     />
                     <button
-                      className={`px-5 py-2.5 rounded-xl text-sm font-medium text-white active:opacity-80 ${
-                        transferSubType === 'deposit' ? 'bg-[#2E7D32]' : 'bg-[#E53935]'
-                      }`}
+                      className="px-5 py-2.5 rounded-xl text-sm font-medium text-white active:opacity-80 bg-[#E53935]"
                       onClick={handleSaveTransfer}
                     >
-                      {transferSubType === 'deposit' ? '确认入金' : '确认提现'}
+                      确认提现
                     </button>
                   </div>
                   {/* 备注 */}
@@ -1609,6 +1581,16 @@ const AddTransaction = () => {
                   })()}
                 </div>
               </div>
+              {/* 累计值提示（当有提现记录时显示） */}
+              {transferSummary.totalWithdraw > 0 && amount && parseFloat(amount) > 0 && (
+                <div className="mt-2 px-1 text-xs text-gray-400">
+                  <span>客户实际总资产: </span>
+                  <span className="text-[#1A2B4A] font-semibold">
+                    {(parseFloat(amount) + transferSummary.totalWithdraw).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-gray-300 ml-1">(余额 {parseFloat(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })} + 累计提现 {transferSummary.totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })})</span>
+                </div>
+              )}
             </div>
 
             {/* 分类选择区 */}

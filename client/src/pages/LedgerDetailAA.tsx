@@ -376,6 +376,19 @@ export default function LedgerDetailAA({
     return records.sort((a: any, b: any) => (a.recordDate || '').localeCompare(b.recordDate || ''));
   }, [capitalTransferData]);
 
+  // 筛选提现记录（非 capital_ 开头的 transfer 记录）—— 用于日历上方显示累计值
+  const totalWithdraw = useMemo(() => {
+    let total = 0;
+    (capitalTransferData as any[] || []).forEach((group: any) => {
+      group.records?.forEach((r: any) => {
+        if (!r.description?.startsWith('capital_') && r.type === 'transfer') {
+          total += Number(r.amount) || 0;
+        }
+      });
+    });
+    return total;
+  }, [capitalTransferData]);
+
   // 当前用户的交易数据
   const activeMemberTransactions = useMemo(() => {
     // 过滤掉 income=0 且 expense=0 的无效记录（误输入空值/0值后删除导致）
@@ -1261,13 +1274,18 @@ export default function LedgerDetailAA({
           ) : (
             /* ─── 单标签模式：最新余额 + 保证金 + 初始金额 + 累计盈亏 ─── */
             <>
-          {/* 最新余额 */}
+          {/* 最新余额（当有提现时显示累计值） */}
           <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            <div className="text-xs opacity-75 mb-0.5">最新余额</div>
+            <div className="text-xs opacity-75 mb-0.5">{totalWithdraw > 0 ? '总资产' : '最新余额'}</div>
             <div className="text-base font-bold">
-              ¥{stats.latestBalance.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ¥{(stats.latestBalance + totalWithdraw).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            {stats.latestDate && (
+            {totalWithdraw > 0 && (
+              <div className="text-xs opacity-60 mt-0.5">
+                余额 {stats.latestBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })} + 提现 {totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+              </div>
+            )}
+            {!totalWithdraw && stats.latestDate && (
               <div className="text-xs opacity-60 mt-0.5">
                 {(() => {
                   const [y, m, d] = stats.latestDate.split("-");
