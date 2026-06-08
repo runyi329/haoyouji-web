@@ -2749,14 +2749,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
                           </span>
                           <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{formData.coin}</span>
                         </div>
-                        {formLivePrices[formData.coin] && formData.buyQuantity && (
+                        {formData.assetType !== 'stock' && formLivePrices[formData.coin] && formData.buyQuantity && (
                           <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>
                             ≈{(formLivePrices[formData.coin] * parseFloat(formData.buyQuantity)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U
                           </div>
                         )}
                       </div>
                       <div className="space-y-0.5 text-xs mt-1">
-                        {displayConfig.buyPrice && formData.buyPrice && (
+                        {formData.assetType !== 'stock' && displayConfig.buyPrice && formData.buyPrice && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">买入币价</span>
                             <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(formData.buyPrice).toLocaleString()} U</span>
@@ -2765,7 +2765,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
                         {displayConfig.buyValue && computedAmount && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">买入价值</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(computedAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                            <span className="font-medium" style={{ color: '#4B5563' }}>
+                              {parseFloat(computedAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })} {formData.coin === 'CNY' ? '元' : 'U'}
+                              {formData.coin === 'CNY' && <span className="text-gray-400 ml-1">≈{(parseFloat(computedAmount) / 7).toLocaleString(undefined, { maximumFractionDigits: 0 })} U</span>}
+                            </span>
                           </div>
                         )}
                         {displayConfig.interestBase && formData.interestBase && (
