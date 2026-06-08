@@ -274,13 +274,15 @@ const AddTransaction = () => {
     { enabled: isCustomAA }
   );
 
-  // 计算累计出入金
+  // 计算累计出入金（排除 capital_ 开头的本金变动记录）
   const transferSummary = useMemo(() => {
     let totalDeposit = 0;
     let totalWithdraw = 0;
     const allRecords: any[] = [];
     (transferHistory as any[]).forEach((group: any) => {
       group.records?.forEach((r: any) => {
+        // 排除本金变动记录
+        if (r.description?.startsWith('capital_')) return;
         allRecords.push(r);
         if (r.description?.startsWith('deposit')) {
           totalDeposit += Number(r.amount);
@@ -291,6 +293,76 @@ const AddTransaction = () => {
     });
     return { totalDeposit, totalWithdraw, net: totalDeposit - totalWithdraw, records: allRecords };
   }, [transferHistory]);
+
+  // ===== 增减本金面板（独立于出入利润） =====
+  const [capitalPanelOpen, setCapitalPanelOpen] = useState(false);
+  const [capitalAmount, setCapitalAmount] = useState('');
+  const [capitalSubType, setCapitalSubType] = useState<'capital_add' | 'capital_reduce'>('capital_add');
+  const [capitalNote, setCapitalNote] = useState('');
+  const [capitalDate, setCapitalDate] = useState(new Date());
+
+  // 计算本金变动汇总
+  const capitalSummary = useMemo(() => {
+    let totalAdd = 0;
+    let totalReduce = 0;
+    const allRecords: any[] = [];
+    (transferHistory as any[]).forEach((group: any) => {
+      group.records?.forEach((r: any) => {
+        if (!r.description?.startsWith('capital_')) return;
+        allRecords.push(r);
+        if (r.description?.startsWith('capital_add')) {
+          totalAdd += Number(r.amount);
+        } else {
+          totalReduce += Number(r.amount);
+        }
+      });
+    });
+    return { totalAdd, totalReduce, net: totalAdd - totalReduce, records: allRecords };
+  }, [transferHistory]);
+
+  // 添加本金变动 mutation
+  const addCapitalMutation = trpc.ledger.addTransaction.useMutation({
+    onSuccess: () => {
+      toast.success(capitalSubType === 'capital_add' ? '增加本金已记录' : '减少本金已记录');
+      setCapitalAmount('');
+      setCapitalNote('');
+      refetchTransfers();
+      utils.ledger.getTransactions.invalidate({ ledgerId });
+    },
+    onError: (error) => {
+      toast.error('添加失败：' + error.message);
+    },
+  });
+
+  // 删除本金变动记录
+  const deleteCapitalMutation = trpc.ledger.deleteTransaction.useMutation({
+    onSuccess: () => {
+      toast.success('记录已删除');
+      refetchTransfers();
+      utils.ledger.getTransactions.invalidate({ ledgerId });
+    },
+    onError: (error) => {
+      toast.error('删除失败：' + error.message);
+    },
+  });
+
+  const handleSaveCapital = () => {
+    if (!capitalAmount || parseFloat(capitalAmount) <= 0) {
+      toast.error('请输入金额');
+      return;
+    }
+    const y = capitalDate.getFullYear();
+    const m = String(capitalDate.getMonth() + 1).padStart(2, '0');
+    const d = String(capitalDate.getDate()).padStart(2, '0');
+    addCapitalMutation.mutate({
+      ledgerId,
+      amount: parseFloat(capitalAmount),
+      type: 'transfer',
+      categoryId: 2,
+      transactionDate: `${y}-${m}-${d}`,
+      description: capitalNote ? `${capitalSubType}:${capitalNote}` : capitalSubType,
+    });
+  };
 
   // 添加出入金 mutation（独立）
   const addTransferMutation = trpc.ledger.addTransaction.useMutation({
@@ -1380,6 +1452,126 @@ const AddTransaction = () => {
                     value={transferNote}
                     placeholder="备注（选填）"
                     onChange={(e) => setTransferNote(e.target.value)}
+                    className="w-full text-xs bg-gray-50 rounded-xl px-3 py-2 outline-none text-gray-600 placeholder-gray-300"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ===== 增减本金折叠面板（独立于出入利润） ===== */}
+          <div className="bg-white mx-3 mt-3 rounded-2xl overflow-hidden flex-shrink-0" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.07)', border: '1px solid #F0E8E0' }}>
+            {/* 折叠头部 */}
+            <button
+              className="w-full px-5 py-4 flex items-center justify-between active:bg-gray-50 transition-colors"
+              onClick={() => setCapitalPanelOpen(!capitalPanelOpen)}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-[#1A2B4A]">增减本金</span>
+                <span className="text-xs text-gray-400">
+                  {capitalSummary.records.length > 0 ? `${capitalSummary.records.length}笔` : '暂无记录'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {capitalSummary.net !== 0 && (
+                  <span className={`text-sm font-semibold ${capitalSummary.net > 0 ? 'text-[#1976D2]' : 'text-[#F57C00]'}`}>
+                    {capitalSummary.net > 0 ? '+' : ''}{capitalSummary.net.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                )}
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${capitalPanelOpen ? 'rotate-180' : ''}`} />
+              </div>
+            </button>
+
+            {/* 折叠内容 */}
+            <div className={`overflow-hidden transition-all duration-300 ${capitalPanelOpen ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+              <div style={{ borderTop: '1px solid #F5F5F5' }}>
+                {/* 汇总信息 */}
+                <div className="px-5 py-3 flex gap-4 text-xs text-gray-500" style={{ borderBottom: '1px solid #F5F5F5' }}>
+                  <span>增加: <span className="text-[#1976D2] font-semibold">+{capitalSummary.totalAdd.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span></span>
+                  <span>减少: <span className="text-[#F57C00] font-semibold">-{capitalSummary.totalReduce.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span></span>
+                </div>
+
+                {/* 历史记录列表 */}
+                {capitalSummary.records.length > 0 && (
+                  <div className="max-h-[200px] overflow-y-auto">
+                    {capitalSummary.records.map((record: any) => {
+                      const isAdd = record.description?.startsWith('capital_add');
+                      const noteText = record.description?.includes(':') ? record.description.split(':').slice(1).join(':') : '';
+                      return (
+                        <div key={record.id} className="px-5 py-2.5 flex items-center gap-3" style={{ borderBottom: '1px solid #FAFAFA' }}>
+                          <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isAdd ? 'bg-[#1976D2]' : 'bg-[#F57C00]'}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs font-medium text-gray-700">{isAdd ? '增加本金' : '减少本金'}</span>
+                              {noteText && <span className="text-[11px] text-gray-400 truncate">- {noteText}</span>}
+                            </div>
+                            <span className="text-[11px] text-gray-400">{record.recordDate || ''}</span>
+                          </div>
+                          <span className={`text-sm font-semibold ${isAdd ? 'text-[#1976D2]' : 'text-[#F57C00]'}`}>
+                            {isAdd ? '+' : '-'}{Number(record.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                          </span>
+                          <button
+                            className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 active:bg-orange-50 active:text-orange-500 flex-shrink-0"
+                            onClick={(e) => { e.stopPropagation(); deleteCapitalMutation.mutate({ recordId: record.id }); }}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* 添加新本金变动 */}
+                <div className="px-5 py-4" style={{ borderTop: '1px solid #F5F5F5' }}>
+                  <div className="text-xs text-gray-400 mb-3 font-medium">添加本金变动</div>
+                  {/* 类型切换 */}
+                  <div className="flex gap-2 mb-3">
+                    <button
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                        capitalSubType === 'capital_add' ? 'bg-[#1976D2] text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                      onClick={() => setCapitalSubType('capital_add')}
+                    >
+                      增加本金
+                    </button>
+                    <button
+                      className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
+                        capitalSubType === 'capital_reduce' ? 'bg-[#F57C00] text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                      onClick={() => setCapitalSubType('capital_reduce')}
+                    >
+                      减少本金
+                    </button>
+                  </div>
+                  {/* 金额输入 */}
+                  <div className="flex gap-2 mb-2">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={capitalAmount}
+                      placeholder="输入金额"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (/^\d*\.?\d{0,2}$/.test(val) || val === '') setCapitalAmount(val);
+                      }}
+                      className="flex-1 text-sm bg-gray-50 rounded-xl px-3 py-2.5 outline-none text-gray-700 placeholder-gray-300"
+                    />
+                    <button
+                      className={`px-5 py-2.5 rounded-xl text-sm font-medium text-white active:opacity-80 ${
+                        capitalSubType === 'capital_add' ? 'bg-[#1976D2]' : 'bg-[#F57C00]'
+                      }`}
+                      onClick={handleSaveCapital}
+                    >
+                      {capitalSubType === 'capital_add' ? '确认增加' : '确认减少'}
+                    </button>
+                  </div>
+                  {/* 备注 */}
+                  <input
+                    type="text"
+                    value={capitalNote}
+                    placeholder="备注（选填）"
+                    onChange={(e) => setCapitalNote(e.target.value)}
                     className="w-full text-xs bg-gray-50 rounded-xl px-3 py-2 outline-none text-gray-600 placeholder-gray-300"
                   />
                 </div>

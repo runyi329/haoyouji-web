@@ -25,7 +25,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import ReactECharts from "echarts-for-react";
 import { useLocation } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
-import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X, RefreshCw, PauseCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X, RefreshCw, PauseCircle, AlertTriangle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { PageTag } from "@/components/PageTag";
 import {
@@ -356,6 +356,25 @@ export default function LedgerDetailAA({
     if (!selectedTagName || !initialBalancesData?.balances) return null;
     return (initialBalancesData.balances as any)[`${selectedTagName}__endDate`] ?? null;
   }, [selectedTagName, initialBalancesData]);
+
+  // ===== 本金变动历史查询（用于初始金额旁感叹号弹窗） =====
+  const [showCapitalHistory, setShowCapitalHistory] = useState(false);
+  const { data: capitalTransferData } = trpc.ledger.getTransactions.useQuery(
+    { ledgerId, type: 'transfer' as any, limit: 200 },
+    { enabled: !!ledgerId }
+  );
+  // 筛选本金变动记录（description 以 capital_ 开头）
+  const capitalHistory = useMemo(() => {
+    const records: any[] = [];
+    (capitalTransferData as any[] || []).forEach((group: any) => {
+      group.records?.forEach((r: any) => {
+        if (r.description?.startsWith('capital_')) {
+          records.push(r);
+        }
+      });
+    });
+    return records.sort((a: any, b: any) => (a.recordDate || '').localeCompare(b.recordDate || ''));
+  }, [capitalTransferData]);
 
   // 当前用户的交易数据
   const activeMemberTransactions = useMemo(() => {
@@ -1313,8 +1332,19 @@ export default function LedgerDetailAA({
           </div>
 
           {/* 初始金额 */}
-          <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            <div className="text-xs opacity-75 mb-0.5">初始金额</div>
+          <div className="rounded-xl p-2 relative" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
+            <div className="text-xs opacity-75 mb-0.5 flex items-center gap-1">
+              初始金额
+              {capitalHistory.length > 0 && (
+                <button
+                  onClick={() => setShowCapitalHistory(true)}
+                  className="inline-flex items-center justify-center active:opacity-60"
+                  title="本金有变动，点击查看详情"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" fill="currentColor" />
+                </button>
+              )}
+            </div>
             <div className="text-base font-bold">
               {(() => {
                 const tagName = selectedTag?.name;
@@ -2765,6 +2795,85 @@ export default function LedgerDetailAA({
                   <span className="text-sm" style={{ color: '#222' }}>{stock.name || '未知名称'}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 本金变动历史弹窗 ── */}
+      {showCapitalHistory && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center" onClick={() => setShowCapitalHistory(false)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div
+            className="relative bg-white rounded-2xl w-[85%] max-w-sm max-h-[70vh] overflow-hidden shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 头部 */}
+            <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F0F0F0' }}>
+              <div className="text-base font-bold text-gray-800">本金变动记录</div>
+              <button onClick={() => setShowCapitalHistory(false)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            {/* 内容 */}
+            <div className="px-5 py-4 overflow-y-auto max-h-[55vh]">
+              {capitalHistory.length === 0 ? (
+                <div className="text-center text-sm text-gray-400 py-8">暂无本金变动记录</div>
+              ) : (
+                <div className="space-y-3">
+                  {/* 初始本金 */}
+                  {stats.startDate && (() => {
+                    const tagName = selectedTag?.name;
+                    const initialVal = tagName && initialBalancesData?.balances ? initialBalancesData.balances[tagName] : null;
+                    if (!initialVal) return null;
+                    // 计算当前本金 = 初始 + 所有 capital_add - 所有 capital_reduce
+                    const netChange = capitalHistory.reduce((sum: number, r: any) => {
+                      const amt = Number(r.amount) || 0;
+                      return r.description?.startsWith('capital_add') ? sum + amt : sum - amt;
+                    }, 0);
+                    return (
+                      <>
+                        <div className="flex items-center gap-3 py-2" style={{ borderBottom: '1px solid #F8F8F8' }}>
+                          <div className="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0" />
+                          <div className="flex-1">
+                            <div className="text-xs text-gray-500">初始本金</div>
+                            <div className="text-[11px] text-gray-400">{stats.startDate}</div>
+                          </div>
+                          <div className="text-sm font-semibold text-gray-700">
+                            ¥{Number(initialVal).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                          </div>
+                        </div>
+                        {/* 变动记录 */}
+                        {capitalHistory.map((record: any) => {
+                          const isAdd = record.description?.startsWith('capital_add');
+                          const noteText = record.description?.includes(':') ? record.description.split(':').slice(1).join(':') : '';
+                          return (
+                            <div key={record.id} className="flex items-center gap-3 py-2" style={{ borderBottom: '1px solid #F8F8F8' }}>
+                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isAdd ? 'bg-blue-500' : 'bg-orange-500'}`} />
+                              <div className="flex-1">
+                                <div className="text-xs text-gray-700">{isAdd ? '增加本金' : '减少本金'}{noteText ? ` - ${noteText}` : ''}</div>
+                                <div className="text-[11px] text-gray-400">{record.recordDate || ''}</div>
+                              </div>
+                              <div className={`text-sm font-semibold ${isAdd ? 'text-blue-600' : 'text-orange-600'}`}>
+                                {isAdd ? '+' : '-'}¥{Number(record.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {/* 当前本金汇总 */}
+                        <div className="mt-3 pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-gray-600">当前本金</span>
+                            <span className="text-base font-bold text-gray-800">
+                              ¥{(Number(initialVal) + netChange).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
           </div>
         </div>
