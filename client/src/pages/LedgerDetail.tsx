@@ -1277,12 +1277,13 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
   const coinNameMap: Record<string, string> = { BTC: '比特币', ETH: '以太坊', SOL: '索拉纳' };
   const cc = coinColorMap[order.coin] || '#6B7280';
   const isEnded = order.status === 'ended';
-  const statusLabel = order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : isEnded ? '已结束' : '已取消';
+  const isSettled = order.status === 'settled';
+  const statusLabel = order.status === 'active' ? '持有中' : isSettled ? '已结算' : isEnded ? '已结束' : '已取消';
   const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
   const accrued = useAccruedInterest(
-    isEnded ? null : order.interest_base,
-    isEnded ? null : order.interest_rate_annual,
-    isEnded ? null : order.interest_start_date
+    (isEnded || isSettled) ? null : order.interest_base,
+    (isEnded || isSettled) ? null : order.interest_rate_annual,
+    (isEnded || isSettled) ? null : order.interest_start_date
   );
   const qty = parseFloat(order.buy_quantity || '0');
   const price = parseFloat(order.buy_price || '0');
@@ -1301,9 +1302,9 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
   const coinName = coinNameMap[order.coin] || order.coin;
   // 受邀订单（参与方视图）
   const isParticipantOrder = !!(order.participantInfo);
-  const cardBgColor = isEnded ? '#F3F4F6' : isParticipantOrder ? '#F0FDF4' : '#FFFFFF';
-  const cardBorderColor = isEnded ? '1px solid #D1D5DB' : isParticipantOrder ? '1px solid #86EFAC' : '1px solid #E0E8FF';
-  const cardShadow = isEnded ? 'none' : isParticipantOrder ? '0 2px 8px rgba(34,197,94,0.12)' : '0 2px 8px rgba(26,86,219,0.08)';
+  const cardBgColor = (isEnded || isSettled) ? '#F3F4F6' : isParticipantOrder ? '#F0FDF4' : '#FFFFFF';
+  const cardBorderColor = (isEnded || isSettled) ? '1px solid #D1D5DB' : isParticipantOrder ? '1px solid #86EFAC' : '1px solid #E0E8FF';
+  const cardShadow = (isEnded || isSettled) ? 'none' : isParticipantOrder ? '0 2px 8px rgba(34,197,94,0.12)' : '0 2px 8px rgba(26,86,219,0.08)';
   return (
     <div
       className="rounded-2xl shadow-sm relative"
@@ -1333,8 +1334,13 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
           </div>
         </div>
       )}
+      {isSettled && (
+        <div className="absolute bottom-4 left-4 pointer-events-none select-none" style={{ transform: 'rotate(-30deg)', zIndex: 10 }}>
+          <div style={{ border: '2px solid rgba(220,38,38,0.5)', color: 'rgba(220,38,38,0.5)', borderRadius: '4px', padding: '2px 8px', fontSize: '13px', fontWeight: 700, letterSpacing: '3px', lineHeight: '1.4', whiteSpace: 'nowrap' }}>已结清</div>
+        </div>
+      )}
       {/* 顶部色条 */}
-      <div className="h-1" style={{ background: isEnded ? '#D1D5DB' : `linear-gradient(90deg, ${cc}, ${cc}55)` }} />
+      <div className="h-1" style={{ background: (isEnded || isSettled) ? '#D1D5DB' : `linear-gradient(90deg, ${cc}, ${cc}55)` }} />
       {/* 帽檐区域：始终显示，资产类型标签 + 所有者名字（受开关控制） */}
       <div className="flex items-center gap-1.5 flex-wrap px-4 py-1.5" style={{ borderBottom: '1px solid #EBEBEB', minHeight: '28px' }}>
         {dc.assetType && order.asset_type && (
