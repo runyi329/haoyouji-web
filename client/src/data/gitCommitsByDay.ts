@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-08
+// 生成时间：2026-06-09
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7035,5 +7035,15 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-08T11:53:59Z", type: "feat", cleanMessage: "新增提现/入金记录功能，交互方式与保证金一致" },
     { date: "2026-06-08T11:54:10Z", type: "chore", cleanMessage: "remove accidentally committed dist-test" },
     { date: "2026-06-08T12:27:08Z", type: "feat", cleanMessage: "37账本添加账目页增加提现/入金类型选项" },
+    { date: "2026-06-08T13:56:48Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-08T14:27:27Z", type: "fix", cleanMessage: "订单卡片中图模式右栏移除固定宽高，内容自然撑开卡片" },
+    { date: "2026-06-08T14:52:21Z", type: "fix", cleanMessage: "前端订单卡片已结算状态显示已结清公章，利息停止计算" },
+    { date: "2026-06-08T15:57:31Z", type: "feat", cleanMessage: "将提现/入金功能独立为折叠面板，与余额记录输入框分离" },
+  ],
+  "2026-06-09": [
+    { date: "2026-06-08T16:20:22Z", type: "feat", cleanMessage: "增减本金折叠面板 + 客户视角初始金额感叹号弹窗" },
+    { date: "2026-06-08T16:36:23Z", type: "feat", cleanMessage: "出入金面板只保留提现，余额输入框下方显示累计值，P117-A日历上方显示总资产(余额+提现)" },
+    { date: "2026-06-08T16:45:57Z", type: "fix", cleanMessage: "修复历史提现和增减本金面板数据互相覆盖的问题（移除竞态refetch，统一用invalidate刷新缓存）" },
+    { date: "2026-06-08T16:58:53Z", type: "fix", cleanMessage: "修复37号账本transfer类型记录被UPSERT覆盖的问题（提现/本金变动不参与同日期同标签覆盖逻辑）" },
   ],
 };
