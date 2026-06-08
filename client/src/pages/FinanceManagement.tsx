@@ -1983,13 +1983,13 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
               </div>
 
               {/* 融资金额 / 买入价格 / 买入数量 三字段联动 */}
-              <div className="rounded-2xl border border-gray-200 overflow-hidden">
+              <div className="rounded-2xl border border-gray-200" style={{ overflow: 'visible' }}>
                 <div className="px-4 pt-3 pb-1">
                   <span className="text-xs text-gray-400">输入任意两个，第三个自动计算 · 融资金额 = 买入价格 × 币数</span>
                 </div>
                 {/* 融资金额 */}
                 <div className="px-4 py-3 border-b border-gray-100">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5">融资金额 (USDT)</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">融资金额 ({formData.coin || 'USDT'})</label>
                   <input
                     type="number"
                     inputMode="decimal"
