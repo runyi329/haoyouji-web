@@ -2177,7 +2177,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
               {/* 融资金额 / 买入价格 / 币数 三字段联动 */}
               <div className="rounded-2xl border border-gray-200" style={{ overflow: 'visible', opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <div className="px-4 pt-3 pb-1">
-                  <span className="text-xs text-gray-400">输入任意两个，第三个自动计算 · 融资金额 = 买入价格 × 币数</span>
+                  <span className="text-xs text-gray-400">
+                    {formData.assetType === 'stock' ? '股票类型：只需输入融资金额' : '输入任意两个，第三个自动计算 · 融资金额 = 买入价格 × 币数'}
+                  </span>
                 </div>
                 {/* 融资金额 */}
                 <div className="px-4 py-3 border-b border-gray-100">
@@ -2210,10 +2212,19 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
                     className="w-full bg-transparent text-base focus:outline-none"
                     placeholder="如：100000"
                   />
+                  {formData.assetType === 'stock' && amountInputValue && parseFloat(amountInputValue) > 0 && (() => {
+                    const amt = parseFloat(amountInputValue);
+                    const usdtEquiv = formData.coin === 'CNY' ? amt / 7 : amt;
+                    return (
+                      <span className="text-xs text-gray-400 mt-1 block">
+                        \u2248 {usdtEquiv.toLocaleString(undefined, { maximumFractionDigits: 0 })} USDT
+                      </span>
+                    );
+                  })()}
                 </div>
                 {/* 买入价格 */}
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5">买入价格 (USD/枚)</label>
+                <div className="px-4 py-3 border-b border-gray-100" style={{ opacity: formData.assetType === 'stock' ? 0.4 : 1 }}>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">买入价格</label>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -2225,17 +2236,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
                         const qty = parseFloat(d.buyQuantity);
                         const p = parseFloat(price);
                         if (!price || isNaN(p) || p <= 0) return d;
-                        if (!isNaN(qty) && qty > 0) return d; // 两个都有值，不自动计算
+                        if (!isNaN(qty) && qty > 0) return d;
                         return d;
                       });
                     }}
-                    className="w-full bg-transparent text-base focus:outline-none"
+                    disabled={formData.assetType === 'stock'}
+                    className="w-full bg-transparent text-base focus:outline-none disabled:text-gray-300"
                     placeholder="如：95000"
                     step="any"
                   />
                 </div>
                 {/* 币数 */}
-                <div className="px-4 py-3">
+                <div className="px-4 py-3" style={{ opacity: formData.assetType === 'stock' ? 0.4 : 1 }}>
                   <label className="block text-xs font-medium text-gray-500 mb-1.5">币数 ({formData.coin})</label>
                   <input
                     type="number"
@@ -2248,11 +2260,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
                         const price = parseFloat(d.buyPrice);
                         const q = parseFloat(qty);
                         if (!qty || isNaN(q) || q <= 0) return d;
-                        if (!isNaN(price) && price > 0) return d; // 两个都有值，不自动计算
+                        if (!isNaN(price) && price > 0) return d;
                         return d;
                       });
                     }}
-                    className="w-full bg-transparent text-base focus:outline-none"
+                    disabled={formData.assetType === 'stock'}
+                    className="w-full bg-transparent text-base focus:outline-none disabled:text-gray-300"
                     placeholder="如：1.05"
                   />
                 </div>
