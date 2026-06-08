@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>59号账本图标预览</title>
+<style>
+  body {
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: sans-serif;
+    color: white;
+    gap: 40px;
+    margin: 0;
+  }
+  h2 { margin: 0; font-size: 18px; opacity: 0.8; }
+  .row { display: flex; align-items: flex-end; gap: 32px; }
+  .icon-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .label { font-size: 11px; opacity: 0.5; }
+
+  /* ===== 动画图标 ===== */
+  .wave-icon {
+    border-radius: 50%;
+    overflow: hidden;
+    border: 1.5px solid rgba(255,255,255,0.4);
+    background: #0d0d1a;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .wave-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* 波形流动动画 */
+  @keyframes wave-flow {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  .wave-track {
+    animation: wave-flow 2.4s linear infinite;
+  }
+  .wave-track-2 { animation: wave-flow 2.8s linear infinite; }
+  .wave-track-3 { animation: wave-flow 3.2s linear infinite; }
+  .wave-track-4 { animation: wave-flow 2.0s linear infinite; }
+
+  /* 节点脉冲 */
+  @keyframes dot-pulse {
+    0%, 100% { opacity: 0.3; r: 2; }
+    50%       { opacity: 1;   r: 3.5; }
+  }
+  .dot-1 { animation: dot-pulse 1.8s ease-in-out infinite; }
+  .dot-2 { animation: dot-pulse 1.8s ease-in-out infinite 0.3s; }
+  .dot-3 { animation: dot-pulse 1.8s ease-in-out infinite 0.6s; }
+  .dot-4 { animation: dot-pulse 1.8s ease-in-out infinite 0.9s; }
+  .dot-5 { animation: dot-pulse 1.8s ease-in-out infinite 1.2s; }
+  .dot-6 { animation: dot-pulse 1.8s ease-in-out infinite 1.5s; }
+
+  /* 模拟头部栏 */
+  .header-bar {
+    background: linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%);
+    padding: 10px 14px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 320px;
+  }
+  .avatar { width: 38px; height: 38px; background: rgba(255,255,255,0.3); border-radius: 50%; }
+  .name { flex: 1; font-size: 14px; font-weight: 600; }
+  .icon-circle { width: 32px; height: 32px; border-radius: 50%; overflow: hidden; border: 1.5px solid rgba(255,255,255,0.5); flex-shrink: 0; }
+  .icon-circle img { width: 100%; height: 100%; object-fit: cover; }
+  .settings-btn { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<h2>59号账本 · 蓄水池股东 · 图标预览</h2>
+
+<div class="row">
+  <!-- 大尺寸 -->
+  <div class="icon-wrap">
+    <div class="wave-icon" style="width:120px;height:120px">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <clipPath id="circle-clip-lg">
+            <circle cx="100" cy="100" r="99"/>
+          </clipPath>
+        </defs>
+        <circle cx="100" cy="100" r="100" fill="#0d0d1a"/>
+        <g clip-path="url(#circle-clip-lg)">
+          <!-- 红色波形（双倍宽度，平移实现循环） -->
+          <g class="wave-track">
+            <path d="M0,82 C12,82 12,62 25,62 C38,62 38,82 50,82 C62,82 62,62 75,62 C88,62 88,82 100,82 C112,82 112,62 125,62 C138,62 138,82 150,82 C162,82 162,62 175,62 C188,62 188,82 200,82 C212,82 212,62 225,62 C238,62 238,82 250,82 C262,82 262,62 275,62 C288,62 288,82 300,82 C312,82 312,62 325,62 C338,62 338,82 350,82 C362,82 362,62 375,62 C388,62 388,82 400,82" fill="none" stroke="#D92626" stroke-width="7" stroke-linecap="round"/>
+          </g>
+          <!-- 黄色波形 -->
+          <g class="wave-track-2">
+            <path d="M0,92 C12,92 12,72 25,72 C38,72 38,92 50,92 C62,92 62,72 75,72 C88,72 88,92 100,92 C112,92 112,72 125,72 C138,72 138,92 150,92 C162,92 162,72 175,72 C188,72 188,92 200,92 C212,92 212,72 225,72 C238,72 238,92 250,92 C262,92 262,72 275,72 C288,72 288,92 300,92 C312,92 312,72 325,72 C338,72 338,92 350,92 C362,92 362,72 375,72 C388,72 388,92 400,92" fill="none" stroke="#F2BE1A" stroke-width="7" stroke-linecap="round"/>
+          </g>
+          <!-- 蓝色波形 -->
+          <g class="wave-track-3">
+            <path d="M0,108 C12,108 12,128 25,128 C38,128 38,108 50,108 C62,108 62,128 75,128 C88,128 88,108 100,108 C112,108 112,128 125,128 C138,128 138,108 150,108 C162,108 162,128 175,128 C188,128 188,108 200,108 C212,108 212,128 225,128 C238,128 238,108 250,108 C262,108 262,128 275,128 C288,128 288,108 300,108 C312,108 312,128 325,128 C338,128 338,108 350,108 C362,108 362,128 375,128 C388,128 388,108 400,108" fill="none" stroke="#3373E6" stroke-width="7" stroke-linecap="round"/>
+          </g>
+          <!-- 绿色波形 -->
+          <g class="wave-track-4">
+            <path d="M0,118 C12,118 12,138 25,138 C38,138 38,118 50,118 C62,118 62,138 75,138 C88,138 88,118 100,118 C112,118 112,138 125,138 C138,138 138,118 150,118 C162,118 162,138 175,138 C188,138 188,118 200,118 C212,118 212,138 225,138 C238,138 238,118 250,118 C262,118 262,138 275,138 C288,138 288,118 300,118 C312,118 312,138 325,138 C338,138 338,118 350,118 C362,118 362,138 375,138 C388,138 388,118 400,118" fill="none" stroke="#1AA340" stroke-width="7" stroke-linecap="round"/>
+          </g>
+          <!-- 电路板节点 -->
+          <circle class="dot-1" cx="28" cy="28" r="2.5" fill="white"/>
+          <circle class="dot-2" cx="172" cy="28" r="2.5" fill="white"/>
+          <circle class="dot-3" cx="28" cy="172" r="2.5" fill="white"/>
+          <circle class="dot-4" cx="172" cy="172" r="2.5" fill="white"/>
+          <circle class="dot-5" cx="100" cy="20" r="2.5" fill="white"/>
+          <circle class="dot-6" cx="100" cy="180" r="2.5" fill="white"/>
+          <!-- 电路线 -->
+          <line x1="28" y1="28" x2="60" y2="28" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+          <line x1="172" y1="28" x2="140" y2="28" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+          <line x1="28" y1="172" x2="60" y2="172" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+          <line x1="172" y1="172" x2="140" y2="172" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+          <line x1="28" y1="28" x2="28" y2="55" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+          <line x1="172" y1="28" x2="172" y2="55" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+          <line x1="28" y1="172" x2="28" y2="145" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+          <line x1="172" y1="172" x2="172" y2="145" stroke="rgba(255,255,255,0.15)" stroke-width="1"/>
+        </g>
+        <!-- 边框 -->
+        <circle cx="100" cy="100" r="98" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+      </svg>
+    </div>
+    <div class="label">大尺寸 120px</div>
+  </div>
+
+  <!-- 中尺寸 -->
+  <div class="icon-wrap">
+    <div class="wave-icon" style="width:64px;height:64px">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <defs><clipPath id="cc-md"><circle cx="100" cy="100" r="99"/></clipPath></defs>
+        <circle cx="100" cy="100" r="100" fill="#0d0d1a"/>
+        <g clip-path="url(#cc-md)">
+          <g class="wave-track"><path d="M0,82 C12,82 12,62 25,62 C38,62 38,82 50,82 C62,82 62,62 75,62 C88,62 88,82 100,82 C112,82 112,62 125,62 C138,62 138,82 150,82 C162,82 162,62 175,62 C188,62 188,82 200,82 C212,82 212,62 225,62 C238,62 238,82 250,82 C262,82 262,62 275,62 C288,62 288,82 300,82 C312,82 312,62 325,62 C338,62 338,82 350,82 C362,82 362,62 375,62 C388,62 388,82 400,82" fill="none" stroke="#D92626" stroke-width="7" stroke-linecap="round"/></g>
+          <g class="wave-track-2"><path d="M0,92 C12,92 12,72 25,72 C38,72 38,92 50,92 C62,92 62,72 75,72 C88,72 88,92 100,92 C112,92 112,72 125,72 C138,72 138,92 150,92 C162,92 162,72 175,72 C188,72 188,92 200,92 C212,92 212,72 225,72 C238,72 238,92 250,92 C262,92 262,72 275,72 C288,72 288,92 300,92 C312,92 312,72 325,72 C338,72 338,92 350,92 C362,92 362,72 375,72 C388,72 388,92 400,92" fill="none" stroke="#F2BE1A" stroke-width="7" stroke-linecap="round"/></g>
+          <g class="wave-track-3"><path d="M0,108 C12,108 12,128 25,128 C38,128 38,108 50,108 C62,108 62,128 75,128 C88,128 88,108 100,108 C112,108 112,128 125,128 C138,128 138,108 150,108 C162,108 162,128 175,128 C188,128 188,108 200,108 C212,108 212,128 225,128 C238,128 238,108 250,108 C262,108 262,128 275,128 C288,128 288,108 300,108 C312,108 312,128 325,128 C338,128 338,108 350,108 C362,108 362,128 375,128 C388,128 388,108 400,108" fill="none" stroke="#3373E6" stroke-width="7" stroke-linecap="round"/></g>
+          <g class="wave-track-4"><path d="M0,118 C12,118 12,138 25,138 C38,138 38,118 50,118 C62,118 62,138 75,138 C88,138 88,118 100,118 C112,118 112,138 125,138 C138,138 138,118 150,118 C162,118 162,138 175,138 C188,138 188,118 200,118 C212,118 212,138 225,138 C238,138 238,118 250,118 C262,118 262,138 275,138 C288,138 288,118 300,118 C312,118 312,138 325,138 C338,138 338,118 350,118 C362,118 362,138 375,138 C388,138 388,118 400,118" fill="none" stroke="#1AA340" stroke-width="7" stroke-linecap="round"/></g>
+          <circle class="dot-1" cx="28" cy="28" r="2.5" fill="white"/>
+          <circle class="dot-2" cx="172" cy="28" r="2.5" fill="white"/>
+          <circle class="dot-3" cx="28" cy="172" r="2.5" fill="white"/>
+          <circle class="dot-4" cx="172" cy="172" r="2.5" fill="white"/>
+        </g>
+        <circle cx="100" cy="100" r="98" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+      </svg>
+    </div>
+    <div class="label">中尺寸 64px</div>
+  </div>
+
+  <!-- 实际尺寸 32px -->
+  <div class="icon-wrap">
+    <div class="wave-icon" style="width:32px;height:32px">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <defs><clipPath id="cc-sm"><circle cx="100" cy="100" r="99"/></clipPath></defs>
+        <circle cx="100" cy="100" r="100" fill="#0d0d1a"/>
+        <g clip-path="url(#cc-sm)">
+          <g class="wave-track"><path d="M0,82 C12,82 12,62 25,62 C38,62 38,82 50,82 C62,82 62,62 75,62 C88,62 88,82 100,82 C112,82 112,62 125,62 C138,62 138,82 150,82 C162,82 162,62 175,62 C188,62 188,82 200,82 C212,82 212,62 225,62 C238,62 238,82 250,82 C262,82 262,62 275,62 C288,62 288,82 300,82 C312,82 312,62 325,62 C338,62 338,82 350,82 C362,82 362,62 375,62 C388,62 388,82 400,82" fill="none" stroke="#D92626" stroke-width="7" stroke-linecap="round"/></g>
+          <g class="wave-track-2"><path d="M0,92 C12,92 12,72 25,72 C38,72 38,92 50,92 C62,92 62,72 75,72 C88,72 88,92 100,92 C112,92 112,72 125,72 C138,72 138,92 150,92 C162,92 162,72 175,72 C188,72 188,92 200,92 C212,92 212,72 225,72 C238,72 238,92 250,92 C262,92 262,72 275,72 C288,72 288,92 300,92 C312,92 312,72 325,72 C338,72 338,92 350,92 C362,92 362,72 375,72 C388,72 388,92 400,92" fill="none" stroke="#F2BE1A" stroke-width="7" stroke-linecap="round"/></g>
+          <g class="wave-track-3"><path d="M0,108 C12,108 12,128 25,128 C38,128 38,108 50,108 C62,108 62,128 75,128 C88,128 88,108 100,108 C112,108 112,128 125,128 C138,128 138,108 150,108 C162,108 162,128 175,128 C188,128 188,108 200,108 C212,108 212,128 225,128 C238,128 238,108 250,108 C262,108 262,128 275,128 C288,128 288,108 300,108 C312,108 312,128 325,128 C338,128 338,108 350,108 C362,108 362,128 375,128 C388,128 388,108 400,108" fill="none" stroke="#3373E6" stroke-width="7" stroke-linecap="round"/></g>
+          <g class="wave-track-4"><path d="M0,118 C12,118 12,138 25,138 C38,138 38,118 50,118 C62,118 62,138 75,138 C88,138 88,118 100,118 C112,118 112,138 125,138 C138,138 138,118 150,118 C162,118 162,138 175,138 C188,138 188,118 200,118 C212,118 212,138 225,138 C238,138 238,118 250,118 C262,118 262,138 275,138 C288,138 288,118 300,118 C312,118 312,138 325,138 C338,138 338,118 350,118 C362,118 362,138 375,138 C388,138 388,118 400,118" fill="none" stroke="#1AA340" stroke-width="7" stroke-linecap="round"/></g>
+        </g>
+        <circle cx="100" cy="100" r="98" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+      </svg>
+    </div>
+    <div class="label">实际尺寸 32px</div>
+  </div>
+</div>
+
+<!-- 实际使用场景 -->
+<div class="icon-wrap">
+  <div class="header-bar">
+    <div class="avatar"></div>
+    <div class="name">蓄水池股东</div>
+    <!-- BTC 图标 -->
+    <div class="icon-circle">
+      <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_trimmed_9f204c04.png">
+    </div>
+    <!-- 新的 59 号图标 -->
+    <div class="icon-circle">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;display:block">
+        <defs><clipPath id="cc-hd"><circle cx="100" cy="100" r="99"/></clipPath></defs>
+        <circle cx="100" cy="100" r="100" fill="#0d0d1a"/>
+        <g clip-path="url(#cc-hd)">
+          <g class="wave-track"><path d="M0,82 C12,82 12,62 25,62 C38,62 38,82 50,82 C62,82 62,62 75,62 C88,62 88,82 100,82 C112,82 112,62 125,62 C138,62 138,82 150,82 C162,82 162,62 175,62 C188,62 188,82 200,82 C212,82 212,62 225,62 C238,62 238,82 250,82 C262,82 262,62 275,62 C288,62 288,82 300,82 C312,82 312,62 325,62 C338,62 338,82 350,82 C362,82 362,62 375,62 C388,62 388,82 400,82" fill="none" stroke="#D92626" stroke-width="7" stroke-linecap="round"/></g>
+          <g class="wave-track-2"><path d="M0,92 C12,92 12,72 25,72 C38,72 38,92 50,92 C62,92 62,72 75,72 C88,72 88,92 100,92 C112,92 112,72 125,72 C138,72 138,92 150,92 C162,92 162,72 175,72 C188,72 188,92 200,92 C212,92 212,72 225,72 C238,72 238,92 250,92 C262,92 262,72 275,72 C288,72 288,92 300,92 C312,92 312,72 325,72 C338,72 338,92 350,92 C362,92 362,72 375,72 C388,72 388,92 400,92" fill="none" stroke="#F2BE1A" stroke-width="7" stroke-linecap="round"/></g>
+          <g class="wave-track-3"><path d="M0,108 C12,108 12,128 25,128 C38,128 38,108 50,108 C62,108 62,128 75,128 C88,128 88,108 100,108 C112,108 112,128 125,128 C138,128 138,108 150,108 C162,108 162,128 175,128 C188,128 188,108 200,108 C212,108 212,128 225,128 C238,128 238,108 250,108 C262,108 262,128 275,128 C288,128 288,108 300,108 C312,108 312,128 325,128 C338,128 338,108 350,108 C362,108 362,128 375,128 C388,128 388,108 400,108" fill="none" stroke="#3373E6" stroke-width="7" stroke-linecap="round"/></g>
+          <g class="wave-track-4"><path d="M0,118 C12,118 12,138 25,138 C38,138 38,118 50,118 C62,118 62,138 75,138 C88,138 88,118 100,118 C112,118 112,138 125,138 C138,138 138,118 150,118 C162,118 162,138 175,138 C188,138 188,118 200,118 C212,118 212,138 225,138 C238,138 238,118 250,118 C262,118 262,138 275,138 C288,138 288,118 300,118 C312,118 312,138 325,138 C338,138 338,118 350,118 C362,118 362,138 375,138 C388,138 388,118 400,118" fill="none" stroke="#1AA340" stroke-width="7" stroke-linecap="round"/></g>
+        </g>
+        <circle cx="100" cy="100" r="98" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+      </svg>
+    </div>
+    <div class="settings-btn">⚙</div>
+  </div>
+  <div class="label" style="margin-top:8px">实际使用场景（头部栏）</div>
+</div>
+
+</body>
+</html>

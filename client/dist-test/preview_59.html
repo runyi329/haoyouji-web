@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>59号账本图标预览</title>
+<style>
+  body {
+    background: #1a1a2e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: sans-serif;
+    color: white;
+    gap: 40px;
+  }
+  h2 { margin: 0; font-size: 18px; opacity: 0.8; }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .label {
+    font-size: 12px;
+    opacity: 0.5;
+    text-align: center;
+    margin-top: 6px;
+  }
+  .icon-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  /* 模拟真实使用场景：头部栏背景 */
+  .header-bar {
+    background: linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%);
+    padding: 12px 16px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 340px;
+  }
+  .avatar {
+    width: 40px; height: 40px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 50%;
+  }
+  .name { flex: 1; font-size: 14px; font-weight: 600; }
+  .icon-circle {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.5);
+    overflow: hidden;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+<h2>59号账本 · 蓄水池股东 · 图标预览</h2>
+
+<div class="row">
+  <!-- 大尺寸预览 -->
+  <div class="icon-wrap">
+    <div style="width:120px;height:120px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.3)">
+      <div id="lottie-large"></div>
+    </div>
+    <div class="label">大尺寸 (120px)</div>
+  </div>
+
+  <!-- 中尺寸 -->
+  <div class="icon-wrap">
+    <div style="width:64px;height:64px;border-radius:50%;overflow:hidden;border:2px solid rgba(255,255,255,0.3)">
+      <div id="lottie-medium"></div>
+    </div>
+    <div class="label">中尺寸 (64px)</div>
+  </div>
+
+  <!-- 实际使用尺寸 32px -->
+  <div class="icon-wrap">
+    <div style="width:32px;height:32px;border-radius:50%;overflow:hidden;border:1.5px solid rgba(255,255,255,0.5)">
+      <div id="lottie-small"></div>
+    </div>
+    <div class="label">实际尺寸 (32px)</div>
+  </div>
+</div>
+
+<!-- 模拟真实场景 -->
+<div class="icon-wrap">
+  <div class="header-bar">
+    <div class="avatar"></div>
+    <div class="name">蓄水池股东</div>
+    <!-- 现有的 BTC 图标 -->
+    <div class="icon-circle">
+      <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/btc_icon_trimmed_9f204c04.png"
+           style="width:100%;height:100%;object-fit:cover">
+    </div>
+    <!-- 新的 59 号图标 -->
+    <div class="icon-circle">
+      <div id="lottie-header"></div>
+    </div>
+    <!-- 设置按钮 -->
+    <div class="icon-circle" style="background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:16px">⚙</div>
+  </div>
+  <div class="label">实际使用场景（头部栏）</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
+<script>
+  const animData = fetch('/wave-icon-59.json').then(r=>r.json());
+  
+  async function init() {
+    const data = await animData;
+    
+    ['large', 'medium', 'small', 'header'].forEach(id => {
+      lottie.loadAnimation({
+        container: document.getElementById('lottie-' + id),
+        animationData: data,
+        renderer: 'svg',
+        loop: true,
+        autoplay: true,
+      });
+    });
+  }
+  init();
+</script>
+</body>
+</html>

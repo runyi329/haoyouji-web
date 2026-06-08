@@ -11631,6 +11631,7 @@ ${klinesSummary}
         initialAmount: z.string().nullable().optional(),
         accountMultiplier: z.string().nullable().optional(),
         marginBase: z.string().nullable().optional(),
+        fundFlow: z.string().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const dbLedgerMod = await import('./db-ledger');
@@ -11655,17 +11656,20 @@ ${klinesSummary}
         try {
           await db.execute(sql`ALTER TABLE ledger_tag_config ADD COLUMN margin_base VARCHAR(64) NULL`);
         } catch {}
+        try {
+          await db.execute(sql`ALTER TABLE ledger_tag_config ADD COLUMN fund_flow TEXT NULL`);
+        } catch {}
         const existing = await db.execute(
           sql`SELECT id FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName} LIMIT 1`
         );
         const existingList = (existing as any)[0] as any[];
         if (existingList.length > 0) {
           await db.execute(
-            sql`UPDATE ledger_tag_config SET settlement_amount = ${input.settlementAmount ?? null}, interest_mode = ${input.interestMode ?? 'fixed'}, interest_rate = ${input.interestRate ?? null}, interest_base_amount = ${input.interestBaseAmount ?? null}, interest_start_date = ${input.interestStartDate ?? null}, pause_date = ${input.pauseDate ?? null}, end_date = ${input.endDate ?? null}, note = ${input.note ?? null}, margin_by_coin = ${input.marginByCoin ?? null}, pnl_manual = ${input.pnlManual ?? null}, pnl_note = ${input.pnlNote ?? null}, original_amount = ${input.originalAmount ?? null}, account_balance = ${input.accountBalance ?? null}, balance_date = ${input.balanceDate ?? null}, initial_amount = ${input.initialAmount ?? null}, account_multiplier = ${input.accountMultiplier ?? null}, margin_base = ${input.marginBase ?? null} WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}`
+            sql`UPDATE ledger_tag_config SET settlement_amount = ${input.settlementAmount ?? null}, interest_mode = ${input.interestMode ?? 'fixed'}, interest_rate = ${input.interestRate ?? null}, interest_base_amount = ${input.interestBaseAmount ?? null}, interest_start_date = ${input.interestStartDate ?? null}, pause_date = ${input.pauseDate ?? null}, end_date = ${input.endDate ?? null}, note = ${input.note ?? null}, margin_by_coin = ${input.marginByCoin ?? null}, pnl_manual = ${input.pnlManual ?? null}, pnl_note = ${input.pnlNote ?? null}, original_amount = ${input.originalAmount ?? null}, account_balance = ${input.accountBalance ?? null}, balance_date = ${input.balanceDate ?? null}, initial_amount = ${input.initialAmount ?? null}, account_multiplier = ${input.accountMultiplier ?? null}, margin_base = ${input.marginBase ?? null}, fund_flow = ${input.fundFlow ?? null} WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}`
           );
         } else {
           await db.execute(
-            sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, settlement_amount, interest_mode, interest_rate, interest_base_amount, interest_start_date, pause_date, end_date, note, margin_by_coin, pnl_manual, pnl_note, original_amount, account_balance, balance_date, initial_amount, account_multiplier, margin_base, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.settlementAmount ?? null}, ${input.interestMode ?? 'fixed'}, ${input.interestRate ?? null}, ${input.interestBaseAmount ?? null}, ${input.interestStartDate ?? null}, ${input.pauseDate ?? null}, ${input.endDate ?? null}, ${input.note ?? null}, ${input.marginByCoin ?? null}, ${input.pnlManual ?? null}, ${input.pnlNote ?? null}, ${input.originalAmount ?? null}, ${input.accountBalance ?? null}, ${input.balanceDate ?? null}, ${input.initialAmount ?? null}, ${input.accountMultiplier ?? null}, ${input.marginBase ?? null}, ${ctx.user.id})`
+            sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, settlement_amount, interest_mode, interest_rate, interest_base_amount, interest_start_date, pause_date, end_date, note, margin_by_coin, pnl_manual, pnl_note, original_amount, account_balance, balance_date, initial_amount, account_multiplier, margin_base, fund_flow, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.settlementAmount ?? null}, ${input.interestMode ?? 'fixed'}, ${input.interestRate ?? null}, ${input.interestBaseAmount ?? null}, ${input.interestStartDate ?? null}, ${input.pauseDate ?? null}, ${input.endDate ?? null}, ${input.note ?? null}, ${input.marginByCoin ?? null}, ${input.pnlManual ?? null}, ${input.pnlNote ?? null}, ${input.originalAmount ?? null}, ${input.accountBalance ?? null}, ${input.balanceDate ?? null}, ${input.initialAmount ?? null}, ${input.accountMultiplier ?? null}, ${input.marginBase ?? null}, ${input.fundFlow ?? null}, ${ctx.user.id})`
           );
         }
         return { success: true };
@@ -11730,7 +11734,7 @@ ${klinesSummary}
         const db = await getLedgerDb();
         // 查询所有标签的配置
         const configRows = await db.execute(
-          sql`SELECT tag_name, margin_by_coin, initial_amount, account_multiplier, margin_base FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId}`
+          sql`SELECT tag_name, margin_by_coin, initial_amount, account_multiplier, margin_base, fund_flow FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId}`
         );
         const configs = (configRows as any)[0] as any[];
         // 查询每个标签最新一条记录的余额
@@ -11754,20 +11758,21 @@ ${klinesSummary}
           };
         }
         // 组装结果
-        const result: Record<string, { marginByCoin: any; initialAmount: string | null; accountMultiplier: string | null; marginBase: string | null; latestBalance: { balance: number; recordDate: string } | null }> = {};
+        const result: Record<string, { marginByCoin: any; initialAmount: string | null; accountMultiplier: string | null; marginBase: string | null; fundFlow: any; latestBalance: { balance: number; recordDate: string } | null }> = {};
         for (const cfg of configs) {
           result[cfg.tag_name] = {
             marginByCoin: cfg.margin_by_coin,
             initialAmount: cfg.initial_amount,
             accountMultiplier: cfg.account_multiplier,
             marginBase: cfg.margin_base,
+            fundFlow: cfg.fund_flow,
             latestBalance: latestMap[cfg.tag_name] ?? null,
           };
         }
         // 补充有余额但无配置的标签
         for (const [tagName, lb] of Object.entries(latestMap)) {
           if (!result[tagName]) {
-            result[tagName] = { marginByCoin: null, initialAmount: null, accountMultiplier: null, marginBase: null, latestBalance: lb };
+            result[tagName] = { marginByCoin: null, initialAmount: null, accountMultiplier: null, marginBase: null, fundFlow: null, latestBalance: lb };
           }
         }
         return result;
