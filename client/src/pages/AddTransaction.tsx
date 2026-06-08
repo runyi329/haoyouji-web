@@ -321,8 +321,7 @@ const AddTransaction = () => {
       toast.success(capitalSubType === 'capital_add' ? '增加本金已记录' : '减少本金已记录');
       setCapitalAmount('');
       setCapitalNote('');
-      refetchTransfers();
-      utils.ledger.getTransactions.invalidate({ ledgerId });
+      utils.ledger.getTransactions.invalidate();
     },
     onError: (error) => {
       toast.error('添加失败：' + error.message);
@@ -333,8 +332,7 @@ const AddTransaction = () => {
   const deleteCapitalMutation = trpc.ledger.deleteTransaction.useMutation({
     onSuccess: () => {
       toast.success('记录已删除');
-      refetchTransfers();
-      utils.ledger.getTransactions.invalidate({ ledgerId });
+      utils.ledger.getTransactions.invalidate();
     },
     onError: (error) => {
       toast.error('删除失败：' + error.message);
@@ -365,8 +363,7 @@ const AddTransaction = () => {
       toast.success('提现记录已添加');
       setTransferAmount('');
       setTransferNote('');
-      refetchTransfers();
-      utils.ledger.getTransactions.invalidate({ ledgerId });
+      utils.ledger.getTransactions.invalidate();
     },
     onError: (error) => {
       toast.error('添加失败：' + error.message);
@@ -377,8 +374,7 @@ const AddTransaction = () => {
   const deleteTransferMutation = trpc.ledger.deleteTransaction.useMutation({
     onSuccess: () => {
       toast.success('记录已删除');
-      refetchTransfers();
-      utils.ledger.getTransactions.invalidate({ ledgerId });
+      utils.ledger.getTransactions.invalidate();
     },
     onError: (error) => {
       toast.error('删除失败：' + error.message);
