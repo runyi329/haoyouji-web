@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft, Pencil, Check, X, ChevronRight } from "lucide-react";
+import { ArrowLeft, Pencil, Check, X, ChevronRight, ChevronDown } from "lucide-react";
 // AfFeeDetail 页面通过路由跳转，已删除内嵌 FeeDetailModal
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -173,6 +173,8 @@ export default function AfOrderManage() {
   const toggleGiftOrders = (orderId: number) => setExpandedGiftOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
   // 持仓人员弹窗
   const [holdersPopup, setHoldersPopup] = useState<string[] | null>(null);
+  // 持仓币种档位详情弹窗：存储当前展开的币种名称
+  const [coinDetailPopup, setCoinDetailPopup] = useState<string | null>(null);
   // 管理费明细：跳转到独立页面
 
   const utils = trpc.useUtils();
@@ -523,10 +525,19 @@ export default function AfOrderManage() {
                       );
                       return (
                         <div key={coin} className={`text-xs ${coinIdx > 0 ? 'pt-2 mt-2 border-t border-gray-100' : ''}`}>
-                          <DotRow
-                            label={<span className="font-semibold">{coin} <span className="font-normal text-gray-400 text-[10px]">({hasDiscount ? `折后${fmtQ(coin, eff)} ${pct}% ` : ''}{coinHolderSets[coin] ? `${coinHolderSets[coin].size}人 ` : ''}{normalCnt[coin] ? `${normalCnt[coin]}单` : ''}{giftCnt[coin] ? ` ${giftCnt[coin]}赠` : ''})</span></span>}
-                            value={<span className="font-semibold">{fmtQ(coin, raw)}</span>}
-                          />
+                          <div className="flex items-center w-full">
+                            <span className="text-gray-700 text-xs whitespace-nowrap">
+                              <span className="font-semibold">{coin} <span className="font-normal text-gray-400 text-[10px]">({hasDiscount ? `折后${fmtQ(coin, eff)} ${pct}% ` : ''}{coinHolderSets[coin] ? `${coinHolderSets[coin].size}人 ` : ''}{normalCnt[coin] ? `${normalCnt[coin]}单` : ''}{giftCnt[coin] ? ` ${giftCnt[coin]}赠` : ''})</span></span>
+                            </span>
+                            <button
+                              className="ml-1 p-0.5 rounded active:bg-gray-100"
+                              onClick={() => setCoinDetailPopup(coin)}
+                            >
+                              <ChevronDown className="w-3 h-3 text-gray-400" />
+                            </button>
+                            <span className="flex-1 mx-1.5 border-b border-dashed border-gray-200" style={{ marginTop: '1px' }} />
+                            <span className="text-gray-700 text-xs whitespace-nowrap text-right font-semibold">{fmtQ(coin, raw)}</span>
+                          </div>
                           {weightedPriceSum[coin] && rawQty[coin] ? (() => {
                             const avgPrice = weightedPriceSum[coin] / rawQty[coin];
                             const feePerCoin = totalFeeUsdt[coin] ? totalFeeUsdt[coin] / rawQty[coin] : 0;
@@ -628,6 +639,93 @@ export default function AfOrderManage() {
           </div>
         </div>
       )}
+
+      {/* 持仓币种档位详情弹窗 */}
+      {coinDetailPopup && (() => {
+        const targetCoin = coinDetailPopup;
+        const holdingOrders = (orders as any[] || []).filter(
+          (o: any) => o.status === 'completed' && o.sellStatus !== 'sold' && o.coin === targetCoin
+        );
+        // 按 limitPrice 档位分组
+        const tierMap: Record<string, { price: number; orders: any[]; rawQty: number; effQty: number; users: Set<string>; giftCount: number; normalCount: number }> = {};
+        holdingOrders.forEach((o: any) => {
+          const price = parseFloat(o.limitPrice) || 0;
+          const key = price.toFixed(2);
+          if (!tierMap[key]) {
+            tierMap[key] = { price, orders: [], rawQty: 0, effQty: 0, users: new Set(), giftCount: 0, normalCount: 0 };
+          }
+          const tier = tierMap[key];
+          const qty = parseFloat(o.quantity) || 0;
+          const rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
+          tier.orders.push(o);
+          tier.rawQty += qty;
+          tier.effQty += qty * rate;
+          const isGift = o.isGift === true || o.isGift === 1;
+          if (isGift) {
+            tier.giftCount += 1;
+          } else {
+            tier.normalCount += 1;
+            const name = o.nickname || o.username || `用户${o.userId}`;
+            tier.users.add(name);
+          }
+        });
+        const tiers = Object.values(tierMap).sort((a, b) => a.price - b.price);
+        const COIN_DECIMALS_D: Record<string, number> = { SOL: 1, BTC: 4, ETH: 2 };
+        const fmtD = (num: number) => num.toFixed(COIN_DECIMALS_D[targetCoin] ?? 4);
+        const totalRaw = tiers.reduce((s, t) => s + t.rawQty, 0);
+        const totalEff = tiers.reduce((s, t) => s + t.effQty, 0);
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.5)' }}
+            onClick={() => setCoinDetailPopup(null)}
+          >
+            <div
+              className="bg-white rounded-2xl px-5 py-4 mx-4 w-full max-w-sm max-h-[80vh] flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
+              <p className="text-sm font-semibold text-gray-700 mb-3">{targetCoin} 持仓档位详情（{tiers.length}个档位）</p>
+              <div className="space-y-2 overflow-y-auto flex-1">
+                {tiers.map((tier) => (
+                  <div key={tier.price} className="bg-gray-50 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold text-gray-800">${tier.price.toFixed(2)}</span>
+                      <span className="text-[10px] text-gray-400">{tier.normalCount}单{tier.giftCount > 0 ? ` ${tier.giftCount}赠` : ''}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">持币</span>
+                        <span className="text-gray-700 font-medium">{fmtD(tier.rawQty)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">折后</span>
+                        <span className="text-gray-700 font-medium">{fmtD(tier.effQty)}</span>
+                      </div>
+                    </div>
+                    {tier.users.size > 0 && (
+                      <div className="mt-1.5 pt-1.5 border-t border-gray-100">
+                        <p className="text-[10px] text-gray-400 mb-0.5">持仓人（{tier.users.size}）</p>
+                        <p className="text-[11px] text-gray-600 leading-relaxed">{Array.from(tier.users).join('、')}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 pt-2 border-t border-gray-100 flex justify-between items-center text-xs text-gray-500">
+                <span>合计 {fmtD(totalRaw)} {targetCoin}</span>
+                <span>折后 {fmtD(totalEff)}</span>
+              </div>
+              <button
+                onClick={() => setCoinDetailPopup(null)}
+                className="mt-3 w-full py-2 rounded-xl text-sm text-white font-medium"
+                style={{ background: '#2563eb' }}
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── 状态筛选Tab ── */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
