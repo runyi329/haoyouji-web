@@ -2199,7 +2199,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
                         const qty = parseFloat(d.buyQuantity);
                         if (!isNaN(price) && price > 0) {
                           const calcQty = amt / price;
-                          return { ...d, buyQuantity: INTEGER_COINS.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
+                          return { ...d, buyQuantity: INTEGER_COINS_FUNDER.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
                         }
                         if (!isNaN(qty) && qty > 0) {
                           return { ...d, buyPrice: (amt / qty).toFixed(2) };
