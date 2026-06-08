@@ -478,10 +478,32 @@ export default function AfOrderManage() {
                   giftCnt[o.coin] = (giftCnt[o.coin] || 0) + 1;
                 } else {
                   normalCnt[o.coin] = (normalCnt[o.coin] || 0) + 1;
-                  // 嵌套赠单
+                  // 嵌套赠单（排除已卖出的）
                   const gifts: any[] = (o.giftOrders as any[]) || [];
                   gifts.forEach((g: any) => {
-                    if (g.coin) giftCnt[g.coin] = (giftCnt[g.coin] || 0) + 1;
+                    if (g.sellStatus === 'sold') return;
+                    if (g.coin) {
+                      giftCnt[g.coin] = (giftCnt[g.coin] || 0) + 1;
+                      const gQty = parseFloat(g.quantity) || 0;
+                      rawQty[g.coin] = (rawQty[g.coin] || 0) + gQty;
+                      const gRate = EQUITY_DISCOUNT_RATES[g.equityTier || 0] ?? 1.0;
+                      effQty[g.coin] = (effQty[g.coin] || 0) + gQty * gRate;
+                      // 嵌套赠单也计入加权均价
+                      const gPrice = parseFloat(g.limitPrice) || price;
+                      if (gPrice > 0 && gQty > 0) {
+                        weightedPriceSum[g.coin] = (weightedPriceSum[g.coin] || 0) + gPrice * gQty;
+                      }
+                      // 嵌套赠单管理费
+                      const gAmount = parseFloat(g.amount) || 0;
+                      if (gAmount > 0) {
+                        const gTradeValue = gAmount;
+                        const gDailyFee = gTradeValue / 0.75 * 0.12 / 365;
+                        const gCreatedDate = g.createdAt ? new Date(g.createdAt) : new Date();
+                        const gCreatedDay = new Date(gCreatedDate.getFullYear(), gCreatedDate.getMonth(), gCreatedDate.getDate());
+                        const gHoldDays = Math.max(1, Math.floor((todayStart.getTime() - gCreatedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+                        totalFeeUsdt[g.coin] = (totalFeeUsdt[g.coin] || 0) + gDailyFee * gHoldDays;
+                      }
+                    }
                   });
                 }
                 // 统计每个币种的持仓人数（排除赠单）
@@ -643,15 +665,29 @@ export default function AfOrderManage() {
       {/* 持仓币种档位详情弹窗 */}
       {coinDetailPopup && (() => {
         const targetCoin = coinDetailPopup;
+        // 取所有未卖出的 completed 订单（正单+独立赠单）
         const holdingOrders = (orders as any[] || []).filter(
           (o: any) => o.status === 'completed' && o.sellStatus !== 'sold' && o.coin === targetCoin
         );
+        // 同时收集嵌套赠单（排除已卖出的）
+        const nestedGifts: any[] = [];
+        (orders as any[] || []).filter(
+          (o: any) => o.status === 'completed' && o.sellStatus !== 'sold' && !o.isGift
+        ).forEach((o: any) => {
+          const gifts: any[] = (o.giftOrders as any[]) || [];
+          gifts.forEach((g: any) => {
+            if (g.sellStatus === 'sold') return;
+            if (g.coin === targetCoin) {
+              nestedGifts.push({ ...g, _parentLimitPrice: o.limitPrice });
+            }
+          });
+        });
         // 按 limitPrice 档位分组，每个档位内再按用户分组
         interface UserDetail { name: string; rawQty: number; effQty: number; orderCount: number; isGift: boolean; equityTier: number; rate: number }
         interface TierGroup { price: number; rawQty: number; effQty: number; orderCount: number; giftCount: number; users: Record<string, UserDetail> }
         const tierMap: Record<string, TierGroup> = {};
-        holdingOrders.forEach((o: any) => {
-          const price = parseFloat(o.limitPrice) || 0;
+        const addToTier = (o: any, isGift: boolean, fallbackPrice?: number) => {
+          const price = parseFloat(o.limitPrice) || (fallbackPrice ? parseFloat(fallbackPrice as any) || 0 : 0);
           const key = price.toFixed(2);
           if (!tierMap[key]) {
             tierMap[key] = { price, rawQty: 0, effQty: 0, orderCount: 0, giftCount: 0, users: {} };
@@ -663,7 +699,6 @@ export default function AfOrderManage() {
           tier.rawQty += qty;
           tier.effQty += qty * rate;
           tier.orderCount += 1;
-          const isGift = o.isGift === true || o.isGift === 1;
           if (isGift) tier.giftCount += 1;
           const name = o.nickname || o.username || `用户${o.userId}`;
           const userKey = `${name}_${isGift ? 'gift' : 'normal'}_${eqTier}`;
@@ -673,6 +708,13 @@ export default function AfOrderManage() {
           tier.users[userKey].rawQty += qty;
           tier.users[userKey].effQty += qty * rate;
           tier.users[userKey].orderCount += 1;
+        };
+        holdingOrders.forEach((o: any) => {
+          const isGift = o.isGift === true || o.isGift === 1;
+          addToTier(o, isGift);
+        });
+        nestedGifts.forEach((g: any) => {
+          addToTier(g, true, g._parentLimitPrice);
         });
         const tiers = Object.values(tierMap).sort((a, b) => a.price - b.price);
         const COIN_DECIMALS_D: Record<string, number> = { SOL: 1, BTC: 4, ETH: 2 };
@@ -820,6 +862,8 @@ export default function AfOrderManage() {
                 const coinQty: Record<string, number> = {};
                 const coinQtyEffective: Record<string, number> = {}; // 折后数量
                 activeOrders.forEach((o: any) => {
+                  // 排除已卖出的订单，不计入币种持仓统计
+                  if (o.sellStatus === 'sold') return;
                   if (o.coin) {
                     const qty = parseFloat(o.quantity) || 0;
                     coinQty[o.coin] = (coinQty[o.coin] || 0) + qty;
@@ -827,9 +871,10 @@ export default function AfOrderManage() {
                     const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
                     coinQtyEffective[o.coin] = (coinQtyEffective[o.coin] || 0) + qty * rate;
                   }
-                  // 同时统计嵌套赠与单的币数
+                  // 同时统计嵌套赠与单的币数（排除已卖出的赠单）
                   const gifts: any[] = (o.giftOrders as any[]) || [];
                   gifts.forEach((g: any) => {
+                    if (g.sellStatus === 'sold') return;
                     if (g.coin) {
                       const gQty = parseFloat(g.quantity) || 0;
                       coinQty[g.coin] = (coinQty[g.coin] || 0) + gQty;
