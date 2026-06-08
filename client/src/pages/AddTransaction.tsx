@@ -274,6 +274,12 @@ const AddTransaction = () => {
     { enabled: isCustomAA && !!currentCategoryId }
   );
 
+  // 获取初始金额配置（用于余额输入框下方的盈亏预览提示）
+  const { data: aaInitialBalancesData } = trpc.ledger.getMyInitialBalances.useQuery(
+    { ledgerId },
+    { enabled: isCustomAA }
+  );
+
   // 计算累计提现（排除 capital_ 开头的本金变动记录）
   const transferSummary = useMemo(() => {
     let totalWithdraw = 0;
@@ -1585,16 +1591,56 @@ const AddTransaction = () => {
                   })()}
                 </div>
               </div>
-              {/* 累计值提示（当有提现记录时显示） */}
-              {transferSummary.totalWithdraw > 0 && amount && parseFloat(amount) > 0 && (
-                <div className="mt-2 px-1 text-xs text-gray-400">
-                  <span>客户实际总资产: </span>
-                  <span className="text-[#1A2B4A] font-semibold">
-                    {(parseFloat(amount) + transferSummary.totalWithdraw).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                  <span className="text-gray-300 ml-1">(余额 {parseFloat(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })} + 累计提现 {transferSummary.totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })})</span>
-                </div>
-              )}
+              {/* 盈亏预览提示（当有提现或本金变动时显示） */}
+              {(() => {
+                if (!amount || parseFloat(amount) <= 0) return null;
+                const hasWithdraw = transferSummary.totalWithdraw > 0;
+                const hasCapitalChange = capitalSummary.net !== 0;
+                if (!hasWithdraw && !hasCapitalChange) return null;
+                // 获取当前标签名称
+                const currentCategory = (topCategories as any[])?.find((c: any) => c.id === currentCategoryId);
+                const tagName = currentCategory?.name || '';
+                // 初始本金
+                const initialBalance = tagName && aaInitialBalancesData?.balances
+                  ? Number((aaInitialBalancesData.balances as any)[tagName] ?? 0)
+                  : 0;
+                // 当前本金 = 初始 + 本金净变动
+                const currentCapital = initialBalance + capitalSummary.net;
+                // 总资产 = 输入余额 + 累计提现
+                const totalAsset = parseFloat(amount) + transferSummary.totalWithdraw;
+                // 盈亏 = 当前本金 - 总资产
+                const pnl = currentCapital - totalAsset;
+                return (
+                  <div className="mt-3 px-1 text-xs text-gray-400 space-y-1">
+                    <div className="text-[10px] text-gray-300 mb-1">-- 客户前端显示预览 --</div>
+                    {hasCapitalChange && (
+                      <div>
+                        <span>当前本金: </span>
+                        <span className="text-[#1A2B4A] font-semibold">
+                          {currentCapital.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                        <span className="text-gray-300 ml-1">(初始 {initialBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })} {capitalSummary.net >= 0 ? '+' : ''} 变动 {capitalSummary.net.toLocaleString('zh-CN', { minimumFractionDigits: 2 })})</span>
+                      </div>
+                    )}
+                    {hasWithdraw && (
+                      <div>
+                        <span>总资产: </span>
+                        <span className="text-[#1A2B4A] font-semibold">
+                          {totalAsset.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                        <span className="text-gray-300 ml-1">(余额 {parseFloat(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })} + 提现 {transferSummary.totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })})</span>
+                      </div>
+                    )}
+                    <div>
+                      <span>盈亏: </span>
+                      <span className={`font-semibold ${pnl >= 0 ? 'text-[#4CAF50]' : 'text-[#E53935]'}`}>
+                        {pnl >= 0 ? '+' : ''}{pnl.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                      <span className="text-gray-300 ml-1">(本金 {currentCapital.toLocaleString('zh-CN', { minimumFractionDigits: 2 })} - 总资产 {totalAsset.toLocaleString('zh-CN', { minimumFractionDigits: 2 })})</span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* 分类选择区 */}
