@@ -360,8 +360,8 @@ export default function LedgerDetailAA({
   // ===== 本金变动历史查询（用于初始金额旁感叹号弹窗） =====
   const [showCapitalHistory, setShowCapitalHistory] = useState(false);
   const { data: capitalTransferData } = trpc.ledger.getTransactions.useQuery(
-    { ledgerId, type: 'transfer' as any, limit: 200 },
-    { enabled: !!ledgerId }
+    { ledgerId, type: 'transfer' as any, categoryId: selectedTagId ?? undefined, limit: 200 },
+    { enabled: !!ledgerId && !!selectedTagId }
   );
   // 筛选本金变动记录（description 以 capital_ 开头）
   const capitalHistory = useMemo(() => {

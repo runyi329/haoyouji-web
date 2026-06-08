@@ -1379,19 +1379,22 @@ const AddTransaction = () => {
                           <span className="text-sm font-semibold text-[#E53935]">
                             -{Number(record.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
                           </span>
-                          <button
-                            className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 active:bg-red-50 active:text-red-500 flex-shrink-0"
-                            onClick={(e) => { e.stopPropagation(); deleteTransferMutation.mutate({ recordId: record.id }); }}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                          {userRole === 'owner' && (
+                            <button
+                              className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 active:bg-red-50 active:text-red-500 flex-shrink-0"
+                              onClick={(e) => { e.stopPropagation(); deleteTransferMutation.mutate({ recordId: record.id }); }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                       );
                     })}
                   </div>
                 )}
 
-                {/* 添加提现 */}
+                {/* 添加提现 - 仅 owner 可操作 */}
+                {userRole === 'owner' && (
                 <div className="px-5 py-4" style={{ borderTop: '1px solid #F5F5F5' }}>
                   <div className="text-xs text-gray-400 mb-3 font-medium">添加提现记录</div>
                   {/* 金额输入 */}
@@ -1423,6 +1426,7 @@ const AddTransaction = () => {
                     className="w-full text-xs bg-gray-50 rounded-xl px-3 py-2 outline-none text-gray-600 placeholder-gray-300"
                   />
                 </div>
+                )}
               </div>
             </div>
           </div>
@@ -1478,19 +1482,22 @@ const AddTransaction = () => {
                           <span className={`text-sm font-semibold ${isAdd ? 'text-[#1976D2]' : 'text-[#F57C00]'}`}>
                             {isAdd ? '+' : '-'}{Number(record.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
                           </span>
-                          <button
-                            className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 active:bg-orange-50 active:text-orange-500 flex-shrink-0"
-                            onClick={(e) => { e.stopPropagation(); deleteCapitalMutation.mutate({ recordId: record.id }); }}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                          {userRole === 'owner' && (
+                            <button
+                              className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 active:bg-orange-50 active:text-orange-500 flex-shrink-0"
+                              onClick={(e) => { e.stopPropagation(); deleteCapitalMutation.mutate({ recordId: record.id }); }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                       );
                     })}
                   </div>
                 )}
 
-                {/* 添加新本金变动 */}
+                {/* 添加新本金变动 - 仅 owner 可操作 */}
+                {userRole === 'owner' && (
                 <div className="px-5 py-4" style={{ borderTop: '1px solid #F5F5F5' }}>
                   <div className="text-xs text-gray-400 mb-3 font-medium">添加本金变动</div>
                   {/* 类型切换 */}
@@ -1543,6 +1550,7 @@ const AddTransaction = () => {
                     className="w-full text-xs bg-gray-50 rounded-xl px-3 py-2 outline-none text-gray-600 placeholder-gray-300"
                   />
                 </div>
+                )}
               </div>
             </div>
           </div>
