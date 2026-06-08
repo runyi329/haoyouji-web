@@ -1234,6 +1234,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
     return '';
   }, [formData.buyPrice, formData.buyQuantity]);
 
+  // 融资金额输入状态：编辑时用本地值，非编辑时显示计算值
+  const [amountEditing, setAmountEditing] = useState(false);
+  const [amountInputValue, setAmountInputValue] = useState('');
+  // 当 computedAmount 变化且用户未在编辑时，同步到输入框
+  useEffect(() => {
+    if (!amountEditing) {
+      setAmountInputValue(computedAmount || '');
+    }
+  }, [computedAmount, amountEditing]);
+
   // 员工名字筛选
   const [employeeNameFilter, setEmployeeNameFilter] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
@@ -2165,21 +2175,23 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
               </div>
 
               {/* 融资金额 / 买入价格 / 币数 三字段联动 */}
-              <div className="rounded-2xl border border-gray-200 overflow-hidden" style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
+              <div className="rounded-2xl border border-gray-200" style={{ overflow: 'visible', opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <div className="px-4 pt-3 pb-1">
                   <span className="text-xs text-gray-400">输入任意两个，第三个自动计算 · 融资金额 = 买入价格 × 币数</span>
                 </div>
                 {/* 融资金额 */}
                 <div className="px-4 py-3 border-b border-gray-100">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5">融资金额 (USDT)</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">融资金额 ({formData.coin || 'USDT'})</label>
                   <input
                     type="number"
                     inputMode="decimal"
-                    value={computedAmount || ''}
+                    value={amountInputValue}
+                    onFocus={() => setAmountEditing(true)}
                     onChange={e => {
-                      // 融资金额不直接存储，但允许用户输入后反算
+                      setAmountInputValue(e.target.value);
                     }}
                     onBlur={e => {
+                      setAmountEditing(false);
                       const amt = parseFloat(e.target.value);
                       if (isNaN(amt) || amt <= 0) return;
                       setFormData(d => {

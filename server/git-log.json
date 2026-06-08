@@ -1,5 +1,149 @@
 [
   {
+    "hash": "a810d3aaf95fa2e1b8a63b05f4a83e336e4602d9",
+    "author": "Manus Dev",
+    "date": "2026-06-08T02:58:02+00:00",
+    "message": "fix(P095): 融资金额单位跟随币种动态变化+修复iOS输入框无法聚焦",
+    "type": "fix",
+    "scope": "P095",
+    "cleanMessage": "融资金额单位跟随币种动态变化+修复iOS输入框无法聚焦"
+  },
+  {
+    "hash": "1c04d1fed8d3a9bf9b7f592091f965f851a771ee",
+    "author": "Manus Dev",
+    "date": "2026-06-08T02:24:50+00:00",
+    "message": "fix(P050): 日期分组-正单已卖出时仍遍历其未卖出的嵌套赠单统计币数",
+    "type": "fix",
+    "scope": "P050",
+    "cleanMessage": "日期分组-正单已卖出时仍遍历其未卖出的嵌套赠单统计币数"
+  },
+  {
+    "hash": "8b5f07cf7845cc060fce713e114c5f66807b288d",
+    "author": "Manus Dev",
+    "date": "2026-06-08T01:53:36+00:00",
+    "message": "fix(P050): 修复重复统计-持仓卡片和弹窗不展开嵌套赠单(顶层已含独立赠单行)",
+    "type": "fix",
+    "scope": "P050",
+    "cleanMessage": "修复重复统计-持仓卡片和弹窗不展开嵌套赠单(顶层已含独立赠单行)"
+  },
+  {
+    "hash": "b18cd9a1006ff96977422fb8208f27614022ac4f",
+    "author": "Manus Dev",
+    "date": "2026-06-08T01:45:52+00:00",
+    "message": "fix(P050): 统一口径-日期分组排除已卖出订单,持仓卡片和弹窗纳入嵌套赠单",
+    "type": "fix",
+    "scope": "P050",
+    "cleanMessage": "统一口径-日期分组排除已卖出订单,持仓卡片和弹窗纳入嵌套赠单"
+  },
+  {
+    "hash": "6e96a248cbafcb46a110046f55444cd3421544a4",
+    "author": "Manus Dev",
+    "date": "2026-06-08T01:24:46+00:00",
+    "message": "feat(P050): 优化档位详情弹窗-每个用户一行显示持币x折扣率=折后数",
+    "type": "feat",
+    "scope": "P050",
+    "cleanMessage": "优化档位详情弹窗-每个用户一行显示持币x折扣率=折后数"
+  },
+  {
+    "hash": "df90c7e0320145e234fa193750907750be521cb6",
+    "author": "Manus Dev",
+    "date": "2026-06-08T01:16:32+00:00",
+    "message": "feat(P050): 持仓币种统计卡片添加按档位展开详情功能",
+    "type": "feat",
+    "scope": "P050",
+    "cleanMessage": "持仓币种统计卡片添加按档位展开详情功能"
+  },
+  {
+    "hash": "d4d91ea17d1d1201ad5cc7bd2ab7171a4392e250",
+    "author": "github-actions[bot]",
+    "date": "2026-06-07T17:16:46+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "6e3558d0dc83fb06f77b429caee8d7cde97bf290",
+    "author": "Manus Dev",
+    "date": "2026-06-07T14:07:24+00:00",
+    "message": "fix: LedgerDetail 资方账本首页利率显示改为最多2位小数",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "LedgerDetail 资方账本首页利率显示改为最多2位小数"
+  },
+  {
+    "hash": "21d51b2a8e4d57d617712894b8489950801f7e56",
+    "author": "Manus Dev",
+    "date": "2026-06-07T13:58:51+00:00",
+    "message": "feat: 在 LedgerDetail 拥有者首页的订单卡片帽子区域显示自定义标签",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "在 LedgerDetail 拥有者首页的订单卡片帽子区域显示自定义标签"
+  },
+  {
+    "hash": "2d403d241ac93f3adb93bbebf5ee2b2269d7da29",
+    "author": "Manus Dev",
+    "date": "2026-06-07T13:31:59+00:00",
+    "message": "feat(P095): 在所有联动页面的帽子区域显示自定义标签 - 回收站弹窗订单卡片 - 借方侧(CryptoPrediction)订单卡片",
+    "type": "feat",
+    "scope": "P095",
+    "cleanMessage": "在所有联动页面的帽子区域显示自定义标签 - 回收站弹窗订单卡片 - 借方侧(CryptoPrediction)订单卡片"
+  },
+  {
+    "hash": "6d72e1611003c27eb66b4caa6c5accf07e5e1ef8",
+    "author": "Manus Dev",
+    "date": "2026-06-07T13:21:29+00:00",
+    "message": "feat(P095): 添加订单自定义标签功能 - 编辑表单中可添加/删除标签 - 订单卡片帽子区域显示标签（样式与类型/用户名一致） - 后端创建/更新API支持tags字段",
+    "type": "feat",
+    "scope": "P095",
+    "cleanMessage": "添加订单自定义标签功能 - 编辑表单中可添加/删除标签 - 订单卡片帽子区域显示标签（样式与类型/用户名一致） - 后端创建/更新API支持tags字段"
+  },
+  {
+    "hash": "f26527e82144ef961e6149071aafa887d4cf75a7",
+    "author": "Manus Dev",
+    "date": "2026-06-07T13:04:25+00:00",
+    "message": "feat(P095): 回收站弹窗订单卡片改为详细两栏布局（与主列表风格一致）",
+    "type": "feat",
+    "scope": "P095",
+    "cleanMessage": "回收站弹窗订单卡片改为详细两栏布局（与主列表风格一致）"
+  },
+  {
+    "hash": "f0ff48df7cac53d9024a3135b4f27703bd8ea72e",
+    "author": "Manus Dev",
+    "date": "2026-06-07T12:58:48+00:00",
+    "message": "fix: 允许管理员(owner/admin)作为资方订单的目标用户",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "允许管理员(owner/admin)作为资方订单的目标用户"
+  },
+  {
+    "hash": "9de08e70e2c89578c1cb52e4fc6dddd6aff8cb87",
+    "author": "Manus Dev",
+    "date": "2026-06-07T12:17:36+00:00",
+    "message": "feat(P095): 手动输入归属用户时自动锁定订单归属为管理员",
+    "type": "feat",
+    "scope": "P095",
+    "cleanMessage": "手动输入归属用户时自动锁定订单归属为管理员"
+  },
+  {
+    "hash": "56d1bf0c20f04e9aadfe286b9fe74f6720ac7ce2",
+    "author": "github-actions[bot]",
+    "date": "2026-06-07T11:40:21+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "121b157140f8dc091d2a40c5149fab86bf4277db",
+    "author": "runyi329",
+    "date": "2026-06-07T11:38:11+00:00",
+    "message": "fix: 将回收站按钮移到P095页面(FinanceUnified)顶部导航栏",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "将回收站按钮移到P095页面(FinanceUnified)顶部导航栏"
+  },
+  {
     "hash": "8c7e28ca5dda443cf123a4ad5768955d9ca710b0",
     "author": "runyi329",
     "date": "2026-06-07T11:23:40+00:00",
@@ -1000,33 +1144,6 @@
   },
   {
     "hash": "58ed5b509fd780e368130f1428a4bdc179c966a4",
-    "author": "runyi329",
-    "date": "2026-06-05T14:24:58+00:00",
-    "message": "feat: P095借方实时预览右栏与前端P076-C完全对齐",
-    "type": "feat",
-    "scope": "",
-    "cleanMessage": "P095借方实时预览右栏与前端P076-C完全对齐"
-  },
-  {
-    "hash": "8de8ea7c00ef0f2d14544b29c690dca0bf635683",
-    "author": "runyi329",
-    "date": "2026-06-05T14:26:00+00:00",
-    "message": "WIP on main: 07687f69 feat: P095借方实时预览右栏与前端P076-C完全对齐",
-    "type": "chore",
-    "scope": "",
-    "cleanMessage": "WIP on main: 07687f69 feat: P095借方实时预览右栏与前端P076-C完全对齐"
-  },
-  {
-    "hash": "bcf38bdeb2f7f4159a69a597cbbb40f59f383aa3",
-    "author": "runyi329",
-    "date": "2026-06-05T14:26:00+00:00",
-    "message": "index on main: 07687f69 feat: P095借方实时预览右栏与前端P076-C完全对齐",
-    "type": "chore",
-    "scope": "",
-    "cleanMessage": "index on main: 07687f69 feat: P095借方实时预览右栏与前端P076-C完全对齐"
-  },
-  {
-    "hash": "07687f694d7a7291b08d359cecc6619a9539eaa3",
     "author": "runyi329",
     "date": "2026-06-05T14:24:58+00:00",
     "message": "feat: P095借方实时预览右栏与前端P076-C完全对齐",
@@ -16216,15 +16333,6 @@
     "type": "fix",
     "scope": "",
     "cleanMessage": "紧急修复 - 从 getProducts select 中移除 inPointsShop 字段，避免数据库字段不存在时商品列表崩溃"
-  },
-  {
-    "hash": "f85b9dc7cac48d2d5a2b6e2faad2b1f2ce3703ce",
-    "author": "Deploy Bot",
-    "date": "2026-04-30T04:48:02-04:00",
-    "message": "diag: 诊断并修复 inPointsShop 字段",
-    "type": "chore",
-    "scope": "",
-    "cleanMessage": "diag: 诊断并修复 inPointsShop 字段"
   },
   {
     "hash": "aca7603cfd1058a02d59fce5ab2cd7a4f38a82ab",
