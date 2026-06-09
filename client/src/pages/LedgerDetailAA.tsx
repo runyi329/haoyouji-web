@@ -369,7 +369,8 @@ export default function LedgerDetailAA({
     (capitalTransferData as any[] || []).forEach((group: any) => {
       group.records?.forEach((r: any) => {
         if (r.description?.startsWith('capital_')) {
-          records.push(r);
+          // 如果记录本身没有 recordDate，从外层分组的 date 字段补充
+          records.push({ ...r, recordDate: r.recordDate || group.date || '' });
         }
       });
     });
@@ -1380,7 +1381,7 @@ export default function LedgerDetailAA({
                   className="inline-flex items-center justify-center active:opacity-60"
                   title="本金有变动，点击查看详情"
                 >
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" fill="currentColor" />
+                  <AlertTriangle className="w-3.5 h-3.5 text-black" fill="#FBBF24" />
                 </button>
               )}
             </div>
