@@ -481,8 +481,8 @@ function FunderOrderCard({
         : { border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}
     >
       {isSettled && (
-        <div className="absolute bottom-4 left-4 pointer-events-none select-none" style={{ transform: 'rotate(-30deg)', zIndex: 10 }}>
-          <div style={{ border: '2px solid rgba(220,38,38,0.5)', color: 'rgba(220,38,38,0.5)', borderRadius: '4px', padding: '2px 8px', fontSize: '13px', fontWeight: 700, letterSpacing: '3px', lineHeight: '1.4', whiteSpace: 'nowrap' }}>已结清</div>
+        <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center" style={{ backgroundColor: 'rgba(220,38,38,0.06)', zIndex: 10 }}>
+          <div style={{ border: '3px solid rgba(220,38,38,0.35)', color: 'rgba(220,38,38,0.35)', borderRadius: '8px', padding: '8px 24px', fontSize: '28px', fontWeight: 800, letterSpacing: '6px', lineHeight: '1.4', whiteSpace: 'nowrap', transform: 'rotate(-15deg)' }}>已结清</div>
         </div>
       )}
 
@@ -1870,7 +1870,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
               <div className="text-gray-400 text-sm">暂无订单</div>
             </div>
           ) : (() => {
-            const filteredOrders = assetOrders as any[];
+            const filteredOrders = [...(assetOrders as any[])].sort((a: any, b: any) => {
+              const aSettled = a.status === 'settled' || a.status === 'cancelled' ? 1 : 0;
+              const bSettled = b.status === 'settled' || b.status === 'cancelled' ? 1 : 0;
+              if (aSettled !== bSettled) return aSettled - bSettled;
+              const aTime = new Date(a.created_at || a.createdAt || 0).getTime();
+              const bTime = new Date(b.created_at || b.createdAt || 0).getTime();
+              return bTime - aTime;
+            });
             return filteredOrders.length === 0 ? (
               <div className="text-center py-8 bg-white rounded-2xl shadow-sm">
                 <div className="text-gray-400 text-sm">暂无订单</div>

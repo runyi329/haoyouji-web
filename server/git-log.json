@@ -1,5 +1,23 @@
 [
   {
+    "hash": "e745d983b47a2e0bb0ece67073242842cd14158f",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T17:06:46+08:00",
+    "message": "chore: re-trigger deploy (fix SSH port 32092)",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "re-trigger deploy (fix SSH port 32092)"
+  },
+  {
+    "hash": "2270b38e885b6b4c29e5dc280a68d3f2127d6d99",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T16:46:20+08:00",
+    "message": "fix(P095): 订单卡片股票类型持有资产显示融资金额而非买入币数",
+    "type": "fix",
+    "scope": "P095",
+    "cleanMessage": "订单卡片股票类型持有资产显示融资金额而非买入币数"
+  },
+  {
     "hash": "608130f526de998d1eee64559ebb440ab5457c91",
     "author": "Deploy Bot",
     "date": "2026-06-09T15:56:37+08:00",
