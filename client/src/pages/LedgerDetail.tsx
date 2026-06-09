@@ -827,6 +827,11 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
               collateralValue += qty;
               collateralItemValues.push(qty);
               collateralItemPrices.push(1);
+            } else if (item.coin === 'CNY') {
+              const cv = qty / cnyRate;
+              collateralValue += cv;
+              collateralItemValues.push(cv);
+              collateralItemPrices.push(1 / cnyRate);
             } else {
               const p = livePrices?.[item.coin];
               if (p) { collateralValue += qty * p; collateralItemValues.push(qty * p); collateralItemPrices.push(p); }
@@ -1569,6 +1574,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, cnyRate, paidInterest, p
                 const q = parseFloat(item.qty);
                 if (!isNaN(q)) {
                   if (item.coin === 'USDT') cv += q;
+                  else if (item.coin === 'CNY') cv += q / cnyRate;
                   else if (livePrices[item.coin]) cv += q * livePrices[item.coin];
                 }
               }

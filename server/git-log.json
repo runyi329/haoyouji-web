@@ -1,5 +1,14 @@
 [
   {
+    "hash": "3078118bd6e65b2184a423081e333a2120b58ee2",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T23:32:29+08:00",
+    "message": "fix: P095 担保货币 CNY 折算用实时汇率，利息折算也改用实时汇率",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "P095 担保货币 CNY 折算用实时汇率，利息折算也改用实时汇率"
+  },
+  {
     "hash": "ec671ac3245ecf138ce8bcf0c5f676d040966f9e",
     "author": "Deploy Bot",
     "date": "2026-06-09T23:21:12+08:00",
