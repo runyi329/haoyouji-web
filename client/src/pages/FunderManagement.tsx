@@ -1229,7 +1229,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     showOwnerName: true,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean>>(DEFAULT_DISPLAY_CONFIG);
-  const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT'];
+  const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY'];
 
   // 自动折算总金额
   const computedAmount = useMemo(() => {
@@ -1277,6 +1277,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   // funderGetAssetOrders 返回 { orders, livePrices }，取 orders 数组
   const assetOrders = (assetOrdersData as any)?.orders ?? assetOrdersData ?? [];
   const formLivePrices: Record<string, number> = (assetOrdersData as any)?.livePrices ?? {};
+  const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
+  const cnyRate = parseFloat((cnyRateData as any)?.money ?? "7.2") || 7.2;
   // 涨跌方向计算：用 localStorage 存储上一次价格（与 LedgerDetail 一致）
   const PREV_PRICE_CACHE_KEY = `funder_prev_prices_p095_${ledgerId}`;
   const [priceDirection, setPriceDirection] = useState<Record<string, 'up' | 'down' | 'same'>>({});
@@ -1340,6 +1342,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       hasAny = true; // qty=0 也算有效填写
       if (item.coin === 'USDT') {
         total += qty;
+      } else if (item.coin === 'CNY') {
+        total += qty / cnyRate;
       } else {
         const price = formLivePrices[item.coin];
         if (price) total += qty * price;
@@ -1347,7 +1351,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       }
     }
     return hasAny ? total : null;
-  }, [collateralAssets, formLivePrices]);
+  }, [collateralAssets, formLivePrices, cnyRate]);
 
   // 担保缺口 = 订单总金额 - 担保价值
   const computedCollateralGap = useMemo(() => {
