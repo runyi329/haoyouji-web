@@ -1231,7 +1231,7 @@ function FunderOrderSmallCard({ order, livePrices }: { order: any; livePrices: R
   const cc = coinColorMap[order.coin] || '#6B7280';
   const qty = parseFloat(order.buy_quantity || '0');
   const livePrice = livePrices[order.coin];
-  const currentValue = order.asset_type === 'stock' ? (parseFloat(order.amount || '0') > 0 ? parseFloat(order.amount) / cnyRate : null) : (livePrice && qty > 0 ? qty * livePrice : null);
+  const currentValue = order.asset_type === 'stock' ? (parseFloat(order.amount || '0') > 0 ? parseFloat(order.amount) / cnyRate : null) : (order.coin === 'CNY' ? (qty > 0 ? qty / cnyRate : null) : (livePrice && qty > 0 ? qty * livePrice : null));
   const isEnded = order.status === 'ended';
   // 待结利息：基于计息基数、年利率、计息开始日实时计算
   const accrued = useAccruedInterest(
@@ -1406,6 +1406,11 @@ function FunderOrderCard({ order, ledgerId, livePrices, cnyRate, paidInterest, p
                 const liveP = isEnded
                   ? (order.end_price ? parseFloat(order.end_price) : (livePrices[order.coin] ?? null))
                   : (livePrices[order.coin] ?? null);
+                if (order.coin === 'CNY') {
+                  if (!qty) return null;
+                  const cnyVal = (qty / cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 });
+                  return <span className="text-base font-medium" style={{ color: '#4B5563' }}>{'\u2248'}{cnyVal} U</span>;
+                }
                 if (!liveP || !qty) return null;
                 const val = (qty * liveP).toLocaleString(undefined, { maximumFractionDigits: 2 });
                 return <span className="text-base font-medium" style={{ color: '#4B5563' }}>≈{val} U</span>;
@@ -1421,6 +1426,11 @@ function FunderOrderCard({ order, ledgerId, livePrices, cnyRate, paidInterest, p
               const liveP = isEnded
                 ? (order.end_price ? parseFloat(order.end_price) : (livePrices[order.coin] ?? null))
                 : (livePrices[order.coin] ?? null);
+              if (order.coin === 'CNY') {
+                if (!qty) return null;
+                const cnyVal = (qty / cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 });
+                return <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>{'\u2248'}{cnyVal} U</div>;
+              }
               if (!liveP || !qty) return null;
               const val = (qty * liveP).toLocaleString(undefined, { maximumFractionDigits: 2 });
               return <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{val} U</div>;

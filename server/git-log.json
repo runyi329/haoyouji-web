@@ -1,5 +1,14 @@
 [
   {
+    "hash": "ec0704407f7a8c6616c210693406d3108b7554ab",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T20:18:35+08:00",
+    "message": "fix: LedgerDetail 所有 CNY/U 折算使用实时汇率(exchange.getRate 3秒刷新)替代硬编码/7",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "LedgerDetail 所有 CNY/U 折算使用实时汇率(exchange.getRate 3秒刷新)替代硬编码/7"
+  },
+  {
     "hash": "0f7e42d9e58ea5abee1569f21b5ef15b09d80377",
     "author": "Deploy Bot",
     "date": "2026-06-09T19:27:29+08:00",
