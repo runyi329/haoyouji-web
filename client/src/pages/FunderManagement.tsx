@@ -1125,12 +1125,13 @@ function FunderOrderCard({
 
 
 interface FunderManagementProps {
+  adminOnly?: boolean;
   ledgerIdProp?: number;
   hideHeader?: boolean;
   onRecycleBinRef?: (openFn: () => void) => void;
 }
 
-export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBinRef }: FunderManagementProps = {}) {
+export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, onRecycleBinRef }: FunderManagementProps = {}) {
   const [, params] = useRoute("/ledger/:id/funder-management");
   const [, routeParams2] = useRoute("/ledger/:id/finance-unified");
   const [, setLocation] = useLocation();
@@ -1265,12 +1266,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
   const isAdminUser = (ledgerData as any)?.userRole === 'owner' || (ledgerData as any)?.userRole === 'admin';
 
   const { data: funderUsers, isLoading: usersLoading } = trpc.ledger.funderGetFunderUsers.useQuery(
-    { ledgerId },
+    { ledgerId, ...(adminOnly ? { roleFilter: "admin" as const } : {}) },
     { enabled: ledgerId > 0 && isAdminUser }
   );
 
   const { data: assetOrdersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.funderGetAssetOrders.useQuery(
-    { ledgerId, ...(selectedUserId ? { userId: selectedUserId } : {}) },
+    { ledgerId, ...(selectedUserId ? { userId: selectedUserId } : {}), ...(adminOnly ? { roleFilter: "admin" as const } : {}) },
     { enabled: ledgerId > 0, staleTime: 3000, refetchInterval: 3000 }
   );
   // funderGetAssetOrders 返回 { orders, livePrices }，取 orders 数组
@@ -1298,7 +1299,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
   }, [JSON.stringify(formLivePrices)]);
   // 全量订单（不带 userId 过滤），专用于下拉框统计每个用户的订单数量
   const { data: allOrdersData } = trpc.ledger.funderGetAssetOrders.useQuery(
-    { ledgerId },
+    { ledgerId, ...(adminOnly ? { roleFilter: "admin" as const } : {}) },
     { enabled: ledgerId > 0, staleTime: 30000 }
   );
   const allOrders: any[] = (allOrdersData as any)?.orders ?? allOrdersData ?? [];

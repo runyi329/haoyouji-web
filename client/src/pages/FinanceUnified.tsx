@@ -4,23 +4,19 @@ import { ChevronLeft } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import FunderManagement from "./FunderManagement";
 import FinanceManagement from "./FinanceManagement";
-
 export default function FinanceUnified() {
   const [, params] = useRoute("/ledger/:id/finance-unified");
   const [, setLocation] = useLocation();
   const ledgerId = params?.id ? parseInt(params.id) : 0;
-  const [activeTab, setActiveTab] = useState<'funder' | 'finance'>('funder');
-
+  const [activeTab, setActiveTab] = useState<'funder' | 'admin' | 'finance'>('funder');
   // 观察视角：从 URL ?viewAs=xxx 读取
   const urlSearchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
   const viewAsUserId = urlSearchParams.get('viewAs') ? parseInt(urlSearchParams.get('viewAs')!) : undefined;
-
   // 回收站打开函数引用
   const openRecycleBinRef = useRef<(() => void) | null>(null);
   const handleRecycleBinRef = useCallback((openFn: () => void) => {
     openRecycleBinRef.current = openFn;
   }, []);
-
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F0F4FF' }}>
       <PageTag code="P095" />
@@ -48,7 +44,7 @@ export default function FinanceUnified() {
             style={{ color: 'rgba(255,255,255,0.9)', background: 'rgba(255,255,255,0.15)' }}
           >刷新</button>
         </div>
-        {/* Tab 切换 */}
+        {/* Tab 切换 - 三个 tab */}
         <div className="flex px-4 pb-0">
           <button
             onClick={() => setActiveTab('funder')}
@@ -57,6 +53,16 @@ export default function FinanceUnified() {
           >
             左侧（资方）
             {activeTab === 'funder' && (
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-0.5 bg-white rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('admin')}
+            className="flex-1 py-2 text-sm font-medium text-center transition-all relative"
+            style={{ color: activeTab === 'admin' ? '#fff' : 'rgba(255,255,255,0.6)' }}
+          >
+            中侧（管理）
+            {activeTab === 'admin' && (
               <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-0.5 bg-white rounded-full" />
             )}
           </button>
@@ -72,11 +78,13 @@ export default function FinanceUnified() {
           </button>
         </div>
       </div>
-
       {/* Tab 内容 */}
       <div>
         {activeTab === 'funder' && (
           <FunderManagement ledgerIdProp={ledgerId} hideHeader onRecycleBinRef={handleRecycleBinRef} />
+        )}
+        {activeTab === 'admin' && (
+          <FunderManagement ledgerIdProp={ledgerId} hideHeader adminOnly onRecycleBinRef={handleRecycleBinRef} />
         )}
         {activeTab === 'finance' && (
           <FinanceManagement ledgerIdProp={ledgerId} hideHeader />

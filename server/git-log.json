@@ -1,5 +1,14 @@
 [
   {
+    "hash": "524170f09935d65b0e963dc59ef0f7f76d79714a",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T17:37:05+08:00",
+    "message": "fix(P095): 编辑订单时保留融资金额，切换资产类型不清空已有金额",
+    "type": "fix",
+    "scope": "P095",
+    "cleanMessage": "编辑订单时保留融资金额，切换资产类型不清空已有金额"
+  },
+  {
     "hash": "898820da0df74f09e01f8ec9fd6ec5f283fea4ec",
     "author": "Deploy Bot",
     "date": "2026-06-09T17:24:14+08:00",

@@ -14705,7 +14705,7 @@ ${klinesSummary}
     // ========== 资方资产订单管理 API ==========
     // 获取资方资产订单列表（资金方看自己的，管理员看全部或指定用户的）
     funderGetAssetOrders: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), userId: z.number().optional() }))
+      .input(z.object({ ledgerId: z.number(), userId: z.number().optional(), roleFilter: z.enum(["funder", "admin"]).optional() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         // 查询当前用户在账本中的角色
@@ -14836,8 +14836,17 @@ ${klinesSummary}
           seenIds.add(id);
           return true;
         });
+        // roleFilter: when admin, only keep orders from owner/admin role users
+        let filteredOrders: any[] = rawOrders;
+        if (input.roleFilter === "admin") {
+          const adminMemberRows = await db.execute(
+            sql`SELECT userId FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND role IN ('owner', 'admin')`
+          ) as any;
+          const adminUserIds = new Set(((adminMemberRows[0] || adminMemberRows) as any[]).map((r: any) => Number(r.userId)));
+          filteredOrders = rawOrders.filter((o: any) => adminUserIds.has(Number(o.user_id)));
+        }
         // 把 Date 对象统一序列化为 yyyy-MM-dd 字符串，防止前端 .replace() 崩溃
-        const orders = rawOrders.map((o: any) => {
+        const orders = filteredOrders.map((o: any) => {
           const result = { ...o };
           const dateFields = ['interest_start_date', 'created_at', 'updated_at', 'end_date', 'start_date'];
           for (const field of dateFields) {
@@ -15273,7 +15282,7 @@ ${klinesSummary}
 
     // 获取账本中所有资金方用户列表（管理员用）
     funderGetFunderUsers: protectedProcedure
-      .input(z.object({ ledgerId: z.number() }))
+      .input(z.object({ ledgerId: z.number(), roleFilter: z.enum(["funder", "admin"]).optional() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         // 验证管理员权限
@@ -15286,7 +15295,7 @@ ${klinesSummary}
           sql`SELECT lm.userId, lm.nickname, u.username, u.name, u.avatar
               FROM ledger_members lm
               LEFT JOIN users u ON u.id = lm.userId
-              WHERE lm.ledgerId = ${input.ledgerId} AND lm.role = 'funder'
+              WHERE lm.ledgerId = ${input.ledgerId} AND lm.role IN (${sql.raw(input.roleFilter === 'admin' ? "'owner','admin'" : "'funder'")})
               ORDER BY lm.id ASC`
         ) as any;
         return ((rows[0] || rows) as any[]) || [];
