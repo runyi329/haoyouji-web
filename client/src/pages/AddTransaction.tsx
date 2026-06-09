@@ -1351,8 +1351,8 @@ const AddTransaction = () => {
               </div>
               <div className="flex items-center gap-2">
                 {transferSummary.totalWithdraw > 0 && (
-                  <span className="text-sm font-semibold text-[#E53935]">
-                    -{transferSummary.totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <span className="text-sm font-semibold text-[#1A2B4A]">
+                    {transferSummary.totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 )}
                 <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${transferPanelOpen ? 'rotate-180' : ''}`} />
@@ -1364,7 +1364,7 @@ const AddTransaction = () => {
               <div style={{ borderTop: '1px solid #F5F5F5' }}>
                 {/* 汇总信息 */}
                 <div className="px-5 py-3 text-xs text-gray-500" style={{ borderBottom: '1px solid #F5F5F5' }}>
-                  <span>累计提现: <span className="text-[#E53935] font-semibold">-{transferSummary.totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span></span>
+                  <span>累计提现: <span className="text-[#1A2B4A] font-semibold">{transferSummary.totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span></span>
                 </div>
 
                 {/* 历史记录列表 */}
@@ -1382,8 +1382,8 @@ const AddTransaction = () => {
                             </div>
                             <span className="text-[11px] text-gray-400">{record.recordDate || ''}</span>
                           </div>
-                          <span className="text-sm font-semibold text-[#E53935]">
-                            -{Number(record.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                          <span className="text-sm font-semibold text-[#1A2B4A]">
+                            {Number(record.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
                           </span>
                           {userRole === 'owner' && (
                             <button
