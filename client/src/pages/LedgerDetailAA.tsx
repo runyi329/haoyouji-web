@@ -1391,7 +1391,7 @@ export default function LedgerDetailAA({
           {/* 初始金额 */}
           <div className="rounded-xl p-2 relative" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
             <div className="text-xs opacity-75 mb-0.5 flex items-center gap-1">
-              初始金额
+              {capitalHistory.length > 0 ? '当前本金' : '初始本金'}
               {capitalHistory.length > 0 && (
                 <button
                   onClick={() => setShowCapitalHistory(true)}
