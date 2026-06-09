@@ -1591,52 +1591,35 @@ const AddTransaction = () => {
                   })()}
                 </div>
               </div>
-              {/* 盈亏预览提示（当有提现或本金变动时显示） */}
+              {/* 客户前端显示余额预览提示（当有提现或本金变动时显示） */}
               {(() => {
                 if (!amount || parseFloat(amount) <= 0) return null;
-                const hasWithdraw = transferSummary.totalWithdraw > 0;
+                const withdrawAbs = Math.abs(transferSummary.totalWithdraw);
+                const hasWithdraw = withdrawAbs > 0;
                 const hasCapitalChange = capitalSummary.net !== 0;
                 if (!hasWithdraw && !hasCapitalChange) return null;
-                // 获取当前标签名称
-                const currentCategory = (topCategories as any[])?.find((c: any) => c.id === currentCategoryId);
-                const tagName = currentCategory?.name || '';
-                // 初始本金
-                const initialBalance = tagName && aaInitialBalancesData?.balances
-                  ? Number((aaInitialBalancesData.balances as any)[tagName] ?? 0)
-                  : 0;
-                // 当前本金 = 初始 + 本金净变动
-                const currentCapital = initialBalance + capitalSummary.net;
-                // 总资产 = 输入余额 + 累计提现
-                const totalAsset = parseFloat(amount) + transferSummary.totalWithdraw;
-                // 盈亏 = 当前本金 - 总资产
-                const pnl = currentCapital - totalAsset;
+                // 客户前端显示余额 = 当前输入余额 + |历史提现| + 本金净变动
+                const inputBalance = parseFloat(amount);
+                const displayBalance = inputBalance + withdrawAbs + capitalSummary.net;
+                // 构建公式各项
+                const parts: string[] = [`余额 ${inputBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`];
+                if (hasWithdraw) {
+                  parts.push(`提现 ${withdrawAbs.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`);
+                }
+                if (hasCapitalChange) {
+                  parts.push(`本金变动 ${capitalSummary.net >= 0 ? '+' : ''}${capitalSummary.net.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`);
+                }
                 return (
                   <div className="mt-3 px-1 text-xs text-gray-400 space-y-1">
                     <div className="text-[10px] text-gray-300 mb-1">-- 客户前端显示预览 --</div>
-                    {hasCapitalChange && (
-                      <div>
-                        <span>当前本金: </span>
-                        <span className="text-[#1A2B4A] font-semibold">
-                          {currentCapital.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                        <span className="text-gray-300 ml-1">(初始 {initialBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })} {capitalSummary.net >= 0 ? '+' : ''} 变动 {capitalSummary.net.toLocaleString('zh-CN', { minimumFractionDigits: 2 })})</span>
-                      </div>
-                    )}
-                    {hasWithdraw && (
-                      <div>
-                        <span>总资产: </span>
-                        <span className="text-[#1A2B4A] font-semibold">
-                          {totalAsset.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                        <span className="text-gray-300 ml-1">(余额 {parseFloat(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })} + 提现 {transferSummary.totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })})</span>
-                      </div>
-                    )}
                     <div>
-                      <span>盈亏: </span>
-                      <span className={`font-semibold ${pnl >= 0 ? 'text-[#4CAF50]' : 'text-[#E53935]'}`}>
-                        {pnl >= 0 ? '+' : ''}{pnl.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <span>客户看到的余额: </span>
+                      <span className="text-[#1A2B4A] font-semibold">
+                        {displayBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
-                      <span className="text-gray-300 ml-1">(本金 {currentCapital.toLocaleString('zh-CN', { minimumFractionDigits: 2 })} - 总资产 {totalAsset.toLocaleString('zh-CN', { minimumFractionDigits: 2 })})</span>
+                    </div>
+                    <div className="text-[10px] text-gray-300">
+                      = {parts.join(' + ')}
                     </div>
                   </div>
                 );
