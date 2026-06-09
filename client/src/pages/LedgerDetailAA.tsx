@@ -377,18 +377,20 @@ export default function LedgerDetailAA({
     return records.sort((a: any, b: any) => (a.recordDate || '').localeCompare(b.recordDate || ''));
   }, [capitalTransferData]);
 
-  // 筛选提现记录（非 capital_ 开头的 transfer 记录）—— 用于日历上方显示累计值
-  const totalWithdraw = useMemo(() => {
-    let total = 0;
+  // 筛选提现记录（非 capital_ 开头的 transfer 记录）—— 带日期列表
+  const withdrawRecords = useMemo(() => {
+    const records: { date: string; amount: number }[] = [];
     (capitalTransferData as any[] || []).forEach((group: any) => {
       group.records?.forEach((r: any) => {
         if (!r.description?.startsWith('capital_') && r.type === 'transfer') {
-          total += Number(r.amount) || 0;
+          records.push({ date: r.recordDate || group.date || '', amount: Number(r.amount) || 0 });
         }
       });
     });
-    return total;
+    return records.sort((a, b) => a.date.localeCompare(b.date));
   }, [capitalTransferData]);
+  // 总提现金额（兼容旧引用）
+  const totalWithdraw = useMemo(() => withdrawRecords.reduce((s, r) => s + r.amount, 0), [withdrawRecords]);
 
   // 当前用户的交易数据
   const activeMemberTransactions = useMemo(() => {
@@ -452,25 +454,35 @@ export default function LedgerDetailAA({
     return map;
   }, [filteredTransactions]);
 
-    // ─── 每天余额快照（联动：原始余额 + 累计提现 + 本金净变动）──────────────────────────
+    // ─── 每天余额快照（联动：原始余额 + 截止当天累计提现 + 截止当天本金净变动）────────
   const cumulativeMap = useMemo(() => {
     const cum = new Map<string, number>();
-    // 本金净变动
-    const capitalNetChange = capitalHistory.reduce((sum: number, r: any) => {
-      const amt = Number(r.amount) || 0;
-      return r.description?.startsWith('capital_add') ? sum + amt : sum - amt;
-    }, 0);
-    // 联动偏移量 = 累计提现 + 本金净变动
-    const offset = totalWithdraw + capitalNetChange;
     filteredTransactions.forEach((d) => {
-      // 每天的记录是当天余额快照，取 income 和 expense 中的主要金额
-      // income 和 expense 只会有一个有值，取其绝对值作为当天余额
       const dayBalance = d.income > 0 ? d.income : d.expense;
-      // 客户前端看到的余额 = 原始余额 + 提现 + 本金变动
-      cum.set(d.date, dayBalance + offset);
+      // 截止当天的累计提现（提现日期 <= 当天）
+      const withdrawToDate = withdrawRecords
+        .filter(w => w.date <= d.date)
+        .reduce((s, w) => s + w.amount, 0);
+      // 截止当天的本金净变动（变动日期 <= 当天）
+      const capitalToDate = capitalHistory
+        .filter((r: any) => (r.recordDate || '') <= d.date)
+        .reduce((sum: number, r: any) => {
+          const amt = Number(r.amount) || 0;
+          return r.description?.startsWith('capital_add') ? sum + amt : sum - amt;
+        }, 0);
+      // 客户前端看到的余额 = 原始余额 + 截止当天提现 + 截止当天本金变动
+      cum.set(d.date, dayBalance + withdrawToDate + capitalToDate);
     });
     return cum;
-  }, [filteredTransactions, totalWithdraw, capitalHistory]);
+  }, [filteredTransactions, withdrawRecords, capitalHistory]);
+
+  // ─── 变动日期集合（用于日历格子上显示黄色感叹号标记）───────────
+  const changeDates = useMemo(() => {
+    const dates = new Set<string>();
+    withdrawRecords.forEach(w => dates.add(w.date));
+    capitalHistory.forEach((r: any) => { if (r.recordDate) dates.add(r.recordDate); });
+    return dates;
+  }, [withdrawRecords, capitalHistory]);
 
   // ─── 全部模式：图表模式切换 ────────────────────────────────────────────────
   const [allChartMode, setAllChartMode] = useState<'amount' | 'initial' | 'margin'>('amount');
@@ -1306,11 +1318,9 @@ export default function LedgerDetailAA({
             <div className="text-xs opacity-75 mb-0.5">最新余额</div>
             <div className="text-base font-bold">
               {(() => {
-                const capitalNetChange = capitalHistory.reduce((sum: number, r: any) => {
-                  const amt = Number(r.amount) || 0;
-                  return r.description?.startsWith('capital_add') ? sum + amt : sum - amt;
-                }, 0);
-                const linkedBalance = stats.latestBalance + totalWithdraw + capitalNetChange;
+                // 从 cumulativeMap 取最后一天的联动值（已按日期累进）
+                const lastDate = stats.latestDate;
+                const linkedBalance = lastDate && cumulativeMap.has(lastDate) ? cumulativeMap.get(lastDate)! : stats.latestBalance;
                 return '¥' + linkedBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
               })()}
             </div>
@@ -1638,6 +1648,14 @@ export default function LedgerDetailAA({
                                 <span style={{ fontSize: '12px', fontWeight: 500, lineHeight: 1, color: dayNumColor }}>{day}</span>
                                 {!isPausedAfter && dotColor && (
                                   <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: dotColor, flexShrink: 0, display: 'inline-block' }} />
+                                )}
+                                {!isPausedAfter && changeDates.has(dayDateStr) && (
+                                  <span style={{ width: '10px', height: '10px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <svg width="10" height="10" viewBox="0 0 20 20">
+                                      <polygon points="10,2 19,18 1,18" fill="#FBBF24" stroke="#222" strokeWidth="1.5" />
+                                      <text x="10" y="16" textAnchor="middle" fontSize="11" fontWeight="bold" fill="#222">!</text>
+                                    </svg>
+                                  </span>
                                 )}
                               </span>
                               {isNonTrading ? (
