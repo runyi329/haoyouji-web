@@ -1288,7 +1288,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
   const qty = parseFloat(order.buy_quantity || '0');
   const price = parseFloat(order.buy_price || '0');
   const totalU = qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0');
-  const hasInterest = order.interest_base && order.interest_rate_annual && order.interest_start_date && order.status === 'active';
+  const hasInterest = order.interest_base && order.interest_rate_annual && order.interest_start_date;
   // 解析字段展示配置（默认全部显示）
   const dc: Record<string, boolean> = (() => {
     const defaults = { buyPrice: true, buyValue: true, interestBase: true, buyDate: true, todayPrice: true, currentValue: true, holdDuration: true, orderNo: true, accruedInterest: true, paidInterest: true, profitShare: true, commissionShare: true, collateral: true, aiIcon: false, assetType: true };
@@ -1302,13 +1302,13 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
   const coinName = coinNameMap[order.coin] || order.coin;
   // 受邀订单（参与方视图）
   const isParticipantOrder = !!(order.participantInfo);
-  const cardBgColor = (isEnded || isSettled) ? '#F3F4F6' : isParticipantOrder ? '#F0FDF4' : '#FFFFFF';
-  const cardBorderColor = (isEnded || isSettled) ? '1px solid #D1D5DB' : isParticipantOrder ? '1px solid #86EFAC' : '1px solid #E0E8FF';
-  const cardShadow = (isEnded || isSettled) ? 'none' : isParticipantOrder ? '0 2px 8px rgba(34,197,94,0.12)' : '0 2px 8px rgba(26,86,219,0.08)';
+  const cardBgColor = isSettled ? 'rgba(220,38,38,0.04)' : isEnded ? '#F3F4F6' : isParticipantOrder ? '#F0FDF4' : '#FFFFFF';
+  const cardBorderColor = isSettled ? '1px solid rgba(220,38,38,0.2)' : isEnded ? '1px solid #D1D5DB' : isParticipantOrder ? '1px solid #86EFAC' : '1px solid #E0E8FF';
+  const cardShadow = isSettled ? '0 2px 8px rgba(220,38,38,0.08)' : isEnded ? 'none' : isParticipantOrder ? '0 2px 8px rgba(34,197,94,0.12)' : '0 2px 8px rgba(26,86,219,0.08)';
   return (
     <div
       className="rounded-2xl shadow-sm relative"
-      style={{ backgroundColor: cardBgColor, border: cardBorderColor, boxShadow: cardShadow, cursor: canClick ? 'pointer' : 'default', overflow: 'hidden', opacity: isEnded ? 0.7 : 1 }}
+      style={{ backgroundColor: cardBgColor, border: cardBorderColor, boxShadow: cardShadow, cursor: canClick ? 'pointer' : 'default', overflow: 'hidden', opacity: 1 }}
       onClick={onClick}
     >
       {/* 受邀订单标签仅在后台管理界面显示，前端不显示 */}
@@ -1335,12 +1335,12 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
         </div>
       )}
       {isSettled && (
-        <div className="absolute bottom-4 left-4 pointer-events-none select-none" style={{ transform: 'rotate(-30deg)', zIndex: 10 }}>
-          <div style={{ border: '2px solid rgba(220,38,38,0.5)', color: 'rgba(220,38,38,0.5)', borderRadius: '4px', padding: '2px 8px', fontSize: '13px', fontWeight: 700, letterSpacing: '3px', lineHeight: '1.4', whiteSpace: 'nowrap' }}>已结清</div>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none" style={{ zIndex: 10 }}>
+          <div style={{ border: '3px solid rgba(220,38,38,0.35)', color: 'rgba(220,38,38,0.35)', borderRadius: '6px', padding: '6px 16px', fontSize: '28px', fontWeight: 700, letterSpacing: '4px', lineHeight: '1.4', whiteSpace: 'nowrap', transform: 'rotate(-15deg)' }}>已结清</div>
         </div>
       )}
       {/* 顶部色条 */}
-      <div className="h-1" style={{ background: (isEnded || isSettled) ? '#D1D5DB' : `linear-gradient(90deg, ${cc}, ${cc}55)` }} />
+      <div className="h-1" style={{ background: isSettled ? 'rgba(220,38,38,0.3)' : isEnded ? '#D1D5DB' : `linear-gradient(90deg, ${cc}, ${cc}55)` }} />
       {/* 帽檐区域：始终显示，资产类型标签 + 所有者名字（受开关控制） */}
       <div className="flex items-center gap-1.5 flex-wrap px-4 py-1.5" style={{ borderBottom: '1px solid #EBEBEB', minHeight: '28px' }}>
         {dc.assetType && order.asset_type && (

@@ -1,5 +1,14 @@
 [
   {
+    "hash": "7a4f025ec3dd83da16d09f64d8c65761578f690b",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T18:28:50+08:00",
+    "message": "fix(P095): LedgerDetail持有资产金额格式化-限制小数位数",
+    "type": "fix",
+    "scope": "P095",
+    "cleanMessage": "LedgerDetail持有资产金额格式化-限制小数位数"
+  },
+  {
     "hash": "8681fecfc79f0b5c3d59801d7570404b62b6cae6",
     "author": "Deploy Bot",
     "date": "2026-06-09T18:19:50+08:00",
