@@ -15087,7 +15087,7 @@ ${klinesSummary}
       .input(z.object({
         id: z.number(),
         ledgerId: z.number(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG']).optional(),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG']).optional(),
         amount: z.string().optional(),
         buyPrice: z.string().optional(),
         buyDate: z.string().optional(),
@@ -15108,6 +15108,10 @@ ${klinesSummary}
         displayConfig: z.record(z.string(), z.union([z.boolean(), z.number()])).optional(),
         assetType: z.enum(['stock', 'crypto', '']).optional(),
         tags: z.array(z.string()).optional(),
+        financeType: z.string().optional(),
+        counterparty: z.string().optional(),
+        collateralCoin: z.string().optional(),
+        collateralQty: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -15142,6 +15146,10 @@ ${klinesSummary}
         if (input.assetType !== undefined) { sets.push('asset_type = ?'); vals.push(input.assetType || null); }
         if (input.tags !== undefined) { sets.push('tags = ?'); vals.push(input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null); }
         if (input.ownerLabel !== undefined) { sets.push('owner_label = ?'); vals.push(input.ownerLabel || null); }
+        if (input.financeType !== undefined) { sets.push('finance_type = ?'); vals.push(input.financeType || null); }
+        if (input.counterparty !== undefined) { sets.push('counterparty = ?'); vals.push(input.counterparty || null); }
+        if (input.collateralCoin !== undefined) { sets.push('collateral_coin = ?'); vals.push(input.collateralCoin || null); }
+        if (input.collateralQty !== undefined) { sets.push('collateral_qty = ?'); vals.push(input.collateralQty || null); }
         if (sets.length === 0) return { success: true };
         const setClause = sets.join(', ');
         const rawQuery = `UPDATE ledger_orders SET ${setClause} WHERE id = ? AND ledger_id = ?`;
@@ -15710,6 +15718,8 @@ ${klinesSummary}
         commissionShare: z.string().optional(),
         displayConfig: z.record(z.string(), z.union([z.boolean(), z.number()])).optional(),
         assetType: z.string().optional(),
+        interestRateCurrency: z.string().optional(),
+        tags: z.array(z.string()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -15718,7 +15728,7 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-        // 自动建表时添加 collateral_coin / collateral_qty / finance_type / collateral_assets / show_profit_share / commission_share / display_config / asset_type 列（如果不存在）
+        // 自动建表时添加列（如果不存在）
         try {
           const mysql = await import('mysql2/promise');
           const dbUrl = process.env.DATABASE_URL || '';
@@ -15736,6 +15746,8 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS commission_share TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS display_config TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS asset_type VARCHAR(20) DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS interest_rate_currency VARCHAR(20) DEFAULT 'USDT'`);
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT NULL`);
           await conn.end();
         } catch(e) {}
         // 生成唯一订单号
@@ -15752,8 +15764,8 @@ ${klinesSummary}
           if (!exists) isUnique = true;
         }
         await db.execute(
-          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, created_by)
-              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, created_by)
+              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -15788,6 +15800,8 @@ ${klinesSummary}
         displayConfig: z.record(z.string(), z.union([z.boolean(), z.number()])).optional(),
         assetType: z.string().optional(),
         ownerLabel: z.string().optional(),
+        interestRateCurrency: z.string().optional(),
+        tags: z.array(z.string()).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -15805,7 +15819,7 @@ ${klinesSummary}
           adminNote: 'admin_note', publicNote: 'public_note', interestRateAnnual: 'interest_rate_annual',
           interestPaymentType: 'interest_payment_type', interestBase: 'interest_base', interestBaseCurrency: 'interest_base_currency', interestStartDate: 'interest_start_date',
           collateralCoin: 'collateral_coin', collateralQty: 'collateral_qty',
-          financeType: 'finance_type',
+          financeType: 'finance_type', interestRateCurrency: 'interest_rate_currency',
         };
         // 特殊处理 showProfitShare
         if (input.showProfitShare !== undefined) { updateCols.push('show_profit_share = ?'); updateVals.push(input.showProfitShare ? 1 : 0); }
@@ -15813,6 +15827,7 @@ ${klinesSummary}
         if (input.displayConfig !== undefined) { updateCols.push('display_config = ?'); updateVals.push(input.displayConfig ? JSON.stringify(input.displayConfig) : null); }
         if (input.assetType !== undefined) { updateCols.push('asset_type = ?'); updateVals.push(input.assetType || null); }
         if (input.ownerLabel !== undefined) { updateCols.push('owner_label = ?'); updateVals.push(input.ownerLabel || null); }
+        if (input.tags !== undefined) { updateCols.push('tags = ?'); updateVals.push(input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null); }
         // 特殊处理 collateralAssets（JSON 序列化）
         // 判断是否正在清空担保物（collateralAssets 为空数组）
         const isClearingCollateral = input.collateralAssets !== undefined && input.collateralAssets.length === 0;
@@ -15862,14 +15877,22 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS commission_share TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS display_config TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS asset_type VARCHAR(20) DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS interest_rate_currency VARCHAR(20) DEFAULT 'USDT'`);
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT NULL`);
         } catch(e) {}
                 await conn.execute(`UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
-        // display_config 联动：同步到同账本同 order_role 的所有订单
+        // display_config 联动：同步到同账本所有订单（含跨角色订单）
         if (input.displayConfig !== undefined) {
           const dcJson = input.displayConfig ? JSON.stringify(input.displayConfig) : null;
+          // 先获取当前订单的 order_role，以便同步到同角色的其他订单
+          const [curRoleRows] = await conn.execute(
+            `SELECT order_role FROM ledger_orders WHERE id = ? AND ledger_id = ? LIMIT 1`,
+            [input.id, input.ledgerId]
+          ) as any[];
+          const curOrderRole = (curRoleRows as any[])?.[0]?.order_role || 'finance';
           await conn.execute(
-            `UPDATE ledger_orders SET display_config = ? WHERE ledger_id = ? AND order_role = 'finance' AND id != ?`,
-            [dcJson, input.ledgerId, input.id]
+            `UPDATE ledger_orders SET display_config = ? WHERE ledger_id = ? AND order_role = ? AND id != ?`,
+            [dcJson, input.ledgerId, curOrderRole, input.id]
           );
         }
         await conn.end();

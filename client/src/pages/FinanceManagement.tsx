@@ -1140,6 +1140,8 @@ const emptyForm = {
   assetType: '' as '' | 'stock' | 'crypto',
   ownerLabel: '',
   ownerLabelMode: 'member' as 'member' | 'manual',
+  interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
+  tags: [] as string[],
 };
 
 // ===== 订单公开备注组件 =====
@@ -1434,6 +1436,11 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     onSuccess: () => { toast.success('订单已更新'); refetchOrders(); closeForm(); },
     onError: (e) => toast.error(e.message),
   });
+  // 跨角色订单（资方订单在借方页面显示）的更新使用 funderUpdateAssetOrder
+  const funderUpdateMutation = trpc.ledger.funderUpdateAssetOrder.useMutation({
+    onSuccess: () => { toast.success('订单已更新'); refetchOrders(); closeForm(); },
+    onError: (e) => toast.error(e.message),
+  });
   const deleteMutation = trpc.ledger.financeDeleteOrder.useMutation({
     onSuccess: () => { toast.success('订单已删除'); refetchOrders(); },
     onError: (e) => toast.error(e.message),
@@ -1587,6 +1594,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       assetType: (order.asset_type || '') as '' | 'stock' | 'crypto',
       ownerLabel: order.owner_label || '',
       ownerLabelMode: (order.owner_label ? 'manual' : 'member') as 'member' | 'manual',
+      interestRateCurrency: (order.interest_rate_currency || 'USDT') as 'USDT' | 'CNY',
+      tags: (() => { try { const t = order.tags; return Array.isArray(t) ? t : (typeof t === 'string' && t ? JSON.parse(t) : []); } catch { return []; } })(),
     });
     // 加载字段展示配置
     if (order.display_config) {
@@ -1618,17 +1627,17 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       ? (formData.interestRateSign === '-' ? '-' : '') + formData.interestRateAnnual
       : '';
     if (editingOrder) {
-      updateMutation.mutate({
+      // 判断是否是跨角色订单（资方订单在借方页面显示）
+      const isCrossRoleOrder = editingOrder.order_role && editingOrder.order_role !== 'finance';
+      const commonUpdatePayload = {
         id: editingOrder.id,
         ledgerId,
-        userId: selectedUserId,
         coin: formData.coin,
         amount: formData.amount,
         buyPrice: formData.buyPrice,
         buyDate: formData.buyDate,
         buyQuantity: formData.buyQuantity,
         storageAccount: formData.storageAccount,
-        counterparty: formData.counterparty,
         interestBase: formData.interestBase,
         interestBaseCurrency: formData.interestBaseCurrency,
         interestStartDate: formData.interestStartDate,
@@ -1639,18 +1648,27 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         status: formData.status,
         collateralCoin: formData.collateralCoin || undefined,
         collateralQty: formData.collateralQty || undefined,
-        // 编辑模式：始终传 collateralAssets（空数组表示用户明确清空）
         collateralAssets: formData.collateralAssets,
         financeType: formData.financeType,
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
         assetType: formData.assetType || undefined,
         ownerLabel: formData.ownerLabel || undefined,
+        interestRateCurrency: formData.interestRateCurrency,
+        tags: formData.tags.length > 0 ? formData.tags : [],
+        counterparty: formData.counterparty,
         displayConfig: {
           ...Object.fromEntries(Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')),
           ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
         } as Record<string, boolean>,
-      });
+      };
+      if (isCrossRoleOrder) {
+        // 跨角色订单：使用 funderUpdateAssetOrder，确保中侧综测管理能看到更新
+        funderUpdateMutation.mutate(commonUpdatePayload as any);
+      } else {
+        // 普通 finance 订单：使用 financeUpdateOrder
+        updateMutation.mutate({ ...commonUpdatePayload, userId: selectedUserId } as any);
+      }
     } else {
       createMutation.mutate({
         ledgerId,
@@ -1677,6 +1695,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         commissionShare: formData.commissionShare || undefined,
         assetType: formData.assetType || undefined,
         ownerLabel: formData.ownerLabel || undefined,
+        interestRateCurrency: formData.interestRateCurrency,
+        tags: formData.tags.length > 0 ? formData.tags : undefined,
         displayConfig: {
           ...Object.fromEntries(Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')),
           ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
