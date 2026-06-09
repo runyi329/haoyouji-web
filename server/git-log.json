@@ -1,5 +1,23 @@
 [
   {
+    "hash": "ec671ac3245ecf138ce8bcf0c5f676d040966f9e",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T23:21:12+08:00",
+    "message": "feat: P095 担保货币添加 CNY 选项，担保价值用实时汇率折算",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "P095 担保货币添加 CNY 选项，担保价值用实时汇率折算"
+  },
+  {
+    "hash": "602b0c16ddf296977c9dca8711857f0c9c26c434",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T22:50:36+08:00",
+    "message": "feat(FinanceManagement): 帽子区域添加 asset_type/owner_label/tags 标签显示，与 LedgerDetail 保持一致",
+    "type": "feat",
+    "scope": "FinanceManagement",
+    "cleanMessage": "帽子区域添加 asset_type/owner_label/tags 标签显示，与 LedgerDetail 保持一致"
+  },
+  {
     "hash": "16d67df01cbb63fe8ff854493a91702e3cd5f5fd",
     "author": "Deploy Bot",
     "date": "2026-06-09T22:13:26+08:00",

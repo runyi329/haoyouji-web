@@ -368,6 +368,8 @@ function FunderOrderCard({
   handleSaveParticipants,
   saveParticipantsMutation,
 }: FunderOrderCardProps) {
+  const { data: _cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
+  const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "7.2") || 7.2;
   const [showInterestTip, setShowInterestTip] = useState(false);
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const [showStatusSheet, setShowStatusSheet] = useState(false);
@@ -397,16 +399,16 @@ function FunderOrderCard({
   const rateCur = order.interest_rate_currency || 'USDT'; // 约定利息货币（决定主显示单位）
   const interestUnit = rateCur === 'CNY' ? '元' : 'U';
   const altUnit = rateCur === 'CNY' ? 'U' : '元';
-  // 折算：计息基数和利息货币不一致时按 1U=7元 折算
+  // 折算：计息基数和利息货币不一致时按实时汇率折算
   const convertAccrued = (val: number): number => {
     if (baseCur === rateCur) return val;
-    if (baseCur === 'USDT' && rateCur === 'CNY') return val * 7; // U计息基数，元显示
-    if (baseCur === 'CNY' && rateCur === 'USDT') return val / 7; // 元计息基数，U显示
+    if (baseCur === 'USDT' && rateCur === 'CNY') return val * cnyRate; // U计息基数，元显示
+    if (baseCur === 'CNY' && rateCur === 'USDT') return val / cnyRate; // 元计息基数，U显示
     return val;
   };
   const convertAlt = (val: number): number => {
-    if (rateCur === 'CNY') return val / 7; // 主显示元，副显示U
-    return val * 7; // 主显示U，副显示元
+    if (rateCur === 'CNY') return val / cnyRate; // 主显示元，副显示U
+    return val * cnyRate; // 主显示U，副显示元
   };
 
   // 已结利息
@@ -454,6 +456,7 @@ function FunderOrderCard({
     const iq = parseFloat(item.qty);
     if (!item.coin || isNaN(iq)) { collateralItemValues.push(null); collateralItemPrices.push(null); collateralValueKnown = false; continue; }
     if (item.coin === 'USDT') { collateralValue += iq; collateralItemValues.push(iq); collateralItemPrices.push(1); }
+    else if (item.coin === 'CNY') { const cv = iq / cnyRate; collateralValue += cv; collateralItemValues.push(cv); collateralItemPrices.push(1 / cnyRate); }
     else {
       const p = livePrices[item.coin];
       if (p) { collateralValue += iq * p; collateralItemValues.push(iq * p); collateralItemPrices.push(p); }
