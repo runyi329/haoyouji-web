@@ -266,7 +266,7 @@ const AddTransaction = () => {
   const [transferAmount, setTransferAmount] = useState('');
   const [transferSubType, setTransferSubType] = useState<'withdraw'>('withdraw');
   const [transferNote, setTransferNote] = useState('');
-  const [transferDate, setTransferDate] = useState(new Date());
+  const [transferDate, setTransferDate] = useState(selectedDate);
 
   // 查询历史 transfer 记录（按当前选中标签过滤）
   const { data: transferHistory = [], refetch: refetchTransfers } = trpc.ledger.getTransactions.useQuery(
@@ -300,7 +300,7 @@ const AddTransaction = () => {
   const [capitalAmount, setCapitalAmount] = useState('');
   const [capitalSubType, setCapitalSubType] = useState<'capital_add' | 'capital_reduce'>('capital_add');
   const [capitalNote, setCapitalNote] = useState('');
-  const [capitalDate, setCapitalDate] = useState(new Date());
+  const [capitalDate, setCapitalDate] = useState(selectedDate);
 
   // 计算本金变动汇总
   const capitalSummary = useMemo(() => {
