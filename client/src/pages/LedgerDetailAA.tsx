@@ -3070,6 +3070,9 @@ export default function LedgerDetailAA({
         const traderPnl = (latestBalance + totalWithdraw) - initialBalance;
         const rawPnl = -traderPnl;
         const totalPnl = rawPnl * ratio;
+        // 获取当前查看的用户名
+        const viewTarget = viewAsUserId ? (membersData || []).find((m: any) => m.userId === viewAsUserId) : null;
+        const customerName = viewTarget ? (viewTarget.nickname || viewTarget.username) : (user?.nickname || user?.username || '用户');
         return (
           <div className="fixed inset-0 z-[500] flex items-center justify-center" onClick={() => setShowPnlExplain(false)}>
             <div className="absolute inset-0 bg-black/50" />
@@ -3131,12 +3134,12 @@ export default function LedgerDetailAA({
                 </div>
                 {/* 第5步 */}
                 <div>
-                  <div className="font-semibold text-gray-900 mb-1">5. 标签盈亏{selectedTag?.name ? `（${selectedTag.name}）` : ''}</div>
+                  <div className="font-semibold text-gray-900 mb-1">5. {selectedTag?.name || '标签'}</div>
                   <div className="pl-3 text-gray-600">
                     = 标签实际资产 - 初始本金
                   </div>
                   <div className="pl-3 text-gray-600 text-xs">
-                    （正数=标签赢了，负数=标签输了）
+                    （正数=赢了，负数=输了）
                   </div>
                   <div className="pl-3 mt-1 font-mono text-gray-800">
                     = ¥{(latestBalance + totalWithdraw).toLocaleString('zh-CN', { minimumFractionDigits: 2 })} - ¥{initialBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
@@ -3147,12 +3150,12 @@ export default function LedgerDetailAA({
                 </div>
                 {/* 第6步 */}
                 <div>
-                  <div className="font-semibold text-gray-900 mb-1">6. 客户盈亏</div>
+                  <div className="font-semibold text-gray-900 mb-1">6. {customerName}</div>
                   <div className="pl-3 text-gray-600">
-                    客户与标签方向相反，标签赢 = 客户亏
+                    与标签方向相反，标签赢 = {customerName}亏
                   </div>
                   <div className="pl-3 text-gray-600">
-                    = -标签盈亏{ratio !== 1 ? ` × 占比(${ratioVal}%)` : ''}
+                    = -标签结果{ratio !== 1 ? ` × 占比(${ratioVal}%)` : ''}
                   </div>
                   <div className="pl-3 mt-1 font-mono text-gray-800">
                     = -{traderPnl >= 0 ? '+' : '-'}¥{Math.abs(traderPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}{ratio !== 1 ? ` × ${ratioVal}%` : ''}
