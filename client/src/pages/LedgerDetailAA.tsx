@@ -25,7 +25,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import ReactECharts from "echarts-for-react";
 import { useLocation } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
-import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X, RefreshCw, PauseCircle, AlertTriangle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X, RefreshCw, PauseCircle, AlertTriangle, HelpCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { PageTag } from "@/components/PageTag";
 import {
@@ -360,6 +360,7 @@ export default function LedgerDetailAA({
   // ===== 本金变动历史查询（用于初始金额旁感叹号弹窗） =====
   const [showCapitalHistory, setShowCapitalHistory] = useState(false);
   const [showWithdrawHistory, setShowWithdrawHistory] = useState(false);
+  const [showPnlExplain, setShowPnlExplain] = useState(false);
   const { data: capitalTransferData } = trpc.ledger.getTransactions.useQuery(
     { ledgerId, type: 'transfer' as any, categoryId: selectedTagId ?? undefined, limit: 200 },
     { enabled: !!ledgerId && !!selectedTagId }
@@ -1479,11 +1480,20 @@ export default function LedgerDetailAA({
                 </button>
               )}
             </div>
-            <div
-              className="text-base font-bold"
-              style={{ color: "#FFFFFF" }}
-            >
-              {stats.totalPnl > 0 ? "+" : stats.totalPnl < 0 ? "-" : ""}¥{Math.abs(stats.totalPnl).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            <div className="flex items-center gap-1">
+              <div
+                className="text-base font-bold"
+                style={{ color: "#FFFFFF" }}
+              >
+                {stats.totalPnl > 0 ? "+" : stats.totalPnl < 0 ? "-" : ""}¥{Math.abs(stats.totalPnl).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+              <button
+                onClick={() => setShowPnlExplain(true)}
+                className="inline-flex items-center justify-center active:opacity-60"
+                title="查看计算详情"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-white/70" />
+              </button>
             </div>
             <div className="text-xs opacity-60 mt-0.5">
               收益率 {stats.returnRate >= 0 ? "+" : ""}{stats.returnRate.toFixed(2)}%
@@ -3047,6 +3057,129 @@ export default function LedgerDetailAA({
           </div>
         </div>
       )}
+
+      {/* ── 盈亏计算详情弹窗 ── */}
+      {showPnlExplain && (() => {
+        // 计算弹窗内需要的数据
+        const initialBalance = stats.initialBalance;
+        const latestBalance = stats.latestBalance;
+        const ratioVal = selectedTag?.name && initialBalancesData?.balances
+          ? Number(initialBalancesData.balances[`${selectedTag.name}__ratio`] ?? 100)
+          : 100;
+        const ratio = ratioVal / 100;
+        const traderPnl = (latestBalance + totalWithdraw) - initialBalance;
+        const rawPnl = -traderPnl;
+        const totalPnl = rawPnl * ratio;
+        return (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center" onClick={() => setShowPnlExplain(false)}>
+            <div className="absolute inset-0 bg-black/50" />
+            <div
+              className="relative bg-white rounded-2xl w-[88%] max-w-sm max-h-[80vh] overflow-hidden shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 头部 */}
+              <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F0F0F0' }}>
+                <div className="text-base font-bold text-gray-800">盈亏计算详情</div>
+                <button onClick={() => setShowPnlExplain(false)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+              {/* 内容 */}
+              <div className="px-5 py-4 overflow-y-auto max-h-[65vh] text-sm text-gray-700 space-y-4">
+                {/* 第1步 */}
+                <div>
+                  <div className="font-semibold text-gray-900 mb-1">1. 初始本金</div>
+                  <div className="pl-3 text-gray-600">
+                    开始时投入的本金金额
+                  </div>
+                  <div className="pl-3 mt-1 font-mono text-gray-800">
+                    = ¥{initialBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                {/* 第2步 */}
+                <div>
+                  <div className="font-semibold text-gray-900 mb-1">2. 最新账户余额</div>
+                  <div className="pl-3 text-gray-600">
+                    登记员最后一次录入的账户余额
+                  </div>
+                  <div className="pl-3 mt-1 font-mono text-gray-800">
+                    = ¥{latestBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                {/* 第3步 */}
+                <div>
+                  <div className="font-semibold text-gray-900 mb-1">3. 累计提现</div>
+                  <div className="pl-3 text-gray-600">
+                    历史上已提现的总金额（提现会导致余额减少，但不是亏损）
+                  </div>
+                  <div className="pl-3 mt-1 font-mono text-gray-800">
+                    = ¥{totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                {/* 第4步 */}
+                <div>
+                  <div className="font-semibold text-gray-900 mb-1">4. 客户实际资产</div>
+                  <div className="pl-3 text-gray-600">
+                    = 最新余额 + 累计提现
+                  </div>
+                  <div className="pl-3 mt-1 font-mono text-gray-800">
+                    = ¥{latestBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })} + ¥{totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                  </div>
+                  <div className="pl-3 mt-1 font-mono font-semibold text-gray-900">
+                    = ¥{(latestBalance + totalWithdraw).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                {/* 第5步 */}
+                <div>
+                  <div className="font-semibold text-gray-900 mb-1">5. 原始盈亏</div>
+                  <div className="pl-3 text-gray-600">
+                    = 初始本金 - 客户实际资产
+                  </div>
+                  <div className="pl-3 text-gray-600 text-xs">
+                    （正数=盈利，负数=亏损）
+                  </div>
+                  <div className="pl-3 mt-1 font-mono text-gray-800">
+                    = ¥{initialBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })} - ¥{(latestBalance + totalWithdraw).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                  </div>
+                  <div className="pl-3 mt-1 font-mono font-semibold text-gray-900">
+                    = {rawPnl >= 0 ? '+' : '-'}¥{Math.abs(rawPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
+                {/* 第6步 */}
+                {ratio !== 1 && (
+                  <div>
+                    <div className="font-semibold text-gray-900 mb-1">6. 按比例计算结果</div>
+                    <div className="pl-3 text-gray-600">
+                      = 原始盈亏 × 占比({ratioVal}%)
+                    </div>
+                    <div className="pl-3 mt-1 font-mono text-gray-800">
+                      = {rawPnl >= 0 ? '+' : '-'}¥{Math.abs(rawPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })} × {ratioVal}%
+                    </div>
+                    <div className="pl-3 mt-1 font-mono font-semibold text-gray-900">
+                      = {totalPnl >= 0 ? '+' : '-'}¥{Math.abs(totalPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                )}
+                {/* 最终结果 */}
+                <div className="pt-3 mt-2" style={{ borderTop: '2px solid #F0F0F0' }}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-gray-900">累计盈亏</span>
+                    <span className={`text-lg font-bold ${totalPnl >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {totalPnl > 0 ? '+' : totalPnl < 0 ? '-' : ''}¥{Math.abs(totalPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-xs text-gray-500">收益率</span>
+                    <span className={`text-sm font-semibold ${stats.returnRate >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {stats.returnRate >= 0 ? '+' : ''}{stats.returnRate.toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── 悬浮加号按鈕（仅管理员/创建者可见，且「2026 AA」账本除外；观察非管理员视角时隐藏） ── */}
       {canEdit && !hideFloatingAddButton && (() => {
