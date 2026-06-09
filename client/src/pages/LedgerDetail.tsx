@@ -438,7 +438,7 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, 
   );
 }
 
-function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paidInterestDetails, livePrices, dc, viewMode }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number; paidInterestDetails?: Array<{ currency: string; total: number; exchangeRate: number }>; livePrices: Record<string, number>; dc?: Record<string, boolean>; viewMode?: 'medium' | 'large' }) {
+function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paidInterestDetails, livePrices, cnyRate, dc, viewMode }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number; paidInterestDetails?: Array<{ currency: string; total: number; exchangeRate: number }>; livePrices: Record<string, number>; cnyRate: number; dc?: Record<string, boolean>; viewMode?: 'medium' | 'large' }) {
   const show = (key: string) => dc ? (dc[key] !== false) : true;
   // 参与方视图：显示佣金而非利息
   const pi = order.participantInfo;
@@ -474,14 +474,14 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
   // 折算：计息基数和利息货币不一致时按 1U=7元 折算
   const convertAccrued = (val: number): number => {
     if (baseCur === rateCur) return val;
-    if (baseCur === 'USDT' && rateCur === 'CNY') return val * 7; // U计息基数，元显示
-    if (baseCur === 'CNY' && rateCur === 'USDT') return val / 7; // 元计息基数，U显示
+    if (baseCur === 'USDT' && rateCur === 'CNY') return val * cnyRate; // U计息基数，元显示
+    if (baseCur === 'CNY' && rateCur === 'USDT') return val / cnyRate; // 元计息基数，U显示
     return val;
   };
   const convertAlt = (val: number): number => {
     // 返回另一种货币的折算值
-    if (rateCur === 'CNY') return val / 7; // 主显示元，副显示U
-    return val * 7; // 主显示U，副显示元
+    if (rateCur === 'CNY') return val / cnyRate; // 主显示元，副显示U
+    return val * cnyRate; // 主显示U，副显示元
   };
   const altUnit = rateCur === 'CNY' ? 'U' : '元';
   const displayAccrued = convertAccrued(accrued);
@@ -506,16 +506,16 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
   // commissionBase 存储单位与 interest_base_currency 一致，结算显示单位与 rateCur 一致
   const convertCommission = (val: number): number => {
     if (baseCur === rateCur) return val;
-    if (baseCur === 'USDT' && rateCur === 'CNY') return val * 7;
-    if (baseCur === 'CNY' && rateCur === 'USDT') return val / 7;
+    if (baseCur === 'USDT' && rateCur === 'CNY') return val * cnyRate;
+    if (baseCur === 'CNY' && rateCur === 'USDT') return val / cnyRate;
     return val;
   };
   const commissionUnit = rateCur === 'CNY' ? '元' : 'U';
   const commissionAltUnit = rateCur === 'CNY' ? 'U' : '元';
   const displayCommissionAccrued = convertCommission(accruedCommission);
   const displayCommissionPaid = convertCommission(paidCommission);
-  const commissionAltAccrued = rateCur === 'CNY' ? displayCommissionAccrued / 7 : displayCommissionAccrued * 7;
-  const commissionAltPaid = rateCur === 'CNY' ? displayCommissionPaid / 7 : displayCommissionPaid * 7;
+  const commissionAltAccrued = rateCur === 'CNY' ? displayCommissionAccrued / cnyRate : displayCommissionAccrued * cnyRate;
+  const commissionAltPaid = rateCur === 'CNY' ? displayCommissionPaid / cnyRate : displayCommissionPaid * cnyRate;
   const displayCommissionBase = convertCommission(commissionBase);
   if (isParticipantView) {
     return (
@@ -747,7 +747,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
             let totalInU = 0;
             for (const d of details) {
               if (d.currency === 'CNY') {
-                totalInU += d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / 7;
+                totalInU += d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / cnyRate;
               } else {
                 totalInU += d.total;
               }
@@ -757,7 +757,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
                 {details.map((d, idx) => {
                   const isCNY = d.currency === 'CNY';
                   const unit = isCNY ? '元' : 'U';
-                  const rate = d.exchangeRate > 0 ? d.exchangeRate : 7;
+                  const rate = d.exchangeRate > 0 ? d.exchangeRate : cnyRate;
                   const approxU = isCNY ? d.total / rate : null;
                   const approxCNY = !isCNY ? d.total * rate : null;
                   return (
@@ -939,7 +939,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
           const isProfit = currentPrice && buyPrice && currentPrice > buyPrice && profitPct > 0;
           const profitU = isProfit ? (currentPrice! - buyPrice!) * parseFloat(order.buy_quantity || '0') * (profitPct / 100) : 0;
           if (isProfit) {
-            const profitCNY = profitU * 7;
+            const profitCNY = profitU * cnyRate;
             return (
               <div className="min-h-9 flex flex-col justify-center">
                 {viewMode === 'large' ? (
@@ -1231,7 +1231,7 @@ function FunderOrderSmallCard({ order, livePrices }: { order: any; livePrices: R
   const cc = coinColorMap[order.coin] || '#6B7280';
   const qty = parseFloat(order.buy_quantity || '0');
   const livePrice = livePrices[order.coin];
-  const currentValue = order.asset_type === 'stock' ? (parseFloat(order.amount || '0') > 0 ? parseFloat(order.amount) / 7 : null) : (livePrice && qty > 0 ? qty * livePrice : null);
+  const currentValue = order.asset_type === 'stock' ? (parseFloat(order.amount || '0') > 0 ? parseFloat(order.amount) / cnyRate : null) : (livePrice && qty > 0 ? qty * livePrice : null);
   const isEnded = order.status === 'ended';
   // 待结利息：基于计息基数、年利率、计息开始日实时计算
   const accrued = useAccruedInterest(
@@ -1271,7 +1271,7 @@ function FunderOrderSmallCard({ order, livePrices }: { order: any; livePrices: R
 // 单张资金方订单卡片（左右两栏布局）
 // AItag Lottie动效数据直接内联，避免fetch/CORS问题
 
-function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidInterestDetails, onClick, canClick, priceDirection, viewMode, currentUser, membersData, isAdmin }: { order: any; ledgerId: number; livePrices: Record<string, number>; paidInterest?: number; paidInterestDetails?: Array<{ currency: string; total: number; exchangeRate: number }>; onClick: () => void; canClick?: boolean; priceDirection?: Record<string, 'up' | 'down' | 'same'>; viewMode?: 'medium' | 'large'; currentUser?: any; membersData?: any[]; isAdmin?: boolean }) {
+function FunderOrderCard({ order, ledgerId, livePrices, cnyRate, paidInterest, paidInterestDetails, onClick, canClick, priceDirection, viewMode, currentUser, membersData, isAdmin }: { order: any; ledgerId: number; livePrices: Record<string, number>; cnyRate: number; paidInterest?: number; paidInterestDetails?: Array<{ currency: string; total: number; exchangeRate: number }>; onClick: () => void; canClick?: boolean; priceDirection?: Record<string, 'up' | 'down' | 'same'>; viewMode?: 'medium' | 'large'; currentUser?: any; membersData?: any[]; isAdmin?: boolean }) {
   const [showAIPanel, setShowAIPanel] = useState(false);
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
   const coinNameMap: Record<string, string> = { BTC: '比特币', ETH: '以太坊', SOL: '索拉纳' };
@@ -1400,7 +1400,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
                 if (order.asset_type === 'stock') {
                   const amt = parseFloat(order.amount || '0');
                   if (amt <= 0 || order.coin !== 'CNY') return null;
-                  const val = (amt / 7).toLocaleString(undefined, { maximumFractionDigits: 0 });
+                  const val = (amt / cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 });
                   return <span className="text-base font-medium" style={{ color: '#4B5563' }}>≈{val} U</span>;
                 }
                 const liveP = isEnded
@@ -1415,7 +1415,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
               if (order.asset_type === 'stock') {
                 const amt = parseFloat(order.amount || '0');
                 if (amt <= 0 || order.coin !== 'CNY') return null;
-                const val = (amt / 7).toLocaleString(undefined, { maximumFractionDigits: 0 });
+                const val = (amt / cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 });
                 return <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{val} U</div>;
               }
               const liveP = isEnded
@@ -1519,7 +1519,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
         {/* 右栏/下半：利息 + 收益分成 */}
         <div className={viewMode === 'large' ? 'p-4 pt-2' : 'p-4 pl-3 flex flex-col shrink-0'} style={viewMode === 'large' ? {} : { width: 'auto', minWidth: '160px', maxWidth: '200px' }}>
           {hasInterest ? (
-            <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} paidInterest={paidInterest ?? 0} paidInterestDetails={paidInterestDetails} livePrices={livePrices} dc={dc} viewMode={viewMode} />
+            <FunderOrderCardRight order={order} ledgerId={ledgerId} accrued={accrued} cc={cc} paidInterest={paidInterest ?? 0} paidInterestDetails={paidInterestDetails} livePrices={livePrices} cnyRate={cnyRate} dc={dc} viewMode={viewMode} />
           ) : (
             <div className="flex items-center justify-center h-full">
               <ChevronRight className="w-5 h-5 text-gray-200" />
@@ -2426,6 +2426,12 @@ export default function LedgerDetail() {
   let cachedPrices: Record<string, number> = {};
   try { cachedPrices = JSON.parse(localStorage.getItem(PRICE_CACHE_KEY) || '{}'); } catch {}
   const funderLivePrices: Record<string, number> = hasFreshPrices ? freshPrices : cachedPrices;
+  // 实时 USD/CNY 汇率（3秒刷新，用于 CNY 订单折算 U 值）
+  const { data: cnyRateData } = trpc.exchange.getRate.useQuery(
+    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
+    { staleTime: 1000, refetchInterval: 3000, enabled: isCustomAF && effectiveIsFunder }
+  );
+  const cnyRate = (cnyRateData?.success && cnyRateData?.money) ? parseFloat(cnyRateData.money) : 7.2;
   // 涨跌方向计算：用 localStorage 存储上一次价格，刷新页面后第一次加载就能显示筜头
   const PREV_PRICE_CACHE_KEY = `funder_prev_prices_${ledgerId}`;
   const [funderPriceDirection, setFunderPriceDirection] = useState<Record<string, 'up' | 'down' | 'same'>>({});
@@ -3653,7 +3659,7 @@ export default function LedgerDetail() {
                         if (d && d.quantity > 0 && price > 0) total += d.quantity * price;
                       }
                       if (total <= 0) return '---';
-                      const cny = total * 7.15;
+                      const cny = total * cnyRate;
                       return `总市值 ${total.toLocaleString(undefined, { maximumFractionDigits: 0 })} U ≈ ${(cny / 10000).toFixed(2)}万元`;
                     })() : '---'}</span>
                   </div>
@@ -4904,7 +4910,7 @@ export default function LedgerDetail() {
                   // 计算折算USDT总额（用于风险敲口计算）
                   let totalInU = 0;
                   for (const d of details) {
-                    if (d.currency === 'CNY') { totalInU += d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / 7; }
+                    if (d.currency === 'CNY') { totalInU += d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / cnyRate; }
                     else { totalInU += d.total; }
                   }
                   return (
@@ -4912,7 +4918,7 @@ export default function LedgerDetail() {
                       key={order.id}
                       order={order}
                       ledgerId={ledgerId}
-                      livePrices={funderLivePrices}
+                      livePrices={funderLivePrices} cnyRate={cnyRate}
                       paidInterest={totalInU}
                       paidInterestDetails={details}
                       onClick={() => {}}
@@ -4932,7 +4938,7 @@ export default function LedgerDetail() {
                   const details = interestSummaryMap[Number(order.id)] || [];
                   let totalInU = 0;
                   for (const d of details) {
-                    if (d.currency === 'CNY') { totalInU += d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / 7; }
+                    if (d.currency === 'CNY') { totalInU += d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / cnyRate; }
                     else { totalInU += d.total; }
                   }
                   return (
@@ -4940,7 +4946,7 @@ export default function LedgerDetail() {
                       key={order.id}
                       order={order}
                       ledgerId={ledgerId}
-                      livePrices={funderLivePrices}
+                      livePrices={funderLivePrices} cnyRate={cnyRate}
                       paidInterest={totalInU}
                       paidInterestDetails={details}
                       onClick={() => {}}
@@ -4961,7 +4967,7 @@ export default function LedgerDetail() {
                   <FunderOrderSmallCard
                     key={order.id}
                     order={order}
-                    livePrices={funderLivePrices}
+                    livePrices={funderLivePrices} cnyRate={cnyRate}
                   />
                 ))}
               </div>
