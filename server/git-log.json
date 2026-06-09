@@ -1,5 +1,14 @@
 [
   {
+    "hash": "2f153b1b7c63c8231965024bbcc0079cc40b2ccf",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T18:45:41+08:00",
+    "message": "fix(P095): LedgerDetail已结清订单保持完整布局+红色背景+居中大印章",
+    "type": "fix",
+    "scope": "P095",
+    "cleanMessage": "LedgerDetail已结清订单保持完整布局+红色背景+居中大印章"
+  },
+  {
     "hash": "7a4f025ec3dd83da16d09f64d8c65761578f690b",
     "author": "Deploy Bot",
     "date": "2026-06-09T18:28:50+08:00",

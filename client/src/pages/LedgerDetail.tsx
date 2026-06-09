@@ -841,7 +841,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
           const interestBaseNum = order.interest_base ? Number(order.interest_base) : buyValue;
           // 当前市値 = 实时价 × 数量（无实时价则为 null，不用买入价代替）
           const liveP = livePrices?.[order.coin] ?? null;
-          const currentValue = liveP !== null ? liveP * buyQty : null;
+          const currentValue = order.asset_type === 'stock' ? (parseFloat(order.amount || '0') > 0 ? parseFloat(order.amount) : null) : (liveP !== null ? liveP * buyQty : null);
           // 浮动盈亏 = 当前市値 - 计息基数（正数为浮盈，负数为亏损）
           const floatPnl = currentValue !== null ? currentValue - interestBaseNum : null;
           // 风险敞口 = 担保物 + 浮动盈亏 - 代结利息 + 已结利息
@@ -1231,7 +1231,7 @@ function FunderOrderSmallCard({ order, livePrices }: { order: any; livePrices: R
   const cc = coinColorMap[order.coin] || '#6B7280';
   const qty = parseFloat(order.buy_quantity || '0');
   const livePrice = livePrices[order.coin];
-  const currentValue = livePrice && qty > 0 ? qty * livePrice : null;
+  const currentValue = order.asset_type === 'stock' ? (parseFloat(order.amount || '0') > 0 ? parseFloat(order.amount) / 7 : null) : (livePrice && qty > 0 ? qty * livePrice : null);
   const isEnded = order.status === 'ended';
   // 待结利息：基于计息基数、年利率、计息开始日实时计算
   const accrued = useAccruedInterest(
@@ -1393,10 +1393,16 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-1 flex-wrap">
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                {qty > 0 ? smartQty(qty) : (parseFloat(order.amount || '0') > 0 ? parseFloat(order.amount).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—')}
+                {order.asset_type === 'stock' ? (parseFloat(order.amount || '0') > 0 ? parseFloat(order.amount).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—') : (qty > 0 ? smartQty(qty) : '—')}
               </span>
               <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-semibold`} style={{ color: '#1A2340' }}>{order.coin}</span>
               {viewMode === 'large' && (() => {
+                if (order.asset_type === 'stock') {
+                  const amt = parseFloat(order.amount || '0');
+                  if (amt <= 0 || order.coin !== 'CNY') return null;
+                  const val = (amt / 7).toLocaleString(undefined, { maximumFractionDigits: 0 });
+                  return <span className="text-base font-medium" style={{ color: '#4B5563' }}>≈{val} U</span>;
+                }
                 const liveP = isEnded
                   ? (order.end_price ? parseFloat(order.end_price) : (livePrices[order.coin] ?? null))
                   : (livePrices[order.coin] ?? null);
@@ -1406,6 +1412,12 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
               })()}
             </div>
             {viewMode !== 'large' && (() => {
+              if (order.asset_type === 'stock') {
+                const amt = parseFloat(order.amount || '0');
+                if (amt <= 0 || order.coin !== 'CNY') return null;
+                const val = (amt / 7).toLocaleString(undefined, { maximumFractionDigits: 0 });
+                return <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{val} U</div>;
+              }
               const liveP = isEnded
                 ? (order.end_price ? parseFloat(order.end_price) : (livePrices[order.coin] ?? null))
                 : (livePrices[order.coin] ?? null);
@@ -1534,7 +1546,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
         const buyValue = buyPriceNum * buyQty || parseFloat(order.amount || '0');
         const interestBaseNum = order.interest_base ? Number(order.interest_base) : buyValue;
         const liveP = livePrices[order.coin] ?? null;
-        const currentValue = liveP !== null ? liveP * buyQty : null;
+        const currentValue = order.asset_type === 'stock' ? (parseFloat(order.amount || '0') > 0 ? parseFloat(order.amount) : null) : (liveP !== null ? liveP * buyQty : null);
         const floatPnl = currentValue !== null ? currentValue - interestBaseNum : null;
         let collateralValue: number | null = null;
         try {
