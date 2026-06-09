@@ -1,5 +1,14 @@
 [
   {
+    "hash": "16d67df01cbb63fe8ff854493a91702e3cd5f5fd",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T22:13:26+08:00",
+    "message": "fix: FinanceManagement 参与方视角 CNY 订单 U 值用实时汇率折算",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "FinanceManagement 参与方视角 CNY 订单 U 值用实时汇率折算"
+  },
+  {
     "hash": "6f152e60fd20255f8661c03efb97d3c30d28439f",
     "author": "Deploy Bot",
     "date": "2026-06-09T21:54:02+08:00",

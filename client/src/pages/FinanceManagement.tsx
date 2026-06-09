@@ -380,6 +380,27 @@ function FinanceOrderCard({
               </span>
             );
           })()}
+          {order.asset_type && (
+            <span className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A', backgroundColor: 'transparent' }}>
+              {order.asset_type === 'stock' ? '股票' : '数字币'}
+            </span>
+          )}
+          {order.owner_label && (
+            <span className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A', backgroundColor: 'transparent' }}>
+              {order.owner_label}
+            </span>
+          )}
+          {(() => {
+            try {
+              const t = (order as any).tags;
+              const tags: string[] = Array.isArray(t) ? t : (typeof t === 'string' && t ? JSON.parse(t) : []);
+              return tags.map((tag, i) => (
+                <span key={i} className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A', backgroundColor: 'transparent' }}>
+                  {tag}
+                </span>
+              ));
+            } catch { return null; }
+          })()}
         </div>
         <div className="flex items-center gap-0.5">
           {isAdmin && (
