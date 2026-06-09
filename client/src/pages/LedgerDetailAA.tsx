@@ -497,6 +497,28 @@ export default function LedgerDetailAA({
     setOverviewSort(prev => prev && prev.col === col ? { col, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' });
   };
 
+  // ─── 全部模式：按标签统计提现（从原始 transactionsData 中提取 transfer 记录）────
+  const withdrawByTag = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (!categories || categories.length === 0) return map;
+    (transactionsData || []).forEach((day) => {
+      (day.records || []).forEach((r: any) => {
+        // 提现 = transfer 类型且非 capital_ 开头
+        if (r.type === 'transfer' && !r.description?.startsWith('capital_')) {
+          const cat = r.category || '';
+          if (!cat) return;
+          // 按标签名匹配（与其他地方保持一致，使用 includes）
+          categories.forEach((c: any) => {
+            if (cat.includes(c.name)) {
+              map[c.name] = (map[c.name] || 0) + (Number(r.amount) || 0);
+            }
+          });
+        }
+      });
+    });
+    return map;
+  }, [transactionsData, categories]);
+
   // ─── 全部模式：计算每个标签的每日盈亏数据（用于多线图表） ─────────────────
   const allTagsChartData = useMemo(() => {
     if (!initialBalancesData?.balances || !categories || categories.length === 0) return [];
@@ -522,6 +544,8 @@ export default function LedgerDetailAA({
       }
       // 权重比例
       const ratio = Number(initialBalancesData.balances[`${tagName}__ratio`] ?? 100) / 100;
+      // 该标签的累计提现
+      const tagWithdraw = withdrawByTag[tagName] || 0;
       // 该标签的所有每日余额记录（按日期升序）
       const tagDays = (activeMemberTransactions || []).map((day: any) => {
         const filtered = (day.records || []).filter((r: any) => r.category && r.category.includes(tagName));
@@ -544,14 +568,16 @@ export default function LedgerDetailAA({
         filteredTagDays = tagDays.filter((d: any) => d.date >= effectiveStartStr);
       }
       const points = filteredTagDays.map((d: any) => {
-        const pnl = (initialBalance - d.balance) * ratio; // 负债视角：初始-最新=盈利
-        const pctInitial = initialBalance > 0 ? ((initialBalance - d.balance) / initialBalance) * 100 * ratio : 0;
-        const pctMargin = marginCny > 0 ? ((initialBalance - d.balance) * ratio / marginCny) * 100 : 0;
+        // 盈亏 = (初始 - 当日余额 - 累计提现) * ratio
+        // 提现导致余额减少但不是亏损，需要扣除
+        const pnl = (initialBalance - d.balance - tagWithdraw) * ratio;
+        const pctInitial = initialBalance > 0 ? ((initialBalance - d.balance - tagWithdraw) / initialBalance) * 100 * ratio : 0;
+        const pctMargin = marginCny > 0 ? ((initialBalance - d.balance - tagWithdraw) * ratio / marginCny) * 100 : 0;
         return { date: d.date, pnl, pctInitial, pctMargin };
       });
       return { name: tagName, color, points, initialBalance, marginCny, marginRaw: marginRaw !== undefined && marginRaw !== null ? Number(marginRaw) : null, marginCoin: coin };
     });
-  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices]);
+  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, withdrawByTag]);
 
   // ─── 全部模式：计算所有标签的保证金总和和盈亏总和 ────────────────────────
   const allTagsStats = useMemo(() => {
@@ -586,9 +612,10 @@ export default function LedgerDetailAA({
           totalMargin += num;
         }
       }
-      // 盈亏：需要计算每个标签的 initialBalance - latestBalance
+      // 盈亏：需要计算每个标签的 (initialBalance - latestBalance - totalWithdraw) * ratio
       const initialBalance = Number(initialBalancesData.balances[tagName] ?? 0);
       const ratio = Number(initialBalancesData.balances[`${tagName}__ratio`] ?? 100) / 100;
+      const tagWithdraw = withdrawByTag[tagName] || 0;
       // 找该标签最新的余额记录（与走势图逻辑一致：每日合计，跳过balance=0的天）
       const tagStartDate = initialBalancesData.balances[`${tagName}__startDate`];
       let effectiveStartStr: string | null = null;
@@ -613,13 +640,14 @@ export default function LedgerDetailAA({
       if (filteredTagDaysStats.length > 0) {
         const last = filteredTagDaysStats[filteredTagDaysStats.length - 1];
         if (initialBalance > 0) {
-          totalPnl += (initialBalance - last.balance) * ratio;
+          // 盈亏 = (初始 - 最新余额 - 累计提现) * ratio，与单标签模式口径一致
+          totalPnl += (initialBalance - last.balance - tagWithdraw) * ratio;
         }
       }
     });
     const cryptoDetails = Object.entries(cryptoMap).map(([coin, v]) => ({ coin, amount: v.amount, cnyValue: v.cnyValue }));
     return { totalMargin, totalPnl, diff: totalMargin + totalPnl, hasCrypto, cryptoDetails };
-  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices]);
+  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, withdrawByTag]);
 
   // ─── 统计数据 ─────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
