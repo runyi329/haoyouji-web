@@ -1393,7 +1393,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, paidInterest, paidIntere
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-1 flex-wrap">
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                {qty > 0 ? smartQty(qty) : '—'}
+                {qty > 0 ? smartQty(qty) : (parseFloat(order.amount || '0') > 0 ? parseFloat(order.amount).toLocaleString() : '—')}
               </span>
               <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-semibold`} style={{ color: '#1A2340' }}>{order.coin}</span>
               {viewMode === 'large' && (() => {

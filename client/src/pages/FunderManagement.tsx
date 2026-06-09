@@ -1975,14 +1975,20 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => setFormData(d => {
+                        onClick={() => {
+                          if (editingOrder && !editingOrder.participantInfo) {
+                            toast.error('\u5df2\u521b\u5efa\u8ba2\u5355\u7684\u8d44\u4ea7\u7c7b\u578b\u4e0d\u53ef\u4fee\u6539');
+                            return;
+                          }
+                          setFormData(d => {
                           const newType = d.assetType === opt.value ? '' : opt.value;
                           // 股票类型自动锁定币种为 CNY
                           if (newType === 'stock') {
                             return { ...d, assetType: newType, coin: 'CNY' as CoinType };
                           }
                           return { ...d, assetType: newType };
-                        })}
+                          });
+                        }}
                         className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
                         style={
                           formData.assetType === opt.value
@@ -2191,11 +2197,15 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 </div>
               )}
               {/* 币种下拉 */}
-              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
-                <label className="block text-sm font-medium text-gray-600 mb-2">币种</label>
+              <div style={{ opacity: (editingOrder || editingOrder?.participantInfo) ? 0.5 : 1, pointerEvents: (editingOrder || editingOrder?.participantInfo) ? 'none' : 'auto' }}>
+                <label className="block text-sm font-medium text-gray-600 mb-2">币种{editingOrder && !editingOrder.participantInfo && <span className="ml-1.5 text-xs text-orange-500 font-normal">(不可修改)</span>}</label>
                 <select
                   value={formData.coin}
-                  onChange={e => setFormData(d => ({ ...d, coin: e.target.value }))}
+                  onChange={e => {
+                    if (editingOrder && !editingOrder.participantInfo) return;
+                    setFormData(d => ({ ...d, coin: e.target.value }));
+                  }}
+                  disabled={!!(editingOrder && !editingOrder.participantInfo)}
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
                   style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.coin as keyof typeof COIN_COLORS] || '#1A2340' }}
                 >

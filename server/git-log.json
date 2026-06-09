@@ -1,5 +1,14 @@
 [
   {
+    "hash": "36289f7b643d7dabbb86949234bf349edb85e1fe",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T18:04:03+08:00",
+    "message": "feat(P095): 添加中侧(管理)tab，管理员订单独立显示",
+    "type": "feat",
+    "scope": "P095",
+    "cleanMessage": "添加中侧(管理)tab，管理员订单独立显示"
+  },
+  {
     "hash": "524170f09935d65b0e963dc59ef0f7f76d79714a",
     "author": "Deploy Bot",
     "date": "2026-06-09T17:37:05+08:00",
