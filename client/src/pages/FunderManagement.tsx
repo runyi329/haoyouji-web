@@ -2756,10 +2756,17 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
                       <div className="min-h-7 flex flex-col justify-center mt-0.5">
                         <div className="flex items-baseline gap-1 flex-wrap">
                           <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                            {formData.buyQuantity ? parseFloat(parseFloat(formData.buyQuantity).toFixed(6)).toString() : '—'}
+                            {formData.assetType === 'stock'
+                              ? (amountInputValue ? parseFloat(amountInputValue).toLocaleString() : '—')
+                              : (formData.buyQuantity ? parseFloat(parseFloat(formData.buyQuantity).toFixed(6)).toString() : '—')}
                           </span>
                           <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{formData.coin}</span>
                         </div>
+                        {formData.assetType === 'stock' && amountInputValue && parseFloat(amountInputValue) > 0 && formData.coin === 'CNY' && (
+                          <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>
+                            ≈{(parseFloat(amountInputValue) / 7).toLocaleString(undefined, { maximumFractionDigits: 0 })} USDT
+                          </div>
+                        )}
                         {formData.assetType !== 'stock' && formLivePrices[formData.coin] && formData.buyQuantity && (
                           <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>
                             ≈{(formLivePrices[formData.coin] * parseFloat(formData.buyQuantity)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U
