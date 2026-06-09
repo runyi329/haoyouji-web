@@ -1238,11 +1238,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
   const [amountEditing, setAmountEditing] = useState(false);
   const [amountInputValue, setAmountInputValue] = useState('');
   // 当 computedAmount 变化且用户未在编辑时，同步到输入框
+  // 股票类型时 buyPrice/buyQuantity 为空，computedAmount 始终为空，不应覆盖用户手动输入的融资金额
   useEffect(() => {
-    if (!amountEditing) {
+    if (!amountEditing && formData.assetType !== 'stock') {
       setAmountInputValue(computedAmount || '');
     }
-  }, [computedAmount, amountEditing]);
+  }, [computedAmount, amountEditing, formData.assetType]);
 
   // 员工名字筛选
   const [employeeNameFilter, setEmployeeNameFilter] = useState('');
