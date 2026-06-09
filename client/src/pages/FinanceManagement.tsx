@@ -151,6 +151,7 @@ const COIN_COLORS: Record<CoinType, string> = {
 interface FinanceOrderCardProps {
   order: any;
   livePrices: Record<string, number>;
+  cnyRate: number;
   totalPaid: number;
   openedPaymentList: any[];
   currentUser: any;
@@ -189,6 +190,7 @@ interface FinanceOrderCardProps {
 function FinanceOrderCard({
   order,
   livePrices,
+  cnyRate,
   totalPaid,
   openedPaymentList,
   currentUser,
@@ -306,7 +308,7 @@ function FinanceOrderCard({
   // 风险敞口计算
   const interestBaseNum = order.interest_base ? Number(order.interest_base) : totalU;
   const liveP = livePrices[order.coin] ?? null;
-  const currentValue = liveP !== null ? liveP * qty : null;
+  const currentValue = liveP !== null ? (order.coin === 'CNY' ? qty / cnyRate : liveP * qty) : null;
   // 浮动盈亏 = 当前持仓市值(数量×当前币价) - 买入价值(数量×买入币价)
   const buyValue = totalU; // qty * buy_price，即买入价值
   const floatPnl = currentValue !== null ? currentValue - buyValue : null;
@@ -430,7 +432,7 @@ function FinanceOrderCard({
               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
             </div>
             {liveP && qty > 0 && (
-              <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(qty * liveP).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
+              <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(order.coin === 'CNY' ? (qty / cnyRate) : (qty * liveP)).toLocaleString(undefined, { maximumFractionDigits: order.coin === 'CNY' ? 0 : 2 })} U</div>
             )}
           </div>
           {/* 订单信息列表 */}
@@ -1396,6 +1398,12 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     { ledgerId, orderIds },
     { enabled: !!ledgerId && orderIds.length > 0 }
   );
+  // 实时 USD/CNY 汇率（3秒刷新，用于 CNY 订单折算 U 值）
+  const { data: cnyRateData } = trpc.exchange.getRate.useQuery(
+    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
+    { staleTime: 1000, refetchInterval: 3000 }
+  );
+  const cnyRate = (cnyRateData?.success && cnyRateData?.money) ? parseFloat(cnyRateData.money) : 7.2;
 
   const createMutation = trpc.ledger.financeCreateOrder.useMutation({
     onSuccess: () => { toast.success('订单已创建'); refetchOrders(); closeForm(); },
@@ -1767,6 +1775,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     key={order.id}
                     order={order}
                     livePrices={livePrices}
+                cnyRate={cnyRate}
                     totalPaid={totalPaid}
                     openedPaymentList={showPaymentPanel === order.id ? openedPaymentList : []}
                     currentUser={currentUser}

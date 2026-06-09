@@ -1,5 +1,23 @@
 [
   {
+    "hash": "6f152e60fd20255f8661c03efb97d3c30d28439f",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T21:54:02+08:00",
+    "message": "fix: coin=CNY 非股票分支的 U 值也用实时汇率(qty/cnyRate)替代 qty*liveP",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "coin=CNY 非股票分支的 U 值也用实时汇率(qty/cnyRate)替代 qty*liveP"
+  },
+  {
+    "hash": "f91e045816c9b1a7909b3e635edda386214c7957",
+    "author": "github-actions[bot]",
+    "date": "2026-06-09T12:28:56+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
     "hash": "ec0704407f7a8c6616c210693406d3108b7554ab",
     "author": "Deploy Bot",
     "date": "2026-06-09T20:18:35+08:00",
