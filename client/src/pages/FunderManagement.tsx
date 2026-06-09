@@ -1689,9 +1689,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
       return;
     }
     // 编辑模式下，如果买入价/数量为空，使用原订单金额；新建模式必须填
-    const finalAmount = computedAmount || (editingOrder ? formData.originalAmount : '');
+    // 股票类型：直接使用用户手动输入的融资金额（amountInputValue），不依赖 computedAmount
+    const finalAmount = formData.assetType === 'stock'
+      ? amountInputValue
+      : (computedAmount || (editingOrder ? formData.originalAmount : ''));
     if (!finalAmount || parseFloat(finalAmount) <= 0) {
-      toast.error('请填写买入价格和买入数量以自动计算总金额');
+      toast.error(formData.assetType === 'stock' ? '请填写融资金额' : '请填写买入价格和买入数量以自动计算总金额');
       return;
     }
     const payload = {
@@ -1952,7 +1955,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => setFormData(d => ({ ...d, assetType: d.assetType === opt.value ? '' : opt.value }))}
+                        onClick={() => setFormData(d => {
+                          const newType = d.assetType === opt.value ? '' : opt.value;
+                          // 股票类型自动锁定币种为 CNY
+                          if (newType === 'stock') {
+                            return { ...d, assetType: newType, coin: 'CNY' as CoinType };
+                          }
+                          return { ...d, assetType: newType };
+                        })}
                         className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
                         style={
                           formData.assetType === opt.value
@@ -2218,7 +2228,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
                     const usdtEquiv = formData.coin === 'CNY' ? amt / 7 : amt;
                     return (
                       <span className="text-xs text-gray-400 mt-1 block">
-                        \u2248 {usdtEquiv.toLocaleString(undefined, { maximumFractionDigits: 0 })} USDT
+                        ≈ {usdtEquiv.toLocaleString(undefined, { maximumFractionDigits: 0 })} USDT
                       </span>
                     );
                   })()}
