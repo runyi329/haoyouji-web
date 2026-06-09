@@ -1591,24 +1591,20 @@ const AddTransaction = () => {
                   })()}
                 </div>
               </div>
-              {/* 客户前端显示余额预览提示（当有提现或本金变动时显示） */}
+              {/* 客户前端显示余额预览提示（当有提现时显示） */}
               {(() => {
                 if (!amount || parseFloat(amount) <= 0) return null;
                 const withdrawAbs = Math.abs(transferSummary.totalWithdraw);
                 const hasWithdraw = withdrawAbs > 0;
-                const hasCapitalChange = capitalSummary.net !== 0;
-                if (!hasWithdraw && !hasCapitalChange) return null;
-                // 客户前端显示余额 = 当前输入余额 + |历史提现| + 本金净变动
+                if (!hasWithdraw) return null;
+                // 客户前端显示余额 = 当前输入余额 + |历史提现|
+                // 注意：本金变动不叠加，因为登记员录入的余额已经包含了本金变动后的实际账户数字
                 const inputBalance = parseFloat(amount);
-                const displayBalance = inputBalance + withdrawAbs + capitalSummary.net;
+                const displayBalance = inputBalance + withdrawAbs;
                 // 构建公式各项
                 const parts: string[] = [`余额 ${inputBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`];
-                if (hasWithdraw) {
-                  parts.push(`提现 ${withdrawAbs.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`);
-                }
-                if (hasCapitalChange) {
-                  parts.push(`本金变动 ${capitalSummary.net >= 0 ? '+' : ''}${capitalSummary.net.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`);
-                }
+                parts.push(`提现 ${withdrawAbs.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`);
+
                 return (
                   <div className="mt-3 px-1 text-xs text-gray-400 space-y-1">
                     <div className="text-[10px] text-gray-300 mb-1">-- 客户前端显示预览 --</div>

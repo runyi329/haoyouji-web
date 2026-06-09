@@ -454,7 +454,7 @@ export default function LedgerDetailAA({
     return map;
   }, [filteredTransactions]);
 
-    // ─── 每天余额快照（联动：原始余额 + 截止当天累计提现 + 截止当天本金净变动）────────
+    // ─── 每天余额快照（联动：原始余额 + 截止当天累计提现）────────
   const cumulativeMap = useMemo(() => {
     const cum = new Map<string, number>();
     filteredTransactions.forEach((d) => {
@@ -463,18 +463,12 @@ export default function LedgerDetailAA({
       const withdrawToDate = withdrawRecords
         .filter(w => w.date <= d.date)
         .reduce((s, w) => s + w.amount, 0);
-      // 截止当天的本金净变动（变动日期 <= 当天）
-      const capitalToDate = capitalHistory
-        .filter((r: any) => (r.recordDate || '') <= d.date)
-        .reduce((sum: number, r: any) => {
-          const amt = Number(r.amount) || 0;
-          return r.description?.startsWith('capital_add') ? sum + amt : sum - amt;
-        }, 0);
-      // 客户前端看到的余额 = 原始余额 + 截止当天提现 + 截止当天本金变动
-      cum.set(d.date, dayBalance + withdrawToDate + capitalToDate);
+      // 客户前端看到的余额 = 原始余额 + 截止当天提现
+      // 注意：本金变动不叠加，因为登记员录入的余额已经包含了本金变动后的实际账户数字
+      cum.set(d.date, dayBalance + withdrawToDate);
     });
     return cum;
-  }, [filteredTransactions, withdrawRecords, capitalHistory]);
+  }, [filteredTransactions, withdrawRecords]);
 
   // ─── 变动日期集合（用于日历格子上显示黄色感叹号标记）───────────
   const changeDates = useMemo(() => {
@@ -865,7 +859,7 @@ export default function LedgerDetailAA({
     if (!data) return null;
 
     if (calendarMode === "balance") {
-      // 显示联动后的余额（原始余额 + 提现 + 本金变动）
+      // 显示联动后的余额（原始余额 + 提现）
       const linkedBalance = cumulativeMap.get(dateStr);
       if (linkedBalance === undefined || linkedBalance <= 0) return null;
       return formatMoney(linkedBalance);
@@ -1314,7 +1308,7 @@ export default function LedgerDetailAA({
           ) : (
             /* ─── 单标签模式：最新余额 + 保证金 + 初始金额 + 累计盈亏 ─── */
             <>
-          {/* 最新余额（联动：原始余额 + 提现 + 本金变动） */}
+          {/* 最新余额（联动：原始余额 + 提现） */}
           <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
             <div className="text-xs opacity-75 mb-0.5">最新余额</div>
             <div className="text-base font-bold">
