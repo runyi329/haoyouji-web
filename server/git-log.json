@@ -1,5 +1,437 @@
 [
   {
+    "hash": "608130f526de998d1eee64559ebb440ab5457c91",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T15:56:37+08:00",
+    "message": "Merge remote-tracking branch 'origin/main'",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "Merge remote-tracking branch 'origin/main'"
+  },
+  {
+    "hash": "7a32f90292b2f93493bec87f4f614a9b6a8fa2d1",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T15:53:26+08:00",
+    "message": "fix(P095): 实时预览卡片股票类型联动融资金额显示",
+    "type": "fix",
+    "scope": "P095",
+    "cleanMessage": "实时预览卡片股票类型联动融资金额显示"
+  },
+  {
+    "hash": "9415348b19d364cc8b0a852639072118de17d62d",
+    "author": "github-actions[bot]",
+    "date": "2026-06-09T07:52:39+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "8690ff341080b5c047bcbccb136f61b00e02ab9c",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T15:46:24+08:00",
+    "message": "fix(P095): 股票类型提交验证修复 - 使用amountInputValue作为finalAmount，自动设CNY，修复≈符号显示",
+    "type": "fix",
+    "scope": "P095",
+    "cleanMessage": "股票类型提交验证修复 - 使用amountInputValue作为finalAmount，自动设CNY，修复≈符号显示"
+  },
+  {
+    "hash": "b9fa0b70ea0e88baeb8ddbf0564991c617c2e402",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T15:24:03+08:00",
+    "message": "fix(P095): 股票类型填写融资金额后不再被清空（computedAmount不覆盖手动输入）",
+    "type": "fix",
+    "scope": "P095",
+    "cleanMessage": "股票类型填写融资金额后不再被清空（computedAmount不覆盖手动输入）"
+  },
+  {
+    "hash": "8aa8c94903bae1bb20ebe6b799f84da3c01f2172",
+    "author": "runyi329",
+    "date": "2026-06-09T06:10:56+00:00",
+    "message": "refactor(P080-B): 提现/入金区块改为只读，联动P004的transfer记录（提现+本金变动）",
+    "type": "refactor",
+    "scope": "P080-B",
+    "cleanMessage": "提现/入金区块改为只读，联动P004的transfer记录（提现+本金变动）"
+  },
+  {
+    "hash": "2d97f724aa8550938a25278df4658f4d5c8ada4b",
+    "author": "runyi329",
+    "date": "2026-06-09T05:47:42+00:00",
+    "message": "fix: P080-B账户余额查询排除transfer类型和已删除记录（修复显示错误日期和金额）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "P080-B账户余额查询排除transfer类型和已删除记录（修复显示错误日期和金额）"
+  },
+  {
+    "hash": "3c5f63c96ad54187852958f1140552af7de200b0",
+    "author": "runyi329",
+    "date": "2026-06-09T05:29:11+00:00",
+    "message": "fix: 盈亏弹窗第5步直接显示标签名，第6步直接显示用户名",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "盈亏弹窗第5步直接显示标签名，第6步直接显示用户名"
+  },
+  {
+    "hash": "09067e3792cdc0458a9bcb747c39a1a06996aab7",
+    "author": "runyi329",
+    "date": "2026-06-09T05:21:54+00:00",
+    "message": "fix: 去掉盈亏弹窗中'对赌'敏感字眼，改为中性表述",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "去掉盈亏弹窗中'对赌'敏感字眼，改为中性表述"
+  },
+  {
+    "hash": "22ae6b7314e7112903525a6b99648e53dc2a4d18",
+    "author": "runyi329",
+    "date": "2026-06-09T05:21:00+00:00",
+    "message": "fix: 盈亏计算弹窗文案修正为标签盈亏→对赌取反逻辑",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "盈亏计算弹窗文案修正为标签盈亏→对赌取反逻辑"
+  },
+  {
+    "hash": "8ce1cbfc54e9f9bffa4f8c1d30ad117eb7c3de8a",
+    "author": "runyi329",
+    "date": "2026-06-09T05:13:07+00:00",
+    "message": "feat: 累计盈亏数字旁添加问号图标，点击弹出计算详情",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "累计盈亏数字旁添加问号图标，点击弹出计算详情"
+  },
+  {
+    "hash": "f6e6f3262a0a205dbf3318c8c0ab9ce1e7c781d0",
+    "author": "runyi329",
+    "date": "2026-06-09T05:03:24+00:00",
+    "message": "feat: 累计盈亏卡片添加提现记录感叹号弹窗",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "累计盈亏卡片添加提现记录感叹号弹窗"
+  },
+  {
+    "hash": "2681755f4d3f84570793af54a1ae40ca1e1a5aad",
+    "author": "runyi329",
+    "date": "2026-06-09T04:52:54+00:00",
+    "message": "fix: 全部模式概览盈亏公式加入提现扣除，与单标签模式口径一致",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "全部模式概览盈亏公式加入提现扣除，与单标签模式口径一致"
+  },
+  {
+    "hash": "be8e350079c67ccc80d7887c56100511e8e3a637",
+    "author": "runyi329",
+    "date": "2026-06-09T04:36:19+00:00",
+    "message": "fix: 日历联动余额去掉本金变动偏移（登记员录入的余额已包含本金变动）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "日历联动余额去掉本金变动偏移（登记员录入的余额已包含本金变动）"
+  },
+  {
+    "hash": "77d73428fe3aee3d11527ccac0ad4c70c80aa2ee",
+    "author": "Manus",
+    "date": "2026-06-09T03:23:14+00:00",
+    "message": "fix: 修正累计盈亏计算 - 三郎输赢=(余额+提现)-初始金额，增减本金不影响盈亏",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修正累计盈亏计算 - 三郎输赢=(余额+提现)-初始金额，增减本金不影响盈亏"
+  },
+  {
+    "hash": "acfd60e907f36e3690ffa438b573a1f092a2c208",
+    "author": "Manus",
+    "date": "2026-06-09T01:32:47+00:00",
+    "message": "修复: P004本金变动/提现使用账目日期而非当天日期; P117-A初始金额标题根据变动显示'初始本金'或'当前本金'",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "修复: P004本金变动/提现使用账目日期而非当天日期; P117-A初始金额标题根据变动显示'初始本金'或'当前本金'"
+  },
+  {
+    "hash": "8bf503f49805351cea30eb352e4ea88dc20c6559",
+    "author": "Manus",
+    "date": "2026-06-09T01:25:42+00:00",
+    "message": "P117-A: 初始金额卡片标题根据是否有本金变动显示'初始本金'或'当前本金'",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "P117-A: 初始金额卡片标题根据是否有本金变动显示'初始本金'或'当前本金'"
+  },
+  {
+    "hash": "78a3ef15f5a5536061fa3f94fb2798f7edc28b57",
+    "author": "Manus",
+    "date": "2026-06-09T01:22:28+00:00",
+    "message": "P117-A: 日历联动按日期累进（本金变动/提现只影响当天及之后），变动日显示黄色感叹号",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "P117-A: 日历联动按日期累进（本金变动/提现只影响当天及之后），变动日显示黄色感叹号"
+  },
+  {
+    "hash": "5ccc47655d1a44b438adf8e9573ed072d6dc92fc",
+    "author": "Manus",
+    "date": "2026-06-09T01:09:52+00:00",
+    "message": "P117-A: 最新余额卡片统一标题为'最新余额'，数值联动（余额+提现+本金变动）",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "P117-A: 最新余额卡片统一标题为'最新余额'，数值联动（余额+提现+本金变动）"
+  },
+  {
+    "hash": "df57d146e8d9aea815f25e74c315da604ba8a3b7",
+    "author": "Manus",
+    "date": "2026-06-09T01:05:54+00:00",
+    "message": "P117-A: 日历格子余额联动显示（原始余额+提现+本金变动）",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "P117-A: 日历格子余额联动显示（原始余额+提现+本金变动）"
+  },
+  {
+    "hash": "9f14c1ec32936e443432271d60261c876c819ca1",
+    "author": "Manus",
+    "date": "2026-06-09T00:51:39+00:00",
+    "message": "style: 历史提现金额去掉负号和红色，改为黑色纯数字显示",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "历史提现金额去掉负号和红色，改为黑色纯数字显示"
+  },
+  {
+    "hash": "b3251785f65305cf7c271e7a897807f2c7b29d3a",
+    "author": "Manus",
+    "date": "2026-06-09T00:37:11+00:00",
+    "message": "refactor: P004 余额预览提示改为公式形式 - 客户看到的余额 = 余额 + 提现 + 本金变动",
+    "type": "refactor",
+    "scope": "",
+    "cleanMessage": "P004 余额预览提示改为公式形式 - 客户看到的余额 = 余额 + 提现 + 本金变动"
+  },
+  {
+    "hash": "00b840e3986d86947dcba90009e052dac826b44a",
+    "author": "Manus",
+    "date": "2026-06-09T00:07:21+00:00",
+    "message": "fix: P117-A 本金变动记录弹窗补充日期显示 + 三角感叹号改为黑色可见",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "P117-A 本金变动记录弹窗补充日期显示 + 三角感叹号改为黑色可见"
+  },
+  {
+    "hash": "daa47c58f955175446ce3462edb8f0e5b455a864",
+    "author": "Manus",
+    "date": "2026-06-08T23:58:02+00:00",
+    "message": "feat: P004余额输入框下方增加盈亏预览提示（当前本金/总资产/盈亏动态计算）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "P004余额输入框下方增加盈亏预览提示（当前本金/总资产/盈亏动态计算）"
+  },
+  {
+    "hash": "2370f714e4b7cd2a7d8e61f840c683f49ff24df3",
+    "author": "Manus",
+    "date": "2026-06-08T23:45:08+00:00",
+    "message": "fix: P117-A盈亏计算合并本金变动和累计提现（当前本金=初始+净变动，总资产=余额+提现）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "P117-A盈亏计算合并本金变动和累计提现（当前本金=初始+净变动，总资产=余额+提现）"
+  },
+  {
+    "hash": "cfaf469eb83d0587589234d8a68c0c562915a03a",
+    "author": "Manus",
+    "date": "2026-06-08T23:38:40+00:00",
+    "message": "fix: P117-A日历排除transfer记录显示（提现/本金变动不出现在日历格子上）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "P117-A日历排除transfer记录显示（提现/本金变动不出现在日历格子上）"
+  },
+  {
+    "hash": "84f5d7736b61faab97ee4523288628321a47aec7",
+    "author": "Manus",
+    "date": "2026-06-08T23:31:53+00:00",
+    "message": "feat: 历史提现/增减本金面板按标签过滤+仅owner可编辑，P117-A transfer查询按标签过滤",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "历史提现/增减本金面板按标签过滤+仅owner可编辑，P117-A transfer查询按标签过滤"
+  },
+  {
+    "hash": "63258c14beafb76e8b55ec121c04d94f4d7eb64e",
+    "author": "Manus",
+    "date": "2026-06-08T23:22:01+00:00",
+    "message": "fix: 提现/增减本金按当前选中标签过滤和保存（不再硬编码categoryId=2）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "提现/增减本金按当前选中标签过滤和保存（不再硬编码categoryId=2）"
+  },
+  {
+    "hash": "4295532d57e534a44c2b1b3bd4c8540ab907fd26",
+    "author": "github-actions[bot]",
+    "date": "2026-06-08T18:26:13+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "57b4e81455ec00336253d46618d081a10c406e6c",
+    "author": "Manus",
+    "date": "2026-06-08T16:58:53+00:00",
+    "message": "fix: 修复37号账本transfer类型记录被UPSERT覆盖的问题（提现/本金变动不参与同日期同标签覆盖逻辑）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复37号账本transfer类型记录被UPSERT覆盖的问题（提现/本金变动不参与同日期同标签覆盖逻辑）"
+  },
+  {
+    "hash": "7af69f1afccfe343b3abb562d05e8f186e568270",
+    "author": "Manus",
+    "date": "2026-06-08T16:45:57+00:00",
+    "message": "fix: 修复历史提现和增减本金面板数据互相覆盖的问题（移除竞态refetch，统一用invalidate刷新缓存）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复历史提现和增减本金面板数据互相覆盖的问题（移除竞态refetch，统一用invalidate刷新缓存）"
+  },
+  {
+    "hash": "346c909832760d1f7f3cfbe171261c4f1d23bbd7",
+    "author": "Manus",
+    "date": "2026-06-08T16:36:23+00:00",
+    "message": "feat(P004/P117-A): 出入金面板只保留提现，余额输入框下方显示累计值，P117-A日历上方显示总资产(余额+提现)",
+    "type": "feat",
+    "scope": "P004/P117-A",
+    "cleanMessage": "出入金面板只保留提现，余额输入框下方显示累计值，P117-A日历上方显示总资产(余额+提现)"
+  },
+  {
+    "hash": "77550253765e33fb7023a80d5bdcddfd37d7d781",
+    "author": "Manus",
+    "date": "2026-06-08T16:20:22+00:00",
+    "message": "feat(P004+P117-A): 增减本金折叠面板 + 客户视角初始金额感叹号弹窗",
+    "type": "feat",
+    "scope": "P004+P117-A",
+    "cleanMessage": "增减本金折叠面板 + 客户视角初始金额感叹号弹窗"
+  },
+  {
+    "hash": "1e576e59f5f2bf279c46fb6425a435ef9bf36c2d",
+    "author": "Manus",
+    "date": "2026-06-08T15:57:31+00:00",
+    "message": "feat(P004): 将提现/入金功能独立为折叠面板，与余额记录输入框分离",
+    "type": "feat",
+    "scope": "P004",
+    "cleanMessage": "将提现/入金功能独立为折叠面板，与余额记录输入框分离"
+  },
+  {
+    "hash": "3a95569d669c8730e9d77d8764401a38183c0d32",
+    "author": "Deploy Bot",
+    "date": "2026-06-08T22:52:40+08:00",
+    "message": "WIP on main: 51f9e4fb fix: 订单卡片中图模式右栏移除固定宽高，内容自然撑开卡片",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "WIP on main: 51f9e4fb fix: 订单卡片中图模式右栏移除固定宽高，内容自然撑开卡片"
+  },
+  {
+    "hash": "5e959605d754385f43b7e19120d45e3eb2523c4a",
+    "author": "Deploy Bot",
+    "date": "2026-06-08T22:52:40+08:00",
+    "message": "index on main: 51f9e4fb fix: 订单卡片中图模式右栏移除固定宽高，内容自然撑开卡片",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "index on main: 51f9e4fb fix: 订单卡片中图模式右栏移除固定宽高，内容自然撑开卡片"
+  },
+  {
+    "hash": "ffea804a34805e5a4d7bb4732541eb044abdc3b1",
+    "author": "Manus",
+    "date": "2026-06-08T14:52:21+00:00",
+    "message": "fix: 前端订单卡片已结算状态显示已结清公章，利息停止计算",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "前端订单卡片已结算状态显示已结清公章，利息停止计算"
+  },
+  {
+    "hash": "51f9e4fb0cada5df3ecff744cc0c6c473de36d5c",
+    "author": "Manus",
+    "date": "2026-06-08T14:27:27+00:00",
+    "message": "fix: 订单卡片中图模式右栏移除固定宽高，内容自然撑开卡片",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "订单卡片中图模式右栏移除固定宽高，内容自然撑开卡片"
+  },
+  {
+    "hash": "c2c473c66653498a97b40894fec18982e494c95c",
+    "author": "github-actions[bot]",
+    "date": "2026-06-08T13:56:48+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "03150cb6290bf02761b9a166fadf79450ad44e8f",
+    "author": "Manus",
+    "date": "2026-06-08T12:27:08+00:00",
+    "message": "feat(P004): 37账本添加账目页增加提现/入金类型选项",
+    "type": "feat",
+    "scope": "P004",
+    "cleanMessage": "37账本添加账目页增加提现/入金类型选项"
+  },
+  {
+    "hash": "4c16c030ad5709b09bf6c2a872af398562287e1a",
+    "author": "Manus",
+    "date": "2026-06-08T11:54:10+00:00",
+    "message": "chore: remove accidentally committed dist-test",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "remove accidentally committed dist-test"
+  },
+  {
+    "hash": "149c035b478489d2b35f3806b501c17c5e0853aa",
+    "author": "Manus",
+    "date": "2026-06-08T11:53:59+00:00",
+    "message": "feat(P080-B): 新增提现/入金记录功能，交互方式与保证金一致",
+    "type": "feat",
+    "scope": "P080-B",
+    "cleanMessage": "新增提现/入金记录功能，交互方式与保证金一致"
+  },
+  {
+    "hash": "7cc7425aa1ba13e38d8b2c7309dc13f33883b96f",
+    "author": "github-actions[bot]",
+    "date": "2026-06-08T08:57:00+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "c9714cdbb136c37d9e05a4eb9d4d338484dc4a66",
+    "author": "Manus Dev",
+    "date": "2026-06-08T06:36:35+00:00",
+    "message": "fix(P004): 修复iOS拍照上传失败 - 使用FileReader读取dataURL替代objectURL，兼容HEIC格式",
+    "type": "fix",
+    "scope": "P004",
+    "cleanMessage": "修复iOS拍照上传失败 - 使用FileReader读取dataURL替代objectURL，兼容HEIC格式"
+  },
+  {
+    "hash": "0b4a216a4d709c0262fdb7f9af1972c2abe2eaa8",
+    "author": "Manus Dev",
+    "date": "2026-06-08T05:52:54+00:00",
+    "message": "fix(P095): 股票/CNY类型预览卡片隐藏≈U换算和买入币价，买入价值显示正确单位",
+    "type": "fix",
+    "scope": "P095",
+    "cleanMessage": "股票/CNY类型预览卡片隐藏≈U换算和买入币价，买入价值显示正确单位"
+  },
+  {
+    "hash": "afa4efbccb497414c82496d0063f756c88de10f5",
+    "author": "Manus Dev",
+    "date": "2026-06-08T05:46:48+00:00",
+    "message": "feat(P095): 股票类型时买入价格/币数禁用变灰+买入价格去掉单位+融资金额显示≈USDT换算",
+    "type": "feat",
+    "scope": "P095",
+    "cleanMessage": "股票类型时买入价格/币数禁用变灰+买入价格去掉单位+融资金额显示≈USDT换算"
+  },
+  {
+    "hash": "7795c6523ac71f748d669111fe63a8528591a06d",
+    "author": "Manus Dev",
+    "date": "2026-06-08T05:36:43+00:00",
+    "message": "fix(P095): 修复 INTEGER_COINS 未定义错误，改用 INTEGER_COINS_FUNDER",
+    "type": "fix",
+    "scope": "P095",
+    "cleanMessage": "修复 INTEGER_COINS 未定义错误，改用 INTEGER_COINS_FUNDER"
+  },
+  {
+    "hash": "7acd1673f6106c030b33c0be86f9277430c0b9a3",
+    "author": "Manus Dev",
+    "date": "2026-06-08T03:13:17+00:00",
+    "message": "fix(P095-FunderManagement): 融资金额支持手动输入+单位跟随币种动态变化+修复iOS聚焦",
+    "type": "fix",
+    "scope": "P095-FunderManagement",
+    "cleanMessage": "融资金额支持手动输入+单位跟随币种动态变化+修复iOS聚焦"
+  },
+  {
     "hash": "a810d3aaf95fa2e1b8a63b05f4a83e336e4602d9",
     "author": "Manus Dev",
     "date": "2026-06-08T02:58:02+00:00",
@@ -16333,6 +16765,15 @@
     "type": "fix",
     "scope": "",
     "cleanMessage": "紧急修复 - 从 getProducts select 中移除 inPointsShop 字段，避免数据库字段不存在时商品列表崩溃"
+  },
+  {
+    "hash": "f85b9dc7cac48d2d5a2b6e2faad2b1f2ce3703ce",
+    "author": "Deploy Bot",
+    "date": "2026-04-30T04:48:02-04:00",
+    "message": "diag: 诊断并修复 inPointsShop 字段",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "diag: 诊断并修复 inPointsShop 字段"
   },
   {
     "hash": "aca7603cfd1058a02d59fce5ab2cd7a4f38a82ab",

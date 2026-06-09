@@ -568,12 +568,18 @@ function FunderOrderCard({
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-1 flex-wrap">
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                {qty > 0 ? formatCoinQtyFunder(qty, order.coin) : '—'}
+                {order.asset_type === 'stock' ? (totalU > 0 ? totalU.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—') : (qty > 0 ? formatCoinQtyFunder(qty, order.coin) : '—')}
               </span>
               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
             </div>
-            {liveP && qty > 0 && (
-              <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(qty * liveP).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
+            {order.asset_type === 'stock' ? (
+              totalU > 0 && order.coin === 'CNY' && (
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / 7).toLocaleString(undefined, { maximumFractionDigits: 0 })} U</div>
+              )
+            ) : (
+              liveP && qty > 0 && (
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(qty * liveP).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
+              )
             )}
           </div>
           <div className="space-y-0.5 text-xs">
