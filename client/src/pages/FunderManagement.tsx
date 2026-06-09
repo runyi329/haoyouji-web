@@ -1247,7 +1247,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
   // 股票类型时 buyPrice/buyQuantity 为空，computedAmount 始终为空，不应覆盖用户手动输入的融资金额
   useEffect(() => {
     if (!amountEditing && formData.assetType !== 'stock') {
-      setAmountInputValue(computedAmount || '');
+      // 仅当 computedAmount 有值时才覆盖（避免切换类型时清空已有金额）
+      if (computedAmount) {
+        setAmountInputValue(computedAmount);
+      }
     }
   }, [computedAmount, amountEditing, formData.assetType]);
 
@@ -1665,6 +1668,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, onRecycleBi
         setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
       }
     } catch { setDisplayConfig(DEFAULT_DISPLAY_CONFIG); }
+    // 初始化融资金额输入值（编辑时恢复已保存的金额）
+    setAmountInputValue(order.amount ? String(order.amount) : '');
+    setAmountEditing(false);
     setEditingOrder(order);
     setShowDatePicker(false);
     setShowInterestDatePicker(false);

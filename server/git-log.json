@@ -1,5 +1,14 @@
 [
   {
+    "hash": "898820da0df74f09e01f8ec9fd6ec5f283fea4ec",
+    "author": "Deploy Bot",
+    "date": "2026-06-09T17:24:14+08:00",
+    "message": "feat(P095): 已结清订单红色半透明背景+居中大印章，未结清排前已结清排后",
+    "type": "feat",
+    "scope": "P095",
+    "cleanMessage": "已结清订单红色半透明背景+居中大印章，未结清排前已结清排后"
+  },
+  {
     "hash": "e745d983b47a2e0bb0ece67073242842cd14158f",
     "author": "Deploy Bot",
     "date": "2026-06-09T17:06:46+08:00",
