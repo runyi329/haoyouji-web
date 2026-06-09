@@ -3147,9 +3147,9 @@ export default function LedgerDetailAA({
                 </div>
                 {/* 第6步 */}
                 <div>
-                  <div className="font-semibold text-gray-900 mb-1">6. 客户盈亏（对赌取反）</div>
+                  <div className="font-semibold text-gray-900 mb-1">6. 客户盈亏</div>
                   <div className="pl-3 text-gray-600">
-                    客户与标签是对赌关系，标签赢 = 客户输
+                    客户与标签方向相反，标签赢 = 客户亏
                   </div>
                   <div className="pl-3 text-gray-600">
                     = -标签盈亏{ratio !== 1 ? ` × 占比(${ratioVal}%)` : ''}
