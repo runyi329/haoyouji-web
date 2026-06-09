@@ -359,6 +359,7 @@ export default function LedgerDetailAA({
 
   // ===== 本金变动历史查询（用于初始金额旁感叹号弹窗） =====
   const [showCapitalHistory, setShowCapitalHistory] = useState(false);
+  const [showWithdrawHistory, setShowWithdrawHistory] = useState(false);
   const { data: capitalTransferData } = trpc.ledger.getTransactions.useQuery(
     { ledgerId, type: 'transfer' as any, categoryId: selectedTagId ?? undefined, limit: 200 },
     { enabled: !!ledgerId && !!selectedTagId }
@@ -1466,7 +1467,18 @@ export default function LedgerDetailAA({
 
           {/* 累计盈亏 */}
           <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            <div className="text-xs opacity-75 mb-0.5">累计盈亏</div>
+            <div className="text-xs opacity-75 mb-0.5 flex items-center gap-1">
+              累计盈亏
+              {withdrawRecords.length > 0 && (
+                <button
+                  onClick={() => setShowWithdrawHistory(true)}
+                  className="inline-flex items-center justify-center active:opacity-60"
+                  title="有提现记录，点击查看详情"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-black" fill="#FBBF24" />
+                </button>
+              )}
+            </div>
             <div
               className="text-base font-bold"
               style={{ color: "#FFFFFF" }}
@@ -2980,6 +2992,55 @@ export default function LedgerDetailAA({
                       </>
                     );
                   })()}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 提现记录弹窗 ── */}
+      {showWithdrawHistory && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center" onClick={() => setShowWithdrawHistory(false)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div
+            className="relative bg-white rounded-2xl w-[85%] max-w-sm max-h-[70vh] overflow-hidden shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 头部 */}
+            <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F0F0F0' }}>
+              <div className="text-base font-bold text-gray-800">提现记录</div>
+              <button onClick={() => setShowWithdrawHistory(false)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            {/* 内容 */}
+            <div className="px-5 py-4 overflow-y-auto max-h-[55vh]">
+              {withdrawRecords.length === 0 ? (
+                <div className="text-center text-sm text-gray-400 py-8">暂无提现记录</div>
+              ) : (
+                <div className="space-y-3">
+                  {withdrawRecords.map((record: any, idx: number) => (
+                    <div key={idx} className="flex items-center gap-3 py-2" style={{ borderBottom: '1px solid #F8F8F8' }}>
+                      <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                      <div className="flex-1">
+                        <div className="text-xs text-gray-700">提现</div>
+                        <div className="text-[11px] text-gray-400">{record.date || ''}</div>
+                      </div>
+                      <div className="text-sm font-semibold text-green-600">
+                        +¥{Number(record.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  ))}
+                  {/* 累计提现汇总 */}
+                  <div className="mt-3 pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-600">累计提现</span>
+                      <span className="text-base font-bold text-green-700">
+                        +¥{totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
