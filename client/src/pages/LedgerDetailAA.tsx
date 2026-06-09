@@ -661,19 +661,20 @@ export default function LedgerDetailAA({
       const sd = initialBalancesData.balances[`${selectedTag.name}__startDate`];
       if (sd) startDate = String(sd);
     }
-    // 本金变动净额（从 capitalHistory 计算）
+    // 本金变动净额（从 capitalHistory 计算）— 仅用于"当前本金"卡片显示
     const capitalNetChange = capitalHistory.reduce((sum: number, r: any) => {
       const amt = Number(r.amount) || 0;
       return r.description?.startsWith('capital_add') ? sum + amt : sum - amt;
     }, 0);
-    // 当前本金 = 初始本金 + 本金净变动
+    // 当前本金 = 初始本金 + 本金净变动（仅用于卡片显示，不参与盈亏计算）
     const currentCapital = initialBalance + capitalNetChange;
-    // 总资产 = 当前余额 + 累计提现
-    const totalAsset = latestBalance + totalWithdraw;
-    // 负债视角盈亏：当前本金 - 总资产，乘以权重
-    const rawPnl = currentCapital - totalAsset;
+    // 盈亏计算：三郎输赢 = (当前余额 + 累计提现) - 初始金额
+    // 增加/减少本金不影响盈亏（增加本金只是追加资金，减少本金只是减少基数）
+    // 客户盈亏 = -三郎输赢（三郎赢=客户输，三郎输=客户赢）
+    const traderPnl = (latestBalance + totalWithdraw) - initialBalance; // 三郎赢的钱
+    const rawPnl = -traderPnl; // 客户盈亏（负债视角：三郎赢客户就输）
     const totalPnl = rawPnl * ratio;
-    const returnRate = currentCapital > 0 ? (rawPnl / currentCapital) * 100 : 0;
+    const returnRate = initialBalance > 0 ? (rawPnl / initialBalance) * 100 : 0;
     return { latestBalance, latestDate, returnRate, recordDays, totalPnl, initialBalance, currentCapital, startDate };
   }, [filteredTransactions, cumulativeMap, ledgerData, initialBalancesData, selectedTag, capitalHistory, totalWithdraw]);
 
