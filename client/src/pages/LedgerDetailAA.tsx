@@ -3118,7 +3118,7 @@ export default function LedgerDetailAA({
                 </div>
                 {/* 第4步 */}
                 <div>
-                  <div className="font-semibold text-gray-900 mb-1">4. 客户实际资产</div>
+                  <div className="font-semibold text-gray-900 mb-1">4. 标签实际资产</div>
                   <div className="pl-3 text-gray-600">
                     = 最新余额 + 累计提现
                   </div>
@@ -3131,35 +3131,36 @@ export default function LedgerDetailAA({
                 </div>
                 {/* 第5步 */}
                 <div>
-                  <div className="font-semibold text-gray-900 mb-1">5. 原始盈亏</div>
+                  <div className="font-semibold text-gray-900 mb-1">5. 标签盈亏{selectedTag?.name ? `（${selectedTag.name}）` : ''}</div>
                   <div className="pl-3 text-gray-600">
-                    = 初始本金 - 客户实际资产
+                    = 标签实际资产 - 初始本金
                   </div>
                   <div className="pl-3 text-gray-600 text-xs">
-                    （正数=盈利，负数=亏损）
+                    （正数=标签赢了，负数=标签输了）
                   </div>
                   <div className="pl-3 mt-1 font-mono text-gray-800">
-                    = ¥{initialBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })} - ¥{(latestBalance + totalWithdraw).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                    = ¥{(latestBalance + totalWithdraw).toLocaleString('zh-CN', { minimumFractionDigits: 2 })} - ¥{initialBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
                   </div>
                   <div className="pl-3 mt-1 font-mono font-semibold text-gray-900">
-                    = {rawPnl >= 0 ? '+' : '-'}¥{Math.abs(rawPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                    = {traderPnl >= 0 ? '+' : '-'}¥{Math.abs(traderPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
                   </div>
                 </div>
                 {/* 第6步 */}
-                {ratio !== 1 && (
-                  <div>
-                    <div className="font-semibold text-gray-900 mb-1">6. 按比例计算结果</div>
-                    <div className="pl-3 text-gray-600">
-                      = 原始盈亏 × 占比({ratioVal}%)
-                    </div>
-                    <div className="pl-3 mt-1 font-mono text-gray-800">
-                      = {rawPnl >= 0 ? '+' : '-'}¥{Math.abs(rawPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })} × {ratioVal}%
-                    </div>
-                    <div className="pl-3 mt-1 font-mono font-semibold text-gray-900">
-                      = {totalPnl >= 0 ? '+' : '-'}¥{Math.abs(totalPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-                    </div>
+                <div>
+                  <div className="font-semibold text-gray-900 mb-1">6. 客户盈亏（对赌取反）</div>
+                  <div className="pl-3 text-gray-600">
+                    客户与标签是对赌关系，标签赢 = 客户输
                   </div>
-                )}
+                  <div className="pl-3 text-gray-600">
+                    = -标签盈亏{ratio !== 1 ? ` × 占比(${ratioVal}%)` : ''}
+                  </div>
+                  <div className="pl-3 mt-1 font-mono text-gray-800">
+                    = -{traderPnl >= 0 ? '+' : '-'}¥{Math.abs(traderPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}{ratio !== 1 ? ` × ${ratioVal}%` : ''}
+                  </div>
+                  <div className="pl-3 mt-1 font-mono font-semibold text-gray-900">
+                    = {totalPnl >= 0 ? '+' : '-'}¥{Math.abs(totalPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                  </div>
+                </div>
                 {/* 最终结果 */}
                 <div className="pt-3 mt-2" style={{ borderTop: '2px solid #F0F0F0' }}>
                   <div className="flex items-center justify-between">
