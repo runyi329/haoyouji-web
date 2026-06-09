@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-09
+// 生成时间：2026-06-10
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7083,5 +7083,15 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-09T18:45:41+08:00", type: "fix", cleanMessage: "LedgerDetail已结清订单保持完整布局+红色背景+居中大印章" },
     { date: "2026-06-09T19:27:29+08:00", type: "fix", cleanMessage: "LedgerDetail股票类型订单显示修复-持有资产用amount、U值用amount/7、抵押物弹窗currentValue用amount" },
     { date: "2026-06-09T20:18:35+08:00", type: "fix", cleanMessage: "LedgerDetail 所有 CNY/U 折算使用实时汇率(exchange.getRate 3秒刷新)替代硬编码/7" },
+    { date: "2026-06-09T12:28:56Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-09T21:54:02+08:00", type: "fix", cleanMessage: "coin=CNY 非股票分支的 U 值也用实时汇率(qty/cnyRate)替代 qty*liveP" },
+    { date: "2026-06-09T22:13:26+08:00", type: "fix", cleanMessage: "FinanceManagement 参与方视角 CNY 订单 U 值用实时汇率折算" },
+    { date: "2026-06-09T22:50:36+08:00", type: "feat", cleanMessage: "帽子区域添加 asset_type/owner_label/tags 标签显示，与 LedgerDetail 保持一致" },
+    { date: "2026-06-09T23:21:12+08:00", type: "feat", cleanMessage: "P095 担保货币添加 CNY 选项，担保价值用实时汇率折算" },
+    { date: "2026-06-09T23:32:29+08:00", type: "fix", cleanMessage: "P095 担保货币 CNY 折算用实时汇率，利息折算也改用实时汇率" },
+  ],
+  "2026-06-10": [
+    { date: "2026-06-10T00:08:28+08:00", type: "fix", cleanMessage: "LedgerDetail 担保货币 CNY 折算用实时汇率(qty/cnyRate)" },
+    { date: "2026-06-09T16:45:46Z", type: "fix", cleanMessage: "彻底修复 p095 借方与综测管理订单联动问题" },
   ],
 };
