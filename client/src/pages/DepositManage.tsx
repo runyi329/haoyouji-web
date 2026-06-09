@@ -464,6 +464,39 @@ export default function DepositManage() {
     { enabled: !!ledgerId && !!selectedTagForRight }
   );
 
+  // 查询当前选中标签的 transfer 记录（提现 + 本金变动），用于只读展示
+  const selectedTagCategoryId = useMemo(() => {
+    if (!selectedTagForRight || !categories.length) return null;
+    const cat = (categories as any[]).find((c: any) => c.name === selectedTagForRight);
+    return cat?.id ?? null;
+  }, [selectedTagForRight, categories]);
+
+  const { data: transferRecordsData } = trpc.ledger.getTransactions.useQuery(
+    { ledgerId, type: 'transfer' as any, categoryId: selectedTagCategoryId ?? undefined, limit: 200 },
+    { enabled: !!ledgerId && !!selectedTagCategoryId }
+  );
+
+  // 解析 transfer 记录：提现记录和本金变动记录
+  const transferRecords = useMemo(() => {
+    const withdraws: { date: string; amount: number; description: string }[] = [];
+    const capitals: { date: string; amount: number; description: string }[] = [];
+    (transferRecordsData as any[] || []).forEach((group: any) => {
+      group.records?.forEach((r: any) => {
+        const item = { date: r.recordDate || group.date || '', amount: Number(r.amount) || 0, description: r.description || '' };
+        if (r.description?.startsWith('capital_')) {
+          capitals.push(item);
+        } else {
+          withdraws.push(item);
+        }
+      });
+    });
+    return {
+      withdraws: withdraws.sort((a, b) => a.date.localeCompare(b.date)),
+      capitals: capitals.sort((a, b) => a.date.localeCompare(b.date)),
+      all: [...withdraws, ...capitals].sort((a, b) => a.date.localeCompare(b.date)),
+    };
+  }, [transferRecordsData]);
+
   // 批量查询所有标签的保证金摘要（用于折叠行右侧显示百分比）
   const { data: allTagsMarginSummary, refetch: refetchAllTagsMarginSummary } = (trpc.ledger as any).getAllTagsMarginSummary.useQuery(
     { ledgerId },
@@ -1179,194 +1212,69 @@ export default function DepositManage() {
                               )}
                             </div>
 
-                            {/* ── 提现/入金记录区块 ── */}
-                            {!fundFlowEditMode && (
-                              <div className="rounded-xl p-3 mb-3 space-y-2" style={{ backgroundColor: '#FFFBF0', border: '1px solid #FDE68A' }}>
-                                <div className="flex justify-end items-center">
-                                  <button
-                                    onClick={handleStartFundFlowEditing}
-                                    className="text-xs text-amber-600 flex items-center gap-0.5"
-                                  >
-                                    <Pencil className="w-3 h-3" />编辑提现/入金
-                                  </button>
-                                </div>
-                                {fundFlowData.length === 0 ? (
-                                  <div className="text-xs text-gray-400 py-2 text-center">暂无提现/入金记录</div>
-                                ) : (
-                                  <div className="space-y-2">
-                                    {(fundFlowData as Array<{ coin: string; amount: number; label: string; date: string }>).map(({ coin, amount, label, date }, _i) => {
-                                      const cnyVal = coin !== '元' ? toCNY(String(Math.abs(amount)), coin, cryptoPrices) : Math.abs(amount);
-                                      return (
-                                        <div
-                                          key={_i}
-                                          className="flex items-start justify-between py-2"
-                                          style={{ borderBottom: '1px solid #FDE68A' }}
-                                        >
-                                          <div className="flex flex-col">
-                                            <div className="flex items-center gap-1.5">
-                                              <span className="text-xs font-medium text-gray-700">{amount < 0 ? '提现' : '入金'}</span>
-                                              <span className="text-xs" style={{ color: '#D97706' }}>
-                                                {date ? date.slice(5) : '--'}
-                                              </span>
-                                              <span
-                                                className="text-[10px] font-medium px-1 py-0.5 rounded"
-                                                style={{
-                                                  backgroundColor: amount < 0 ? '#FEF3C7' : '#DCFCE7',
-                                                  color: amount < 0 ? '#D97706' : '#16A34A',
-                                                }}
-                                              >
-                                                {amount < 0 ? '提出' : '转入'}
-                                              </span>
-                                            </div>
-                                            {label ? <span className="text-[10px] text-gray-400 mt-0.5">{label}</span> : null}
-                                          </div>
-                                          <div className="flex flex-col items-end">
-                                            <span className="text-sm font-semibold" style={{ color: amount < 0 ? '#D97706' : '#16A34A' }}>
-                                              {amount >= 0 ? '+' : ''}{amount.toLocaleString('zh-CN', { maximumFractionDigits: 4 })}
-                                              <span className="text-xs text-gray-500 ml-1">{coin}</span>
+                            {/* ── 提现/本金变动记录区块（只读，联动P004录入的transfer记录） ── */}
+                            <div className="rounded-xl p-3 mb-3 space-y-2" style={{ backgroundColor: '#FFFBF0', border: '1px solid #FDE68A' }}>
+                              <div className="text-xs text-amber-700 font-medium">提现/本金变动记录</div>
+                              {transferRecords.all.length === 0 ? (
+                                <div className="text-xs text-gray-400 py-2 text-center">暂无提现/本金变动记录</div>
+                              ) : (
+                                <div className="space-y-2">
+                                  {transferRecords.all.map((record, _i) => {
+                                    const isCapital = record.description?.startsWith('capital_');
+                                    const isAdd = record.description === 'capital_add';
+                                    const label = isCapital
+                                      ? (isAdd ? '加本金' : '减本金')
+                                      : (record.amount < 0 ? '提现' : '入金');
+                                    const tagColor = isCapital ? '#7C3AED' : (record.amount < 0 ? '#D97706' : '#16A34A');
+                                    const tagBg = isCapital ? '#EDE9FE' : (record.amount < 0 ? '#FEF3C7' : '#DCFCE7');
+                                    return (
+                                      <div
+                                        key={_i}
+                                        className="flex items-start justify-between py-2"
+                                        style={{ borderBottom: '1px solid #FDE68A' }}
+                                      >
+                                        <div className="flex flex-col">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-xs font-medium text-gray-700">{label}</span>
+                                            <span className="text-xs" style={{ color: '#D97706' }}>
+                                              {record.date ? record.date.slice(5) : '--'}
                                             </span>
-                                            {(coin === '元' || coin === '人民币') && cryptoPrices['USDT'] > 0 && (
-                                              <span className="text-xs text-gray-400">
-                                                ≈{(Math.abs(amount) / cryptoPrices['USDT']).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} U
-                                              </span>
-                                            )}
-                                            {coin !== '元' && coin !== '人民币' && (
-                                              <span className="text-xs" style={{ color: amount < 0 ? '#D97706' : '#16A34A' }}>
-                                                {amount < 0 ? '-' : ''}¥{cnyVal.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                                              </span>
-                                            )}
+                                            <span
+                                              className="text-[10px] font-medium px-1 py-0.5 rounded"
+                                              style={{ backgroundColor: tagBg, color: tagColor }}
+                                            >
+                                              {isCapital ? '本金' : (record.amount < 0 ? '提出' : '转入')}
+                                            </span>
                                           </div>
                                         </div>
-                                      );
-                                    })}
-                                    {/* 合计行 */}
-                                    <div className="flex items-end justify-between pt-1" style={{ borderTop: '1px solid #FDE68A' }}>
-                                      <span className="text-xs text-gray-500">净提现合计</span>
-                                      <div className="flex flex-col items-end">
-                                        {Object.entries(
-                                          (fundFlowData as Array<{ coin: string; amount: number }>).reduce((acc, { coin, amount }) => {
-                                            acc[coin] = (acc[coin] || 0) + amount;
-                                            return acc;
-                                          }, {} as Record<string, number>)
-                                        ).map(([coin, total]) => (
-                                          <span key={coin} className="text-xs font-semibold" style={{ color: total < 0 ? '#D97706' : '#16A34A' }}>
-                                            {total >= 0 ? '+' : ''}{total.toLocaleString('zh-CN', { maximumFractionDigits: 4 })} {coin}
+                                        <div className="flex flex-col items-end">
+                                          <span className="text-sm font-semibold" style={{ color: tagColor }}>
+                                            {record.amount >= 0 ? '+' : ''}¥{record.amount.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
                                           </span>
-                                        ))}
-                                        <span className="text-sm font-bold" style={{ color: fundFlowTotalCNY < 0 ? '#D97706' : '#16A34A' }}>
-                                          {fundFlowTotalCNY >= 0 ? '+' : ''}¥{fundFlowTotalCNY.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                                        </span>
+                                        </div>
                                       </div>
+                                    );
+                                  })}
+                                  {/* 合计行 */}
+                                  {transferRecords.withdraws.length > 0 && (
+                                    <div className="flex items-end justify-between pt-1" style={{ borderTop: '1px solid #FDE68A' }}>
+                                      <span className="text-xs text-gray-500">累计提现</span>
+                                      <span className="text-sm font-bold" style={{ color: '#D97706' }}>
+                                        ¥{transferRecords.withdraws.reduce((s, r) => s + r.amount, 0).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                                      </span>
                                     </div>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-
-                            {/* 提现/入金编辑模式 */}
-                            {fundFlowEditMode && (
-                              <div className="rounded-xl p-3 mb-3 space-y-2" style={{ backgroundColor: '#FFFBF0', border: '1px solid #FDE68A' }}>
-                                <div className="text-xs text-amber-700 font-medium mb-2">编辑提现/入金记录（负数=提现，正数=入金）</div>
-                                <div className="space-y-3">
-                                  {fundFlowEdits.map((entry, idx) => (
-                                    <div key={idx} className="rounded-xl p-2.5" style={{ backgroundColor: '#FFF8E1', border: '1px solid #FDE68A' }}>
-                                      <div className="flex gap-1 flex-wrap mb-2">
-                                        {CRYPTO_COINS.map((c) => (
-                                          <button
-                                            key={c}
-                                            onClick={() => {
-                                              const next = [...fundFlowEdits];
-                                              next[idx] = { ...next[idx], coin: c };
-                                              setFundFlowEdits(next);
-                                            }}
-                                            className="px-2 py-1 rounded-lg text-xs font-medium"
-                                            style={{
-                                              backgroundColor: (entry.coin || "元") === c ? "#D97706" : "#FFFFFF",
-                                              color: (entry.coin || "元") === c ? "#FFFFFF" : "#374151",
-                                              border: (entry.coin || "元") === c ? "none" : "1px solid #E5E7EB",
-                                            }}
-                                          >
-                                            {c}
-                                          </button>
-                                        ))}
-                                      </div>
-                                      <div className="flex gap-2 items-center">
-                                        <input
-                                          type="number"
-                                          value={entry.amount}
-                                          onChange={(e) => {
-                                            const next = [...fundFlowEdits];
-                                            next[idx] = { ...next[idx], amount: e.target.value };
-                                            setFundFlowEdits(next);
-                                          }}
-                                          placeholder="负数=提现 正数=入金"
-                                          className="flex-1 text-sm border rounded-lg px-2 py-1.5 outline-none"
-                                          style={{ borderColor: '#FDE68A', backgroundColor: '#FFFFFF' }}
-                                        />
-                                        <input
-                                          type="date"
-                                          value={entry.date}
-                                          onChange={(e) => {
-                                            const next = [...fundFlowEdits];
-                                            next[idx] = { ...next[idx], date: e.target.value };
-                                            setFundFlowEdits(next);
-                                          }}
-                                          className="text-xs border rounded-lg px-2 py-1.5 outline-none"
-                                          style={{ borderColor: '#FDE68A', backgroundColor: '#FFFFFF', width: '120px' }}
-                                        />
-                                        <button
-                                          onClick={() => {
-                                            const next = fundFlowEdits.filter((_, i) => i !== idx);
-                                            setFundFlowEdits(next);
-                                          }}
-                                          className="text-red-400 p-1"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
-                                      <input
-                                        type="text"
-                                        value={entry.label}
-                                        onChange={(e) => {
-                                          const next = [...fundFlowEdits];
-                                          next[idx] = { ...next[idx], label: e.target.value };
-                                          setFundFlowEdits(next);
-                                        }}
-                                        placeholder="备注（可选）"
-                                        className="w-full text-xs border rounded-lg px-2 py-1 outline-none mt-2"
-                                        style={{ borderColor: '#FDE68A', backgroundColor: '#FFFFFF' }}
-                                      />
+                                  )}
+                                  {transferRecords.capitals.length > 0 && (
+                                    <div className="flex items-end justify-between pt-1" style={{ borderTop: '1px solid #FDE68A' }}>
+                                      <span className="text-xs text-gray-500">累计本金变动</span>
+                                      <span className="text-sm font-bold" style={{ color: '#7C3AED' }}>
+                                        {transferRecords.capitals.reduce((s, r) => s + r.amount, 0) >= 0 ? '+' : ''}¥{transferRecords.capitals.reduce((s, r) => s + r.amount, 0).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                                      </span>
                                     </div>
-                                  ))}
-                                  <button
-                                    onClick={() => setFundFlowEdits([...fundFlowEdits, { coin: "元", amount: "", label: "", date: new Date().toISOString().slice(0, 10) }])}
-                                    className="flex items-center gap-1 text-xs text-amber-600 mt-1"
-                                  >
-                                    <Plus className="w-3 h-3" />添加一条记录
-                                  </button>
+                                  )}
                                 </div>
-                                <div className="flex gap-2 mt-3">
-                                  <button
-                                    onClick={() => setFundFlowEditMode(false)}
-                                    className="flex-1 py-2 rounded-xl border text-sm text-gray-600 font-medium"
-                                    style={{ borderColor: '#E5E7EB' }}
-                                  >
-                                    取消
-                                  </button>
-                                  <button
-                                    onClick={handleSaveFundFlow}
-                                    disabled={fundFlowSaving}
-                                    className="flex-1 py-2 rounded-xl text-white text-sm font-bold"
-                                    style={{
-                                      background: 'linear-gradient(135deg, #92400E 0%, #D97706 100%)',
-                                      opacity: fundFlowSaving ? 0.7 : 1,
-                                    }}
-                                  >
-                                    {fundFlowSaving ? '保存中...' : '确认保存'}
-                                  </button>
-                                </div>
-                              </div>
-                            )}
+                              )}
+                            </div>
 
                             {/* ── 账户余额（自动读取）/ 初始金额 / 倍数 区块 ── */}
                             {(() => {
