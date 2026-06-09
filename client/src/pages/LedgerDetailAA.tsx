@@ -1301,18 +1301,20 @@ export default function LedgerDetailAA({
           ) : (
             /* ─── 单标签模式：最新余额 + 保证金 + 初始金额 + 累计盈亏 ─── */
             <>
-          {/* 最新余额（当有提现时显示累计值） */}
+          {/* 最新余额（联动：原始余额 + 提现 + 本金变动） */}
           <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-            <div className="text-xs opacity-75 mb-0.5">{totalWithdraw > 0 ? '总资产' : '最新余额'}</div>
+            <div className="text-xs opacity-75 mb-0.5">最新余额</div>
             <div className="text-base font-bold">
-              ¥{(stats.latestBalance + totalWithdraw).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {(() => {
+                const capitalNetChange = capitalHistory.reduce((sum: number, r: any) => {
+                  const amt = Number(r.amount) || 0;
+                  return r.description?.startsWith('capital_add') ? sum + amt : sum - amt;
+                }, 0);
+                const linkedBalance = stats.latestBalance + totalWithdraw + capitalNetChange;
+                return '¥' + linkedBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+              })()}
             </div>
-            {totalWithdraw > 0 && (
-              <div className="text-xs opacity-60 mt-0.5">
-                余额 {stats.latestBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })} + 提现 {totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-              </div>
-            )}
-            {!totalWithdraw && stats.latestDate && (
+            {stats.latestDate && (
               <div className="text-xs opacity-60 mt-0.5">
                 {(() => {
                   const [y, m, d] = stats.latestDate.split("-");
