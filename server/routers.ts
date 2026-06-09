@@ -11708,6 +11708,8 @@ ${klinesSummary}
               INNER JOIN ledger_categories lc ON lc.id = lr.categoryId
               WHERE lr.ledgerId = ${input.ledgerId}
                 AND lc.name = ${input.tagName}
+                AND lr.type != 'transfer'
+                AND lr.deleted_at IS NULL
               ORDER BY lr.recordDate DESC
               LIMIT 1`
         );
@@ -11737,16 +11739,20 @@ ${klinesSummary}
           sql`SELECT tag_name, margin_by_coin, initial_amount, account_multiplier, margin_base, fund_flow FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId}`
         );
         const configs = (configRows as any)[0] as any[];
-        // 查询每个标签最新一条记录的余额
+        // 查询每个标签最新一条记录的余额（排除transfer类型和已删除记录）
         const latestRows = await db.execute(
           sql`SELECT lc.name as tag_name, lr.amount, lr.recordDate
               FROM ledger_records lr
               INNER JOIN ledger_categories lc ON lc.id = lr.categoryId
               WHERE lr.ledgerId = ${input.ledgerId}
+                AND lr.type != 'transfer'
+                AND lr.deleted_at IS NULL
                 AND lr.id IN (
                   SELECT MAX(lr2.id) FROM ledger_records lr2
                   INNER JOIN ledger_categories lc2 ON lc2.id = lr2.categoryId
                   WHERE lr2.ledgerId = ${input.ledgerId}
+                    AND lr2.type != 'transfer'
+                    AND lr2.deleted_at IS NULL
                   GROUP BY lc2.name
                 )`
         );
