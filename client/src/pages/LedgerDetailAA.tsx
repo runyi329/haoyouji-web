@@ -452,17 +452,25 @@ export default function LedgerDetailAA({
     return map;
   }, [filteredTransactions]);
 
-    // ─── 每天余额快照（直接存当天的余额绝对值，不累加）──────────────────────────
+    // ─── 每天余额快照（联动：原始余额 + 累计提现 + 本金净变动）──────────────────────────
   const cumulativeMap = useMemo(() => {
     const cum = new Map<string, number>();
+    // 本金净变动
+    const capitalNetChange = capitalHistory.reduce((sum: number, r: any) => {
+      const amt = Number(r.amount) || 0;
+      return r.description?.startsWith('capital_add') ? sum + amt : sum - amt;
+    }, 0);
+    // 联动偏移量 = 累计提现 + 本金净变动
+    const offset = totalWithdraw + capitalNetChange;
     filteredTransactions.forEach((d) => {
       // 每天的记录是当天余额快照，取 income 和 expense 中的主要金额
       // income 和 expense 只会有一个有值，取其绝对值作为当天余额
       const dayBalance = d.income > 0 ? d.income : d.expense;
-      cum.set(d.date, dayBalance);
+      // 客户前端看到的余额 = 原始余额 + 提现 + 本金变动
+      cum.set(d.date, dayBalance + offset);
     });
     return cum;
-  }, [filteredTransactions]);
+  }, [filteredTransactions, totalWithdraw, capitalHistory]);
 
   // ─── 全部模式：图表模式切换 ────────────────────────────────────────────────
   const [allChartMode, setAllChartMode] = useState<'amount' | 'initial' | 'margin'>('amount');
@@ -615,7 +623,7 @@ export default function LedgerDetailAA({
 
     const sorted = [...filteredTransactions].sort((a, b) => a.date.localeCompare(b.date));
     const lastRecord = sorted[sorted.length - 1];
-    // 最新余额 = 最后一天的余额快照（income 和 expense 只有一个有值）
+    // 最新余额 = 最后一天的原始余额快照（income 和 expense 只有一个有值）
     const latestBalance = lastRecord.income > 0 ? lastRecord.income : lastRecord.expense;
     const latestDate = lastRecord.date; // 最新余额登记日期
     const recordDays = filteredTransactions.length;
@@ -726,15 +734,15 @@ export default function LedgerDetailAA({
         return { ...point, balanceGap: prevVal + (nextVal - prevVal) * ratio };
       });
     } else if (calendarMode === "monthly") {
-      // 月模式：取当月最后一天的余额快照作为该月余额
+      // 月模式：取当月最后一天的联动余额作为该月余额
       return Array.from({ length: 12 }, (_, i) => {
         const m = i + 1;
         const prefix = `${year}-${String(m).padStart(2, "0")}`;
         const monthData = sorted.filter((d) => d.date.startsWith(prefix));
         if (monthData.length === 0) return { date: `${m}月`, balance: null, pnl: null };
-        // 取当月最后一天的余额快照
+        // 取当月最后一天的联动余额
         const lastDay = monthData[monthData.length - 1];
-        const lastBalance = lastDay.income > 0 ? lastDay.income : lastDay.expense;
+        const lastBalance = cumulativeMap.get(lastDay.date) ?? (lastDay.income > 0 ? lastDay.income : lastDay.expense);
         return {
           date: `${m}月`,
           balance: lastBalance,
@@ -742,10 +750,10 @@ export default function LedgerDetailAA({
         };
       });
     }
-    // 年模式：显示全部数据，每天直接取余额快照
+    // 年模式：显示全部数据，每天取联动余额
     return sorted.map((d) => ({
       date: d.date.slice(5),
-      balance: d.income > 0 ? d.income : d.expense,
+      balance: cumulativeMap.get(d.date) ?? (d.income > 0 ? d.income : d.expense),
       pnl: d.income - d.expense,
     }));
   }, [filteredTransactions, cumulativeMap, calendarMode, calendarDate, dayMap, chartEffectiveStartDate]);
@@ -844,25 +852,22 @@ export default function LedgerDetailAA({
     if (!data) return null;
 
     if (calendarMode === "balance") {
-      // 显示当天绝对金额（当天支出+收入的绝对值之和）
-      const dayData = dayMap.get(dateStr);
-      if (!dayData) return null;
-      const dayTotal = dayData.expense + dayData.income;
-      return dayTotal > 0 ? formatMoney(dayTotal) : null;
+      // 显示联动后的余额（原始余额 + 提现 + 本金变动）
+      const linkedBalance = cumulativeMap.get(dateStr);
+      if (linkedBalance === undefined || linkedBalance <= 0) return null;
+      return formatMoney(linkedBalance);
     }
     if (calendarMode === "daily") {
-      // 当天绝对金额 - 前一天绝对金额的差值
-      const todayData = dayMap.get(dateStr);
-      if (!todayData) return null;
-      const todayTotal = todayData.expense + todayData.income;
+      // 联动后的当天余额 - 前一天联动余额的差值
+      const todayLinked = cumulativeMap.get(dateStr);
+      if (todayLinked === undefined) return null;
       // 找前一个有数据的日期
-      const allDates = Array.from(dayMap.keys()).sort();
+      const allDates = Array.from(cumulativeMap.keys()).sort();
       const idx = allDates.indexOf(dateStr);
-      if (idx <= 0) return formatMoney(todayTotal); // 第一条数据直接显示当天金额
+      if (idx <= 0) return formatMoney(todayLinked); // 第一条数据直接显示联动余额
       const prevDate = allDates[idx - 1];
-      const prevData = dayMap.get(prevDate)!;
-      const prevTotal = prevData.expense + prevData.income;
-      const diff = todayTotal - prevTotal;
+      const prevLinked = cumulativeMap.get(prevDate)!;
+      const diff = todayLinked - prevLinked;
       const sign = diff > 0 ? "+" : diff < 0 ? "-" : "";
       return formatMoney(Math.abs(diff), sign);
     }
