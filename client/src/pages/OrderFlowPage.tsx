@@ -495,6 +495,9 @@ export default function OrderFlowPage() {
     let totalNotional = 0;  // 总名义价值
     let totalPnl = 0;       // 总浮动盈亏
     let pnlCount = 0;       // 有有效盈亏的订单数
+    let spotCount = 0;      // 现货订单数
+    let perpCount = 0;      // 合约订单数
+    let optionCount = 0;    // 期权订单数
     for (const order of filteredOrders as any[]) {
       const oPrice = getPriceForSymbol(order.symbol || 'ETHUSDT');
       const calc = calcOrder(order, oPrice, fundingRate);
@@ -504,9 +507,13 @@ export default function OrderFlowPage() {
         totalPnl += calc.pnl;
         pnlCount++;
       }
+      // 按类型统计
+      if (order.market_type === 'spot') spotCount++;
+      else if (order.market_type === 'option') optionCount++;
+      else perpCount++;
     }
     const pnlPct = totalCost > 0 ? totalPnl / totalCost : null;
-    return { totalCost, totalNotional, totalPnl, pnlPct, count: filteredOrders.length, pnlCount };
+    return { totalCost, totalNotional, totalPnl, pnlPct, count: filteredOrders.length, pnlCount, spotCount, perpCount, optionCount };
   }, [filteredOrders, cryptoPricesRaw, fundingRate]);
 
   // 批量获取所有订单的备注数量（页面加载时就显示徽章）
@@ -682,6 +689,21 @@ export default function OrderFlowPage() {
           >
             <span className="text-xs font-medium" style={{ color: "rgba(240,185,11,0.7)", letterSpacing: "0.05em" }}>持仓汇总</span>
             <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>{summary.count} 笔订单</span>
+          </div>
+          {/* 类型统计行 */}
+          <div className="flex items-center gap-3 px-4 py-1.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
+              合约 <span style={{ color: OKX_TEXT_PRI, fontWeight: 600 }}>{summary.perpCount}</span>
+            </span>
+            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
+              现货 <span style={{ color: OKX_TEXT_PRI, fontWeight: 600 }}>{summary.spotCount}</span>
+            </span>
+            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
+              期权 <span style={{ color: "#a78bfa", fontWeight: 600 }}>{summary.optionCount}</span>
+            </span>
+            <span className="text-xs ml-auto" style={{ color: OKX_TEXT_SEC }}>
+              合计 <span style={{ color: OKX_YELLOW, fontWeight: 600 }}>{summary.count}</span>
+            </span>
           </div>
           {/* 主数据行：三列 */}
           <div className="flex items-stretch px-4 py-3 gap-3">
