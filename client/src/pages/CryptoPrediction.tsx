@@ -3115,8 +3115,12 @@ export default function CryptoPrediction() {
                   const coinQty = parseFloat(order.buy_quantity || order.coinQuantity || '0');
                   const buyPrice = parseFloat(order.buy_price || '0');
                   const buyValue = parseFloat(order.amount || '0');
+                  const totalU = coinQty > 0 && buyPrice > 0 ? coinQty * buyPrice : buyValue;
+                  const isStock = order.asset_type === 'stock';
+                  const displayQty = isStock ? totalU : coinQty;
                   const coinPrice = financeLivePrices[order.coin] || 0;
                   const marketValue = coinQty * coinPrice;
+                  const isSettled = order.status === 'settled' || order.status === 'completed' || order.status === 'cancelled';
                   const statusLabel = order.status === 'active' ? '持有中' : order.status === 'settled' ? '已结算' : '已取消';
                   const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
                   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
@@ -3176,7 +3180,7 @@ export default function CryptoPrediction() {
                         ? { backgroundColor: '#F0FDF4', border: '1px solid #86EFAC', boxShadow: '0 2px 8px rgba(34,197,94,0.12)', overflow: 'hidden' }
                         : { backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)', overflow: 'hidden' }}
                     >
-                      {String(order.admin_note || '').includes('[已卖出]') && (
+                      {(String(order.admin_note || '').includes('[已卖出]') || isSettled) && (
                         <div
                           className="absolute bottom-4 left-4 pointer-events-none select-none"
                           style={{ transform: 'rotate(-30deg)', zIndex: 10 }}
@@ -3194,7 +3198,7 @@ export default function CryptoPrediction() {
                               whiteSpace: 'nowrap',
                             }}
                           >
-                            已卖出
+                            {String(order.admin_note || '').includes('[已卖出]') ? '已卖出' : '已结清'}
                           </div>
                         </div>
                       )}
@@ -3238,7 +3242,7 @@ export default function CryptoPrediction() {
                           {/* 持币数量（大字突出） */}
                           <div className="flex items-baseline gap-1 mb-1">
                             <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>
-                              {coinQty > 0 ? formatCoinQty(coinQty, order.coin) : '—'}
+                              {displayQty > 0 ? (isStock ? displayQty.toLocaleString(undefined, { maximumFractionDigits: 0 }) : formatCoinQty(displayQty, order.coin)) : '—'}
                             </span>
                             <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
                           </div>
@@ -3629,8 +3633,12 @@ export default function CryptoPrediction() {
                             const coinQty = parseFloat(order.buy_quantity || order.coinQuantity || '0');
                             const buyPrice = parseFloat(order.buy_price || '0');
                             const buyValue = parseFloat(order.amount || '0');
+                            const totalU = coinQty > 0 && buyPrice > 0 ? coinQty * buyPrice : buyValue;
+                            const isStock = order.asset_type === 'stock';
+                            const displayQty = isStock ? totalU : coinQty;
                             const coinPrice = financeLivePrices[order.coin] || 0;
                             const marketValue = coinQty * coinPrice;
+                            const isSettled = order.status === 'settled' || order.status === 'completed' || order.status === 'cancelled';
                             const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
                             const cc = coinColorMap[order.coin] || '#6B7280';
                             const _baseCur = order.interest_base_currency || 'USDT';
@@ -3674,9 +3682,9 @@ export default function CryptoPrediction() {
                                 className="rounded-2xl shadow-sm relative"
                                 style={{ backgroundColor: '#F0FDF4', border: '1px solid #86EFAC', boxShadow: '0 2px 8px rgba(34,197,94,0.12)', overflow: 'hidden' }}
                               >
-                                {String(order.admin_note || '').includes('[已卖出]') && (
+                                {(String(order.admin_note || '').includes('[已卖出]') || isSettled) && (
                                   <div className="absolute bottom-4 left-4 pointer-events-none select-none" style={{ transform: 'rotate(-30deg)', zIndex: 10 }}>
-                                    <div style={{ border: '2px solid rgba(220,38,38,0.5)', color: 'rgba(220,38,38,0.5)', borderRadius: '4px', padding: '2px 8px', fontSize: '13px', fontWeight: 700, letterSpacing: '3px', lineHeight: '1.4', whiteSpace: 'nowrap' }}>已卖出</div>
+                                    <div style={{ border: '2px solid rgba(22,163,74,0.5)', color: 'rgba(22,163,74,0.5)', borderRadius: '4px', padding: '2px 8px', fontSize: '13px', fontWeight: 700, letterSpacing: '3px', lineHeight: '1.4', whiteSpace: 'nowrap' }}>{String(order.admin_note || '').includes('[已卖出]') ? '已卖出' : '已结清'}</div>
                                   </div>
                                 )}
                                 <div className="h-1" style={{ background: `linear-gradient(90deg, ${cc}, ${cc}55)` }} />
@@ -3697,7 +3705,7 @@ export default function CryptoPrediction() {
                                   <div className="flex-1 p-4 pr-3">
                                     <div className="text-[10px] mb-0.5" style={{ color: '#16A34A' }}>订单资产</div>
                                     <div className="flex items-baseline gap-1 mb-1">
-                                      <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>{coinQty > 0 ? formatCoinQty(coinQty, order.coin) : '—'}</span>
+                                      <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>{displayQty > 0 ? (isStock ? displayQty.toLocaleString(undefined, { maximumFractionDigits: 0 }) : formatCoinQty(displayQty, order.coin)) : '—'}</span>
                                       <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
                                     </div>
                                     <div className="space-y-0.5">
