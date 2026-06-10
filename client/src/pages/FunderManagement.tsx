@@ -176,7 +176,7 @@ function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, i
     setEditingIdx(null);
   };
   const handleAddNote = () => {
-    const newNotes = [...notes, { text: '', time: new Date().toISOString(), userId: currentUser?.id, userName: currentUser?.name || currentUser?.username, userAvatar: currentUser?.avatar || undefined }];
+    const newNotes = [...notes, { text: '', time: new Date().toISOString(), userId: currentUser?.id, userName: currentUser?.username || currentUser?.name, userAvatar: currentUser?.avatar || undefined }];
     setNotes(newNotes); setEditingIdx(newNotes.length - 1); setEditValue(''); setExpanded(true);
   };
   const handleSaveNew = async (idx: number) => {
@@ -219,7 +219,7 @@ function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, i
                       const fallbackAvatar = ownerMember?.avatar || currentUser?.avatar;
                       const finalAvatar = avatarUrl || (!note.userId ? fallbackAvatar : null);
                       if (finalAvatar) return <img src={finalAvatar} alt="" className="w-7 h-7 rounded-full object-cover" style={{ border: '1px solid #E0E7FF' }} />;
-                      const name = note.userName || (!note.userId ? (ownerMember?.nickname || ownerMember?.username || currentUser?.name || currentUser?.username || '') : '');
+                      const name = note.userName || (!note.userId ? (ownerMember?.username || ownerMember?.nickname || currentUser?.username || currentUser?.name || '') : '');
                       if (!name) return <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: '#E5E7EB' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>;
                       const initials = name.slice(0, 1).toUpperCase();
                       const colors = ['#6366F1','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6'];
@@ -526,7 +526,7 @@ function FunderOrderCard({
           {show('showOwnerName') && (() => {
             const label = (order as any).owner_label || (() => {
               const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
-              return m ? (m.nickname || m.username) : null;
+              return m ? (m.username || m.nickname) : null;
             })();
             if (!label) return null;
             return (
@@ -1504,14 +1504,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       const result = await trpcUtils.ledger.funderGetOrderParticipants.fetch({ orderId, ledgerId });
       const mapped = (result.participants || []).map((p: any) => ({
         userId: p.user_id,
-        displayName: p.nickname || p.userName || p.username || `用户${p.user_id}`,
+        displayName: p.username || p.nickname || p.userName || `用户${p.user_id}`,
         role: p.role as ParticipantRole,
         sortOrder: p.sort_order || 0,
       }));
       setParticipantsList(mapped);
       const mappedMembers = (result.members || []).map((m: any) => ({
         userId: m.userId,
-        displayName: m.nickname || m.userName || m.username || `用户${m.userId}`,
+        displayName: m.username || m.nickname || m.userName || `用户${m.userId}`,
         memberRole: m.memberRole,
       }));
       setLedgerMembers(mappedMembers);
@@ -1809,9 +1809,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 {selectedUserId === null
                   ? '全部资金方'
                   : (funderUsers as any[])?.find((u: any) => u.userId === selectedUserId)
-                    ? ((funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.nickname ||
-                       (funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.name ||
-                       (funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.username)
+                    ? ((funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.username ||
+                       (funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.nickname ||
+                       (funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.name)
                     : '选择资金方'}
               </span>
               <ChevronDown className="w-4 h-4 text-gray-400 ml-1 shrink-0" />
@@ -1838,7 +1838,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   >全部资金方</button>
                   {(funderUsers as any[])?.filter((u: any) => {
                     if (!userSearchText) return true;
-                    const name = u.nickname || u.name || u.username || '';
+                    const name = u.username || u.nickname || u.name || '';
                     return name.includes(userSearchText);
                   }).map((u: any) => {
                     const userOrders = allOrders.filter((o: any) => o.userId === u.userId || o.user_id === u.userId || (o._participantUserIds && o._participantUserIds.includes(u.userId)));
@@ -1851,7 +1851,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
                       style={{ color: selectedUserId === u.userId ? '#1A56DB' : '#374151', fontWeight: selectedUserId === u.userId ? 600 : 400 }}
                     >
-                      <span>{u.nickname || u.name || u.username}</span>
+                      <span>{u.username || u.nickname || u.name}</span>
                       <span className="text-xs ml-2 shrink-0" style={{ color: '#9CA3AF', fontWeight: 400 }}>
                         {activeCount > 0 && <span style={{ color: '#22C55E' }}>进行中 {activeCount}</span>}
                         {activeCount > 0 && settledCount > 0 && <span style={{ color: '#D1D5DB' }}> / </span>}
@@ -2132,14 +2132,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           {(() => {
                             const allMembers = ((ledgerData as any)?.members || []) as any[];
                             const m = allMembers.find((m: any) => m.userId === formData.userId);
-                            return (m?.nickname || m?.name || m?.username || '?')[0].toUpperCase();
+                            return (m?.username || m?.nickname || m?.name || '?')[0].toUpperCase();
                           })()}
                         </div>
                         <span className="text-sm font-medium flex-1" style={{ color: '#1A2340' }}>
                           {(() => {
                             const allMembers = ((ledgerData as any)?.members || []) as any[];
                             const m = allMembers.find((m: any) => m.userId === formData.userId);
-                            return m?.nickname || m?.name || m?.username || `用户${formData.userId}`;
+                            return m?.username || m?.nickname || m?.name || `用户${formData.userId}`;
                           })()}
                         </span>
                         {!(formData.ownerLabelMode === 'manual' && formData.ownerLabel) && (
@@ -2176,7 +2176,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             const allMembers = ((ledgerData as any)?.members || []) as any[];
                             const filtered = allMembers.filter((m: any) => {
                               if (!formUserSearch) return true;
-                              const name = (m.nickname || m.name || m.username || '').toLowerCase();
+                              const name = (m.username || m.nickname || m.name || '').toLowerCase();
                               return name.includes(formUserSearch.toLowerCase());
                             });
                             if (filtered.length === 0) {
@@ -2185,18 +2185,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             return filtered.map((m: any) => (
                               <button
                                 key={m.userId}
-                                onClick={() => { setFormData(d => ({ ...d, userId: m.userId })); setFormUserSearch(m.nickname || m.name || m.username || ''); setFormUserDropdown(false); }}
+                                onClick={() => { setFormData(d => ({ ...d, userId: m.userId })); setFormUserSearch(m.username || m.nickname || m.name || ''); setFormUserDropdown(false); }}
                                 className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 text-left"
                               >
                                 <div
                                   className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
                                   style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
                                 >
-                                  {(m.nickname || m.name || m.username || '?')[0].toUpperCase()}
+                                  {(m.username || m.nickname || m.name || '?')[0].toUpperCase()}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="text-sm font-medium truncate" style={{ color: '#1A2340' }}>
-                                    {m.nickname || m.name || m.username}
+                                    {m.username || m.nickname || m.name}
                                   </div>
                                   <div className="text-xs text-gray-400">{m.role}</div>
                                 </div>

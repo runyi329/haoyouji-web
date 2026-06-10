@@ -14745,7 +14745,7 @@ ${klinesSummary}
           if (participantOrderIds.length > 0) {
             const placeholders = participantOrderIds.map(() => '?').join(',');
             rows = await conn!.execute(
-              `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
+              `SELECT fo.*, u.username, u.username as userName, u.avatar
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
@@ -14755,7 +14755,7 @@ ${klinesSummary}
             );
           } else {
             rows = await conn!.execute(
-              `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
+              `SELECT fo.*, u.username, u.username as userName, u.avatar
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
@@ -14771,7 +14771,7 @@ ${klinesSummary}
           } else {
             const placeholders = participantOrderIds.map(() => '?').join(',');
             rows = await conn!.execute(
-              `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
+              `SELECT fo.*, u.username, u.username as userName, u.avatar
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
@@ -14797,7 +14797,7 @@ ${klinesSummary}
             if (targetParticipantOrderIds.length > 0) {
               const ph = targetParticipantOrderIds.map(() => '?').join(',');
               rows = await conn!.execute(
-                `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
+                `SELECT fo.*, u.username, u.username as userName, u.avatar
                  FROM ledger_orders fo
                  LEFT JOIN users u ON u.id = fo.user_id
                  LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
@@ -14807,7 +14807,7 @@ ${klinesSummary}
               );
             } else {
               rows = await conn!.execute(
-                `SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
+                `SELECT fo.*, u.username, u.username as userName, u.avatar
                  FROM ledger_orders fo
                  LEFT JOIN users u ON u.id = fo.user_id
                  LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
@@ -14818,7 +14818,7 @@ ${klinesSummary}
             }
           } else {
             rows = await db.execute(
-              sql`SELECT fo.*, u.username, COALESCE(lm.nickname, u.name, u.username) as userName, u.avatar
+              sql`SELECT fo.*, u.username, u.username as userName, u.avatar
                   FROM ledger_orders fo
                   LEFT JOIN users u ON u.id = fo.user_id
                   LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
@@ -15251,7 +15251,7 @@ ${klinesSummary}
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         const rows = await db.execute(
-          sql`SELECT fo.*, u.username, u.name as user_display_name FROM ledger_orders fo LEFT JOIN users u ON fo.user_id = u.id WHERE fo.ledger_id = ${input.ledgerId} AND fo.deleted_at IS NOT NULL ORDER BY fo.deleted_at DESC`
+          sql`SELECT fo.*, u.username, u.username as user_display_name FROM ledger_orders fo LEFT JOIN users u ON fo.user_id = u.id WHERE fo.ledger_id = ${input.ledgerId} AND fo.deleted_at IS NOT NULL ORDER BY fo.deleted_at DESC`
         ) as any;
         return (rows[0] ?? rows) as any[];
       }),
