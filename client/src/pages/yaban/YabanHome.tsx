@@ -24,7 +24,7 @@ const FREQUENT_FEATURES = [
 
 // 更多功能（4列网格）
 const MORE_FEATURES = [
-  { name: "随访", icon: `${ICON_BASE}/suifang.webp`, route: "" },
+  { name: "随访", icon: `${ICON_BASE}/suifang.webp`, route: "/yaban/followup" },
   { name: "运营报表", icon: `${ICON_BASE}/yunying_baobiao.webp`, route: "" },
   { name: "有数", icon: `${ICON_BASE}/youshu.webp`, route: "" },
   { name: "库存", icon: `${ICON_BASE}/kucun.webp`, route: "" },
@@ -72,8 +72,12 @@ export default function YabanHome() {
   const [expandedCompanies, setExpandedCompanies] = useState<string[]>(["恒愿齿科"]);
   const [expandedGroups, setExpandedGroups] = useState<string[]>(["总部"]);
 
-  const handleFeatureClick = (name: string) => {
-    toast.info(`"${name}" 功能开发中，敬请期待`);
+  const handleFeatureClick = (name: string, route?: string) => {
+    if (route) {
+      setLocation(route);
+    } else {
+      toast.info(`"${name}" 功能开发中，敬请期待`);
+    }
   };
 
   const toggleCompany = (company: string) => {
@@ -228,7 +232,7 @@ export default function YabanHome() {
               <button
                 key={feat.name}
                 className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform"
-                onClick={() => handleFeatureClick(feat.name)}
+                onClick={() => handleFeatureClick(feat.name, feat.route)}
               >
                 <div className="w-14 h-14 flex items-center justify-center overflow-hidden">
                   <img src={feat.icon} alt={feat.name} className="w-14 h-14 object-contain" />
@@ -257,7 +261,7 @@ export default function YabanHome() {
               <button
                 key={`${feat.name}-${idx}`}
                 className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform relative"
-                onClick={() => handleFeatureClick(feat.name)}
+                onClick={() => handleFeatureClick(feat.name, feat.route)}
               >
                 <div className="w-14 h-14 flex items-center justify-center overflow-hidden relative">
                   <img src={feat.icon} alt={feat.name} className="w-14 h-14 object-contain" />

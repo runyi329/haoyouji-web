@@ -1,5 +1,14 @@
 [
   {
+    "hash": "e842d0dfdbb34a1d1de1b6d63778e1a22315193f",
+    "author": "runyi329",
+    "date": "2026-06-10T15:56:34+00:00",
+    "message": "feat(yaban): 添加随访管理功能页面（列表+创建记录+选择患者），月历随访Tab跳转入口",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "添加随访管理功能页面（列表+创建记录+选择患者），月历随访Tab跳转入口"
+  },
+  {
     "hash": "775427b58e47e90eb52df5a787e07b1301dd8852",
     "author": "runyi329",
     "date": "2026-06-10T15:28:37+00:00",
