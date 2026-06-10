@@ -5,108 +5,171 @@
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, Plus, Search, Filter, Phone, Copy } from "lucide-react";
+import { ChevronLeft, Plus, Search, Filter } from "lucide-react";
 import { toast } from "sonner";
 
-// 患者标签类型
+// 患者标签类型及配色（参考图2样式）
 type TagType = "female" | "male" | "phone" | "visit" | "door" | "old" | "new" | "vip";
 
-const TAG_CONFIG: Record<TagType, { label: string; bg: string; text: string }> = {
-  female: { label: "\u2640", bg: "bg-orange-400", text: "text-white" },
-  male: { label: "\u2642", bg: "bg-sky-400", text: "text-white" },
-  phone: { label: "\u7535", bg: "bg-sky-400", text: "text-white" },
-  visit: { label: "\u4e34", bg: "bg-orange-400", text: "text-white" },
-  door: { label: "\u95e8", bg: "bg-orange-400", text: "text-white" },
-  old: { label: "\u8001", bg: "bg-sky-400", text: "text-white" },
-  new: { label: "D", bg: "bg-gray-500", text: "text-white" },
-  vip: { label: "V", bg: "bg-amber-500", text: "text-white" },
+interface TagConfig {
+  label: string;
+  bg: string;
+  text: string;
+}
+
+const TAG_CONFIG: Record<TagType, TagConfig> = {
+  female: { label: "\u2640", bg: "#F97316", text: "#FFFFFF" },
+  male: { label: "\u2642", bg: "#0EA5E9", text: "#FFFFFF" },
+  phone: { label: "\u7535", bg: "#0EA5E9", text: "#FFFFFF" },
+  visit: { label: "\u4E34", bg: "#F97316", text: "#FFFFFF" },
+  door: { label: "\u95E8", bg: "#F97316", text: "#FFFFFF" },
+  old: { label: "\u8001", bg: "#0EA5E9", text: "#FFFFFF" },
+  new: { label: "D", bg: "#6B7280", text: "#FFFFFF" },
+  vip: { label: "V", bg: "#D97706", text: "#FFFFFF" },
 };
 
 // 模拟患者数据
-const MOCK_PATIENTS = [
+interface Patient {
+  id: number;
+  name: string;
+  nickname?: string;
+  age: number;
+  gender: "female" | "male";
+  tags: TagType[];
+  recordNo: string;
+  source: string;
+  lastVisit: string;
+  lastDoctor: string;
+  avatar: string;
+}
+
+const MOCK_PATIENTS: Patient[] = [
   {
     id: 1,
-    name: "\u80e1\u4eea\u7480",
+    name: "\u80E1\u4EEA\u7480",
     age: 27,
-    gender: "female" as const,
-    tags: ["female", "phone", "door", "new"] as TagType[],
+    gender: "female",
+    tags: ["female", "phone", "door", "new"],
     recordNo: "017967",
-    source: "\u4e0a\u95e8\u5ba2 | \u9644\u8fd1\u5de5\u4f5c",
+    source: "\u4E0A\u95E8\u5BA2 | \u9644\u8FD1\u5DE5\u4F5C",
     lastVisit: "2026-06-10 15:45",
     lastDoctor: "",
     avatar: "",
   },
   {
     id: 2,
-    name: "\u8d75\u5973\u58eb",
-    nickname: "\u738b\u536b\u4e1c\u7684\u8001\u5a46",
+    name: "\u8D75\u5973\u58EB",
+    nickname: "\u738B\u536B\u4E1C\u7684\u8001\u5A46",
     age: 0,
-    gender: "female" as const,
-    tags: ["female", "visit", "door"] as TagType[],
+    gender: "female",
+    tags: ["female", "visit", "door"],
     recordNo: "L010116902",
-    source: "\u4ed6\u4eba\u4ecb\u7ecd | \u670b\u53cb\u4ecb\u7ecd | \u738b\u536b\u4e1c",
+    source: "\u4ED6\u4EBA\u4ECB\u7ECD | \u670B\u53CB\u4ECB\u7ECD | \u738B\u536B\u4E1C",
     lastVisit: "",
     lastDoctor: "",
     avatar: "",
   },
   {
     id: 3,
-    name: "\u5468\u52c7",
+    name: "\u5468\u52C7",
     age: 66,
-    gender: "male" as const,
-    tags: ["male", "old", "phone"] as TagType[],
+    gender: "male",
+    tags: ["male", "old", "phone"],
     recordNo: "017966",
-    source: "\u4ed6\u4eba\u4ecb\u7ecd | \u670b\u53cb\u4ecb\u7ecd",
+    source: "\u4ED6\u4EBA\u4ECB\u7ECD | \u670B\u53CB\u4ECB\u7ECD",
     lastVisit: "2026-06-10 13:00",
     lastDoctor: "",
     avatar: "",
   },
   {
     id: 4,
-    name: "\u5b59\u6cf3\u6770",
+    name: "\u5B59\u6CF3\u6770",
     age: 27,
-    gender: "male" as const,
-    tags: ["male", "phone"] as TagType[],
+    gender: "male",
+    tags: ["male", "phone"],
     recordNo: "017964",
-    source: "\u4ed6\u4eba\u4ecb\u7ecd | \u5458\u5de5\u4ecb\u7ecd | \u9c81\u6bc5",
+    source: "\u4ED6\u4EBA\u4ECB\u7ECD | \u5458\u5DE5\u4ECB\u7ECD | \u9C81\u6BC5",
     lastVisit: "2026-06-09 10:15",
-    lastDoctor: "\u9c81\u6bc5",
+    lastDoctor: "\u9C81\u6BC5",
     avatar: "",
   },
   {
     id: 5,
-    name: "\u738b\u5efa\u56fd",
+    name: "\u738B\u5EFA\u56FD",
     age: 55,
-    gender: "male" as const,
-    tags: ["male", "phone", "old"] as TagType[],
+    gender: "male",
+    tags: ["male", "phone", "old"],
     recordNo: "017960",
-    source: "\u4ed6\u4eba\u4ecb\u7ecd | \u670b\u53cb\u4ecb\u7ecd",
+    source: "\u4ED6\u4EBA\u4ECB\u7ECD | \u670B\u53CB\u4ECB\u7ECD",
     lastVisit: "2026-06-08 09:30",
-    lastDoctor: "\u674e\u660e",
+    lastDoctor: "\u674E\u660E",
     avatar: "",
   },
   {
     id: 6,
-    name: "\u5218\u82b3",
+    name: "\u5218\u82B3",
     age: 34,
-    gender: "female" as const,
-    tags: ["female", "phone", "door", "vip"] as TagType[],
+    gender: "female",
+    tags: ["female", "phone", "door", "vip"],
     recordNo: "017955",
-    source: "\u7f51\u7edc\u9884\u7ea6 | \u7f8e\u56e2",
+    source: "\u7F51\u7EDC\u9884\u7EA6 | \u7F8E\u56E2",
     lastVisit: "2026-06-07 14:20",
-    lastDoctor: "\u5f20\u4f1f",
+    lastDoctor: "\u5F20\u4F1F",
     avatar: "",
   },
 ];
 
 // 筛选选项
 const FILTER_OPTIONS = [
-  { id: "all", label: "\u5168\u90e8\u60a3\u8005" },
-  { id: "today", label: "\u4eca\u65e5\u5c31\u8bca" },
-  { id: "week", label: "\u672c\u5468\u5c31\u8bca" },
-  { id: "new", label: "\u65b0\u60a3\u8005" },
-  { id: "vip", label: "VIP\u60a3\u8005" },
+  { id: "all", label: "\u5168\u90E8\u60A3\u8005" },
+  { id: "today", label: "\u4ECA\u65E5\u5C31\u8BCA" },
+  { id: "week", label: "\u672C\u5468\u5C31\u8BCA" },
+  { id: "new", label: "\u65B0\u60A3\u8005" },
+  { id: "vip", label: "VIP\u60A3\u8005" },
 ];
+
+// 头像组件 - 参考图2的戴口罩头像样式
+function PatientAvatar({ gender }: { gender: "female" | "male" }) {
+  const skinColor = gender === "female" ? "#FDDCBD" : "#E8D5C4";
+  const hairColor = gender === "female" ? "#4A3728" : "#3D3D3D";
+  const maskColor = "#B2E0F0";
+  const maskStrap = "#8ECFE0";
+
+  return (
+    <div className="w-[56px] h-[56px] rounded-full bg-[#F0F7FA] flex items-center justify-center flex-shrink-0 overflow-hidden">
+      <svg viewBox="0 0 56 56" className="w-full h-full">
+        {/* 头发 */}
+        {gender === "female" ? (
+          <>
+            <ellipse cx="28" cy="20" rx="13" ry="14" fill={hairColor} />
+            <ellipse cx="28" cy="22" rx="10" ry="11" fill={skinColor} />
+            {/* 刘海 */}
+            <path d="M18 18 Q22 10 28 12 Q34 10 38 18 Q36 14 28 15 Q20 14 18 18Z" fill={hairColor} />
+          </>
+        ) : (
+          <>
+            <ellipse cx="28" cy="20" rx="12" ry="13" fill={hairColor} />
+            <ellipse cx="28" cy="22" rx="10" ry="11" fill={skinColor} />
+            <rect x="17" y="12" width="22" height="8" rx="4" fill={hairColor} />
+          </>
+        )}
+        {/* 口罩 */}
+        <rect x="19" y="24" width="18" height="10" rx="4" fill={maskColor} />
+        <line x1="19" y1="28" x2="14" y2="24" stroke={maskStrap} strokeWidth="1.2" />
+        <line x1="37" y1="28" x2="42" y2="24" stroke={maskStrap} strokeWidth="1.2" />
+        {/* 口罩褶皱 */}
+        <line x1="22" y1="27" x2="34" y2="27" stroke={maskStrap} strokeWidth="0.5" opacity="0.6" />
+        <line x1="22" y1="29.5" x2="34" y2="29.5" stroke={maskStrap} strokeWidth="0.5" opacity="0.6" />
+        <line x1="22" y1="32" x2="34" y2="32" stroke={maskStrap} strokeWidth="0.5" opacity="0.6" />
+        {/* 眼睛 */}
+        <circle cx="24" cy="21" r="1.2" fill="#333" />
+        <circle cx="32" cy="21" r="1.2" fill="#333" />
+        {/* 身体 */}
+        <ellipse cx="28" cy="50" rx="14" ry="12" fill={maskColor} />
+      </svg>
+    </div>
+  );
+}
 
 export default function YabanPatientList() {
   const [, setLocation] = useLocation();
@@ -118,9 +181,10 @@ export default function YabanPatientList() {
     setLocation("/yaban");
   };
 
-  const handleCopyRecordNo = (recordNo: string) => {
+  const handleCopyRecordNo = (e: React.MouseEvent, recordNo: string) => {
+    e.stopPropagation();
     navigator.clipboard.writeText(recordNo);
-    toast.success("\u75c5\u5386\u53f7\u5df2\u590d\u5236");
+    toast.success("\u75C5\u5386\u53F7\u5DF2\u590D\u5236");
   };
 
   const handlePatientClick = (patientId: number) => {
@@ -137,20 +201,23 @@ export default function YabanPatientList() {
     );
   });
 
-  const currentFilterLabel = FILTER_OPTIONS.find((f) => f.id === activeFilter)?.label || "\u5168\u90e8\u60a3\u8005";
+  const currentFilterLabel =
+    FILTER_OPTIONS.find((f) => f.id === activeFilter)?.label || "\u5168\u90E8\u60A3\u8005";
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 顶部导航栏 */}
       <div className="sticky top-0 z-50 bg-white border-b border-gray-100">
-        <div className="flex items-center justify-between px-4 py-3">
-          <button onClick={handleBack} className="p-1">
+        <div className="flex items-center justify-between px-4 h-[48px]">
+          <button onClick={handleBack} className="p-1 -ml-1">
             <ChevronLeft className="w-6 h-6 text-gray-700" />
           </button>
-          <h1 className="text-lg font-bold text-gray-900">\u60a3\u8005</h1>
+          <h1 className="text-[17px] font-bold text-gray-900">
+            {"\u60A3\u8005"}
+          </h1>
           <button
-            onClick={() => toast.info("\u65b0\u589e\u60a3\u8005\u529f\u80fd\u5f00\u53d1\u4e2d")}
-            className="p-1"
+            onClick={() => toast.info("\u65B0\u589E\u60A3\u8005\u529F\u80FD\u5F00\u53D1\u4E2D")}
+            className="p-1 -mr-1"
           >
             <Plus className="w-6 h-6 text-sky-500" />
           </button>
@@ -158,29 +225,30 @@ export default function YabanPatientList() {
       </div>
 
       {/* 搜索栏 + 筛选 */}
-      <div className="sticky top-[53px] z-40 bg-white px-4 py-2.5 border-b border-gray-100">
-        <div className="flex items-center gap-3">
+      <div className="sticky top-[48px] z-40 bg-white px-4 py-2 border-b border-gray-100">
+        <div className="flex items-center gap-2">
           {/* 搜索输入框 */}
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="\u8f93\u5165\u60a3\u8005\u540d\u5b57\u3001\u624b\u673a\u53f7"
+              placeholder={"\u8F93\u5165\u60A3\u8005\u540D\u5B57\u3001\u624B\u673A\u53F7"}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-gray-100 rounded-lg text-sm text-gray-700 placeholder-gray-400 outline-none focus:ring-2 focus:ring-sky-200"
+              className="w-full pl-9 pr-3 py-2 bg-gray-50 rounded-lg text-sm text-gray-700 placeholder-gray-400 outline-none border border-gray-200 focus:border-sky-300 focus:ring-1 focus:ring-sky-100"
             />
           </div>
           {/* 筛选按钮 */}
           <div className="relative">
             <button
               onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              className="flex items-center gap-1 text-sm text-sky-600 font-medium whitespace-nowrap"
+              className="flex items-center gap-0.5 text-sm whitespace-nowrap"
             >
-              <span>{currentFilterLabel}</span>
-              <span className="text-gray-300 mx-1">|</span>
-              <Filter className="w-4 h-4" />
-              <span>\u7b5b\u9009</span>
+              <span className="text-sky-600 font-medium">{currentFilterLabel}</span>
+              <span className="text-sky-600">{"\u25BC"}</span>
+              <span className="text-gray-300 mx-0.5">|</span>
+              <Filter className="w-3.5 h-3.5 text-sky-600" />
+              <span className="text-sky-600 font-medium">{"\u7B5B\u9009"}</span>
             </button>
             {/* 筛选下拉 */}
             {showFilterDropdown && (
@@ -214,14 +282,14 @@ export default function YabanPatientList() {
             <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-3">
               <Search className="w-8 h-8 text-gray-300" />
             </div>
-            <p className="text-gray-400 text-sm">\u672a\u627e\u5230\u5339\u914d\u7684\u60a3\u8005</p>
+            <p className="text-gray-400 text-sm">{"\u672A\u627E\u5230\u5339\u914D\u7684\u60A3\u8005"}</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
             {filteredPatients.map((patient) => (
               <div
                 key={patient.id}
-                className="bg-white px-4 py-4 active:bg-gray-50 transition-colors"
+                className="bg-white px-4 py-3.5 active:bg-gray-50 transition-colors"
               >
                 {/* 点击区域：头像 + 信息 */}
                 <div
@@ -229,51 +297,42 @@ export default function YabanPatientList() {
                   onClick={() => handlePatientClick(patient.id)}
                 >
                   {/* 头像 */}
-                  <div className="w-14 h-14 rounded-full bg-sky-50 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    {patient.avatar ? (
-                      <img src={patient.avatar} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-b from-sky-100 to-sky-50 flex items-center justify-center">
-                        <svg viewBox="0 0 40 40" className="w-10 h-10">
-                          <circle cx="20" cy="15" r="7" fill="#90CAF9" />
-                          <ellipse cx="20" cy="35" rx="12" ry="10" fill="#90CAF9" />
-                          {/* 口罩 */}
-                          <rect x="12" y="17" width="16" height="8" rx="3" fill="#E3F2FD" stroke="#90CAF9" strokeWidth="0.5" />
-                        </svg>
-                      </div>
-                    )}
-                  </div>
+                  <PatientAvatar gender={patient.gender} />
 
                   {/* 信息区 */}
                   <div className="flex-1 min-w-0">
                     {/* 姓名 + 年龄 */}
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-base font-bold text-gray-900">
+                    <div className="flex items-baseline gap-1 mb-1">
+                      <span className="text-[16px] font-bold text-gray-900 leading-tight">
                         {patient.name}
                       </span>
                       {patient.nickname && (
-                        <span className="text-sm text-gray-500">
+                        <span className="text-[13px] text-gray-500">
                           ({patient.nickname})
                         </span>
                       )}
                       {patient.age > 0 && (
                         <>
-                          <span className="text-gray-300">\u00b7</span>
-                          <span className="text-base font-bold text-gray-900">
-                            {patient.age}\u5c81
+                          <span className="text-gray-300 text-sm">{"\u00B7"}</span>
+                          <span className="text-[16px] font-bold text-gray-900">
+                            {patient.age}{"\u5C81"}
                           </span>
                         </>
                       )}
                     </div>
 
                     {/* 标签 */}
-                    <div className="flex items-center gap-1 mb-1.5">
+                    <div className="flex items-center gap-1 mb-2">
                       {patient.tags.map((tag, idx) => {
                         const config = TAG_CONFIG[tag];
                         return (
                           <span
                             key={idx}
-                            className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${config.bg} ${config.text}`}
+                            className="inline-flex items-center justify-center w-[20px] h-[20px] rounded-[4px] text-[11px] font-bold"
+                            style={{
+                              backgroundColor: config.bg,
+                              color: config.text,
+                            }}
                           >
                             {config.label}
                           </span>
@@ -282,70 +341,67 @@ export default function YabanPatientList() {
                     </div>
 
                     {/* 病历号 */}
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="text-sm text-gray-500">
-                        \u75c5\u5386\u53f7\uff1a{patient.recordNo}
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[13px] text-gray-600">
+                        {"\u75C5\u5386\u53F7\uFF1A"}{patient.recordNo}
                       </span>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCopyRecordNo(patient.recordNo);
-                        }}
-                        className="text-xs text-gray-400"
+                        onClick={(e) => handleCopyRecordNo(e, patient.recordNo)}
+                        className="text-[12px] text-gray-400 border-b border-gray-300 leading-tight"
                       >
-                        \u590d\u5236
+                        {"\u590D\u5236"}
                       </button>
                     </div>
 
                     {/* 来源 */}
-                    <p className="text-sm text-gray-500 mb-0.5">
-                      \u6765\u6e90\uff1a{patient.source}
+                    <p className="text-[13px] text-gray-500 mb-0.5 leading-relaxed">
+                      {"\u6765\u6E90\uFF1A"}{patient.source}
                     </p>
 
                     {/* 上次就诊医生 */}
                     {patient.lastDoctor && (
-                      <p className="text-sm text-gray-500 mb-0.5">
-                        \u4e0a\u6b21\u5c31\u8bca\u533b\u751f\uff1a{patient.lastDoctor}
+                      <p className="text-[13px] text-gray-500 mb-0.5">
+                        {"\u4E0A\u6B21\u5C31\u8BCA\u533B\u751F\uFF1A"}{patient.lastDoctor}
                       </p>
                     )}
 
                     {/* 上次就诊时间 */}
                     {patient.lastVisit && (
-                      <p className="text-sm text-gray-500">
-                        \u4e0a\u6b21\u5c31\u8bca\u65f6\u95f4\uff1a{patient.lastVisit}
+                      <p className="text-[13px] text-gray-500">
+                        {"\u4E0A\u6B21\u5C31\u8BCA\u65F6\u95F4\uFF1A"}{patient.lastVisit}
                       </p>
                     )}
                   </div>
                 </div>
 
                 {/* 底部操作按钮 */}
-                <div className="flex items-center justify-center gap-3 mt-3 pl-[68px]">
+                <div className="flex items-center gap-3 mt-3 ml-[68px]">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      toast.info("\u9884\u7ea6\u529f\u80fd\u5f00\u53d1\u4e2d");
+                      toast.info("\u9884\u7EA6\u529F\u80FD\u5F00\u53D1\u4E2D");
                     }}
-                    className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 font-medium text-center active:bg-gray-50"
+                    className="flex-1 py-[7px] border border-gray-200 rounded-full text-[13px] text-gray-700 font-medium text-center active:bg-gray-50"
                   >
-                    \u9884\u7ea6
+                    {"\u9884\u7EA6"}
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      toast.info("\u6302\u53f7\u529f\u80fd\u5f00\u53d1\u4e2d");
+                      toast.info("\u6302\u53F7\u529F\u80FD\u5F00\u53D1\u4E2D");
                     }}
-                    className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 font-medium text-center active:bg-gray-50"
+                    className="flex-1 py-[7px] border border-gray-200 rounded-full text-[13px] text-gray-700 font-medium text-center active:bg-gray-50"
                   >
-                    \u6302\u53f7
+                    {"\u6302\u53F7"}
                   </button>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      toast.info("\u6536\u8d39\u529f\u80fd\u5f00\u53d1\u4e2d");
+                      toast.info("\u6536\u8D39\u529F\u80FD\u5F00\u53D1\u4E2D");
                     }}
-                    className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 font-medium text-center active:bg-gray-50"
+                    className="flex-1 py-[7px] border border-gray-200 rounded-full text-[13px] text-gray-700 font-medium text-center active:bg-gray-50"
                   >
-                    \u6536\u8d39
+                    {"\u6536\u8D39"}
                   </button>
                 </div>
               </div>
