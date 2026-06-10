@@ -2676,31 +2676,46 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
                      {/* 右栏：待结利息 */}
                      <div className="p-4 pl-3 flex flex-col shrink-0" style={{ width: 'auto', minWidth: '160px', maxWidth: '200px' }}>
-                      {displayConfig.accruedInterest && formData.interestRateAnnual && formData.interestBase && formData.interestStartDate ? (
-                        <div>
-                          <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
-                            <span className="text-[10px]" style={{ color: '#3B82F6' }}>
-                              {parseFloat(formData.interestRateAnnual) < 0 ? '待收利息' : '待付利息'}
-                            </span>
-                            <span className="text-[10px] text-gray-400">(年化 {Math.abs(parseFloat(formData.interestRateAnnual)).toFixed(0)}%)</span>
-                          </div>
-                          <div className="min-h-7 flex flex-col justify-center mt-0.5">
-                            <div className="flex items-baseline gap-0.5 flex-wrap">
-                              <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                                {(() => {
-                                  const base = parseFloat(formData.interestBase);
-                                  const rate = Math.abs(parseFloat(formData.interestRateAnnual)) / 100;
-                                  const start = new Date(formData.interestStartDate + 'T00:00:00');
-                                  const elapsed = Math.max(0, (Date.now() - start.getTime()) / 1000);
-                                  const interest = base * rate / (365 * 24 * 3600) * elapsed;
-                                  return (interest > 0 ? '-' : '') + interest.toLocaleString(undefined, { maximumFractionDigits: 2 });
-                                })()}
-                              </span>
-                              <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>USDT</span>
+                      {(() => {
+                        const hasInterestData = formData.interestRateAnnual && formData.interestBase && formData.interestStartDate;
+                        const hasCollateralData = formData.collateralAssets.filter(a => a.coin && a.qty !== '').length > 0;
+                        const hasAnyRightContent = (displayConfig.accruedInterest && hasInterestData) || (displayConfig.collateralCoin && hasCollateralData) || (displayConfig.collateralValue && hasCollateralData) || (displayConfig.profitShare && formData.showProfitShare);
+                        if (!hasAnyRightContent) {
+                          return (
+                            <div className="flex items-center justify-center h-full">
+                              <span className="text-gray-300 text-xs">填写利息信息后显示</span>
                             </div>
-                          </div>
-                          <div className="space-y-0.5 text-xs mt-1">
-                            {displayConfig.paidInterest && (() => {
+                          );
+                        }
+                        return (
+                          <div>
+                            {displayConfig.accruedInterest && hasInterestData && (
+                              <>
+                                <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
+                                  <span className="text-[10px]" style={{ color: '#3B82F6' }}>
+                                    {parseFloat(formData.interestRateAnnual) < 0 ? '待收利息' : '待付利息'}
+                                  </span>
+                                  <span className="text-[10px] text-gray-400">(年化 {Math.abs(parseFloat(formData.interestRateAnnual)).toFixed(0)}%)</span>
+                                </div>
+                                <div className="min-h-7 flex flex-col justify-center mt-0.5">
+                                  <div className="flex items-baseline gap-0.5 flex-wrap">
+                                    <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                                      {(() => {
+                                        const base = parseFloat(formData.interestBase);
+                                        const rate = Math.abs(parseFloat(formData.interestRateAnnual)) / 100;
+                                        const start = new Date(formData.interestStartDate + 'T00:00:00');
+                                        const elapsed = Math.max(0, (Date.now() - start.getTime()) / 1000);
+                                        const interest = base * rate / (365 * 24 * 3600) * elapsed;
+                                        return (interest > 0 ? '-' : '') + interest.toLocaleString(undefined, { maximumFractionDigits: 2 });
+                                      })()}
+                                    </span>
+                                    <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>USDT</span>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                            <div className="space-y-0.5 text-xs mt-1">
+                            {displayConfig.paidInterest && hasInterestData && (() => {
                               const totalPaid = editingOrder ? ((interestPaymentSummary as any)?.[editingOrder.id] ?? 0) : 0;
                               return (
                                 <div className="flex items-center justify-between">
@@ -2769,8 +2784,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                                 <span className="font-medium" style={{ color: '#4B5563' }}>{formComputedCollateralValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U</span>
                               </div>
                             )}
-                            {displayConfig.collateral && formComputedCollateralValue !== null && formComputedAmount && formComputedAmount > 0 && (() => {
-                              // 风险敞口计算与前端 P076-C 一致
+                            {displayConfig.collateral && formComputedCollateralValue !== null && formComputedAmount && formComputedAmount > 0 && hasInterestData && (() => {
                               const base = parseFloat(formData.interestBase);
                               const rate = Math.abs(parseFloat(formData.interestRateAnnual)) / 100;
                               const start = new Date(formData.interestStartDate + 'T00:00:00');
@@ -2799,7 +2813,6 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                             {/* 保证金率：担保物当前价値 ÷ 计息基数 x 100% */}
                             {displayConfig.marginRate && formComputedCollateralValue !== null && formComputedCollateralValue > 0 && formData.interestBase && parseFloat(formData.interestBase) > 0 && (() => {
                               const base = parseFloat(formData.interestBase);
-                              // 新公式：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数
                               const previewRate = Math.abs(parseFloat(formData.interestRateAnnual)) / 100;
                               const previewStart = new Date(formData.interestStartDate + 'T00:00:00');
                               const previewElapsed = Math.max(0, (Date.now() - previewStart.getTime()) / 1000);
@@ -2808,7 +2821,6 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                               const previewCoinQty = parseFloat(formData.buyQuantity || '0');
                               const previewCoinPrice = formLivePrices[formData.coin] || 0;
                               const previewMarketValue = previewCoinQty * previewCoinPrice;
-                              // 买入价值 = 数量 × 买入币价（即用户输入的买入币价）
                               const previewBuyPrice = parseFloat(formData.buyPrice || '0');
                               const previewBuyValue = previewCoinQty > 0 && previewBuyPrice > 0
                                 ? previewCoinQty * previewBuyPrice
@@ -2851,11 +2863,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                           )}
                           </div>
                         </div>
-                      ) : (
-                        <div className="flex items-center justify-center h-full">
-                          <span className="text-gray-300 text-xs">填写利息信息后显示</span>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>

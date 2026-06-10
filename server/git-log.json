@@ -1,5 +1,14 @@
 [
   {
+    "hash": "c874a17c1f9cd622de24ca9dbe0be7db31ab844b",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T07:45:50+00:00",
+    "message": "fix: P076-C 持有时长统一移到左栏（与P095一致）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "P076-C 持有时长统一移到左栏（与P095一致）"
+  },
+  {
     "hash": "7bb329ec64a1b8decdbf5d99ca76d013ed1b5467",
     "author": "Manus Deploy",
     "date": "2026-06-10T07:32:19+00:00",
