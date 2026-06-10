@@ -105,15 +105,17 @@ function calcOrder(
   const qty = parseFloat(order.quantity);
   const lev = order.leverage || 1;
   const direction = order.direction as "long" | "short";
-  const marketType: "spot" | "perp" = order.market_type === "spot" ? "spot" : "perp";
+  const marketType: "spot" | "perp" | "option" = order.market_type === "spot" ? "spot" : order.market_type === "option" ? "option" : "perp";
   const vipLevel: string = order.vip_level || "普通";
   const orderType: "maker" | "taker" = order.order_type === "maker" ? "maker" : "taker";
 
-  const feeRate = getFeeRate(marketType, vipLevel, orderType);
+  // 期权类型用现货费率表
+  const feeTableType: "spot" | "perp" = marketType === "option" ? "spot" : marketType;
+  const feeRate = getFeeRate(feeTableType, vipLevel, orderType);
   const effectiveFeeRate = Math.max(0, feeRate); // 负费率（返佣）视为0成本
 
   const notional = entry * qty;
-  const margin = marketType === "spot" ? notional : notional / lev;
+  const margin = marketType === "spot" || marketType === "option" ? notional : notional / lev;
   const openFee = notional * effectiveFeeRate;
 
   const closePrice = order.exit_price
@@ -126,14 +128,31 @@ function calcOrder(
 
   if (closePrice && closePrice > 0) {
     const closeNotional = closePrice * qty;
-    const closeFeeRate = Math.max(0, getFeeRate(marketType, vipLevel, orderType));
+    const closeFeeRate = Math.max(0, getFeeRate(feeTableType, vipLevel, orderType));
     closeFee = closeNotional * closeFeeRate;
-    const rawPnl =
-      direction === "long"
-        ? (closePrice - entry) * qty
-        : (entry - closePrice) * qty;
-    pnl = rawPnl - openFee - closeFee;
-    pnlPct = margin > 0 ? pnl / margin : null;
+
+    // 期权特殊盈亏计算：
+    // 当前价 < 开仓价 → 浮动盈亏 = -权利金（固定亏损）
+    // 当前价 >= 开仓价 → 正常计算浮动盈亏
+    if (marketType === "option") {
+      const premium = order.premium ? parseFloat(order.premium) : 0;
+      if (closePrice < entry) {
+        // 低于开仓价，固定亏损 = 权利金
+        pnl = -premium;
+      } else {
+        // 高于开仓价，正常计算
+        const rawPnl = (closePrice - entry) * qty;
+        pnl = rawPnl - openFee - closeFee;
+      }
+      pnlPct = margin > 0 ? pnl / margin : null;
+    } else {
+      const rawPnl =
+        direction === "long"
+          ? (closePrice - entry) * qty
+          : (entry - closePrice) * qty;
+      pnl = rawPnl - openFee - closeFee;
+      pnlPct = margin > 0 ? pnl / margin : null;
+    }
   }
 
   const totalFee = openFee + closeFee;
@@ -166,7 +185,7 @@ function calcOrder(
 interface OrderFormData {
   symbol: string;
   direction: "long" | "short";
-  marketType: "spot" | "perp";
+  marketType: "spot" | "perp" | "option";
   orderType: "maker" | "taker";
   vipLevel: string;
   entryPrice: string;
@@ -176,6 +195,8 @@ interface OrderFormData {
   takeProfit: string;
   stopLoss: string;
   entryDate: string;
+  expiryDate: string;
+  premium: string;
   exitDate: string;
   status: "open" | "closed";
   note: string;
@@ -194,6 +215,8 @@ const defaultForm = (): OrderFormData => ({
   takeProfit: "",
   stopLoss: "",
   entryDate: todayStr(),
+  expiryDate: "",
+  premium: "",
   exitDate: "",
   status: "open",
   note: "",
@@ -507,6 +530,8 @@ export default function OrderFlowPage() {
       takeProfit: order.take_profit ? String(order.take_profit) : "",
       stopLoss: order.stop_loss ? String(order.stop_loss) : "",
       entryDate: order.entry_date || todayStr(),
+      expiryDate: order.expiry_date || "",
+      premium: order.premium ? String(order.premium) : "",
       exitDate: order.exit_date || "",
       status: order.status || "open",
       note: order.note || "",
@@ -546,6 +571,8 @@ export default function OrderFlowPage() {
       takeProfit: form.takeProfit ? parseFloat(form.takeProfit) : undefined,
       stopLoss: form.stopLoss ? parseFloat(form.stopLoss) : undefined,
       entryDate: form.entryDate,
+      expiryDate: form.expiryDate || undefined,
+      premium: form.premium ? parseFloat(form.premium) : undefined,
       note: form.note || undefined,
     };
 
@@ -575,7 +602,7 @@ export default function OrderFlowPage() {
   const BTN_STYLE = { backgroundColor: "rgba(255,255,255,0.06)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` };
 
   // 当前费率预览
-  const previewFeeRate = getFeeRate(form.marketType, form.vipLevel, form.orderType);
+  const previewFeeRate = getFeeRate(form.marketType === "option" ? "spot" : form.marketType, form.vipLevel, form.orderType);
 
   return (
     <div
@@ -740,7 +767,16 @@ export default function OrderFlowPage() {
           const calc = calcOrder(order, orderPrice, fundingRate);
           const isLong = order.direction === "long";
           const isOpen = order.status === "open";
-          const isPerp = order.market_type !== "spot";
+          const isPerp = order.market_type === "perp";
+          const isOption = order.market_type === "option";
+          // 期权到期倒计时
+          let expiryDaysLeft: number | null = null;
+          if (isOption && order.expiry_date) {
+            const expiry = new Date(order.expiry_date);
+            const now = new Date();
+            const diffMs = expiry.getTime() - now.getTime();
+            expiryDaysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+          }
           const pnlPositive = (calc.pnl ?? 0) >= 0;
           const isNotesExpanded = expandedNotes.has(order.id);
           const dirColor = isLong ? "#F6465D" : "#0ECB81";  // 多=红 空=绿
@@ -772,9 +808,14 @@ export default function OrderFlowPage() {
                     {order.leverage}x
                   </span>
                 )}
-                <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(240,185,11,0.08)", color: OKX_TEXT_SEC }}>
-                  {isPerp ? "永续" : "现货"}
+                <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: isOption ? "rgba(147,51,234,0.12)" : "rgba(240,185,11,0.08)", color: isOption ? "#a78bfa" : OKX_TEXT_SEC }}>
+                  {isPerp ? "永续" : isOption ? "期权" : "现货"}
                 </span>
+                {isOption && expiryDaysLeft != null && (
+                  <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: expiryDaysLeft <= 3 ? "rgba(246,70,93,0.15)" : "rgba(14,203,129,0.12)", color: expiryDaysLeft <= 3 ? "#F6465D" : "#0ECB81" }}>
+                    {expiryDaysLeft > 0 ? `${expiryDaysLeft}天到期` : "已到期"}
+                  </span>
+                )}
                 {/* 开仓日期（持仓中）或开仓+平仓日期（已平仓） */}
                 {isOpen ? (
                   <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>{order.entry_date}</span>
@@ -842,9 +883,9 @@ export default function OrderFlowPage() {
                   </div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>{isPerp ? "保证金" : "成本"}</div>
+                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>{isPerp ? "保证金" : isOption ? "权利金" : "成本"}</div>
                   <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(calc.margin, 2)}
+                    {isOption && order.premium ? fmt(parseFloat(order.premium), 2) : fmt(calc.margin, 2)}
                   </div>
                 </div>
                 <div className="text-right">
@@ -1045,12 +1086,13 @@ export default function OrderFlowPage() {
                 <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>类型</label>
                 <select
                   value={form.marketType}
-                  onChange={(e) => setForm((f) => ({ ...f, marketType: e.target.value as "perp" | "spot" }))}
+                  onChange={(e) => setForm((f) => ({ ...f, marketType: e.target.value as "perp" | "spot" | "option" }))}
                   className="w-full px-2 py-2 rounded-xl text-sm"
                   style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${OKX_BORDER}`, color: OKX_TEXT_PRI }}
                 >
                   <option value="perp">永续合约</option>
                   <option value="spot">现货</option>
+                  <option value="option">期权</option>
                 </select>
               </div>
               {/* 方向 */}
@@ -1202,6 +1244,49 @@ export default function OrderFlowPage() {
                 }}
               />
             </div>
+
+            {/* 到期日期（仅期权） */}
+            {form.marketType === "option" && (
+              <div className="mb-3">
+                <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>到期日期</label>
+                <input
+                  type="date"
+                  value={form.expiryDate}
+                  onChange={(e) => setForm((f) => ({ ...f, expiryDate: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-xl text-sm"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: `1px solid ${OKX_BORDER}`,
+                    color: OKX_TEXT_PRI,
+                    outline: "none",
+                    boxSizing: "border-box",
+                    maxWidth: "100%",
+                    WebkitAppearance: "none",
+                  }}
+                />
+              </div>
+            )}
+
+            {/* 权利金（仅期权） */}
+            {form.marketType === "option" && (
+              <div className="mb-3">
+                <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>权利金 (USDT)</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={form.premium}
+                  onChange={(e) => setForm((f) => ({ ...f, premium: e.target.value }))}
+                  placeholder="输入权利金金额"
+                  className="w-full px-3 py-2 rounded-xl text-sm"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: `1px solid ${OKX_BORDER}`,
+                    color: OKX_TEXT_PRI,
+                    outline: "none",
+                  }}
+                />
+              </div>
+            )}
 
             {/* 状态 */}
             <div className="mb-3">

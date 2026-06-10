@@ -24775,7 +24775,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         ledgerId: z.number(),
         symbol: z.string().default('ETHUSDT'),
         direction: z.enum(['long', 'short']).default('long'),
-        marketType: z.enum(['spot', 'perp']).default('perp'),
+        marketType: z.enum(['spot', 'perp', 'option']).default('perp'),
         orderType: z.enum(['maker', 'taker']).default('taker'),
         vipLevel: z.string().default('普通'),
         entryPrice: z.number(),
@@ -24784,6 +24784,8 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         takeProfit: z.number().optional(),
         stopLoss: z.number().optional(),
         entryDate: z.string(),
+        expiryDate: z.string().optional(),
+        premium: z.number().optional(),
         note: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -24791,12 +24793,12 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
         await db.execute(
           sql`INSERT INTO order_flow_trades
-              (ledger_id, user_id, symbol, direction, market_type, order_type, vip_level, entry_price, quantity, leverage, take_profit, stop_loss, entry_date, note, created_by)
+              (ledger_id, user_id, symbol, direction, market_type, order_type, vip_level, entry_price, quantity, leverage, take_profit, stop_loss, entry_date, expiry_date, premium, note, created_by)
               VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.symbol}, ${input.direction},
                       ${input.marketType}, ${input.orderType}, ${input.vipLevel},
                       ${input.entryPrice}, ${input.quantity}, ${input.leverage},
                       ${input.takeProfit ?? null}, ${input.stopLoss ?? null},
-                      ${input.entryDate}, ${input.note ?? null}, ${ctx.user.id})`
+                      ${input.entryDate}, ${input.expiryDate ?? null}, ${input.premium ?? null}, ${input.note ?? null}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -24807,7 +24809,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         ledgerId: z.number(),
         symbol: z.string().optional(),
         direction: z.enum(['long', 'short']).optional(),
-        marketType: z.enum(['spot', 'perp']).optional(),
+        marketType: z.enum(['spot', 'perp', 'option']).optional(),
         orderType: z.enum(['maker', 'taker']).optional(),
         vipLevel: z.string().optional(),
         entryPrice: z.number().optional(),
@@ -24817,6 +24819,8 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         takeProfit: z.number().nullable().optional(),
         stopLoss: z.number().nullable().optional(),
         entryDate: z.string().optional(),
+        expiryDate: z.string().nullable().optional(),
+        premium: z.number().nullable().optional(),
         exitDate: z.string().nullable().optional(),
         status: z.enum(['open', 'closed']).optional(),
         note: z.string().nullable().optional(),
@@ -24840,7 +24844,9 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
               entry_date = COALESCE(${input.entryDate ?? null}, entry_date),
               exit_date = CASE WHEN ${input.exitDate !== undefined} THEN ${input.exitDate ?? null} ELSE exit_date END,
               status = COALESCE(${input.status ?? null}, status),
-              note = CASE WHEN ${input.note !== undefined} THEN ${input.note ?? null} ELSE note END
+              note = CASE WHEN ${input.note !== undefined} THEN ${input.note ?? null} ELSE note END,
+              expiry_date = CASE WHEN ${input.expiryDate !== undefined} THEN ${input.expiryDate ?? null} ELSE expiry_date END,
+              premium = CASE WHEN ${input.premium !== undefined} THEN ${input.premium ?? null} ELSE premium END
               WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}`
         );
         return { success: true };
