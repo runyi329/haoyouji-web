@@ -707,6 +707,11 @@ function Router() {
         <Route path="/ai-travel" component={AiTravel} />
         <Route path="/world-cup/teams" component={WcTeams} />
         <Route path="/world-cup/teams/:code" component={WcTeams} />
+        {/* 牙伴齿科管理 */}
+        <Route path="/yaban" component={lazy(() => import("./pages/yaban/YabanHome"))} />
+        <Route path="/yaban/messages" component={lazy(() => import("./pages/yaban/YabanMessages"))} />
+        <Route path="/yaban/shop" component={lazy(() => import("./pages/yaban/YabanShop"))} />
+        <Route path="/yaban/profile" component={lazy(() => import("./pages/yaban/YabanProfile"))} />
         {/* 404 */}
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />

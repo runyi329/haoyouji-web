@@ -1,5 +1,14 @@
 [
   {
+    "hash": "2ad49208079d59f1461b9110ba87de87d39b2251",
+    "author": "runyi329",
+    "date": "2026-06-10T11:08:05+00:00",
+    "message": "fix: 卡片0值正常显示(不再显示横线) + 统一使用username显示(借方视角/参与方)",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "卡片0值正常显示(不再显示横线) + 统一使用username显示(借方视角/参与方)"
+  },
+  {
     "hash": "076c540598e884799087bf30a191e39aeb76d5c9",
     "author": "Manus Deploy",
     "date": "2026-06-10T08:49:15+00:00",

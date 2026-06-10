@@ -1908,6 +1908,10 @@ export default function Home() {
                         navigate('/pet-platform');
                         return;
                       }
+                      if (cat.name === '牙伴') {
+                        navigate('/yaban');
+                        return;
+                      }
                       setSelectedCategoryId(cat.id);
                       setCategorySheetOpen(true);
                     }}
