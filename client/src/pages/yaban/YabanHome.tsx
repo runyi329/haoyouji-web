@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Search, Plus, ChevronDown, ChevronUp, Settings } from "lucide-react";
+import { Search, Plus, ChevronDown, ChevronUp, Settings, RefreshCw } from "lucide-react";
 import YabanCalendar from "./YabanCalendar";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
@@ -117,8 +117,11 @@ export default function YabanHome() {
               <ChevronDown className="w-4 h-4" />
             )}
           </button>
-          {/* 右侧：搜索 + 新增 */}
+          {/* 右侧：刷新 + 搜索 + 新增 */}
           <div className="flex items-center gap-3">
+            <button onClick={() => { window.location.reload(); }}>
+              <RefreshCw className="w-5 h-5" />
+            </button>
             <button onClick={() => toast.info("搜索功能开发中")}>
               <Search className="w-5 h-5" />
             </button>
