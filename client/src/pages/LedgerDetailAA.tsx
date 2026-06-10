@@ -1283,20 +1283,33 @@ export default function LedgerDetailAA({
                       >
                         全部
                       </button>
-                      {categories.map((cat: any) => (
-                        <button
-                          key={cat.id}
-                          onClick={() => { setSelectedTagId(cat.id); setShowTagDropdown(false); }}
-                          className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#FFEBEE]"
-                          style={{
-                            color: selectedTagId === cat.id ? "#D32F2F" : "#222222",
-                            fontWeight: selectedTagId === cat.id ? 600 : 400,
-                            borderBottom: "1px solid #F5F5F5",
-                          }}
-                        >
-                          {cat.name}
-                        </button>
-                      ))}
+                      {[...categories]
+                        .sort((a: any, b: any) => {
+                          const balances = initialBalancesData?.balances ?? {};
+                          const aPaused = !!balances[`${a.name}__pauseDate`];
+                          const bPaused = !!balances[`${b.name}__pauseDate`];
+                          if (aPaused && !bPaused) return 1;
+                          if (!aPaused && bPaused) return -1;
+                          return 0;
+                        })
+                        .map((cat: any) => {
+                          const catPauseDate = initialBalancesData?.balances ? (initialBalancesData.balances as any)[`${cat.name}__pauseDate`] : null;
+                          const isCatPaused = !!catPauseDate;
+                          return (
+                            <button
+                              key={cat.id}
+                              onClick={() => { setSelectedTagId(cat.id); setShowTagDropdown(false); }}
+                              className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#FFEBEE]"
+                              style={{
+                                color: selectedTagId === cat.id ? "#D32F2F" : isCatPaused ? "#1565C0" : "#222222",
+                                fontWeight: selectedTagId === cat.id ? 600 : 400,
+                                borderBottom: "1px solid #F5F5F5",
+                              }}
+                            >
+                              {cat.name}{isCatPaused && <span style={{ marginLeft: 4, fontSize: 11, color: '#1565C0', opacity: 0.7 }}>(暂停)</span>}
+                            </button>
+                          );
+                        })}
                     </div>
                   </>
                 )}
