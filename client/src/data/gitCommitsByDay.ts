@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-10
+// 生成时间：2026-06-11
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7120,5 +7120,23 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-10T08:10:40Z", type: "feat", cleanMessage: "概览表格暂停/下沉状态默认排最下面，手动排序时参与全局排序" },
     { date: "2026-06-10T08:49:15Z", type: "other", cleanMessage: "__manus_ec=$?; trap '' PIPE; printf \"%d:%s\\n\" $__manus_ec \"$PWD\" 2>/dev/null >&3; trap - PIPEfix: P095/FunderManagement统一使用username(登录用户名)显示，不再使用nickname/name :wq" },
     { date: "2026-06-10T11:08:05Z", type: "fix", cleanMessage: "卡片0值正常显示(不再显示横线) + 统一使用username显示(借方视角/参与方)" },
+    { date: "2026-06-10T12:48:09Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-10T13:37:06Z", type: "feat", cleanMessage: "新增牙伴齿科管理App首页(工作Tab) + 3个占位Tab + 20个3D图标 + 积分商城入口跳转" },
+    { date: "2026-06-10T13:48:49Z", type: "fix", cleanMessage: "牙伴更多功能图标统一淡蓝色背景" },
+    { date: "2026-06-10T14:08:11Z", type: "fix", cleanMessage: "牙伴图标去掉淡蓝色背景容器，使用透明背景纯图标" },
+    { date: "2026-06-10T14:20:16Z", type: "feat", cleanMessage: "牙伴首页工作统计改为3D立体风格月历组件(3Tab切换)" },
+    { date: "2026-06-10T14:56:30Z", type: "fix", cleanMessage: "牙伴月历改为淡蓝色系+帽檐日期+大黑色数字+5个独立Tab" },
+    { date: "2026-06-10T15:08:21Z", type: "style", cleanMessage: "牙伴顶部改蓝色+月历帽檐缩小+月份切换与月总结合并一行" },
+    { date: "2026-06-10T15:28:37Z", type: "fix", cleanMessage: "修复账本记账金额为负数的bug - 前端type从硬编码expense改为transactionType - 前端/后端amount统一取Math.abs确保正数 - 后端getTransactionsList读取时也取绝对值兼容旧数据 - 前端显示时Math.abs兼容已有负数数据" },
+    { date: "2026-06-10T15:56:34Z", type: "feat", cleanMessage: "添加随访管理功能页面（列表+创建记录+选择患者），月历随访Tab跳转入口" },
+  ],
+  "2026-06-11": [
+    { date: "2026-06-10T16:04:23Z", type: "fix", cleanMessage: "随访入口改为更多功能区按钮跳转，月历Tab恢复为仅切换数据" },
+    { date: "2026-06-10T16:22:02Z", type: "feat", cleanMessage: "新增日程管理功能（列表页+详情页+新建预约页）" },
+    { date: "2026-06-10T16:26:03Z", type: "fix", cleanMessage: "删除功能推荐横幅后面的文字" },
+    { date: "2026-06-10T16:50:25Z", type: "feat", cleanMessage: "新增患者详情页和随访详情页" },
+    { date: "2026-06-10T16:54:04Z", type: "feat", cleanMessage: "首页右上角添加强制刷新按钮" },
+    { date: "2026-06-10T17:02:54Z", type: "feat", cleanMessage: "新增患者列表页，首页患者入口跳转到列表页" },
+    { date: "2026-06-10T17:10:55Z", type: "fix", cleanMessage: "修复患者列表页Unicode编码显示问题，优化标签样式" },
   ],
 };
