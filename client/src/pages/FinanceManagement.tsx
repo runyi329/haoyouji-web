@@ -1140,7 +1140,6 @@ const emptyForm = {
   commissionShare: '',
   assetType: '' as '' | 'stock' | 'crypto',
   ownerLabel: '',
-  ownerLabelMode: 'member' as 'member' | 'manual',
   interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
   tags: [] as string[],
 };
@@ -1301,6 +1300,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [userSearchText, setUserSearchText] = useState('');
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [tagInput, setTagInput] = useState('');
   // 列表筛选下拉框
   const [showListDropdown, setShowListDropdown] = useState(false);
 
@@ -1593,10 +1593,19 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
       commissionShare: order.commission_share || '',
       assetType: (order.asset_type || '') as '' | 'stock' | 'crypto',
-      ownerLabel: order.owner_label || '',
-      ownerLabelMode: (order.owner_label ? 'manual' : 'member') as 'member' | 'manual',
+      ownerLabel: '',
       interestRateCurrency: (order.interest_rate_currency || 'USDT') as 'USDT' | 'CNY',
-      tags: (() => { try { const t = order.tags; return Array.isArray(t) ? t : (typeof t === 'string' && t ? JSON.parse(t) : []); } catch { return []; } })(),
+      tags: (() => {
+        try {
+          const t = order.tags;
+          const parsed: string[] = Array.isArray(t) ? t : (typeof t === 'string' && t ? JSON.parse(t) : []);
+          // 兼容旧数据：如果有owner_label且不在tags中，将其加入tags
+          if (order.owner_label && !parsed.includes(order.owner_label)) {
+            return [order.owner_label, ...parsed];
+          }
+          return parsed;
+        } catch { return order.owner_label ? [order.owner_label] : []; }
+      })(),
     });
     // 加载字段展示配置
     if (order.display_config) {
@@ -1654,7 +1663,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
         assetType: formData.assetType || undefined,
-        ownerLabel: formData.ownerLabel || undefined,
+        ownerLabel: '',
         interestRateCurrency: formData.interestRateCurrency,
         tags: formData.tags.length > 0 ? formData.tags : [],
         counterparty: formData.counterparty,
@@ -1695,7 +1704,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
         assetType: formData.assetType || undefined,
-        ownerLabel: formData.ownerLabel || undefined,
+        ownerLabel: undefined,
         interestRateCurrency: formData.interestRateCurrency,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
         displayConfig: {
@@ -1900,43 +1909,48 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                 </div>
               </div>
 
-              {/* 归属用户（手动标注） */}
+              {/* 帽檐标签（可添加多个） */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-600">归属用户<span className="ml-1.5 text-xs text-gray-400 font-normal">可选</span></label>
-                  <div className="flex gap-1">
-                    <button type="button" onClick={() => setFormData(d => ({ ...d, ownerLabelMode: 'member', ownerLabel: '' }))}
-                      className="text-xs px-2 py-0.5 rounded-full transition-all"
-                      style={formData.ownerLabelMode === 'member' ? { background: '#1A56DB', color: '#fff' } : { background: '#F3F4F6', color: '#6B7280' }}>
-                      选账本成员
-                    </button>
-                    <button type="button" onClick={() => setFormData(d => ({ ...d, ownerLabelMode: 'manual' }))}
-                      className="text-xs px-2 py-0.5 rounded-full transition-all"
-                      style={formData.ownerLabelMode === 'manual' ? { background: '#1A56DB', color: '#fff' } : { background: '#F3F4F6', color: '#6B7280' }}>
-                      手动输入
-                    </button>
-                  </div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">帽檐标签<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，可添加多个</span></label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {formData.tags.map((tag, idx) => (
+                    <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium" style={{ backgroundColor: '#E8F0FE', color: '#1A56DB' }}>
+                      {tag}
+                      <button type="button" onClick={() => setFormData(d => ({ ...d, tags: d.tags.filter((_, i) => i !== idx) }))} className="text-blue-400 hover:text-red-500 text-sm leading-none">&times;</button>
+                    </span>
+                  ))}
                 </div>
-                {formData.ownerLabelMode === 'member' ? (
-                  <select
-                    value={formData.ownerLabel}
-                    onChange={e => setFormData(d => ({ ...d, ownerLabel: e.target.value }))}
-                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  >
-                    <option value="">不指定</option>
-                    {realMembers.map((m: any) => (
-                      <option key={m.userId} value={m.nickname || m.username}>{m.nickname || m.username}</option>
-                    ))}
-                  </select>
-                ) : (
+                <div className="flex gap-2">
                   <input
                     type="text"
-                    value={formData.ownerLabel}
-                    onChange={e => setFormData(d => ({ ...d, ownerLabel: e.target.value }))}
-                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                    placeholder="输入显示名称，如：英姐"
+                    value={tagInput}
+                    onChange={e => setTagInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && tagInput.trim()) {
+                        e.preventDefault();
+                        if (!formData.tags.includes(tagInput.trim())) {
+                          setFormData(d => ({ ...d, tags: [...d.tags, tagInput.trim()] }));
+                        }
+                        setTagInput('');
+                      }
+                    }}
+                    placeholder="输入标签名称，按回车添加"
+                    className="flex-1 px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                   />
-                )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
+                        setFormData(d => ({ ...d, tags: [...d.tags, tagInput.trim()] }));
+                      }
+                      setTagInput('');
+                    }}
+                    className="px-4 py-2.5 rounded-xl text-sm font-medium text-white"
+                    style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+                  >
+                    添加
+                  </button>
+                </div>
               </div>
 
               {/* 用户 + 币种 同一行 */}
@@ -1944,7 +1958,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
               {/* 选择用户 */}
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-600 mb-2">
-                  {editingOrder ? '归属用户' : '用户'} <span className="text-red-400 ml-0.5">*</span>
+                  用户 <span className="text-red-400 ml-0.5">*</span>
                 </label>
                 <div className="relative">
                   {selectedUser ? (
@@ -2022,7 +2036,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                 <label className="block text-sm font-medium text-gray-600 mb-2">币种 <span className="text-red-400 ml-0.5">*</span></label>
                 <select
                   value={formData.coin}
-                  onChange={e => setFormData(d => ({ ...d, coin: e.target.value }))}
+                  onChange={e => setFormData(d => ({ ...d, coin: e.target.value as typeof d.coin }))}
                   className="w-full px-3 py-3 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
                   style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.coin as keyof typeof COIN_COLORS] || '#1A2340' }}
                 >
@@ -2460,7 +2474,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                           { key: 'orderNo', label: '订单编号' },
                           { key: 'aiIcon', label: 'AI图标（融资资产右上角）' },
                           { key: 'assetType', label: '资产类型（股票/数字币）' },
-                          { key: 'showOwnerName', label: '显示订单所有者名字' },
+                          { key: 'showOwnerName', label: '显示帽檐标签' },
                         ].map(({ key, label }) => (
                           <div key={key} className="flex items-center justify-between">
                             <span className="text-sm text-gray-600">{label}</span>
@@ -2577,11 +2591,11 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                         {formData.assetType === 'stock' ? '股票' : formData.assetType === 'crypto' ? '数字币' : formData.assetType}
                       </span>
                     )}
-                    {displayConfig.showOwnerName && (formData.ownerLabel || editingOrder?.userName) && (
-                      <span className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
-                        {formData.ownerLabel || editingOrder?.userName}
+                    {formData.tags.map((tag, idx) => (
+                      <span key={idx} className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
+                        {tag}
                       </span>
-                    )}
+                    ))}
                   </div>
                    {/* 两栏主体 */}
                    <div className="flex">

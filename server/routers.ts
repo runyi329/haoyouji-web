@@ -15718,6 +15718,7 @@ ${klinesSummary}
         commissionShare: z.string().optional(),
         displayConfig: z.record(z.string(), z.union([z.boolean(), z.number()])).optional(),
         assetType: z.string().optional(),
+        ownerLabel: z.string().optional(),
         interestRateCurrency: z.string().optional(),
         tags: z.array(z.string()).optional(),
       }))
