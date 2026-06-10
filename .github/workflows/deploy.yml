@@ -15,7 +15,8 @@ jobs:
   deploy:
     name: 部署到服务器
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 15
+
     steps:
       - name: 📥 检出代码
         uses: actions/checkout@v4
@@ -29,8 +30,10 @@ jobs:
           echo "Host 124.223.54.69" >> ~/.ssh/config
           echo "  StrictHostKeyChecking no" >> ~/.ssh/config
           echo "  UserKnownHostsFile /dev/null" >> ~/.ssh/config
+          echo "  ServerAliveInterval 15" >> ~/.ssh/config
+          echo "  ServerAliveCountMax 20" >> ~/.ssh/config
           chmod 600 ~/.ssh/config
-      
+
       - name: 🚀 执行部署脚本
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
@@ -41,19 +44,29 @@ jobs:
             cd /root/haoyouji-web
 
             echo "📥 拉取最新代码..."
+            OLD_LOCK_HASH=$(md5sum pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || echo "none")
             git fetch origin && git reset --hard origin/main && git clean -fd
+            NEW_LOCK_HASH=$(md5sum pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || echo "none")
             echo "✅ 当前 git HEAD: $(git log --oneline -1)"
 
-            echo "🧹 清除 Vite 缓存..."
-            rm -rf node_modules/.vite client/.vite
+            # 只在lockfile变化时重新安装依赖
+            if [ "$OLD_LOCK_HASH" != "$NEW_LOCK_HASH" ]; then
+              echo "📦 lockfile已变化，重新安装依赖..."
+              pnpm install --frozen-lockfile
+            else
+              echo "📦 依赖无变化，跳过安装"
+            fi
 
-            echo "📦 安装依赖..."
-            pnpm install --frozen-lockfile
-
-            echo "🔨 构建项目..."
+            echo "🔨 开始构建项目..."
             export NODE_OPTIONS="--max-old-space-size=4096"
             set -o pipefail
-            pnpm run build 2>&1 | tee /tmp/build_output.log || { echo "❌ 构建失败！"; cat /tmp/build_output.log | tail -50; exit 1; }
+            # 后台心跳：每10秒输出一个点，防止SSH因无输出被断开
+            ( while true; do sleep 10; printf "."; done ) &
+            HEARTBEAT_PID=$!
+            pnpm run build 2>&1 | tee /tmp/build_output.log || { kill $HEARTBEAT_PID 2>/dev/null; echo ""; echo "❌ 构建失败！"; cat /tmp/build_output.log | tail -50; exit 1; }
+            kill $HEARTBEAT_PID 2>/dev/null
+            echo ""
+            echo "✅ 构建完成"
 
             echo "📊 执行数据库迁移..."
             bash scripts/post-deploy-migration.sh || true
@@ -69,9 +82,14 @@ jobs:
             cp /root/haoyouji-web/package.json /home/ubuntu/haoyouji-web/package.json
             cp /root/haoyouji-web/pnpm-lock.yaml /home/ubuntu/haoyouji-web/pnpm-lock.yaml
 
-            echo "🔄 同步 node_modules..."
-            rsync -a --delete /root/haoyouji-web/node_modules/ /home/ubuntu/haoyouji-web/node_modules/
-            chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules
+            # 只在lockfile变化时同步node_modules（最耗时的步骤）
+            if [ "$OLD_LOCK_HASH" != "$NEW_LOCK_HASH" ]; then
+              echo "🔄 依赖已变化，同步 node_modules..."
+              rsync -a --delete /root/haoyouji-web/node_modules/ /home/ubuntu/haoyouji-web/node_modules/
+              chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules
+            else
+              echo "🔄 依赖无变化，跳过 node_modules 同步"
+            fi
 
             echo "🔄 同步环境配置..."
             cp /root/haoyouji-web/.env /home/ubuntu/haoyouji-web/.env 2>/dev/null || true
@@ -88,14 +106,13 @@ jobs:
               sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' 2>&1
             fi
             sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' 2>&1
-            sleep 5
+            sleep 3
 
             echo "🔒 同步 Nginx 配置..."
             cp /root/haoyouji-web/nginx.conf /etc/nginx/sites-available/haoyouji
             nginx -t && (systemctl reload nginx 2>/dev/null || true)
 
             echo "📊 服务状态检查..."
-            ss -tlnp | grep ':3000\|:3001\|:8080' || echo '暂无端口监听'
             sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
 
             echo "✅ 部署完成！"
