@@ -713,16 +713,16 @@ export default function OrderFlowPage() {
           {/* ETH数量统计行 */}
           <div className="flex items-center gap-3 px-4 py-1.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
             <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
-              合约 <span style={{ color: OKX_TEXT_PRI, fontWeight: 600 }}>{summary.perpQty.toFixed(4)}</span>
+              合约 <span style={{ color: OKX_TEXT_PRI, fontWeight: 600 }}>{Math.floor(summary.perpQty)}</span>
             </span>
             <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
-              现货 <span style={{ color: OKX_TEXT_PRI, fontWeight: 600 }}>{summary.spotQty.toFixed(4)}</span>
+              现货 <span style={{ color: OKX_TEXT_PRI, fontWeight: 600 }}>{Math.floor(summary.spotQty)}</span>
             </span>
             <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
-              期权 <span style={{ color: "#a78bfa", fontWeight: 600 }}>{summary.optionQty.toFixed(4)}</span>
+              期权 <span style={{ color: "#a78bfa", fontWeight: 600 }}>{Math.floor(summary.optionQty)}</span>
             </span>
             <span className="text-xs ml-auto" style={{ color: OKX_TEXT_SEC }}>
-              全部 <span style={{ color: OKX_YELLOW, fontWeight: 600 }}>{summary.totalQty.toFixed(4)}</span> ETH
+              全部 <span style={{ color: OKX_YELLOW, fontWeight: 600 }}>{Math.floor(summary.totalQty)}</span> ETH
             </span>
           </div>
           {/* 主数据行：三列 */}
