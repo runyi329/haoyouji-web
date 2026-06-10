@@ -6,7 +6,8 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Search, Plus, ChevronDown, ChevronUp, Settings, Eye, EyeOff } from "lucide-react";
+import { Search, Plus, ChevronDown, ChevronUp, Settings } from "lucide-react";
+import YabanCalendar from "./YabanCalendar";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
@@ -61,13 +62,7 @@ const CLINICS = [
   },
 ];
 
-// 工作统计数据（模拟）
-const STATS = [
-  { label: "预约", value: "10" },
-  { label: "随访", value: "57" },
-  { label: "已收费", value: "5" },
-  { label: "实收业绩", value: "\u00A54,660.00", showEye: true },
-];
+
 
 export default function YabanHome() {
   const [, setLocation] = useLocation();
@@ -76,7 +71,6 @@ export default function YabanHome() {
   const [currentClinic, setCurrentClinic] = useState("恒愿齿科北外滩店");
   const [expandedCompanies, setExpandedCompanies] = useState<string[]>(["恒愿齿科"]);
   const [expandedGroups, setExpandedGroups] = useState<string[]>(["总部"]);
-  const [showRevenue, setShowRevenue] = useState(true);
 
   const handleFeatureClick = (name: string) => {
     toast.info(`"${name}" 功能开发中，敬请期待`);
@@ -249,43 +243,8 @@ export default function YabanHome() {
           <span className="text-[11px] text-[#BF360C]">开通分期支付，提升客户成交率、客单价 &gt;</span>
         </div>
 
-        {/* 工作统计 */}
-        <div className="bg-white mx-3 mt-2 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-bold text-gray-800">工作统计</span>
-            <button onClick={() => toast.info("统计设置开发中")}>
-              <Settings className="w-4 h-4 text-gray-400" />
-            </button>
-          </div>
-          <div className="grid grid-cols-4 gap-2 mb-3">
-            {STATS.map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="text-lg font-bold text-gray-800">
-                  {stat.showEye && !showRevenue ? "****" : stat.value}
-                </div>
-                <div className="text-[11px] text-gray-500 flex items-center justify-center gap-0.5">
-                  {stat.label}
-                  {stat.showEye && (
-                    <button onClick={() => setShowRevenue(!showRevenue)}>
-                      {showRevenue ? (
-                        <Eye className="w-3 h-3 text-gray-400" />
-                      ) : (
-                        <EyeOff className="w-3 h-3 text-gray-400" />
-                      )}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-          {/* 新增患者 */}
-          <div className="border-t border-gray-100 pt-3">
-            <div className="w-24 bg-gray-50 rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-gray-800">3</div>
-              <div className="text-[11px] text-gray-500 mt-0.5">新增患者</div>
-            </div>
-          </div>
-        </div>
+        {/* 工作统计 - 3D立体月历 */}
+        <YabanCalendar />
 
         {/* 更多功能 */}
         <div className="bg-white mx-3 mt-2 rounded-xl p-4">
