@@ -1609,11 +1609,22 @@ export async function updateLedgerCategory(
             ? JSON.parse(member.initialBalances)
             : { ...(member.initialBalances as Record<string, any>) };
 
-          if (!(oldName in balances)) continue;
+          // 检查是否有任何与旧名相关的键（主键或后缀键如 oldName__ratio）
+          const hasOldKeys = Object.keys(balances).some(k => k === oldName || k.startsWith(oldName + '__'));
+          if (!hasOldKeys) continue;
 
           const newBalances: Record<string, any> = {};
           for (const [k, v] of Object.entries(balances)) {
-            newBalances[k === oldName ? newName : k] = v;
+            if (k === oldName) {
+              // 主键：直接替换为新名称
+              newBalances[newName] = v;
+            } else if (k.startsWith(oldName + '__')) {
+              // 后缀键（如 oldName__ratio）：替换前缀为新名称
+              const suffix = k.slice(oldName.length); // 包含 "__ratio" 等
+              newBalances[newName + suffix] = v;
+            } else {
+              newBalances[k] = v;
+            }
           }
 
           await db
@@ -1624,6 +1635,11 @@ export async function updateLedgerCategory(
           // 解析失败则跳过，不影响主流程
         }
       }
+
+      // 同步更新 ledger_tag_config 中的 tag_name
+      await db.execute(
+        sql`UPDATE ledger_tag_config SET tag_name = ${newName} WHERE ledger_id = ${ledgerId} AND tag_name = ${oldName}`
+      );
     }
   }
 
