@@ -18,7 +18,7 @@ const ICON_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.c
 // 我常用的
 const FREQUENT_FEATURES = [
   { name: "日程", icon: `${ICON_BASE}/richeng.webp`, route: "/yaban/schedule" },
-  { name: "患者", icon: `${ICON_BASE}/huanzhe.webp`, route: "/yaban/patient/1" },
+  { name: "患者", icon: `${ICON_BASE}/huanzhe.webp`, route: "/yaban/patients" },
   { name: "考勤打卡", icon: `${ICON_BASE}/kaoqin_daka.webp`, route: "" },
 ];
 
