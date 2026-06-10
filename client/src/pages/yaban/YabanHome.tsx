@@ -1,7 +1,7 @@
 /**
  * 牙伴齿科管理 - 首页（工作 Tab）
  * 路由：/yaban
- * 模仿恒愿齿科App风格：橙色顶栏 + 白色内容区 + 功能网格
+ * 蓝色系顶栏 + 白色内容区 + 功能网格
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
@@ -92,8 +92,11 @@ export default function YabanHome() {
     <div className="min-h-screen bg-gray-50">
       <PageTag code="P300" />
 
-      {/* 顶部橙色渐变 Header */}
-      <div className="bg-gradient-to-r from-[#FF8C00] to-[#FFA500] text-white sticky top-0 z-40">
+      {/* 顶部蓝色渐变 Header */}
+      <div
+        className="text-white sticky top-0 z-40"
+        style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
+      >
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
           {/* 左侧：诊所名称 + 下拉 */}
           <button
@@ -236,11 +239,11 @@ export default function YabanHome() {
           </div>
         </div>
 
-        {/* 功能推荐横幅 */}
-        <div className="mx-3 mt-2 bg-gradient-to-r from-[#FFF3E0] to-[#FFE0B2] rounded-lg px-3 py-2 flex items-center">
-          <span className="text-[11px] text-[#E65100] font-bold mr-1">功能推荐</span>
-          <span className="text-[9px] bg-[#FF5722] text-white px-1 py-0.5 rounded mr-2">NEW</span>
-          <span className="text-[11px] text-[#BF360C]">开通分期支付，提升客户成交率、客单价 &gt;</span>
+        {/* 功能推荐横幅 - 也改为蓝色系 */}
+        <div className="mx-3 mt-2 bg-gradient-to-r from-[#E8F4FD] to-[#D6EEFB] rounded-lg px-3 py-2 flex items-center">
+          <span className="text-[11px] text-[#1976D2] font-bold mr-1">功能推荐</span>
+          <span className="text-[9px] bg-[#2196C8] text-white px-1 py-0.5 rounded mr-2">NEW</span>
+          <span className="text-[11px] text-[#1565C0]">开通分期支付，提升客户成交率、客单价 &gt;</span>
         </div>
 
         {/* 工作统计 - 3D立体月历 */}
@@ -259,7 +262,7 @@ export default function YabanHome() {
                 <div className="w-14 h-14 flex items-center justify-center overflow-hidden relative">
                   <img src={feat.icon} alt={feat.name} className="w-14 h-14 object-contain" />
                   {feat.badge && (
-                    <span className="absolute top-0 right-0 text-[8px] bg-[#FF5722] text-white px-1 rounded-bl">
+                    <span className="absolute top-0 right-0 text-[8px] bg-[#2196C8] text-white px-1 rounded-bl">
                       {feat.badge}
                     </span>
                   )}

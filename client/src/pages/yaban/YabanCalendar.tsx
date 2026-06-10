@@ -1,7 +1,8 @@
 /**
  * 牙伴 - 3D立体风格月历组件
  * 5个Tab：预约 | 随访 | 已收费 | 实收业绩 | 新增患者
- * 淡蓝色系，日历格子上方帽檐显示日期，中间大黑色数字
+ * 淡蓝色系，日历格子上方小帽檐(1/5~1/6高度)显示日期，中间大黑色数字
+ * 切换月份和月总结合并为一行（左切换月份，右月总结）
  * 支持左右滑动切换月份
  */
 import { useState, useRef, TouchEvent } from "react";
@@ -121,6 +122,16 @@ export default function YabanCalendar() {
     return val.toString();
   };
 
+  // 格式化月总结
+  const formatMonthTotal = (): string => {
+    if (tab.isRevenue) {
+      if (!showRevenue) return "****";
+      if (monthTotal >= 10000) return `\u00A5${(monthTotal / 10000).toFixed(1)}w`;
+      return `\u00A5${monthTotal.toLocaleString()}`;
+    }
+    return monthTotal.toString();
+  };
+
   return (
     <div
       className="bg-white mx-3 mt-2 rounded-2xl overflow-hidden"
@@ -128,68 +139,84 @@ export default function YabanCalendar() {
         boxShadow: "0 8px 32px rgba(0, 140, 210, 0.06), 0 2px 8px rgba(0,0,0,0.04)",
       }}
     >
-      {/* 月份选择器 - 淡蓝色系 */}
+      {/* 月份切换 + 月总结 合并一行 */}
       <div
-        className="relative px-4 pt-4 pb-3"
+        className="px-3 pt-3 pb-2 flex items-center justify-between"
         style={{
           background: "linear-gradient(135deg, #F0F8FF 0%, #E8F4FD 50%, #E0F0FA 100%)",
         }}
       >
-        <div className="flex items-center justify-center gap-4">
+        {/* 左侧：月份切换 */}
+        <div className="flex items-center gap-2">
           <button
             onClick={prevMonth}
-            className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+            className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform"
             style={{
               background: "linear-gradient(145deg, #FFFFFF, #F0F4F8)",
-              boxShadow: "3px 3px 6px rgba(0,0,0,0.06), -2px -2px 4px rgba(255,255,255,0.9)",
+              boxShadow: "2px 2px 4px rgba(0,0,0,0.05), -1px -1px 3px rgba(255,255,255,0.9)",
             }}
           >
-            <ChevronLeft className="w-4 h-4 text-gray-600" />
+            <ChevronLeft className="w-3.5 h-3.5 text-gray-600" />
           </button>
 
           <div
-            className="px-5 py-2 rounded-full text-center"
+            className="px-3 py-1.5 rounded-full text-center"
             style={{
               background: "linear-gradient(145deg, #4DB8E8, #2196C8)",
-              boxShadow: "0 4px 12px rgba(33, 150, 200, 0.3), inset 0 1px 2px rgba(255,255,255,0.3)",
+              boxShadow: "0 3px 8px rgba(33, 150, 200, 0.25), inset 0 1px 2px rgba(255,255,255,0.3)",
             }}
           >
-            <span className="text-white font-bold text-sm tracking-wide">
+            <span className="text-white font-bold text-xs tracking-wide">
               {currentYear}年{currentMonth + 1}月
             </span>
           </div>
 
           <button
             onClick={nextMonth}
-            className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+            className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform"
             style={{
               background: "linear-gradient(145deg, #FFFFFF, #F0F4F8)",
-              boxShadow: "3px 3px 6px rgba(0,0,0,0.06), -2px -2px 4px rgba(255,255,255,0.9)",
+              boxShadow: "2px 2px 4px rgba(0,0,0,0.05), -1px -1px 3px rgba(255,255,255,0.9)",
             }}
           >
-            <ChevronRight className="w-4 h-4 text-gray-600" />
+            <ChevronRight className="w-3.5 h-3.5 text-gray-600" />
           </button>
+        </div>
+
+        {/* 右侧：月总结 */}
+        <div className="flex items-center gap-1">
+          <span className="text-[11px] text-gray-500">本月{tab.label}:</span>
+          <span className="text-sm font-bold text-[#2196C8]">{formatMonthTotal()}</span>
+          {tab.isRevenue && (
+            <button onClick={() => setShowRevenue(!showRevenue)} className="ml-0.5">
+              {showRevenue ? (
+                <Eye className="w-3.5 h-3.5 text-gray-400" />
+              ) : (
+                <EyeOff className="w-3.5 h-3.5 text-gray-400" />
+              )}
+            </button>
+          )}
         </div>
       </div>
 
       {/* 星期标题行 - 淡蓝色渐变 */}
       <div
-        className="grid grid-cols-7 px-2 py-2"
+        className="grid grid-cols-7 px-2 py-1.5"
         style={{
           background: "linear-gradient(180deg, #4DB8E8 0%, #5CC4F0 100%)",
           boxShadow: "0 3px 8px rgba(33, 150, 200, 0.15)",
         }}
       >
         {weekDays.map((day) => (
-          <div key={day} className="text-center text-[11px] font-bold text-white">
+          <div key={day} className="text-center text-[10px] font-bold text-white">
             {day}
           </div>
         ))}
       </div>
 
-      {/* 日历网格 - 帽檐日期 + 大数字 */}
+      {/* 日历网格 - 小帽檐(1/5~1/6) + 大数字 */}
       <div
-        className="px-1.5 py-2"
+        className="px-1.5 py-1.5"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         style={{ background: "linear-gradient(180deg, #F8FBFF 0%, #F2F6FA 100%)" }}
@@ -205,8 +232,9 @@ export default function YabanCalendar() {
               return (
                 <div
                   key={di}
-                  className="relative rounded-lg overflow-hidden flex flex-col items-center min-h-[54px]"
+                  className="relative rounded-lg overflow-hidden flex flex-col items-center"
                   style={{
+                    height: "48px",
                     background: todayMark
                       ? "linear-gradient(145deg, #E3F2FD, #BBDEFB)"
                       : "linear-gradient(145deg, #FFFFFF, #F5F8FC)",
@@ -216,29 +244,29 @@ export default function YabanCalendar() {
                     border: todayMark ? "1.5px solid #4DB8E8" : "1px solid rgba(0,0,0,0.03)",
                   }}
                 >
-                  {/* 帽檐 - 日期数字 */}
+                  {/* 小帽檐 - 只占约1/6高度(8px) */}
                   <div
-                    className="w-full text-center py-[2px]"
+                    className="w-full text-center flex items-center justify-center"
                     style={{
+                      height: "8px",
                       background: todayMark
                         ? "linear-gradient(180deg, #4DB8E8, #3AA8D8)"
                         : "linear-gradient(180deg, #E8F0F8, #DCE8F2)",
-                      borderBottom: todayMark ? "none" : "1px solid rgba(0,0,0,0.03)",
                     }}
                   >
                     <span
-                      className={`text-[9px] font-bold leading-none ${
-                        todayMark ? "text-white" : "text-gray-500"
+                      className={`text-[7px] font-bold leading-none ${
+                        todayMark ? "text-white" : "text-gray-400"
                       }`}
                     >
                       {day}
                     </span>
                   </div>
 
-                  {/* 中间大数字 */}
+                  {/* 中间大数字 - 占据剩余空间 */}
                   <div className="flex-1 flex items-center justify-center">
                     {hasData ? (
-                      <span className="text-[15px] font-bold text-gray-900 leading-none">
+                      <span className="text-[16px] font-bold text-gray-900 leading-none">
                         {formatValue(val)}
                       </span>
                     ) : (
@@ -252,35 +280,8 @@ export default function YabanCalendar() {
         ))}
       </div>
 
-      {/* 月度汇总 - 淡蓝色立体卡片 */}
-      <div
-        className="mx-3 mb-3 rounded-xl p-3 flex items-center justify-center gap-2"
-        style={{
-          background: "linear-gradient(145deg, #F0F8FF, #E8F4FD)",
-          boxShadow: "inset 0 2px 4px rgba(0,0,0,0.02), 0 2px 8px rgba(33, 150, 200, 0.06)",
-        }}
-      >
-        <span className="text-xs text-gray-500">本月{tab.label}：</span>
-        <span className="text-lg font-bold text-[#2196C8]">
-          {tab.isRevenue
-            ? showRevenue
-              ? `\u00A5${monthTotal.toLocaleString()}`
-              : "****"
-            : monthTotal}
-        </span>
-        {tab.isRevenue && (
-          <button onClick={() => setShowRevenue(!showRevenue)} className="ml-1">
-            {showRevenue ? (
-              <Eye className="w-4 h-4 text-gray-400" />
-            ) : (
-              <EyeOff className="w-4 h-4 text-gray-400" />
-            )}
-          </button>
-        )}
-      </div>
-
       {/* 5个Tab切换栏 - 淡蓝色3D胶囊 */}
-      <div className="px-3 pb-4">
+      <div className="px-3 pb-3 pt-1">
         <div
           className="flex rounded-full p-1"
           style={{

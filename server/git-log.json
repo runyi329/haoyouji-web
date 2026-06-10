@@ -1,5 +1,14 @@
 [
   {
+    "hash": "4a122a97c8a6f6b1a9355442ea2df65af020653d",
+    "author": "runyi329",
+    "date": "2026-06-10T14:56:30+00:00",
+    "message": "fix: 牙伴月历改为淡蓝色系+帽檐日期+大黑色数字+5个独立Tab",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "牙伴月历改为淡蓝色系+帽檐日期+大黑色数字+5个独立Tab"
+  },
+  {
     "hash": "6f2e0e657dfe43d3cc8c1670a36106112b235fc7",
     "author": "runyi329",
     "date": "2026-06-10T14:20:16+00:00",
