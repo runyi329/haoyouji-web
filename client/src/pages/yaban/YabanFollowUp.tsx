@@ -142,7 +142,8 @@ export default function YabanFollowUp() {
             {filteredData.map((item) => (
               <div
                 key={item.id}
-                className="bg-white px-4 py-4 active:bg-gray-50 transition-colors"
+                onClick={() => setLocation(`/yaban/followup/detail/${item.id}`)}
+                className="bg-white px-4 py-4 active:bg-gray-50 transition-colors cursor-pointer"
               >
                 {/* 第一行：日期 | 患者名 + 状态标签 */}
                 <div className="flex items-start justify-between mb-1.5">
