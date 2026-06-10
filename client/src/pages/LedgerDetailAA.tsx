@@ -1295,18 +1295,26 @@ export default function LedgerDetailAA({
                         .map((cat: any) => {
                           const catPauseDate = initialBalancesData?.balances ? (initialBalancesData.balances as any)[`${cat.name}__pauseDate`] : null;
                           const isCatPaused = !!catPauseDate;
+                          let pauseInfo = '';
+                          if (isCatPaused) {
+                            const [y, m, d] = catPauseDate.split('-');
+                            const pauseD = new Date(catPauseDate);
+                            const today = new Date();
+                            const diffDays = Math.floor((today.getTime() - pauseD.getTime()) / 86400000);
+                            pauseInfo = `(${Number(m)}月${Number(d)}日暂停，已${diffDays}天)`;
+                          }
                           return (
                             <button
                               key={cat.id}
                               onClick={() => { setSelectedTagId(cat.id); setShowTagDropdown(false); }}
                               className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#FFEBEE]"
                               style={{
-                                color: selectedTagId === cat.id ? "#D32F2F" : isCatPaused ? "#1565C0" : "#222222",
                                 fontWeight: selectedTagId === cat.id ? 600 : 400,
                                 borderBottom: "1px solid #F5F5F5",
                               }}
                             >
-                              {cat.name}{isCatPaused && <span style={{ marginLeft: 4, fontSize: 11, color: '#1565C0', opacity: 0.7 }}>(暂停)</span>}
+                              <span style={{ color: selectedTagId === cat.id ? '#D32F2F' : '#222222' }}>{cat.name}</span>
+                              {isCatPaused && <span style={{ marginLeft: 4, fontSize: 11, color: '#1565C0' }}>{pauseInfo}</span>}
                             </button>
                           );
                         })}
