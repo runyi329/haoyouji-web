@@ -3169,7 +3169,7 @@ export default function LedgerDetailAA({
                 </div>
                 {/* 第5步 */}
                 <div>
-                  <div className="font-semibold text-gray-900 mb-1">{capitalNet !== 0 ? '5' : '4'}. 标签实际资产</div>
+                  <div className="font-semibold text-gray-900 mb-1">{capitalNet !== 0 ? '5' : '4'}. <span className="text-red-600">{selectedTag?.name || '标签'}</span> 实际账户本金</div>
                   <div className="pl-3 text-gray-600">
                     = 最新余额 + 累计提现
                   </div>
