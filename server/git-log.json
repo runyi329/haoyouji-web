@@ -1,5 +1,14 @@
 [
   {
+    "hash": "ca2303a6f2abc31a3581156466913943a6a88de0",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T08:03:13+00:00",
+    "message": "fix: P095/FunderManagement预览右栏各开关独立控制，不依赖accruedInterest前置条件",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "P095/FunderManagement预览右栏各开关独立控制，不依赖accruedInterest前置条件"
+  },
+  {
     "hash": "c874a17c1f9cd622de24ca9dbe0be7db31ab844b",
     "author": "Manus Deploy",
     "date": "2026-06-10T07:45:50+00:00",

@@ -2097,7 +2097,7 @@ export default function LedgerDetailAA({
               const divAmt = dividendByTag[tag.name] ?? 0;
               return { tag, days, latestPnl, latestDate, annualized, divAmt, isLast: idx === visibleTags.length - 1, isPaused, firstDate, endDate };
             });
-            // 排序逻辑
+            // 排序逻辑：默认（无手动排序）时暂停的排最下面；用户手动排序时参与全局排序
             const sortedTagData = overviewSort ? [...tagData].sort((a, b) => {
               let va = 0, vb = 0;
               if (overviewSort.col === 'days') { va = a.days; vb = b.days; }
@@ -2111,7 +2111,12 @@ export default function LedgerDetailAA({
               else if (overviewSort.col === 'annualized') { va = a.annualized ?? -Infinity; vb = b.annualized ?? -Infinity; }
               else if (overviewSort.col === 'dividend') { va = a.divAmt; vb = b.divAmt; }
               return overviewSort.dir === 'desc' ? vb - va : va - vb;
-            }) : tagData;
+            }) : [...tagData].sort((a, b) => {
+              // 默认排序：暂停(isPaused)的排最下面
+              if (a.isPaused && !b.isPaused) return 1;
+              if (!a.isPaused && b.isPaused) return -1;
+              return 0; // 同状态保持原始顺序
+            });
             // 汇总行数据
             const totalMargin = validTags.reduce((s, t) => s + t.marginCny, 0);
             // totalPnl 统计所有有数据的标签（不限于有保证金），与红色区域「全部统计之和」口径一致
