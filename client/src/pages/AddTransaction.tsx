@@ -867,8 +867,8 @@ const AddTransaction = () => {
     
     const payload: any = {
       ledgerId,
-      amount: parseFloat(amount) || 0,
-      type: 'expense' as const,
+      amount: Math.abs(parseFloat(amount) || 0),
+      type: transactionType as 'income' | 'expense',
       categoryId: selectedCategoryPath[selectedCategoryPath.length - 1],
       transactionDate: formattedDate,
       description: note || undefined,

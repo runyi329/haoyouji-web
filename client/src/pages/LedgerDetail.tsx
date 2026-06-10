@@ -6011,7 +6011,7 @@ export default function LedgerDetail() {
                               ? 'text-gray-400'
                               : record.type === 'expense' ? 'text-[#D32F2F]' : 'text-[#4CAF50]'
                           }`}>
-                            {record.type === 'expense' ? '-' : '+'}{record.amount.toFixed(2)}
+                            {record.type === 'expense' ? '-' : '+'}{Math.abs(record.amount).toFixed(2)}
                           </div>
                         )}
                       </div>

@@ -3149,7 +3149,7 @@ export async function addTransaction(data: {
   const recordData = {
     ledgerId: data.ledgerId,
     type: data.type,
-    amount: data.amount.toString(),
+    amount: Math.abs(data.amount).toString(),
     categoryId: data.categoryId,
     description: data.description || null,
     imageUrl: data.images && data.images.length > 0 ? data.images[0] : null,
@@ -3483,7 +3483,7 @@ export async function getTransactionsList(
     const category = categoryMap.get(record.categoryId);
     const creator = creatorMap.get(record.createdBy);
     
-    const amount = Number(record.amount);
+    const amount = Math.abs(Number(record.amount));
     
     groupedRecords[date].records.push({
       id: record.id,
@@ -4134,11 +4134,11 @@ export async function updateTransaction(
     updateData.type = data.type; // 仍然更新，但不记录日志
   }
   
-  if (data.amount !== undefined && String(data.amount) !== String(parseFloat(decryptedOldRecord.amount))) {
-    updateData.amount = data.amount.toString();
-    logChanges.push({ fieldName: '金额', oldValue: String(parseFloat(decryptedOldRecord.amount)), newValue: String(data.amount) });
+  if (data.amount !== undefined && String(Math.abs(data.amount)) !== String(Math.abs(parseFloat(decryptedOldRecord.amount)))) {
+    updateData.amount = Math.abs(data.amount).toString();
+    logChanges.push({ fieldName: '金额', oldValue: String(Math.abs(parseFloat(decryptedOldRecord.amount))), newValue: String(Math.abs(data.amount)) });
   } else if (data.amount !== undefined) {
-    updateData.amount = data.amount.toString();
+    updateData.amount = Math.abs(data.amount).toString();
   }
   
   if (data.categoryId && data.categoryId !== decryptedOldRecord.categoryId) {
