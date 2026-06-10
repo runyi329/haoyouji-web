@@ -3292,32 +3292,40 @@ export default function CryptoPrediction() {
                           <div className="flex flex-col">
                             {/* 待付/待收利息 */}
                             <div className="flex flex-col justify-start">
-                              <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
-                                <span className="text-[10px]" style={{ color: '#3B82F6' }}>
-                                  {isNegativeRate ? '待付利息' : '待收利息'}
-                                </span>
-                                <span className="text-[10px] text-gray-400">{isNegativeRate ? '(整体部分年化12%)' : `(年化 ${Math.abs(annualRate)}%)`}</span>
-                              </div>
-                              <div className="flex items-baseline gap-0.5">
-                                <span
-                                  className="text-2xl font-bold tabular-nums leading-tight"
-                                  style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
-                                >
-                                  {unpaidInterest > 0 ? '-' : ''}{unpaidInterest.toFixed(2)}
-                                </span>
-                                <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{_interestUnit}</span>
-                              </div>
-                              <div className="text-xs font-medium leading-tight mb-1" style={{ color: '#4B5563' }}>≈{unpaidInterest > 0 ? '-' : ''}{_convertAlt(unpaidInterest).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {_altUnit}</div>
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-400">{isNegativeRate ? '已付利息' : '已收利息'}</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>{paidInterest.toFixed(2)} {_interestUnit}</span>
-                              </div>
-                              {paidInterest > 0 && (
-                                <div className="flex justify-end text-xs">
-                                  <span className="text-gray-400">≈{_convertAlt(paidInterest).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {_altUnit}</span>
-                                </div>
+                              {showField('accruedInterest') ? (
+                                <>
+                                  <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
+                                    <span className="text-[10px]" style={{ color: '#3B82F6' }}>
+                                      {isNegativeRate ? '待付利息' : '待收利息'}
+                                    </span>
+                                    <span className="text-[10px] text-gray-400">{isNegativeRate ? '(整体部分年化12%)' : `(年化 ${Math.abs(annualRate)}%)`}</span>
+                                  </div>
+                                  <div className="flex items-baseline gap-0.5">
+                                    <span
+                                      className="text-2xl font-bold tabular-nums leading-tight"
+                                      style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
+                                    >
+                                      {unpaidInterest > 0 ? '-' : ''}{unpaidInterest.toFixed(2)}
+                                    </span>
+                                    <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{_interestUnit}</span>
+                                  </div>
+                                  <div className="text-xs font-medium leading-tight mb-1" style={{ color: '#4B5563' }}>≈{unpaidInterest > 0 ? '-' : ''}{_convertAlt(unpaidInterest).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {_altUnit}</div>
+                                </>
+                              ) : <div style={{ height: '16px' }} />}
+                              {showField('paidInterest') && (
+                                <>
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="text-gray-400">{isNegativeRate ? '已付利息' : '已收利息'}</span>
+                                    <span className="font-medium" style={{ color: '#4B5563' }}>{paidInterest.toFixed(2)} {_interestUnit}</span>
+                                  </div>
+                                  {paidInterest > 0 && (
+                                    <div className="flex justify-end text-xs">
+                                      <span className="text-gray-400">≈{_convertAlt(paidInterest).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {_altUnit}</span>
+                                    </div>
+                                  )}
+                                </>
                               )}
-                              {startDate && (
+                              {showField('interestStartDate') && startDate && (
                                 <div className="flex items-center justify-between text-xs">
                                   <span className="text-gray-400">计息日期</span>
                                   <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -3708,19 +3716,25 @@ export default function CryptoPrediction() {
                                   <div className="p-4 pl-3 flex flex-col shrink-0" style={{ width: 'auto', minWidth: '160px', maxWidth: '200px' }}>
                                     <div className="flex flex-col">
                                       <div className="flex flex-col justify-start">
-                                        <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
-                                          <span className="text-[10px]" style={{ color: '#3B82F6' }}>{isNegativeRate ? '待付利息' : '待收利息'}</span>
-                                        </div>
-                                        <div className="flex items-baseline gap-0.5">
-                                          <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{unpaidInterest > 0 ? '-' : ''}{unpaidInterest.toFixed(2)}</span>
-                                          <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{_interestUnit}</span>
-                                        </div>
-                                        <div className="text-xs font-medium leading-tight mb-1" style={{ color: '#4B5563' }}>≈{unpaidInterest > 0 ? '-' : ''}{_convertAlt(unpaidInterest).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {_altUnit}</div>
-                                        <div className="flex items-center justify-between text-xs">
-                                          <span className="text-gray-400">{isNegativeRate ? '已付利息' : '已收利息'}</span>
-                                          <span className="font-medium" style={{ color: '#4B5563' }}>{paidInterest.toFixed(2)} {_interestUnit}</span>
-                                        </div>
-                                        {startDate && (<div className="flex items-center justify-between text-xs"><span className="text-gray-400">计息日期</span><span className="font-medium" style={{ color: '#4B5563' }}>{startDate.replace(/^\d{4}-(\d{2})-(\d{2}).*$/, (_: string, m: string, dd: string) => `${parseInt(m)}月${parseInt(dd)}日`)}</span></div>)}
+                                        {showField('accruedInterest') ? (
+                                          <>
+                                            <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
+                                              <span className="text-[10px]" style={{ color: '#3B82F6' }}>{isNegativeRate ? '待付利息' : '待收利息'}</span>
+                                            </div>
+                                            <div className="flex items-baseline gap-0.5">
+                                              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{unpaidInterest > 0 ? '-' : ''}{unpaidInterest.toFixed(2)}</span>
+                                              <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{_interestUnit}</span>
+                                            </div>
+                                            <div className="text-xs font-medium leading-tight mb-1" style={{ color: '#4B5563' }}>≈{unpaidInterest > 0 ? '-' : ''}{_convertAlt(unpaidInterest).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {_altUnit}</div>
+                                          </>
+                                        ) : <div style={{ height: '16px' }} />}
+                                        {showField('paidInterest') && (
+                                          <div className="flex items-center justify-between text-xs">
+                                            <span className="text-gray-400">{isNegativeRate ? '已付利息' : '已收利息'}</span>
+                                            <span className="font-medium" style={{ color: '#4B5563' }}>{paidInterest.toFixed(2)} {_interestUnit}</span>
+                                          </div>
+                                        )}
+                                        {showField('interestStartDate') && startDate && (<div className="flex items-center justify-between text-xs"><span className="text-gray-400">计息日期</span><span className="font-medium" style={{ color: '#4B5563' }}>{startDate.replace(/^\d{4}-(\d{2})-(\d{2}).*$/, (_: string, m: string, dd: string) => `${parseInt(m)}月${parseInt(dd)}日`)}</span></div>)}
                                         {showField('holdDuration') && holdingLabel && (<div className="flex items-center justify-between mt-0.5 text-xs"><span className="text-gray-400">持有时长</span><span className="font-medium" style={{ color: '#4B5563' }}>{holdingLabel}</span></div>)}
                                       </div>
                                     </div>
