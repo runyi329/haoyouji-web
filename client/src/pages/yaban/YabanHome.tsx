@@ -247,7 +247,7 @@ export default function YabanHome() {
         <div className="mx-3 mt-2 bg-gradient-to-r from-[#E8F4FD] to-[#D6EEFB] rounded-lg px-3 py-2 flex items-center">
           <span className="text-[11px] text-[#1976D2] font-bold mr-1">功能推荐</span>
           <span className="text-[9px] bg-[#2196C8] text-white px-1 py-0.5 rounded mr-2">NEW</span>
-          <span className="text-[11px] text-[#1565C0]">开通分期支付，提升客户成交率、客单价 &gt;</span>
+
         </div>
 
         {/* 工作统计 - 3D立体月历 */}

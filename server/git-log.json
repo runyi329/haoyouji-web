@@ -1,5 +1,14 @@
 [
   {
+    "hash": "858d7509a0185d25f6a6835fb595c562ab2efef4",
+    "author": "runyi329",
+    "date": "2026-06-10T16:22:02+00:00",
+    "message": "feat(yaban): 新增日程管理功能（列表页+详情页+新建预约页）",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "新增日程管理功能（列表页+详情页+新建预约页）"
+  },
+  {
     "hash": "7dce03b757365643ada582d8ea262bfb76a6da12",
     "author": "runyi329",
     "date": "2026-06-10T16:04:23+00:00",
