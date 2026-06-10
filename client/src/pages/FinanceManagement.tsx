@@ -298,6 +298,7 @@ function FinanceOrderCard({
     const iq = parseFloat(item.qty);
     if (!item.coin || isNaN(iq)) { collateralItemValues.push(null); collateralValueKnown = false; continue; }
     if (item.coin === 'USDT') { collateralValue += iq; collateralItemValues.push(iq); }
+    else if (item.coin === 'CNY') { const cv = iq / cnyRate; collateralValue += cv; collateralItemValues.push(cv); }
     else {
       const p = livePrices[item.coin];
       if (p) { collateralValue += iq * p; collateralItemValues.push(iq * p); }
