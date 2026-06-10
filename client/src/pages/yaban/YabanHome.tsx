@@ -132,21 +132,21 @@ export default function YabanHome() {
       {showClinicPicker && (
         <div className="fixed inset-0 z-50" onClick={() => setShowClinicPicker(false)}>
           <div
-            className="absolute top-[52px] left-0 right-0 bg-[#2C2C3A] text-white max-w-lg mx-auto rounded-b-xl shadow-xl overflow-hidden"
+            className="absolute top-[52px] left-0 right-0 bg-[#3D3D4D] text-white max-w-lg mx-auto shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {CLINICS.map((clinic) => (
               <div key={clinic.company}>
                 {/* 公司名称 */}
                 <button
-                  className="w-full flex items-center justify-between px-4 py-3 border-b border-white/10"
+                  className="w-full flex items-center justify-between px-4 py-3.5 bg-[#4A4A5A] border-b border-[#555565]"
                   onClick={() => toggleCompany(clinic.company)}
                 >
-                  <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded bg-[#00B4D8] flex items-center justify-center">
-                      <span className="text-[8px] font-bold">企</span>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-6 h-6 rounded bg-[#00B4D8] flex items-center justify-center">
+                      <span className="text-[9px] font-bold text-white">企</span>
                     </div>
-                    <span className="text-sm font-medium">{clinic.company}</span>
+                    <span className="text-[13px] font-medium text-white">{clinic.company}</span>
                   </div>
                   <span className="text-xs text-gray-400">
                     {expandedCompanies.includes(clinic.company) ? "收起" : "展开"}
@@ -159,35 +159,35 @@ export default function YabanHome() {
                       {branch.children ? (
                         <>
                           <button
-                            className="w-full flex items-center justify-between px-6 py-2.5 border-b border-white/5"
+                            className="w-full flex items-center justify-between px-5 py-3 border-b border-[#4A4A5A]"
                             onClick={() => toggleGroup(branch.name)}
                           >
-                            <span className="text-xs text-gray-300">
-                              <span className="text-gray-500 mr-1">|-</span>
+                            <span className="text-[13px] text-gray-300">
+                              <span className="text-gray-500 mr-1.5">|-</span>
                               {branch.name}
                             </span>
                             {expandedGroups.includes(branch.name) ? (
-                              <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
+                              <ChevronUp className="w-4 h-4 text-gray-400" />
                             ) : (
-                              <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                              <ChevronDown className="w-4 h-4 text-gray-400" />
                             )}
                           </button>
                           {expandedGroups.includes(branch.name) &&
                             branch.children.map((child) => (
                               <button
                                 key={child.id}
-                                className="w-full flex items-center justify-between px-8 py-2.5 border-b border-white/5"
+                                className="w-full flex items-center justify-between px-8 py-3 border-b border-[#4A4A5A]"
                                 onClick={() => {
                                   setCurrentClinic(child.name);
                                   setShowClinicPicker(false);
                                 }}
                               >
-                                <span className="text-xs text-gray-300">
-                                  <span className="text-gray-500 mr-1">|-</span>
+                                <span className="text-[13px] text-gray-300">
+                                  <span className="text-gray-500 mr-1.5">|-</span>
                                   {child.name}
                                 </span>
                                 {currentClinic === child.name && (
-                                  <span className="text-[10px] bg-[#00B4D8] text-white px-2 py-0.5 rounded">
+                                  <span className="text-[11px] bg-[#00B4D8] text-white px-2.5 py-1 rounded-md font-medium">
                                     当前
                                   </span>
                                 )}
@@ -196,14 +196,14 @@ export default function YabanHome() {
                         </>
                       ) : (
                         <button
-                          className="w-full flex items-center px-6 py-2.5 border-b border-white/5"
+                          className="w-full flex items-center px-5 py-3 border-b border-[#4A4A5A]"
                           onClick={() => {
                             setCurrentClinic(branch.name);
                             setShowClinicPicker(false);
                           }}
                         >
-                          <span className="text-xs text-gray-300">
-                            <span className="text-gray-500 mr-1">|-</span>
+                          <span className="text-[13px] text-gray-300">
+                            <span className="text-gray-500 mr-1.5">|-</span>
                             {branch.name}
                           </span>
                         </button>
@@ -233,8 +233,8 @@ export default function YabanHome() {
                 className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform"
                 onClick={() => handleFeatureClick(feat.name)}
               >
-                <div className="w-12 h-12 rounded-xl bg-[#00B4D8]/10 flex items-center justify-center overflow-hidden">
-                  <img src={feat.icon} alt={feat.name} className="w-10 h-10 object-contain" />
+                <div className="w-14 h-14 flex items-center justify-center overflow-hidden">
+                  <img src={feat.icon} alt={feat.name} className="w-14 h-14 object-contain" />
                 </div>
                 <span className="text-[11px] text-gray-600">{feat.name}</span>
               </button>
@@ -297,8 +297,8 @@ export default function YabanHome() {
                 className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform relative"
                 onClick={() => handleFeatureClick(feat.name)}
               >
-                <div className="w-12 h-12 rounded-xl bg-[#00B4D8]/10 flex items-center justify-center overflow-hidden relative">
-                  <img src={feat.icon} alt={feat.name} className="w-10 h-10 object-contain" />
+                <div className="w-14 h-14 flex items-center justify-center overflow-hidden relative">
+                  <img src={feat.icon} alt={feat.name} className="w-14 h-14 object-contain" />
                   {feat.badge && (
                     <span className="absolute top-0 right-0 text-[8px] bg-[#FF5722] text-white px-1 rounded-bl">
                       {feat.badge}
