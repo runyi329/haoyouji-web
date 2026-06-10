@@ -25,9 +25,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          # 直接写入已知的服务器指纹，避免ssh-keyscan超时问题
           ssh-keyscan -H 124.223.54.69 >> ~/.ssh/known_hosts 2>/dev/null || true
-          # 备用：如果keyscan失败，使用StrictHostKeyChecking=no
           echo "Host 124.223.54.69" >> ~/.ssh/config
           echo "  StrictHostKeyChecking no" >> ~/.ssh/config
           echo "  UserKnownHostsFile /dev/null" >> ~/.ssh/config
@@ -38,235 +36,67 @@ jobs:
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
             set -e
             export PATH="/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
             echo "📂 进入项目目录..."
             cd /root/haoyouji-web
+
             echo "📥 拉取最新代码..."
             git fetch origin && git reset --hard origin/main && git clean -fd
             echo "✅ 当前 git HEAD: $(git log --oneline -1)"
-            echo "✅ 验证 LedgerDetail.tsx 关键内容:"
-            grep -c '★测\|申请中测\|FFF8E1\|rotate(5deg)' client/src/pages/LedgerDetail.tsx || echo '未找到关键字'
-            echo "🧹 清除 Vite 缓存（保留旧 dist 继续服务）..."
+
+            echo "🧹 清除 Vite 缓存..."
             rm -rf node_modules/.vite client/.vite
+
             echo "📦 安装依赖..."
-            pnpm install
-            echo "🔨 构建项目（旧 dist 在整个构建期间保持可用）..."
+            pnpm install --frozen-lockfile
+
+            echo "🔨 构建项目..."
             export NODE_OPTIONS="--max-old-space-size=4096"
             set -o pipefail
-            pnpm run build 2>&1 | tee /tmp/build_output.log || { echo "❌ 构建失败！错误日志："; cat /tmp/build_output.log | tail -50; exit 1; }
+            pnpm run build 2>&1 | tee /tmp/build_output.log || { echo "❌ 构建失败！"; cat /tmp/build_output.log | tail -50; exit 1; }
+
             echo "📊 执行数据库迁移..."
             bash scripts/post-deploy-migration.sh || true
-            echo "📊 执行数据库结构更新..."
             bash scripts/db-migrations.sh || true
-            echo "💳 注入支付宝环境变量..."
-            node /root/haoyouji-web/scripts/inject-alipay-env.cjs || echo "⚠️ inject-alipay-env 失败（非致命，继续部署）"
-            echo "🔄 删除root PM2进程（释放3000端口）..."
-            pm2 delete haoyouji-web 2>/dev/null || true
-            pm2 save 2>/dev/null || true
-            sleep 2
-            echo "🔄 同步新代码到实际服务目录（先清理旧 dist 避免旧 JS 文件残留）..."
+
+            echo "🔄 同步构建产物到服务目录..."
             rm -rf /home/ubuntu/haoyouji-web/dist
             cp -rf /root/haoyouji-web/dist /home/ubuntu/haoyouji-web/dist
-            # 复制 git-log.json 到服务器运行目录（供 getWorkLogs 接口读取）
             mkdir -p /home/ubuntu/haoyouji-web/server
-            cp /root/haoyouji-web/server/git-log.json /home/ubuntu/haoyouji-web/server/git-log.json 2>/dev/null || echo "⚠️ git-log.json 复制失败（非致命）"
+            cp /root/haoyouji-web/server/git-log.json /home/ubuntu/haoyouji-web/server/git-log.json 2>/dev/null || true
+            chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/dist
             chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/server/git-log.json 2>/dev/null || true
             cp /root/haoyouji-web/package.json /home/ubuntu/haoyouji-web/package.json
             cp /root/haoyouji-web/pnpm-lock.yaml /home/ubuntu/haoyouji-web/pnpm-lock.yaml
-            chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/dist
-            echo "🔄 同步node_modules..."
+
+            echo "🔄 同步 node_modules..."
             rsync -a --delete /root/haoyouji-web/node_modules/ /home/ubuntu/haoyouji-web/node_modules/
             chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules
-            echo "🔄 重启实际服务进程..."
-            # 同步.env文件到ubuntu目录（ubuntu用户没有/root/目录权限）
+
+            echo "🔄 同步环境配置..."
             cp /root/haoyouji-web/.env /home/ubuntu/haoyouji-web/.env 2>/dev/null || true
             chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/.env 2>/dev/null || true
-            # 复制ecosystem.config.cjs并替换cwd为ubuntu用户路径
             sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' /root/haoyouji-web/ecosystem.config.cjs > /home/ubuntu/haoyouji-web/ecosystem.config.cjs
             chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/ecosystem.config.cjs
-            # 用restart+update-env确保环境变量生效，不删除进程避免服务中断
+
+            echo "🔄 重启服务..."
+            pm2 delete haoyouji-web 2>/dev/null || true
+            pm2 save 2>/dev/null || true
             if sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 describe haoyouji-web > /dev/null 2>&1'; then
               sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart /home/ubuntu/haoyouji-web/ecosystem.config.cjs --update-env' 2>&1
             else
               sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' 2>&1
             fi
             sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' 2>&1
-            sleep 8
-            echo "当前监听端口："
-            ss -tlnp | grep ':3000\|:3001\|:8080' || echo '暂无3000/3001/8080端口监听'
-            echo "ubuntu PM2进程状态："
-            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
-            echo "ubuntu PM2错误日志（最后30行）："
-            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 logs haoyouji-web --err --nostream --lines 30' 2>&1 || true
-            echo "✅ 部署完成！"
-            echo "🔒 同步Nginx配置并重载Nginx..."
+            sleep 5
+
+            echo "🔒 同步 Nginx 配置..."
             cp /root/haoyouji-web/nginx.conf /etc/nginx/sites-available/haoyouji
-            nginx -t && (systemctl reload nginx 2>/dev/null || systemctl start nginx 2>/dev/null || true)
-            echo "✅ Nginx配置已同步并重载"
-            echo "Nginx错误日志（最后10行）："
-            tail -10 /var/log/nginx/haoyouji_error.log 2>/dev/null || true
-            tail -10 /var/log/nginx/error.log 2>/dev/null || true
-            echo "👤 补全历史订单员工编号..."
-            cd /root/haoyouji-web && node scripts/backfill-employee-no.mjs || echo "⚠️ 员工编号补全失败（非致命）"
-            echo "📊 导入/更新黄金历史日K线数据..."
-            cd /root/haoyouji-web && node scripts/update-gold-daily.mjs || echo "⚠️ 黄金数据更新失败（非致命）"
-            echo "📊 初始化/更新数字币价格缓存..."
-            cd /root/haoyouji-web && node scripts/seed-crypto-prices.mjs || echo "⚠️ 数字币价格初始化失败（非致命）"
-            echo "🖼️ 上传交易所图标到腾讯云COS..."
-            cd /root/haoyouji-web && node scripts/upload-exchange-icons.mjs || echo "⚠️ 交易所图标上传失败（非致命）"
-            echo "🌍 上传世界杯海报到腾讯云COS..."
-            cd /root/haoyouji-web && node scripts/upload-worldcup-banner.mjs || echo "⚠️ 世界杯海报上传失败（非致命）"
-            echo "🏳️ 上传世界杯球队国旗到腾讯云COS..."
-            cd /root/haoyouji-web && node scripts/upload-flags.mjs || echo "⚠️ 国旗上传失败（非致命）"
-            echo "📊 预计算数字币相关性统计..."
-            cd /root/haoyouji-web && node scripts/compute-correlation.mjs || echo "⚠️ 相关性统计预计算失败（非致命）"
-            echo "📊 插入ETH持仓模拟数据（一次性）..."
-            cd /root/haoyouji-web && node scripts/seed-eth-positions.mjs || echo "⚠️ ETH持仓模拟数据插入失败（非致命）"
-            # 首次部署时检查数据量，不足100条则全量导入
-            source /root/haoyouji-web/.env 2>/dev/null || true
-            DB_HOST=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'@([^:/]+)', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
-            DB_PORT=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r':([0-9]{4,5})/', u); print(m.group(1) if m else '4000')" 2>/dev/null || echo "4000")
-            DB_USER=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'://([^:]+):', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
-            DB_PASS=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'://[^:]+:([^@]+)@', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
-            DB_NAME=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'/([^/?]+)(\?|$)', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
-            if [ -n "$DB_HOST" ]; then
-              GOLD_COUNT=$(mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -sN -e "SELECT COUNT(*) FROM gold_daily_kline;" 2>/dev/null || echo "0")
-              echo "当前黄金数据条数: $GOLD_COUNT"
-              if [ "$GOLD_COUNT" -lt 100 ] 2>/dev/null; then
-                echo "数据不足，执行全量导入..."
-                cd /root/haoyouji-web && node scripts/import-gold-history.mjs || echo "⚠️ 全量导入失败"
-              fi
-            fi
-            # 设置每日凌晨2点自动更新黄金数据的cron任务
-            CRON_JOB="0 2 * * * cd /root/haoyouji-web && node scripts/update-gold-daily.mjs >> /var/log/gold-update.log 2>&1"
-            (crontab -l 2>/dev/null | grep -v "update-gold-daily"; echo "$CRON_JOB") | crontab -
-            echo "✅ 黄金数据每日更新cron任务已设置"
-            # 设置每个交易日收盘后（北京时间16:00 = UTC 08:00）更新A股2026年交易成本累计数据
-            # 失败后每小时重试一次（09:00、10:00），最多重试2次，确保能拉到数据
-            TRADING_COST_CRON_1="0 8 * * 1-5 cd /root/haoyouji-web && node scripts/update-trading-cost-2026.mjs >> /var/log/trading-cost-2026.log 2>&1"
-            TRADING_COST_CRON_2="0 9 * * 1-5 cd /root/haoyouji-web && node scripts/update-trading-cost-2026.mjs >> /var/log/trading-cost-2026.log 2>&1"
-            TRADING_COST_CRON_3="0 10 * * 1-5 cd /root/haoyouji-web && node scripts/update-trading-cost-2026.mjs >> /var/log/trading-cost-2026.log 2>&1"
-            (crontab -l 2>/dev/null | grep -v "update-trading-cost-2026"; echo "$TRADING_COST_CRON_1"; echo "$TRADING_COST_CRON_2"; echo "$TRADING_COST_CRON_3") | crontab -
-            echo "✅ A股2026年交易成本每日更新cron任务已设置（UTC 08:00/09:00/10:00，周一至周五）"
-            echo "📤 上传同花顺股票图标到COS..."
-            cd /root/haoyouji-web && node scripts/upload-ths-icon.mjs || echo "⚠️ 图标上传失败（非致命）"
-            echo "🔍 执行COS诊断..."
-            bash /root/haoyouji-web/scripts/diagnose-cos.sh || true
-            echo "=== 确保 snt_withdrawals 表存在 ==="
-            source /root/haoyouji-web/.env 2>/dev/null || true
-            DB_HOST=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'@([^:/]+)', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
-            DB_PORT=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r':([0-9]{4,5})/', u); print(m.group(1) if m else '4000')" 2>/dev/null || echo "4000")
-            DB_USER=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'://([^:]+):', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
-            DB_PASS=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'://[^:]+:([^@]+)@', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
-            DB_NAME=$(python3 -c "import os,re; u=os.environ.get('DATABASE_URL',''); m=re.search(r'/([^/?]+)(\?|$)', u); print(m.group(1) if m else '')" 2>/dev/null || echo "")
-            if [ -n "$DB_HOST" ]; then
-              echo "建表 snt_withdrawals..."
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-                CREATE TABLE IF NOT EXISTS snt_withdrawals (
-                  id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
-                  user_id int NOT NULL,
-                  ledger_id int DEFAULT NULL,
-                  snt_amount decimal(20, 4) NOT NULL,
-                  bsc_address varchar(255) NOT NULL,
-                  status enum('pending','processing','completed','rejected') DEFAULT 'pending' NOT NULL,
-                  admin_note text,
-                  txn_hash varchar(100),
-                  created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                  updated_at timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
-                  INDEX snt_withdrawals_user_id_idx (user_id),
-                  INDEX snt_withdrawals_status_idx (status),
-                  INDEX snt_withdrawals_ledger_id_idx (ledger_id)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-              " 2>&1 && echo "✅ snt_withdrawals 表已就绪" || echo "⚠️ snt_withdrawals 建表失败"
-              echo "建表 user_bsc_wallets..."
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-                CREATE TABLE IF NOT EXISTS user_bsc_wallets (
-                  id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
-                  user_id int NOT NULL,
-                  bsc_address varchar(255) NOT NULL,
-                  created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                  updated_at timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
-                  UNIQUE KEY user_bsc_wallets_user_id_unique (user_id),
-                  INDEX user_bsc_wallets_user_id_idx (user_id)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-              " 2>&1 && echo "✅ user_bsc_wallets 表已就绪" || echo "⚠️ user_bsc_wallets 建表失败"
-              echo "检查表是否存在..."
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "SHOW TABLES LIKE 'snt%';" 2>&1
-              echo "建表 snt_withdrawal_fee_rules（提现手续费规则表）..."
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-                CREATE TABLE IF NOT EXISTS snt_withdrawal_fee_rules (
-                  id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
-                  ledger_id int DEFAULT NULL,
-                  scope enum('global','user','user_and_downlines') DEFAULT 'global' NOT NULL,
-                  target_user_id int DEFAULT NULL,
-                  fee_rate decimal(5,4) DEFAULT 0.0000 NOT NULL,
-                  fee_fixed decimal(20,4) DEFAULT 0.0000 NOT NULL,
-                  min_fee decimal(20,4) DEFAULT 0.0000 NOT NULL,
-                  max_fee decimal(20,4) DEFAULT NULL,
-                  note varchar(255) DEFAULT NULL,
-                  created_by int DEFAULT NULL,
-                  created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                  updated_at timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP NOT NULL,
-                  INDEX snt_fee_rules_ledger_idx (ledger_id),
-                  INDEX snt_fee_rules_target_user_idx (target_user_id)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-              " 2>&1 && echo "✅ snt_withdrawal_fee_rules 表已就绪" || echo "⚠️ snt_withdrawal_fee_rules 建表失败"
-              echo "确保全局默认手续费规则存在（fee_rate=0）..."
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-                INSERT IGNORE INTO snt_withdrawal_fee_rules (id, ledger_id, scope, target_user_id, fee_rate, fee_fixed, min_fee, note)
-                VALUES (1, NULL, 'global', NULL, 0.0000, 0.0000, 0.0000, '全局默认手续费');
-              " 2>&1 && echo "✅ 全局默认手续费规则已就绪" || echo "⚠️ 插入全局规则失败"
-              echo "验证 snt_withdrawals 数据..."
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "SELECT id, user_id, ledger_id, snt_amount, status, created_at FROM snt_withdrawals ORDER BY id DESC LIMIT 10;" 2>&1
-              echo "建表 funder_interest_payments（资方结息记录表）..."
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-                CREATE TABLE IF NOT EXISTS funder_interest_payments (
-                  id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
-                  order_id int NOT NULL,
-                  ledger_id int NOT NULL,
-                  amount decimal(20, 4) NOT NULL,
-                  pay_date date NOT NULL,
-                  note text,
-                  created_by int NOT NULL,
-                  created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
-                  INDEX fip_order_id_idx (order_id),
-                  INDEX fip_ledger_id_idx (ledger_id),
-                  INDEX fip_pay_date_idx (pay_date)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-              " 2>&1 && echo "✅ funder_interest_payments 表已就绪" || echo "⚠️ funder_interest_payments 建表失败"
-              echo "确保 ledger_members 表有 shortcut_buttons 字段..."
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-                ALTER TABLE ledger_members ADD COLUMN shortcut_buttons JSON NULL DEFAULT NULL;
-              " 2>&1 && echo "✅ shortcut_buttons 字段已添加" || echo "⚠️ shortcut_buttons 字段可能已存在（正常）"
-              echo "确保 merchant_products 表有 inPointsShop 字段（积分商城开关）..."
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-                ALTER TABLE merchant_products ADD COLUMN inPointsShop TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否上架到积分商城（0=否，1=是）' AFTER isShareable;
-              " 2>&1 && echo "✅ inPointsShop 字段已添加" || echo "⚠️ inPointsShop 字段可能已存在（正常）"
-              echo "确保 aj_company_access 表有 access_type 字段（资方/劳方独立权限）..."
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-                ALTER TABLE aj_company_access ADD COLUMN IF NOT EXISTS access_type VARCHAR(20) NOT NULL DEFAULT 'worker' COMMENT '权限类型: funder=资方, worker=劳方' AFTER user_id;
-              " 2>&1 && echo "✅ access_type 字段已添加" || echo "⚠️ access_type 字段可能已存在（正常）"
-              echo "确保 aj_company_access 表的唯一索引包含 access_type（兼容 MySQL 5.7/8.0）..."
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-                SET @idx_exists = (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='aj_company_access' AND index_name='aj_company_access_uniq');
-                SET @sql = IF(@idx_exists > 0, 'ALTER TABLE aj_company_access DROP INDEX aj_company_access_uniq', 'SELECT 1');
-                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
-              " 2>&1 && echo "✅ 旧索引已删除（或不存在）" || echo "⚠️ 删除旧索引失败"
-              mysql -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --ssl-mode=REQUIRED "$DB_NAME" -e "
-                SET @new_idx = (SELECT COUNT(*) FROM information_schema.STATISTICS WHERE table_schema=DATABASE() AND table_name='aj_company_access' AND index_name='aj_company_access_uniq' AND column_name='access_type');
-                SET @sql2 = IF(@new_idx = 0, 'ALTER TABLE aj_company_access ADD UNIQUE INDEX aj_company_access_uniq (company_id, user_id, access_type)', 'SELECT 1');
-                PREPARE stmt2 FROM @sql2; EXECUTE stmt2; DEALLOCATE PREPARE stmt2;
-              " 2>&1 && echo "✅ 新唯一索引已就绪" || echo "⚠️ 添加新索引失败"
-            else
-              echo "DATABASE_URL not found, 跳过建表"
-            fi
-            echo "📊 同步数字币历史资金费率（增量/全量）..."
-            cd /root/haoyouji-web && node scripts/sync-funding-rates.mjs >> /var/log/funding-rates-sync.log 2>&1 || echo "⚠️ 资金费率同步失败（非致命）"
-            # 设置每8小时同步一次资金费率的cron任务（覆盖旧任务）
-            FUNDING_CRON="0 0,8,16 * * * cd /root/haoyouji-web && node scripts/sync-funding-rates.mjs >> /var/log/funding-rates-sync.log 2>&1"
-            (crontab -l 2>/dev/null | grep -v "sync-funding-rates"; echo "$FUNDING_CRON") | crontab -
-            echo "✅ 资金费率每8小时自动同步cron任务已设置"
-            # 设置每2小时同步一次数字币小时线K线数据的cron任务
-            HOURLY_KLINE_CRON="0 */2 * * * cd /root/haoyouji-web && for S in BTCUSDT ETHUSDT SOLUSDT; do node scripts/fetch-1h-klines-generic.mjs \$S >> /var/log/crypto-1h-sync.log 2>&1; done"
-            (crontab -l 2>/dev/null | grep -v "fetch-1h-klines-generic"; echo "$HOURLY_KLINE_CRON") | crontab -
-            echo "✅ 数字币小时线每2小时自动同步cron任务已设置"
+            nginx -t && (systemctl reload nginx 2>/dev/null || true)
+
+            echo "📊 服务状态检查..."
+            ss -tlnp | grep ':3000\|:3001\|:8080' || echo '暂无端口监听'
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
+
+            echo "✅ 部署完成！"
           ENDSSH
