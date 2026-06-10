@@ -7116,5 +7116,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-10T07:32:19Z", type: "other", cleanMessage: "P076-C: 前端白底和绿底订单右栏字段根据displayConfig开关联动隐藏" },
     { date: "2026-06-10T07:45:50Z", type: "fix", cleanMessage: "P076-C 持有时长统一移到左栏（与P095一致）" },
     { date: "2026-06-10T08:03:13Z", type: "fix", cleanMessage: "P095/FunderManagement预览右栏各开关独立控制，不依赖accruedInterest前置条件" },
+    { date: "2026-06-10T08:10:35Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-10T08:10:40Z", type: "feat", cleanMessage: "概览表格暂停/下沉状态默认排最下面，手动排序时参与全局排序" },
+    { date: "2026-06-10T08:49:15Z", type: "other", cleanMessage: "__manus_ec=$?; trap '' PIPE; printf \"%d:%s\\n\" $__manus_ec \"$PWD\" 2>/dev/null >&3; trap - PIPEfix: P095/FunderManagement统一使用username(登录用户名)显示，不再使用nickname/name :wq" },
+    { date: "2026-06-10T11:08:05Z", type: "fix", cleanMessage: "卡片0值正常显示(不再显示横线) + 统一使用username显示(借方视角/参与方)" },
   ],
 };
