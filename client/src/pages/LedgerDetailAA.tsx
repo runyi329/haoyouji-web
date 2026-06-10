@@ -2259,7 +2259,7 @@ export default function LedgerDetailAA({
                               <div style={{ fontSize: 9, marginTop: 2, lineHeight: 1, color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
                             )}
                           </>
-                        ) : <span style={{ fontSize: 13, color: '#BDBDBD' }}>--</span>}
+                        ) : <span style={{ fontSize: 13, color: '#BDBDBD' }}>0</span>}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 回报 */}
