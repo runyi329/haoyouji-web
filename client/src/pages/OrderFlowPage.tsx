@@ -498,6 +498,9 @@ export default function OrderFlowPage() {
     let spotCount = 0;      // 现货订单数
     let perpCount = 0;      // 合约订单数
     let optionCount = 0;    // 期权订单数
+    let spotQty = 0;        // 现货ETH数量
+    let perpQty = 0;        // 合约ETH数量
+    let optionQty = 0;      // 期权ETH数量
     for (const order of filteredOrders as any[]) {
       const oPrice = getPriceForSymbol(order.symbol || 'ETHUSDT');
       const calc = calcOrder(order, oPrice, fundingRate);
@@ -507,13 +510,15 @@ export default function OrderFlowPage() {
         totalPnl += calc.pnl;
         pnlCount++;
       }
+      const qty = parseFloat(order.quantity) || 0;
       // 按类型统计
-      if (order.market_type === 'spot') spotCount++;
-      else if (order.market_type === 'option') optionCount++;
-      else perpCount++;
+      if (order.market_type === 'spot') { spotCount++; spotQty += qty; }
+      else if (order.market_type === 'option') { optionCount++; optionQty += qty; }
+      else { perpCount++; perpQty += qty; }
     }
+    const totalQty = spotQty + perpQty + optionQty;
     const pnlPct = totalCost > 0 ? totalPnl / totalCost : null;
-    return { totalCost, totalNotional, totalPnl, pnlPct, count: filteredOrders.length, pnlCount, spotCount, perpCount, optionCount };
+    return { totalCost, totalNotional, totalPnl, pnlPct, count: filteredOrders.length, pnlCount, spotCount, perpCount, optionCount, spotQty, perpQty, optionQty, totalQty };
   }, [filteredOrders, cryptoPricesRaw, fundingRate]);
 
   // 批量获取所有订单的备注数量（页面加载时就显示徽章）
@@ -703,6 +708,21 @@ export default function OrderFlowPage() {
             </span>
             <span className="text-xs ml-auto" style={{ color: OKX_TEXT_SEC }}>
               合计 <span style={{ color: OKX_YELLOW, fontWeight: 600 }}>{summary.count}</span>
+            </span>
+          </div>
+          {/* ETH数量统计行 */}
+          <div className="flex items-center gap-3 px-4 py-1.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
+              合约 <span style={{ color: OKX_TEXT_PRI, fontWeight: 600 }}>{summary.perpQty.toFixed(4)}</span>
+            </span>
+            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
+              现货 <span style={{ color: OKX_TEXT_PRI, fontWeight: 600 }}>{summary.spotQty.toFixed(4)}</span>
+            </span>
+            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
+              期权 <span style={{ color: "#a78bfa", fontWeight: 600 }}>{summary.optionQty.toFixed(4)}</span>
+            </span>
+            <span className="text-xs ml-auto" style={{ color: OKX_TEXT_SEC }}>
+              全部 <span style={{ color: OKX_YELLOW, fontWeight: 600 }}>{summary.totalQty.toFixed(4)}</span> ETH
             </span>
           </div>
           {/* 主数据行：三列 */}
