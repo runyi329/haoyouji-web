@@ -297,8 +297,8 @@ export default function YabanHome() {
                 className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform relative"
                 onClick={() => handleFeatureClick(feat.name)}
               >
-                <div className="w-12 h-12 rounded-xl overflow-hidden relative">
-                  <img src={feat.icon} alt={feat.name} className="w-full h-full object-contain" />
+                <div className="w-12 h-12 rounded-xl bg-[#00B4D8]/10 flex items-center justify-center overflow-hidden relative">
+                  <img src={feat.icon} alt={feat.name} className="w-10 h-10 object-contain" />
                   {feat.badge && (
                     <span className="absolute top-0 right-0 text-[8px] bg-[#FF5722] text-white px-1 rounded-bl">
                       {feat.badge}
