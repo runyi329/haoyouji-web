@@ -3181,23 +3181,8 @@ export default function CryptoPrediction() {
                         : { backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)', overflow: 'hidden' }}
                     >
                       {(String(order.admin_note || '').includes('[已卖出]') || isSettled) && (
-                        <div
-                          className="absolute bottom-4 left-4 pointer-events-none select-none"
-                          style={{ transform: 'rotate(-30deg)', zIndex: 10 }}
-                        >
-                          <div
-                            style={{
-                              border: '2px solid rgba(220,38,38,0.5)',
-                              color: 'rgba(220,38,38,0.5)',
-                              borderRadius: '4px',
-                              padding: '2px 8px',
-                              fontSize: '13px',
-                              fontWeight: 700,
-                              letterSpacing: '3px',
-                              lineHeight: '1.4',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
+                        <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center" style={{ backgroundColor: 'rgba(220,38,38,0.06)', zIndex: 10 }}>
+                          <div style={{ border: '3px solid rgba(220,38,38,0.35)', color: 'rgba(220,38,38,0.35)', borderRadius: '8px', padding: '8px 24px', fontSize: '28px', fontWeight: 800, letterSpacing: '6px', lineHeight: '1.4', whiteSpace: 'nowrap', transform: 'rotate(-15deg)' }}>
                             {String(order.admin_note || '').includes('[已卖出]') ? '已卖出' : '已结清'}
                           </div>
                         </div>
@@ -3683,8 +3668,8 @@ export default function CryptoPrediction() {
                                 style={{ backgroundColor: '#F0FDF4', border: '1px solid #86EFAC', boxShadow: '0 2px 8px rgba(34,197,94,0.12)', overflow: 'hidden' }}
                               >
                                 {(String(order.admin_note || '').includes('[已卖出]') || isSettled) && (
-                                  <div className="absolute bottom-4 left-4 pointer-events-none select-none" style={{ transform: 'rotate(-30deg)', zIndex: 10 }}>
-                                    <div style={{ border: '2px solid rgba(22,163,74,0.5)', color: 'rgba(22,163,74,0.5)', borderRadius: '4px', padding: '2px 8px', fontSize: '13px', fontWeight: 700, letterSpacing: '3px', lineHeight: '1.4', whiteSpace: 'nowrap' }}>{String(order.admin_note || '').includes('[已卖出]') ? '已卖出' : '已结清'}</div>
+                                  <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center" style={{ backgroundColor: 'rgba(220,38,38,0.06)', zIndex: 10 }}>
+                                    <div style={{ border: '3px solid rgba(220,38,38,0.35)', color: 'rgba(220,38,38,0.35)', borderRadius: '8px', padding: '8px 24px', fontSize: '28px', fontWeight: 800, letterSpacing: '6px', lineHeight: '1.4', whiteSpace: 'nowrap', transform: 'rotate(-15deg)' }}>{String(order.admin_note || '').includes('[已卖出]') ? '已卖出' : '已结清'}</div>
                                   </div>
                                 )}
                                 <div className="h-1" style={{ background: `linear-gradient(90deg, ${cc}, ${cc}55)` }} />
