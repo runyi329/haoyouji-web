@@ -1,5 +1,14 @@
 [
   {
+    "hash": "6f2e0e657dfe43d3cc8c1670a36106112b235fc7",
+    "author": "runyi329",
+    "date": "2026-06-10T14:20:16+00:00",
+    "message": "feat: 牙伴首页工作统计改为3D立体风格月历组件(3Tab切换)",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "牙伴首页工作统计改为3D立体风格月历组件(3Tab切换)"
+  },
+  {
     "hash": "918cbf104861f793a9dc60a493890b4f3896d438",
     "author": "runyi329",
     "date": "2026-06-10T14:08:11+00:00",
