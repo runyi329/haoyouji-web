@@ -576,7 +576,7 @@ function FunderOrderCard({
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-1 flex-wrap">
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                {order.asset_type === 'stock' ? (totalU > 0 ? totalU.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—') : (qty > 0 ? formatCoinQtyFunder(qty, order.coin) : '—')}
+                {order.asset_type === 'stock' ? (order.amount !== null && order.amount !== undefined && order.amount !== '' ? totalU.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—') : (order.buy_quantity !== null && order.buy_quantity !== undefined && order.buy_quantity !== '' ? formatCoinQtyFunder(qty, order.coin) : '—')}
               </span>
               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
             </div>
@@ -2800,8 +2800,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         <div className="flex items-baseline gap-1 flex-wrap">
                           <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
                             {formData.assetType === 'stock'
-                              ? (amountInputValue ? parseFloat(amountInputValue).toLocaleString() : '—')
-                              : (formData.buyQuantity ? parseFloat(parseFloat(formData.buyQuantity).toFixed(6)).toString() : '—')}
+                              ? (amountInputValue !== '' && amountInputValue !== undefined ? parseFloat(amountInputValue).toLocaleString() : '—')
+                              : (formData.buyQuantity !== '' && formData.buyQuantity !== undefined ? parseFloat(parseFloat(formData.buyQuantity).toFixed(6)).toString() : '—')}
                           </span>
                           <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{formData.coin}</span>
                         </div>
@@ -3149,7 +3149,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             <div className="text-[10px] font-medium mb-0.5" style={{ color: '#3B82F6' }}>持有资产</div>
                             <div className="flex items-baseline gap-1 flex-wrap mb-1">
                               <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                                {totalU > 0 ? totalU.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}
+                                {order.amount !== null && order.amount !== undefined && order.amount !== '' ? totalU.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}
                               </span>
                               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{baseCur === 'CNY' ? 'CNY' : order.coin}</span>
                             </div>

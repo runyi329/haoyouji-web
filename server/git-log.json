@@ -1,5 +1,113 @@
 [
   {
+    "hash": "076c540598e884799087bf30a191e39aeb76d5c9",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T08:49:15+00:00",
+    "message": "__manus_ec=$?; trap '' PIPE; printf \"%d:%s\\n\" $__manus_ec \"$PWD\" 2>/dev/null >&3; trap - PIPEfix: P095/FunderManagement统一使用username(登录用户名)显示，不再使用nickname/name :wq",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "__manus_ec=$?; trap '' PIPE; printf \"%d:%s\\n\" $__manus_ec \"$PWD\" 2>/dev/null >&3; trap - PIPEfix: P095/FunderManagement统一使用username(登录用户名)显示，不再使用nickname/name :wq"
+  },
+  {
+    "hash": "814373641eeb86e4337543299a4128ebb7787b5f",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T08:10:40+00:00",
+    "message": "feat: 概览表格暂停/下沉状态默认排最下面，手动排序时参与全局排序",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "概览表格暂停/下沉状态默认排最下面，手动排序时参与全局排序"
+  },
+  {
+    "hash": "337847174c7a55d390d2762c3561798f0eca8737",
+    "author": "github-actions[bot]",
+    "date": "2026-06-10T08:10:35+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "ca2303a6f2abc31a3581156466913943a6a88de0",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T08:03:13+00:00",
+    "message": "fix: P095/FunderManagement预览右栏各开关独立控制，不依赖accruedInterest前置条件",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "P095/FunderManagement预览右栏各开关独立控制，不依赖accruedInterest前置条件"
+  },
+  {
+    "hash": "c874a17c1f9cd622de24ca9dbe0be7db31ab844b",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T07:45:50+00:00",
+    "message": "fix: P076-C 持有时长统一移到左栏（与P095一致）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "P076-C 持有时长统一移到左栏（与P095一致）"
+  },
+  {
+    "hash": "7bb329ec64a1b8decdbf5d99ca76d013ed1b5467",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T07:32:19+00:00",
+    "message": "P076-C: 前端白底和绿底订单右栏字段根据displayConfig开关联动隐藏",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "P076-C: 前端白底和绿底订单右栏字段根据displayConfig开关联动隐藏"
+  },
+  {
+    "hash": "0caeb0fb8feeb0391bf6b585dc729d8bcce8cb55",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T07:21:24+00:00",
+    "message": "P095: 右栏字段根据displayConfig开关条件显示（关闭时隐藏标题和内容但保留占位）",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "P095: 右栏字段根据displayConfig开关条件显示（关闭时隐藏标题和内容但保留占位）"
+  },
+  {
+    "hash": "ca45ec12467eda5adf0ff79f75119b79a97d3b70",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T06:57:28+00:00",
+    "message": "feat: 已结清订单冻结利息和持有时长（使用settled_at时间戳）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "已结清订单冻结利息和持有时长（使用settled_at时间戳）"
+  },
+  {
+    "hash": "4fff7e320d72a094a1427b940c480a7b1ae2e864",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T06:46:29+00:00",
+    "message": "style: 统一所有印章为居中大样式+红色(P076-C/P095/LedgerDetail)",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "统一所有印章为居中大样式+红色(P076-C/P095/LedgerDetail)"
+  },
+  {
+    "hash": "f726724bebfdb456c29d60cb17beeaa17ecdd620",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T06:39:19+00:00",
+    "message": "fix(P076-C): 修复共享订单金额显示错误(stock类型显示totalU) + 添加已结清印章(绿底绿色/白底红色)",
+    "type": "fix",
+    "scope": "P076-C",
+    "cleanMessage": "修复共享订单金额显示错误(stock类型显示totalU) + 添加已结清印章(绿底绿色/白底红色)"
+  },
+  {
+    "hash": "ce2232cba1d09b63a0b24610ba5dc030a9ae3af6",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T06:27:19+00:00",
+    "message": "feat(P076-C): 融资订单分组显示 - 白底订单逐张陈列，绿底共享订单收纳在可展开下拉框中",
+    "type": "feat",
+    "scope": "P076-C",
+    "cleanMessage": "融资订单分组显示 - 白底订单逐张陈列，绿底共享订单收纳在可展开下拉框中"
+  },
+  {
+    "hash": "fd832aae2c433493d2632696c554b096c0de3572",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T06:07:47+00:00",
+    "message": "P095: 将归属用户字段改为帽檐标签（支持多标签输入）",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "P095: 将归属用户字段改为帽檐标签（支持多标签输入）"
+  },
+  {
     "hash": "33b4232518697d1885b7230acfc375d0dfb22941",
     "author": "Manus Deploy",
     "date": "2026-06-10T05:26:57+00:00",

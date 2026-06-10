@@ -15519,7 +15519,7 @@ ${klinesSummary}
         let orders: any[] = [];
         if (targetIsManager) {
           const rows = await db.execute(
-            sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar,
+            sql`SELECT fo.*, u.username, u.username as userName, u.avatar as userAvatar,
                 COALESCE(pc.cnt, 0) as _participantCount
                 FROM ledger_orders fo
                 LEFT JOIN users u ON u.id = fo.user_id
@@ -15535,7 +15535,7 @@ ${klinesSummary}
           // 额外查询通过参与方关联的非 finance 订单（如资方订单添加了借方参与方）
           try {
             const crossRoleRows = await db.execute(
-              sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar,
+              sql`SELECT fo.*, u.username, u.username as userName, u.avatar as userAvatar,
                   COALESCE(pc.cnt, 0) as _participantCount
                   FROM ledger_orders fo
                   LEFT JOIN users u ON u.id = fo.user_id
@@ -15581,7 +15581,7 @@ ${klinesSummary}
         } else {
           // 先查自己的订单
           const myRows = await db.execute(
-            sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
+            sql`SELECT fo.*, u.username, u.username as userName, u.avatar as userAvatar
                 FROM ledger_orders fo
                 LEFT JOIN users u ON u.id = fo.user_id
                 WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role = 'finance' AND fo.deleted_at IS NULL AND fo.user_id = ${targetUserId}
@@ -15591,7 +15591,7 @@ ${klinesSummary}
           // 再查参与方订单（排除自己的订单，不限 order_role，资方订单也能看到）
           try {
             const participantOrderRows = await db.execute(
-              sql`SELECT fo.*, u.username, u.name as userName, u.avatar as userAvatar
+              sql`SELECT fo.*, u.username, u.username as userName, u.avatar as userAvatar
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                INNER JOIN ledger_order_participants p ON p.order_id = fo.id
@@ -15993,7 +15993,7 @@ ${klinesSummary}
         if (!isManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看参与方配置' });
         // 已配置的参与方
         const rows = await db.execute(
-          sql`SELECT p.*, u.username, u.name as userName, u.avatar, lm.nickname
+          sql`SELECT p.*, u.username, u.username as userName, u.avatar, lm.nickname
               FROM ledger_order_participants p
               LEFT JOIN users u ON u.id = p.user_id
               LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = ${input.ledgerId}
@@ -16002,7 +16002,7 @@ ${klinesSummary}
         ) as any;
         // 账本所有成员（供前端下拉选择）
         const memberRows = await db.execute(
-          sql`SELECT lm.userId, lm.nickname, lm.role as memberRole, u.username, u.name as userName, u.avatar
+          sql`SELECT lm.userId, lm.nickname, lm.role as memberRole, u.username, u.username as userName, u.avatar
               FROM ledger_members lm
               LEFT JOIN users u ON u.id = lm.userId
               WHERE lm.ledgerId = ${input.ledgerId}
@@ -16142,7 +16142,7 @@ ${klinesSummary}
         const isManager = role === 'owner' || role === 'admin';
         if (!isManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看参与方配置' });
         const rows = await db.execute(
-          sql`SELECT p.*, u.username, u.name as userName, u.avatar, lm.nickname
+          sql`SELECT p.*, u.username, u.username as userName, u.avatar, lm.nickname
               FROM ledger_order_participants p
               LEFT JOIN users u ON u.id = p.user_id
               LEFT JOIN ledger_members lm ON lm.userId = p.user_id AND lm.ledgerId = ${input.ledgerId}
@@ -16150,7 +16150,7 @@ ${klinesSummary}
               ORDER BY p.sort_order ASC, p.id ASC`
         ) as any;
         const memberRows = await db.execute(
-          sql`SELECT lm.userId, lm.nickname, lm.role as memberRole, u.username, u.name as userName, u.avatar
+          sql`SELECT lm.userId, lm.nickname, lm.role as memberRole, u.username, u.username as userName, u.avatar
               FROM ledger_members lm
               LEFT JOIN users u ON u.id = lm.userId
               WHERE lm.ledgerId = ${input.ledgerId}
@@ -16382,7 +16382,7 @@ ${klinesSummary}
 
         // 1. 获取订单资金方（ledger_orders.user_id 就是资金方的系统 userId）
         const orderRows = await db.execute(
-          sql`SELECT o.user_id as funderUserId, u.username, u.name as userName, u.avatar,
+          sql`SELECT o.user_id as funderUserId, u.username, u.username as userName, u.avatar,
                      lm.nickname
               FROM ledger_orders o
               LEFT JOIN users u ON u.id = o.user_id
@@ -16395,7 +16395,7 @@ ${klinesSummary}
         // 2. 获取订单参与方（ledger_order_participants.user_id 直接是系统用户 ID）
         const participantRows = await db.execute(
           sql`SELECT p.id, p.user_id as userId, p.role as participantRole,
-                     u.username, u.name as userName, u.avatar,
+                     u.username, u.username as userName, u.avatar,
                      lm.nickname
               FROM ledger_order_participants p
               LEFT JOIN users u ON u.id = p.user_id
@@ -16414,7 +16414,7 @@ ${klinesSummary}
           participantMap.set(key, {
             userId: Number(orderRow.funderUserId),
             participantRole: 'funder',
-            displayName: orderRow.nickname || orderRow.userName || orderRow.username || `用户${orderRow.funderUserId}`,
+            displayName: orderRow.username || orderRow.nickname || orderRow.userName || `用户${orderRow.funderUserId}`,
             avatar: orderRow.avatar || null,
             matched: true,
           });
@@ -16428,7 +16428,7 @@ ${klinesSummary}
             participantMap.set(key, {
               userId: Number(p.userId),
               participantRole: p.participantRole || 'participant',
-              displayName: p.nickname || p.userName || p.username || `用户${p.userId}`,
+              displayName: p.username || p.nickname || p.userName || `用户${p.userId}`,
               avatar: p.avatar || null,
               matched: true,
             });

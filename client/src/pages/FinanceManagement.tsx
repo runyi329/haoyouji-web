@@ -452,7 +452,7 @@ function FinanceOrderCard({
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-1 flex-wrap">
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                {qty > 0 ? formatCoinQty(qty, order.coin) : '—'}
+                {order.buy_quantity !== null && order.buy_quantity !== undefined && order.buy_quantity !== '' ? formatCoinQty(qty, order.coin) : '—'}
               </span>
               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
             </div>
@@ -2620,7 +2620,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                       <div className="min-h-7 flex flex-col justify-center mt-0.5">
                         <div className="flex items-baseline gap-1 flex-wrap">
                           <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                            {formData.buyQuantity ? parseFloat(parseFloat(formData.buyQuantity).toFixed(6)).toString() : '—'}
+                            {formData.buyQuantity !== '' && formData.buyQuantity !== undefined ? parseFloat(parseFloat(formData.buyQuantity).toFixed(6)).toString() : '—'}
                           </span>
                           <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{formData.coin}</span>
                         </div>
