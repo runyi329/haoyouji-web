@@ -1,5 +1,212 @@
 [
   {
+    "hash": "7bb329ec64a1b8decdbf5d99ca76d013ed1b5467",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T07:32:19+00:00",
+    "message": "P076-C: 前端白底和绿底订单右栏字段根据displayConfig开关联动隐藏",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "P076-C: 前端白底和绿底订单右栏字段根据displayConfig开关联动隐藏"
+  },
+  {
+    "hash": "0caeb0fb8feeb0391bf6b585dc729d8bcce8cb55",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T07:21:24+00:00",
+    "message": "P095: 右栏字段根据displayConfig开关条件显示（关闭时隐藏标题和内容但保留占位）",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "P095: 右栏字段根据displayConfig开关条件显示（关闭时隐藏标题和内容但保留占位）"
+  },
+  {
+    "hash": "ca45ec12467eda5adf0ff79f75119b79a97d3b70",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T06:57:28+00:00",
+    "message": "feat: 已结清订单冻结利息和持有时长（使用settled_at时间戳）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "已结清订单冻结利息和持有时长（使用settled_at时间戳）"
+  },
+  {
+    "hash": "4fff7e320d72a094a1427b940c480a7b1ae2e864",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T06:46:29+00:00",
+    "message": "style: 统一所有印章为居中大样式+红色(P076-C/P095/LedgerDetail)",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "统一所有印章为居中大样式+红色(P076-C/P095/LedgerDetail)"
+  },
+  {
+    "hash": "f726724bebfdb456c29d60cb17beeaa17ecdd620",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T06:39:19+00:00",
+    "message": "fix(P076-C): 修复共享订单金额显示错误(stock类型显示totalU) + 添加已结清印章(绿底绿色/白底红色)",
+    "type": "fix",
+    "scope": "P076-C",
+    "cleanMessage": "修复共享订单金额显示错误(stock类型显示totalU) + 添加已结清印章(绿底绿色/白底红色)"
+  },
+  {
+    "hash": "ce2232cba1d09b63a0b24610ba5dc030a9ae3af6",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T06:27:19+00:00",
+    "message": "feat(P076-C): 融资订单分组显示 - 白底订单逐张陈列，绿底共享订单收纳在可展开下拉框中",
+    "type": "feat",
+    "scope": "P076-C",
+    "cleanMessage": "融资订单分组显示 - 白底订单逐张陈列，绿底共享订单收纳在可展开下拉框中"
+  },
+  {
+    "hash": "fd832aae2c433493d2632696c554b096c0de3572",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T06:07:47+00:00",
+    "message": "P095: 将归属用户字段改为帽檐标签（支持多标签输入）",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "P095: 将归属用户字段改为帽檐标签（支持多标签输入）"
+  },
+  {
+    "hash": "33b4232518697d1885b7230acfc375d0dfb22941",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T05:26:57+00:00",
+    "message": "fix: 累计盈亏弹窗不算比例，只显示账面剩余盈亏+已提现盈亏+汇总",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "累计盈亏弹窗不算比例，只显示账面剩余盈亏+已提现盈亏+汇总"
+  },
+  {
+    "hash": "9ed4034308e67a07a4b4420b07f549da20baa964",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T05:20:40+00:00",
+    "message": "fix: 累计盈亏感叹号弹窗改为详细计算说明",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "累计盈亏感叹号弹窗改为详细计算说明"
+  },
+  {
+    "hash": "f42e98a2bdf3e67a619f484e419045104c2ab0ad",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T05:14:26+00:00",
+    "message": "fix: 概览表格占比和金额列为0时颜色格式与有数值时一致",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "概览表格占比和金额列为0时颜色格式与有数值时一致"
+  },
+  {
+    "hash": "e8d1df9d6233a3fce4e4c68a49026dbbbd77bb54",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T05:10:33+00:00",
+    "message": "fix: 概览表格金额列未设置保证金时显示0而非--",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "概览表格金额列未设置保证金时显示0而非--"
+  },
+  {
+    "hash": "334aed2149b63d9e1e8ac98ed3845a891e2c0188",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T05:05:49+00:00",
+    "message": "fix: P117-A保证金未设置时统一显示为0",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "P117-A保证金未设置时统一显示为0"
+  },
+  {
+    "hash": "d89032cc1247f947c9168d1b27fb344169ddb317",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T05:00:16+00:00",
+    "message": "fix: 标签下拉框暂停标签样式优化",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "标签下拉框暂停标签样式优化"
+  },
+  {
+    "hash": "625108f00058732eab3c1213578c321db621c72e",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T04:54:11+00:00",
+    "message": "feat: 标签下拉框中暂停标签显示蓝色并下沉到最后",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "标签下拉框中暂停标签显示蓝色并下沉到最后"
+  },
+  {
+    "hash": "66dab29159d4d654d2b310078d34bae71a421001",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T04:45:06+00:00",
+    "message": "perf: 优化部署流程 - SSH加KeepAlive防断连、构建加心跳、依赖无变化时跳过install和rsync",
+    "type": "perf",
+    "scope": "",
+    "cleanMessage": "优化部署流程 - SSH加KeepAlive防断连、构建加心跳、依赖无变化时跳过install和rsync"
+  },
+  {
+    "hash": "1f9b8ab73ecb1a8054ffa2246d310a6ab3317c09",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T04:07:17+00:00",
+    "message": "fix: 盈亏弹窗第5步标题改为'标签名 实际账户本金'，标签名用红色字体",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "盈亏弹窗第5步标题改为'标签名 实际账户本金'，标签名用红色字体"
+  },
+  {
+    "hash": "b06bc42eae6f8559a348fe86ed4c3948e4c53a7a",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T03:23:27+00:00",
+    "message": "fix: 盈亏计算加入增减本金，修复中途追加本金被误算为盈利的bug",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "盈亏计算加入增减本金，修复中途追加本金被误算为盈利的bug"
+  },
+  {
+    "hash": "4f52df833ddb0b438c6e190c54b7d3d9cef6cefe",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T02:01:26+00:00",
+    "message": "fix: 修复标签改名时 initial_balances 后缀键和 tag_config 未同步的 bug",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复标签改名时 initial_balances 后缀键和 tag_config 未同步的 bug"
+  },
+  {
+    "hash": "47d9c79ad2b3acd43034412ccd4f3c13fbe3f9f8",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T00:33:46+00:00",
+    "message": "perf: 精简部署流程，移除所有历史数据同步脚本",
+    "type": "perf",
+    "scope": "",
+    "cleanMessage": "精简部署流程，移除所有历史数据同步脚本"
+  },
+  {
+    "hash": "2cbaa478afc4ad7c9716677e1a9bde270d0f3b79",
+    "author": "Manus Deploy",
+    "date": "2026-06-10T00:08:34+00:00",
+    "message": "fix: 修复右侧借方页面 CNY 担保物折算 U 未除汇率的 bug",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复右侧借方页面 CNY 担保物折算 U 未除汇率的 bug"
+  },
+  {
+    "hash": "0bd872098b18a6e086b21a10e994585ceeb10cc7",
+    "author": "github-actions[bot]",
+    "date": "2026-06-09T18:06:24+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "b9f201957cb13e09c0ce6464dba21fa208fc64b6",
+    "author": "Manus Deploy",
+    "date": "2026-06-09T16:45:46+00:00",
+    "message": "fix: 彻底修复 p095 借方与综测管理订单联动问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "彻底修复 p095 借方与综测管理订单联动问题"
+  },
+  {
+    "hash": "b35ff3dbfb159225721e399c774d085dd157546c",
+    "author": "Deploy Bot",
+    "date": "2026-06-10T00:08:28+08:00",
+    "message": "fix: LedgerDetail 担保货币 CNY 折算用实时汇率(qty/cnyRate)",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "LedgerDetail 担保货币 CNY 折算用实时汇率(qty/cnyRate)"
+  },
+  {
     "hash": "3078118bd6e65b2184a423081e333a2120b58ee2",
     "author": "Deploy Bot",
     "date": "2026-06-09T23:32:29+08:00",
@@ -448,24 +655,6 @@
     "type": "feat",
     "scope": "P004",
     "cleanMessage": "将提现/入金功能独立为折叠面板，与余额记录输入框分离"
-  },
-  {
-    "hash": "3a95569d669c8730e9d77d8764401a38183c0d32",
-    "author": "Deploy Bot",
-    "date": "2026-06-08T22:52:40+08:00",
-    "message": "WIP on main: 51f9e4fb fix: 订单卡片中图模式右栏移除固定宽高，内容自然撑开卡片",
-    "type": "chore",
-    "scope": "",
-    "cleanMessage": "WIP on main: 51f9e4fb fix: 订单卡片中图模式右栏移除固定宽高，内容自然撑开卡片"
-  },
-  {
-    "hash": "5e959605d754385f43b7e19120d45e3eb2523c4a",
-    "author": "Deploy Bot",
-    "date": "2026-06-08T22:52:40+08:00",
-    "message": "index on main: 51f9e4fb fix: 订单卡片中图模式右栏移除固定宽高，内容自然撑开卡片",
-    "type": "chore",
-    "scope": "",
-    "cleanMessage": "index on main: 51f9e4fb fix: 订单卡片中图模式右栏移除固定宽高，内容自然撑开卡片"
   },
   {
     "hash": "ffea804a34805e5a4d7bb4732541eb044abdc3b1",

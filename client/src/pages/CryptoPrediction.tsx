@@ -3275,6 +3275,12 @@ export default function CryptoPrediction() {
                               </div>
                             )}
 
+                            {showField('holdDuration') && holdingLabel && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400 shrink-0">持有时长</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>{holdingLabel}</span>
+                              </div>
+                            )}
                             {showField('orderNo') && order.order_no && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400 shrink-0">订单编号</span>
@@ -3334,12 +3340,6 @@ export default function CryptoPrediction() {
                                       return d;
                                     })()}
                                   </span>
-                                </div>
-                              )}
-                              {showField('holdDuration') && holdingLabel && (
-                                <div className="flex items-center justify-between mt-0.5 text-xs">
-                                  <span className="text-gray-400">持有时长</span>
-                                  <span className="font-medium" style={{ color: '#4B5563' }}>{holdingLabel}</span>
                                 </div>
                               )}
                               {/* 已卖出：卖出价、卖出币数、订单利润 */}
@@ -3709,6 +3709,7 @@ export default function CryptoPrediction() {
                                       {showField('buyPrice') && buyPrice > 0 && (<div className="flex items-center justify-between text-xs"><span className="text-gray-400 shrink-0">买入币价</span><span className="font-medium" style={{ color: '#4B5563' }}>{buyPrice.toLocaleString()} U</span></div>)}
                                       {showField('buyValue') && buyValue > 0 && (<><div className="flex items-center justify-between text-xs"><span className="text-gray-400 shrink-0">买入价值</span><span className="font-medium" style={{ color: '#4B5563' }}>{buyValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span></div><div className="flex justify-end text-xs"><span className="text-gray-400">≈{(buyValue * 7).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span></div></>)}
                                       {showField('buyDate') && order.buy_date && (<div className="flex items-center justify-between text-xs"><span className="text-gray-400 shrink-0">开仓时间</span><span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span></div>)}
+                                      {showField('holdDuration') && holdingLabel && (<div className="flex items-center justify-between text-xs"><span className="text-gray-400 shrink-0">持有时长</span><span className="font-medium" style={{ color: '#4B5563' }}>{holdingLabel}</span></div>)}
                                       {showField('orderNo') && order.order_no && (<div className="flex items-center justify-between text-xs"><span className="text-gray-400 shrink-0">订单编号</span><span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span></div>)}
                                     </div>
                                   </div>
@@ -3735,7 +3736,7 @@ export default function CryptoPrediction() {
                                           </div>
                                         )}
                                         {showField('interestStartDate') && startDate && (<div className="flex items-center justify-between text-xs"><span className="text-gray-400">计息日期</span><span className="font-medium" style={{ color: '#4B5563' }}>{startDate.replace(/^\d{4}-(\d{2})-(\d{2}).*$/, (_: string, m: string, dd: string) => `${parseInt(m)}月${parseInt(dd)}日`)}</span></div>)}
-                                        {showField('holdDuration') && holdingLabel && (<div className="flex items-center justify-between mt-0.5 text-xs"><span className="text-gray-400">持有时长</span><span className="font-medium" style={{ color: '#4B5563' }}>{holdingLabel}</span></div>)}
+
                                       </div>
                                     </div>
                                   </div>
