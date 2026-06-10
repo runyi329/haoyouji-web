@@ -1,5 +1,14 @@
 [
   {
+    "hash": "7dce03b757365643ada582d8ea262bfb76a6da12",
+    "author": "runyi329",
+    "date": "2026-06-10T16:04:23+00:00",
+    "message": "fix(yaban): 随访入口改为更多功能区按钮跳转，月历Tab恢复为仅切换数据",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "随访入口改为更多功能区按钮跳转，月历Tab恢复为仅切换数据"
+  },
+  {
     "hash": "e842d0dfdbb34a1d1de1b6d63778e1a22315193f",
     "author": "runyi329",
     "date": "2026-06-10T15:56:34+00:00",
