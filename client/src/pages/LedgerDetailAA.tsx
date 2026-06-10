@@ -1419,7 +1419,7 @@ export default function LedgerDetailAA({
                 return (
                   <>
                     <div className="text-xs opacity-75 mb-0.5">保证金</div>
-                    <div className="text-base font-bold">未设置</div>
+                    <div className="text-base font-bold">¥0.00</div>
                   </>
                 );
               }
@@ -1444,7 +1444,7 @@ export default function LedgerDetailAA({
                         <span className="opacity-80">比例 {Number(ratioVal).toFixed(1)}%</span>
                       )}
                     </div>
-                    <div className="text-base font-bold">{num !== null ? `${num} ${coin}` : '未设置'}</div>
+                    <div className="text-base font-bold">{num !== null ? `${num} ${coin}` : '0'}</div>
                     <div className="text-xs opacity-60 mt-0.5">{cnyText}</div>
                   </>
                 );
@@ -1454,7 +1454,7 @@ export default function LedgerDetailAA({
                   <>
                     <div className="text-xs opacity-75 mb-0.5">保证金</div>
                     <div className="text-base font-bold">
-                      {num !== null ? '¥' + num.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '未设置'}
+                      {num !== null ? '¥' + num.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '¥0.00'}
                     </div>
                     <div className="text-xs opacity-60 mt-0.5">
                       {ratioVal !== undefined && ratioVal !== null ? `比例 ${Number(ratioVal).toFixed(1)}%` : ''}
