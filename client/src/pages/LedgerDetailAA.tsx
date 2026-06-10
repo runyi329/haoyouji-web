@@ -3062,7 +3062,10 @@ export default function LedgerDetailAA({
       )}
 
       {/* ── 提现记录弹窗 ── */}
-      {showWithdrawHistory && (
+      {showWithdrawHistory && (() => {
+        const accountPnl = stats.latestBalance - stats.currentCapital;
+        const cumulativePnl = stats.totalPnl;
+        return (
         <div className="fixed inset-0 z-[500] flex items-center justify-center" onClick={() => setShowWithdrawHistory(false)}>
           <div className="absolute inset-0 bg-black/50" />
           <div
@@ -3071,44 +3074,55 @@ export default function LedgerDetailAA({
           >
             {/* 头部 */}
             <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F0F0F0' }}>
-              <div className="text-base font-bold text-gray-800">提现记录</div>
+              <div className="text-base font-bold text-gray-800">累计盈亏详情</div>
               <button onClick={() => setShowWithdrawHistory(false)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
                 <X className="w-4 h-4 text-gray-500" />
               </button>
             </div>
             {/* 内容 */}
             <div className="px-5 py-4 overflow-y-auto max-h-[55vh]">
-              {withdrawRecords.length === 0 ? (
-                <div className="text-center text-sm text-gray-400 py-8">暂无提现记录</div>
-              ) : (
-                <div className="space-y-3">
-                  {withdrawRecords.map((record: any, idx: number) => (
-                    <div key={idx} className="flex items-center gap-3 py-2" style={{ borderBottom: '1px solid #F8F8F8' }}>
-                      <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-                      <div className="flex-1">
-                        <div className="text-xs text-gray-700">提现</div>
-                        <div className="text-[11px] text-gray-400">{record.date || ''}</div>
-                      </div>
-                      <div className="text-sm font-semibold text-green-600">
-                        +¥{Number(record.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-                      </div>
+              {/* 1. 账户内盈亏 */}
+              <div className="mb-4">
+                <div className="text-sm font-bold text-gray-800 mb-1">1. 账户内盈亏</div>
+                <div className="text-xs text-gray-500 ml-2 mb-1">当前余额 - 当前本金</div>
+                <div className="text-xs text-gray-600 ml-2">= ¥{stats.latestBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })} - ¥{stats.currentCapital.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</div>
+                <div className="text-sm font-bold ml-2 mt-0.5" style={{ color: accountPnl >= 0 ? '#D32F2F' : '#388E3C' }}>= {accountPnl >= 0 ? '+' : '-'}¥{Math.abs(accountPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</div>
+              </div>
+
+              {/* 2. 历史提现 */}
+              <div className="mb-4">
+                <div className="text-sm font-bold text-gray-800 mb-1">2. 历史提现盈利</div>
+                {withdrawRecords.length === 0 ? (
+                  <div className="text-xs text-gray-400 ml-2">暂无提现记录</div>
+                ) : (
+                  <>
+                    <div className="text-xs text-gray-500 ml-2 mb-1">共 {withdrawRecords.length} 次提现</div>
+                    <div className="ml-2 space-y-1">
+                      {withdrawRecords.map((record: any, idx: number) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />
+                          <span className="text-[11px] text-gray-400">{record.date || ''}</span>
+                          <span className="text-xs font-medium text-green-600 ml-auto">+¥{Number(record.amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                  {/* 累计提现汇总 */}
-                  <div className="mt-3 pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-600">累计提现</span>
-                      <span className="text-base font-bold text-green-700">
-                        +¥{totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
+                    <div className="text-sm font-bold ml-2 mt-1 text-green-700">累计提现 = +¥{totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</div>
+                  </>
+                )}
+              </div>
+
+              {/* 3. 累计盈亏 */}
+              <div className="pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
+                <div className="text-sm font-bold text-gray-800 mb-1">3. 累计盈亏</div>
+                <div className="text-xs text-gray-500 ml-2 mb-1">= 账户内盈亏 + 累计提现</div>
+                <div className="text-xs text-gray-600 ml-2">= {accountPnl >= 0 ? '+' : '-'}¥{Math.abs(accountPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })} + ¥{totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</div>
+                <div className="text-base font-bold ml-2 mt-1" style={{ color: cumulativePnl >= 0 ? '#D32F2F' : '#388E3C' }}>= {cumulativePnl >= 0 ? '+' : '-'}¥{Math.abs(cumulativePnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</div>
+              </div>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ── 盈亏计算详情弹窗 ── */}
       {showPnlExplain && (() => {
