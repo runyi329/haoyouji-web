@@ -24,6 +24,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
   const isStevenHuang = user?.username === 'STEVEN_HUANG';
   const isHanming = user?.id === 4957321;
   const isYunting = user?.id === 540801;
+  const isYaban = user?.id === 4957372;
 
   // 判断当前在哪个页面
   const isLedgerPage = location.startsWith('/ledger');
@@ -74,6 +75,10 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
       // yunting：跳转到算力中心商城
       setShowLedgerMenu(false);
       setLocation('/jiang/shop');
+    } else if (isYaban) {
+      // 牙伴用户：跳转到牙伴首页
+      setShowLedgerMenu(false);
+      setLocation('/yaban');
     } else if (isYJH) {
       // YJH：跳转到数金研投网站
       setShowLedgerMenu(false);
@@ -99,6 +104,8 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
     ? 'bg-[#D32F2F] border-4 border-rose-200 ring-2 ring-rose-300'
     : isJiangPage
     ? 'bg-[#D32F2F] border-4 border-[#D32F2F]/30 ring-2 ring-[#D32F2F]/20'
+    : isYaban
+    ? 'bg-[#E3F2FD] border-4 border-[#90CAF9] ring-2 ring-[#90CAF9]/30'
     : showLedgerMenu
     ? 'bg-gray-600 rotate-45 border-4 border-white'
     : 'bg-[#D32F2F] hover:bg-[#B71C1C] border-4 border-white';
@@ -207,6 +214,8 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
                   <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/idealight-icon-white.png" className="w-full h-full object-cover" alt="IDEALIGHT" />
                 ) : isHanming ? (
                   <span className="text-white text-xs font-bold leading-tight text-center">汉明</span>
+                ) : isYaban ? (
+                  <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/yaban/yaban_logo_bottomnav.webp" className="w-full h-full object-cover" alt="牙伴" />
                 ) : isYunting ? (
                   <Cpu className="w-7 h-7 text-white" />
                 ) : (
