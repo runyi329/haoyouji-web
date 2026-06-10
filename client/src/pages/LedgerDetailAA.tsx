@@ -2225,7 +2225,7 @@ export default function LedgerDetailAA({
                             <span
                               style={{
                                 fontSize: 13,
-                                color: ratioNum !== null ? '#424242' : '#BDBDBD',
+                                color: '#424242',
                                 cursor: ratioNum !== null ? 'pointer' : 'default',
                                 textDecoration: ratioNum !== null ? 'underline' : 'none',
                                 textDecorationStyle: 'dashed',
@@ -2234,7 +2234,7 @@ export default function LedgerDetailAA({
                               }}
                               onClick={() => ratioNum !== null ? setTooltipRatioTag(tooltipRatioTag === tag.name ? null : tag.name) : undefined}
                             >
-                              {ratioNum !== null ? `${ratioNum.toFixed(0)}%` : '--'}
+                              {ratioNum !== null ? `${ratioNum.toFixed(0)}%` : '0%'}
                             </span>
                             {tooltipRatioTag === tag.name && ratioNum !== null && actualAmt !== null && (
                               <div style={{
@@ -2259,7 +2259,7 @@ export default function LedgerDetailAA({
                               <div style={{ fontSize: 9, marginTop: 2, lineHeight: 1, color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
                             )}
                           </>
-                        ) : <span style={{ fontSize: 13, color: '#BDBDBD' }}>0</span>}
+                        ) : <span style={{ fontSize: 13, color: '#424242' }}>0</span>}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 回报 */}
