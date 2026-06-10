@@ -527,34 +527,42 @@ function FinanceOrderCard({
         {/* 右栏：待结利息 */}
         <div className="p-4 pl-3 flex flex-col shrink-0" style={{ width: 'auto', minWidth: '160px', maxWidth: '200px' }}>
           {/* 标题 */}
-          <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
-            <span className="text-[10px]" style={{ color: '#3B82F6' }}>待付利息</span>
-            {rateAbs && <span className="text-[10px] text-gray-400">(年化 {isNegRate ? '-' : ''}{rateAbs}%)</span>}
-          </div>
-          {/* 待结利息大数字 */}
-          <div className="min-h-9 flex flex-col justify-center">
-            <div className="flex items-baseline gap-0.5">
-              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                {displayAccrued > 0 ? '-' : ''}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
-            </div>
-            <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued > 0 ? '-' : ''}{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
-          </div>
+          {orderDc.accruedInterest !== false ? (
+            <>
+              <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
+                <span className="text-[10px]" style={{ color: '#3B82F6' }}>待付利息</span>
+                {rateAbs && <span className="text-[10px] text-gray-400">(年化 {isNegRate ? '-' : ''}{rateAbs}%)</span>}
+              </div>
+              {/* 待结利息大数字 */}
+              <div className="min-h-9 flex flex-col justify-center">
+                <div className="flex items-baseline gap-0.5">
+                  <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                    {displayAccrued > 0 ? '-' : ''}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
+                </div>
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued > 0 ? '-' : ''}{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
+              </div>
+            </>
+          ) : <div style={{ height: '16px' }} />}
           {/* 明细行 */}
           <div className="space-y-0.5 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-400 whitespace-nowrap">已付利息</span>
-              <span className="font-medium" style={{ color: '#4B5563' }}>
-                {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
-              </span>
-            </div>
-            {displayPaid > 0 && (
-              <div className="flex justify-end">
-                <span className="text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
-              </div>
+            {orderDc.paidInterest !== false && (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400 whitespace-nowrap">已付利息</span>
+                  <span className="font-medium" style={{ color: '#4B5563' }}>
+                    {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
+                  </span>
+                </div>
+                {displayPaid > 0 && (
+                  <div className="flex justify-end">
+                    <span className="text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
+                  </div>
+                )}
+              </>
             )}
-            {order.interest_start_date && (
+            {orderDc.interestStartDate !== false && order.interest_start_date && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">计息日期</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -563,7 +571,7 @@ function FinanceOrderCard({
               </div>
             )}
             {/* 担保货币 */}
-            {collateralAssets.map((a, idx) => (
+            {orderDc.collateralCoin !== false && collateralAssets.map((a, idx) => (
               <div key={idx}>
                 <div className="flex items-center justify-between mt-0.5">
                   <span className="text-gray-400">{collateralAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
@@ -577,14 +585,14 @@ function FinanceOrderCard({
                 )}
               </div>
             ))}
-            {collateralAssets.length > 0 && collateralValueKnown && (
+            {orderDc.collateralValue !== false && collateralAssets.length > 0 && collateralValueKnown && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">{collateralAssets.length > 1 ? '担保总值' : '担保价值'}</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
               </div>
             )}
             {/* 担保缺口 */}
-            {collateralAssets.length > 0 && order.status === 'active' && (
+            {orderDc.collateral !== false && collateralAssets.length > 0 && order.status === 'active' && (
               <>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1">
