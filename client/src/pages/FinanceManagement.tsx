@@ -90,8 +90,8 @@ function CollateralMarginRateDisplay({ assets, interestBase, ledgerId }: {
   );
 }
 
-// 精确到秒的利息计数器 Hook
-function useAccruedInterest(interestBase: string | null, interestRateAnnual: string | null, interestStartDate: string | null) {
+// 精确到秒的利息计数器 Hook——已结清订单使用 settledAt 作为截止时间
+function useAccruedInterest(interestBase: string | null, interestRateAnnual: string | null, interestStartDate: string | null, settledAt?: string | null) {
   const [accrued, setAccrued] = useState<number>(0);
   const computeAccrued = useCallback(() => {
     const base = parseFloat(interestBase || '0');
@@ -99,15 +99,18 @@ function useAccruedInterest(interestBase: string | null, interestRateAnnual: str
     if (!base || !rate || !interestStartDate) return 0;
     const startTs = new Date(interestStartDate + 'T00:00:00').getTime();
     if (isNaN(startTs)) return 0;
-    const elapsedSeconds = Math.max(0, (Date.now() - startTs) / 1000);
+    const endTs = settledAt ? new Date(settledAt).getTime() : Date.now();
+    const elapsedSeconds = Math.max(0, (endTs - startTs) / 1000);
     const perSecond = (base * rate / 100) / (365 * 24 * 3600);
     return perSecond * elapsedSeconds;
-  }, [interestBase, interestRateAnnual, interestStartDate]);
+  }, [interestBase, interestRateAnnual, interestStartDate, settledAt]);
   useEffect(() => {
     setAccrued(computeAccrued());
+    // 已结清的订单不需要实时更新
+    if (settledAt) return;
     const timer = setInterval(() => setAccrued(computeAccrued()), 1000);
     return () => clearInterval(timer);
-  }, [computeAccrued]);
+  }, [computeAccrued, settledAt]);
   return accrued;
 }
 
@@ -229,9 +232,10 @@ function FinanceOrderCard({
   const [showMarginInfo, setShowMarginInfo] = useState(false);
   // 每张卡片独立调用 useAccruedInterest（Hook 必须在组件顶层）
   const accrued = useAccruedInterest(
-    order.status === 'active' ? order.interest_base : null,
-    order.status === 'active' ? order.interest_rate_annual : null,
-    order.status === 'active' ? order.interest_start_date : null
+    (order.status === 'active' || order.settled_at) ? order.interest_base : null,
+    (order.status === 'active' || order.settled_at) ? order.interest_rate_annual : null,
+    (order.status === 'active' || order.settled_at) ? order.interest_start_date : null,
+    order.settled_at
   );
 
   const rateStr = String(order.interest_rate_annual || '');
@@ -279,10 +283,12 @@ function FinanceOrderCard({
   const altAccrued = convertAlt(displayAccrued);
   const altPaid = convertAlt(displayPaid);
 
-  // 持有时长
+  // 持有时长——已结清订单冻结在 settled_at 时刻
   const holdDurationLabel = (() => {
-    if (!order.buy_date || order.status !== 'active') return null;
-    const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
+    if (!order.buy_date) return null;
+    if (order.status !== 'active' && !order.settled_at) return null;
+    const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+    const elapsed = endTs - new Date(order.buy_date + 'T00:00:00').getTime();
     if (elapsed < 0) return null;
     const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
     const days = Math.floor(totalHours / 24);

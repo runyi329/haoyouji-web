@@ -15844,6 +15844,9 @@ ${klinesSummary}
           }
         }
         if (input.userId !== undefined) { updateCols.push('user_id = ?'); updateVals.push(input.userId); }
+        // 结清时记录 settled_at 时间戳，恢复（active）时清除
+        if (input.status === 'settled') { updateCols.push('settled_at = ?'); updateVals.push(new Date().toISOString().slice(0, 19).replace('T', ' ')); }
+        if (input.status === 'active') { updateCols.push('settled_at = ?'); updateVals.push(null); }
         // DECIMAL/数字列：空字符串需转为 null，否则 MySQL 报 Incorrect decimal value
         const decimalCols = new Set(['amount', 'buy_price', 'buy_quantity', 'interest_rate_annual', 'interest_base', 'collateral_qty']);
         for (const [key, col] of Object.entries(fieldMap)) {
@@ -15880,6 +15883,7 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS asset_type VARCHAR(20) DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS interest_rate_currency VARCHAR(20) DEFAULT 'USDT'`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS settled_at DATETIME DEFAULT NULL`);
         } catch(e) {}
                 await conn.execute(`UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
         // display_config 联动：同步到同账本所有订单（含跨角色订单）

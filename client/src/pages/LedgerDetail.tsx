@@ -117,7 +117,7 @@ function exportLedgerToPDF() {
 }
 
 // 精确到秒的利息计数器 Hook
-function useAccruedInterest(interestBase: string | null, interestRateAnnual: string | null, interestStartDate: string | null) {
+function useAccruedInterest(interestBase: string | null, interestRateAnnual: string | null, interestStartDate: string | null, settledAt?: string | null) {
   const [accrued, setAccrued] = useState<number>(0);
   const computeAccrued = useCallback(() => {
     const base = parseFloat(interestBase || '0');
@@ -125,16 +125,17 @@ function useAccruedInterest(interestBase: string | null, interestRateAnnual: str
     if (!base || !rate || !interestStartDate) return 0;
     const startTs = new Date(interestStartDate + 'T00:00:00').getTime();
     if (isNaN(startTs)) return 0;
-    const nowTs = Date.now();
-    const elapsedSeconds = Math.max(0, (nowTs - startTs) / 1000);
+    const endTs = settledAt ? new Date(settledAt).getTime() : Date.now();
+    const elapsedSeconds = Math.max(0, (endTs - startTs) / 1000);
     const perSecond = (base * rate / 100) / (365 * 24 * 3600);
     return perSecond * elapsedSeconds;
-  }, [interestBase, interestRateAnnual, interestStartDate]);
+  }, [interestBase, interestRateAnnual, interestStartDate, settledAt]);
   useEffect(() => {
     setAccrued(computeAccrued());
+    if (settledAt) return;
     const timer = setInterval(() => setAccrued(computeAccrued()), 1000);
     return () => clearInterval(timer);
-  }, [computeAccrued]);
+  }, [computeAccrued, settledAt]);
   return accrued;
 }
 
@@ -533,7 +534,8 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
             {showCommissionTip && (() => {
               const startStr = commissionStartDate ? String(commissionStartDate).slice(0, 10) : null;
               const todayStr = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
-              const elapsedMs = startStr ? Math.max(0, Date.now() - new Date(startStr + 'T00:00:00').getTime()) : 0;
+              const _commEndTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+              const elapsedMs = startStr ? Math.max(0, _commEndTs - new Date(startStr + 'T00:00:00').getTime()) : 0;
               const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
               const elapsedHours = Math.floor((elapsedMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
               const elapsedMins = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -645,7 +647,8 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
           {showInterestTip && (() => {
             const startDate = order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : null;
             const todayStr = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
-            const elapsedMs = startDate ? Math.max(0, Date.now() - new Date(startDate + 'T00:00:00').getTime()) : 0;
+            const _tipEndTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+            const elapsedMs = startDate ? Math.max(0, _tipEndTs - new Date(startDate + 'T00:00:00').getTime()) : 0;
             const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
             const elapsedHours = Math.floor((elapsedMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
             const elapsedMins = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
@@ -1238,11 +1241,12 @@ function FunderOrderSmallCard({ order, livePrices }: { order: any; livePrices: R
   const livePrice = livePrices[order.coin];
   const currentValue = order.asset_type === 'stock' ? (parseFloat(order.amount || '0') > 0 ? parseFloat(order.amount) / cnyRate : null) : (order.coin === 'CNY' ? (qty > 0 ? qty / cnyRate : null) : (livePrice && qty > 0 ? qty * livePrice : null));
   const isEnded = order.status === 'ended';
-  // 待结利息：基于计息基数、年利率、计息开始日实时计算
+  // 待结利息：基于计息基数、年利率、计息开始日实时计算（已结清订单冻结在 settled_at）
   const accrued = useAccruedInterest(
     order.interest_base || order.buy_value || null,
     order.interest_rate_annual || order.interestRateAnnual || null,
-    order.interest_start_date || order.interestStartDate || null
+    order.interest_start_date || order.interestStartDate || null,
+    order.settled_at
   );
   return (
     <div
@@ -1286,9 +1290,10 @@ function FunderOrderCard({ order, ledgerId, livePrices, cnyRate, paidInterest, p
   const statusLabel = order.status === 'active' ? '持有中' : isSettled ? '已结算' : isEnded ? '已结束' : '已取消';
   const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
   const accrued = useAccruedInterest(
-    (isEnded || isSettled) ? null : order.interest_base,
-    (isEnded || isSettled) ? null : order.interest_rate_annual,
-    (isEnded || isSettled) ? null : order.interest_start_date
+    (isEnded || isSettled) ? (order.settled_at ? order.interest_base : null) : order.interest_base,
+    (isEnded || isSettled) ? (order.settled_at ? order.interest_rate_annual : null) : order.interest_rate_annual,
+    (isEnded || isSettled) ? (order.settled_at ? order.interest_start_date : null) : order.interest_start_date,
+    order.settled_at
   );
   const qty = parseFloat(order.buy_quantity || '0');
   const price = parseFloat(order.buy_price || '0');
@@ -1487,8 +1492,9 @@ function FunderOrderCard({ order, ledgerId, livePrices, cnyRate, paidInterest, p
               </div>
             )}
             {/* 当前价值已移至持有资产大数字旁括号显示，此行已移除 */}
-            {dc.holdDuration && order.buy_date && order.status === 'active' && (() => {
-              const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
+            {dc.holdDuration && order.buy_date && (order.status === 'active' || order.settled_at) && (() => {
+              const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+              const elapsed = endTs - new Date(order.buy_date + 'T00:00:00').getTime();
               if (elapsed < 0) return null;
               const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
               const days = Math.floor(totalHours / 24);

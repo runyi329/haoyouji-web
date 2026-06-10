@@ -3125,9 +3125,9 @@ export default function CryptoPrediction() {
                   const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
                   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
                   const cc = coinColorMap[order.coin] || '#6B7280';
-                  // 精确计息（秒级）
+                  // 精确计息（秒级）—— 已结清订单使用 settled_at 作为截止时间
                   const _baseCur = order.interest_base_currency || 'USDT';
-                  const nowTs = Date.now();
+                  const nowTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
                   const startTs = startDate ? new Date(startDate + (startDate.includes('T') ? '' : 'T00:00:00')).getTime() : 0;
                   const elapsedSeconds = startTs > 0 ? Math.max(0, (nowTs - startTs) / 1000) : 0;
                   const perSecond = interestBase && annualRate ? (interestBase * Math.abs(annualRate) / 100) / (365 * 24 * 3600) : 0;
@@ -3156,16 +3156,18 @@ export default function CryptoPrediction() {
                     } catch { return null; }
                   })();
                   const showField = (key: string) => _dc ? (_dc[key] !== false) : true;
-                  // 持有时长
+                  // 持有时长——已结清订单冻结在 settled_at 时刻
                   const holdingLabel = (() => {
-                    if (!order.buy_date || order.status !== 'active') return null;
-                    // 已卖出标记：从 admin_note 中读取 [持有:xxx] 固定值，若无则默认"1个月"
+                    if (!order.buy_date) return null;
+                    if (order.status !== 'active' && !order.settled_at) return null;
+                    // 已卖出标记：从 admin_note 中读取 [持有:xxx] 固定值，若无则默认“1个月”
                     const adminNote = String(order.admin_note || '');
                     if (adminNote.includes('[已卖出]')) {
                       const m = adminNote.match(/\[持有:([^\]]+)\]/);
                       return m ? m[1] : '1个月';
                     }
-                    const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
+                    const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+                    const elapsed = endTs - new Date(order.buy_date + 'T00:00:00').getTime();
                     if (elapsed < 0) return null;
                     const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
                     const days = Math.floor(totalHours / 24);
@@ -3627,7 +3629,7 @@ export default function CryptoPrediction() {
                             const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
                             const cc = coinColorMap[order.coin] || '#6B7280';
                             const _baseCur = order.interest_base_currency || 'USDT';
-                            const nowTs = Date.now();
+                            const nowTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
                             const startTs = startDate ? new Date(startDate + (startDate.includes('T') ? '' : 'T00:00:00')).getTime() : 0;
                             const elapsedSeconds = startTs > 0 ? Math.max(0, (nowTs - startTs) / 1000) : 0;
                             const perSecond = interestBase && annualRate ? (interestBase * Math.abs(annualRate) / 100) / (365 * 24 * 3600) : 0;
@@ -3651,10 +3653,12 @@ export default function CryptoPrediction() {
                             })();
                             const showField = (key: string) => _dc ? (_dc[key] !== false) : true;
                             const holdingLabel = (() => {
-                              if (!order.buy_date || order.status !== 'active') return null;
+                              if (!order.buy_date) return null;
+                              if (order.status !== 'active' && !order.settled_at) return null;
                               const adminNote = String(order.admin_note || '');
                               if (adminNote.includes('[已卖出]')) { const m = adminNote.match(/\[持有:([^\]]+)\]/); return m ? m[1] : '1个月'; }
-                              const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
+                              const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+                              const elapsed = endTs - new Date(order.buy_date + 'T00:00:00').getTime();
                               if (elapsed < 0) return null;
                               const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
                               const days = Math.floor(totalHours / 24);

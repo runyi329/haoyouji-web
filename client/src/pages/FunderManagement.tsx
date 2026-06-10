@@ -274,7 +274,7 @@ function formatCoinQtyFunder(qty: string | number | null | undefined, coin: stri
 }
 
 // ===== Helper: useAccruedInterest =====
-function useAccruedInterestFunder(interestBase: string | null, interestRateAnnual: string | null, interestStartDate: string | null) {
+function useAccruedInterestFunder(interestBase: string | null, interestRateAnnual: string | null, interestStartDate: string | null, settledAt?: string | null) {
   const [accrued, setAccrued] = useState<number>(0);
   const computeAccrued = useCallback(() => {
     const base = parseFloat(interestBase || '0');
@@ -282,15 +282,17 @@ function useAccruedInterestFunder(interestBase: string | null, interestRateAnnua
     if (!base || !rate || !interestStartDate) return 0;
     const startTs = new Date(interestStartDate + 'T00:00:00').getTime();
     if (isNaN(startTs)) return 0;
-    const elapsedSeconds = Math.max(0, (Date.now() - startTs) / 1000);
+    const endTs = settledAt ? new Date(settledAt).getTime() : Date.now();
+    const elapsedSeconds = Math.max(0, (endTs - startTs) / 1000);
     const perSecond = (base * rate / 100) / (365 * 24 * 3600);
     return perSecond * elapsedSeconds;
-  }, [interestBase, interestRateAnnual, interestStartDate]);
+  }, [interestBase, interestRateAnnual, interestStartDate, settledAt]);
   useEffect(() => {
     setAccrued(computeAccrued());
+    if (settledAt) return;
     const timer = setInterval(() => setAccrued(computeAccrued()), 1000);
     return () => clearInterval(timer);
-  }, [computeAccrued]);
+  }, [computeAccrued, settledAt]);
   return accrued;
 }
 
@@ -376,9 +378,10 @@ function FunderOrderCard({
   const tipBtnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
   const accrued = useAccruedInterestFunder(
-    order.status === 'active' ? order.interest_base : null,
-    order.status === 'active' ? (isInvited ? order.participantInfo?.commissionRate : order.interest_rate_annual) : null,
-    order.status === 'active' ? (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) : null
+    (order.status === 'active' || order.settled_at) ? order.interest_base : null,
+    (order.status === 'active' || order.settled_at) ? (isInvited ? order.participantInfo?.commissionRate : order.interest_rate_annual) : null,
+    (order.status === 'active' || order.settled_at) ? (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) : null,
+    order.settled_at
   );
 
   const statusLabel = STATUS_OPTIONS.find(s => s.value === order.status)?.label || order.status;
@@ -418,10 +421,12 @@ function FunderOrderCard({
   const altAccrued = convertAlt(displayAccrued);
   const altPaid = convertAlt(displayPaid);
 
-  // 持有时长
+  // 持有时长——已结清订单冻结在 settled_at 时刻
   const holdDurationLabel = (() => {
-    if (!order.buy_date || order.status !== 'active') return null;
-    const elapsed = Date.now() - new Date(order.buy_date + 'T00:00:00').getTime();
+    if (!order.buy_date) return null;
+    if (order.status !== 'active' && !order.settled_at) return null;
+    const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+    const elapsed = endTs - new Date(order.buy_date + 'T00:00:00').getTime();
     if (elapsed < 0) return null;
     const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
     const days = Math.floor(totalHours / 24);
@@ -684,7 +689,8 @@ function FunderOrderCard({
             {showInterestTip && (() => {
               const startDate = (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) ? String(isInvited ? order.participantInfo.commissionStartDate : order.interest_start_date).slice(0, 10) : null;
               const todayStr = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
-              const elapsedMs = startDate ? Math.max(0, Date.now() - new Date(startDate + 'T00:00:00').getTime()) : 0;
+              const _tipEndTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+              const elapsedMs = startDate ? Math.max(0, _tipEndTs - new Date(startDate + 'T00:00:00').getTime()) : 0;
               const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
               const elapsedHours = Math.floor((elapsedMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
               const elapsedMins = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
