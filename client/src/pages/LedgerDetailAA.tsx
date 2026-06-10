@@ -521,6 +521,31 @@ export default function LedgerDetailAA({
     return map;
   }, [transactionsData, categories]);
 
+  // ─── 全部模式：按标签统计本金变动净额（从原始 transactionsData 中提取 capital_ 记录）────
+  const capitalByTag = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (!categories || categories.length === 0) return map;
+    (transactionsData || []).forEach((day) => {
+      (day.records || []).forEach((r: any) => {
+        if (r.type === 'transfer' && r.description?.startsWith('capital_')) {
+          const cat = r.category || '';
+          if (!cat) return;
+          categories.forEach((c: any) => {
+            if (cat.includes(c.name)) {
+              const amt = Number(r.amount) || 0;
+              if (r.description?.startsWith('capital_add')) {
+                map[c.name] = (map[c.name] || 0) + amt;
+              } else {
+                map[c.name] = (map[c.name] || 0) - amt;
+              }
+            }
+          });
+        }
+      });
+    });
+    return map;
+  }, [transactionsData, categories]);
+
   // ─── 全部模式：计算每个标签的每日盈亏数据（用于多线图表） ─────────────────
   const allTagsChartData = useMemo(() => {
     if (!initialBalancesData?.balances || !categories || categories.length === 0) return [];
@@ -548,6 +573,8 @@ export default function LedgerDetailAA({
       const ratio = Number(initialBalancesData.balances[`${tagName}__ratio`] ?? 100) / 100;
       // 该标签的累计提现
       const tagWithdraw = withdrawByTag[tagName] || 0;
+      // 该标签的本金变动净额
+      const tagCapitalChange = capitalByTag[tagName] || 0;
       // 该标签的所有每日余额记录（按日期升序）
       const tagDays = (activeMemberTransactions || []).map((day: any) => {
         const filtered = (day.records || []).filter((r: any) => r.category && r.category.includes(tagName));
@@ -570,16 +597,18 @@ export default function LedgerDetailAA({
         filteredTagDays = tagDays.filter((d: any) => d.date >= effectiveStartStr);
       }
       const points = filteredTagDays.map((d: any) => {
-        // 盈亏 = (初始 - 当日余额 - 累计提现) * ratio
+        // 盈亏 = (初始本金 + 增减本金 - 当日余额 - 累计提现) * ratio
         // 提现导致余额减少但不是亏损，需要扣除
-        const pnl = (initialBalance - d.balance - tagWithdraw) * ratio;
-        const pctInitial = initialBalance > 0 ? ((initialBalance - d.balance - tagWithdraw) / initialBalance) * 100 * ratio : 0;
-        const pctMargin = marginCny > 0 ? ((initialBalance - d.balance - tagWithdraw) * ratio / marginCny) * 100 : 0;
+        // 增减本金是追加/减少的投入，不是盈利
+        const effectiveInitial = initialBalance + tagCapitalChange;
+        const pnl = (effectiveInitial - d.balance - tagWithdraw) * ratio;
+        const pctInitial = effectiveInitial > 0 ? ((effectiveInitial - d.balance - tagWithdraw) / effectiveInitial) * 100 * ratio : 0;
+        const pctMargin = marginCny > 0 ? ((effectiveInitial - d.balance - tagWithdraw) * ratio / marginCny) * 100 : 0;
         return { date: d.date, pnl, pctInitial, pctMargin };
       });
       return { name: tagName, color, points, initialBalance, marginCny, marginRaw: marginRaw !== undefined && marginRaw !== null ? Number(marginRaw) : null, marginCoin: coin };
     });
-  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, withdrawByTag]);
+  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, withdrawByTag, capitalByTag]);
 
   // ─── 全部模式：计算所有标签的保证金总和和盈亏总和 ────────────────────────
   const allTagsStats = useMemo(() => {
@@ -618,6 +647,7 @@ export default function LedgerDetailAA({
       const initialBalance = Number(initialBalancesData.balances[tagName] ?? 0);
       const ratio = Number(initialBalancesData.balances[`${tagName}__ratio`] ?? 100) / 100;
       const tagWithdraw = withdrawByTag[tagName] || 0;
+      const tagCapitalChange = capitalByTag[tagName] || 0;
       // 找该标签最新的余额记录（与走势图逻辑一致：每日合计，跳过balance=0的天）
       const tagStartDate = initialBalancesData.balances[`${tagName}__startDate`];
       let effectiveStartStr: string | null = null;
@@ -641,15 +671,16 @@ export default function LedgerDetailAA({
       const filteredTagDaysStats = effectiveStartStr ? tagDays.filter(d => d.date >= effectiveStartStr!) : tagDays;
       if (filteredTagDaysStats.length > 0) {
         const last = filteredTagDaysStats[filteredTagDaysStats.length - 1];
-        if (initialBalance > 0) {
-          // 盈亏 = (初始 - 最新余额 - 累计提现) * ratio，与单标签模式口径一致
-          totalPnl += (initialBalance - last.balance - tagWithdraw) * ratio;
+        const effectiveInitial = initialBalance + tagCapitalChange;
+        if (effectiveInitial > 0) {
+          // 盈亏 = (初始本金 + 增减本金 - 最新余额 - 累计提现) * ratio
+          totalPnl += (effectiveInitial - last.balance - tagWithdraw) * ratio;
         }
       }
     });
     const cryptoDetails = Object.entries(cryptoMap).map(([coin, v]) => ({ coin, amount: v.amount, cnyValue: v.cnyValue }));
     return { totalMargin, totalPnl, diff: totalMargin + totalPnl, hasCrypto, cryptoDetails };
-  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, withdrawByTag]);
+  }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, withdrawByTag, capitalByTag]);
 
   // ─── 统计数据 ─────────────────────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -685,21 +716,21 @@ export default function LedgerDetailAA({
       const sd = initialBalancesData.balances[`${selectedTag.name}__startDate`];
       if (sd) startDate = String(sd);
     }
-    // 本金变动净额（从 capitalHistory 计算）— 仅用于"当前本金"卡片显示
+        // 本金变动净额（从 capitalHistory 计算）
     const capitalNetChange = capitalHistory.reduce((sum: number, r: any) => {
       const amt = Number(r.amount) || 0;
       return r.description?.startsWith('capital_add') ? sum + amt : sum - amt;
     }, 0);
-    // 当前本金 = 初始本金 + 本金净变动（仅用于卡片显示，不参与盈亏计算）
+    // 当前本金 = 初始本金 + 本金净变动（用于卡片显示）
     const currentCapital = initialBalance + capitalNetChange;
-    // 盈亏计算：三郎输赢 = (当前余额 + 累计提现) - 初始金额
-    // 增加/减少本金不影响盈亏（增加本金只是追加资金，减少本金只是减少基数）
+    // 盈亏计算：三郎输赢 = (当前余额 + 累计提现) - (初始本金 + 增减本金)
+    // 增减本金是中途追加/减少的投入，不是盈利，必须加到本金基数中
     // 客户盈亏 = -三郎输赢（三郎赢=客户输，三郎输=客户赢）
-    const traderPnl = (latestBalance + totalWithdraw) - initialBalance; // 三郎赢的钱
-    const rawPnl = -traderPnl; // 客户盈亏（负债视角：三郎赢客户就输）
+    const traderPnl = (latestBalance + totalWithdraw) - (initialBalance + capitalNetChange); // 三郎赢的钱
+    const rawPnl = -traderPnl; // 客户盈亏（负债视角：三郎财客户就输）
     const totalPnl = rawPnl * ratio;
-    const returnRate = initialBalance > 0 ? (rawPnl / initialBalance) * 100 : 0;
-    return { latestBalance, latestDate, returnRate, recordDays, totalPnl, initialBalance, currentCapital, startDate };
+    const returnRate = (initialBalance + capitalNetChange) > 0 ? (rawPnl / (initialBalance + capitalNetChange)) * 100 : 0;
+    return { latestBalance, latestDate, returnRate, recordDays, totalPnl, initialBalance, currentCapital, startDate, capitalNetChange };
   }, [filteredTransactions, cumulativeMap, ledgerData, initialBalancesData, selectedTag, capitalHistory, totalWithdraw]);
 
    // ─── 余额曲线数据（根据日历模式生成对应时间范围内所有日期点） ─────
@@ -3063,11 +3094,13 @@ export default function LedgerDetailAA({
         // 计算弹窗内需要的数据
         const initialBalance = stats.initialBalance;
         const latestBalance = stats.latestBalance;
+        const capitalNet = stats.capitalNetChange || 0;
         const ratioVal = selectedTag?.name && initialBalancesData?.balances
           ? Number(initialBalancesData.balances[`${selectedTag.name}__ratio`] ?? 100)
           : 100;
         const ratio = ratioVal / 100;
-        const traderPnl = (latestBalance + totalWithdraw) - initialBalance;
+        const effectiveCapital = initialBalance + capitalNet;
+        const traderPnl = (latestBalance + totalWithdraw) - effectiveCapital;
         const rawPnl = -traderPnl;
         const totalPnl = rawPnl * ratio;
         // 获取当前查看的用户名
@@ -3099,9 +3132,24 @@ export default function LedgerDetailAA({
                     = ¥{initialBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
                   </div>
                 </div>
-                {/* 第2步 */}
+                {/* 第2步 - 增减本金（仅当有变动时显示） */}
+                {capitalNet !== 0 && (
+                  <div>
+                    <div className="font-semibold text-gray-900 mb-1">2. 增减本金</div>
+                    <div className="pl-3 text-gray-600">
+                      中途追加或减少的本金（与输赢无关）
+                    </div>
+                    <div className="pl-3 mt-1 font-mono text-gray-800">
+                      = {capitalNet >= 0 ? '+' : '-'}¥{Math.abs(capitalNet).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                    </div>
+                    <div className="pl-3 mt-1 text-gray-600 text-xs">
+                      实际本金基数 = 初始本金 + 增减本金 = ¥{effectiveCapital.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                )}
+                {/* 第3步 */}
                 <div>
-                  <div className="font-semibold text-gray-900 mb-1">2. 最新账户余额</div>
+                  <div className="font-semibold text-gray-900 mb-1">{capitalNet !== 0 ? '3' : '2'}. 最新账户余额</div>
                   <div className="pl-3 text-gray-600">
                     登记员最后一次录入的账户余额
                   </div>
@@ -3109,9 +3157,9 @@ export default function LedgerDetailAA({
                     = ¥{latestBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
                   </div>
                 </div>
-                {/* 第3步 */}
+                {/* 第4步 */}
                 <div>
-                  <div className="font-semibold text-gray-900 mb-1">3. 累计提现</div>
+                  <div className="font-semibold text-gray-900 mb-1">{capitalNet !== 0 ? '4' : '3'}. 累计提现</div>
                   <div className="pl-3 text-gray-600">
                     历史上已提现的总金额（提现会导致余额减少，但不是亏损）
                   </div>
@@ -3119,9 +3167,9 @@ export default function LedgerDetailAA({
                     = ¥{totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
                   </div>
                 </div>
-                {/* 第4步 */}
+                {/* 第5步 */}
                 <div>
-                  <div className="font-semibold text-gray-900 mb-1">4. 标签实际资产</div>
+                  <div className="font-semibold text-gray-900 mb-1">{capitalNet !== 0 ? '5' : '4'}. 标签实际资产</div>
                   <div className="pl-3 text-gray-600">
                     = 最新余额 + 累计提现
                   </div>
@@ -3132,25 +3180,25 @@ export default function LedgerDetailAA({
                     = ¥{(latestBalance + totalWithdraw).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
                   </div>
                 </div>
-                {/* 第5步 */}
+                {/* 第6步 */}
                 <div>
-                  <div className="font-semibold text-gray-900 mb-1">5. {selectedTag?.name || '标签'}</div>
+                  <div className="font-semibold text-gray-900 mb-1">{capitalNet !== 0 ? '6' : '5'}. {selectedTag?.name || '标签'}</div>
                   <div className="pl-3 text-gray-600">
-                    = 标签实际资产 - 初始本金
+                    = 标签实际资产 - {capitalNet !== 0 ? '实际本金基数' : '初始本金'}
                   </div>
                   <div className="pl-3 text-gray-600 text-xs">
                     （正数=赢了，负数=输了）
                   </div>
                   <div className="pl-3 mt-1 font-mono text-gray-800">
-                    = ¥{(latestBalance + totalWithdraw).toLocaleString('zh-CN', { minimumFractionDigits: 2 })} - ¥{initialBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                    = ¥{(latestBalance + totalWithdraw).toLocaleString('zh-CN', { minimumFractionDigits: 2 })} - ¥{effectiveCapital.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
                   </div>
                   <div className="pl-3 mt-1 font-mono font-semibold text-gray-900">
                     = {traderPnl >= 0 ? '+' : '-'}¥{Math.abs(traderPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
                   </div>
                 </div>
-                {/* 第6步 */}
+                {/* 客户盈亏步骤 */}
                 <div>
-                  <div className="font-semibold text-gray-900 mb-1">6. {customerName}</div>
+                  <div className="font-semibold text-gray-900 mb-1">{capitalNet !== 0 ? '7' : '6'}. {customerName}</div>
                   <div className="pl-3 text-gray-600">
                     与标签方向相反，标签赢 = {customerName}亏
                   </div>
