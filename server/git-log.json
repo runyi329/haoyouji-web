@@ -1,5 +1,23 @@
 [
   {
+    "hash": "775427b58e47e90eb52df5a787e07b1301dd8852",
+    "author": "runyi329",
+    "date": "2026-06-10T15:28:37+00:00",
+    "message": "fix: 修复账本记账金额为负数的bug - 前端type从硬编码expense改为transactionType - 前端/后端amount统一取Math.abs确保正数 - 后端getTransactionsList读取时也取绝对值兼容旧数据 - 前端显示时Math.abs兼容已有负数数据",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复账本记账金额为负数的bug - 前端type从硬编码expense改为transactionType - 前端/后端amount统一取Math.abs确保正数 - 后端getTransactionsList读取时也取绝对值兼容旧数据 - 前端显示时Math.abs兼容已有负数数据"
+  },
+  {
+    "hash": "8ff99d980fb59b0393cca339e87668af603e0f02",
+    "author": "runyi329",
+    "date": "2026-06-10T15:08:21+00:00",
+    "message": "style: 牙伴顶部改蓝色+月历帽檐缩小+月份切换与月总结合并一行",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "牙伴顶部改蓝色+月历帽檐缩小+月份切换与月总结合并一行"
+  },
+  {
     "hash": "4a122a97c8a6f6b1a9355442ea2df65af020653d",
     "author": "runyi329",
     "date": "2026-06-10T14:56:30+00:00",

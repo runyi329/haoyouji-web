@@ -6,6 +6,7 @@
  * 支持左右滑动切换月份
  */
 import { useState, useRef, TouchEvent } from "react";
+import { useLocation } from "wouter";
 import { ChevronLeft, ChevronRight, Eye, EyeOff } from "lucide-react";
 
 // Tab 配置 - 5个独立Tab
@@ -38,6 +39,7 @@ function generateMockData(year: number, month: number, tabId: string): Record<nu
 }
 
 export default function YabanCalendar() {
+  const [, setLocation] = useLocation();
   const today = new Date();
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
@@ -304,7 +306,12 @@ export default function YabanCalendar() {
                     }
                   : {}
               }
-              onClick={() => setActiveTab(i)}
+              onClick={() => {
+                setActiveTab(i);
+                if (t.id === "suifang") {
+                  setLocation("/yaban/followup");
+                }
+              }}
             >
               {t.label}
             </button>

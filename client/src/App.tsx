@@ -712,6 +712,9 @@ function Router() {
         <Route path="/yaban/messages" component={lazy(() => import("./pages/yaban/YabanMessages"))} />
         <Route path="/yaban/shop" component={lazy(() => import("./pages/yaban/YabanShop"))} />
         <Route path="/yaban/profile" component={lazy(() => import("./pages/yaban/YabanProfile"))} />
+        <Route path="/yaban/followup" component={lazy(() => import("./pages/yaban/YabanFollowUp"))} />
+        <Route path="/yaban/followup/create" component={lazy(() => import("./pages/yaban/YabanFollowUpCreate"))} />
+        <Route path="/yaban/followup/patient-select" component={lazy(() => import("./pages/yaban/YabanPatientSelect"))} />
         {/* 404 */}
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
