@@ -3063,8 +3063,9 @@ export default function LedgerDetailAA({
 
       {/* ── 提现记录弹窗 ── */}
       {showWithdrawHistory && (() => {
+        // 不算比例，只算标签账户本身的盈亏
         const accountPnl = stats.latestBalance - stats.currentCapital;
-        const cumulativePnl = stats.totalPnl;
+        const totalPnlRaw = accountPnl + totalWithdraw;
         return (
         <div className="fixed inset-0 z-[500] flex items-center justify-center" onClick={() => setShowWithdrawHistory(false)}>
           <div className="absolute inset-0 bg-black/50" />
@@ -3081,17 +3082,17 @@ export default function LedgerDetailAA({
             </div>
             {/* 内容 */}
             <div className="px-5 py-4 overflow-y-auto max-h-[55vh]">
-              {/* 1. 账户内盈亏 */}
+              {/* 1. 账面剩余盈亏 */}
               <div className="mb-4">
-                <div className="text-sm font-bold text-gray-800 mb-1">1. 账户内盈亏</div>
+                <div className="text-sm font-bold text-gray-800 mb-1">1. 账面剩余盈亏</div>
                 <div className="text-xs text-gray-500 ml-2 mb-1">当前余额 - 当前本金</div>
                 <div className="text-xs text-gray-600 ml-2">= ¥{stats.latestBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })} - ¥{stats.currentCapital.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</div>
                 <div className="text-sm font-bold ml-2 mt-0.5" style={{ color: accountPnl >= 0 ? '#D32F2F' : '#388E3C' }}>= {accountPnl >= 0 ? '+' : '-'}¥{Math.abs(accountPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</div>
               </div>
 
-              {/* 2. 历史提现 */}
+              {/* 2. 已提现盈亏 */}
               <div className="mb-4">
-                <div className="text-sm font-bold text-gray-800 mb-1">2. 历史提现盈利</div>
+                <div className="text-sm font-bold text-gray-800 mb-1">2. 已提现盈亏</div>
                 {withdrawRecords.length === 0 ? (
                   <div className="text-xs text-gray-400 ml-2">暂无提现记录</div>
                 ) : (
@@ -3111,12 +3112,12 @@ export default function LedgerDetailAA({
                 )}
               </div>
 
-              {/* 3. 累计盈亏 */}
+              {/* 汇总 */}
               <div className="pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
-                <div className="text-sm font-bold text-gray-800 mb-1">3. 累计盈亏</div>
-                <div className="text-xs text-gray-500 ml-2 mb-1">= 账户内盈亏 + 累计提现</div>
+                <div className="text-sm font-bold text-gray-800 mb-1">汇总</div>
+                <div className="text-xs text-gray-500 ml-2 mb-1">= 账面剩余盈亏 + 已提现盈亏</div>
                 <div className="text-xs text-gray-600 ml-2">= {accountPnl >= 0 ? '+' : '-'}¥{Math.abs(accountPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })} + ¥{totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</div>
-                <div className="text-base font-bold ml-2 mt-1" style={{ color: cumulativePnl >= 0 ? '#D32F2F' : '#388E3C' }}>= {cumulativePnl >= 0 ? '+' : '-'}¥{Math.abs(cumulativePnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</div>
+                <div className="text-base font-bold ml-2 mt-1" style={{ color: totalPnlRaw >= 0 ? '#D32F2F' : '#388E3C' }}>= {totalPnlRaw >= 0 ? '+' : '-'}¥{Math.abs(totalPnlRaw).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}</div>
               </div>
             </div>
           </div>
