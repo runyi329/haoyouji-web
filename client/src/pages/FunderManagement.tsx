@@ -266,8 +266,9 @@ function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, i
 // ===== Helper: formatCoinQty =====
 const INTEGER_COINS_FUNDER = new Set(['SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'AAVE']);
 function formatCoinQtyFunder(qty: string | number | null | undefined, coin: string): string {
-  if (!qty) return '';
+  if (qty === null || qty === undefined || qty === '') return '0';
   const num = typeof qty === 'string' ? parseFloat(qty) : qty;
+  if (num === 0) return '0';
   if (isNaN(num)) return String(qty);
   if (INTEGER_COINS_FUNDER.has(coin)) return Math.round(num).toLocaleString('en-US');
   return parseFloat(num.toFixed(6)).toString();

@@ -13,8 +13,9 @@ const INTEGER_COINS = new Set(['SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'AAVE']);
 
 // 根据币种格式化数量：整数型去掉小数，BTC/ETH/SOL 保留最多6位有效小数
 function formatCoinQty(qty: string | number | null | undefined, coin: string): string {
-  if (!qty) return '';
+  if (qty === null || qty === undefined || qty === '') return '0';
   const num = typeof qty === 'string' ? parseFloat(qty) : qty;
+  if (num === 0) return '0';
   if (isNaN(num)) return String(qty);
   if (INTEGER_COINS.has(coin)) return Math.round(num).toLocaleString('en-US');
   // 去掉末尾多余的0，最多6位小数

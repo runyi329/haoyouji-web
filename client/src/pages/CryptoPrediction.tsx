@@ -1230,6 +1230,7 @@ function MarketBetPanelInner({ ledgerId, coinKey, onBetPlaced, tomorrowLabel, ta
 }
 
 function formatCoinQty(qty: number, coin: string): string {
+  if (qty === 0) return '0';
   if (INTEGER_COINS_FIN.has(coin)) return Math.round(qty).toLocaleString('en-US');
   if (coin === 'BTC') return parseFloat(qty.toFixed(6)).toString();
   return parseFloat(qty.toFixed(4)).toString();

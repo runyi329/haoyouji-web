@@ -1226,7 +1226,7 @@ function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, currentUser, i
 // 智能去尾零：保留有效小数位，去掉末尾无意义的零
 // 例：1.0000 → "1"，1.0001 → "1.0001"，0.00350 → "0.0035"
 function smartQty(val: number | string): string {
-  if (val === '' || val === null || val === undefined) return '—';
+  if (val === '' || val === null || val === undefined) return '0';
   const n = typeof val === 'string' ? parseFloat(val) : val;
   if (isNaN(n) || n === 0) return '0';
   // 最多保留8位小数，然后去掉末尾零
