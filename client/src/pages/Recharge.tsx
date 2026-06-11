@@ -265,6 +265,16 @@ export default function Recharge({ hideHeader = false, hideBalance = false }: Re
             </div>
           </div>
 
+          {/* 重要提示：OKX内部转账 */}
+          <div className="rounded-xl p-4" style={{background:'rgba(244,67,54,0.08)',border:'1px solid rgba(244,67,54,0.25)'}}>
+            <div className="text-sm font-medium text-red-300 mb-2">重要提示</div>
+            <ul className="text-xs text-red-400/90 space-y-1.5">
+              <li>• 如您使用OKX（欧易）提币，请务必选择<span className="font-bold text-red-300">「链上提币」</span>方式</li>
+              <li>• 若收款地址同为OKX用户，OKX可能自动触发<span className="font-bold text-red-300">「内部转账」</span>，此方式不走链上，系统将无法自动识别到账</li>
+              <li>• 提币时如出现"内部转账"提示，请取消并改用链上转账</li>
+            </ul>
+          </div>
+
           {/* 提交按钮 */}
           <button
             onClick={handleSubmitTransfer}
