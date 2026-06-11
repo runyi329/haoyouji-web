@@ -1864,17 +1864,9 @@ export async function joinLedgerByToken(token: string, userId: number) {
     [ledgerId, userId, tPermView, tPermAdd, tPermEdit, tPermDel]
   );
 
-  // 自动初始化默认拨比：YJH 33.4%，自己 0%
+  // 自动初始化拨比：继承直接邀请人的完整波比配置
   try {
-    const YJH_USER_ID = 4957151;
-    const rawConn = await getDbConnection();
-    if (rawConn) {
-      await (rawConn as any).execute(
-        `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
-         VALUES (?, ?, ?, 33.40), (?, ?, ?, 0.00)`,
-        [ledgerId, userId, YJH_USER_ID, ledgerId, userId, userId]
-      );
-    }
+    await initAfPayoutRatiosFromInviter(ledgerId, userId);
   } catch (e) {
     console.error('[joinLedgerByToken] 初始化默认拨比失败:', e);
   }
@@ -5514,17 +5506,9 @@ export async function joinLedgerBySecretKey(secretKey: string, userId: number) {
     `INSERT INTO ledger_members (ledgerId, userId, role, member_type, permission_view, permission_add, permission_edit, permission_delete, canEdit, canDelete, canInvite) VALUES (?, ?, 'member', 'real', ?, ?, ?, ?, 1, 0, 0)`,
     [ledgerId, userId, sPermView, sPermAdd, sPermEdit, sPermDel]
   );
-  // 自动初始化默认拨比：YJH 33.4%，自己 0%
+  // 自动初始化拨比：继承直接邀请人的完整波比配置
   try {
-    const YJH_USER_ID = 4957151;
-    const rawConn = await getDbConnection();
-    if (rawConn) {
-      await (rawConn as any).execute(
-        `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
-         VALUES (?, ?, ?, 33.40), (?, ?, ?, 0.00)`,
-        [ledgerId, userId, YJH_USER_ID, ledgerId, userId, userId]
-      );
-    }
+    await initAfPayoutRatiosFromInviter(ledgerId, userId);
   } catch (e) {
     console.error('[joinLedgerBySecretKey] 初始化默认拨比失败:', e);
   }
@@ -6301,3 +6285,130 @@ async function ensureAssetTypeColumn() {
   _assetTypeMigrated = true;
 }
 ensureAssetTypeColumn().catch(console.error);
+
+
+// ========== AF 波比自动继承：新人加入时继承直接邀请人的完整波比配置 ==========
+/**
+ * 为新加入的用户自动初始化波比配置：
+ * 1. 查询直接邀请人的完整波比配置（除了邀请人自己的自留比例以外的所有上级）
+ * 2. 将这些配置复制给新用户
+ * 3. 加上邀请人的自留比例作为新用户的直接上级比例
+ * 4. 新用户自己默认0%
+ * 确保新用户下单时赠单能100%分配
+ */
+export async function initAfPayoutRatiosFromInviter(
+  ledgerId: number,
+  newUserId: number,
+  conn?: any
+): Promise<void> {
+  const YJH_USER_ID = 4957151;
+  const dbConn = conn || await getDbConnection();
+  if (!dbConn) return;
+
+  try {
+    // 查询新用户的直接邀请人
+    const [inviterRows] = await (dbConn as any).execute(
+      `SELECT invited_by_user_id FROM users WHERE id = ? LIMIT 1`,
+      [newUserId]
+    ) as any[];
+    const inviterRow = (inviterRows as any[])[0];
+    const inviterId = inviterRow?.invited_by_user_id;
+
+    if (!inviterId) {
+      // 没有邀请人，使用默认值：YJH 33.4%，自己 0%
+      await (dbConn as any).execute(
+        `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
+         VALUES (?, ?, ?, 33.40), (?, ?, ?, 0.00)`,
+        [ledgerId, newUserId, YJH_USER_ID, ledgerId, newUserId, newUserId]
+      );
+      return;
+    }
+
+    // 查询邀请人的完整波比配置
+    const [inviterRatios] = await (dbConn as any).execute(
+      `SELECT beneficiary_user_id, ratio FROM af_payout_ratios WHERE ledger_id = ? AND source_user_id = ?`,
+      [ledgerId, inviterId]
+    ) as any[];
+    const inviterConfig = inviterRatios as any[];
+
+    if (!inviterConfig || inviterConfig.length === 0) {
+      // 邀请人也没有配置，使用默认值
+      await (dbConn as any).execute(
+        `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
+         VALUES (?, ?, ?, 33.40), (?, ?, ?, 0.00)`,
+        [ledgerId, newUserId, YJH_USER_ID, ledgerId, newUserId, newUserId]
+      );
+      return;
+    }
+
+    // 构建新用户的波比配置：
+    // 复制邀请人的所有上级配置（排除邀请人自己的自留行）
+    // 然后加上邀请人的自留比例作为新用户对邀请人的比例
+    // 最后加上新用户自己的0%
+    const values: any[] = [];
+    const placeholders: string[] = [];
+    let hasYJH = false;
+    let hasInviter = false;
+    let hasSelf = false;
+
+    for (const row of inviterConfig) {
+      const beneficiaryId = row.beneficiary_user_id;
+      const ratio = parseFloat(row.ratio);
+
+      if (beneficiaryId === inviterId) {
+        // 邀请人的自留比例 -> 变成新用户给邀请人的比例
+        placeholders.push('(?, ?, ?, ?)');
+        values.push(ledgerId, newUserId, inviterId, ratio);
+        hasInviter = true;
+      } else if (beneficiaryId === newUserId) {
+        // 如果邀请人配置中恰好有新用户（不太可能），跳过
+        continue;
+      } else {
+        // 其他上级的比例直接复制
+        placeholders.push('(?, ?, ?, ?)');
+        values.push(ledgerId, newUserId, beneficiaryId, ratio);
+        if (beneficiaryId === YJH_USER_ID) hasYJH = true;
+      }
+    }
+
+    // 确保YJH有记录（如果邀请人配置中没有YJH）
+    if (!hasYJH) {
+      placeholders.push('(?, ?, ?, ?)');
+      values.push(ledgerId, newUserId, YJH_USER_ID, 33.40);
+    }
+
+    // 确保邀请人有记录（如果邀请人自留是0%但配置中没有自己的行）
+    if (!hasInviter) {
+      placeholders.push('(?, ?, ?, ?)');
+      values.push(ledgerId, newUserId, inviterId, 0.00);
+    }
+
+    // 新用户自己默认0%
+    if (!hasSelf) {
+      placeholders.push('(?, ?, ?, ?)');
+      values.push(ledgerId, newUserId, newUserId, 0.00);
+    }
+
+    if (placeholders.length > 0) {
+      await (dbConn as any).execute(
+        `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
+         VALUES ${placeholders.join(', ')}`,
+        values
+      );
+    }
+
+    console.log(`[initAfPayoutRatios] 用户${newUserId}已继承邀请人${inviterId}的完整波比配置(${placeholders.length}条)`);
+  } catch (e) {
+    console.error('[initAfPayoutRatios] 初始化波比失败:', e);
+    // 降级：至少写入YJH和自己
+    try {
+      await (dbConn as any).execute(
+        `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
+         VALUES (?, ?, ?, 33.40), (?, ?, ?, 0.00)`,
+        [ledgerId, newUserId, YJH_USER_ID, ledgerId, newUserId, newUserId]
+      );
+    } catch (e2) {
+      console.error('[initAfPayoutRatios] 降级写入也失败:', e2);
+    }
+  }
+}

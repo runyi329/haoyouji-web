@@ -8299,39 +8299,9 @@ ${klinesSummary}
                      VALUES (52, ?, 'member', 'real', 'all', 'all', 'own', 'own', 1, 0, 0, NOW(), NOW())`,
                     [ctx.user.id]
                   );
-                  // 自动初始化拨比：继承直接邀请人（上级）的 YJH 拨比；新用户本人默认 0%
+                  // 自动初始化拨比：继承直接邀请人的完整波比配置
                   try {
-                    const YJH_USER_ID_AF = 4957151;
-                    let yjhRatio = 33.40;
-                    let selfRatio = 0.00;
-                    // 查询直接邀请人（invited_by_user_id）的 YJH 拨比
-                    try {
-                      const [inviterRows] = await db52.execute(
-                        `SELECT invited_by_user_id FROM users WHERE id = ? LIMIT 1`,
-                        [ctx.user.id]
-                      ) as any[];
-                      const inviterRow = (inviterRows as any[])[0];
-                      if (inviterRow?.invited_by_user_id) {
-                        const inviterId = inviterRow.invited_by_user_id;
-                        const [inviterRatioRows] = await db52.execute(
-                          `SELECT ratio FROM af_payout_ratios WHERE ledger_id = 52 AND source_user_id = ? AND beneficiary_user_id = ? LIMIT 1`,
-                          [inviterId, YJH_USER_ID_AF]
-                        ) as any[];
-                        const inviterRatioRow = (inviterRatioRows as any[])[0];
-                        if (inviterRatioRow) {
-                          yjhRatio = parseFloat(inviterRatioRow.ratio);
-                          console.log(`[52号账本自动准入] 用户${ctx.user.id}继承上级${inviterId}的YJH拨比: YJH=${yjhRatio}%, 自己=${selfRatio}%`);
-                        }
-
-                      }
-                    } catch (inheritErr) {
-                      console.error('[52号账本自动准入] 查询上级拨比失败，使用默认値:', inheritErr);
-                    }
-                    await db52.execute(
-                      `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
-                       VALUES (52, ?, ?, ?), (52, ?, ?, ?)`,
-                      [ctx.user.id, YJH_USER_ID_AF, yjhRatio, ctx.user.id, ctx.user.id, selfRatio]
-                    );
+                    await dbLedger.initAfPayoutRatiosFromInviter(52, ctx.user.id, db52);
                   } catch (e2) {
                     console.error('[52号账本自动准入] 初始化拨比失败:', e2);
                   }
@@ -18550,36 +18520,13 @@ ${klinesSummary}
           username: r.username || '',
         });
         const list = (rows as any[]).map(mapRow);
-        // 如果该成员还没有任何拨比配置，自动初始化：继承直接上级的 YJH 拨比；本人默认 0%
+        // 如果该成员还没有任何拨比配置，自动初始化：继承直接邀请人的完整波比配置
         if (list.length === 0) {
-          let yjhRatio = 33.40;
-          let selfRatio = 0.00;
           try {
-            const [inviterRows] = await (conn as any).execute(
-              `SELECT invited_by_user_id FROM users WHERE id = ? LIMIT 1`,
-              [input.sourceUserId]
-            ) as any[];
-            const inviterRow = (inviterRows as any[])[0];
-            if (inviterRow?.invited_by_user_id) {
-              const inviterId = inviterRow.invited_by_user_id;
-              const [inviterRatioRows] = await (conn as any).execute(
-                `SELECT ratio FROM af_payout_ratios WHERE ledger_id = ? AND source_user_id = ? AND beneficiary_user_id = ? LIMIT 1`,
-                [input.ledgerId, inviterId, YJH_USER_ID]
-              ) as any[];
-              const inviterRatioRow = (inviterRatioRows as any[])[0];
-              if (inviterRatioRow) {
-                yjhRatio = parseFloat(inviterRatioRow.ratio);
-              }
-            }
+            await dbLedger.initAfPayoutRatiosFromInviter(input.ledgerId, input.sourceUserId, conn);
           } catch (inheritErr) {
-            console.error('[afGetMemberPayoutRatios] 查询上级拨比失败，使用默认値:', inheritErr);
+            console.error('[afGetMemberPayoutRatios] 自动初始化波比失败:', inheritErr);
           }
-          await (conn as any).execute(
-            `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
-             VALUES (?, ?, ?, ?), (?, ?, ?, ?)`,
-            [input.ledgerId, input.sourceUserId, YJH_USER_ID, yjhRatio,
-             input.ledgerId, input.sourceUserId, input.sourceUserId, selfRatio]
-          );
           const [rows2] = await (conn as any).execute(querySQL, [input.ledgerId, input.sourceUserId, YJH_USER_ID]);
           return (rows2 as any[]).map(mapRow);
         }
