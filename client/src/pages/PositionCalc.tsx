@@ -355,6 +355,24 @@ export default function PositionCalc() {
       utils.ethPositionGetSettings.invalidate({ ledgerId });
     }
   });
+  // 当目标止盈价变化时，自动静默保存到数据库（供P155实时读取）
+  const lastSavedExitPrice = useRef<number>(0);
+  useEffect(() => {
+    if (computedTargetExitPrice > 0 && computedTargetExitPrice !== lastSavedExitPrice.current && ledgerId > 0 && !isViewAs) {
+      lastSavedExitPrice.current = computedTargetExitPrice;
+      const timer = setTimeout(() => {
+        saveSettingsMutation.mutate({
+          ledgerId,
+          targetProfitCny: parseFloat(targetProfitCny) || 0,
+          cnyRate: 0,
+          targetEthQty: parseFloat(targetEthQty) || 0,
+          priceStep,
+          targetExitPrice: computedTargetExitPrice,
+        });
+      }, 2000); // 2秒防抖，避免汇率微调时频繁保存
+      return () => clearTimeout(timer);
+    }
+  }, [computedTargetExitPrice]);
 
   // 战略/策略拖动交互：纯 touch/mouse 事件，不依赖 range input
   const calcStrategyRatioFromX = useCallback((clientX: number): number => {
