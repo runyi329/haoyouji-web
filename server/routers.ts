@@ -23380,6 +23380,7 @@ insights 数组每项包含：
       targetEthQty: z.number().min(0).optional().default(0),
       strategyRatio: z.number().min(0).max(100).optional().default(50),
       priceStep: z.number().refine(v => [20,50,100,200].includes(v)).optional().default(50),
+      targetExitPrice: z.number().min(0).optional().default(0),
     }))
     .mutation(async ({ input, ctx }) => {
       await dbEthPosition.upsertEthPositionSettings(
@@ -23389,7 +23390,8 @@ insights 数组每项包含：
         input.cnyRate,
         input.targetEthQty ?? 0,
         input.strategyRatio ?? 50,
-        input.priceStep ?? 50
+        input.priceStep ?? 50,
+        input.targetExitPrice ?? 0
       );
       return { success: true };
     }),
@@ -24983,39 +24985,27 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
-        if (!db) return { targetExitPrice: null, targetProfitCny: 0, cnyRate: 7.28 };
-        // 获取设置（目标利润、目标持仓量）
+        if (!db) return { targetExitPrice: null, targetProfitCny: 0, cnyRate: 0 };
+        // 直接从数据库读取智能仓位管理页面已计算并保存的目标止盈价
         const settings = await dbEthPosition.getEthPositionSettings(input.ledgerId, ctx.user.id);
-        const { targetProfitCny, targetEthQty } = settings;
-        if (!targetProfitCny || targetProfitCny <= 0) return { targetExitPrice: null, targetProfitCny, cnyRate: 7.28 };
-        // 获取实时汇率（与 PositionCalc 中 exchange.getRate 完全一致，多源降级）
+        const { targetProfitCny } = settings;
+        // 读取已保存的 targetExitPrice
+        const rows = await db.execute(
+          sql`SELECT target_exit_price FROM eth_position_settings WHERE ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id} LIMIT 1`
+        );
+        const row = ((rows as any)[0] as any[])?.[0];
+        const savedExitPrice = row ? parseFloat(row.target_exit_price) : 0;
+        if (savedExitPrice > 0) {
+          return { targetExitPrice: Math.round(savedExitPrice), targetProfitCny: targetProfitCny || 0, cnyRate: 0 };
+        }
+        // 如果数据库中还没有保存过（旧数据兼容），回退到实时计算
+        if (!targetProfitCny || targetProfitCny <= 0) return { targetExitPrice: null, targetProfitCny: targetProfitCny || 0, cnyRate: 0 };
         let cnyRate = 7.28;
         try {
-          const apis = [
-            async () => {
-              const r = await fetch('https://apis.tianapi.com/fxrate/index?key=3878a89bed4728b65cc7d8dc0a644c07&fromcoin=USD&tocoin=CNY&money=1', { signal: AbortSignal.timeout(5000) });
-              const d = await r.json() as { code: number; result?: { money: string } };
-              return (d.code === 200 && d.result?.money) ? parseFloat(d.result.money) : null;
-            },
-            async () => {
-              const r = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(5000) });
-              const d = await r.json() as { result: string; rates?: Record<string, number> };
-              return (d.result === 'success' && d.rates?.CNY) ? d.rates.CNY : null;
-            },
-            async () => {
-              const r = await fetch('https://api.frankfurter.app/latest?from=USD&to=CNY', { signal: AbortSignal.timeout(5000) });
-              const d = await r.json() as { rates?: Record<string, number> };
-              return d.rates?.CNY ?? null;
-            },
-          ];
-          for (const api of apis) {
-            try {
-              const rate = await api();
-              if (rate && rate > 0) { cnyRate = rate; break; }
-            } catch { /* 继续下一个 */ }
-          }
-        } catch { /* 使用默认汇率 */ }
-        // 获取计划档位数据，计算目标均价（与 PositionCalc 一致：按 plannedQty 加权）
+          const r = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(5000) });
+          const d = await r.json() as { result: string; rates?: Record<string, number> };
+          if (d.result === 'success' && d.rates?.CNY) cnyRate = d.rates.CNY;
+        } catch { /* 使用默认 */ }
         const levels = await dbEthPosition.getEthPositionLevels(input.ledgerId, ctx.user.id);
         let planCost = 0, planQty = 0;
         for (const lv of levels) {
@@ -25024,11 +25014,9 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
           if (qty > 0 && price > 0) { planCost += qty * price; planQty += qty; }
         }
         const targetAvgPrice = planQty > 0 ? planCost / planQty : 0;
-        // 关键：用 targetEthQty（用户设置的目标总持仓量），与 PositionCalc 一致
-        const targetQty = targetEthQty > 0 ? targetEthQty : planQty;
+        const targetQty = (settings.targetEthQty || 0) > 0 ? settings.targetEthQty : planQty;
         if (targetAvgPrice <= 0 || targetQty <= 0) return { targetExitPrice: null, targetProfitCny, cnyRate };
         const profitUsdt = cnyRate > 0 ? targetProfitCny / cnyRate : 0;
-        // 止盈价 = 目标均价 + 目标利润(USDT) / 目标持仓总量
         const targetExitPrice = Math.round(targetAvgPrice + profitUsdt / targetQty);
         return { targetExitPrice, targetProfitCny, cnyRate };
       }),
@@ -25808,6 +25796,7 @@ export const adminFeatureRouter = router({
       targetEthQty: z.number().min(0).optional().default(0),
       strategyRatio: z.number().min(0).max(100).optional().default(50),
       priceStep: z.number().refine(v => [20,50,100,200].includes(v)).optional().default(50),
+      targetExitPrice: z.number().min(0).optional().default(0),
     }))
     .mutation(async ({ input, ctx }) => {
       await dbEthPosition.upsertEthPositionSettings(
@@ -25817,7 +25806,8 @@ export const adminFeatureRouter = router({
         input.cnyRate,
         input.targetEthQty ?? 0,
         input.strategyRatio ?? 50,
-        input.priceStep ?? 50
+        input.priceStep ?? 50,
+        input.targetExitPrice ?? 0
       );
       return { success: true };
     }),

@@ -368,8 +368,9 @@ export default function PositionCalc() {
       targetEthQty: parseFloat(targetEthQty) || 0,
       strategyRatio: val,
       priceStep,
+      targetExitPrice: computedTargetExitPrice,
     });
-  }, [ledgerId, targetProfitCny, targetEthQty, priceStep, saveSettingsMutation]);
+  }, [ledgerId, targetProfitCny, targetEthQty, priceStep, saveSettingsMutation, computedTargetExitPrice]);
 
   // 监听全局 touchmove/touchend/mousemove/mouseup
   useEffect(() => {
@@ -549,6 +550,16 @@ export default function PositionCalc() {
     const totalPlanned = priceLevels.reduce((s, p) => s + (planned[p] || 0), 0);
     return { totalQty, avgPrice, totalValue, totalPnl, pnlPct, totalPlanned };
   }, [actual, planned, currentPrice]);
+
+  // 计算目标止盈价（组件级别，用于保存到数据库供P155引用）
+  const computedTargetExitPrice = useMemo(() => {
+    const targetQty = parseFloat(targetEthQty) || 0;
+    const profitUsdt = targetProfitCny && cnyRate ? parseFloat(targetProfitCny) / cnyRate : 0;
+    let _planCost = 0, _planQty = 0;
+    priceLevels.forEach(p => { const q = planned[p] || 0; if (q > 0) { _planCost += q * p; _planQty += q; } });
+    const targetAvgPrice = _planQty > 0 ? _planCost / _planQty : 0;
+    return targetAvgPrice > 0 && targetQty > 0 ? Math.round(targetAvgPrice + profitUsdt / targetQty) : 0;
+  }, [targetProfitCny, targetEthQty, cnyRate, planned, priceLevels]);
 
   const hasData = (p: number) => (planned[p] || 0) > 0 || (actual[p] || 0) > 0;
 
@@ -1266,7 +1277,7 @@ export default function PositionCalc() {
                 setEditingRate(false);
                 // 保存到数据库（汇率不保存，始终用实时值）
                 if (ledgerId > 0) {
-                  saveSettingsMutation.mutate({ ledgerId, targetProfitCny: profit, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0, priceStep });
+                  saveSettingsMutation.mutate({ ledgerId, targetProfitCny: profit, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0, priceStep, targetExitPrice: computedTargetExitPrice });
                 }
               }}
               className="w-full py-2.5 rounded-xl text-sm font-bold text-white"
@@ -1948,7 +1959,7 @@ export default function PositionCalc() {
                       <button
                         onClick={() => {
                           if (ledgerId > 0) {
-                            saveSettingsMutation.mutate({ ledgerId, targetProfitCny: parseFloat(targetProfitCny) || 0, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0, priceStep });
+                            saveSettingsMutation.mutate({ ledgerId, targetProfitCny: parseFloat(targetProfitCny) || 0, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0, priceStep, targetExitPrice: computedTargetExitPrice });
                           }
                           setAllocStep('method');
                         }}
@@ -1961,7 +1972,7 @@ export default function PositionCalc() {
                       <button
                         onClick={() => {
                           if (ledgerId > 0) {
-                            saveSettingsMutation.mutate({ ledgerId, targetProfitCny: parseFloat(targetProfitCny) || 0, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0, priceStep });
+                            saveSettingsMutation.mutate({ ledgerId, targetProfitCny: parseFloat(targetProfitCny) || 0, cnyRate: 0, targetEthQty: parseFloat(targetEthQty) || 0, priceStep, targetExitPrice: computedTargetExitPrice });
                           }
                           setShowAutoAlloc(false);
                         }}

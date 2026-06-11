@@ -414,7 +414,7 @@ export default function OrderFlowPage() {
   const [takeProfitModified, setTakeProfitModified] = useState(false); // 是否已手动修改止盈价
   const { data: defaultTpData } = trpc.orderFlow.getDefaultTakeProfit.useQuery(
     { ledgerId },
-    { enabled: ledgerId > 0, staleTime: 30000 }
+    { enabled: ledgerId > 0, staleTime: 5000, refetchInterval: 10000 }
   );
     const defaultTakeProfit = defaultTpData?.targetExitPrice ?? null;
   // 最新资金费率（在form定义后使用，见下方UI状态块）
@@ -1228,23 +1228,31 @@ export default function OrderFlowPage() {
             <div className="mb-3">
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs" style={{ color: OKX_TEXT_SEC }}>止盈价 (可选)</label>
-                {defaultTakeProfit && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      // 无论当前状态，点击都填入默认值
-                      setForm(f => ({ ...f, takeProfit: String(defaultTakeProfit) }));
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (takeProfitModified) {
+                      // 当前是“手动”状态，点击切换回“默认”，拉取最新数据
+                      await utils.orderFlow.getDefaultTakeProfit.invalidate();
+                      // invalidate后等待refetch完成，用当前缓存的defaultTakeProfit
+                      const tp = defaultTakeProfit;
+                      if (tp) setForm(f => ({ ...f, takeProfit: String(tp) }));
                       setTakeProfitModified(false);
-                    }}
-                    className="text-xs px-1.5 py-0.5 rounded"
-                    style={{
-                      backgroundColor: takeProfitModified ? "rgba(240,185,11,0.12)" : "rgba(255,255,255,0.08)",
-                      color: takeProfitModified ? OKX_YELLOW : OKX_TEXT_SEC,
-                    }}
-                  >
-                    {takeProfitModified ? "恢复默认" : "默认"}
-                  </button>
-                )}
+                    } else {
+                      // 当前是“默认”状态，点击切换为“手动”，清空输入框让用户自己输入
+                      setForm(f => ({ ...f, takeProfit: '' }));
+                      setTakeProfitModified(true);
+                    }
+                  }}
+                  className="text-xs px-2 py-0.5 rounded font-bold"
+                  style={{
+                    backgroundColor: takeProfitModified ? "rgba(240,185,11,0.15)" : "rgba(76,175,80,0.15)",
+                    color: takeProfitModified ? OKX_YELLOW : "#4CAF50",
+                    border: `1px solid ${takeProfitModified ? OKX_YELLOW : "#4CAF50"}`,
+                  }}
+                >
+                  {takeProfitModified ? "\u624b\u52a8" : "\u9ed8\u8ba4"}
+                </button>
               </div>
               <input
                 type="number"
@@ -1252,13 +1260,16 @@ export default function OrderFlowPage() {
                 value={form.takeProfit}
                 onChange={(e) => {
                   setForm(f => ({ ...f, takeProfit: e.target.value }));
-                  setTakeProfitModified(e.target.value !== "" && e.target.value !== String(defaultTakeProfit));
+                  // 只要用户输入了内容，自动切换为“手动”状态
+                  if (e.target.value !== "" && e.target.value !== String(defaultTakeProfit)) {
+                    setTakeProfitModified(true);
+                  }
                 }}
-                placeholder={defaultTakeProfit ? `默认 ${defaultTakeProfit}` : "如 3000"}
+                placeholder={defaultTakeProfit ? `\u9ed8\u8ba4 ${defaultTakeProfit}` : "\u5982 3000"}
                 className="w-full px-3 py-2 rounded-xl text-sm font-mono"
                 style={{
                   background: "rgba(255,255,255,0.05)",
-                  border: `1px solid ${takeProfitModified ? OKX_YELLOW : OKX_BORDER}`,
+                  border: `1px solid ${takeProfitModified ? OKX_YELLOW : "#4CAF50"}`,
                   color: OKX_TEXT_PRI,
                   outline: "none",
                   boxSizing: "border-box",
@@ -1445,8 +1456,10 @@ export default function OrderFlowPage() {
       )}
       {/* ===== 底部 FAB 新增按钮 ===== */}
       {!showForm && <button
-        onClick={() => {
+        onClick={async () => {
           setEditingId(null);
+          // 强制重新获取最新止盈价，确保与智能仓位管理同步
+          await utils.orderFlow.getDefaultTakeProfit.invalidate();
           const f = defaultForm();
           if (defaultTakeProfit) { f.takeProfit = String(defaultTakeProfit); }
           setForm(f);

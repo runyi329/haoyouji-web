@@ -184,7 +184,8 @@ export async function upsertEthPositionSettings(
   cnyRate: number,
   targetEthQty: number = 0,
   strategyRatio: number = 50,
-  priceStep: number = 50
+  priceStep: number = 50,
+  targetExitPrice: number = 0
 ): Promise<void> {
   const db = await getLedgerDb();
   if (!db) return;
@@ -198,6 +199,7 @@ export async function upsertEthPositionSettings(
       targetEthQty: String(targetEthQty),
       strategyRatio,
       priceStep,
+      targetExitPrice: String(targetExitPrice),
     } as any)
     .onDuplicateKeyUpdate({
       set: {
@@ -206,6 +208,7 @@ export async function upsertEthPositionSettings(
         targetEthQty: String(targetEthQty),
         strategyRatio,
         priceStep,
+        targetExitPrice: String(targetExitPrice),
       } as any,
     });
 }
