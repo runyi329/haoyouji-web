@@ -2341,9 +2341,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 </div>
               </div>
 
-              {/* 买入日期 */}
+              {/* 开仓日期 */}
               <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
-                <label className="block text-sm font-medium text-gray-600 mb-2">买入日期</label>
+                <label className="block text-sm font-medium text-gray-600 mb-2">开仓日期</label>
                 <button
                   onClick={() => setShowDatePicker(v => !v)}
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base text-left focus:outline-none"

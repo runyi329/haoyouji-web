@@ -1498,14 +1498,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, cnyRate, paidInterest, p
                 <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
               </div>
             )}
-            {order.created_at && (
-              <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
-                <span className="text-gray-400 shrink-0">登记时间</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>
-                  {typeof order.created_at === 'string' ? order.created_at.replace('T', ' ').slice(0, 16) : new Date(order.created_at).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            )}
+
             {/* 当前价值已移至持有资产大数字旁括号显示，此行已移除 */}
             {dc.holdDuration && order.buy_date && (order.status === 'active' || order.settled_at) && (() => {
               const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
