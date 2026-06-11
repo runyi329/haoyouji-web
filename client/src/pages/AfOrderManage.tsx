@@ -915,6 +915,45 @@ export default function AfOrderManage() {
                 const directGiftCount = activeOrders.filter((o: any) => o.isGift === true || o.isGift === 1).length;
                 const giftCount = directGiftCount + nestedGiftCount;
                 const totalAmount = activeOrders.reduce((s: number, o: any) => s + (parseFloat(o.amount) || 0), 0);
+                // 计算每人的持仓币数量（排除已卖出）
+                const personCoinQty: Record<string, number> = {};
+                const personCoinEff: Record<string, number> = {};
+                activeOrders.forEach((o: any) => {
+                  if (o.sellStatus !== 'sold' && o.coin) {
+                    const qty = parseFloat(o.quantity) || 0;
+                    personCoinQty[o.coin] = (personCoinQty[o.coin] || 0) + qty;
+                    const tier = o.equityTier || 0;
+                    const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                    personCoinEff[o.coin] = (personCoinEff[o.coin] || 0) + qty * rate;
+                  }
+                  const gifts: any[] = (o.giftOrders as any[]) || [];
+                  gifts.forEach((g: any) => {
+                    if (g.sellStatus === 'sold') return;
+                    if (g.coin) {
+                      const gQty = parseFloat(g.quantity) || 0;
+                      personCoinQty[g.coin] = (personCoinQty[g.coin] || 0) + gQty;
+                      const gTier = g.equityTier || 0;
+                      const gRate = EQUITY_DISCOUNT_RATES[gTier] ?? 1.0;
+                      personCoinEff[g.coin] = (personCoinEff[g.coin] || 0) + gQty * gRate;
+                    }
+                  });
+                });
+                const COIN_ORDER_P = ['ETH', 'BTC', 'SOL'];
+                const COIN_SHORT: Record<string, string> = { ETH: 'E', BTC: 'B', SOL: 'S' };
+                const COIN_DEC: Record<string, number> = { SOL: 1, BTC: 4, ETH: 2 };
+                const personCoinParts = Object.entries(personCoinQty)
+                  .sort(([a], [b]) => {
+                    const ai = COIN_ORDER_P.indexOf(a);
+                    const bi = COIN_ORDER_P.indexOf(b);
+                    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+                  })
+                  .map(([c, q]) => {
+                    const qStr = q.toFixed(COIN_DEC[c] ?? 4);
+                    const effNum = personCoinEff[c] ?? q;
+                    const hasDiscount = Math.abs(effNum - q) > 0.00005;
+                    const effStr = hasDiscount ? effNum.toFixed(COIN_DEC[c] ?? 4) : null;
+                    return { short: COIN_SHORT[c] || c, qStr, effStr };
+                  });
                 // 展开后的筛选
                 const pFilter = getPersonFilter(group.uid);
                 // 展平所有订单（正单+嵌套赠单+孤儿赠单）并按时间从近到远排序
@@ -955,10 +994,24 @@ export default function AfOrderManage() {
                       className="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors bg-white border border-gray-200 hover:bg-gray-50 shadow-sm"
                     >
                       <span className="text-sm font-bold text-gray-800 shrink-0 mr-2">{group.name}</span>
-                      <div className="flex items-center gap-1.5 flex-1 justify-end">
-                        <span className="text-[11px] text-blue-500">{normalCount}单</span>
-                        {giftCount > 0 && <span className="text-[11px] text-orange-400">{giftCount}赠</span>}
-                        <span className="text-[11px] text-gray-600">{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
+                      <div className="flex flex-col gap-0.5 flex-1 min-w-0 overflow-hidden">
+                        {/* 第一行：单数/赠数/金额 */}
+                        <div className="flex items-center gap-1.5 justify-end">
+                          <span className="text-[11px] text-blue-500">{normalCount}单</span>
+                          {giftCount > 0 && <span className="text-[11px] text-orange-400">{giftCount}赠</span>}
+                          <span className="text-[11px] text-gray-600">{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
+                        </div>
+                        {/* 第二行：币种持仓数量 + 折后 */}
+                        {personCoinParts.length > 0 && (
+                          <div className="flex items-center gap-1.5 justify-end flex-wrap">
+                            {personCoinParts.map(({ short, qStr, effStr }) => (
+                              <span key={short} className="text-[11px] text-gray-500">
+                                {short}:{qStr}
+                                {effStr && <span className="text-green-600">({effStr})</span>}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <span className={`transition-transform duration-200 shrink-0 ml-1 text-gray-400 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                     </button>
