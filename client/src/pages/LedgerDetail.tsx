@@ -630,7 +630,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
       <div className="flex flex-col justify-start">
         {/* 区块标题（固定高度与左栏对齐） */}
         <div className="h-5 flex items-center gap-1 relative">
-          <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`} style={{ color: isNegRate ? '#059669' : '#DC2626' }}>待结利息</span>
+          <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`} style={{ color: '#3B82F6' }}>待结利息</span>
           <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} text-gray-400`}>(年化 {parseFloat(String(order.interest_rate_annual || 0)).toFixed(2).replace(/\.?0+$/, '')}%)</span>
           <button
             ref={tipBtnRef}
@@ -701,19 +701,19 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
         <div className="min-h-9 flex flex-col justify-center">
           {viewMode === 'large' ? (
             <div className="flex items-baseline gap-1 flex-wrap">
-              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: isNegRate ? '#059669' : '#DC2626', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                {isNegRate ? '-' : '+'}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: displayAccrued === 0 ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626'), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                {displayAccrued === 0 ? '' : (isNegRate ? '-' : '+')}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
-              <span className="text-base font-semibold" style={{ color: isNegRate ? '#059669' : '#DC2626' }}>{interestUnit}</span>
+              <span className="text-base font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
               <span className="text-base font-medium" style={{ color: '#4B5563' }}>≈{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
             </div>
           ) : (
             <>
               <div className="flex items-baseline gap-0.5">
-                <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: isNegRate ? '#059669' : '#DC2626', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                  {isNegRate ? '-' : '+'}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: displayAccrued === 0 ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626'), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                  {displayAccrued === 0 ? '' : (isNegRate ? '-' : '+')}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
-                <span className="text-xs font-semibold" style={{ color: isNegRate ? '#059669' : '#DC2626' }}>{interestUnit}</span>
+                <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
               </div>
               <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
             </>
@@ -731,7 +731,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
                 <>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 whitespace-nowrap">已结利息</span>
-                    <span className="font-medium" style={{ color: isNegRate ? '#059669' : '#DC2626' }}>
+                    <span className="font-medium" style={{ color: '#4B5563' }}>
                       {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
                     </span>
                   </div>
@@ -768,7 +768,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
                     <div key={idx}>
                       <div className="flex items-center justify-between">
                         <span className="text-gray-400 whitespace-nowrap">已结利息</span>
-                        <span className="font-medium" style={{ color: isNegRate ? '#059669' : '#DC2626' }}>
+                        <span className="font-medium" style={{ color: '#4B5563' }}>
                           {d.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {unit}
                         </span>
                       </div>
@@ -1284,7 +1284,7 @@ function FunderOrderSmallCard({ order, livePrices }: { order: any; livePrices: R
         {/* 待结利息 */}
         <div className="flex items-center gap-1">
           <span className="text-xs text-gray-400">待结利息</span>
-          <span className="text-xs font-medium tabular-nums" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#059669' : '#DC2626' }}>
+          <span className="text-xs font-medium tabular-nums" style={{ color: accrued === 0 ? '#1A2340' : (String(order.interest_rate_annual || '').startsWith('-') ? '#059669' : '#DC2626') }}>
             {accrued > 0 ? `${String(order.interest_rate_annual || '').startsWith('-') ? '-' : '+'}${accrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U` : '—'}
           </span>
         </div>

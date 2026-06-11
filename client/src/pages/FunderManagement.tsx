@@ -672,7 +672,7 @@ function FunderOrderCard({
         {/* 右栏：待结利息 */}
         <div className="p-4 pl-3 flex flex-col shrink-0" style={{ width: 'auto', minWidth: '160px', maxWidth: '200px' }}>
           <div className="flex items-center gap-1 mb-0.5 relative" style={{ height: '16px' }}>
-            <span className="text-[10px]" style={{ color: isInvited ? '#059669' : (isNegRate ? '#059669' : '#DC2626') }}>{isInvited ? '待结佣金' : '待结利息'}</span>
+            <span className="text-[10px]" style={{ color: '#3B82F6' }}>{isInvited ? '待结佣金' : '待结利息'}</span>
             {rateAbs && <span className="text-[10px] text-gray-400">(年化 {rateAbs}%)</span>}
             <button
               ref={tipBtnRef}
@@ -741,8 +741,8 @@ function FunderOrderCard({
           </div>
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-0.5">
-              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: isInvited ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626'), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                {isInvited ? '' : (isNegRate ? '-' : '+')}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: isInvited ? '#1A2340' : (displayAccrued === 0 ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626')), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                {isInvited ? '' : (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+'))}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
             </div>
@@ -753,7 +753,7 @@ function FunderOrderCard({
             <>
             <div className="flex items-center justify-between">
               <span className="text-gray-400 whitespace-nowrap">{isInvited ? '已结佣金' : '已结利息'}</span>
-              <span className="font-medium" style={{ color: isInvited ? '#4B5563' : (isNegRate ? '#059669' : '#DC2626') }}>
+              <span className="font-medium" style={{ color: '#4B5563' }}>
                 {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
               </span>
             </div>
@@ -3005,15 +3005,15 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             {displayConfig.accruedInterest && hasInterestData && (
                               <>
                                 <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
-                                  <span className="text-[10px]" style={{ color: formData.interestRateAnnual.startsWith('-') ? '#059669' : '#DC2626' }}>待结利息</span>
+                                  <span className="text-[10px]" style={{ color: '#3B82F6' }}>待结利息</span>
                                   <span className="text-[10px] text-gray-400">(年化 {Math.abs(parseFloat(formData.interestRateAnnual)).toFixed(0)}%)</span>
                                 </div>
                                 <div className="min-h-7 flex flex-col justify-center mt-0.5">
                                   <div className="flex items-baseline gap-0.5">
-                                    <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: formData.interestRateAnnual.startsWith('-') ? '#059669' : '#DC2626', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                                      {formData.interestRateAnnual.startsWith('-') ? '-' : '+'}{prevDisplayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: prevDisplayAccrued === 0 ? '#1A2340' : (formData.interestRateAnnual.startsWith('-') ? '#059669' : '#DC2626'), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                                      {prevDisplayAccrued === 0 ? '' : (formData.interestRateAnnual.startsWith('-') ? '-' : '+')}{prevDisplayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                     </span>
-                                    <span className="text-xs font-semibold" style={{ color: formData.interestRateAnnual.startsWith('-') ? '#059669' : '#DC2626' }}>{prevInterestUnit}</span>
+                                    <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{prevInterestUnit}</span>
                                   </div>
                                   <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{prevAltAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {prevAltUnit}</div>
                                 </div>
@@ -3024,7 +3024,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 <>
                                   <div className="flex items-center justify-between">
                                     <span className="text-gray-400 whitespace-nowrap">已结利息</span>
-                                    <span className="font-medium" style={{ color: formData.interestRateAnnual.startsWith('-') ? '#059669' : '#DC2626' }}>
+                                    <span className="font-medium" style={{ color: '#4B5563' }}>
                                       {prevDisplayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {prevInterestUnit}
                                     </span>
                                   </div>
@@ -3258,7 +3258,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
                           {/* 右栏：利息信息 */}
                           <div className="w-36 p-3 pl-2 flex flex-col">
-                            <div className="text-[10px] mb-0.5" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#059669' : '#DC2626' }}>待结利息{rateAbs ? ` (年化 ${rateAbs}%)` : ''}</div>
+                            <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>待结利息{rateAbs ? ` (年化 ${rateAbs}%)` : ''}</div>
                             {price > 0 && (
                               <div className="flex items-center justify-between text-xs mt-1">
                                 <span className="text-gray-400">买入价</span>
