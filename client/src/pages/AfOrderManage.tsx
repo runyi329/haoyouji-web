@@ -1,6 +1,16 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft, Pencil, Check, X, ChevronRight, ChevronDown } from "lucide-react";
+import { ArrowLeft, Pencil, Check, X, ChevronRight, ChevronDown, Trash2, Search } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 // AfFeeDetail 页面通过路由跳转，已删除内嵌 FeeDetailModal
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -162,6 +172,10 @@ export default function AfOrderManage() {
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
+  // 搜索关键词
+  const [searchQuery, setSearchQuery] = useState('');
+  // 删除确认
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
   // 状态筛选：all / pending(委买中) / holding(持仓中) / selling(委卖中) / sold(已卖出)
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'holding' | 'selling' | 'sold'>('all');
   // 分组维度：时间 / 人员
@@ -236,6 +250,16 @@ export default function AfOrderManage() {
       utils.ledger.afAdminGetOrders.invalidate({ ledgerId });
     },
     onError: (e) => toast.error("更新失败：" + e.message),
+  });
+
+  const deleteMutation = trpc.ledger.afAdminDeleteOrder.useMutation({
+    onSuccess: () => {
+      toast.success("订单已删除");
+      setDeleteTarget(null);
+      utils.ledger.afAdminGetOrders.invalidate({ ledgerId });
+      utils.ledger.afAdminGetStats.invalidate({ ledgerId });
+    },
+    onError: (e) => toast.error("删除失败：" + e.message),
   });
 
   // 计算卖出的实时利润（从同一订单取买入信息）
@@ -357,6 +381,18 @@ export default function AfOrderManage() {
     if (statusFilter === 'sold') return order.sellStatus === 'sold'; // 已卖出：赠单也显示
     return true;
   }) ?? [];
+
+  // 搜索过滤（支持订单号、币种、用户名、昵称）
+  const searchedOrders = searchQuery.trim()
+    ? filteredOrders.filter((order: any) => {
+        const q = searchQuery.trim().toLowerCase();
+        const orderNo = (order.orderNo || '').toLowerCase();
+        const coin = (order.coin || '').toLowerCase();
+        const nickname = (order.nickname || '').toLowerCase();
+        const username = (order.username || '').toLowerCase();
+        return orderNo.includes(q) || coin.includes(q) || nickname.includes(q) || username.includes(q);
+      })
+    : filteredOrders;
 
   // 日期格式化：完整时间（用于气泡）
   const formatDateFull = (d: any) => {
@@ -777,6 +813,28 @@ export default function AfOrderManage() {
 
       {/* ── 状态筛选Tab ── */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
+        {/* 搜索框 */}
+        <div className="px-4 pt-2 pb-1">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="搜索订单号、币种、用户名..."
+              className="w-full pl-9 pr-8 py-2 rounded-xl text-sm border border-gray-200 focus:outline-none focus:border-blue-400"
+              style={{ background: '#f9fafb' }}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2"
+              >
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            )}
+          </div>
+        </div>
         {/* 第一行：分组维度切换 */}
         <div className="flex items-center justify-center gap-1 px-4 pt-2 pb-1">
           {([
@@ -828,7 +886,7 @@ export default function AfOrderManage() {
           <div className="text-center py-12 text-gray-400">加载中...</div>
         ) : !orders || orders.length === 0 ? (
           <div className="text-center py-12 text-gray-400">暂无订单记录</div>
-        ) : filteredOrders.length === 0 ? (
+        ) : searchedOrders.length === 0 ? (
           <div className="text-center py-12 text-gray-400">该状态下暂无订单</div>
         ) : groupMode === 'person' ? (
           /* ── 人员维度分组 ── */
@@ -836,7 +894,7 @@ export default function AfOrderManage() {
             {(() => {
               // 按人员分组
               const personMap = new Map<string, { uid: string; name: string; orders: any[] }>();
-              (filteredOrders || []).forEach((order: any) => {
+              (searchedOrders || []).forEach((order: any) => {
                 const uid = String(order.userId || 'unknown');
                 const name = order.nickname || order.username || `用户${uid}`;
                 if (!personMap.has(uid)) {
@@ -989,7 +1047,7 @@ export default function AfOrderManage() {
               const COIN_COLORS: Record<string, string> = { ETH: '#3b82f6', BTC: '#f59e0b', SOL: '#10b981' };
               // 按币种分组
               const coinMap = new Map<string, any[]>();
-              (filteredOrders || []).forEach((order: any) => {
+              (searchedOrders || []).forEach((order: any) => {
                 const coin = order.coin || '未知';
                 if (!coinMap.has(coin)) coinMap.set(coin, []);
                 coinMap.get(coin)!.push(order);
@@ -1109,7 +1167,7 @@ export default function AfOrderManage() {
               // 按买入价格分组（同一价格归为一组）
               const priceMap = new Map<string, { price: number; coin: string; orders: any[] }>();
               const orphanGiftIdsP = new Set<number>(); // 孤儿赠单ID
-              (filteredOrders || []).forEach((order: any) => {
+              (searchedOrders || []).forEach((order: any) => {
                 const isGift = order.isGift === true || order.isGift === 1;
                 if (isGift) orphanGiftIdsP.add(order.id);
                 const price = parseFloat(order.limitPrice || '0');
@@ -1245,7 +1303,7 @@ export default function AfOrderManage() {
                 return toDateKey(order.createdAt ? new Date(order.createdAt) : null);
               };
               const dateGroups: Record<string, any[]> = {};
-              (filteredOrders || []).forEach((order: any) => {
+              (searchedOrders || []).forEach((order: any) => {
                 const dateKey = getOrderDateKey(order);
                 if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
                 dateGroups[dateKey].push(order);
@@ -1437,12 +1495,20 @@ export default function AfOrderManage() {
                       )}
                     </div>
                     {!isEditing ? (
-                      <button
-                        onClick={() => startEdit(order)}
-                        className="flex items-center gap-1 text-xs text-gray-700 border border-gray-300 rounded-lg px-2 py-1"
-                      >
-                        <Pencil className="w-3 h-3" /> 编辑
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => startEdit(order)}
+                          className="flex items-center gap-1 text-xs text-gray-700 border border-gray-300 rounded-lg px-2 py-1"
+                        >
+                          <Pencil className="w-3 h-3" /> 编辑
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(order)}
+                          className="flex items-center gap-1 text-xs text-red-500 border border-red-200 rounded-lg px-2 py-1"
+                        >
+                          <Trash2 className="w-3 h-3" /> 删除
+                        </button>
+                      </div>
                     ) : (
                       <div className="flex gap-2">
                         <button
@@ -1918,6 +1984,33 @@ export default function AfOrderManage() {
           </div>
         )}
       </div>
+
+      {/* 删除确认弹窗 */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent className="mx-4 rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogDescription>
+              删除订单 #{deleteTarget?.id}（{deleteTarget?.coin} {deleteTarget?.quantity}）后无法恢复，关联的赠单也会一并删除。{deleteTarget?.status === 'pending' && '已扣余额将自动退回。'}确认删除吗？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="rounded-xl bg-red-600 hover:bg-red-700"
+              onClick={() =>
+                deleteTarget &&
+                deleteMutation.mutate({ ledgerId, orderId: deleteTarget.id })
+              }
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

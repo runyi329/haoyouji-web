@@ -13844,6 +13844,48 @@ ${klinesSummary}
         console.log(`[afCancelOrder] 联动撤销订单#${input.orderId}的所有pending赠予订单`);
         return { success: true };
       }),
+    // AF 管理员删除订单（含关联赠单和余额退回）
+    afAdminDeleteOrder: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), orderId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        // 验证是否是 owner 或 admin
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
+        if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
+        // 查询订单信息
+        const orderRows = await db.execute(
+          sql`SELECT id, user_id, coin, side, amount, quantity, status, is_gift, source_order_id, sell_status FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+        ) as any;
+        const order = (orderRows[0]?.[0] ?? orderRows[0]);
+        if (!order) throw new Error('订单不存在');
+        const userId = order.user_id;
+        const amount = parseFloat(order.amount || '0');
+        const isGift = parseInt(order.is_gift || '0') === 1;
+        // 如果是 pending 正单，退回已扣余额
+        if (order.status === 'pending' && !isGift && amount > 0.001) {
+          await db.execute(
+            sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+                VALUES (${input.ledgerId}, ${userId}, ${amount}, ${`管理员删除订单退回 ${order.coin} ${amount} USDT`}, NOW(), NOW())`
+          );
+        }
+        // 删除关联的赠予订单
+        await db.execute(
+          sql`DELETE FROM af_orders WHERE source_order_id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND is_gift = 1`
+        );
+        // 删除该订单的档位触发记录
+        await db.execute(
+          sql`DELETE FROM af_order_tier_triggers WHERE order_id = ${input.orderId}`
+        );
+        // 删除订单本身
+        await db.execute(
+          sql`DELETE FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
+        );
+        console.log(`[afAdminDeleteOrder] 管理员(${ctx.user.id})删除订单#${input.orderId} 币种:${order.coin} 金额:${amount} 是否赠单:${isGift}`);
+        return { success: true };
+      }),
     // AF 查询订单的收益权档位触发记录 + 扫描状态
     afGetTierData: protectedProcedure
       .input(z.object({ orderId: z.number(), ledgerId: z.number(), viewAsUserId: z.number().optional() }))
