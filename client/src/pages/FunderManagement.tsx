@@ -651,7 +651,7 @@ function FunderOrderCard({
                 <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
               </div>
             )}
-            {order.interest_payment_type && (
+            {order.interest_payment_type && showField('interestPaymentType') && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">付息方式</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{getPaymentLabel(order.interest_payment_type)}</span>
@@ -1237,6 +1237,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     aiIcon: false,
     assetType: true,
     showOwnerName: true,
+    interestPaymentType: true,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean>>(DEFAULT_DISPLAY_CONFIG);
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY'];
@@ -2688,6 +2689,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       // 当前价值已移至持有资产括号显示，不再单独作为开关
                       { key: 'holdDuration', label: '持有时长' },
                       { key: 'orderNo', label: '订单编号' },
+                      { key: 'interestPaymentType', label: '付息方式' },
                       { key: 'aiIcon', label: 'AI图标（持有资产右上角）' },
                       { key: 'assetType', label: '资产类型标签（股票/数字币）' },
                       { key: 'showOwnerName', label: '显示订单所有者名字' },
@@ -2885,6 +2887,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">订单编号</span>
                             <span className="font-medium" style={{ color: '#4B5563' }}>{editingOrder.order_no}</span>
+                          </div>
+                        )}
+                        {displayConfig.interestPaymentType && formData.interestPaymentType && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400 shrink-0">付息方式</span>
+                            <span className="font-medium" style={{ color: '#4B5563' }}>{formData.interestPaymentType === 'monthly_prepaid' ? '月付先付' : formData.interestPaymentType === 'monthly_postpaid' ? '月付后付' : formData.interestPaymentType === 'end_postpaid' ? '结束后付' : formData.interestPaymentType === 'quarterly' ? '季付' : formData.interestPaymentType === 'maturity' ? '到期付' : formData.interestPaymentType}</span>
                           </div>
                         )}
                       </div>
@@ -3173,7 +3181,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                   <span className="font-mono" style={{ color: '#9CA3AF' }}>{order.order_no}</span>
                                 </div>
                               )}
-                              {order.interest_payment_type && (
+                              {order.interest_payment_type && showField('interestPaymentType') && (
                                 <div className="flex items-center justify-between">
                                   <span className="text-gray-400">付息方式</span>
                                   <span className="font-medium" style={{ color: '#4B5563' }}>{order.interest_payment_type === 'monthly_prepaid' ? '月付先付' : order.interest_payment_type === 'monthly_postpaid' ? '月付后付' : order.interest_payment_type === 'quarterly' ? '季付' : order.interest_payment_type === 'maturity' ? '到期付' : order.interest_payment_type}</span>

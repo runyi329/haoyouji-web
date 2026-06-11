@@ -3288,6 +3288,12 @@ export default function CryptoPrediction() {
                                 <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
                               </div>
                             )}
+                            {showField('interestPaymentType') && order.interest_payment_type && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400 shrink-0">付息方式</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>{order.interest_payment_type === 'monthly_prepaid' ? '月付先付' : order.interest_payment_type === 'monthly_postpaid' ? '月付后付' : order.interest_payment_type === 'end_postpaid' ? '结束后付' : order.interest_payment_type === 'quarterly' ? '季付' : order.interest_payment_type === 'maturity' ? '到期付' : order.interest_payment_type}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
 
