@@ -1809,12 +1809,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             >
               <span>
                 {selectedUserId === null
-                  ? '全部资金方'
+                  ? '全部成员'
                   : (funderUsers as any[])?.find((u: any) => u.userId === selectedUserId)
                     ? ((funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.username ||
                        (funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.nickname ||
                        (funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.name)
-                    : '选择资金方'}
+                    : '选择成员'}
               </span>
               <ChevronDown className="w-4 h-4 text-gray-400 ml-1 shrink-0" />
             </button>
@@ -1826,7 +1826,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       type="text"
                       value={userSearchText}
                       onChange={e => setUserSearchText(e.target.value)}
-                      placeholder="搜索资金方..."
+                      placeholder="搜索成员..."
                       className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none"
                       autoFocus
                     />
@@ -1837,7 +1837,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     onClick={() => { setSelectedUserId(null); setShowUserDropdown(false); }}
                     className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors"
                     style={{ color: selectedUserId === null ? '#1A56DB' : '#374151', fontWeight: selectedUserId === null ? 600 : 400 }}
-                  >全部资金方</button>
+                  >全部成员</button>
                   {(funderUsers as any[])?.filter((u: any) => {
                     if (!userSearchText) return true;
                     const name = u.username || u.nickname || u.name || '';

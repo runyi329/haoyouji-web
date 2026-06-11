@@ -15021,12 +15021,14 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-        // 验证目标用户是资金方或管理员（管理员可作为任何一边的目标用户）
+        // 查询目标用户在账本中的角色，用于自动设置 order_role
         const targetRoleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${input.userId} LIMIT 1`
         ) as any;
         const targetRole = (targetRoleRows[0]?.[0] ?? targetRoleRows[0])?.role;
-        if (targetRole !== 'funder' && targetRole !== 'owner' && targetRole !== 'admin') throw new TRPCError({ code: 'BAD_REQUEST', message: '目标用户不是资金方角色' });
+        if (!targetRole) throw new TRPCError({ code: 'BAD_REQUEST', message: '目标用户不是账本成员' });
+        // 根据成员角色自动决定 order_role：funder/owner/admin -> 'funder'，其他 -> 'finance'
+        const orderRole = (targetRole === 'funder' || targetRole === 'owner' || targetRole === 'admin') ? 'funder' : 'finance';
         // 生成唯一订单号（2个大写字母 + 4个数字）
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         const digits = '0123456789';
@@ -15042,7 +15044,7 @@ ${klinesSummary}
         }
         const insertResult = await db.execute(
           sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, show_profit_share, commission_share, collateral_assets, display_config, asset_type, tags, created_by)
-              VALUES (${orderNo}, 'funder', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${ctx.user.id})`
+              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${ctx.user.id})`
         ) as any;
         // 新订单创建后触发即时扫描
         const newOrderId = insertResult?.insertId || (insertResult?.[0] as any)?.insertId;
@@ -15273,7 +15275,7 @@ ${klinesSummary}
           sql`SELECT lm.userId, lm.nickname, u.username, u.name, u.avatar
               FROM ledger_members lm
               LEFT JOIN users u ON u.id = lm.userId
-              WHERE lm.ledgerId = ${input.ledgerId} AND lm.role IN (${sql.raw(input.roleFilter === 'admin' ? "'owner','admin'" : "'funder'")})
+              WHERE lm.ledgerId = ${input.ledgerId} AND lm.role IN (${sql.raw(input.roleFilter === 'admin' ? "'owner','admin'" : "'owner','admin','funder','member','viewer'")})
               ORDER BY lm.id ASC`
         ) as any;
         return ((rows[0] || rows) as any[]) || [];
