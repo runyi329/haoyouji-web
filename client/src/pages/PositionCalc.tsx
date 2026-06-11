@@ -170,6 +170,15 @@ export default function PositionCalc() {
   const [editingRate, setEditingRate] = useState(false); // 是否正在编辑汇率
   const [rateFromApi, setRateFromApi] = useState<number | null>(null); // 实时汇率（API 成功后设置）
   const [showExitPriceInfo, setShowExitPriceInfo] = useState(false); // 目标离场价说明弹窗
+  // 计算目标止盈价（组件级别，用于保存到数据库供P155引用）
+  const computedTargetExitPrice = useMemo(() => {
+    const targetQty = parseFloat(targetEthQty) || 0;
+    const profitUsdt = targetProfitCny && cnyRate ? parseFloat(targetProfitCny) / cnyRate : 0;
+    let _planCost = 0, _planQty = 0;
+    priceLevels.forEach(p => { const q = planned[p] || 0; if (q > 0) { _planCost += q * p; _planQty += q; } });
+    const targetAvgPrice = _planQty > 0 ? _planCost / _planQty : 0;
+    return targetAvgPrice > 0 && targetQty > 0 ? Math.round(targetAvgPrice + profitUsdt / targetQty) : 0;
+  }, [targetProfitCny, targetEthQty, cnyRate, planned, priceLevels]);
   // ===== 自动分配计划持仓 =====
   const [showAutoAlloc, setShowAutoAlloc] = useState(false); // 是否显示自动分配弹窗
   const [allocStep, setAllocStep] = useState<'setup' | 'range' | 'method' | 'preview'>('setup'); // 分配步骤
@@ -551,15 +560,6 @@ export default function PositionCalc() {
     return { totalQty, avgPrice, totalValue, totalPnl, pnlPct, totalPlanned };
   }, [actual, planned, currentPrice]);
 
-  // 计算目标止盈价（组件级别，用于保存到数据库供P155引用）
-  const computedTargetExitPrice = useMemo(() => {
-    const targetQty = parseFloat(targetEthQty) || 0;
-    const profitUsdt = targetProfitCny && cnyRate ? parseFloat(targetProfitCny) / cnyRate : 0;
-    let _planCost = 0, _planQty = 0;
-    priceLevels.forEach(p => { const q = planned[p] || 0; if (q > 0) { _planCost += q * p; _planQty += q; } });
-    const targetAvgPrice = _planQty > 0 ? _planCost / _planQty : 0;
-    return targetAvgPrice > 0 && targetQty > 0 ? Math.round(targetAvgPrice + profitUsdt / targetQty) : 0;
-  }, [targetProfitCny, targetEthQty, cnyRate, planned, priceLevels]);
 
   const hasData = (p: number) => (planned[p] || 0) > 0 || (actual[p] || 0) > 0;
 
