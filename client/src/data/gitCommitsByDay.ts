@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-11
+// 生成时间：2026-06-12
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7177,5 +7177,12 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-11T12:58:31Z", type: "refactor", cleanMessage: "按币种Tab标题改为显示总币数、折后权益、折扣率" },
     { date: "2026-06-11T13:26:18Z", type: "feat", cleanMessage: "添加OKX内部转账重要提示" },
     { date: "2026-06-11T13:40:40Z", type: "fix", cleanMessage: "修复孤儿赠单统计遗漏" },
+    { date: "2026-06-11T13:47:12Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-11T14:32:04Z", type: "feat", cleanMessage: "添加搜索订单和删除订单功能" },
+    { date: "2026-06-11T14:44:23Z", type: "feat", cleanMessage: "重新设计删除弹窗 - 支持选择删除范围和退款选项" },
+  ],
+  "2026-06-12": [
+    { date: "2026-06-11T16:10:07Z", type: "feat", cleanMessage: "按人员Tab收缩状态显示各币种持仓数量和折后数量" },
+    { date: "2026-06-11T16:18:17Z", type: "feat", cleanMessage: "按人员Tab显示用户钱包余额" },
   ],
 };
