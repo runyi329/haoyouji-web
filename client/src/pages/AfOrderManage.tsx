@@ -169,6 +169,17 @@ export default function AfOrderManage() {
   // 人员分组展开状态
   const [expandedPersons, setExpandedPersons] = useState<Record<string, boolean>>({});
   const togglePerson = (uid: string) => setExpandedPersons(prev => ({ ...prev, [uid]: !(prev[uid] ?? false) }));
+  // 人员维度内部筛选：每个人独立的勾选状态（默认全选）
+  const [personFilters, setPersonFilters] = useState<Record<string, Set<string>>>({});
+  const getPersonFilter = (uid: string): Set<string> => personFilters[uid] || new Set(['pending', 'holding', 'selling', 'sold', 'gift']);
+  const togglePersonFilter = (uid: string, key: string) => {
+    setPersonFilters(prev => {
+      const current = prev[uid] || new Set(['pending', 'holding', 'selling', 'sold', 'gift']);
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return { ...prev, [uid]: next };
+    });
+  };
   // 赠予订单折叠展开状态：key = 委买订单ID
   const [expandedGiftOrders, setExpandedGiftOrders] = useState<Record<number, boolean>>({});
   const [expandedDateId, setExpandedDateId] = useState<number | null>(null);
@@ -806,7 +817,7 @@ export default function AfOrderManage() {
           <div className="text-center py-12 text-gray-400">该状态下暂无订单</div>
         ) : groupMode === 'person' ? (
           /* ── 人员维度分组 ── */
-          <div className="space-y-3 pb-6">
+          <div className="space-y-2 pb-6">
             {(() => {
               // 按人员分组
               const personMap = new Map<string, { uid: string; name: string; orders: any[] }>();
@@ -818,115 +829,131 @@ export default function AfOrderManage() {
                 }
                 personMap.get(uid)!.orders.push(order);
               });
-              // 按订单数量排序（多的在前）
               const personGroups = Array.from(personMap.values()).sort((a, b) => b.orders.length - a.orders.length);
+              const COIN_DECIMALS: Record<string, number> = { SOL: 1, BTC: 4, ETH: 2 };
               return personGroups.map(group => {
                 const isOpen = expandedPersons[group.uid] ?? false;
-                // 统计：正单数、赠单数、总投入
                 const activeOrders = group.orders.filter((o: any) => o.status !== 'cancelled');
                 const normalCount = activeOrders.filter((o: any) => !(o.isGift === true || o.isGift === 1)).length;
-                const giftCount = activeOrders.filter((o: any) => o.isGift === true || o.isGift === 1).length
-                  + activeOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[] || []).length), 0);
+                const nestedGiftCount = activeOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[] || []).length), 0);
+                const directGiftCount = activeOrders.filter((o: any) => o.isGift === true || o.isGift === 1).length;
+                const giftCount = directGiftCount + nestedGiftCount;
                 const totalAmount = activeOrders.reduce((s: number, o: any) => s + (parseFloat(o.amount) || 0), 0);
-                // 币种持仓
-                const coinQty: Record<string, number> = {};
-                activeOrders.forEach((o: any) => {
-                  if (o.sellStatus !== 'sold' && o.coin) {
-                    coinQty[o.coin] = (coinQty[o.coin] || 0) + (parseFloat(o.quantity) || 0);
-                  }
+                // 展开后的筛选
+                const pFilter = getPersonFilter(group.uid);
+                // 展平所有订单（正单+嵌套赠单）并按时间从近到远排序
+                const flatOrders: any[] = [];
+                group.orders.forEach((o: any) => {
+                  flatOrders.push({ ...o, _isGift: o.isGift === true || o.isGift === 1 });
+                  // 嵌套赠单也展平
                   const gifts: any[] = (o.giftOrders as any[]) || [];
                   gifts.forEach((g: any) => {
-                    if (g.sellStatus === 'sold') return;
-                    if (g.coin) coinQty[g.coin] = (coinQty[g.coin] || 0) + (parseFloat(g.quantity) || 0);
+                    flatOrders.push({ ...g, _isGift: true, _parentCoin: o.coin });
                   });
                 });
-                const COIN_CONFIG: Record<string, { short: string; color: string }> = {
-                  ETH: { short: 'E', color: 'text-blue-500' },
-                  BTC: { short: 'B', color: 'text-orange-400' },
-                  SOL: { short: 'S', color: 'text-green-500' },
-                };
-                const COIN_ORDER = ['ETH', 'BTC', 'SOL'];
-                const COIN_DECIMALS: Record<string, number> = { SOL: 1, BTC: 4, ETH: 2 };
-                const sortedCoins = Object.entries(coinQty)
-                  .sort(([a], [b]) => {
-                    const ai = COIN_ORDER.indexOf(a);
-                    const bi = COIN_ORDER.indexOf(b);
-                    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-                  });
+                flatOrders.sort((a, b) => {
+                  const ta = new Date(a.createdAt || a.confirmedAt || 0).getTime();
+                  const tb = new Date(b.createdAt || b.confirmedAt || 0).getTime();
+                  return tb - ta;
+                });
+                // 根据勾选筛选
+                const visibleOrders = flatOrders.filter((o: any) => {
+                  if (o._isGift) return pFilter.has('gift');
+                  if (o.sellStatus === 'sold') return pFilter.has('sold');
+                  if (o.sellStatus === 'selling') return pFilter.has('selling');
+                  if (o.status === 'completed') return pFilter.has('holding');
+                  if (o.status === 'pending') return pFilter.has('pending');
+                  return true;
+                });
                 return (
                   <div key={group.uid}>
+                    {/* 人员标题行 */}
                     <button
                       onClick={() => togglePerson(group.uid)}
-                      className="w-full flex items-center justify-between px-3 py-2.5 mb-1 rounded-xl transition-colors bg-white border border-gray-200 hover:bg-gray-50 shadow-sm"
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors bg-white border border-gray-200 hover:bg-gray-50 shadow-sm"
                     >
-                      {/* 左侧：用户名 */}
                       <span className="text-sm font-bold text-gray-800 shrink-0 mr-2">{group.name}</span>
-                      {/* 右侧：统计信息 */}
-                      <div className="flex flex-col gap-0.5 flex-1 min-w-0 overflow-hidden items-end">
-                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                          <span className="text-[11px] text-blue-500">{normalCount}单</span>
-                          {giftCount > 0 && <span className="text-[11px] text-orange-400">{giftCount}赠</span>}
-                          <span className="text-[11px] text-gray-600">{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
-                        </div>
-                        {sortedCoins.length > 0 && (
-                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                            {sortedCoins.map(([c, q]) => {
-                              const cfg = COIN_CONFIG[c] || { short: c, color: 'text-gray-500' };
-                              return (
-                                <span key={c} className={`text-[11px] ${cfg.color}`}>
-                                  {cfg.short}:{(q as number).toFixed(COIN_DECIMALS[c] ?? 4)}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        )}
+                      <div className="flex items-center gap-1.5 flex-1 justify-end">
+                        <span className="text-[11px] text-blue-500">{normalCount}单</span>
+                        {giftCount > 0 && <span className="text-[11px] text-orange-400">{giftCount}赠</span>}
+                        <span className="text-[11px] text-gray-600">{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
                       </div>
                       <span className={`transition-transform duration-200 shrink-0 ml-1 text-gray-400 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                     </button>
-                    {/* 展开后显示该用户的订单 */}
-                    {isOpen && group.orders.map((order: any) => {
-                      const statusDisplay = getStatusDisplay(order);
-                      const orderDate = new Date(order.createdAt);
-                      const yy = String(orderDate.getFullYear()).slice(2);
-                      const mm = String(orderDate.getMonth() + 1).padStart(2, '0');
-                      const dd = String(orderDate.getDate()).padStart(2, '0');
-                      const orderNo = `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
-                      const allSold = order.sellStatus === 'sold';
-                      return (
-                        <div key={order.id} className={`rounded-2xl p-4 shadow-sm mb-2 ml-2 ${allSold ? 'bg-gray-50' : 'bg-white'}`}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
-                            <div className="flex items-center gap-2">
-                              <span className={`text-[10px] font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>
-                              <span className="text-[10px] text-gray-400">{formatDate(order.createdAt)}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-gray-800">{order.coin}</span>
-                              {order.isGift && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 font-medium">赠</span>
-                              )}
-                            </div>
-                            <div className="text-right">
-                              <span className="text-xs text-gray-600">{parseFloat(order.quantity || 0).toFixed(4)} {order.coin}</span>
-                              <span className="text-[10px] text-gray-400 ml-2">{parseFloat(order.amount || 0).toFixed(0)}U</span>
-                            </div>
-                          </div>
-                          {/* 嵌套赠单 */}
-                          {(order.giftOrders as any[] || []).length > 0 && (
-                            <div className="mt-1.5 pl-2 border-l-2 border-amber-200">
-                              {(order.giftOrders as any[]).map((g: any) => (
-                                <div key={g.id} className="flex items-center justify-between py-0.5">
-                                  <span className="text-[10px] text-amber-600">赠 {g.coin}</span>
-                                  <span className="text-[10px] text-gray-500">{parseFloat(g.quantity || 0).toFixed(4)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                    {/* 展开后：一个容器 */}
+                    {isOpen && (
+                      <div className="mt-1 mb-2 rounded-xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+                        {/* 勾选筛选行 */}
+                        <div className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-100 bg-gray-50 flex-wrap">
+                          {([
+                            { key: 'pending', label: '委买', color: 'text-yellow-600' },
+                            { key: 'holding', label: '持仓', color: 'text-green-600' },
+                            { key: 'selling', label: '委卖', color: 'text-red-500' },
+                            { key: 'sold', label: '已卖', color: 'text-blue-600' },
+                            { key: 'gift', label: '赠单', color: 'text-orange-500' },
+                          ]).map(f => (
+                            <label key={f.key} className="flex items-center gap-0.5 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={pFilter.has(f.key)}
+                                onChange={() => togglePersonFilter(group.uid, f.key)}
+                                className="w-3 h-3 rounded accent-blue-500"
+                              />
+                              <span className={`text-[10px] ${pFilter.has(f.key) ? f.color : 'text-gray-400'}`}>{f.label}</span>
+                            </label>
+                          ))}
                         </div>
-                      );
-                    })}
+                        {/* 订单列表：每行一张订单 */}
+                        <div className="divide-y divide-gray-50">
+                          {visibleOrders.length === 0 ? (
+                            <div className="text-center py-3 text-[11px] text-gray-400">无匹配订单</div>
+                          ) : visibleOrders.map((order: any) => {
+                            const isGift = order._isGift;
+                            const statusDisplay = getStatusDisplay(order);
+                            const qty = parseFloat(order.quantity || 0);
+                            const coin = order.coin || order._parentCoin || '';
+                            const tier = order.equityTier || 0;
+                            const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                            const effQty = qty * rate;
+                            const hasDiscount = Math.abs(effQty - qty) > 0.00005;
+                            const amount = parseFloat(order.amount || 0);
+                            const dateStr = formatDate(order.confirmedAt || order.createdAt);
+                            return (
+                              <div
+                                key={order.id}
+                                className={`flex items-center px-2.5 py-1.5 gap-1 min-h-[28px] ${isGift ? 'bg-amber-50/40' : ''}`}
+                              >
+                                {/* 币种+赠标记 */}
+                                <span className="text-[11px] font-medium text-gray-800 w-8 shrink-0">{coin}</span>
+                                {isGift ? (
+                                  <span className="text-[9px] px-1 py-0 rounded bg-amber-100 text-amber-600 shrink-0">赠</span>
+                                ) : (
+                                  <span className="text-[9px] px-1 py-0 rounded bg-blue-50 text-blue-500 shrink-0">正</span>
+                                )}
+                                {/* 数量 */}
+                                <span className="text-[11px] text-gray-700 flex-1 text-right font-mono">
+                                  {qty.toFixed(COIN_DECIMALS[coin] ?? 4)}
+                                </span>
+                                {/* 档位+折后 */}
+                                {!isGift && tier > 0 && hasDiscount ? (
+                                  <span className="text-[9px] text-purple-500 shrink-0 w-16 text-right">
+                                    T{tier}→{effQty.toFixed(COIN_DECIMALS[coin] ?? 4)}
+                                  </span>
+                                ) : (
+                                  <span className="w-16 shrink-0" />
+                                )}
+                                {/* 金额 */}
+                                <span className="text-[10px] text-gray-400 w-10 text-right shrink-0">{amount > 0 ? amount.toFixed(0)+'U' : ''}</span>
+                                {/* 状态 */}
+                                <span className={`text-[9px] w-8 text-center shrink-0 ${statusDisplay.color}`}>{statusDisplay.label}</span>
+                                {/* 日期 */}
+                                <span className="text-[9px] text-gray-400 w-14 text-right shrink-0">{dateStr}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               });
