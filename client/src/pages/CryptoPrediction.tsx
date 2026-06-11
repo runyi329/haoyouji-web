@@ -3199,7 +3199,7 @@ export default function CryptoPrediction() {
                             {order.asset_type === 'stock' ? '股票' : '数字币'}
                           </span>
                         )}
-                        {showField('showOwnerName') && (order.userName || order.username) && order._isParticipant && (
+                        {showField('showOwnerName') && (order.userName || order.username) && (
                           <span className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A', backgroundColor: 'transparent' }}>
                             {order.userName || order.username}
                           </span>
