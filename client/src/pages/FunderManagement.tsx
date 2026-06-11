@@ -2775,7 +2775,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   {/* 顶部色条 */}
                   <div className="h-1" style={{ background: `linear-gradient(90deg, ${COIN_COLORS[formData.coin] || '#3B82F6'}, ${(COIN_COLORS[formData.coin] || '#3B82F6')}55)` }} />
                   {/* 帽子区域：资产类型标签 + 所有者名字（受开关控制） */}
-                  {(displayConfig.assetType || displayConfig.showOwnerName) && (
+                  {(displayConfig.assetType || displayConfig.showOwnerName || (formData.tags && formData.tags.length > 0)) && (
                     <div className="flex items-center gap-1.5 px-4 py-1.5 flex-wrap" style={{ borderBottom: '1px solid #F3F4F6', backgroundColor: '#FAFBFF' }}>
                       {displayConfig.assetType && formData.assetType && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: formData.assetType === 'stock' ? '#FEF3C7' : '#E0E7FF', color: formData.assetType === 'stock' ? '#92400E' : '#1D4ED8' }}>
@@ -2787,6 +2787,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           {editingOrder.userName}
                         </span>
                       )}
+                      {formData.tags && formData.tags.length > 0 && formData.tags.map((tag: string, i: number) => (
+                        <span key={i} className="text-[10px] font-medium px-1.5 py-0.5" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
+                          {tag}
+                        </span>
+                      ))}
                     </div>
                   )}
                    {/* 两栏主体 */}
