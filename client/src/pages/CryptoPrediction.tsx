@@ -3349,6 +3349,21 @@ export default function CryptoPrediction() {
                                   </span>
                                 </div>
                               )}
+                              {showField('interestDuration') && startDate && (order.status === 'active' || order.settled_at) && (() => {
+                                const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+                                const elapsed = endTs - new Date(String(startDate).slice(0, 10) + 'T00:00:00').getTime();
+                                if (elapsed < 0) return null;
+                                const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
+                                const days = Math.floor(totalHours / 24);
+                                const hours = totalHours % 24;
+                                const label = days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
+                                return (
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="text-gray-400">计息时长</span>
+                                    <span className="font-medium" style={{ color: '#4B5563' }}>{label}</span>
+                                  </div>
+                                );
+                              })()}
                               {/* 已卖出：卖出价、卖出币数、订单利润 */}
                               {(() => {
                                 const _an = String(order.admin_note || '');
@@ -3747,6 +3762,16 @@ export default function CryptoPrediction() {
                                           </div>
                                         )}
                                         {showField('interestStartDate') && startDate && (<div className="flex items-center justify-between text-xs"><span className="text-gray-400">计息日期</span><span className="font-medium" style={{ color: '#4B5563' }}>{startDate.replace(/^\d{4}-(\d{2})-(\d{2}).*$/, (_: string, m: string, dd: string) => `${parseInt(m)}月${parseInt(dd)}日`)}</span></div>)}
+                                        {showField('interestDuration') && startDate && (order.status === 'active' || order.settled_at) && (() => {
+                                          const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+                                          const elapsed = endTs - new Date(String(startDate).slice(0, 10) + 'T00:00:00').getTime();
+                                          if (elapsed < 0) return null;
+                                          const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
+                                          const days = Math.floor(totalHours / 24);
+                                          const hours = totalHours % 24;
+                                          const label = days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
+                                          return (<div className="flex items-center justify-between text-xs"><span className="text-gray-400">计息时长</span><span className="font-medium" style={{ color: '#4B5563' }}>{label}</span></div>);
+                                        })()}
                                         {(() => {
                                           // 担保物渲染（与myOrders保持一致）
                                           let collAssets: { coin: string; qty: string }[] = [];

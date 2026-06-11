@@ -795,7 +795,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
           })()}
         </div>
         )}
-        {order.interest_start_date && (
+        {dc.interestStartDate && order.interest_start_date && (
           <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
             <span className="text-gray-400">计息日期</span>
             <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -803,6 +803,21 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
             </span>
           </div>
         )}
+        {dc.interestDuration && order.interest_start_date && (order.status === 'active' || order.settled_at) && (() => {
+          const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+          const elapsed = endTs - new Date(String(order.interest_start_date).slice(0, 10) + 'T00:00:00').getTime();
+          if (elapsed < 0) return null;
+          const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
+          const days = Math.floor(totalHours / 24);
+          const hours = totalHours % 24;
+          const label = days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
+          return (
+            <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
+              <span className="text-gray-400">计息时长</span>
+              <span className="font-medium" style={{ color: '#4B5563' }}>{label}</span>
+            </div>
+          );
+        })()}
         {/* 担保货币信息 */}
         {(() => {
           let collateral: { coin: string; qty: string }[] = [];
@@ -1301,7 +1316,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, cnyRate, paidInterest, p
   const hasInterest = order.interest_base && order.interest_rate_annual && order.interest_start_date;
   // 解析字段展示配置（默认全部显示）
   const dc: Record<string, boolean> = (() => {
-    const defaults = { buyPrice: true, buyValue: true, interestBase: true, buyDate: true, todayPrice: true, currentValue: true, holdDuration: true, orderNo: true, accruedInterest: true, paidInterest: true, profitShare: true, commissionShare: true, collateral: true, aiIcon: false, assetType: true };
+    const defaults = { buyPrice: true, buyValue: true, interestBase: true, buyDate: true, todayPrice: true, currentValue: true, holdDuration: true, orderNo: true, accruedInterest: true, paidInterest: true, profitShare: true, commissionShare: true, collateral: true, aiIcon: false, assetType: true, interestDuration: true, interestStartDate: true };
     try {
       const raw = order.display_config;
       if (!raw) return defaults;

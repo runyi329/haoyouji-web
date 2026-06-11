@@ -772,6 +772,21 @@ function FunderOrderCard({
                 </span>
               </div>
             )}
+            {show('interestDuration') && order.interest_start_date && (order.status === 'active' || order.settled_at) && (() => {
+              const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+              const elapsed = endTs - new Date(String(order.interest_start_date).slice(0, 10) + 'T00:00:00').getTime();
+              if (elapsed < 0) return null;
+              const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
+              const days = Math.floor(totalHours / 24);
+              const hours = totalHours % 24;
+              const label = days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
+              return (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">计息时长</span>
+                  <span className="font-medium" style={{ color: '#4B5563' }}>{label}</span>
+                </div>
+              );
+            })()}
             {/* 担保货币（与 LedgerDetail 前端完全一致：受 display_config 开关控制） */}
             {show('collateralCoin') && (
               collateralAssets.length === 0
@@ -1238,6 +1253,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     assetType: true,
     showOwnerName: true,
     interestPaymentType: true,
+    interestDuration: true,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean>>(DEFAULT_DISPLAY_CONFIG);
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY'];
@@ -2718,6 +2734,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       { key: 'accruedInterest', label: '待收利息（标题+大数字）' },
 { key: 'paidInterest', label: '已收利息' },
                           { key: 'interestStartDate', label: '计息日期' },
+                          { key: 'interestDuration', label: '计息时长' },
                           { key: 'collateralCoin', label: '担保货币' },
                       { key: 'collateralValue', label: '担保价值' },
                       { key: 'collateral', label: '担保缺口' },
@@ -2907,7 +2924,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       {(() => {
                         const hasInterestData = !!(formData.interestRateAnnual && formData.interestBase && formData.interestStartDate);
                         const hasCollateralData = collateralAssets.filter(a => a.coin && a.qty !== '').length > 0;
-                        const hasAnyRightContent = (displayConfig.accruedInterest && hasInterestData) || (displayConfig.collateralCoin && hasCollateralData) || (displayConfig.collateralValue && hasCollateralData) || (displayConfig.profitShare && formData.showProfitShare) || (displayConfig.holdDuration && formData.buyDate) || (displayConfig.interestStartDate && formData.interestStartDate);
+                        const hasAnyRightContent = (displayConfig.accruedInterest && hasInterestData) || (displayConfig.collateralCoin && hasCollateralData) || (displayConfig.collateralValue && hasCollateralData) || (displayConfig.profitShare && formData.showProfitShare) || (displayConfig.interestDuration && formData.interestStartDate) || (displayConfig.interestStartDate && formData.interestStartDate);
                         if (!hasAnyRightContent) {
                           return (
                             <div className="flex items-center justify-center h-full">
@@ -2983,12 +3000,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                   </span>
                                 </div>
                               )}
-                              {displayConfig.holdDuration && formData.buyDate && (
+                              {displayConfig.interestDuration && formData.interestStartDate && (
                                 <div className="flex items-center justify-between">
-                                  <span className="text-gray-400">持有时长</span>
+                                  <span className="text-gray-400">计息时长</span>
                                   <span className="font-medium" style={{ color: '#4B5563' }}>
                                     {(() => {
-                                      const elapsed = Date.now() - new Date(formData.buyDate + 'T00:00:00').getTime();
+                                      const elapsed = Date.now() - new Date(formData.interestStartDate + 'T00:00:00').getTime();
                                       if (elapsed < 0) return '---';
                                       const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
                                       const days = Math.floor(totalHours / 24);
