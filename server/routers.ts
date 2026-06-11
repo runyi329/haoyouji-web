@@ -13285,6 +13285,39 @@ ${klinesSummary}
           }
         }
 
+        // 批量查询每个用户的余额（充值 + 手动调账）
+        try {
+          const userIdSet = new Set(list.map((o: any) => o.userId));
+          const uniqueUserIds = Array.from(userIdSet);
+          if (uniqueUserIds.length > 0) {
+            const conn = await (await import('./db')).getDbConnection();
+            if (conn) {
+              const placeholders = uniqueUserIds.map(() => '?').join(',');
+              const [rechargeRows] = await (conn as any).execute(
+                `SELECT user_id, COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) as recharged FROM recharge_orders WHERE user_id IN (${placeholders}) AND ledger_id = ? AND status = 'completed' GROUP BY user_id`,
+                [...uniqueUserIds, input.ledgerId]
+              ) as any[];
+              const userBalanceMap = new Map<number, number>();
+              for (const row of (rechargeRows as any[])) {
+                userBalanceMap.set(row.user_id, parseFloat(row.recharged?.toString() || '0'));
+              }
+              const [manualRows] = await (conn as any).execute(
+                `SELECT user_id, COALESCE(SUM(amount), 0) as manual FROM af_manual_balances WHERE user_id IN (${placeholders}) AND ledger_id = ? GROUP BY user_id`,
+                [...uniqueUserIds, input.ledgerId]
+              ) as any[];
+              for (const row of (manualRows as any[])) {
+                const prev = userBalanceMap.get(row.user_id) ?? 0;
+                userBalanceMap.set(row.user_id, prev + parseFloat(row.manual?.toString() || '0'));
+              }
+              for (const order of list) {
+                (order as any).userBalance = userBalanceMap.get(order.userId) ?? 0;
+              }
+            }
+          }
+        } catch (e) {
+          console.error('[afAdminGetOrders] 批量余额查询失败:', e);
+        }
+
         return list;
       }),
     // 管理员：订单和管理费统计

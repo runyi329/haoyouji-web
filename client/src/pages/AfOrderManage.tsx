@@ -993,7 +993,17 @@ export default function AfOrderManage() {
                       onClick={() => togglePerson(group.uid)}
                       className="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors bg-white border border-gray-200 hover:bg-gray-50 shadow-sm"
                     >
-                      <span className="text-sm font-bold text-gray-800 shrink-0 mr-2">{group.name}</span>
+                      <div className="shrink-0 mr-2">
+                        <span className="text-sm font-bold text-gray-800">{group.name}</span>
+                        {(() => {
+                          const firstOrder = group.orders[0];
+                          const bal = firstOrder?.userBalance;
+                          if (bal != null) {
+                            return <div className="text-[10px] text-gray-400 mt-0.5">{parseFloat(bal).toFixed(2)} U</div>;
+                          }
+                          return null;
+                        })()}
+                      </div>
                       <div className="flex flex-col gap-0.5 flex-1 min-w-0 overflow-hidden">
                         {/* 第一行：单数/赠数/金额 */}
                         <div className="flex items-center gap-1.5 justify-end">
