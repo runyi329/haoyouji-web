@@ -3736,6 +3736,94 @@ export default function CryptoPrediction() {
                                           </div>
                                         )}
                                         {showField('interestStartDate') && startDate && (<div className="flex items-center justify-between text-xs"><span className="text-gray-400">计息日期</span><span className="font-medium" style={{ color: '#4B5563' }}>{startDate.replace(/^\d{4}-(\d{2})-(\d{2}).*$/, (_: string, m: string, dd: string) => `${parseInt(m)}月${parseInt(dd)}日`)}</span></div>)}
+                                        {(() => {
+                                          // 担保物渲染（与myOrders保持一致）
+                                          let collAssets: { coin: string; qty: string }[] = [];
+                                          try {
+                                            const rawCA = order.collateral_assets;
+                                            if (rawCA) {
+                                              const parsed = typeof rawCA === 'string' ? JSON.parse(rawCA) : rawCA;
+                                              if (Array.isArray(parsed)) collAssets = parsed;
+                                            }
+                                          } catch {}
+                                          if (collAssets.length === 0 && order.collateral_coin && order.collateral_qty) {
+                                            collAssets = [{ coin: order.collateral_coin, qty: String(parseFloat(order.collateral_qty)) }];
+                                          }
+                                          const hasCollateral = collAssets.length > 0;
+                                          const collAssetValues = collAssets.map(a => {
+                                            const qty = parseFloat(a.qty || '0');
+                                            const price = financeLivePrices[a.coin] || 0;
+                                            return { coin: a.coin, qty, price, value: qty * price };
+                                          });
+                                          const collValue = collAssetValues.reduce((s, a) => s + a.value, 0);
+                                          const allPricesLoaded = collAssets.length === 0 || collAssetValues.every(a => a.price > 0);
+                                          const financeType = order.finance_type || '保本分成';
+                                          let gap: number | null = null;
+                                          if (hasCollateral && allPricesLoaded) {
+                                            if (financeType === '保本分成') {
+                                              const base = buyValue * 0.24;
+                                              const advancedInterest = isNegativeRate ? unpaidInterest : 0;
+                                              const netCollValue = collValue - advancedInterest + paidInterest;
+                                              gap = netCollValue - base;
+                                            } else {
+                                              if (order.coin === 'USDT') {
+                                                gap = collValue - buyValue - unpaidInterest + paidInterest;
+                                              } else if (coinPrice > 0) {
+                                                gap = marketValue + collValue - buyValue - unpaidInterest + paidInterest;
+                                              }
+                                            }
+                                          }
+                                          const _isSoldOrder = String(order.admin_note || '').includes('[已卖出]');
+                                          if (_isSoldOrder) return null;
+                                          if (order.status !== 'active') return null;
+                                          return hasCollateral ? (
+                                            <>
+                                              {collAssets.map((a, i) => {
+                                                const av = collAssetValues[i];
+                                                return (
+                                                  <div key={i}>
+                                                    <div className="flex items-center justify-between mt-0.5 text-xs">
+                                                      <span className="text-gray-400">{collAssets.length > 1 ? `担保货币${i+1}` : '担保货币'}</span>
+                                                      <span className="font-medium" style={{ color: '#4B5563' }}>
+                                                        {av.qty % 1 === 0 ? av.qty.toFixed(0) : av.qty} {a.coin}
+                                                      </span>
+                                                    </div>
+                                                    {av.price > 0 && (
+                                                      <div className="flex items-center justify-between text-xs">
+                                                        <span></span>
+                                                        <span className="font-medium" style={{ color: '#4B5563' }}>
+                                                          ≈ {av.value.toLocaleString(undefined, { maximumFractionDigits: 2 })} U
+                                                        </span>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                );
+                                              })}
+                                              {collAssets.length > 1 && (
+                                                <div className="flex items-center justify-between mt-0.5 text-xs">
+                                                  <span className="text-gray-400">担保总値</span>
+                                                  <span className="font-medium" style={{ color: '#4B5563' }}>
+                                                    {allPricesLoaded && collValue > 0 ? `${collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U` : '---'}
+                                                  </span>
+                                                </div>
+                                              )}
+                                              {collAssets.length === 1 && (
+                                                <div className="flex items-center justify-between mt-0.5 text-xs">
+                                                  <span className="text-gray-400">担保价値</span>
+                                                  <span className="font-medium" style={{ color: '#4B5563' }}>
+                                                    {allPricesLoaded && collValue > 0 ? `${collValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U` : '---'}
+                                                  </span>
+                                                </div>
+                                              )}
+                                              <div className="flex items-center justify-between mt-0.5 text-xs">
+                                                <span className="text-gray-400">担保缺口</span>
+                                                <span className="font-medium" style={{ color: gap === null ? '#4B5563' : gap < 0 ? '#EF4444' : '#4B5563' }}>
+                                                  {gap === null ? '---' : gap >= 0 ? '超过100%' : `${gap.toLocaleString(undefined, { maximumFractionDigits: 0 })} U`}
+                                                </span>
+                                              </div>
+                                            </>
+                                          ) : null;
+                                        })()}
 
                                       </div>
                                     </div>
