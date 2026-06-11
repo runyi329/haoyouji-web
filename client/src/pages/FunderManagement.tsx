@@ -1811,9 +1811,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 {selectedUserId === null
                   ? '全部成员'
                   : (funderUsers as any[])?.find((u: any) => u.userId === selectedUserId)
-                    ? ((funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.username ||
-                       (funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.nickname ||
-                       (funderUsers as any[]).find((u: any) => u.userId === selectedUserId)?.name)
+                    ? (() => { const _u = (funderUsers as any[]).find((u: any) => u.userId === selectedUserId); return _u?.username + (_u?.nickname && _u.nickname !== _u.username ? ` (${_u.nickname})` : ''); })()
                     : '选择成员'}
               </span>
               <ChevronDown className="w-4 h-4 text-gray-400 ml-1 shrink-0" />
@@ -1853,7 +1851,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
                       style={{ color: selectedUserId === u.userId ? '#1A56DB' : '#374151', fontWeight: selectedUserId === u.userId ? 600 : 400 }}
                     >
-                      <span>{u.username || u.nickname || u.name}</span>
+                      <span>{u.username}{u.nickname && u.nickname !== u.username ? ` (${u.nickname})` : ''}</span>
                       <span className="text-xs ml-2 shrink-0" style={{ color: '#9CA3AF', fontWeight: 400 }}>
                         {activeCount > 0 && <span style={{ color: '#22C55E' }}>进行中 {activeCount}</span>}
                         {activeCount > 0 && settledCount > 0 && <span style={{ color: '#D1D5DB' }}> / </span>}
