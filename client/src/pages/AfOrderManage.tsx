@@ -164,6 +164,11 @@ export default function AfOrderManage() {
   const [editState, setEditState] = useState<EditState | null>(null);
   // 状态筛选：all / pending(委买中) / holding(持仓中) / selling(委卖中) / sold(已卖出)
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'holding' | 'selling' | 'sold'>('all');
+  // 分组维度：时间 / 人员
+  const [groupMode, setGroupMode] = useState<'time' | 'person'>('time');
+  // 人员分组展开状态
+  const [expandedPersons, setExpandedPersons] = useState<Record<string, boolean>>({});
+  const togglePerson = (uid: string) => setExpandedPersons(prev => ({ ...prev, [uid]: !(prev[uid] ?? false) }));
   // 赠予订单折叠展开状态：key = 委买订单ID
   const [expandedGiftOrders, setExpandedGiftOrders] = useState<Record<number, boolean>>({});
   const [expandedDateId, setExpandedDateId] = useState<number | null>(null);
@@ -748,6 +753,25 @@ export default function AfOrderManage() {
 
       {/* ── 状态筛选Tab ── */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
+        {/* 第一行：分组维度切换 */}
+        <div className="flex items-center justify-center gap-1 px-4 pt-2 pb-1">
+          {([
+            { key: 'time' as const, label: '按时间' },
+            { key: 'person' as const, label: '按人员' },
+          ]).map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setGroupMode(tab.key)}
+              className="px-4 py-1 rounded-full text-xs font-medium transition-all"
+              style={groupMode === tab.key
+                ? { background: '#2563eb', color: '#fff' }
+                : { background: '#F3F4F6', color: '#6b7280' }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {/* 第二行：状态筛选 */}
         <div className="flex">
           {([
             { key: 'all' as const, label: '全部', count: (orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return !(g && o.status === 'pending'); }).length ?? 0 },
@@ -780,6 +804,134 @@ export default function AfOrderManage() {
           <div className="text-center py-12 text-gray-400">暂无订单记录</div>
         ) : filteredOrders.length === 0 ? (
           <div className="text-center py-12 text-gray-400">该状态下暂无订单</div>
+        ) : groupMode === 'person' ? (
+          /* ── 人员维度分组 ── */
+          <div className="space-y-3 pb-6">
+            {(() => {
+              // 按人员分组
+              const personMap = new Map<string, { uid: string; name: string; orders: any[] }>();
+              (filteredOrders || []).forEach((order: any) => {
+                const uid = String(order.userId || 'unknown');
+                const name = order.nickname || order.username || `用户${uid}`;
+                if (!personMap.has(uid)) {
+                  personMap.set(uid, { uid, name, orders: [] });
+                }
+                personMap.get(uid)!.orders.push(order);
+              });
+              // 按订单数量排序（多的在前）
+              const personGroups = Array.from(personMap.values()).sort((a, b) => b.orders.length - a.orders.length);
+              return personGroups.map(group => {
+                const isOpen = expandedPersons[group.uid] ?? false;
+                // 统计：正单数、赠单数、总投入
+                const activeOrders = group.orders.filter((o: any) => o.status !== 'cancelled');
+                const normalCount = activeOrders.filter((o: any) => !(o.isGift === true || o.isGift === 1)).length;
+                const giftCount = activeOrders.filter((o: any) => o.isGift === true || o.isGift === 1).length
+                  + activeOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[] || []).length), 0);
+                const totalAmount = activeOrders.reduce((s: number, o: any) => s + (parseFloat(o.amount) || 0), 0);
+                // 币种持仓
+                const coinQty: Record<string, number> = {};
+                activeOrders.forEach((o: any) => {
+                  if (o.sellStatus !== 'sold' && o.coin) {
+                    coinQty[o.coin] = (coinQty[o.coin] || 0) + (parseFloat(o.quantity) || 0);
+                  }
+                  const gifts: any[] = (o.giftOrders as any[]) || [];
+                  gifts.forEach((g: any) => {
+                    if (g.sellStatus === 'sold') return;
+                    if (g.coin) coinQty[g.coin] = (coinQty[g.coin] || 0) + (parseFloat(g.quantity) || 0);
+                  });
+                });
+                const COIN_CONFIG: Record<string, { short: string; color: string }> = {
+                  ETH: { short: 'E', color: 'text-blue-500' },
+                  BTC: { short: 'B', color: 'text-orange-400' },
+                  SOL: { short: 'S', color: 'text-green-500' },
+                };
+                const COIN_ORDER = ['ETH', 'BTC', 'SOL'];
+                const COIN_DECIMALS: Record<string, number> = { SOL: 1, BTC: 4, ETH: 2 };
+                const sortedCoins = Object.entries(coinQty)
+                  .sort(([a], [b]) => {
+                    const ai = COIN_ORDER.indexOf(a);
+                    const bi = COIN_ORDER.indexOf(b);
+                    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+                  });
+                return (
+                  <div key={group.uid}>
+                    <button
+                      onClick={() => togglePerson(group.uid)}
+                      className="w-full flex items-center justify-between px-3 py-2.5 mb-1 rounded-xl transition-colors bg-white border border-gray-200 hover:bg-gray-50 shadow-sm"
+                    >
+                      {/* 左侧：用户名 */}
+                      <span className="text-sm font-bold text-gray-800 shrink-0 mr-2">{group.name}</span>
+                      {/* 右侧：统计信息 */}
+                      <div className="flex flex-col gap-0.5 flex-1 min-w-0 overflow-hidden items-end">
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          <span className="text-[11px] text-blue-500">{normalCount}单</span>
+                          {giftCount > 0 && <span className="text-[11px] text-orange-400">{giftCount}赠</span>}
+                          <span className="text-[11px] text-gray-600">{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
+                        </div>
+                        {sortedCoins.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                            {sortedCoins.map(([c, q]) => {
+                              const cfg = COIN_CONFIG[c] || { short: c, color: 'text-gray-500' };
+                              return (
+                                <span key={c} className={`text-[11px] ${cfg.color}`}>
+                                  {cfg.short}:{(q as number).toFixed(COIN_DECIMALS[c] ?? 4)}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                      <span className={`transition-transform duration-200 shrink-0 ml-1 text-gray-400 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                    </button>
+                    {/* 展开后显示该用户的订单 */}
+                    {isOpen && group.orders.map((order: any) => {
+                      const statusDisplay = getStatusDisplay(order);
+                      const orderDate = new Date(order.createdAt);
+                      const yy = String(orderDate.getFullYear()).slice(2);
+                      const mm = String(orderDate.getMonth() + 1).padStart(2, '0');
+                      const dd = String(orderDate.getDate()).padStart(2, '0');
+                      const orderNo = `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
+                      const allSold = order.sellStatus === 'sold';
+                      return (
+                        <div key={order.id} className={`rounded-2xl p-4 shadow-sm mb-2 ml-2 ${allSold ? 'bg-gray-50' : 'bg-white'}`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
+                            <div className="flex items-center gap-2">
+                              <span className={`text-[10px] font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>
+                              <span className="text-[10px] text-gray-400">{formatDate(order.createdAt)}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-gray-800">{order.coin}</span>
+                              {order.isGift && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 font-medium">赠</span>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs text-gray-600">{parseFloat(order.quantity || 0).toFixed(4)} {order.coin}</span>
+                              <span className="text-[10px] text-gray-400 ml-2">{parseFloat(order.amount || 0).toFixed(0)}U</span>
+                            </div>
+                          </div>
+                          {/* 嵌套赠单 */}
+                          {(order.giftOrders as any[] || []).length > 0 && (
+                            <div className="mt-1.5 pl-2 border-l-2 border-amber-200">
+                              {(order.giftOrders as any[]).map((g: any) => (
+                                <div key={g.id} className="flex items-center justify-between py-0.5">
+                                  <span className="text-[10px] text-amber-600">赠 {g.coin}</span>
+                                  <span className="text-[10px] text-gray-500">{parseFloat(g.quantity || 0).toFixed(4)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              });
+            })()}
+          </div>
         ) : (
           <div className="space-y-4 pb-6">
             {(() => {
