@@ -651,7 +651,7 @@ function FunderOrderCard({
                 <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
               </div>
             )}
-            {order.interest_payment_type && showField('interestPaymentType') && (
+            {order.interest_payment_type && show('interestPaymentType') && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">付息方式</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{getPaymentLabel(order.interest_payment_type)}</span>
@@ -3181,7 +3181,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                   <span className="font-mono" style={{ color: '#9CA3AF' }}>{order.order_no}</span>
                                 </div>
                               )}
-                              {order.interest_payment_type && showField('interestPaymentType') && (
+                              {order.interest_payment_type && show('interestPaymentType') && (
                                 <div className="flex items-center justify-between">
                                   <span className="text-gray-400">付息方式</span>
                                   <span className="font-medium" style={{ color: '#4B5563' }}>{order.interest_payment_type === 'monthly_prepaid' ? '月付先付' : order.interest_payment_type === 'monthly_postpaid' ? '月付后付' : order.interest_payment_type === 'quarterly' ? '季付' : order.interest_payment_type === 'maturity' ? '到期付' : order.interest_payment_type}</span>
