@@ -3424,7 +3424,7 @@ export default function CryptoPrediction() {
                                 return hasCollateral ? (
                                   <>
                                     {/* 多笔担保物逐行展示：数量一行，折算价值另起一行 */}
-                                    {collAssets.map((a, i) => {
+                                    {showField('collateralCoin') && collAssets.map((a, i) => {
                                       const av = collAssetValues[i];
                                       return (
                                         <div key={i}>
@@ -3445,12 +3445,15 @@ export default function CryptoPrediction() {
                                         </div>
                                       );
                                     })}
+                                    {showField('collateralValue') && (
                                     <div className="flex items-center justify-between mt-0.5 text-xs">
                                       <span className="text-gray-400">担保价值{collAssets.length > 1 ? '(合计)' : ''}</span>
                                       <span className="font-medium" style={{ color: '#4B5563' }}>
                                         {allPricesLoaded && collValue > 0 ? `${collValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U` : '---'}
                                       </span>
                                     </div>
+                                    )}
+                                    {showField('collateral') && (
                                     <div className="flex items-center justify-between mt-0.5 text-xs">
                                       <div className="flex items-center gap-1">
                                         <span className="text-gray-400">担保缺口</span>
@@ -3472,7 +3475,8 @@ export default function CryptoPrediction() {
                                         {gap === null ? '---' : gap >= 0 ? '超过100%' : `${gap.toLocaleString(undefined, { maximumFractionDigits: 0 })} U`}
                                       </span>
                                     </div>
-                                    {gap !== null && (
+                                    )}
+                                    {showField('collateral') && gap !== null && (
                                       <div
                                         id={`gap_modal_${order.id}`}
                                         style={{ display: 'none', position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.45)', alignItems: 'flex-end', justifyContent: 'center' }}
@@ -3779,7 +3783,7 @@ export default function CryptoPrediction() {
                                           if (order.status !== 'active') return null;
                                           return hasCollateral ? (
                                             <>
-                                              {collAssets.map((a, i) => {
+                                              {showField('collateralCoin') && collAssets.map((a, i) => {
                                                 const av = collAssetValues[i];
                                                 return (
                                                   <div key={i}>
@@ -3800,7 +3804,7 @@ export default function CryptoPrediction() {
                                                   </div>
                                                 );
                                               })}
-                                              {collAssets.length > 1 && (
+                                              {showField('collateralValue') && collAssets.length > 1 && (
                                                 <div className="flex items-center justify-between mt-0.5 text-xs">
                                                   <span className="text-gray-400">担保总値</span>
                                                   <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -3808,7 +3812,7 @@ export default function CryptoPrediction() {
                                                   </span>
                                                 </div>
                                               )}
-                                              {collAssets.length === 1 && (
+                                              {showField('collateralValue') && collAssets.length === 1 && (
                                                 <div className="flex items-center justify-between mt-0.5 text-xs">
                                                   <span className="text-gray-400">担保价値</span>
                                                   <span className="font-medium" style={{ color: '#4B5563' }}>
@@ -3816,12 +3820,14 @@ export default function CryptoPrediction() {
                                                   </span>
                                                 </div>
                                               )}
+                                              {showField('collateral') && (
                                               <div className="flex items-center justify-between mt-0.5 text-xs">
                                                 <span className="text-gray-400">担保缺口</span>
                                                 <span className="font-medium" style={{ color: gap === null ? '#4B5563' : gap < 0 ? '#EF4444' : '#4B5563' }}>
                                                   {gap === null ? '---' : gap >= 0 ? '超过100%' : `${gap.toLocaleString(undefined, { maximumFractionDigits: 0 })} U`}
                                                 </span>
                                               </div>
+                                              )}
                                             </>
                                           ) : null;
                                         })()}
