@@ -3308,7 +3308,7 @@ export default function CryptoPrediction() {
                               {showField('accruedInterest') ? (
                                 <>
                                   <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
-                                    <span className="text-[10px]" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#DC2626' : '#059669' }}>
+                                    <span className="text-[10px]" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#059669' : '#DC2626' }}>
                                       待结利息
                                     </span>
                                     <span className="text-[10px] text-gray-400">(年化 {Math.abs(annualRate)}%)</span>
@@ -3316,11 +3316,11 @@ export default function CryptoPrediction() {
                                   <div className="flex items-baseline gap-0.5">
                                     <span
                                       className="text-2xl font-bold tabular-nums leading-tight"
-                                      style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#DC2626' : '#059669', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
+                                      style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#059669' : '#DC2626', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                                     >
-                                      {unpaidInterest.toFixed(2)}
+                                      {String(order.interest_rate_annual || '').startsWith('-') ? '-' : '+'}{unpaidInterest.toFixed(2)}
                                     </span>
-                                    <span className="text-sm font-semibold" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#DC2626' : '#059669' }}>{_interestUnit}</span>
+                                    <span className="text-sm font-semibold" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#059669' : '#DC2626' }}>{_interestUnit}</span>
                                   </div>
                                   <div className="text-xs font-medium leading-tight mb-1" style={{ color: '#4B5563' }}>≈{_convertAlt(unpaidInterest).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {_altUnit}</div>
                                 </>
@@ -3329,7 +3329,7 @@ export default function CryptoPrediction() {
                                 <>
                                   <div className="flex items-center justify-between text-xs">
                                     <span className="text-gray-400">已结利息</span>
-                                    <span className="font-medium" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#DC2626' : '#059669' }}>{paidInterest.toFixed(2)} {_interestUnit}</span>
+                                    <span className="font-medium" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#059669' : '#DC2626' }}>{paidInterest.toFixed(2)} {_interestUnit}</span>
                                   </div>
                                   {paidInterest > 0 && (
                                     <div className="flex justify-end text-xs">
@@ -3743,11 +3743,11 @@ export default function CryptoPrediction() {
                                         {showField('accruedInterest') ? (
                                           <>
                                             <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
-                                              <span className="text-[10px]" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#DC2626' : '#059669' }}>待结利息</span>
+                                              <span className="text-[10px]" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#059669' : '#DC2626' }}>待结利息</span>
                                             </div>
                                             <div className="flex items-baseline gap-0.5">
-                                              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#DC2626' : '#059669', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{unpaidInterest.toFixed(2)}</span>
-                                              <span className="text-sm font-semibold" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#DC2626' : '#059669' }}>{_interestUnit}</span>
+                                              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#059669' : '#DC2626', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{String(order.interest_rate_annual || '').startsWith('-') ? '-' : '+'}{unpaidInterest.toFixed(2)}</span>
+                                              <span className="text-sm font-semibold" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#059669' : '#DC2626' }}>{_interestUnit}</span>
                                             </div>
                                             <div className="text-xs font-medium leading-tight mb-1" style={{ color: '#4B5563' }}>≈{_convertAlt(unpaidInterest).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {_altUnit}</div>
                                           </>
@@ -3755,7 +3755,7 @@ export default function CryptoPrediction() {
                                         {showField('paidInterest') && (
                                           <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-400">已结利息</span>
-                                            <span className="font-medium" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#DC2626' : '#059669' }}>{paidInterest.toFixed(2)} {_interestUnit}</span>
+                                            <span className="font-medium" style={{ color: String(order.interest_rate_annual || '').startsWith('-') ? '#059669' : '#DC2626' }}>{paidInterest.toFixed(2)} {_interestUnit}</span>
                                           </div>
                                         )}
                                         {showField('interestStartDate') && startDate && (<div className="flex items-center justify-between text-xs"><span className="text-gray-400">计息日期</span><span className="font-medium" style={{ color: '#4B5563' }}>{String(startDate).slice(0, 10)}</span></div>)}
