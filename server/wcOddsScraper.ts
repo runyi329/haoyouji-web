@@ -56,12 +56,14 @@ export async function scrapeWcOdds(): Promise<OddsTeam[]> {
     const cells = $(row).find('td');
     if (cells.length < 3) return;
 
-    const rankAndName = $(cells[0]).text().trim();
-    // 格式如 "1\n西班牙" 或 "1西班牙"
-    const rankMatch = rankAndName.match(/^(\d+)/);
+    const cellText = $(cells[0]).text().trim();
+    const cellHtml = $(cells[0]).html() || '';
+    // 排名从文本中提取
+    const rankMatch = cellText.match(/^(\d+)/);
     const rank = rankMatch ? parseInt(rankMatch[1]) : i;
-    // 提取球队名（去除数字和空白）
-    const teamName = rankAndName.replace(/^\d+\s*/, '').trim();
+    // 球队名优先从img alt属性提取（网站结构含img标签），否则从文本提取
+    const altMatch = cellHtml.match(/alt="([^"]+)"/);
+    const teamName = altMatch ? altMatch[1] : cellText.replace(/^\d+\s*/, '').trim();
 
     const pinnacleText = $(cells[1]).text().replace(/[↑↓\s]/g, '').trim();
     const whText = $(cells[2]).text().replace(/[↑↓\s]/g, '').trim();
