@@ -33,7 +33,13 @@ jobs:
           rm -rf node_modules/.vite client/.vite
           pnpm install --frozen-lockfile >> $LOG 2>&1
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] pnpm build..." >> $LOG
+          export NODE_OPTIONS="--max-old-space-size=4096"
           pnpm run build >> $LOG 2>&1
+          if [ ! -f dist/public/index.html ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] BUILD FAILED: dist/public/index.html not found, aborting deploy" >> $LOG
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] === DEPLOY DONE (FAILED) ===" >> $LOG
+            exit 1
+          fi
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] sync to ubuntu user..." >> $LOG
           cp -r dist/. /home/ubuntu/haoyouji-web/dist/ >> $LOG 2>&1
           cp package.json /home/ubuntu/haoyouji-web/ >> $LOG 2>&1
