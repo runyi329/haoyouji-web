@@ -1853,9 +1853,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     style={{ color: selectedUserId === null ? '#1A56DB' : '#374151', fontWeight: selectedUserId === null ? 600 : 400 }}
                   >全部成员</button>
                   {(funderUsers as any[])?.filter((u: any) => {
-                    if (!userSearchText) return true;
                     const name = u.username || u.nickname || u.name || '';
-                    return name.includes(userSearchText);
+                    if (userSearchText && !name.includes(userSearchText)) return false;
+                    // 过滤掉没有订单的用户
+                    const hasOrders = allOrders.some((o: any) => o.userId === u.userId || o.user_id === u.userId || (o._participantUserIds && o._participantUserIds.includes(u.userId)));
+                    return hasOrders;
                   }).map((u: any) => {
                     const userOrders = allOrders.filter((o: any) => o.userId === u.userId || o.user_id === u.userId || (o._participantUserIds && o._participantUserIds.includes(u.userId)));
                     const activeCount = userOrders.filter((o: any) => o.status === 'active').length;
