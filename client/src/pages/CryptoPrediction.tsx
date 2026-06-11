@@ -3229,7 +3229,7 @@ export default function CryptoPrediction() {
                           {/* 持币数量（大字突出） */}
                           <div className="flex items-baseline gap-1 mb-1">
                             <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>
-                              {displayQty > 0 ? (isStock ? displayQty.toLocaleString(undefined, { maximumFractionDigits: 0 }) : formatCoinQty(displayQty, order.coin)) : '—'}
+                              {(isStock ? (displayQty > 0 ? displayQty.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0') : (order.buy_quantity !== null && order.buy_quantity !== undefined && order.buy_quantity !== '' ? formatCoinQty(displayQty, order.coin) : '—'))}
                             </span>
                             <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
                           </div>
@@ -3702,7 +3702,7 @@ export default function CryptoPrediction() {
                                   <div className="flex-1 p-4 pr-3">
                                     <div className="text-[10px] mb-0.5" style={{ color: '#16A34A' }}>订单资产</div>
                                     <div className="flex items-baseline gap-1 mb-1">
-                                      <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>{displayQty > 0 ? (isStock ? displayQty.toLocaleString(undefined, { maximumFractionDigits: 0 }) : formatCoinQty(displayQty, order.coin)) : '—'}</span>
+                                      <span className="text-2xl font-bold tabular-nums" style={{ color: '#1A2340' }}>{(isStock ? (displayQty > 0 ? displayQty.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0') : (order.buy_quantity !== null && order.buy_quantity !== undefined && order.buy_quantity !== '' ? formatCoinQty(displayQty, order.coin) : '—'))}</span>
                                       <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
                                     </div>
                                     <div className="space-y-0.5">

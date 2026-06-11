@@ -1388,7 +1388,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, cnyRate, paidInterest, p
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-1 flex-wrap">
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                {order.asset_type === 'stock' ? (parseFloat(order.amount || '0') > 0 ? parseFloat(order.amount).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—') : (qty > 0 ? smartQty(qty) : '—')}
+                {order.asset_type === 'stock' ? (order.amount !== null && order.amount !== undefined && order.amount !== '' ? parseFloat(order.amount).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0') : (order.buy_quantity !== null && order.buy_quantity !== undefined && order.buy_quantity !== '' ? smartQty(qty) : '0')}
               </span>
               <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-semibold`} style={{ color: '#1A2340' }}>{order.coin}</span>
               {viewMode === 'large' && (() => {
