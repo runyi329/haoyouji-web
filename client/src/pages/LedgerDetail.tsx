@@ -441,21 +441,7 @@ function FunderCollateralInfoModal({ onClose, collateral, collateralItemValues, 
 
 function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paidInterestDetails, livePrices, cnyRate, dc, viewMode }: { order: any; ledgerId: number; accrued: number; cc: string; paidInterest: number; paidInterestDetails?: Array<{ currency: string; total: number; exchangeRate: number }>; livePrices: Record<string, number>; cnyRate: number; dc?: Record<string, boolean>; viewMode?: 'medium' | 'large' }) {
   const show = (key: string) => dc ? (dc[key] !== false) : true;
-  // 参与方视图：显示佣金而非利息
-  const pi = order.participantInfo;
-  const isParticipantView = !!pi;
-  const commissionRate = pi?.commissionRate ? parseFloat(pi.commissionRate) : 0;
-  const commissionBase = pi?.commissionBase ? parseFloat(pi.commissionBase) : 0;
-  const commissionStartDate = pi?.commissionStartDate || null;
-  const paidCommission = pi?.paidCommission ? parseFloat(pi.paidCommission) : 0;
-  // 实时计算待结佣金（同待结利息算法）
-  const accruedCommission = (() => {
-    if (!commissionRate || !commissionBase || !commissionStartDate || order.status !== 'active') return 0;
-    const start = new Date(commissionStartDate);
-    const now = new Date();
-    const elapsedSecs = Math.max(0, (now.getTime() - start.getTime()) / 1000);
-    return commissionBase * (commissionRate / 100) / 365 / 24 / 3600 * elapsedSecs;
-  })();
+
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const [showInterestTip, setShowInterestTip] = useState(false);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number } | null>(null);
@@ -502,128 +488,7 @@ function FunderOrderCardRight({ order, ledgerId, accrued, cc, paidInterest, paid
   } else if (order.buy_date) {
     lowestAtLabel = order.buy_date.replace(/^(\d{4})-(\d{2})-(\d{2})$/, (_: string, y: string, m: string, dd: string) => `${parseInt(m)}月${parseInt(dd)}日`);
   }
-  // 参与方视图：显示佣金模块（带折算 + 问号说明）
-  const [showCommissionTip, setShowCommissionTip] = useState(false);
-  // 佣金折算：跟随原始订单的结算货币（rateCur），与待结利息货币规则完全一致
-  // commissionBase 存储单位与 interest_base_currency 一致，结算显示单位与 rateCur 一致
-  const convertCommission = (val: number): number => {
-    if (baseCur === rateCur) return val;
-    if (baseCur === 'USDT' && rateCur === 'CNY') return val * cnyRate;
-    if (baseCur === 'CNY' && rateCur === 'USDT') return val / cnyRate;
-    return val;
-  };
-  const commissionUnit = rateCur === 'CNY' ? '元' : 'U';
-  const commissionAltUnit = rateCur === 'CNY' ? 'U' : '元';
-  const displayCommissionAccrued = convertCommission(accruedCommission);
-  const displayCommissionPaid = convertCommission(paidCommission);
-  const commissionAltAccrued = rateCur === 'CNY' ? displayCommissionAccrued / cnyRate : displayCommissionAccrued * cnyRate;
-  const commissionAltPaid = rateCur === 'CNY' ? displayCommissionPaid / cnyRate : displayCommissionPaid * cnyRate;
-  const displayCommissionBase = convertCommission(commissionBase);
-  if (isParticipantView) {
-    return (
-      <div className="flex flex-col">
-        <div className="flex flex-col justify-start">
-          <div className="h-5 flex items-center gap-1 relative">
-            <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} font-medium`} style={{ color: '#16A34A' }}>待结佣金</span>
-            <span className={`${viewMode === 'large' ? 'text-base' : 'text-xs'} text-gray-400`}>(年化{commissionRate}%)</span>
-            {/* 问号说明按钮 */}
-            <button
-              className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ml-0.5"
-              style={{ backgroundColor: '#E5E7EB', color: '#6B7280' }}
-              onClick={e => { e.stopPropagation(); setShowCommissionTip(true); }}
-            >?</button>
-            {showCommissionTip && (() => {
-              const startStr = commissionStartDate ? String(commissionStartDate).slice(0, 10) : null;
-              const todayStr = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
-              const _commEndTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
-              const elapsedMs = startStr ? Math.max(0, _commEndTs - new Date(startStr + 'T00:00:00').getTime()) : 0;
-              const elapsedDays = Math.floor(elapsedMs / (1000 * 60 * 60 * 24));
-              const elapsedHours = Math.floor((elapsedMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-              const elapsedMins = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
-              const elapsedSecs = Math.floor(elapsedMs / 1000);
-              const elapsedLabel = elapsedDays > 0 ? `${elapsedDays}天 ${elapsedHours}小时 ${elapsedMins}分` : `${elapsedHours}小时 ${elapsedMins}分`;
-              return (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowCommissionTip(false)}>
-                  <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-bold" style={{ color: '#1A2340' }}>计佣说明</span>
-                      <button onClick={() => setShowCommissionTip(false)} className="text-gray-400 text-lg leading-none">×</button>
-                    </div>
-                    <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
-                      <div className="p-2.5 rounded-lg" style={{ background: '#F0FDF4' }}>
-                        <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 计佣时间</div>
-                        <div className="space-y-1">
-                          <div className="flex justify-between"><span>开始日期</span><span className="font-mono font-medium">{startStr || '--'}</span></div>
-                          <div className="flex justify-between"><span>当前日期</span><span className="font-mono font-medium">{todayStr}</span></div>
-                          <div className="flex justify-between"><span>已过时间</span><span className="font-mono font-medium">{elapsedLabel}</span></div>
-                        </div>
-                      </div>
-                      <div className="p-2.5 rounded-lg" style={{ background: '#F0FDF4' }}>
-                        <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 计算公式</div>
-                        <div>计佣基数 × 佣金率 ÷ 365天 ÷ 24小时 ÷ 60分 ÷ 60秒 × 已过秒数</div>
-                        <div className="mt-1 font-mono">
-                          <span style={{ color: '#16A34A' }}>{displayCommissionBase.toLocaleString()}{commissionUnit} × {commissionRate}% ÷ 365天 ÷ 24小时 ÷ 60分 ÷ 60秒 × {elapsedSecs.toLocaleString()}秒</span>
-                        </div>
-                      </div>
-                      <div className="p-2.5 rounded-lg" style={{ background: '#F0FDF4' }}>
-                        <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>③ 计佣结果</div>
-                        <div className="font-mono flex items-baseline gap-1">
-                          <span style={{ color: '#16A34A', fontSize: '1.5em', fontWeight: 700 }}>= {displayCommissionAccrued.toFixed(6)} {commissionUnit}</span>
-                        </div>
-                        <div className="mt-1 font-mono" style={{ color: '#16A34A', fontSize: '1.5em', fontWeight: 700 }}>≈ {commissionAltAccrued.toFixed(2)} {commissionAltUnit}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-          <div className="min-h-9 flex flex-col justify-center">
-            {viewMode === 'large' ? (
-              <div className="flex items-baseline gap-1 flex-wrap">
-                <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                  {displayCommissionAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-                <span className="text-base font-semibold" style={{ color: '#1A2340' }}>{commissionUnit}</span>
-                <span className="text-base font-medium" style={{ color: '#4B5563' }}>≈{commissionAltAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {commissionAltUnit}</span>
-              </div>
-            ) : (
-              <div className="flex items-baseline gap-0.5">
-                <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                  {displayCommissionAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-                <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{commissionUnit}</span>
-                <span className="text-xs font-medium ml-1" style={{ color: '#6B7280' }}>≈{commissionAltAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{commissionAltUnit}</span>
-              </div>
-            )}
-          </div>
-          <div className="space-y-0.5">
-            <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
-              <span className="text-gray-400">已结佣金</span>
-              <span className="font-medium" style={{ color: '#4B5563' }}>
-                {displayCommissionPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {commissionUnit}
-                <span className="text-gray-400 ml-1">≈{commissionAltPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{commissionAltUnit}</span>
-              </span>
-            </div>
-            {commissionStartDate && (
-              <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
-                <span className="text-gray-400">计佣日期</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>
-                  {String(commissionStartDate).replace(/^(\d{4})-(\d{2})-(\d{2})$/, (_: string, _y: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
-                </span>
-              </div>
-            )}
-            {commissionBase > 0 && (
-              <div className={`flex items-center justify-between ${viewMode === 'large' ? 'text-base' : 'text-xs'}`}>
-                <span className="text-gray-400">计佣基数</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{displayCommissionBase.toLocaleString(undefined, { maximumFractionDigits: 2 })} {commissionUnit}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
+
   return (
     <div className="flex flex-col">
       {/* 上半：代结利息 */}
@@ -1586,22 +1451,7 @@ function FunderOrderCard({ order, ledgerId, livePrices, cnyRate, paidInterest, p
           <FunderAIPanel
             orderId={order.id}
             ledgerId={ledgerId}
-            orderInfo={order.participantInfo ? {
-              coin: order.coin,
-              qty: buyQty,
-              buyValue: order.participantInfo.commissionBase ? parseFloat(order.participantInfo.commissionBase) : (buyValue || null),
-              accrued: (() => {
-                const cr = order.participantInfo.commissionRate ? parseFloat(order.participantInfo.commissionRate) : 0;
-                const cb = order.participantInfo.commissionBase ? parseFloat(order.participantInfo.commissionBase) : 0;
-                const sd = order.participantInfo.commissionStartDate;
-                if (!cr || !cb || !sd || order.status !== 'active') return 0;
-                const elapsedSecs = Math.max(0, (new Date().getTime() - new Date(sd).getTime()) / 1000);
-                return cb * (cr / 100) / 365 / 24 / 3600 * elapsedSecs;
-              })(),
-              paidInterest: order.participantInfo.paidCommission ? parseFloat(order.participantInfo.paidCommission) : 0,
-              collateralValue,
-              floatPnl,
-            } : {
+            orderInfo={{
               coin: order.coin,
               qty: buyQty,
               buyValue: buyValue || null,

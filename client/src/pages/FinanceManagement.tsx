@@ -271,14 +271,20 @@ function FinanceOrderCard({
   const qty = parseFloat(order.buy_quantity || '0');
   const price = parseFloat(order.buy_price || '0');
   const totalU = qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0');
+  const isGreenOrder = !!(order._fromFunder || order._isParticipant);
   const baseCur = order.interest_base_currency || 'USDT';
-  const interestUnit = baseCur === 'CNY' ? '元' : 'U';
-  // 利率货币（与计息基数货币一致）
-  const rateCur = baseCur;
+  // 绿色订单使用 interest_rate_currency（与 FunderManagement 一致）
+  const rateCur = isGreenOrder ? (order.interest_rate_currency || 'USDT') : baseCur;
+  const interestUnit = rateCur === 'CNY' ? '元' : 'U';
   const altUnit = rateCur === 'CNY' ? 'U' : '元';
-  // 折算：CNY 基数 → U 显示，或 U 基数 → 元 显示（按 1U=7元）
-  const convertAccrued = (val: number): number => val; // 同货币无需折算
-  const convertAlt = (val: number): number => rateCur === 'CNY' ? val / 7 : val * 7;
+  // 折算逻辑：绿色订单支持跨货币折算
+  const convertAccrued = (val: number): number => {
+    if (baseCur === rateCur) return val;
+    if (baseCur === 'USDT' && rateCur === 'CNY') return val * cnyRate;
+    if (baseCur === 'CNY' && rateCur === 'USDT') return val / cnyRate;
+    return val;
+  };
+  const convertAlt = (val: number): number => rateCur === 'CNY' ? val / cnyRate : val * cnyRate;
   const displayAccrued = convertAccrued(accrued);
   const displayPaid = convertAccrued(totalPaid);
   const altAccrued = convertAlt(displayAccrued);
@@ -446,19 +452,27 @@ function FinanceOrderCard({
         {/* 左栏：持有资产 */}
         <div className="flex-1 p-4 pr-3">
           <div className="flex items-center gap-0.5 mb-0.5">
-            <span className="text-[10px] font-medium" style={{ color: '#3B82F6' }}>融资资产</span>
-            <span className="text-[10px] text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span>
+            <span className="text-[10px] font-medium" style={{ color: isGreenOrder ? '#16A34A' : '#3B82F6' }}>{isGreenOrder ? '持有资产' : '融资资产'}</span>
+            {!isGreenOrder && <span className="text-[10px] text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span>}
           </div>
           {/* 持币量大数字 */}
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-1 flex-wrap">
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                {order.buy_quantity !== null && order.buy_quantity !== undefined && order.buy_quantity !== '' ? formatCoinQty(qty, order.coin) : '0'}
+                {isGreenOrder && order.asset_type === 'stock'
+                  ? (order.amount !== null && order.amount !== undefined && order.amount !== '' ? totalU.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0')
+                  : (order.buy_quantity !== null && order.buy_quantity !== undefined && order.buy_quantity !== '' ? formatCoinQty(qty, order.coin) : '0')}
               </span>
               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
             </div>
-            {liveP && qty > 0 && (
-              <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(order.coin === 'CNY' ? (qty / cnyRate) : (qty * liveP)).toLocaleString(undefined, { maximumFractionDigits: order.coin === 'CNY' ? 0 : 2 })} U</div>
+            {isGreenOrder && order.asset_type === 'stock' ? (
+              totalU > 0 && order.coin === 'CNY' && (
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / 7).toLocaleString(undefined, { maximumFractionDigits: 0 })} U</div>
+              )
+            ) : (
+              liveP && qty > 0 && (
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(order.coin === 'CNY' ? (qty / cnyRate) : (qty * liveP)).toLocaleString(undefined, { maximumFractionDigits: order.coin === 'CNY' ? 0 : 2 })} U</div>
+              )
             )}
           </div>
           {/* 订单信息列表 */}
@@ -531,18 +545,20 @@ function FinanceOrderCard({
           {orderDc.accruedInterest !== false ? (
             <>
               <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
-                <span className="text-[10px]" style={{ color: '#3B82F6' }}>待付利息</span>
-                {rateAbs && <span className="text-[10px] text-gray-400">(年化 {isNegRate ? '-' : ''}{rateAbs}%)</span>}
+                <span className="text-[10px]" style={{ color: '#3B82F6' }}>{isGreenOrder ? '待结利息' : '待付利息'}</span>
+                {rateAbs && <span className="text-[10px] text-gray-400">(年化 {isGreenOrder ? '' : (isNegRate ? '-' : '')}{rateAbs}%)</span>}
               </div>
               {/* 待结利息大数字 */}
               <div className="min-h-9 flex flex-col justify-center">
                 <div className="flex items-baseline gap-0.5">
-                  <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                    {displayAccrued > 0 ? '-' : ''}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: isGreenOrder ? (displayAccrued === 0 ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626')) : '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                    {isGreenOrder
+                      ? (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+'))
+                      : (displayAccrued > 0 ? '-' : '')}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                   <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
                 </div>
-                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued > 0 ? '-' : ''}{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{isGreenOrder ? (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+')) : (altAccrued > 0 ? '-' : '')}{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
               </div>
             </>
           ) : <div style={{ height: '16px' }} />}
@@ -551,7 +567,7 @@ function FinanceOrderCard({
             {orderDc.paidInterest !== false && (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400 whitespace-nowrap">已付利息</span>
+                  <span className="text-gray-400 whitespace-nowrap">{isGreenOrder ? '已结利息' : '已付利息'}</span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>
                     {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
                   </span>
@@ -571,6 +587,22 @@ function FinanceOrderCard({
                 </span>
               </div>
             )}
+            {/* 计息时长（绿色订单显示，与 FunderManagement 一致） */}
+            {isGreenOrder && order.interest_start_date && (order.status === 'active' || order.settled_at) && (() => {
+              const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+              const elapsed = endTs - new Date(String(order.interest_start_date).slice(0, 10) + 'T00:00:00').getTime();
+              if (elapsed < 0) return null;
+              const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
+              const days = Math.floor(totalHours / 24);
+              const hours = totalHours % 24;
+              const label = days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
+              return (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">计息时长</span>
+                  <span className="font-medium" style={{ color: '#4B5563' }}>{label}</span>
+                </div>
+              );
+            })()}
             {/* 担保货币 */}
             {orderDc.collateralCoin !== false && collateralAssets.map((a, idx) => (
               <div key={idx}>
@@ -807,7 +839,7 @@ function FinanceOrderCard({
       <div className="px-4 pt-3 pb-3 border-t border-blue-100">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium" style={{ color: '#1A2340' }}>
-            已付利息：<span style={{ color: '#16A34A' }}>{displayPaid.toFixed(2)} {interestUnit}</span>
+            {isGreenOrder ? '已结利息' : '已付利息'}：<span style={{ color: '#16A34A' }}>{displayPaid.toFixed(2)} {interestUnit}</span>
           </span>
           <button
             onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm(() => ({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
