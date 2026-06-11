@@ -339,7 +339,20 @@ export default function AfOrderManage() {
     const isGift = order.isGift === true || order.isGift === 1;
     if (statusFilter === 'all') return !(isGift && order.status === 'pending');
     if (statusFilter === 'pending') return order.status === 'pending' && !isGift;
-    if (statusFilter === 'holding') return order.status === 'completed' && !isGift && order.sellStatus !== 'sold'; // 持仓中：显示 completed 正单（排除已卖出），赠单只嵌套在正单里
+    if (statusFilter === 'holding') {
+      // 持仓中：正单（completed且未sold）+ 孤儿赠单（自身completed且未sold，但父正单已sold）
+      if (!isGift) return order.status === 'completed' && order.sellStatus !== 'sold';
+      // 赠单：如果自身仍持仓（completed且未sold），也要显示（处理父正单已卖出但赠单卖出取消的情况）
+      if (isGift && order.status === 'completed' && order.sellStatus !== 'sold') {
+        // 检查父正单是否已卖出（如果是，则这是孤儿赠单，需要独立显示）
+        const parentId = order.sourceOrderId;
+        if (parentId) {
+          const parentOrder = (orders as any[] || []).find((o: any) => o.id === parentId);
+          if (parentOrder && parentOrder.sellStatus === 'sold') return true; // 孤儿赠单
+        }
+      }
+      return false;
+    }
     if (statusFilter === 'selling') return order.sellStatus === 'selling'; // 委卖中：赠单也显示
     if (statusFilter === 'sold') return order.sellStatus === 'sold'; // 已卖出：赠单也显示
     return true;
@@ -843,15 +856,21 @@ export default function AfOrderManage() {
                 const totalAmount = activeOrders.reduce((s: number, o: any) => s + (parseFloat(o.amount) || 0), 0);
                 // 展开后的筛选
                 const pFilter = getPersonFilter(group.uid);
-                // 展平所有订单（正单+嵌套赠单）并按时间从近到远排序
+                // 展平所有订单（正单+嵌套赠单+孤儿赠单）并按时间从近到远排序
+                const orphanIdsInPerson = new Set<number>();
+                group.orders.forEach((o: any) => { if (o.isGift === true || o.isGift === 1) orphanIdsInPerson.add(o.id); });
                 const flatOrders: any[] = [];
                 group.orders.forEach((o: any) => {
-                  flatOrders.push({ ...o, _isGift: o.isGift === true || o.isGift === 1 });
-                  // 嵌套赠单也展平
-                  const gifts: any[] = (o.giftOrders as any[]) || [];
-                  gifts.forEach((g: any) => {
-                    flatOrders.push({ ...g, _isGift: true, _parentCoin: o.coin });
-                  });
+                  const isGift = o.isGift === true || o.isGift === 1;
+                  flatOrders.push({ ...o, _isGift: isGift });
+                  // 嵌套赠单也展平（跳过已作为孤儿赠单独立显示的）
+                  if (!isGift) {
+                    const gifts: any[] = (o.giftOrders as any[]) || [];
+                    gifts.forEach((g: any) => {
+                      if (orphanIdsInPerson.has(g.id)) return;
+                      flatOrders.push({ ...g, _isGift: true, _parentCoin: o.coin });
+                    });
+                  }
                 });
                 flatOrders.sort((a, b) => {
                   const ta = new Date(a.createdAt || a.confirmedAt || 0).getTime();
@@ -982,29 +1001,39 @@ export default function AfOrderManage() {
               });
               return coinGroups.map(([coin, coinOrders]) => {
                 const isOpen = expandedPersons[`coin_${coin}`] ?? false;
-                // 计算总币数（正单+嵌套赠单合计）和折后权益
+                // 计算总币数（正单+嵌套赠单+孤儿赠单合计）和折后权益
                 let allQty = 0;
                 let allEffQty = 0;
+                const orphanGiftIds = new Set<number>(); // 记录孤儿赠单ID避免重复计算
                 coinOrders.forEach((o: any) => {
+                  const isGift = o.isGift === true || o.isGift === 1;
+                  if (isGift) orphanGiftIds.add(o.id); // 这是孤儿赠单（已通过filteredOrders筛选进来）
                   const qty = parseFloat(o.quantity) || 0;
                   const rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
                   allQty += qty;
                   allEffQty += qty * rate;
-                  ((o.giftOrders as any[]) || []).forEach((g: any) => {
-                    const gQty = parseFloat(g.quantity) || 0;
-                    const gRate = EQUITY_DISCOUNT_RATES[g.equityTier || 0] ?? 1.0;
-                    allQty += gQty;
-                    allEffQty += gQty * gRate;
-                  });
+                  if (!isGift) {
+                    ((o.giftOrders as any[]) || []).forEach((g: any) => {
+                      if (orphanGiftIds.has(g.id)) return; // 已作为孤儿赠单统计，跳过
+                      const gQty = parseFloat(g.quantity) || 0;
+                      const gRate = EQUITY_DISCOUNT_RATES[g.equityTier || 0] ?? 1.0;
+                      allQty += gQty;
+                      allEffQty += gQty * gRate;
+                    });
+                  }
                 });
                 const discountPct = allQty > 0 ? (allEffQty / allQty * 100) : 100;
                 // 展平订单按时间从近到远
                 const flatOrders: any[] = [];
                 coinOrders.forEach((o: any) => {
-                  flatOrders.push({ ...o, _isGift: o.isGift === true || o.isGift === 1 });
-                  ((o.giftOrders as any[]) || []).forEach((g: any) => {
-                    flatOrders.push({ ...g, _isGift: true, _parentCoin: o.coin });
-                  });
+                  const isGift = o.isGift === true || o.isGift === 1;
+                  flatOrders.push({ ...o, _isGift: isGift });
+                  if (!isGift) {
+                    ((o.giftOrders as any[]) || []).forEach((g: any) => {
+                      if (orphanGiftIds.has(g.id)) return; // 已作为独立行显示
+                      flatOrders.push({ ...g, _isGift: true, _parentCoin: o.coin });
+                    });
+                  }
                 });
                 flatOrders.sort((a, b) => {
                   const ta = new Date(a.createdAt || a.confirmedAt || 0).getTime();
@@ -1079,7 +1108,10 @@ export default function AfOrderManage() {
               const COIN_DECIMALS: Record<string, number> = { SOL: 1, BTC: 4, ETH: 2 };
               // 按买入价格分组（同一价格归为一组）
               const priceMap = new Map<string, { price: number; coin: string; orders: any[] }>();
+              const orphanGiftIdsP = new Set<number>(); // 孤儿赠单ID
               (filteredOrders || []).forEach((order: any) => {
+                const isGift = order.isGift === true || order.isGift === 1;
+                if (isGift) orphanGiftIdsP.add(order.id);
                 const price = parseFloat(order.limitPrice || '0');
                 if (price <= 0) return;
                 const coin = order.coin || '未知';
@@ -1095,19 +1127,36 @@ export default function AfOrderManage() {
               return priceGroups.map(group => {
                 const gKey = `price_${group.coin}_${group.price}`;
                 const isOpen = expandedPersons[gKey] ?? false;
-                const totalQty = group.orders.reduce((s: number, o: any) => s + (parseFloat(o.quantity) || 0), 0);
-                const giftQty = group.orders.reduce((s: number, o: any) => {
-                  return s + ((o.giftOrders as any[]) || []).reduce((gs: number, g: any) => gs + (parseFloat(g.quantity) || 0), 0);
-                }, 0);
-                const orderCount = group.orders.length;
-                const giftCount = group.orders.reduce((s: number, o: any) => s + ((o.giftOrders as any[]) || []).length, 0);
+                let totalQty = 0;
+                let giftQty = 0;
+                let orderCount = 0;
+                let giftCount = 0;
+                group.orders.forEach((o: any) => {
+                  const isGift = o.isGift === true || o.isGift === 1;
+                  totalQty += parseFloat(o.quantity) || 0;
+                  orderCount++;
+                  if (isGift) { giftQty += parseFloat(o.quantity) || 0; giftCount++; }
+                  if (!isGift) {
+                    ((o.giftOrders as any[]) || []).forEach((g: any) => {
+                      if (orphanGiftIdsP.has(g.id)) return;
+                      const gQty = parseFloat(g.quantity) || 0;
+                      totalQty += gQty;
+                      giftQty += gQty;
+                      giftCount++;
+                    });
+                  }
+                });
                 // 展平
                 const flatOrders: any[] = [];
                 group.orders.forEach((o: any) => {
-                  flatOrders.push({ ...o, _isGift: o.isGift === true || o.isGift === 1 });
-                  ((o.giftOrders as any[]) || []).forEach((g: any) => {
-                    flatOrders.push({ ...g, _isGift: true, _parentCoin: o.coin });
-                  });
+                  const isGift = o.isGift === true || o.isGift === 1;
+                  flatOrders.push({ ...o, _isGift: isGift });
+                  if (!isGift) {
+                    ((o.giftOrders as any[]) || []).forEach((g: any) => {
+                      if (orphanGiftIdsP.has(g.id)) return;
+                      flatOrders.push({ ...g, _isGift: true, _parentCoin: o.coin });
+                    });
+                  }
                 });
                 flatOrders.sort((a, b) => {
                   const ta = new Date(a.createdAt || a.confirmedAt || 0).getTime();
