@@ -408,7 +408,7 @@ function FinanceOrderCard({
           })()}
         </div>
         <div className="flex items-center gap-0.5">
-          {isAdmin && (
+          {isAdmin && !order._isParticipant && !order._fromFunder && (
             <button
               onClick={() => handleOpenParticipants(order.id)}
               className="flex items-center gap-0.5 px-1.5 py-1 ml-0.5 rounded-full transition-colors"
@@ -429,7 +429,7 @@ function FinanceOrderCard({
               )}
             </button>
           )}
-          {(activeUserTab === 'all' || Number(order.user_id) === Number(activeUserTab)) && (
+          {!order._isParticipant && !order._fromFunder && (activeUserTab === 'all' || Number(order.user_id) === Number(activeUserTab)) && (
             <button
               onClick={() => openEdit(order)}
               className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors"
