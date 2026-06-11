@@ -507,7 +507,7 @@ function FinanceOrderCard({
                 <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
               </div>
             )}
-            {order.interest_payment_type && (
+            {orderDc.interestPaymentType !== false && order.interest_payment_type && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">付息方式</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{getPaymentLabel(order.interest_payment_type)}</span>
@@ -1300,6 +1300,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     aiIcon: false,
     assetType: true,
     showOwnerName: true,
+    interestPaymentType: true,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | number>>(DEFAULT_DISPLAY_CONFIG);
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
@@ -2484,6 +2485,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                           { key: 'todayPrice', label: '今日币价' },
                           { key: 'holdDuration', label: '持有时长' },
                           { key: 'orderNo', label: '订单编号' },
+                          { key: 'interestPaymentType', label: '付息方式' },
                           { key: 'aiIcon', label: 'AI图标（融资资产右上角）' },
                           { key: 'assetType', label: '资产类型（股票/数字币）' },
                           { key: 'showOwnerName', label: '显示帽檐标签' },
@@ -2669,6 +2671,12 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">订单编号</span>
                             <span className="font-medium" style={{ color: '#4B5563' }}>{editingOrder.order_no}</span>
+                          </div>
+                        )}
+                        {displayConfig.interestPaymentType && formData.interestPaymentType && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-gray-400 shrink-0">付息方式</span>
+                            <span className="font-medium" style={{ color: '#4B5563' }}>{formData.interestPaymentType === 'monthly_prepaid' ? '月付先付' : formData.interestPaymentType === 'monthly_postpaid' ? '月付后付' : formData.interestPaymentType === 'end_postpaid' ? '结束后付' : formData.interestPaymentType === 'quarterly' ? '季付' : formData.interestPaymentType === 'maturity' ? '到期付' : formData.interestPaymentType}</span>
                           </div>
                         )}
                       </div>
