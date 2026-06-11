@@ -982,13 +982,22 @@ export default function AfOrderManage() {
               });
               return coinGroups.map(([coin, coinOrders]) => {
                 const isOpen = expandedPersons[`coin_${coin}`] ?? false;
-                const totalQty = coinOrders.reduce((s: number, o: any) => s + (parseFloat(o.quantity) || 0), 0);
-                const nestedGiftQty = coinOrders.reduce((s: number, o: any) => {
-                  return s + ((o.giftOrders as any[]) || []).reduce((gs: number, g: any) => gs + (parseFloat(g.quantity) || 0), 0);
-                }, 0);
-                const totalAmount = coinOrders.reduce((s: number, o: any) => s + (parseFloat(o.amount) || 0), 0);
-                const orderCount = coinOrders.length;
-                const giftCount = coinOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[]) || []).length, 0);
+                // 计算总币数（正单+嵌套赠单合计）和折后权益
+                let allQty = 0;
+                let allEffQty = 0;
+                coinOrders.forEach((o: any) => {
+                  const qty = parseFloat(o.quantity) || 0;
+                  const rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
+                  allQty += qty;
+                  allEffQty += qty * rate;
+                  ((o.giftOrders as any[]) || []).forEach((g: any) => {
+                    const gQty = parseFloat(g.quantity) || 0;
+                    const gRate = EQUITY_DISCOUNT_RATES[g.equityTier || 0] ?? 1.0;
+                    allQty += gQty;
+                    allEffQty += gQty * gRate;
+                  });
+                });
+                const discountPct = allQty > 0 ? (allEffQty / allQty * 100) : 100;
                 // 展平订单按时间从近到远
                 const flatOrders: any[] = [];
                 coinOrders.forEach((o: any) => {
@@ -1010,11 +1019,9 @@ export default function AfOrderManage() {
                     >
                       <span className="text-sm font-bold shrink-0 mr-2" style={{ color: COIN_COLORS[coin] || '#374151' }}>{coin}</span>
                       <div className="flex items-center gap-1.5 flex-1 justify-end">
-                        <span className="text-[11px] text-gray-700 font-mono">{totalQty.toFixed(COIN_DECIMALS[coin] ?? 4)}</span>
-                        {nestedGiftQty > 0 && <span className="text-[11px] text-orange-400">+{nestedGiftQty.toFixed(COIN_DECIMALS[coin] ?? 4)}赠</span>}
-                        <span className="text-[11px] text-blue-500">{orderCount}单</span>
-                        {giftCount > 0 && <span className="text-[11px] text-orange-400">{giftCount}赠</span>}
-                        <span className="text-[11px] text-gray-500">{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
+                        <span className="text-[11px] text-gray-700 font-mono">{allQty.toFixed(COIN_DECIMALS[coin] ?? 4)}</span>
+                        <span className="text-[11px] text-purple-500">→{allEffQty.toFixed(COIN_DECIMALS[coin] ?? 4)}</span>
+                        <span className="text-[11px] text-gray-500">{discountPct.toFixed(0)}%</span>
                       </div>
                       <span className={`transition-transform duration-200 shrink-0 ml-1 text-gray-400 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                     </button>
