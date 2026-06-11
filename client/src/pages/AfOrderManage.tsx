@@ -176,6 +176,9 @@ export default function AfOrderManage() {
   const [searchQuery, setSearchQuery] = useState('');
   // 删除确认
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [deleteScope, setDeleteScope] = useState<'all' | 'mainOnly' | 'selected'>('all');
+  const [selectedGiftIds, setSelectedGiftIds] = useState<number[]>([]);
+  const [refundChecked, setRefundChecked] = useState(false);
   // 状态筛选：all / pending(委买中) / holding(持仓中) / selling(委卖中) / sold(已卖出)
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'holding' | 'selling' | 'sold'>('all');
   // 分组维度：时间 / 人员
@@ -1503,7 +1506,14 @@ export default function AfOrderManage() {
                           <Pencil className="w-3 h-3" /> 编辑
                         </button>
                         <button
-                          onClick={() => setDeleteTarget(order)}
+                          onClick={() => {
+                            setDeleteTarget(order);
+                            const isGift = order.isGift === true || order.isGift === 1;
+                            setDeleteScope(isGift ? 'all' : 'all');
+                            setSelectedGiftIds([]);
+                            // 默认退款逻辑：pending自动勾选，其他不勾选
+                            setRefundChecked(order.status === 'pending' && !isGift);
+                          }}
                           className="flex items-center gap-1 text-xs text-red-500 border border-red-200 rounded-lg px-2 py-1"
                         >
                           <Trash2 className="w-3 h-3" /> 删除
@@ -1990,23 +2000,110 @@ export default function AfOrderManage() {
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
       >
-        <AlertDialogContent className="mx-4 rounded-2xl">
+        <AlertDialogContent className="mx-4 rounded-2xl max-h-[80vh] overflow-y-auto">
           <AlertDialogHeader>
             <AlertDialogTitle>确认删除</AlertDialogTitle>
-            <AlertDialogDescription>
-              删除订单 #{deleteTarget?.id}（{deleteTarget?.coin} {deleteTarget?.quantity}）后无法恢复，关联的赠单也会一并删除。{deleteTarget?.status === 'pending' && '已扣余额将自动退回。'}确认删除吗？
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-sm text-gray-600">
+                <p>删除订单 <span className="font-medium text-gray-800">#{deleteTarget?.id}</span>（{deleteTarget?.coin} {parseFloat(deleteTarget?.quantity || '0').toFixed(4)}）后无法恢复。</p>
+
+                {/* 如果是赠单，直接删除，不显示范围选择 */}
+                {(deleteTarget?.isGift === true || deleteTarget?.isGift === 1) ? (
+                  <p className="text-orange-600">该订单为赠单，将直接删除。</p>
+                ) : (
+                  <>
+                    {/* 删除范围选择 */}
+                    {((deleteTarget?.giftOrders as any[]) || []).length > 0 && (
+                      <div className="border border-gray-200 rounded-xl p-3 space-y-2">
+                        <p className="font-medium text-gray-700 text-xs">删除范围（该正单关联 {((deleteTarget?.giftOrders as any[]) || []).length} 笔赠单）</p>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="deleteScope" checked={deleteScope === 'all'} onChange={() => setDeleteScope('all')} className="accent-red-500" />
+                          <span>删除正单 + 全部赠单</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="deleteScope" checked={deleteScope === 'mainOnly'} onChange={() => setDeleteScope('mainOnly')} className="accent-red-500" />
+                          <span>仅删除正单（保留所有赠单）</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input type="radio" name="deleteScope" checked={deleteScope === 'selected'} onChange={() => setDeleteScope('selected')} className="accent-red-500" />
+                          <span>删除正单 + 勾选的赠单</span>
+                        </label>
+                        {/* 勾选赠单列表 */}
+                        {deleteScope === 'selected' && (
+                          <div className="ml-5 space-y-1 border-l-2 border-purple-200 pl-3">
+                            {((deleteTarget?.giftOrders as any[]) || []).map((g: any) => (
+                              <label key={g.id} className="flex items-center gap-2 cursor-pointer text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedGiftIds.includes(g.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedGiftIds([...selectedGiftIds, g.id]);
+                                    } else {
+                                      setSelectedGiftIds(selectedGiftIds.filter(id => id !== g.id));
+                                    }
+                                  }}
+                                  className="accent-red-500"
+                                />
+                                <span className="text-gray-700">
+                                  #{g.id} {g.coin} {parseFloat(g.quantity || '0').toFixed(4)} ({g.nickname || g.username})
+                                </span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 退款选项 */}
+                    <div className="border border-gray-200 rounded-xl p-3 space-y-2">
+                      <p className="font-medium text-gray-700 text-xs">退款设置</p>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={refundChecked}
+                          onChange={(e) => setRefundChecked(e.target.checked)}
+                          className="accent-green-500 w-4 h-4"
+                        />
+                        <span>同时退还投入金额到用户账户</span>
+                      </label>
+                      {refundChecked && (
+                        <p className="text-xs text-green-600 ml-6">将退回 {parseFloat(deleteTarget?.amount || '0').toFixed(2)} USDT 到用户 {deleteTarget?.nickname || deleteTarget?.username} 的账户</p>
+                      )}
+                      {deleteTarget?.status === 'pending' && (
+                        <p className="text-xs text-yellow-600 ml-6">委买中的订单建议退款（资金已冻结）</p>
+                      )}
+                      {(deleteTarget?.status === 'completed' && deleteTarget?.sellStatus !== 'sold') && (
+                        <p className="text-xs text-gray-400 ml-6">持仓中的订单，请根据实际情况决定是否退款</p>
+                      )}
+                      {deleteTarget?.sellStatus === 'sold' && (
+                        <p className="text-xs text-gray-400 ml-6">已卖出的订单已经结算，通常无需退款</p>
+                      )}
+                      {deleteTarget?.status === 'cancelled' && (
+                        <p className="text-xs text-gray-400 ml-6">已撤单的订单已退过款，通常无需再次退款</p>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">取消</AlertDialogCancel>
             <AlertDialogAction
               className="rounded-xl bg-red-600 hover:bg-red-700"
-              onClick={() =>
-                deleteTarget &&
-                deleteMutation.mutate({ ledgerId, orderId: deleteTarget.id })
-              }
+              onClick={() => {
+                if (!deleteTarget) return;
+                deleteMutation.mutate({
+                  ledgerId,
+                  orderId: deleteTarget.id,
+                  deleteScope,
+                  selectedGiftIds: deleteScope === 'selected' ? selectedGiftIds : undefined,
+                  refund: refundChecked,
+                });
+              }}
             >
-              删除
+              确认删除
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

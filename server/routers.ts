@@ -13846,7 +13846,16 @@ ${klinesSummary}
       }),
     // AF 管理员删除订单（含关联赠单和余额退回）
     afAdminDeleteOrder: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), orderId: z.number() }))
+      .input(z.object({
+        ledgerId: z.number(),
+        orderId: z.number(),
+        // 删除范围：all=正单+全部赠单, mainOnly=仅正单, selected=正单+勾选的赠单
+        deleteScope: z.enum(['all', 'mainOnly', 'selected']).default('all'),
+        // 勾选删除的赠单ID列表（仅 deleteScope=selected 时有效）
+        selectedGiftIds: z.array(z.number()).optional(),
+        // 是否退款到用户账户
+        refund: z.boolean().default(false),
+      }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         // 验证是否是 owner 或 admin
@@ -13864,17 +13873,31 @@ ${klinesSummary}
         const userId = order.user_id;
         const amount = parseFloat(order.amount || '0');
         const isGift = parseInt(order.is_gift || '0') === 1;
-        // 如果是 pending 正单，退回已扣余额
-        if (order.status === 'pending' && !isGift && amount > 0.001) {
+        // 退款逻辑：管理员勾选了退款且订单有金额
+        if (input.refund && !isGift && amount > 0.001) {
           await db.execute(
             sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
                 VALUES (${input.ledgerId}, ${userId}, ${amount}, ${`管理员删除订单退回 ${order.coin} ${amount} USDT`}, NOW(), NOW())`
           );
         }
-        // 删除关联的赠予订单
-        await db.execute(
-          sql`DELETE FROM af_orders WHERE source_order_id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND is_gift = 1`
-        );
+        // 处理赠单删除
+        if (!isGift) {
+          // 当前删除的是正单
+          if (input.deleteScope === 'all') {
+            // 删除所有关联赠单
+            await db.execute(
+              sql`DELETE FROM af_orders WHERE source_order_id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND is_gift = 1`
+            );
+          } else if (input.deleteScope === 'selected' && input.selectedGiftIds && input.selectedGiftIds.length > 0) {
+            // 只删除勾选的赠单
+            for (const giftId of input.selectedGiftIds) {
+              await db.execute(
+                sql`DELETE FROM af_orders WHERE id = ${giftId} AND ledger_id = ${input.ledgerId} AND is_gift = 1 AND source_order_id = ${input.orderId}`
+              );
+            }
+          }
+          // mainOnly: 不删除任何赠单
+        }
         // 删除该订单的档位触发记录
         await db.execute(
           sql`DELETE FROM af_order_tier_triggers WHERE order_id = ${input.orderId}`
@@ -13883,7 +13906,7 @@ ${klinesSummary}
         await db.execute(
           sql`DELETE FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
         );
-        console.log(`[afAdminDeleteOrder] 管理员(${ctx.user.id})删除订单#${input.orderId} 币种:${order.coin} 金额:${amount} 是否赠单:${isGift}`);
+        console.log(`[afAdminDeleteOrder] 管理员(${ctx.user.id})删除订单#${input.orderId} 范围:${input.deleteScope} 退款:${input.refund} 币种:${order.coin} 金额:${amount}`);
         return { success: true };
       }),
     // AF 查询订单的收益权档位触发记录 + 扫描状态
