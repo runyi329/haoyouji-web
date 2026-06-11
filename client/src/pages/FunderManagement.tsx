@@ -672,7 +672,7 @@ function FunderOrderCard({
         {/* 右栏：待结利息 */}
         <div className="p-4 pl-3 flex flex-col shrink-0" style={{ width: 'auto', minWidth: '160px', maxWidth: '200px' }}>
           <div className="flex items-center gap-1 mb-0.5 relative" style={{ height: '16px' }}>
-            <span className="text-[10px]" style={{ color: isInvited ? '#059669' : '#3B82F6' }}>{isInvited ? '待结佣金' : '待收利息'}</span>
+            <span className="text-[10px]" style={{ color: isInvited ? '#059669' : '#3B82F6' }}>{isInvited ? '待结佣金' : '待结利息'}</span>
             {rateAbs && <span className="text-[10px] text-gray-400">(年化 {rateAbs}%)</span>}
             <button
               ref={tipBtnRef}
@@ -752,7 +752,7 @@ function FunderOrderCard({
             {show('paidInterest') && (
             <>
             <div className="flex items-center justify-between">
-              <span className="text-gray-400 whitespace-nowrap">{isInvited ? '已结佣金' : '已收利息'}</span>
+              <span className="text-gray-400 whitespace-nowrap">{isInvited ? '已结佣金' : '已结利息'}</span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
                 {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
               </span>
@@ -768,7 +768,7 @@ function FunderOrderCard({
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">{isInvited ? '计佣日期' : '计息日期'}</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>
-                  {String(isInvited ? order.participantInfo.commissionStartDate : order.interest_start_date).slice(0, 10).replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
+                  {String(isInvited ? order.participantInfo.commissionStartDate : order.interest_start_date).slice(0, 10)}
                 </span>
               </div>
             )}
@@ -864,7 +864,7 @@ function FunderOrderCard({
                       </div>
                       <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
                         <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敞口</div>
-                        <div>担保物 + 浮动盈亏 − 待收利息 + 已收利息（正数充足，负数缺口）</div>
+                        <div>担保物 + 浮动盈亏 − 待结利息 + 已结利息（正数充足，负数缺口）</div>
                         <div className="mt-1 font-mono">
                           {floatPnl !== null
                             ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} + {totalPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
@@ -990,7 +990,7 @@ function FunderOrderCard({
       <div className="px-4 pt-3 pb-3 border-t border-blue-100">
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs font-medium" style={{ color: '#1A2340' }}>
-            {isInvited ? '已结佣金' : '已收利息'}：<span style={{ color: '#16A34A' }}>{displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
+            {isInvited ? '已结佣金' : '已结利息'}：<span style={{ color: '#16A34A' }}>{displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
           </span>
           <button
             onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm(() => ({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
@@ -2728,11 +2728,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 <div className="mx-4 h-px bg-gray-100 my-2" />
                 {/* 右栏上半：待结利息区 */}
                 <div className="px-4 pb-2">
-                  <div className="text-xs font-medium text-blue-500 mb-2">右栏上半：待收利息区</div>
+                  <div className="text-xs font-medium text-blue-500 mb-2">右栏上半：待结利息区</div>
                   <div className="space-y-2">
                     {[
-                      { key: 'accruedInterest', label: '待收利息（标题+大数字）' },
-{ key: 'paidInterest', label: '已收利息' },
+                      { key: 'accruedInterest', label: '待结利息（标题+大数字）' },
+{ key: 'paidInterest', label: '已结利息' },
                           { key: 'interestStartDate', label: '计息日期' },
                           { key: 'interestDuration', label: '计息时长' },
                           { key: 'collateralCoin', label: '担保货币' },
@@ -2962,7 +2962,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             {displayConfig.accruedInterest && hasInterestData && (
                               <>
                                 <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
-                                  <span className="text-[10px]" style={{ color: '#3B82F6' }}>待收利息</span>
+                                  <span className="text-[10px]" style={{ color: '#3B82F6' }}>待结利息</span>
                                   <span className="text-[10px] text-gray-400">(年化 {Math.abs(parseFloat(formData.interestRateAnnual)).toFixed(0)}%)</span>
                                 </div>
                                 <div className="min-h-7 flex flex-col justify-center mt-0.5">
@@ -2980,7 +2980,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               {displayConfig.paidInterest && hasInterestData && (
                                 <>
                                   <div className="flex items-center justify-between">
-                                    <span className="text-gray-400 whitespace-nowrap">已收利息</span>
+                                    <span className="text-gray-400 whitespace-nowrap">已结利息</span>
                                     <span className="font-medium" style={{ color: '#4B5563' }}>
                                       {prevDisplayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {prevInterestUnit}
                                     </span>
@@ -2996,7 +2996,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 <div className="flex items-center justify-between">
                                   <span className="text-gray-400">计息日期</span>
                                   <span className="font-medium" style={{ color: '#4B5563' }}>
-                                    {formData.interestStartDate.replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
+                                    {formData.interestStartDate.slice(0, 10)}
                                   </span>
                                 </div>
                               )}
@@ -3215,7 +3215,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
                           {/* 右栏：利息信息 */}
                           <div className="w-36 p-3 pl-2 flex flex-col">
-                            <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>待收利息{rateAbs ? ` (年化 ${rateAbs}%)` : ''}</div>
+                            <div className="text-[10px] mb-0.5" style={{ color: '#3B82F6' }}>待结利息{rateAbs ? ` (年化 ${rateAbs}%)` : ''}</div>
                             {price > 0 && (
                               <div className="flex items-center justify-between text-xs mt-1">
                                 <span className="text-gray-400">买入价</span>

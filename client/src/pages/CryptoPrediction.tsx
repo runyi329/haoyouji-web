@@ -3303,13 +3303,13 @@ export default function CryptoPrediction() {
                         {/* 右栏：利息信息 */}
                         <div className="p-4 pl-3 flex flex-col shrink-0" style={{ width: 'auto', minWidth: '160px', maxWidth: '200px' }}>
                           <div className="flex flex-col">
-                            {/* 待付/待收利息 */}
+                            {/* 待结利息 */}
                             <div className="flex flex-col justify-start">
                               {showField('accruedInterest') ? (
                                 <>
                                   <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
                                     <span className="text-[10px]" style={{ color: '#3B82F6' }}>
-                                      {isNegativeRate ? '待付利息' : '待收利息'}
+                                      待结利息
                                     </span>
                                     <span className="text-[10px] text-gray-400">{isNegativeRate ? '(整体部分年化12%)' : `(年化 ${Math.abs(annualRate)}%)`}</span>
                                   </div>
@@ -3328,7 +3328,7 @@ export default function CryptoPrediction() {
                               {showField('paidInterest') && (
                                 <>
                                   <div className="flex items-center justify-between text-xs">
-                                    <span className="text-gray-400">{isNegativeRate ? '已付利息' : '已收利息'}</span>
+                                    <span className="text-gray-400">已结利息</span>
                                     <span className="font-medium" style={{ color: '#4B5563' }}>{paidInterest.toFixed(2)} {_interestUnit}</span>
                                   </div>
                                   {paidInterest > 0 && (
@@ -3342,10 +3342,7 @@ export default function CryptoPrediction() {
                                 <div className="flex items-center justify-between text-xs">
                                   <span className="text-gray-400">计息日期</span>
                                   <span className="font-medium" style={{ color: '#4B5563' }}>
-                                    {(() => {
-                                      const d = startDate.replace(/^\d{4}-(\d{2})-(\d{2}).*$/, (_: string, m: string, dd: string) => `${parseInt(m)}月${parseInt(dd)}日`);
-                                      return d;
-                                    })()}
+                                    {String(startDate).slice(0, 10)}
                                   </span>
                                 </div>
                               )}
@@ -3746,7 +3743,7 @@ export default function CryptoPrediction() {
                                         {showField('accruedInterest') ? (
                                           <>
                                             <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
-                                              <span className="text-[10px]" style={{ color: '#3B82F6' }}>{isNegativeRate ? '待付利息' : '待收利息'}</span>
+                                              <span className="text-[10px]" style={{ color: '#3B82F6' }}>待结利息</span>
                                             </div>
                                             <div className="flex items-baseline gap-0.5">
                                               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{unpaidInterest > 0 ? '-' : ''}{unpaidInterest.toFixed(2)}</span>
@@ -3757,11 +3754,11 @@ export default function CryptoPrediction() {
                                         ) : <div style={{ height: '16px' }} />}
                                         {showField('paidInterest') && (
                                           <div className="flex items-center justify-between text-xs">
-                                            <span className="text-gray-400">{isNegativeRate ? '已付利息' : '已收利息'}</span>
+                                            <span className="text-gray-400">已结利息</span>
                                             <span className="font-medium" style={{ color: '#4B5563' }}>{paidInterest.toFixed(2)} {_interestUnit}</span>
                                           </div>
                                         )}
-                                        {showField('interestStartDate') && startDate && (<div className="flex items-center justify-between text-xs"><span className="text-gray-400">计息日期</span><span className="font-medium" style={{ color: '#4B5563' }}>{startDate.replace(/^\d{4}-(\d{2})-(\d{2}).*$/, (_: string, m: string, dd: string) => `${parseInt(m)}月${parseInt(dd)}日`)}</span></div>)}
+                                        {showField('interestStartDate') && startDate && (<div className="flex items-center justify-between text-xs"><span className="text-gray-400">计息日期</span><span className="font-medium" style={{ color: '#4B5563' }}>{String(startDate).slice(0, 10)}</span></div>)}
                                         {showField('interestDuration') && startDate && (order.status === 'active' || order.settled_at) && (() => {
                                           const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
                                           const elapsed = endTs - new Date(String(startDate).slice(0, 10) + 'T00:00:00').getTime();
