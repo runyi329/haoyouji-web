@@ -165,7 +165,7 @@ export default function AfOrderManage() {
   // 状态筛选：all / pending(委买中) / holding(持仓中) / selling(委卖中) / sold(已卖出)
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'holding' | 'selling' | 'sold'>('all');
   // 分组维度：时间 / 人员
-  const [groupMode, setGroupMode] = useState<'time' | 'person'>('time');
+  const [groupMode, setGroupMode] = useState<'time' | 'person' | 'coin' | 'price'>('time');
   // 人员分组展开状态
   const [expandedPersons, setExpandedPersons] = useState<Record<string, boolean>>({});
   const togglePerson = (uid: string) => setExpandedPersons(prev => ({ ...prev, [uid]: !(prev[uid] ?? false) }));
@@ -769,6 +769,8 @@ export default function AfOrderManage() {
           {([
             { key: 'time' as const, label: '按时间' },
             { key: 'person' as const, label: '按人员' },
+            { key: 'coin' as const, label: '按币种' },
+            { key: 'price' as const, label: '按价格' },
           ]).map(tab => (
             <button
               key={tab.key}
@@ -948,6 +950,215 @@ export default function AfOrderManage() {
                                 <span className={`text-[9px] w-8 text-center shrink-0 ${statusDisplay.color}`}>{statusDisplay.label}</span>
                                 {/* 日期 */}
                                 <span className="text-[9px] text-gray-400 w-14 text-right shrink-0">{dateStr}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        ) : groupMode === 'coin' ? (
+          /* ── 币种维度分组 ── */
+          <div className="space-y-2 pb-6">
+            {(() => {
+              const COIN_ORDER = ['ETH', 'BTC', 'SOL'];
+              const COIN_DECIMALS: Record<string, number> = { SOL: 1, BTC: 4, ETH: 2 };
+              const COIN_COLORS: Record<string, string> = { ETH: '#3b82f6', BTC: '#f59e0b', SOL: '#10b981' };
+              // 按币种分组
+              const coinMap = new Map<string, any[]>();
+              (filteredOrders || []).forEach((order: any) => {
+                const coin = order.coin || '未知';
+                if (!coinMap.has(coin)) coinMap.set(coin, []);
+                coinMap.get(coin)!.push(order);
+              });
+              const coinGroups = Array.from(coinMap.entries()).sort(([a], [b]) => {
+                const ai = COIN_ORDER.indexOf(a);
+                const bi = COIN_ORDER.indexOf(b);
+                return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+              });
+              return coinGroups.map(([coin, coinOrders]) => {
+                const isOpen = expandedPersons[`coin_${coin}`] ?? false;
+                const totalQty = coinOrders.reduce((s: number, o: any) => s + (parseFloat(o.quantity) || 0), 0);
+                const nestedGiftQty = coinOrders.reduce((s: number, o: any) => {
+                  return s + ((o.giftOrders as any[]) || []).reduce((gs: number, g: any) => gs + (parseFloat(g.quantity) || 0), 0);
+                }, 0);
+                const totalAmount = coinOrders.reduce((s: number, o: any) => s + (parseFloat(o.amount) || 0), 0);
+                const orderCount = coinOrders.length;
+                const giftCount = coinOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[]) || []).length, 0);
+                // 展平订单按时间从近到远
+                const flatOrders: any[] = [];
+                coinOrders.forEach((o: any) => {
+                  flatOrders.push({ ...o, _isGift: o.isGift === true || o.isGift === 1 });
+                  ((o.giftOrders as any[]) || []).forEach((g: any) => {
+                    flatOrders.push({ ...g, _isGift: true, _parentCoin: o.coin });
+                  });
+                });
+                flatOrders.sort((a, b) => {
+                  const ta = new Date(a.createdAt || a.confirmedAt || 0).getTime();
+                  const tb = new Date(b.createdAt || b.confirmedAt || 0).getTime();
+                  return tb - ta;
+                });
+                return (
+                  <div key={coin}>
+                    <button
+                      onClick={() => togglePerson(`coin_${coin}`)}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors bg-white border border-gray-200 hover:bg-gray-50 shadow-sm"
+                    >
+                      <span className="text-sm font-bold shrink-0 mr-2" style={{ color: COIN_COLORS[coin] || '#374151' }}>{coin}</span>
+                      <div className="flex items-center gap-1.5 flex-1 justify-end">
+                        <span className="text-[11px] text-gray-700 font-mono">{totalQty.toFixed(COIN_DECIMALS[coin] ?? 4)}</span>
+                        {nestedGiftQty > 0 && <span className="text-[11px] text-orange-400">+{nestedGiftQty.toFixed(COIN_DECIMALS[coin] ?? 4)}赠</span>}
+                        <span className="text-[11px] text-blue-500">{orderCount}单</span>
+                        {giftCount > 0 && <span className="text-[11px] text-orange-400">{giftCount}赠</span>}
+                        <span className="text-[11px] text-gray-500">{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
+                      </div>
+                      <span className={`transition-transform duration-200 shrink-0 ml-1 text-gray-400 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                    </button>
+                    {isOpen && (
+                      <div className="mt-1 mb-2 rounded-xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="divide-y divide-gray-50">
+                          {flatOrders.map((order: any) => {
+                            const isGift = order._isGift;
+                            const statusDisplay = getStatusDisplay(order);
+                            const qty = parseFloat(order.quantity || 0);
+                            const oCoin = order.coin || order._parentCoin || coin;
+                            const tier = order.equityTier || 0;
+                            const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                            const effQty = qty * rate;
+                            const hasDiscount = Math.abs(effQty - qty) > 0.00005;
+                            const amount = parseFloat(order.amount || 0);
+                            const price = parseFloat(order.limitPrice || 0);
+                            const dateStr = formatDate(order.confirmedAt || order.createdAt);
+                            const nickname = order.nickname || order.username || '';
+                            return (
+                              <div key={order.id} className={`flex items-center px-2.5 py-1.5 gap-1 min-h-[28px] ${isGift ? 'bg-amber-50/40' : ''}`}>
+                                {isGift ? (
+                                  <span className="text-[9px] px-1 py-0 rounded bg-amber-100 text-amber-600 shrink-0">赠</span>
+                                ) : (
+                                  <span className="text-[9px] px-1 py-0 rounded bg-blue-50 text-blue-500 shrink-0">正</span>
+                                )}
+                                <span className="text-[11px] text-gray-700 flex-1 text-right font-mono">
+                                  {qty.toFixed(COIN_DECIMALS[oCoin] ?? 4)}
+                                </span>
+                                {!isGift && tier > 0 && hasDiscount ? (
+                                  <span className="text-[9px] text-purple-500 shrink-0 w-16 text-right">T{tier}→{effQty.toFixed(COIN_DECIMALS[oCoin] ?? 4)}</span>
+                                ) : (
+                                  <span className="w-16 shrink-0" />
+                                )}
+                                {price > 0 && <span className="text-[9px] text-gray-500 shrink-0">${price.toFixed(2)}</span>}
+                                <span className="text-[10px] text-gray-400 w-10 text-right shrink-0">{amount > 0 ? amount.toFixed(0)+'U' : ''}</span>
+                                <span className={`text-[9px] w-8 text-center shrink-0 ${statusDisplay.color}`}>{statusDisplay.label}</span>
+                                <span className="text-[9px] text-gray-400 w-14 text-right shrink-0">{dateStr}</span>
+                                {nickname && <span className="text-[9px] text-gray-400 shrink-0 ml-0.5 max-w-[40px] truncate">{nickname}</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        ) : groupMode === 'price' ? (
+          /* ── 价格维度分组 ── */
+          <div className="space-y-2 pb-6">
+            {(() => {
+              const COIN_DECIMALS: Record<string, number> = { SOL: 1, BTC: 4, ETH: 2 };
+              // 按买入价格分组（同一价格归为一组）
+              const priceMap = new Map<string, { price: number; coin: string; orders: any[] }>();
+              (filteredOrders || []).forEach((order: any) => {
+                const price = parseFloat(order.limitPrice || '0');
+                if (price <= 0) return;
+                const coin = order.coin || '未知';
+                const key = `${coin}_${price.toFixed(2)}`;
+                if (!priceMap.has(key)) priceMap.set(key, { price, coin, orders: [] });
+                priceMap.get(key)!.orders.push(order);
+              });
+              // 按币种分组后按价格从低到高排序
+              const priceGroups = Array.from(priceMap.values()).sort((a, b) => {
+                if (a.coin !== b.coin) return a.coin.localeCompare(b.coin);
+                return a.price - b.price;
+              });
+              return priceGroups.map(group => {
+                const gKey = `price_${group.coin}_${group.price}`;
+                const isOpen = expandedPersons[gKey] ?? false;
+                const totalQty = group.orders.reduce((s: number, o: any) => s + (parseFloat(o.quantity) || 0), 0);
+                const giftQty = group.orders.reduce((s: number, o: any) => {
+                  return s + ((o.giftOrders as any[]) || []).reduce((gs: number, g: any) => gs + (parseFloat(g.quantity) || 0), 0);
+                }, 0);
+                const orderCount = group.orders.length;
+                const giftCount = group.orders.reduce((s: number, o: any) => s + ((o.giftOrders as any[]) || []).length, 0);
+                // 展平
+                const flatOrders: any[] = [];
+                group.orders.forEach((o: any) => {
+                  flatOrders.push({ ...o, _isGift: o.isGift === true || o.isGift === 1 });
+                  ((o.giftOrders as any[]) || []).forEach((g: any) => {
+                    flatOrders.push({ ...g, _isGift: true, _parentCoin: o.coin });
+                  });
+                });
+                flatOrders.sort((a, b) => {
+                  const ta = new Date(a.createdAt || a.confirmedAt || 0).getTime();
+                  const tb = new Date(b.createdAt || b.confirmedAt || 0).getTime();
+                  return tb - ta;
+                });
+                return (
+                  <div key={gKey}>
+                    <button
+                      onClick={() => togglePerson(gKey)}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl transition-colors bg-white border border-gray-200 hover:bg-gray-50 shadow-sm"
+                    >
+                      <div className="flex items-center gap-1.5 shrink-0 mr-2">
+                        <span className="text-sm font-bold text-gray-800">{group.coin}</span>
+                        <span className="text-xs text-gray-500">${group.price.toFixed(2)}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-1 justify-end">
+                        <span className="text-[11px] text-gray-700 font-mono">{totalQty.toFixed(COIN_DECIMALS[group.coin] ?? 4)}</span>
+                        {giftQty > 0 && <span className="text-[11px] text-orange-400">+{giftQty.toFixed(COIN_DECIMALS[group.coin] ?? 4)}赠</span>}
+                        <span className="text-[11px] text-blue-500">{orderCount}单</span>
+                        {giftCount > 0 && <span className="text-[11px] text-orange-400">{giftCount}赠</span>}
+                      </div>
+                      <span className={`transition-transform duration-200 shrink-0 ml-1 text-gray-400 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                    </button>
+                    {isOpen && (
+                      <div className="mt-1 mb-2 rounded-xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+                        <div className="divide-y divide-gray-50">
+                          {flatOrders.map((order: any) => {
+                            const isGift = order._isGift;
+                            const statusDisplay = getStatusDisplay(order);
+                            const qty = parseFloat(order.quantity || 0);
+                            const oCoin = order.coin || order._parentCoin || group.coin;
+                            const tier = order.equityTier || 0;
+                            const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                            const effQty = qty * rate;
+                            const hasDiscount = Math.abs(effQty - qty) > 0.00005;
+                            const amount = parseFloat(order.amount || 0);
+                            const dateStr = formatDate(order.confirmedAt || order.createdAt);
+                            const nickname = order.nickname || order.username || '';
+                            return (
+                              <div key={order.id} className={`flex items-center px-2.5 py-1.5 gap-1 min-h-[28px] ${isGift ? 'bg-amber-50/40' : ''}`}>
+                                {isGift ? (
+                                  <span className="text-[9px] px-1 py-0 rounded bg-amber-100 text-amber-600 shrink-0">赠</span>
+                                ) : (
+                                  <span className="text-[9px] px-1 py-0 rounded bg-blue-50 text-blue-500 shrink-0">正</span>
+                                )}
+                                <span className="text-[11px] text-gray-700 flex-1 text-right font-mono">
+                                  {qty.toFixed(COIN_DECIMALS[oCoin] ?? 4)}
+                                </span>
+                                {!isGift && tier > 0 && hasDiscount ? (
+                                  <span className="text-[9px] text-purple-500 shrink-0 w-16 text-right">T{tier}→{effQty.toFixed(COIN_DECIMALS[oCoin] ?? 4)}</span>
+                                ) : (
+                                  <span className="w-16 shrink-0" />
+                                )}
+                                <span className="text-[10px] text-gray-400 w-10 text-right shrink-0">{amount > 0 ? amount.toFixed(0)+'U' : ''}</span>
+                                <span className={`text-[9px] w-8 text-center shrink-0 ${statusDisplay.color}`}>{statusDisplay.label}</span>
+                                <span className="text-[9px] text-gray-400 w-14 text-right shrink-0">{dateStr}</span>
+                                {nickname && <span className="text-[9px] text-gray-400 shrink-0 ml-0.5 max-w-[40px] truncate">{nickname}</span>}
                               </div>
                             );
                           })}
