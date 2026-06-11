@@ -197,6 +197,8 @@ interface Match {
   venue?: string;
   stage: string;
   date?: string;  // 比赛日期 YYYY-MM-DD
+  homeScore?: number | null;  // 主队进球数（已完赛时填入）
+  awayScore?: number | null;  // 客队进球数（已完赛时填入）
 }
 interface DaySchedule {
   date: string;
@@ -209,7 +211,7 @@ const schedule: DaySchedule[] = [
     date: "2026-06-12",
     dateLabel: "6月12日 周五",
     matches: [
-      { home: "墨西哥", homeCode: "mx", away: "南非", awayCode: "za", time: "03:00", venue: "墨西哥城", stage: "A组" },
+      { home: "墨西哥", homeCode: "mx", away: "南非", awayCode: "za", time: "03:00", venue: "墨西哥城", stage: "A组", homeScore: 2, awayScore: 0 },
       { home: "韩国", homeCode: "kr", away: "捷克", awayCode: "cz", time: "10:00", venue: "瓜达拉哈拉", stage: "A组" },
     ],
   },
@@ -1031,6 +1033,31 @@ function ResultsTab({ groups }: { groups: Record<string, { name: string; code: s
         <div className="pb-8">
           {Object.entries(groups).map(([groupName, teams]) => {
             const standings = initStandings(teams);
+            // 从 schedule 中提取该组已完赛的比赛，计算积分
+            const groupStage = `${groupName}组`;
+            for (const day of schedule) {
+              for (const m of day.matches) {
+                if (m.stage !== groupStage) continue;
+                if (m.homeScore == null || m.awayScore == null) continue;
+                const home = standings.find(s => s.code === m.homeCode);
+                const away = standings.find(s => s.code === m.awayCode);
+                if (!home || !away) continue;
+                home.played++;
+                away.played++;
+                if (m.homeScore > m.awayScore) {
+                  home.won++; home.points += 3;
+                  away.lost++;
+                } else if (m.homeScore < m.awayScore) {
+                  away.won++; away.points += 3;
+                  home.lost++;
+                } else {
+                  home.drawn++; home.points += 1;
+                  away.drawn++; away.points += 1;
+                }
+              }
+            }
+            // 按积分降序排序
+            standings.sort((a, b) => b.points - a.points || (b.won - a.won) || (a.name.localeCompare(b.name)));
             return (
               <div key={groupName} className="mb-1">
                 <div className="flex items-center px-4 py-2" style={{ backgroundColor: BG3, borderBottom: `1px solid ${BORDER}` }}>
@@ -1240,9 +1267,13 @@ function DayGroup({
               >{match.home}</span>
               <Flag code={match.homeCode} size={18} />
             </div>
-            {/* VS：固定宽度居中 */}
-            <div className="flex items-center justify-center flex-shrink-0" style={{ width: 28 }}>
-              <span style={{ color: GOLD, fontSize: "12px", fontWeight: 900 }}>VS</span>
+            {/* VS或比分：固定宽度居中 */}
+            <div className="flex items-center justify-center flex-shrink-0" style={{ width: 38 }}>
+              {match.homeScore != null && match.awayScore != null ? (
+                <span style={{ color: GOLD, fontSize: "13px", fontWeight: 900 }}>{match.homeScore}:{match.awayScore}</span>
+              ) : (
+                <span style={{ color: GOLD, fontSize: "12px", fontWeight: 900 }}>VS</span>
+              )}
             </div>
             {/* 客队：左对齐 */}
             <div className="flex items-center justify-start" style={{ flex: "1 1 0", minWidth: 0, gap: 3, overflow: "hidden" }}>
@@ -1626,9 +1657,17 @@ export default function WorldCup() {
                     {/* 比分 */}
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flex: 0, minWidth: 60 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ fontSize: 32, fontWeight: 900, color: TEXT }}>-</span>
-                        <span style={{ fontSize: 32, fontWeight: 900, color: TEXT }}>-</span>
+                        <span style={{ fontSize: 32, fontWeight: 900, color: selectedMatch.homeScore != null ? GOLD : TEXT }}>
+                          {selectedMatch.homeScore != null ? selectedMatch.homeScore : "-"}
+                        </span>
+                        <span style={{ fontSize: 20, fontWeight: 400, color: TEXT2 }}>:</span>
+                        <span style={{ fontSize: 32, fontWeight: 900, color: selectedMatch.awayScore != null ? GOLD : TEXT }}>
+                          {selectedMatch.awayScore != null ? selectedMatch.awayScore : "-"}
+                        </span>
                       </div>
+                      {selectedMatch.homeScore != null && (
+                        <span style={{ fontSize: 10, color: TEXT2, marginTop: 2 }}>已结束</span>
+                      )}
                     </div>
                     {/* 客队 */}
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flex: 1 }}>
@@ -2610,7 +2649,11 @@ export function WorldCupEmbedded() {
                       <Flag code={selectedMatch.homeCode} size={32} />
                       <span style={{ color: TEXT, fontWeight: 700, fontSize: 16 }}>{selectedMatch.home}</span>
                     </div>
-                    <span style={{ color: TEXT2, fontSize: 13, fontWeight: 600 }}>VS</span>
+                    {selectedMatch.homeScore != null && selectedMatch.awayScore != null ? (
+                      <span style={{ color: GOLD, fontSize: 16, fontWeight: 900 }}>{selectedMatch.homeScore} : {selectedMatch.awayScore}</span>
+                    ) : (
+                      <span style={{ color: TEXT2, fontSize: 13, fontWeight: 600 }}>VS</span>
+                    )}
                     <div className="flex items-center gap-2">
                       <span style={{ color: TEXT, fontWeight: 700, fontSize: 16 }}>{selectedMatch.away}</span>
                       <Flag code={selectedMatch.awayCode} size={32} />
@@ -2618,6 +2661,7 @@ export function WorldCupEmbedded() {
                   </div>
                   <div style={{ color: TEXT2, fontSize: 12, textAlign: "center", marginBottom: 8 }}>
                     {selectedMatch.date} {selectedMatch.time} · {selectedMatch.venue}
+                    {selectedMatch.homeScore != null && <span style={{ color: GOLD, marginLeft: 8 }}>已结束</span>}
                   </div>
                   {homeTeamData && awayTeamData && (
                     <div className="mt-3 grid grid-cols-2 gap-3">
