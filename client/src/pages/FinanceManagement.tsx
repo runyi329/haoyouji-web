@@ -352,7 +352,6 @@ function FinanceOrderCard({
           <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: coinColor }}>
             {order.coin}
           </span>
-          <span className="text-xs text-gray-400">#{order.order_no}</span>
           {isAdmin ? (
             <button
               onClick={() => setShowStatusSheet(true)}
