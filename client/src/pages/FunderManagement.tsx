@@ -1448,7 +1448,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     },
     onError: (err) => toast.error(err.message),
   });
-  const updateMutation = trpc.ledger.funderUpdateAssetOrder.useMutation({
+  const updateMutation = trpc.ledger.financeUpdateOrder.useMutation({
     onSuccess: () => {
       toast.success('更新成功');
       setShowForm(false);
