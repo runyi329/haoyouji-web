@@ -2140,6 +2140,8 @@ export default function CryptoPrediction() {
   );
   const financeOrders: any[] = (financeOrdersData as any)?.orders ?? [];
   const [sharedOrdersExpanded, setSharedOrdersExpanded] = useState(false);
+  const [mySettledExpanded, setMySettledExpanded] = useState(false);
+  const [sharedSettledExpanded, setSharedSettledExpanded] = useState(false);
   // 融资付息：资产汇总
   const { data: financeAssetSummary } = trpc.ledger.financeGetAssetSummary.useQuery(
     { ledgerId },
@@ -3099,8 +3101,9 @@ export default function CryptoPrediction() {
               const sharedSettled = sharedOrders.filter((o: any) => o.status === 'settled' || o.status === 'completed' || o.status === 'cancelled').length;
               return (
                 <div className="space-y-3">
-                  {/* 白底订单：用户自己的订单，逐张陈列 */}
-                  {myOrders.map((order: any) => {
+                  {/* 白底订单：用户自己的订单，进行中逐张陈列，已结束二级折叠 */}
+                  {(() => {
+                  const renderMyCard = (order: any) => {
                   const paidInterest = (financeInterestSummary as any)?.[order.id] ?? 0;
                   const annualRate = parseFloat(order.interest_rate_annual || order.annualInterestRate || '0');
                   const isNegativeRate = true; // 融资付息页面用户均为付息方，利息一律显示为负数
@@ -3620,7 +3623,35 @@ export default function CryptoPrediction() {
                       />
                     </div>
                   );
-                  })}
+                  };
+                  const myActive = myOrders.filter((o: any) => o.status === 'active');
+                  const mySettled = myOrders.filter((o: any) => o.status === 'settled' || o.status === 'completed' || o.status === 'cancelled');
+                  return (
+                    <>
+                      {myActive.map(renderMyCard)}
+                      {mySettled.length > 0 && (
+                        <div className="mt-2">
+                          <button
+                            onClick={() => setMySettledExpanded(!mySettledExpanded)}
+                            className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all"
+                            style={{ backgroundColor: '#F9FAFB', border: '1px solid #E5E7EB' }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium" style={{ color: '#6B7280' }}>自己的订单</span>
+                              <span className="text-xs" style={{ color: '#9CA3AF' }}>已结束 {mySettled.length} 笔</span>
+                            </div>
+                            <ChevronDown className={`w-4 h-4 transition-transform ${mySettledExpanded ? 'rotate-180' : ''}`} style={{ color: '#9CA3AF' }} />
+                          </button>
+                          {mySettledExpanded && (
+                            <div className="space-y-3 mt-3">
+                              {mySettled.map(renderMyCard)}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                  })()}
                   {/* 绿底订单：别人分享的订单，收纳在可展开下拉框中 */}
                   {sharedOrders.length > 0 && (
                     <div className="mt-4">
@@ -3639,7 +3670,8 @@ export default function CryptoPrediction() {
                       </button>
                       {sharedOrdersExpanded && (
                         <div className="space-y-3 mt-3">
-                          {sharedOrders.map((order: any) => {
+                          {(() => {
+                          const renderSharedCard = (order: any) => {
                             const paidInterest = (financeInterestSummary as any)?.[order.id] ?? 0;
                             const annualRate = parseFloat(order.interest_rate_annual || order.annualInterestRate || '0');
                             const isNegativeRate = true;
@@ -3877,7 +3909,35 @@ export default function CryptoPrediction() {
                                 />
                               </div>
                             );
-                          })}
+                          };
+                          const sharedActiveList = sharedOrders.filter((o: any) => o.status === 'active');
+                          const sharedSettledList = sharedOrders.filter((o: any) => o.status === 'settled' || o.status === 'completed' || o.status === 'cancelled');
+                          return (
+                            <>
+                              {sharedActiveList.map(renderSharedCard)}
+                              {sharedSettledList.length > 0 && (
+                                <div className="mt-2">
+                                  <button
+                                    onClick={() => setSharedSettledExpanded(!sharedSettledExpanded)}
+                                    className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all"
+                                    style={{ backgroundColor: '#F9FAFB', border: '1px solid #E5E7EB' }}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm font-medium" style={{ color: '#6B7280' }}>共享订单</span>
+                                      <span className="text-xs" style={{ color: '#9CA3AF' }}>已结束 {sharedSettledList.length} 笔</span>
+                                    </div>
+                                    <ChevronDown className={`w-4 h-4 transition-transform ${sharedSettledExpanded ? 'rotate-180' : ''}`} style={{ color: '#9CA3AF' }} />
+                                  </button>
+                                  {sharedSettledExpanded && (
+                                    <div className="space-y-3 mt-3">
+                                      {sharedSettledList.map(renderSharedCard)}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          );
+                          })()}
                         </div>
                       )}
                     </div>

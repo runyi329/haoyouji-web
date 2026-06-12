@@ -1,5 +1,14 @@
 [
   {
+    "hash": "12acb0c53af45e504684554111726995baa490ee",
+    "author": "deploy",
+    "date": "2026-06-12T14:25:45+00:00",
+    "message": "fix: 实时预览付息方式显示中文而非英文代码，复用INTEREST_PAYMENT_OPTIONS映射",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "实时预览付息方式显示中文而非英文代码，复用INTEREST_PAYMENT_OPTIONS映射"
+  },
+  {
     "hash": "1ca2140cc73fa3e1168b4ad6ae362b92a3e74dd1",
     "author": "deploy",
     "date": "2026-06-12T13:10:05+00:00",
