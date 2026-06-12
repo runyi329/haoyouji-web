@@ -3234,6 +3234,9 @@ export default function CryptoPrediction() {
                             </span>
                             <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
                           </div>
+                          {coinPrice && coinQty > 0 && order.coin !== 'USDT' && (
+                            <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(order.coin === 'CNY' ? (coinQty / 7) : (coinQty * coinPrice)).toLocaleString(undefined, { maximumFractionDigits: order.coin === 'CNY' ? 0 : 2 })} U</div>
+                          )}
                           {/* 订单详情列表 */}
                           <div className="space-y-0.5">
                             {showField('buyPrice') && buyPrice > 0 && (
@@ -3253,29 +3256,28 @@ export default function CryptoPrediction() {
                                 </div>
                               </>
                             )}
+                            {showField('interestBase') && interestBase > 0 && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400 shrink-0">计息基数</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>
+                                  {interestBaseRaw.toLocaleString(undefined, { maximumFractionDigits: 2 })} {_baseCur === 'CNY' ? '元' : 'U'}
+                                </span>
+                              </div>
+                            )}
+                            {showField('todayPrice') && !String(order.admin_note || '').includes('[已卖出]') && order.coin !== 'CNY' && order.coin !== 'USDT' && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-gray-400 shrink-0">当前币价</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>
+                                  {coinPrice ? coinPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U' : '---'}
+                                </span>
+                              </div>
+                            )}
                             {showField('buyDate') && order.buy_date && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400 shrink-0">开仓时间</span>
                                 <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
                               </div>
                             )}
-                            {showField('todayPrice') && !String(order.admin_note || '').includes('[已卖出]') && (
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-400 shrink-0">今日币价</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>
-                                  {coinPrice ? coinPrice.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
-                                </span>
-                              </div>
-                            )}
-                            {showField('currentValue') && !String(order.admin_note || '').includes('[已卖出]') && (
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-400 shrink-0">当前价值</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>
-                                  {coinPrice && coinQty ? (coinQty * coinPrice).toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '---'}
-                                </span>
-                              </div>
-                            )}
-
                             {showField('holdDuration') && holdingLabel && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400 shrink-0">持有时长</span>
