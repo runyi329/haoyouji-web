@@ -3316,9 +3316,9 @@ export default function CryptoPrediction() {
                                   <div className="flex items-baseline gap-0.5">
                                     <span
                                       className="text-2xl font-bold tabular-nums leading-tight"
-                                      style={{ color: unpaidInterest === 0 ? '#1A2340' : (String(order.interest_rate_annual || '').startsWith('-') ? '#059669' : '#DC2626'), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
+                                      style={{ color: unpaidInterest === 0 ? '#1A2340' : '#059669', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                                     >
-                                      {unpaidInterest === 0 ? '' : (String(order.interest_rate_annual || '').startsWith('-') ? '-' : '+')}{unpaidInterest.toFixed(2)}
+                                      {unpaidInterest === 0 ? '' : '-'}{unpaidInterest.toFixed(2)}
                                     </span>
                                     <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{_interestUnit}</span>
                                   </div>
@@ -3746,7 +3746,7 @@ export default function CryptoPrediction() {
                                               <span className="text-[10px]" style={{ color: '#3B82F6' }}>待结利息</span>
                                             </div>
                                             <div className="flex items-baseline gap-0.5">
-                                              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: unpaidInterest === 0 ? '#1A2340' : (String(order.interest_rate_annual || '').startsWith('-') ? '#059669' : '#DC2626'), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{unpaidInterest === 0 ? '' : (String(order.interest_rate_annual || '').startsWith('-') ? '-' : '+')}{unpaidInterest.toFixed(2)}</span>
+                                              <span className="text-2xl font-bold tabular-nums leading-tight"                                       style={{ color: unpaidInterest === 0 ? '#1A2340' : '#059669', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{unpaidInterest === 0 ? '' : '-'}{unpaidInterest.toFixed(2)}</span>
                                               <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{_interestUnit}</span>
                                             </div>
                                             <div className="text-xs font-medium leading-tight mb-1" style={{ color: '#4B5563' }}>≈{_convertAlt(unpaidInterest).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {_altUnit}</div>
