@@ -1043,6 +1043,31 @@ export default function LedgerDetailAA({
     return null;
   };
 
+  // 基于 YYYY-MM-DD 字符串判断是否为非交易日（节假日/周末，排除调休上班日），可跨月使用
+  const isNonTradingDateStr = (dateStr: string): boolean => {
+    if (MAKEUP_WORKDAYS_2026.has(dateStr)) return false;
+    if (HOLIDAY_MAP_2026[dateStr]) return true;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dow = new Date(y, m - 1, d).getDay();
+    return dow === 0 || dow === 6;
+  };
+
+  // 暂停标志应显示的日期：暂停日期当天；若当天为非交易日（周末/节假日），则顺延到下一个交易日
+  // 这样可保证暂停标志一定可见，不会被非交易日灰格覆盖
+  const pauseMarkDateStr: string | null = useMemo(() => {
+    if (!selectedTagPauseDate) return null;
+    const [y, m, d] = selectedTagPauseDate.split('-').map(Number);
+    if (!y || !m || !d) return null;
+    let cur = new Date(y, m - 1, d);
+    // 最多顺延 30 天，避免极端情况死循环
+    for (let i = 0; i < 30; i++) {
+      const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+      if (!isNonTradingDateStr(ds)) return ds;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return selectedTagPauseDate;
+  }, [selectedTagPauseDate]);
+
   // 点击日历格子：已有记录则跳转编辑，否则跳转新增
   const handleDayClick = (day: number) => {
     const dateStr = getDateStr(day);
@@ -1722,16 +1747,15 @@ export default function LedgerDetailAA({
                       const pauseDateStr = selectedTagPauseDate;
                       const endDateStr = selectedTagEndDate;
                       const dayDateStr2 = getDateStr(day);
-                      const isPauseDay = !isNonTrading && pauseDateStr && dayDateStr2 === pauseDateStr;
-                      const isPausedAfter = !isNonTrading && pauseDateStr && dayDateStr2 > pauseDateStr;
-                      const cellBg = isNonTrading
-                        ? '#F0F0F0'
-                        : isPauseDay ? '#1565C0'
+                      // 暂停标志显示在「暂停标志日」(暂停日，非交易日则顺延到下一交易日)那一格，即使该格本身是非交易日也强制显示蓝标
+                      const isPauseDay = pauseMarkDateStr && dayDateStr2 === pauseMarkDateStr;
+                      const isPausedAfter = !isPauseDay && !isNonTrading && pauseDateStr && dayDateStr2 > pauseDateStr;
+                      const cellBg = isPauseDay ? '#1565C0'
+                        : isNonTrading ? '#F0F0F0'
                         : isPausedAfter ? '#F0F0F0'
                         : todayMark ? '#FFF3E0' : '#F9F9F9';
-                      const cellBorder = isNonTrading
-                        ? '1px solid #E0E0E0'
-                        : isPauseDay ? '1.5px solid #1565C0'
+                      const cellBorder = isPauseDay ? '1.5px solid #1565C0'
+                        : isNonTrading ? '1px solid #E0E0E0'
                         : isPausedAfter ? '1px solid #E0E0E0'
                         : todayMark ? '1.5px solid #D32F2F' : '1px solid #F0F0F0';
                       const dayNumColor = isNonTrading
