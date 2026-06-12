@@ -550,7 +550,7 @@ function FinanceOrderCard({
               {/* 待结利息大数字 */}
               <div className="min-h-9 flex flex-col justify-center">
                 <div className="flex items-baseline gap-0.5">
-                  <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: displayAccrued === 0 ? '#1A2340' : (isGreenOrder ? (isNegRate ? '#059669' : '#DC2626') : '#DC2626'), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                  <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: displayAccrued === 0 ? '#1A2340' : '#059669', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
                     {isGreenOrder
                       ? (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+'))
                       : (displayAccrued > 0 ? '-' : '')}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
