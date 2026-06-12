@@ -3634,13 +3634,13 @@ export default function CryptoPrediction() {
                           <button
                             onClick={() => setMySettledExpanded(!mySettledExpanded)}
                             className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all"
-                            style={{ backgroundColor: '#F9FAFB', border: '1px solid #E5E7EB' }}
+                            style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5' }}
                           >
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium" style={{ color: '#6B7280' }}>自己的订单</span>
-                              <span className="text-xs" style={{ color: '#9CA3AF' }}>已结束 {mySettled.length} 笔</span>
+                              <span className="text-sm font-medium" style={{ color: '#DC2626' }}>自己的订单</span>
+                              <span className="text-xs" style={{ color: '#DC2626' }}>已结束 {mySettled.length} 笔</span>
                             </div>
-                            <ChevronDown className={`w-4 h-4 transition-transform ${mySettledExpanded ? 'rotate-180' : ''}`} style={{ color: '#9CA3AF' }} />
+                            <ChevronDown className={`w-4 h-4 transition-transform ${mySettledExpanded ? 'rotate-180' : ''}`} style={{ color: '#DC2626' }} />
                           </button>
                           {mySettledExpanded && (
                             <div className="space-y-3 mt-3">
@@ -3920,13 +3920,13 @@ export default function CryptoPrediction() {
                                   <button
                                     onClick={() => setSharedSettledExpanded(!sharedSettledExpanded)}
                                     className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all"
-                                    style={{ backgroundColor: '#F9FAFB', border: '1px solid #E5E7EB' }}
+                                    style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5' }}
                                   >
                                     <div className="flex items-center gap-2">
-                                      <span className="text-sm font-medium" style={{ color: '#6B7280' }}>共享订单</span>
-                                      <span className="text-xs" style={{ color: '#9CA3AF' }}>已结束 {sharedSettledList.length} 笔</span>
+                                      <span className="text-sm font-medium" style={{ color: '#DC2626' }}>共享订单</span>
+                                      <span className="text-xs" style={{ color: '#DC2626' }}>已结束 {sharedSettledList.length} 笔</span>
                                     </div>
-                                    <ChevronDown className={`w-4 h-4 transition-transform ${sharedSettledExpanded ? 'rotate-180' : ''}`} style={{ color: '#9CA3AF' }} />
+                                    <ChevronDown className={`w-4 h-4 transition-transform ${sharedSettledExpanded ? 'rotate-180' : ''}`} style={{ color: '#DC2626' }} />
                                   </button>
                                   {sharedSettledExpanded && (
                                     <div className="space-y-3 mt-3">
