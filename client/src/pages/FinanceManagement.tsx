@@ -319,6 +319,29 @@ function FinanceOrderCard({
     }
   }
 
+  // 解析外借资金
+  let lentOutAssets: { coin: string; qty: string }[] = [];
+  try {
+    const rawLA = order.lent_out_assets;
+    if (rawLA) {
+      const parsed = typeof rawLA === 'string' ? JSON.parse(rawLA) : rawLA;
+      if (Array.isArray(parsed)) lentOutAssets = parsed;
+    }
+  } catch {}
+
+  // 计算外借资金折算U值
+  let lentOutValueU = 0;
+  for (const la of lentOutAssets) {
+    const lq = parseFloat(la.qty);
+    if (!la.coin || isNaN(lq) || lq <= 0) continue;
+    if (la.coin === 'USDT') { lentOutValueU += lq; }
+    else if (la.coin === 'CNY') { lentOutValueU += lq / cnyRate; }
+    else {
+      const lp = livePrices[la.coin];
+      if (lp) { lentOutValueU += lq * lp; }
+    }
+  }
+
   // 风险敞口计算（计息基数统一折算为U）
   const interestBaseRaw = order.interest_base ? Number(order.interest_base) : totalU;
   const interestBaseNum = baseCur === 'CNY' ? interestBaseRaw / cnyRate : interestBaseRaw;
@@ -330,8 +353,8 @@ function FinanceOrderCard({
   const accruedInU = baseCur === 'CNY' ? accrued / cnyRate : accrued;
   const totalPaidInU = baseCur === 'CNY' ? totalPaid / cnyRate : totalPaid;
   const exposure = floatPnl !== null
-    ? collateralValue + floatPnl - accruedInU + totalPaidInU
-    : collateralValue - accruedInU + totalPaidInU;
+    ? collateralValue + floatPnl - accruedInU + totalPaidInU - lentOutValueU
+    : collateralValue - accruedInU + totalPaidInU - lentOutValueU;
   const isSufficient = exposure >= 0;
 
   return (
@@ -650,11 +673,11 @@ function FinanceOrderCard({
                 {/* 担保缺口计算弹窗（与资方担保缺口弹窗居中弹窗风格一致） */}
                 {/* 保证金率：担保物当前价値 ÷ 计息基数 x 100% */}
                 {orderDc.marginRate !== false && collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0 && (() => {
-                  // 新公式：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数（全部折算为U）
-                  const effectiveCollateral = floatPnl !== null
-                    ? collateralValue + floatPnl - accruedInU + totalPaidInU
-                    : collateralValue - accruedInU + totalPaidInU;
-                  const marginRatio = effectiveCollateral / interestBaseNum;
+                   // 新公式：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息 - 外借资金) ÷ 计息基数（全部折算为U）
+                   const effectiveCollateral = floatPnl !== null
+                     ? collateralValue + floatPnl - accruedInU + totalPaidInU - lentOutValueU
+                     : collateralValue - accruedInU + totalPaidInU - lentOutValueU;
+                   const marginRatio = effectiveCollateral / interestBaseNum;
                   const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
                   // 预警阈值判断
                   const alertThreshold = typeof orderDc.marginAlertThreshold === 'number' ? orderDc.marginAlertThreshold : null;
@@ -685,11 +708,11 @@ function FinanceOrderCard({
                             <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
                               {/* 公式说明 */}
                               <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 公式</div>
-                                <div>保证金率 = (担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100%</div>
+                              <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 公式</div>
+                                <div>保证金率 = (担保物市值 + 浮动盈亏 - 应付利息 + 已付利息{lentOutValueU > 0 ? ' - 外借资金' : ''}) ÷ 计息基数 × 100%</div>
                                 <div className="mt-1 font-mono text-[10px]">
-                                  <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ''} − {accruedInU.toFixed(2)} + {totalPaidInU.toFixed(2)}) ÷ {interestBaseNum.toFixed(2)} × 100% = </span>
-                                  <strong style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</strong>
+                                   <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ''} − {accruedInU.toFixed(2)} + {totalPaidInU.toFixed(2)}{lentOutValueU > 0 ? ` − ${lentOutValueU.toFixed(2)}` : ''}) ÷ {interestBaseNum.toFixed(2)} × 100% = </span>
+                                   <strong style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</strong>
                                 </div>
                               </div>
                               {/* 担保物明细 */}
@@ -789,13 +812,18 @@ function FinanceOrderCard({
                         {/* ③ 风险敞口 */}
                         <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
                           <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敞口</div>
-                          <div>担保物 + 浮动盈亏 − 待付利息 + 已付利息（正数充足，负数缺口）</div>
+                          <div>担保物 + 浮动盈亏 − 待付利息 + 已付利息{lentOutValueU > 0 ? ' − 外借资金' : ''}（正数充足，负数缺口）</div>
                           <div className="mt-1 font-mono">
                             {floatPnl !== null
-                              ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accruedInU.toFixed(2)} + {totalPaidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
-                              : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accruedInU.toFixed(2)} + {totalPaidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                              ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accruedInU.toFixed(2)} + {totalPaidInU.toFixed(2)}{lentOutValueU > 0 ? ` − ${lentOutValueU.toFixed(2)}` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                              : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accruedInU.toFixed(2)} + {totalPaidInU.toFixed(2)}{lentOutValueU > 0 ? ` − ${lentOutValueU.toFixed(2)}` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
                             }
                           </div>
+                          {lentOutValueU > 0 && (
+                            <div className="mt-1 text-xs" style={{ color: '#EA580C' }}>
+                              外借资金折算: {lentOutAssets.map(la => `${la.qty} ${la.coin}`).join(' + ')} = {lentOutValueU.toFixed(2)} U
+                            </div>
+                          )}
                           <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
                             {isSufficient
                               ? `担保物充足，还有 ${exposure.toFixed(2)} U 的余量空间`
@@ -1181,6 +1209,7 @@ const emptyForm = {
   collateralCoin: 'BTC' as CoinType,
   collateralQty: '',
   collateralAssets: [] as { coin: string; qty: string }[],
+  lentOutAssets: [] as { coin: string; qty: string }[],
   financeType: '保本分成' as '保本分成' | '自负盈亏',
   showProfitShare: true,
   commissionShare: '',
@@ -1528,6 +1557,22 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     return total;
   }, [formData.collateralAssets, formLivePrices]);
 
+  // 表单中外借资金的实时总价值（折算U）
+  const formComputedLentOutValue = useMemo(() => {
+    const validAssets = formData.lentOutAssets.filter(a => a.coin && a.qty !== '' && parseFloat(a.qty) > 0);
+    if (validAssets.length === 0) return 0;
+    let total = 0;
+    for (const a of validAssets) {
+      if (a.coin === 'USDT') { total += parseFloat(a.qty); }
+      else if (a.coin === 'CNY') { const cnyR = formLivePrices['CNY'] || 7.2; total += parseFloat(a.qty) / cnyR; }
+      else {
+        const p = formLivePrices[a.coin];
+        if (p) { total += p * parseFloat(a.qty); }
+      }
+    }
+    return total;
+  }, [formData.lentOutAssets, formLivePrices]);
+
   // 表单中融资本金（计息基数）
   const formComputedAmount = formData.interestBase ? parseFloat(formData.interestBase) : null;
 
@@ -1636,6 +1681,16 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         }
         return [];
       })(),
+      lentOutAssets: (() => {
+        try {
+          const rawLA = order.lent_out_assets;
+          if (rawLA) {
+            const parsed = typeof rawLA === 'string' ? JSON.parse(rawLA) : rawLA;
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+        } catch {}
+        return [];
+      })(),
       financeType: (order.finance_type || '保本分成') as '保本分成' | '自负盈亏',
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
       commissionShare: order.commission_share || '',
@@ -1706,6 +1761,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         collateralCoin: formData.collateralCoin || undefined,
         collateralQty: formData.collateralQty || undefined,
         collateralAssets: formData.collateralAssets,
+        lentOutAssets: formData.lentOutAssets.length > 0 ? formData.lentOutAssets : [],
         financeType: formData.financeType,
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
@@ -1747,6 +1803,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         collateralCoin: formData.collateralCoin || undefined,
         collateralQty: formData.collateralQty || undefined,
         collateralAssets: formData.collateralAssets.length > 0 ? formData.collateralAssets : undefined,
+        lentOutAssets: formData.lentOutAssets.length > 0 ? formData.lentOutAssets : undefined,
         financeType: formData.financeType,
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
@@ -2315,6 +2372,80 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                 </div>
               </div>
 
+              {/* 外借资金 */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-600">外借资金</label>
+                  {formData.lentOutAssets.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setFormData(d => ({ ...d, lentOutAssets: [{ coin: 'USDT', qty: '' }] }))}
+                      className="flex items-center gap-1 text-xs text-orange-600 font-medium"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> 添加外借资金
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setFormData(d => ({ ...d, lentOutAssets: [...d.lentOutAssets, { coin: 'USDT', qty: '' }] }))}
+                      className="flex items-center gap-1 text-xs text-orange-600 font-medium"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> 添加
+                    </button>
+                  )}
+                </div>
+                {formData.lentOutAssets.length === 0 && (
+                  <div className="text-xs text-gray-400 py-2 text-center border border-dashed border-orange-200 rounded-xl">无外借资金（如有借出资金请添加）</div>
+                )}
+                <div className="space-y-2">
+                  {formData.lentOutAssets.map((item, idx) => (
+                    <div key={idx} className="rounded-xl border border-orange-200 overflow-hidden">
+                      <div className="px-4 pt-3 pb-2">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs text-orange-500">外借币种 #{idx + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => setFormData(d => ({ ...d, lentOutAssets: d.lentOutAssets.filter((_, i) => i !== idx) }))}
+                            className="text-red-400 text-xs"
+                          >删除</button>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {COIN_OPTIONS.map(c => (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => setFormData(d => {
+                                const arr = [...d.lentOutAssets];
+                                arr[idx] = { ...arr[idx], coin: c };
+                                return { ...d, lentOutAssets: arr };
+                              })}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                                item.coin === c ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600'
+                              }`}
+                            >{c}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="px-4 py-3 border-t border-orange-100">
+                        <span className="text-xs text-orange-400 block mb-1.5">外借金额 ({item.coin})</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={item.qty}
+                          onChange={e => setFormData(d => {
+                            const arr = [...d.lentOutAssets];
+                            arr[idx] = { ...arr[idx], qty: e.target.value };
+                            return { ...d, lentOutAssets: arr };
+                          })}
+                          className="w-full bg-transparent text-base focus:outline-none"
+                          placeholder="如：50000"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-gray-100" />
                 <span className="text-xs text-gray-400 shrink-0">利息约定</span>
@@ -2840,9 +2971,9 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                               const marketValue = coinQty * coinPrice;
                               let gap: number | null = null;
                               if (formData.coin === 'USDT') {
-                                gap = formComputedCollateralValue - buyValue - unpaidInterest + totalPaid;
+                                gap = formComputedCollateralValue - buyValue - unpaidInterest + totalPaid - formComputedLentOutValue;
                               } else if (coinPrice > 0) {
-                                gap = marketValue + formComputedCollateralValue - buyValue - unpaidInterest + totalPaid;
+                                gap = marketValue + formComputedCollateralValue - buyValue - unpaidInterest + totalPaid - formComputedLentOutValue;
                               }
                               return gap !== null ? (
                                 <div className="flex items-center justify-between mt-0.5">
@@ -2870,8 +3001,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                                 : parseFloat(formData.amount || '0');
                               const previewFloatPnl = formData.coin === 'USDT' ? 0 : (previewCoinPrice > 0 ? previewMarketValue - previewBuyValue : null);
                               const previewEffective = previewFloatPnl !== null
-                                ? formComputedCollateralValue + previewFloatPnl - previewAccrued + previewTotalPaid
-                                : formComputedCollateralValue - previewAccrued + previewTotalPaid;
+                                ? formComputedCollateralValue + previewFloatPnl - previewAccrued + previewTotalPaid - formComputedLentOutValue
+                                : formComputedCollateralValue - previewAccrued + previewTotalPaid - formComputedLentOutValue;
                               const marginRatio = previewEffective / base;
                               const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
                               const previewAlertThreshold = marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? parseFloat(marginAlertThreshold) : null;
