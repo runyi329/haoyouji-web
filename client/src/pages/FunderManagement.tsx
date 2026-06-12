@@ -2234,7 +2234,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   value={formData.coin}
                   onChange={e => {
                     if (editingOrder && !editingOrder.participantInfo) return;
-                    setFormData(d => ({ ...d, coin: e.target.value }));
+                    setFormData(d => ({ ...d, coin: e.target.value as CoinType }));
                   }}
                   disabled={!!(editingOrder && !editingOrder.participantInfo)}
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
@@ -3176,6 +3176,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     const interestUnit = rateCur === 'CNY' ? '元' : 'U';
                     const rateStr = order.interest_rate_annual || '';
                     const rateAbs = rateStr ? parseFloat(rateStr).toFixed(0) : '';
+                    const dc = (() => { try { const raw = order.display_config; if (!raw) return null; return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; } })();
+                    const show = (key: string) => dc ? (dc[key] !== false) : true;
                     return (
                       <div key={order.id} className="bg-white rounded-2xl overflow-hidden" style={{ border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}>
                         {/* 帽子：标签行 */}

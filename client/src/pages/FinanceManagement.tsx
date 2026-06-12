@@ -1232,6 +1232,9 @@ const emptyForm = {
   financeType: '保本分成' as '保本分成' | '自负盈亏',
   showProfitShare: true,
   commissionShare: '',
+  commissionRate: '',
+  commissionBase: '',
+  commissionStartDate: '',
   assetType: '' as '' | 'stock' | 'crypto',
   ownerLabel: '',
   interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
@@ -1532,6 +1535,10 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     onSuccess: () => { toast.success('订单已更新'); refetchOrders(); closeForm(); },
     onError: (e) => toast.error(e.message),
   });
+  const updateParticipantConfigMutation = trpc.ledger.funderUpdateParticipantConfig.useMutation({
+    onSuccess: () => { toast.success('佣金配置已保存'); refetchOrders(); closeForm(); },
+    onError: (e) => toast.error(e.message),
+  });
 
   const deleteMutation = trpc.ledger.financeDeleteOrder.useMutation({
     onSuccess: () => { toast.success('订单已删除'); refetchOrders(); },
@@ -1712,6 +1719,9 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       assetType: (order.asset_type || '') as '' | 'stock' | 'crypto',
       ownerLabel: '',
       interestRateCurrency: (order.interest_rate_currency || 'USDT') as 'USDT' | 'CNY',
+      commissionRate: order.participantInfo?.commissionRate || '',
+      commissionBase: order.participantInfo?.commissionBase || '',
+      commissionStartDate: order.participantInfo?.commissionStartDate || '',
       tags: (() => {
         try {
           const t = order.tags;
@@ -1747,6 +1757,20 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   }
 
   function handleSubmit() {
+    // 受邀订单：仅保存佣金配置
+    if (editingOrder?.participantInfo) {
+      const participantUserId = editingOrder.participantInfo.userId ?? editingOrder.participantInfo.user_id;
+      if (!participantUserId) { toast.error('无法确定参与方用户ID'); return; }
+      updateParticipantConfigMutation.mutate({
+        orderId: editingOrder.id,
+        ledgerId,
+        userId: participantUserId,
+        commissionRate: formData.commissionRate || undefined,
+        commissionBase: formData.commissionBase || undefined,
+        commissionStartDate: formData.commissionStartDate || undefined,
+      });
+      return;
+    }
     if (!selectedUserId) { toast.error('请先选择要为哪位用户添加订单'); return; }
     if (!formData.coin) { toast.error('请选择币种'); return; }
     if (!formData.amount) { toast.error('请填写融资金额'); return; }
@@ -1987,7 +2011,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
           <div className="bg-white w-full max-w-lg rounded-t-3xl max-h-[92vh] flex flex-col overflow-hidden">
             <div className="flex-shrink-0 bg-white px-5 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-3xl">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>
-                {editingOrder ? '编辑融资订单' : '添加融资订单'}
+                {editingOrder?.participantInfo ? '受邀订单配置' : editingOrder ? '编辑订单' : '添加订单'}
               </h3>
               <button
                 onClick={closeForm}
@@ -1999,8 +2023,60 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
 
             <div className="px-5 py-4 space-y-5 overflow-y-auto overflow-x-hidden flex-1">
 
+              {/* 受邀订单：只读提示 */}
+              {editingOrder?.participantInfo && (
+                <div className="rounded-xl px-4 py-3 flex items-start gap-2" style={{ backgroundColor: '#ECFDF5', border: '1px solid #A7F3D0' }}>
+                  <span className="text-green-600 mt-0.5">\u2713</span>
+                  <div>
+                    <div className="text-sm font-medium text-green-800">受邀订单</div>
+                    <div className="text-xs text-green-600 mt-0.5">订单基础信息为只读，仅可配置佣金相关参数</div>
+                  </div>
+                </div>
+              )}
+
+              {/* 受邀订单专属：佣金配置区 */}
+              {editingOrder?.participantInfo && (
+                <div className="rounded-2xl p-4 space-y-4" style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                  <div className="text-sm font-semibold text-green-800 mb-1">佣金配置</div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">佣金率（%/年）</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={formData.commissionRate ?? ''}
+                        onChange={e => setFormData(d => ({ ...d, commissionRate: e.target.value }))}
+                        className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
+                        placeholder="如：1"
+                      />
+                      <span className="text-base font-medium text-gray-500 shrink-0">% / 年</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">计佣基数（USDT）<span className="text-xs text-gray-400 ml-1">默认=计息基数</span></label>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={formData.commissionBase ?? ''}
+                      onChange={e => setFormData(d => ({ ...d, commissionBase: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
+                      placeholder={formData.interestBase ? `默认：${formData.interestBase}` : '默认=计息基数'}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">计佣开始日期<span className="text-xs text-gray-400 ml-1">默认=计息开始日</span></label>
+                    <input
+                      type="date"
+                      value={formData.commissionStartDate ?? ''}
+                      onChange={e => setFormData(d => ({ ...d, commissionStartDate: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* 资产类型 */}
-              <div>
+              {!editingOrder?.participantInfo && (<div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">类型<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
                 <div className="flex gap-2">
                   {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }] as const).map(opt => (
@@ -2019,11 +2095,11 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     </button>
                   ))}
                 </div>
-              </div>
+              </div>)}
 
-              {/* 帽檐标签（可添加多个） */}
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">帽檐标签<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，可添加多个</span></label>
+              {/* 标签（可添加多个） */}
+              {!editingOrder?.participantInfo && (<div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">标签<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，可添加多个</span></label>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {formData.tags.map((tag, idx) => (
                     <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium" style={{ backgroundColor: '#E8F0FE', color: '#1A56DB' }}>
@@ -2063,10 +2139,10 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     添加
                   </button>
                 </div>
-              </div>
+              </div>)}
 
               {/* 用户 + 币种 同一行 */}
-              <div className="flex gap-3 items-start">
+              {!editingOrder?.participantInfo && (<div className="flex gap-3 items-start">
               {/* 选择用户 */}
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-600 mb-2">
@@ -2157,8 +2233,10 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                   ))}
                 </select>
               </div>
-              </div>
+              </div>)}
 
+              {/* 以下字段受邀订单时不显示 */}
+              {!editingOrder?.participantInfo && (<>
               {/* 融资金额 / 买入价格 / 买入数量 三字段联动 */}
               <div className="rounded-2xl border border-gray-200" style={{ overflow: 'visible' }}>
                 <div className="px-4 pt-3 pb-1">
@@ -2661,7 +2739,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                           { key: 'interestPaymentType', label: '付息方式' },
                           { key: 'aiIcon', label: 'AI图标（融资资产右上角）' },
                           { key: 'assetType', label: '资产类型（股票/数字币）' },
-                          { key: 'showOwnerName', label: '显示帽檐标签' },
+                          { key: 'showOwnerName', label: '显示标签' },
                         ].map(({ key, label }) => (
                           <div key={key} className="flex items-center justify-between">
                             <span className="text-sm text-gray-600">{label}</span>
@@ -3053,16 +3131,17 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
               </div>
             )}
 
+            </>)}
             </div>
 
             <div className="sticky bottom-0 bg-white px-5 py-4 border-t border-gray-100">
               <button
                 onClick={handleSubmit}
-                disabled={createMutation.isPending || updateMutation.isPending}
+                disabled={createMutation.isPending || updateMutation.isPending || updateParticipantConfigMutation.isPending}
                 className="w-full py-3.5 rounded-xl text-white font-semibold text-base disabled:opacity-50"
                 style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
               >
-                {(createMutation.isPending || updateMutation.isPending) ? '提交中...' : (editingOrder ? '保存修改' : '确认添加')}
+                {(createMutation.isPending || updateMutation.isPending || updateParticipantConfigMutation.isPending) ? '提交中...' : (editingOrder?.participantInfo ? '保存佣金配置' : editingOrder ? '保存修改' : '确认添加')}
               </button>
             </div>
           </div>
