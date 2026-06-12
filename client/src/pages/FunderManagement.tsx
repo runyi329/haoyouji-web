@@ -2922,7 +2922,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         {displayConfig.interestPaymentType && formData.interestPaymentType && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">付息方式</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>{formData.interestPaymentType === 'monthly_prepaid' ? '月付先付' : formData.interestPaymentType === 'monthly_postpaid' ? '月付后付' : formData.interestPaymentType === 'end_postpaid' ? '结束后付' : formData.interestPaymentType === 'quarterly' ? '季付' : formData.interestPaymentType === 'maturity' ? '到期付' : formData.interestPaymentType}</span>
+                            <span className="font-medium" style={{ color: '#4B5563' }}>{INTEREST_PAYMENT_OPTIONS.find(o => o.value === formData.interestPaymentType)?.label ?? formData.interestPaymentType}</span>
                           </div>
                         )}
                       </div>

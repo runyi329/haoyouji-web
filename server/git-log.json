@@ -1,5 +1,725 @@
 [
   {
+    "hash": "1ca2140cc73fa3e1168b4ad6ae362b92a3e74dd1",
+    "author": "deploy",
+    "date": "2026-06-12T13:10:05+00:00",
+    "message": "统一融资付息创建入口：右侧借方移除添加按钮，所有订单从左侧资方弹窗创建并按用户角色(owner/admin进资方/member进借方)自动归属；删除左侧归属用户块",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "统一融资付息创建入口：右侧借方移除添加按钮，所有订单从左侧资方弹窗创建并按用户角色(owner/admin进资方/member进借方)自动归属；删除左侧归属用户块"
+  },
+  {
+    "hash": "1a2996d4458b40044827421bad3d1cec466d2989",
+    "author": "deploy",
+    "date": "2026-06-12T12:52:34+00:00",
+    "message": "Merge branch 'main' of https://github.com/runyi329/haoyouji-web",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "Merge branch 'main' of https://github.com/runyi329/haoyouji-web"
+  },
+  {
+    "hash": "ee0e70eef6869907fffff7e8ff7bfee0308c2cea",
+    "author": "deploy",
+    "date": "2026-06-12T12:52:24+00:00",
+    "message": "融资订单融资金额计价货币与标的币种解耦，可独立选USDT/USD/CNY并持久化",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "融资订单融资金额计价货币与标的币种解耦，可独立选USDT/USD/CNY并持久化"
+  },
+  {
+    "hash": "58754b91a1e5cd8706604b8701f4316b9ddbba9f",
+    "author": "github-actions[bot]",
+    "date": "2026-06-12T12:46:45+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "e76043cecc5401a40323e7a8bac62aca206be52f",
+    "author": "dev",
+    "date": "2026-06-12T12:01:29+00:00",
+    "message": "fix: 暂停日落在非交易日(周末/节假日)时顺延到下一交易日显示蓝色暂停标志, 确保一定可见",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "暂停日落在非交易日(周末/节假日)时顺延到下一交易日显示蓝色暂停标志, 确保一定可见"
+  },
+  {
+    "hash": "cddd5ae0864580d2c654f6a1405dc512048f868c",
+    "author": "dev",
+    "date": "2026-06-12T11:55:27+00:00",
+    "message": "feat: 未暂停标签周期可点击显示开始日期到今天(北京时间), 概览天数用北京时间",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "未暂停标签周期可点击显示开始日期到今天(北京时间), 概览天数用北京时间"
+  },
+  {
+    "hash": "9846c5ff62b80a885424d79d0d39fc6e9437880a",
+    "author": "Manus",
+    "date": "2026-06-12T11:46:08+00:00",
+    "message": "feat: 在标签备注按钮和客户端分红/保证金金额旁显示已有备注条数",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "在标签备注按钮和客户端分红/保证金金额旁显示已有备注条数"
+  },
+  {
+    "hash": "4ae0ba33e125561434519920a5de21414273f65c",
+    "author": "deploy",
+    "date": "2026-06-12T11:24:31+00:00",
+    "message": "fix: 标签匹配改为精确相等，修复 612郭总8617P15 被误并入 郭总8617",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "标签匹配改为精确相等，修复 612郭总8617P15 被误并入 郭总8617"
+  },
+  {
+    "hash": "5c6f5833c5e4682e0de4573f58a6ae67aebe62be",
+    "author": "deploy",
+    "date": "2026-06-12T11:11:50+00:00",
+    "message": "feat: 保证金备注改为标签维度，客户端点击金额列查看",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "保证金备注改为标签维度，客户端点击金额列查看"
+  },
+  {
+    "hash": "3ffc3a1b266f513359d1bb1377eca53bce5cd429",
+    "author": "deploy",
+    "date": "2026-06-12T10:58:56+00:00",
+    "message": "feat: 备注输入框改为多行textarea，展示保留换行",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "备注输入框改为多行textarea，展示保留换行"
+  },
+  {
+    "hash": "ccb93f10a55533864def0595e6e766d08a200cab",
+    "author": "runyi329",
+    "date": "2026-06-12T10:38:45+00:00",
+    "message": "feat: 37号账本分红改为按标签两级分组+标签维度备注+标签内快捷加分红",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "37号账本分红改为按标签两级分组+标签维度备注+标签内快捷加分红"
+  },
+  {
+    "hash": "ee2bf8353e12e874dcd99cf6e1167f1d7cf62bef",
+    "author": "runyi329",
+    "date": "2026-06-12T10:06:42+00:00",
+    "message": "feat: 37号账本分红和保证金备注功能",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "37号账本分红和保证金备注功能"
+  },
+  {
+    "hash": "3811ac91d6489a424722775ace6a0738fbf81721",
+    "author": "github-actions[bot]",
+    "date": "2026-06-12T08:27:13+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "2db67ea0d83b2333e82930a7d90650d73b3b7566",
+    "author": "Manus",
+    "date": "2026-06-12T04:03:38+00:00",
+    "message": "feat: 统一添加/编辑订单表单 - 借方加受邀订单逻辑、标题改为添加订单、帽檐标签改为标签、financeCreate支持lentOutAssets",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "统一添加/编辑订单表单 - 借方加受邀订单逻辑、标题改为添加订单、帽檐标签改为标签、financeCreate支持lentOutAssets"
+  },
+  {
+    "hash": "df6f5ba854d80c4f89d605fbed08d1f6f0daa04f",
+    "author": "Manus",
+    "date": "2026-06-12T03:22:07+00:00",
+    "message": "refactor: 统一订单更新路径，废弃funderUpdateAssetOrder，全部使用financeUpdateOrder",
+    "type": "refactor",
+    "scope": "",
+    "cleanMessage": "统一订单更新路径，废弃funderUpdateAssetOrder，全部使用financeUpdateOrder"
+  },
+  {
+    "hash": "830ec81a62b63edb61637eaa355396d0aa947801",
+    "author": "Manus",
+    "date": "2026-06-12T03:01:25+00:00",
+    "message": "fix: 客户端卡片左栏字段与管理员端统一（新增计息基数、今日币价改当前币价、添加≈U折算、移除当前价值独立行）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "客户端卡片左栏字段与管理员端统一（新增计息基数、今日币价改当前币价、添加≈U折算、移除当前价值独立行）"
+  },
+  {
+    "hash": "fe9180801f2851e3111468d2e01e31000b58da82",
+    "author": "Manus",
+    "date": "2026-06-12T02:52:12+00:00",
+    "message": "fix: 客户端待结利息统一显示为绿色负数（与管理员端一致）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "客户端待结利息统一显示为绿色负数（与管理员端一致）"
+  },
+  {
+    "hash": "9fa41df771ecff7f8a031f50be6f538423fb3e68",
+    "author": "Manus",
+    "date": "2026-06-12T02:28:40+00:00",
+    "message": "feat: 下拉框和用户显示统一改为 username (realName) 格式",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "下拉框和用户显示统一改为 username (realName) 格式"
+  },
+  {
+    "hash": "62aca37767bcbdb44818d827420f21e031c9335a",
+    "author": "Manus",
+    "date": "2026-06-12T02:14:04+00:00",
+    "message": "fix: financeUpdateOrder路由缺少lentOutAssets字段导致外借资金无法保存",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "financeUpdateOrder路由缺少lentOutAssets字段导致外借资金无法保存"
+  },
+  {
+    "hash": "41ca007001319d1e5326916f8b54da06bad082c0",
+    "author": "Manus",
+    "date": "2026-06-12T02:04:59+00:00",
+    "message": "fix: 担保缺口弹窗新增③外借资金明细区块，风险敞口公式编号动态调整为④",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "担保缺口弹窗新增③外借资金明细区块，风险敞口公式编号动态调整为④"
+  },
+  {
+    "hash": "f66d215854fa98b3ad8c0f2c9a33fa9aedb94711",
+    "author": "Manus",
+    "date": "2026-06-12T01:59:37+00:00",
+    "message": "feat: P095新增外借资金功能（lent_out_assets），风险敞口和保证金率计算减去外借资金折算U值",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "P095新增外借资金功能（lent_out_assets），风险敞口和保证金率计算减去外借资金折算U值"
+  },
+  {
+    "hash": "cf08aa44d3e84dfb1ce5a425993e8a19892bc769",
+    "author": "Manus",
+    "date": "2026-06-12T01:41:47+00:00",
+    "message": "fix: P095担保缺口计算统一折算为U（CNY计息基数/利息除以cnyRate）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "P095担保缺口计算统一折算为U（CNY计息基数/利息除以cnyRate）"
+  },
+  {
+    "hash": "357fa2f33eb278ddaa929621f08333a2d28a1c8a",
+    "author": "Manus",
+    "date": "2026-06-12T01:27:22+00:00",
+    "message": "fix(P095): 待付/待结利息统一显示绿色（负数=绿色）",
+    "type": "fix",
+    "scope": "P095",
+    "cleanMessage": "待付/待结利息统一显示绿色（负数=绿色）"
+  },
+  {
+    "hash": "b89de9c8803ab43d386b7a7599f469d6a949f3cf",
+    "author": "Manus",
+    "date": "2026-06-12T00:58:47+00:00",
+    "message": "fix(FinanceManagement): 去掉订单卡片头部的订单号显示",
+    "type": "fix",
+    "scope": "FinanceManagement",
+    "cleanMessage": "去掉订单卡片头部的订单号显示"
+  },
+  {
+    "hash": "b7717777d889e0f726ab8c78f9411ad0a0e18106",
+    "author": "Manus",
+    "date": "2026-06-12T00:56:42+00:00",
+    "message": "fix(FinanceManagement): 融资借款订单待付利息也显示红色",
+    "type": "fix",
+    "scope": "FinanceManagement",
+    "cleanMessage": "融资借款订单待付利息也显示红色"
+  },
+  {
+    "hash": "c920dde3e61065619b77f5eee5a96036ff6c67c5",
+    "author": "Manus",
+    "date": "2026-06-12T00:50:54+00:00",
+    "message": "feat(wcOdds): 删除订单改为可选退款+简化确认流程",
+    "type": "feat",
+    "scope": "wcOdds",
+    "cleanMessage": "删除订单改为可选退款+简化确认流程"
+  },
+  {
+    "hash": "0832633c79fca1f38198c31641c2ecc46d09aca8",
+    "author": "Manus",
+    "date": "2026-06-12T00:21:06+00:00",
+    "message": "feat(wcOdds): k值保护改为方案B - 扣款不变，潜在回报缩水",
+    "type": "feat",
+    "scope": "wcOdds",
+    "cleanMessage": "k值保护改为方案B - 扣款不变，潜在回报缩水"
+  },
+  {
+    "hash": "9c4df4b49093d5312bb21d8fe756c529e3004a49",
+    "author": "Manus",
+    "date": "2026-06-11T23:52:38+00:00",
+    "message": "fix(wcOddsScraper): 修复球队名解析逻辑，从img alt属性提取名称",
+    "type": "fix",
+    "scope": "wcOddsScraper",
+    "cleanMessage": "修复球队名解析逻辑，从img alt属性提取名称"
+  },
+  {
+    "hash": "0b5cddbd5a21d7ebeaf78e2120c4c15737945764",
+    "author": "Manus",
+    "date": "2026-06-11T23:08:43+00:00",
+    "message": "feat(P011): 更新世界杯赛果 - 墨西哥2:0南非揭幕战",
+    "type": "feat",
+    "scope": "P011",
+    "cleanMessage": "更新世界杯赛果 - 墨西哥2:0南非揭幕战"
+  },
+  {
+    "hash": "08af64ffbb36d82652278b3a9a5b2b4b4446d7b1",
+    "author": "Manus",
+    "date": "2026-06-11T22:53:24+00:00",
+    "message": "fix: 增加Node内存限制防止Vite构建OOM，构建失败时中止部署",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "增加Node内存限制防止Vite构建OOM，构建失败时中止部署"
+  },
+  {
+    "hash": "844499e1f420e47b81e2671aeea955b0b2e56fb1",
+    "author": "github-actions[bot]",
+    "date": "2026-06-11T18:46:41+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "e96e284b04dd51d90d7c89a5b0b8943e803b400b",
+    "author": "Manus",
+    "date": "2026-06-11T16:18:17+00:00",
+    "message": "feat(P050): 按人员Tab显示用户钱包余额",
+    "type": "feat",
+    "scope": "P050",
+    "cleanMessage": "按人员Tab显示用户钱包余额"
+  },
+  {
+    "hash": "9ce658bdb65a2e5009731bc7573ec42c946f8ef4",
+    "author": "Manus",
+    "date": "2026-06-11T16:10:07+00:00",
+    "message": "feat(P050): 按人员Tab收缩状态显示各币种持仓数量和折后数量",
+    "type": "feat",
+    "scope": "P050",
+    "cleanMessage": "按人员Tab收缩状态显示各币种持仓数量和折后数量"
+  },
+  {
+    "hash": "e98fd5c0b0c9d1108598cb280f8c6a63099d6ece",
+    "author": "Manus",
+    "date": "2026-06-11T14:44:23+00:00",
+    "message": "feat(P050): 重新设计删除弹窗 - 支持选择删除范围和退款选项",
+    "type": "feat",
+    "scope": "P050",
+    "cleanMessage": "重新设计删除弹窗 - 支持选择删除范围和退款选项"
+  },
+  {
+    "hash": "c8dd98290c7a597774fc0c2cedac62f09e69d1a7",
+    "author": "Manus",
+    "date": "2026-06-11T14:32:04+00:00",
+    "message": "feat(P050): 添加搜索订单和删除订单功能",
+    "type": "feat",
+    "scope": "P050",
+    "cleanMessage": "添加搜索订单和删除订单功能"
+  },
+  {
+    "hash": "4f699d8994e95184d5189e76b65945114464fc2f",
+    "author": "github-actions[bot]",
+    "date": "2026-06-11T13:47:12+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "b82e58e81c56fa465679c833521a66cb4cff19a4",
+    "author": "runyi329",
+    "date": "2026-06-11T13:40:40+00:00",
+    "message": "fix(AfOrderManage): 修复孤儿赠单统计遗漏",
+    "type": "fix",
+    "scope": "AfOrderManage",
+    "cleanMessage": "修复孤儿赠单统计遗漏"
+  },
+  {
+    "hash": "81e4940bc5bb0ba01c70c010ddf8293f8d8bf0ec",
+    "author": "runyi329",
+    "date": "2026-06-11T13:26:18+00:00",
+    "message": "feat(Recharge): 添加OKX内部转账重要提示",
+    "type": "feat",
+    "scope": "Recharge",
+    "cleanMessage": "添加OKX内部转账重要提示"
+  },
+  {
+    "hash": "deb44aa248b10bf82b82bc01c139da0def1b25bb",
+    "author": "runyi329",
+    "date": "2026-06-11T12:58:31+00:00",
+    "message": "refactor(AfOrderManage): 按币种Tab标题改为显示总币数、折后权益、折扣率",
+    "type": "refactor",
+    "scope": "AfOrderManage",
+    "cleanMessage": "按币种Tab标题改为显示总币数、折后权益、折扣率"
+  },
+  {
+    "hash": "b2dc0dbb15d9211a61ec33801b75ad017767eafd",
+    "author": "runyi329",
+    "date": "2026-06-11T12:50:58+00:00",
+    "message": "fix(AfOrderManage): 持仓中筛选排除已卖出订单，与蓝色区域口径一致",
+    "type": "fix",
+    "scope": "AfOrderManage",
+    "cleanMessage": "持仓中筛选排除已卖出订单，与蓝色区域口径一致"
+  },
+  {
+    "hash": "6b45f17f83bfa7a26075e8c1495022e02c023e9f",
+    "author": "runyi329",
+    "date": "2026-06-11T11:02:29+00:00",
+    "message": "feat(AfOrderManage): 新增按币种和按价格两个分组维度Tab",
+    "type": "feat",
+    "scope": "AfOrderManage",
+    "cleanMessage": "新增按币种和按价格两个分组维度Tab"
+  },
+  {
+    "hash": "21a30549f6a23f10e69ec8771cf8e68636f9ae64",
+    "author": "runyi329",
+    "date": "2026-06-11T10:47:38+00:00",
+    "message": "refactor(AfOrderManage): 人员维度改为紧凑单行列表+勾选筛选",
+    "type": "refactor",
+    "scope": "AfOrderManage",
+    "cleanMessage": "人员维度改为紧凑单行列表+勾选筛选"
+  },
+  {
+    "hash": "239f7a77cb3783a508fee6846db57201e18b555e",
+    "author": "runyi329",
+    "date": "2026-06-11T10:36:57+00:00",
+    "message": "feat(AfOrderManage): 添加按时间/按人员分组维度Tab切换",
+    "type": "feat",
+    "scope": "AfOrderManage",
+    "cleanMessage": "添加按时间/按人员分组维度Tab切换"
+  },
+  {
+    "hash": "1c133016971b3699553b6a341d242f575d053c33",
+    "author": "runyi329",
+    "date": "2026-06-11T09:41:53+00:00",
+    "message": "统一参与方订单显示逻辑：绿色订单和创建者订单显示完全一致",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "统一参与方订单显示逻辑：绿色订单和创建者订单显示完全一致"
+  },
+  {
+    "hash": "742f7fe9541c7c98155835534a9e7ffd71dc02bf",
+    "author": "github-actions[bot]",
+    "date": "2026-06-11T08:48:31+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "2dcbdbb05e015a5cf57bc19c1a8392bbddfd46b2",
+    "author": "runyi329",
+    "date": "2026-06-11T08:38:34+00:00",
+    "message": "fix: 右侧借方页面绿色订单（参与方/共享订单）隐藏编辑按钮和参与方按钮",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "右侧借方页面绿色订单（参与方/共享订单）隐藏编辑按钮和参与方按钮"
+  },
+  {
+    "hash": "5021f952a6f1fe4f494b2acadc50c190aa824c75",
+    "author": "runyi329",
+    "date": "2026-06-11T08:13:51+00:00",
+    "message": "fix: 待结利息标题保持蓝色，已结利息灰色，仅待结数字红/绿/黑",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "待结利息标题保持蓝色，已结利息灰色，仅待结数字红/绿/黑"
+  },
+  {
+    "hash": "e0aea7d4a2a18f17860a39f0be0520e5999e4a8e",
+    "author": "runyi329",
+    "date": "2026-06-11T08:06:16+00:00",
+    "message": "fix: 利息颜色修正为收=红付=绿，待结利息加正负号前缀",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "利息颜色修正为收=红付=绿，待结利息加正负号前缀"
+  },
+  {
+    "hash": "016cc16aab11c2b0f79b6fcd48848c2fb57b6ad8",
+    "author": "runyi329",
+    "date": "2026-06-11T07:57:05+00:00",
+    "message": "fix: 下拉框过滤掉没有订单的成员",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "下拉框过滤掉没有订单的成员"
+  },
+  {
+    "hash": "9792be62333f1726ec63daa628f5fb433edb2f3e",
+    "author": "runyi329",
+    "date": "2026-06-11T07:45:08+00:00",
+    "message": "feat: 利率正负收付选择，利息颜色绿收红付（全端统一）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "利率正负收付选择，利息颜色绿收红付（全端统一）"
+  },
+  {
+    "hash": "1ab5b69e0be859175572df42ffc45e0be566a380",
+    "author": "runyi329",
+    "date": "2026-06-11T04:42:42+00:00",
+    "message": "feat: 融资付息订单去掉登记时间显示；编辑表单买入日期改为开仓日期",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "融资付息订单去掉登记时间显示；编辑表单买入日期改为开仓日期"
+  },
+  {
+    "hash": "388ee531538a2ac454727d65a444713ef4aaa4ee",
+    "author": "runyi329",
+    "date": "2026-06-11T04:33:36+00:00",
+    "message": "style: 计息日期格式统一为YYYY-MM-DD；待收利息/已收利息统一改为待结利息/已结利息",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "计息日期格式统一为YYYY-MM-DD；待收利息/已收利息统一改为待结利息/已结利息"
+  },
+  {
+    "hash": "ed11c8ce711eddaf0c743893e85bf7da593cb402",
+    "author": "runyi329",
+    "date": "2026-06-11T04:23:10+00:00",
+    "message": "feat: 新增计息时长独立开关(interestDuration)，与左栏持有时长(holdDuration)分开控制；右栏计息时长从interestStartDate计算；同步到管理端卡片、LedgerDetail和CryptoPrediction用户前端",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "新增计息时长独立开关(interestDuration)，与左栏持有时长(holdDuration)分开控制；右栏计息时长从interestStartDate计算；同步到管理端卡片、LedgerDetail和CryptoPrediction用户前端"
+  },
+  {
+    "hash": "a277674fce84d16e4c2ea85c6291523c1f4c0463",
+    "author": "runyi329",
+    "date": "2026-06-11T04:03:21+00:00",
+    "message": "fix: 用户前端showOwnerName去掉isParticipant限制，开关打开即显示所有者名字",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "用户前端showOwnerName去掉isParticipant限制，开关打开即显示所有者名字"
+  },
+  {
+    "hash": "df5e608bd4117edba5319b4d4a6805071937bea6",
+    "author": "runyi329",
+    "date": "2026-06-11T03:41:15+00:00",
+    "message": "feat: 实时预览卡片中显示标签(tags)，添加标签后立即可在预览中看到",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "实时预览卡片中显示标签(tags)，添加标签后立即可在预览中看到"
+  },
+  {
+    "hash": "414008aff95867cd5dd498ad7d7d56b45ec1cac6",
+    "author": "runyi329",
+    "date": "2026-06-11T03:29:26+00:00",
+    "message": "fix: 成员下拉框改为显示 username (注册昵称name)，而非账本nickname",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "成员下拉框改为显示 username (注册昵称name)，而非账本nickname"
+  },
+  {
+    "hash": "18726caaf2a88ab10431b60ccf8cb48f0f5bd516",
+    "author": "runyi329",
+    "date": "2026-06-11T03:26:53+00:00",
+    "message": "feat: 成员下拉框同时显示用户名和昵称，格式为 username (nickname)，方便区分相似名字",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "成员下拉框同时显示用户名和昵称，格式为 username (nickname)，方便区分相似名字"
+  },
+  {
+    "hash": "1d4e7a56a4b44c7c4b18324b45ea7f7681c097f8",
+    "author": "runyi329",
+    "date": "2026-06-11T03:15:33+00:00",
+    "message": "feat: 资方页面支持为所有账本成员创建订单，根据成员角色自动设置order_role，非funder角色订单显示在借方页面；下拉框改为全部成员",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "资方页面支持为所有账本成员创建订单，根据成员角色自动设置order_role，非funder角色订单显示在借方页面；下拉框改为全部成员"
+  },
+  {
+    "hash": "d008f66466adc01c964609738cd331daebf0ef23",
+    "author": "runyi329",
+    "date": "2026-06-11T02:42:24+00:00",
+    "message": "feat: FinanceManagement页面新增付息方式(interestPaymentType)开关，与FunderManagement保持一致",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "FinanceManagement页面新增付息方式(interestPaymentType)开关，与FunderManagement保持一致"
+  },
+  {
+    "hash": "6c8352cc59ceee31524e81d8f48dd96448e61c46",
+    "author": "runyi329",
+    "date": "2026-06-11T02:25:57+00:00",
+    "message": "fix: FunderManagement中showField改为show，修复前端报错Can't find variable: showField",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "FunderManagement中showField改为show，修复前端报错Can't find variable: showField"
+  },
+  {
+    "hash": "08bea40fc7a14fc2047dd8a2b4f0d212d91cc59f",
+    "author": "runyi329",
+    "date": "2026-06-11T02:17:10+00:00",
+    "message": "feat: 新增付息方式displayConfig开关，前后端联动显示/隐藏",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "新增付息方式displayConfig开关，前后端联动显示/隐藏"
+  },
+  {
+    "hash": "27e7cdcf4da6b3f702c6e3aa5aa26c9514c40fce",
+    "author": "runyi329",
+    "date": "2026-06-11T02:04:03+00:00",
+    "message": "fix: displayConfig开关联动 - myOrders担保缺口加showField(collateral), sharedOrders担保货币/价值/缺口加showField控制",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "displayConfig开关联动 - myOrders担保缺口加showField(collateral), sharedOrders担保货币/价值/缺口加showField控制"
+  },
+  {
+    "hash": "bbed41453dcddff36dd7676ee216564c39e0bea9",
+    "author": "runyi329",
+    "date": "2026-06-11T01:49:23+00:00",
+    "message": "fix: formatCoinQty系列函数qty=0时返回'0'而非空字符串（修复数字币订单金额为0时显示空的问题）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "formatCoinQty系列函数qty=0时返回'0'而非空字符串（修复数字币订单金额为0时显示空的问题）"
+  },
+  {
+    "hash": "a5d310bd65e088f211f252159fa7140c4c152d03",
+    "author": "runyi329",
+    "date": "2026-06-11T01:42:32+00:00",
+    "message": "fix: 融资金额为0时显示0而非横杠（所有页面统一）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "融资金额为0时显示0而非横杠（所有页面统一）"
+  },
+  {
+    "hash": "f8fc571caf964ad4cc041f8713d3ad53a567148b",
+    "author": "runyi329",
+    "date": "2026-06-11T01:27:12+00:00",
+    "message": "fix: 共享订单卡片右侧添加担保货币/担保价值/担保缺口显示（与myOrders保持一致）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "共享订单卡片右侧添加担保货币/担保价值/担保缺口显示（与myOrders保持一致）"
+  },
+  {
+    "hash": "8438e95ffeffb27bb60faa13184dbcd81fb90a3c",
+    "author": "runyi329",
+    "date": "2026-06-11T01:06:41+00:00",
+    "message": "fix: AF波比自动继承 - 新人加入时继承邀请人完整波比配置",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "AF波比自动继承 - 新人加入时继承邀请人完整波比配置"
+  },
+  {
+    "hash": "72c1dfc8fc41082a76c54bcc02834b0e6a9d2ed6",
+    "author": "runyi329",
+    "date": "2026-06-11T00:13:22+00:00",
+    "message": "fix: PositionCalc止盈价变化时自动同步到数据库，确保P155读取最新值",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "PositionCalc止盈价变化时自动同步到数据库，确保P155读取最新值"
+  },
+  {
+    "hash": "9db39edda3a5b75053482e610d00eac7b38a3344",
+    "author": "runyi329",
+    "date": "2026-06-11T00:07:20+00:00",
+    "message": "fix: 修复Cannot access Ee before initialization错误",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复Cannot access Ee before initialization错误"
+  },
+  {
+    "hash": "4e7bae5a747af66841ea27762dbf2d372be07cbd",
+    "author": "runyi329",
+    "date": "2026-06-11T00:01:37+00:00",
+    "message": "feat: P155止盈价联动智能仓位管理 + 默认/手动按钮切换交互",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "P155止盈价联动智能仓位管理 + 默认/手动按钮切换交互"
+  },
+  {
+    "hash": "7db82383c800453d899e486fc6eefd9dc204064c",
+    "author": "runyi329",
+    "date": "2026-06-10T23:34:00+00:00",
+    "message": "fix: P155 ETH数量统计改为整数显示避免换行",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "P155 ETH数量统计改为整数显示避免换行"
+  },
+  {
+    "hash": "4ffc922902e4acdf7d7a34a64033763e278430a3",
+    "author": "runyi329",
+    "date": "2026-06-10T23:29:40+00:00",
+    "message": "feat: P155持仓汇总增加ETH数量统计(合约/现货/期权/全部ETH)",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "P155持仓汇总增加ETH数量统计(合约/现货/期权/全部ETH)"
+  },
+  {
+    "hash": "64fb131c2b0fdf05626db283e4a08e11c171a5b1",
+    "author": "runyi329",
+    "date": "2026-06-10T23:19:54+00:00",
+    "message": "feat: P155持仓汇总增加类型统计(合约/现货/期权/合计)",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "P155持仓汇总增加类型统计(合约/现货/期权/合计)"
+  },
+  {
+    "hash": "bc70cfc357cb0db7cd9bcd148208b6409d57b42f",
+    "author": "runyi329",
+    "date": "2026-06-10T23:13:52+00:00",
+    "message": "feat: P155订单流管理添加期权类型 - 新增期权选项(永续/现货/期权) - 期权订单支持到期日期和权利金字段 - 卡片显示到期倒计时天数(3天内红色警告) - 期权盈亏计算: 低于开仓价固定亏损权利金, 高于开仓价正常计算 - 后端addOrder/updateOrder支持expiryDate和premium字段",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "P155订单流管理添加期权类型 - 新增期权选项(永续/现货/期权) - 期权订单支持到期日期和权利金字段 - 卡片显示到期倒计时天数(3天内红色警告) - 期权盈亏计算: 低于开仓价固定亏损权利金, 高于开仓价正常计算 - 后端addOrder/updateOrder支持expiryDate和premium字段"
+  },
+  {
+    "hash": "61061c4d76a859b4abca5c0ed3fb67dee9d2a715",
+    "author": "runyi329",
+    "date": "2026-06-10T22:42:45+00:00",
+    "message": "feat(bottomnav): 为用户4957372添加牙伴logo中间按钮",
+    "type": "feat",
+    "scope": "bottomnav",
+    "cleanMessage": "为用户4957372添加牙伴logo中间按钮"
+  },
+  {
+    "hash": "137df7c50690c7fa2dc7e29b62e457916f1e1034",
+    "author": "github-actions[bot]",
+    "date": "2026-06-10T18:30:44+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "d7955aae53373f46665e23dfdcc28f7e4b81c71c",
+    "author": "runyi329",
+    "date": "2026-06-10T17:10:55+00:00",
+    "message": "fix(yaban): 修复患者列表页Unicode编码显示问题，优化标签样式",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "修复患者列表页Unicode编码显示问题，优化标签样式"
+  },
+  {
+    "hash": "7fe2f10b67d68ed6084560683ab4f3eb81683a0a",
+    "author": "runyi329",
+    "date": "2026-06-10T17:02:54+00:00",
+    "message": "feat(yaban): 新增患者列表页，首页患者入口跳转到列表页",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "新增患者列表页，首页患者入口跳转到列表页"
+  },
+  {
+    "hash": "ba827a8bca6670c4ad006fe52bd6a1e7ad5f5271",
+    "author": "runyi329",
+    "date": "2026-06-10T16:54:04+00:00",
+    "message": "feat(yaban): 首页右上角添加强制刷新按钮",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "首页右上角添加强制刷新按钮"
+  },
+  {
+    "hash": "5841245763c5538fd98840ff3d061690d058f7da",
+    "author": "runyi329",
+    "date": "2026-06-10T16:50:25+00:00",
+    "message": "feat(yaban): 新增患者详情页和随访详情页",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "新增患者详情页和随访详情页"
+  },
+  {
+    "hash": "6e67ec16f7efcbc60ccce33fda0474004fc824cf",
+    "author": "runyi329",
+    "date": "2026-06-10T16:26:03+00:00",
+    "message": "fix(yaban): 删除功能推荐横幅后面的文字",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "删除功能推荐横幅后面的文字"
+  },
+  {
     "hash": "858d7509a0185d25f6a6835fb595c562ab2efef4",
     "author": "runyi329",
     "date": "2026-06-10T16:22:02+00:00",
