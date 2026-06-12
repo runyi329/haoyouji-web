@@ -673,14 +673,14 @@ export default function LedgerAADividendManage() {
 
             <div className="px-4 py-4 overflow-y-auto" style={{ maxHeight: '50vh' }}>
               {/* 添加新备注 */}
-              <div className="flex gap-2 mb-4">
-                <input
-                  type="text"
-                  placeholder="输入备注内容"
+              <div className="flex gap-2 mb-4 items-start">
+                <textarea
+                  placeholder="输入备注内容（可输入多行）"
                   value={newNoteContent}
                   onChange={e => setNewNoteContent(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-xl text-sm outline-none border"
-                  style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
+                  rows={3}
+                  className="flex-1 px-3 py-2 rounded-xl text-sm outline-none border resize-y"
+                  style={{ borderColor: '#E0E0E0', color: '#1A1A1A', minHeight: 72, lineHeight: 1.5 }}
                 />
                 <button
                   onClick={() => {
@@ -688,7 +688,7 @@ export default function LedgerAADividendManage() {
                     addNoteMutation.mutate({ ledgerId, userId: showNoteModal.userId, tagName: showNoteModal.tagName, type: 'dividend', content: newNoteContent.trim() });
                   }}
                   disabled={addNoteMutation.isPending}
-                  className="px-4 py-2 rounded-xl text-sm font-medium"
+                  className="px-4 py-2 rounded-xl text-sm font-medium flex-shrink-0"
                   style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
                 >
                   添加
@@ -706,7 +706,7 @@ export default function LedgerAADividendManage() {
                         <div className="text-xs" style={{ color: '#9E9E9E' }}>
                           {new Date(note.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
                         </div>
-                        <div className="text-sm mt-0.5" style={{ color: '#1A1A1A' }}>{note.content}</div>
+                        <div className="text-sm mt-0.5" style={{ color: '#1A1A1A', whiteSpace: 'pre-wrap' }}>{note.content}</div>
                       </div>
                       <button
                         onClick={() => {

@@ -3361,7 +3361,7 @@ export default function LedgerDetailAA({
                       <div className="text-xs" style={{ color: '#9E9E9E' }}>
                         {new Date(note.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
                       </div>
-                      <div className="text-sm mt-0.5" style={{ color: '#1A1A1A' }}>{note.content}</div>
+                      <div className="text-sm mt-0.5" style={{ color: '#1A1A1A', whiteSpace: 'pre-wrap' }}>{note.content}</div>
                     </div>
                   ))}
                 </div>
@@ -3397,7 +3397,7 @@ export default function LedgerDetailAA({
                       <div className="text-xs" style={{ color: '#9E9E9E' }}>
                         {new Date(note.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
                       </div>
-                      <div className="text-sm mt-0.5" style={{ color: '#1A1A1A' }}>{note.content}</div>
+                      <div className="text-sm mt-0.5" style={{ color: '#1A1A1A', whiteSpace: 'pre-wrap' }}>{note.content}</div>
                     </div>
                   ))}
                 </div>
