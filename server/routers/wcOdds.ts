@@ -592,6 +592,7 @@ export const wcOddsRouter = router({
       orderId: z.number().int().positive(),
       status: z.enum(['pending', 'won', 'lost', 'revoked', 'deleted']),
       bonusAmount: z.string().optional(), // 中奖时必填实际奖金
+      refund: z.boolean().optional(), // 删除时是否退回投注金额（默认false）
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -694,10 +695,10 @@ export const wcOddsRouter = router({
         }
       }
 
-      // 删除订单的钉包规则：
-      // 规则A：已中奖订单删除 → 自动从用户钉包扣回奖金（防止奖金白拿）
-      // 规则B：进行中订单删除 → 自动退回投注金额（订单作废撤单）
-      // 规则C：未中奖订单删除 → 不退款（已输的赔注不退）
+      // 删除订单的钱包规则：
+      // 规则A：已中奖订单删除 → 自动从用户钱包扣回奖金（防止奖金白拿）
+      // 规则B：管理员勾选退款时 → 退回投注金额（默认不退）
+      // 规则C：未勾选退款 → 不退款
       if (input.status === 'deleted') {
         const currency = orderRow.currency as string;
 
@@ -734,8 +735,8 @@ export const wcOddsRouter = router({
           }
         }
 
-        // 规则B：进行中 → 删除，退回投注金额
-        if (orderRow.status === 'pending') {
+        // 规则B：管理员勾选退款时，退回投注金额
+        if (input.refund === true) {
           const [amtRows] = await db
             .select({ amount: wcOrders.amount })
             .from(wcOrders)
@@ -774,7 +775,7 @@ export const wcOddsRouter = router({
             }
           }
         }
-        // 规则C：未中奖(lost)/已撤销(revoked) → 删除，不动钉包
+        // 规则C：未勾选退款 → 不退款
       }
 
       // 删除 → 恢复进行中：需要重新占用投注金额，先检查用户余额是否足够
