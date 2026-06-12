@@ -375,6 +375,17 @@ export default function LedgerDetailAA({
     { ledgerId, type: 'margin' as const, tagName: marginNoteTag ?? '', viewAsUserId: viewAsUserId ?? undefined },
     { enabled: !!ledgerId && !!marginNoteTag }
   );
+  // 各标签备注数量（用于在分红/金额旁显示条数）
+  const { data: dividendNoteCountsData } = trpc.getAdminNoteCounts.useQuery(
+    { ledgerId, type: 'dividend' as const, viewAsUserId: viewAsUserId ?? undefined },
+    { enabled: !!ledgerId }
+  );
+  const dividendNoteCounts = (dividendNoteCountsData?.counts ?? {}) as Record<string, number>;
+  const { data: marginNoteCountsData } = trpc.getAdminNoteCounts.useQuery(
+    { ledgerId, type: 'margin' as const, viewAsUserId: viewAsUserId ?? undefined },
+    { enabled: !!ledgerId }
+  );
+  const marginNoteCounts = (marginNoteCountsData?.counts ?? {}) as Record<string, number>;
   const { data: capitalTransferData } = trpc.ledger.getTransactions.useQuery(
     { ledgerId, type: 'transfer' as any, categoryId: selectedTagId ?? undefined, limit: 200 },
     { enabled: !!ledgerId && !!selectedTagId }
@@ -1031,6 +1042,31 @@ export default function LedgerDetailAA({
     if (dow === 6) return '周六';
     return null;
   };
+
+  // 基于 YYYY-MM-DD 字符串判断是否为非交易日（节假日/周末，排除调休上班日），可跨月使用
+  const isNonTradingDateStr = (dateStr: string): boolean => {
+    if (MAKEUP_WORKDAYS_2026.has(dateStr)) return false;
+    if (HOLIDAY_MAP_2026[dateStr]) return true;
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dow = new Date(y, m - 1, d).getDay();
+    return dow === 0 || dow === 6;
+  };
+
+  // 暂停标志应显示的日期：暂停日期当天；若当天为非交易日（周末/节假日），则顺延到下一个交易日
+  // 这样可保证暂停标志一定可见，不会被非交易日灰格覆盖
+  const pauseMarkDateStr: string | null = useMemo(() => {
+    if (!selectedTagPauseDate) return null;
+    const [y, m, d] = selectedTagPauseDate.split('-').map(Number);
+    if (!y || !m || !d) return null;
+    let cur = new Date(y, m - 1, d);
+    // 最多顺延 30 天，避免极端情况死循环
+    for (let i = 0; i < 30; i++) {
+      const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+      if (!isNonTradingDateStr(ds)) return ds;
+      cur.setDate(cur.getDate() + 1);
+    }
+    return selectedTagPauseDate;
+  }, [selectedTagPauseDate]);
 
   // 点击日历格子：已有记录则跳转编辑，否则跳转新增
   const handleDayClick = (day: number) => {
@@ -1711,16 +1747,15 @@ export default function LedgerDetailAA({
                       const pauseDateStr = selectedTagPauseDate;
                       const endDateStr = selectedTagEndDate;
                       const dayDateStr2 = getDateStr(day);
-                      const isPauseDay = !isNonTrading && pauseDateStr && dayDateStr2 === pauseDateStr;
-                      const isPausedAfter = !isNonTrading && pauseDateStr && dayDateStr2 > pauseDateStr;
-                      const cellBg = isNonTrading
-                        ? '#F0F0F0'
-                        : isPauseDay ? '#1565C0'
+                      // 暂停标志显示在「暂停标志日」(暂停日，非交易日则顺延到下一交易日)那一格，即使该格本身是非交易日也强制显示蓝标
+                      const isPauseDay = pauseMarkDateStr && dayDateStr2 === pauseMarkDateStr;
+                      const isPausedAfter = !isPauseDay && !isNonTrading && pauseDateStr && dayDateStr2 > pauseDateStr;
+                      const cellBg = isPauseDay ? '#1565C0'
+                        : isNonTrading ? '#F0F0F0'
                         : isPausedAfter ? '#F0F0F0'
                         : todayMark ? '#FFF3E0' : '#F9F9F9';
-                      const cellBorder = isNonTrading
-                        ? '1px solid #E0E0E0'
-                        : isPauseDay ? '1.5px solid #1565C0'
+                      const cellBorder = isPauseDay ? '1.5px solid #1565C0'
+                        : isNonTrading ? '1px solid #E0E0E0'
                         : isPausedAfter ? '1px solid #E0E0E0'
                         : todayMark ? '1.5px solid #D32F2F' : '1px solid #F0F0F0';
                       const dayNumColor = isNonTrading
@@ -2097,8 +2132,8 @@ export default function LedgerDetailAA({
               const configStartDate = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__startDate`] ?? '') : '';
               const firstDate = configStartDate || tag.points[0]?.date;
               const configPauseDate = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__pauseDate`] ?? '') : '';
-              // 有暂停日期时，截止日期为暂停前一天；否则截止日期为今天
-              let endDate = new Date().toISOString().slice(0, 10);
+              // 有暂停日期时，截止日期为暂停前一天；否则截止日期为今天（北京时间 UTC+8）
+              let endDate = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
               let isPaused = false;
               if (configPauseDate) {
                 const pauseD = new Date(configPauseDate);
@@ -2140,7 +2175,7 @@ export default function LedgerDetailAA({
             const weightedDenominator = validTags.reduce((s, t) => {
               const configSD = initialBalancesData?.balances ? String(initialBalancesData.balances[`${t.name}__startDate`] ?? '') : '';
               const firstDate = configSD || t.points[0]?.date;
-              const today = new Date().toISOString().slice(0, 10);
+              const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
               const days = firstDate ? Math.max(1, Math.round((new Date(today).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 1;
               return s + t.marginCny * (days / 365);
             }, 0);
@@ -2230,7 +2265,14 @@ export default function LedgerDetailAA({
                             }}
                           >{days > 0 ? `${days}天` : '--'}</span>
                         ) : (
-                          <span style={{ color: '#424242', whiteSpace: 'nowrap', fontSize: 13 }}>{days > 0 ? `${days}天` : '--'}</span>
+                          <span
+                            style={{ color: '#424242', whiteSpace: 'nowrap', fontSize: 13, cursor: firstDate ? 'pointer' : 'default', textDecoration: firstDate ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
+                            onClick={() => {
+                              if (!firstDate) return;
+                              const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
+                              alert(`${fmt(firstDate)} ~ ${fmt(endDate)}（今天），共 ${days} 天`);
+                            }}
+                          >{days > 0 ? `${days}天` : '--'}</span>
                         )}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
@@ -2278,7 +2320,7 @@ export default function LedgerDetailAA({
                             <div
                               onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
                               style={{ fontSize: 13, lineHeight: 1, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
-                            >{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
+                            >{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(marginNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{marginNoteCounts[tag.name]}</sup>)}</div>
                             {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
                               <div style={{ fontSize: 9, marginTop: 2, lineHeight: 1, color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
                             )}
@@ -2307,7 +2349,7 @@ export default function LedgerDetailAA({
                           <span
                             onClick={(e) => { e.stopPropagation(); setDividendNoteTag(tag.name); }}
                             style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#D32F2F', textUnderlineOffset: '2px' }}
-                          >{divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
+                          >{divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(dividendNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{dividendNoteCounts[tag.name]}</sup>)}</span>
                         ) : '--'}
                       </div>
                     </>

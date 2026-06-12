@@ -22211,6 +22211,47 @@ insights 数组每项包含：
       return { notes: (result as any)[0] as any[] };
     }),
 
+  // 按标签返回备注数量统计（用于在按钮上显示已有备注条数）
+  getAdminNoteCounts: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      type: z.enum(['dividend', 'margin']),
+      userId: z.number().optional(), // 管理员可指定用户
+      viewAsUserId: z.number().optional(), // 管理员以成员视角查看时的目标用户
+      allMembers: z.boolean().optional(), // 管理员一次性获取全部成员的计数，key 为 `${userId}|${tagName}`
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getLedgerDb();
+      if (!db) return { counts: {} as Record<string, number> };
+      const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+      const isAdmin = myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
+      // 管理员请求全部成员计数：返回 key 为 `${user_id}|${tag_name}`
+      if (isAdmin && input.allMembers) {
+        const result = await db.execute(sql`SELECT user_id, tag_name, COUNT(*) as cnt FROM ledger_admin_notes WHERE ledger_id = ${input.ledgerId} AND type = ${input.type} GROUP BY user_id, tag_name`);
+        const rows = (result as any)[0] as any[];
+        const counts: Record<string, number> = {};
+        for (const r of rows) {
+          const tag = r.tag_name == null ? '' : String(r.tag_name);
+          counts[`${r.user_id}|${tag}`] = Number(r.cnt) || 0;
+        }
+        return { counts };
+      }
+      let targetUserId = ctx.user.id;
+      if (isAdmin && input.userId !== undefined) {
+        targetUserId = input.userId;
+      } else if (isAdmin && input.viewAsUserId !== undefined) {
+        targetUserId = input.viewAsUserId;
+      }
+      const result = await db.execute(sql`SELECT tag_name, COUNT(*) as cnt FROM ledger_admin_notes WHERE ledger_id = ${input.ledgerId} AND type = ${input.type} AND (user_id = ${targetUserId} OR user_id = 0) GROUP BY tag_name`);
+      const rows = (result as any)[0] as any[];
+      const counts: Record<string, number> = {};
+      for (const r of rows) {
+        const key = r.tag_name == null ? '' : String(r.tag_name);
+        counts[key] = Number(r.cnt) || 0;
+      }
+      return { counts };
+    }),
+
   // ============================================================
   // A股全景仪表盘接口
   // ============================================================
