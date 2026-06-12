@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-12
+// 生成时间：2026-06-13
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7211,5 +7211,16 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-12T11:46:08Z", type: "feat", cleanMessage: "在标签备注按钮和客户端分红/保证金金额旁显示已有备注条数" },
     { date: "2026-06-12T11:55:27Z", type: "feat", cleanMessage: "未暂停标签周期可点击显示开始日期到今天(北京时间), 概览天数用北京时间" },
     { date: "2026-06-12T12:01:29Z", type: "fix", cleanMessage: "暂停日落在非交易日(周末/节假日)时顺延到下一交易日显示蓝色暂停标志, 确保一定可见" },
+    { date: "2026-06-12T12:46:45Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-12T12:52:24Z", type: "other", cleanMessage: "融资订单融资金额计价货币与标的币种解耦，可独立选USDT/USD/CNY并持久化" },
+    { date: "2026-06-12T13:10:05Z", type: "other", cleanMessage: "统一融资付息创建入口：右侧借方移除添加按钮，所有订单从左侧资方弹窗创建并按用户角色(owner/admin进资方/member进借方)自动归属；删除左侧归属用户块" },
+    { date: "2026-06-12T14:25:45Z", type: "fix", cleanMessage: "实时预览付息方式显示中文而非英文代码，复用INTEREST_PAYMENT_OPTIONS映射" },
+    { date: "2026-06-12T14:34:13Z", type: "feat", cleanMessage: "融资订单自己的订单/共享订单中已结束订单二级折叠，进行中直接显示" },
+    { date: "2026-06-12T14:40:56Z", type: "style", cleanMessage: "已结束订单折叠条改为红色醒目风格" },
+    { date: "2026-06-12T15:02:00Z", type: "fix", cleanMessage: "结息记录增删后自动刷新已付利息汇总，无需手动刷新页面" },
+    { date: "2026-06-12T15:52:23Z", type: "feat", cleanMessage: "手动调账新增弹窗选中成员后显示其当前钱包余额" },
+  ],
+  "2026-06-13": [
+    { date: "2026-06-12T16:07:00Z", type: "fix", cleanMessage: "调账弹窗余额改用全局口径(去ledgerId)并修复弹窗居中" },
   ],
 };
