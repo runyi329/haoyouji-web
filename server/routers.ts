@@ -22147,6 +22147,7 @@ insights 数组每项包含：
     .input(z.object({
       ledgerId: z.number(),
       userId: z.number(), // 目标用户ID，0表示全局
+      tagName: z.string().optional(), // 标签维度备注（分红场景使用）
       type: z.enum(['dividend', 'margin']),
       content: z.string().min(1),
     }))
@@ -22157,7 +22158,7 @@ insights 数组每项包含：
       }
       const db = await getLedgerDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
-      await db.execute(sql`INSERT INTO ledger_admin_notes (ledger_id, user_id, type, content) VALUES (${input.ledgerId}, ${input.userId}, ${input.type}, ${input.content})`);
+      await db.execute(sql`INSERT INTO ledger_admin_notes (ledger_id, user_id, tag_name, type, content) VALUES (${input.ledgerId}, ${input.userId}, ${input.tagName ?? null}, ${input.type}, ${input.content})`);
       return { success: true };
     }),
 
@@ -22184,6 +22185,8 @@ insights 数组每项包含：
       ledgerId: z.number(),
       type: z.enum(['dividend', 'margin']),
       userId: z.number().optional(), // 管理员可指定用户，普通用户自动用自己的ID
+      viewAsUserId: z.number().optional(), // 管理员以成员视角查看时的目标用户
+      tagName: z.string().optional(), // 按标签筛选（分红场景）
     }))
     .query(async ({ ctx, input }) => {
       const db = await getLedgerDb();
@@ -22193,9 +22196,15 @@ insights 数组每项包含：
       let targetUserId = ctx.user.id;
       if (isAdmin && input.userId !== undefined) {
         targetUserId = input.userId;
+      } else if (isAdmin && input.viewAsUserId !== undefined) {
+        targetUserId = input.viewAsUserId;
       }
-      // 查询该用户的备注 + 全局备注(user_id=0)
-      const result = await db.execute(sql`SELECT id, ledger_id, user_id, type, content, created_at FROM ledger_admin_notes WHERE ledger_id = ${input.ledgerId} AND type = ${input.type} AND (user_id = ${targetUserId} OR user_id = 0) ORDER BY created_at DESC`);
+      // 查询该用户的备注 + 全局备注(user_id=0)；若传 tagName 则按标签筛选
+      if (input.tagName !== undefined) {
+        const result = await db.execute(sql`SELECT id, ledger_id, user_id, tag_name, type, content, created_at FROM ledger_admin_notes WHERE ledger_id = ${input.ledgerId} AND type = ${input.type} AND tag_name = ${input.tagName} AND (user_id = ${targetUserId} OR user_id = 0) ORDER BY created_at DESC`);
+        return { notes: (result as any)[0] as any[] };
+      }
+      const result = await db.execute(sql`SELECT id, ledger_id, user_id, tag_name, type, content, created_at FROM ledger_admin_notes WHERE ledger_id = ${input.ledgerId} AND type = ${input.type} AND (user_id = ${targetUserId} OR user_id = 0) ORDER BY created_at DESC`);
       return { notes: (result as any)[0] as any[] };
     }),
 

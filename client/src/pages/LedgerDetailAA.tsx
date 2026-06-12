@@ -363,15 +363,16 @@ export default function LedgerDetailAA({
   const [showPnlExplain, setShowPnlExplain] = useState(false);
 
   // 客户端查看备注
-  const [showDividendNotes, setShowDividendNotes] = useState(false);
+  // 分红备注按标签维度：记录当前查看的标签名
+  const [dividendNoteTag, setDividendNoteTag] = useState<string | null>(null);
   const [showMarginNotes, setShowMarginNotes] = useState(false);
 
   const { data: dividendNotesData } = trpc.getAdminNotes.useQuery(
-    { ledgerId, type: 'dividend' as const },
-    { enabled: !!ledgerId && showDividendNotes }
+    { ledgerId, type: 'dividend' as const, tagName: dividendNoteTag ?? '', viewAsUserId: viewAsUserId ?? undefined },
+    { enabled: !!ledgerId && !!dividendNoteTag }
   );
   const { data: marginNotesData } = trpc.getAdminNotes.useQuery(
-    { ledgerId, type: 'margin' as const },
+    { ledgerId, type: 'margin' as const, viewAsUserId: viewAsUserId ?? undefined },
     { enabled: !!ledgerId && showMarginNotes }
   );
   const { data: capitalTransferData } = trpc.ledger.getTransactions.useQuery(
@@ -1404,16 +1405,8 @@ export default function LedgerDetailAA({
                       <div className="text-base font-bold">
                         {value > 0 ? '+' : ''}¥{value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
-                      <div className="text-xs opacity-60 mt-0.5 flex items-center gap-1">
-                        <span>已分红 ¥{totalDividend.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setShowDividendNotes(true); }}
-                          className="inline-flex items-center justify-center w-4 h-4 rounded-full active:opacity-60"
-                          style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-                          title="查看分红备注"
-                        >
-                          <span className="text-[10px] font-bold leading-none">…</span>
-                        </button>
+                      <div className="text-xs opacity-60 mt-0.5">
+                        已分红 ¥{totalDividend.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
                     </>
                   );
@@ -2322,7 +2315,12 @@ export default function LedgerDetailAA({
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 分红 */}
                       <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13, color: divAmt > 0 ? '#D32F2F' : '#BDBDBD' }}>
-                        {divAmt > 0 ? `${divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                        {divAmt > 0 ? (
+                          <span
+                            onClick={(e) => { e.stopPropagation(); setDividendNoteTag(tag.name); }}
+                            style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#D32F2F', textUnderlineOffset: '2px' }}
+                          >{divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
+                        ) : '--'}
                       </div>
                     </>
                   );
@@ -3337,12 +3335,12 @@ export default function LedgerDetailAA({
         </button>
       )}
 
-      {/* 分红备注弹窗（客户端查看） */}
-      {showDividendNotes && (
+      {/* 分红备注弹窗（客户端查看，按标签） */}
+      {dividendNoteTag && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center px-6"
           style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-          onClick={() => setShowDividendNotes(false)}
+          onClick={() => setDividendNoteTag(null)}
         >
           <div
             className="w-full rounded-2xl overflow-hidden"
@@ -3350,8 +3348,8 @@ export default function LedgerDetailAA({
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
-              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>分红备注</span>
-              <button onClick={() => setShowDividendNotes(false)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
+              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>分红备注 · {dividendNoteTag}</span>
+              <button onClick={() => setDividendNoteTag(null)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
             </div>
             <div className="px-4 py-4 overflow-y-auto" style={{ maxHeight: '55vh' }}>
               {(dividendNotesData?.notes ?? []).length === 0 ? (

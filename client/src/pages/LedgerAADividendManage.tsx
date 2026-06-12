@@ -34,8 +34,8 @@ export default function LedgerAADividendManage() {
   const [editAmount, setEditAmount] = useState("");
   const [editNote, setEditNote] = useState("");
 
-  // 管理员备注功能
-  const [showNoteModal, setShowNoteModal] = useState<{ userId: number; userName: string } | null>(null);
+  // 管理员备注功能（标签维度）
+  const [showNoteModal, setShowNoteModal] = useState<{ userId: number; userName: string; tagName: string } | null>(null);
   const [newNoteContent, setNewNoteContent] = useState("");
 
   // 用户端：行内编辑备注
@@ -44,6 +44,12 @@ export default function LedgerAADividendManage() {
 
   // 展开某个成员的明细
   const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
+  // 展开某个标签的明细（key: `${userId}__${tagName}`）
+  const [expandedTagKey, setExpandedTagKey] = useState<string | null>(null);
+  // 针对某标签快捷添加分红（行内输入）
+  const [quickAdd, setQuickAdd] = useState<{ userId: number; tagName: string } | null>(null);
+  const [quickAmount, setQuickAmount] = useState("");
+  const [quickNote, setQuickNote] = useState("");
 
   // 获取账本信息（权限校验）
   const { data: ledgerData } = trpc.ledger.getById.useQuery(
@@ -53,11 +59,11 @@ export default function LedgerAADividendManage() {
 
   // 管理员备注查询
   const { data: notesData, refetch: refetchNotes } = trpc.getAdminNotes.useQuery(
-    { ledgerId, type: 'dividend' as const, userId: showNoteModal?.userId ?? 0 },
+    { ledgerId, type: 'dividend' as const, userId: showNoteModal?.userId ?? 0, tagName: showNoteModal?.tagName ?? '' },
     { enabled: !!ledgerId && !!showNoteModal }
   );
 
-  // 管理员添加备注
+  // 管理员添加备注（标签维度）
   const addNoteMutation = trpc.adminAddNote.useMutation({
     onSuccess: () => {
       toast.success("备注已添加");
@@ -113,6 +119,30 @@ export default function LedgerAADividendManage() {
     return map;
   }, [allDividendsData]);
 
+  // 按用户 -> 标签 分组聚合
+  // tagGroups[userId] = { tags: [{ tagName, total, records:[] }], total }
+  const tagGroupsByUser = useMemo(() => {
+    const result: Record<number, { tagName: string; total: number; records: any[] }[]> = {};
+    for (const userIdStr of Object.keys(dividendsByUser)) {
+      const userId = Number(userIdStr);
+      const recs = dividendsByUser[userId].records;
+      const tagMap: Record<string, { tagName: string; total: number; records: any[] }> = {};
+      // 先纳入该用户在保证金里涉及的所有标签（即使尚无分红）
+      const memberTags = balancesMap[userId] ? Object.keys(balancesMap[userId]).filter(k => !k.includes('__')) : [];
+      for (const t of memberTags) {
+        tagMap[t] = { tagName: t, total: 0, records: [] };
+      }
+      for (const r of recs) {
+        const t = r.tag_name || '未分类';
+        if (!tagMap[t]) tagMap[t] = { tagName: t, total: 0, records: [] };
+        tagMap[t].records.push(r);
+        tagMap[t].total += parseFloat(r.amount);
+      }
+      result[userId] = Object.values(tagMap);
+    }
+    return result;
+  }, [dividendsByUser, balancesMap]);
+
   // ── 普通成员：获取自己的分红明细 ──
   const { data: myDividendData, refetch: refetchMyDividends } = trpc.getDividendRecords.useQuery(
     { ledgerId },
@@ -127,6 +157,10 @@ export default function LedgerAADividendManage() {
       toast.success("分红添加成功");
       setShowAddModal(false);
       setAddForm({ targetUserId: 0, tagName: "", amount: "", note: "" });
+      // 快捷添加模式：保留标签录入状态、清空输入
+      setQuickAmount("");
+      setQuickNote("");
+      setQuickAdd(null);
       refetchDividends();
     },
     onError: (err) => {
@@ -200,6 +234,20 @@ export default function LedgerAADividendManage() {
       ledgerId,
       recordId,
       note: editingNoteText,
+    });
+  };
+
+  // 标签内快捷添加一笔分红
+  const handleQuickAddSubmit = () => {
+    if (!quickAdd) return;
+    const amount = parseFloat(quickAmount);
+    if (!amount || amount <= 0) return toast.error("请输入有效金额");
+    addMutation.mutate({
+      ledgerId,
+      targetUserId: quickAdd.userId,
+      tagName: quickAdd.tagName,
+      amount,
+      note: quickNote || undefined,
     });
   };
 
@@ -356,68 +404,147 @@ export default function LedgerAADividendManage() {
                     {total > 0 ? `¥${total.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                   </div>
                   <div className="text-[10px]" style={{ color: '#BDBDBD' }}>累计分红</div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShowNoteModal({ userId, userName: userDiv?.userName ?? member.nickname ?? member.username ?? `用户${userId}` }); }}
-                    className="text-[10px] mt-0.5 underline"
-                    style={{ color: '#1565C0' }}
-                  >
-                    备注
-                  </button>
                 </div>
-                {records.length > 0 && (
+                {(tagGroupsByUser[userId]?.length ?? 0) > 0 && (
                   isExpanded
                     ? <ChevronUp className="w-4 h-4 flex-shrink-0" style={{ color: '#BDBDBD' }} />
                     : <ChevronDown className="w-4 h-4 flex-shrink-0" style={{ color: '#BDBDBD' }} />
                 )}
               </div>
 
-              {/* 明细列表 */}
-              {isExpanded && records.length > 0 && (
+              {/* 标签分组（第一级：每个标签汇总；点开第二级：该标签下每笔明细） */}
+              {isExpanded && (tagGroupsByUser[userId]?.length ?? 0) > 0 && (
                 <div style={{ borderTop: '1px solid #F5F5F5' }}>
-                  {records.map((rec: any) => (
-                    <div key={rec.id} className="flex items-center px-4 py-2.5" style={{ borderBottom: '1px solid #FAFAFA' }}>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                  {(tagGroupsByUser[userId] ?? []).map((grp) => {
+                    const tagKey = `${userId}__${grp.tagName}`;
+                    const tagExpanded = expandedTagKey === tagKey;
+                    return (
+                      <div key={tagKey} style={{ borderBottom: '1px solid #F5F5F5' }}>
+                        {/* 标签汇总行 */}
+                        <div
+                          className="flex items-center px-4 py-2.5 cursor-pointer"
+                          style={{ backgroundColor: '#FAFAFA' }}
+                          onClick={() => setExpandedTagKey(tagExpanded ? null : tagKey)}
+                        >
                           <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: '#FFF3E0', color: '#E65100' }}>
-                            {rec.tag_name}
+                            {grp.tagName}
                           </span>
-                          {rec.note && (
-                            <span className="text-xs truncate" style={{ color: '#9E9E9E' }}>{rec.note}</span>
+                          <span className="text-[10px] ml-2" style={{ color: '#9E9E9E' }}>
+                            {grp.records.length > 0 ? `共 ${grp.records.length} 笔` : '暂无分红'}
+                          </span>
+                          <div className="flex-1" />
+                          <span className="text-sm font-semibold mr-2" style={{ color: grp.total > 0 ? '#D32F2F' : '#BDBDBD' }}>
+                            {grp.total > 0 ? `¥${grp.total.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                          </span>
+                          {grp.records.length > 0 && (
+                            tagExpanded
+                              ? <ChevronUp className="w-4 h-4 flex-shrink-0" style={{ color: '#BDBDBD' }} />
+                              : <ChevronDown className="w-4 h-4 flex-shrink-0" style={{ color: '#BDBDBD' }} />
                           )}
                         </div>
-                        <div className="text-[10px] mt-1" style={{ color: '#BDBDBD' }}>
-                          {new Date(rec.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
-                        </div>
+
+                        {/* 第二级：该标签下每笔明细 + 标签操作区 */}
+                        {tagExpanded && (
+                          <div style={{ backgroundColor: '#FFFFFF' }}>
+                            {grp.records.map((rec: any) => (
+                              <div key={rec.id} className="flex items-center px-6 py-2" style={{ borderTop: '1px solid #FAFAFA' }}>
+                                <div className="flex-1 min-w-0">
+                                  {rec.note && (
+                                    <div className="text-xs truncate" style={{ color: '#9E9E9E' }}>{rec.note}</div>
+                                  )}
+                                  <div className="text-[10px] mt-0.5" style={{ color: '#BDBDBD' }}>
+                                    {new Date(rec.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                                  </div>
+                                </div>
+                                <div className="text-sm font-semibold mr-2" style={{ color: '#D32F2F' }}>
+                                  ¥{parseFloat(rec.amount).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    setEditRecord(rec);
+                                    setEditAmount(String(parseFloat(rec.amount)));
+                                    setEditNote(rec.note ?? '');
+                                  }}
+                                  className="p-1.5 rounded-lg mr-1"
+                                  style={{ backgroundColor: '#FFF8E1' }}
+                                >
+                                  <Pencil className="w-3.5 h-3.5" style={{ color: '#F57F17' }} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (confirm('确认删除这笔分红记录？')) {
+                                      deleteMutation.mutate({ ledgerId, recordId: rec.id });
+                                    }
+                                  }}
+                                  className="p-1.5 rounded-lg"
+                                  style={{ backgroundColor: '#FFF5F5' }}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" style={{ color: '#EF5350' }} />
+                                </button>
+                              </div>
+                            ))}
+
+                            {/* 标签操作区：快捷加一笔分红 + 标签备注 */}
+                            <div className="px-6 py-2 flex items-center gap-2" style={{ borderTop: '1px solid #FAFAFA' }}>
+                              {quickAdd && quickAdd.userId === userId && quickAdd.tagName === grp.tagName ? (
+                                <div className="flex-1 flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    placeholder="金额"
+                                    value={quickAmount}
+                                    onChange={e => setQuickAmount(e.target.value)}
+                                    className="w-20 px-2 py-1.5 rounded-lg text-xs outline-none border"
+                                    style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
+                                    autoFocus
+                                  />
+                                  <input
+                                    type="text"
+                                    placeholder="备注(选填)"
+                                    value={quickNote}
+                                    onChange={e => setQuickNote(e.target.value)}
+                                    className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-xs outline-none border"
+                                    style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
+                                  />
+                                  <button
+                                    onClick={handleQuickAddSubmit}
+                                    disabled={addMutation.isPending}
+                                    className="p-1.5 rounded-lg flex-shrink-0"
+                                    style={{ backgroundColor: '#E8F5E9' }}
+                                  >
+                                    <Check className="w-3.5 h-3.5" style={{ color: '#388E3C' }} />
+                                  </button>
+                                  <button
+                                    onClick={() => { setQuickAdd(null); setQuickAmount(''); setQuickNote(''); }}
+                                    className="p-1.5 rounded-lg flex-shrink-0"
+                                    style={{ backgroundColor: '#F5F5F5' }}
+                                  >
+                                    <X className="w-3.5 h-3.5" style={{ color: '#9E9E9E' }} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => { setQuickAdd({ userId, tagName: grp.tagName }); setQuickAmount(''); setQuickNote(''); }}
+                                    className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
+                                    style={{ backgroundColor: '#FFEBEE', color: '#D32F2F' }}
+                                  >
+                                    <Plus className="w-3.5 h-3.5" /> 加一笔
+                                  </button>
+                                  <button
+                                    onClick={() => setShowNoteModal({ userId, userName: userDiv?.userName ?? member.nickname ?? member.username ?? `用户${userId}`, tagName: grp.tagName })}
+                                    className="px-2.5 py-1 rounded-full text-xs font-medium underline"
+                                    style={{ color: '#1565C0' }}
+                                  >
+                                    标签备注
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div className="text-sm font-semibold mr-2" style={{ color: '#D32F2F' }}>
-                        ¥{parseFloat(rec.amount).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
-                      </div>
-                      {/* 编辑按钮 */}
-                      <button
-                        onClick={() => {
-                          setEditRecord(rec);
-                          setEditAmount(String(parseFloat(rec.amount)));
-                          setEditNote(rec.note ?? '');
-                        }}
-                        className="p-1.5 rounded-lg mr-1"
-                        style={{ backgroundColor: '#FFF8E1' }}
-                      >
-                        <Pencil className="w-3.5 h-3.5" style={{ color: '#F57F17' }} />
-                      </button>
-                      {/* 删除按钮 */}
-                      <button
-                        onClick={() => {
-                          if (confirm('确认删除这笔分红记录？')) {
-                            deleteMutation.mutate({ ledgerId, recordId: rec.id });
-                          }
-                        }}
-                        className="p-1.5 rounded-lg"
-                        style={{ backgroundColor: '#FFF5F5' }}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" style={{ color: '#EF5350' }} />
-                      </button>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -540,7 +667,7 @@ export default function LedgerAADividendManage() {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
-              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>分红备注 - {showNoteModal.userName}</span>
+              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>分红备注 - {showNoteModal.userName} · {showNoteModal.tagName}</span>
               <button onClick={() => setShowNoteModal(null)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
             </div>
 
@@ -558,7 +685,7 @@ export default function LedgerAADividendManage() {
                 <button
                   onClick={() => {
                     if (!newNoteContent.trim()) return toast.error("请输入备注内容");
-                    addNoteMutation.mutate({ ledgerId, userId: showNoteModal.userId, type: 'dividend', content: newNoteContent.trim() });
+                    addNoteMutation.mutate({ ledgerId, userId: showNoteModal.userId, tagName: showNoteModal.tagName, type: 'dividend', content: newNoteContent.trim() });
                   }}
                   disabled={addNoteMutation.isPending}
                   className="px-4 py-2 rounded-xl text-sm font-medium"
