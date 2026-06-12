@@ -809,9 +809,33 @@ function FinanceOrderCard({
                               </>
                           }
                         </div>
-                        {/* ③ 风险敞口 */}
+                        {/* ③ 外借资金 */}
+                        {lentOutValueU > 0 && (
+                          <div className="p-2.5 rounded-lg" style={{ background: '#FFF7ED' }}>
+                            <div className="font-semibold mb-1" style={{ color: '#EA580C' }}>③ 外借资金</div>
+                            {lentOutAssets.map((la, idx) => {
+                              const lq = parseFloat(la.qty);
+                              let laVal = 0;
+                              if (la.coin === 'USDT') laVal = lq;
+                              else if (la.coin === 'CNY') laVal = lq / cnyRate;
+                              else { const lp = livePrices[la.coin]; if (lp) laVal = lq * lp; }
+                              return (
+                                <div key={idx} className="mt-1 flex justify-between">
+                                  <span className="font-mono" style={{ color: '#6B7280' }}>{la.qty} {la.coin}</span>
+                                  <span className="font-mono font-semibold" style={{ color: '#EA580C' }}>{laVal.toFixed(2)} U</span>
+                                </div>
+                              );
+                            })}
+                            {lentOutAssets.length > 1 && (
+                              <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #FED7AA', color: '#EA580C' }}>
+                                合计 {lentOutValueU.toFixed(2)} U
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {/* ④ 风险敞口 */}
                         <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
-                          <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敞口</div>
+                          <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{lentOutValueU > 0 ? '④' : '③'} 风险敞口</div>
                           <div>担保物 + 浮动盈亏 − 待付利息 + 已付利息{lentOutValueU > 0 ? ' − 外借资金' : ''}（正数充足，负数缺口）</div>
                           <div className="mt-1 font-mono">
                             {floatPnl !== null
@@ -819,11 +843,6 @@ function FinanceOrderCard({
                               : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accruedInU.toFixed(2)} + {totalPaidInU.toFixed(2)}{lentOutValueU > 0 ? ` − ${lentOutValueU.toFixed(2)}` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
                             }
                           </div>
-                          {lentOutValueU > 0 && (
-                            <div className="mt-1 text-xs" style={{ color: '#EA580C' }}>
-                              外借资金折算: {lentOutAssets.map(la => `${la.qty} ${la.coin}`).join(' + ')} = {lentOutValueU.toFixed(2)} U
-                            </div>
-                          )}
                           <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
                             {isSufficient
                               ? `担保物充足，还有 ${exposure.toFixed(2)} U 的余量空间`
