@@ -438,7 +438,7 @@ export default function LedgerDetailAA({
     return (activeMemberTransactions || []).map((day) => {
       // 筛选该标签下的记录（category 字段包含标签名），排除 transfer 类型（提现/本金变动不显示在日历上）
       const filtered = day.records.filter((r: any) =>
-        r.category && r.category.includes(tagName) && r.type !== 'transfer'
+        r.category && r.category === tagName && r.type !== 'transfer'
       );
       if (filtered.length === 0) return null;
 
@@ -523,9 +523,9 @@ export default function LedgerDetailAA({
         if (r.type === 'transfer' && !r.description?.startsWith('capital_')) {
           const cat = r.category || '';
           if (!cat) return;
-          // 按标签名匹配（与其他地方保持一致，使用 includes）
+          // 按标签名精确匹配（避免「612郭总8617P15」被误并入「郭总8617」）
           categories.forEach((c: any) => {
-            if (cat.includes(c.name)) {
+            if (cat === c.name) {
               map[c.name] = (map[c.name] || 0) + (Number(r.amount) || 0);
             }
           });
@@ -545,7 +545,7 @@ export default function LedgerDetailAA({
           const cat = r.category || '';
           if (!cat) return;
           categories.forEach((c: any) => {
-            if (cat.includes(c.name)) {
+            if (cat === c.name) {
               const amt = Number(r.amount) || 0;
               if (r.description?.startsWith('capital_add')) {
                 map[c.name] = (map[c.name] || 0) + amt;
@@ -591,7 +591,7 @@ export default function LedgerDetailAA({
       const tagCapitalChange = capitalByTag[tagName] || 0;
       // 该标签的所有每日余额记录（按日期升序）
       const tagDays = (activeMemberTransactions || []).map((day: any) => {
-        const filtered = (day.records || []).filter((r: any) => r.category && r.category.includes(tagName));
+        const filtered = (day.records || []).filter((r: any) => r.category && r.category === tagName);
         if (filtered.length === 0) return null;
         let income = 0, expense = 0;
         filtered.forEach((r: any) => {
@@ -670,7 +670,7 @@ export default function LedgerDetailAA({
       }
       const tagDayMap: Record<string, { income: number; expense: number }> = {};
       (activeMemberTransactions || []).forEach((day: any) => {
-        const filtered = (day.records || []).filter((r: any) => r.category && r.category.includes(tagName));
+        const filtered = (day.records || []).filter((r: any) => r.category && r.category === tagName);
         if (filtered.length === 0) return;
         if (!tagDayMap[day.date]) tagDayMap[day.date] = { income: 0, expense: 0 };
         filtered.forEach((r: any) => {
