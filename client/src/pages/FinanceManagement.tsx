@@ -319,16 +319,19 @@ function FinanceOrderCard({
     }
   }
 
-  // 风险敞口计算
-  const interestBaseNum = order.interest_base ? Number(order.interest_base) : totalU;
+  // 风险敞口计算（计息基数统一折算为U）
+  const interestBaseRaw = order.interest_base ? Number(order.interest_base) : totalU;
+  const interestBaseNum = baseCur === 'CNY' ? interestBaseRaw / cnyRate : interestBaseRaw;
   const liveP = livePrices[order.coin] ?? null;
   const currentValue = liveP !== null ? (order.coin === 'CNY' ? qty / cnyRate : liveP * qty) : null;
-  // 浮动盈亏 = 当前持仓市值(数量×当前币价) - 买入价值(数量×买入币价)
-  const buyValue = totalU; // qty * buy_price，即买入价值
-  const floatPnl = currentValue !== null ? currentValue - buyValue : null;
+  // 浮动盈亏 = 当前持仓市值(U) - 计息基数(U)
+  const floatPnl = currentValue !== null ? currentValue - interestBaseNum : null;
+  // 将利息统一折算为U（accrued单位跟interest_base一致，totalPaid单位也interest_base一致）
+  const accruedInU = baseCur === 'CNY' ? accrued / cnyRate : accrued;
+  const totalPaidInU = baseCur === 'CNY' ? totalPaid / cnyRate : totalPaid;
   const exposure = floatPnl !== null
-    ? collateralValue + floatPnl - accrued + totalPaid
-    : collateralValue - accrued + totalPaid;
+    ? collateralValue + floatPnl - accruedInU + totalPaidInU
+    : collateralValue - accruedInU + totalPaidInU;
   const isSufficient = exposure >= 0;
 
   return (
@@ -647,10 +650,10 @@ function FinanceOrderCard({
                 {/* 担保缺口计算弹窗（与资方担保缺口弹窗居中弹窗风格一致） */}
                 {/* 保证金率：担保物当前价値 ÷ 计息基数 x 100% */}
                 {orderDc.marginRate !== false && collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0 && (() => {
-                  // 新公式：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数
+                  // 新公式：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数（全部折算为U）
                   const effectiveCollateral = floatPnl !== null
-                    ? collateralValue + floatPnl - accrued + totalPaid
-                    : collateralValue - accrued + totalPaid;
+                    ? collateralValue + floatPnl - accruedInU + totalPaidInU
+                    : collateralValue - accruedInU + totalPaidInU;
                   const marginRatio = effectiveCollateral / interestBaseNum;
                   const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
                   // 预警阈值判断
@@ -685,7 +688,7 @@ function FinanceOrderCard({
                                 <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 公式</div>
                                 <div>保证金率 = (担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100%</div>
                                 <div className="mt-1 font-mono text-[10px]">
-                                  <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ''} − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}) ÷ {interestBaseNum.toFixed(2)} × 100% = </span>
+                                  <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ''} − {accruedInU.toFixed(2)} + {totalPaidInU.toFixed(2)}) ÷ {interestBaseNum.toFixed(2)} × 100% = </span>
                                   <strong style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</strong>
                                 </div>
                               </div>
@@ -789,8 +792,8 @@ function FinanceOrderCard({
                           <div>担保物 + 浮动盈亏 − 待付利息 + 已付利息（正数充足，负数缺口）</div>
                           <div className="mt-1 font-mono">
                             {floatPnl !== null
-                              ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} + {totalPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
-                              : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} + {totalPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                              ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accruedInU.toFixed(2)} + {totalPaidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                              : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accruedInU.toFixed(2)} + {totalPaidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
                             }
                           </div>
                           <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
