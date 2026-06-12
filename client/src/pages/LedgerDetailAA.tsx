@@ -375,6 +375,17 @@ export default function LedgerDetailAA({
     { ledgerId, type: 'margin' as const, tagName: marginNoteTag ?? '', viewAsUserId: viewAsUserId ?? undefined },
     { enabled: !!ledgerId && !!marginNoteTag }
   );
+  // 各标签备注数量（用于在分红/金额旁显示条数）
+  const { data: dividendNoteCountsData } = trpc.getAdminNoteCounts.useQuery(
+    { ledgerId, type: 'dividend' as const, viewAsUserId: viewAsUserId ?? undefined },
+    { enabled: !!ledgerId }
+  );
+  const dividendNoteCounts = (dividendNoteCountsData?.counts ?? {}) as Record<string, number>;
+  const { data: marginNoteCountsData } = trpc.getAdminNoteCounts.useQuery(
+    { ledgerId, type: 'margin' as const, viewAsUserId: viewAsUserId ?? undefined },
+    { enabled: !!ledgerId }
+  );
+  const marginNoteCounts = (marginNoteCountsData?.counts ?? {}) as Record<string, number>;
   const { data: capitalTransferData } = trpc.ledger.getTransactions.useQuery(
     { ledgerId, type: 'transfer' as any, categoryId: selectedTagId ?? undefined, limit: 200 },
     { enabled: !!ledgerId && !!selectedTagId }
@@ -2278,7 +2289,7 @@ export default function LedgerDetailAA({
                             <div
                               onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
                               style={{ fontSize: 13, lineHeight: 1, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
-                            >{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
+                            >{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(marginNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{marginNoteCounts[tag.name]}</sup>)}</div>
                             {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
                               <div style={{ fontSize: 9, marginTop: 2, lineHeight: 1, color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
                             )}
@@ -2307,7 +2318,7 @@ export default function LedgerDetailAA({
                           <span
                             onClick={(e) => { e.stopPropagation(); setDividendNoteTag(tag.name); }}
                             style={{ cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#D32F2F', textUnderlineOffset: '2px' }}
-                          >{divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
+                          >{divAmt.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(dividendNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{dividendNoteCounts[tag.name]}</sup>)}</span>
                         ) : '--'}
                       </div>
                     </>

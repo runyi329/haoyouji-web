@@ -64,11 +64,19 @@ export default function LedgerAADividendManage() {
   );
 
   // 管理员添加备注（标签维度）
+  // 全部成员各标签的分红备注数量（key: `${userId}|${tagName}`）
+  const { data: noteCountsData, refetch: refetchNoteCounts } = trpc.getAdminNoteCounts.useQuery(
+    { ledgerId, type: 'dividend' as const, allMembers: true },
+    { enabled: !!ledgerId }
+  );
+  const noteCounts = (noteCountsData?.counts ?? {}) as Record<string, number>;
+
   const addNoteMutation = trpc.adminAddNote.useMutation({
     onSuccess: () => {
       toast.success("备注已添加");
       setNewNoteContent("");
       refetchNotes();
+      refetchNoteCounts();
     },
     onError: (err) => { toast.error(err.message || "添加失败"); },
   });
@@ -78,6 +86,7 @@ export default function LedgerAADividendManage() {
     onSuccess: () => {
       toast.success("备注已删除");
       refetchNotes();
+      refetchNoteCounts();
     },
     onError: (err) => { toast.error(err.message || "删除失败"); },
   });
@@ -535,7 +544,7 @@ export default function LedgerAADividendManage() {
                                     className="px-2.5 py-1 rounded-full text-xs font-medium underline"
                                     style={{ color: '#1565C0' }}
                                   >
-                                    标签备注
+                                    标签备注{(noteCounts[`${userId}|${grp.tagName}`] ?? 0) > 0 ? ` (${noteCounts[`${userId}|${grp.tagName}`]})` : ''}
                                   </button>
                                 </>
                               )}

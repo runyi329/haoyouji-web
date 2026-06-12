@@ -248,11 +248,19 @@ export default function LedgerAAInitialBalance() {
     { enabled: !!ledgerId && !!showMarginNoteModal }
   );
 
+  // 全部成员各标签的保证金备注数量（key: `${userId}|${tagName}`）
+  const { data: marginNoteCountsData, refetch: refetchMarginNoteCounts } = trpc.getAdminNoteCounts.useQuery(
+    { ledgerId, type: 'margin' as const, allMembers: true },
+    { enabled: !!ledgerId }
+  );
+  const marginNoteCounts = (marginNoteCountsData?.counts ?? {}) as Record<string, number>;
+
   const addMarginNoteMutation = trpc.adminAddNote.useMutation({
     onSuccess: () => {
       toast.success("备注已添加");
       setNewMarginNoteContent("");
       refetchMarginNotes();
+      refetchMarginNoteCounts();
     },
     onError: (err) => { toast.error((err as any).message || "添加失败"); },
   });
@@ -261,6 +269,7 @@ export default function LedgerAAInitialBalance() {
     onSuccess: () => {
       toast.success("备注已删除");
       refetchMarginNotes();
+      refetchMarginNoteCounts();
     },
     onError: (err) => { toast.error((err as any).message || "删除失败"); },
   });
@@ -1512,7 +1521,7 @@ export default function LedgerAAInitialBalance() {
                                 onClick={(e) => { e.stopPropagation(); setShowMarginNoteModal({ userId, userName: member.nickname || member.username || `用户${userId}`, tagName: cat.name }); }}
                                 className="text-xs font-medium"
                                 style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }}
-                              >保证金备注</button>
+                              >保证金备注{(marginNoteCounts[`${userId}|${cat.name}`] ?? 0) > 0 ? ` (${marginNoteCounts[`${userId}|${cat.name}`]})` : ''}</button>
                             </div>
                           </div>
                         </div>
