@@ -2108,8 +2108,8 @@ export default function LedgerDetailAA({
               const configStartDate = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__startDate`] ?? '') : '';
               const firstDate = configStartDate || tag.points[0]?.date;
               const configPauseDate = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__pauseDate`] ?? '') : '';
-              // 有暂停日期时，截止日期为暂停前一天；否则截止日期为今天
-              let endDate = new Date().toISOString().slice(0, 10);
+              // 有暂停日期时，截止日期为暂停前一天；否则截止日期为今天（北京时间 UTC+8）
+              let endDate = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
               let isPaused = false;
               if (configPauseDate) {
                 const pauseD = new Date(configPauseDate);
@@ -2151,7 +2151,7 @@ export default function LedgerDetailAA({
             const weightedDenominator = validTags.reduce((s, t) => {
               const configSD = initialBalancesData?.balances ? String(initialBalancesData.balances[`${t.name}__startDate`] ?? '') : '';
               const firstDate = configSD || t.points[0]?.date;
-              const today = new Date().toISOString().slice(0, 10);
+              const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
               const days = firstDate ? Math.max(1, Math.round((new Date(today).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 1;
               return s + t.marginCny * (days / 365);
             }, 0);
@@ -2241,7 +2241,14 @@ export default function LedgerDetailAA({
                             }}
                           >{days > 0 ? `${days}天` : '--'}</span>
                         ) : (
-                          <span style={{ color: '#424242', whiteSpace: 'nowrap', fontSize: 13 }}>{days > 0 ? `${days}天` : '--'}</span>
+                          <span
+                            style={{ color: '#424242', whiteSpace: 'nowrap', fontSize: 13, cursor: firstDate ? 'pointer' : 'default', textDecoration: firstDate ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
+                            onClick={() => {
+                              if (!firstDate) return;
+                              const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
+                              alert(`${fmt(firstDate)} ~ ${fmt(endDate)}（今天），共 ${days} 天`);
+                            }}
+                          >{days > 0 ? `${days}天` : '--'}</span>
                         )}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
