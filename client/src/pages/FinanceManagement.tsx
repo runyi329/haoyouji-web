@@ -408,7 +408,7 @@ function FinanceOrderCard({
           )}
           {(() => {
             const m = (realMembers as any[])?.find((m: any) => m.userId === order.user_id);
-            const name = m ? (m.nickname || m.username) : null;
+            const name = m ? (m.username + (m.realName && m.realName !== m.username ? ` (${m.realName})` : '')) : null;
             if (!name) return null;
             return (
               <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#F3F4F6', color: '#374151' }}>
@@ -1451,7 +1451,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       const result = await trpcUtils.ledger.financeGetOrderParticipants.fetch({ orderId, ledgerId });
       const mapped = (result.participants || []).map((p: any) => ({
         userId: p.user_id,
-        displayName: p.nickname || p.userName || p.username || `用户${p.user_id}`,
+        displayName: (p.username || p.userName || '') + (p.realName && p.realName !== (p.username || p.userName) ? ` (${p.realName})` : '') || `用户${p.user_id}`,
         role: p.role as ParticipantRole,
         sortOrder: p.sort_order || 0,
       }));
@@ -1459,7 +1459,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       setParticipantsList([]);      // 新增行始终保持空白
       const mappedMembers = (result.members || []).map((m: any) => ({
         userId: m.userId,
-        displayName: m.nickname || m.userName || m.username || `用户${m.userId}`,
+        displayName: (m.username || m.userName || '') + (m.realName && m.realName !== (m.username || m.userName) ? ` (${m.realName})` : '') || `用户${m.userId}`,
         memberRole: m.memberRole,
       }));
       setLedgerMembers(mappedMembers);
@@ -1640,8 +1640,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   const filteredMembers = realMembers.filter((m: any) => {
     // 右侧借方页面不显示资方(funder)角色的用户
     if (m.role === 'funder') return false;
-    const name = (m.nickname || m.username || '').toLowerCase();
-    return name.includes(userSearchText.toLowerCase());
+    const searchStr = ((m.username || '') + ' ' + (m.realName || '') + ' ' + (m.nickname || '')).toLowerCase();
+    return searchStr.includes(userSearchText.toLowerCase());
   });
 
   const selectedUser = realMembers.find((m: any) => m.userId === selectedUserId);
@@ -1745,7 +1745,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     }
     setSelectedUserId(order.user_id || null);
     const u = realMembers.find((m: any) => m.userId === order.user_id);
-    setUserSearchText(u ? (u.nickname || u.username || '') : '');
+    setUserSearchText(u ? (u.username || '') : '');
     setEditingOrder(order);
     setShowForm(true);
   }
@@ -1888,7 +1888,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                   ? `全部借方${orders.length > 0 ? ` (${orders.length})` : ''}`
                   : (() => {
                       const m = realMembers.find((m: any) => m.userId === activeUserTab);
-                      const name = m ? (m.nickname || m.username || `用户${activeUserTab}`) : `用户${activeUserTab}`;
+                      const name = m ? (m.username + (m.realName && m.realName !== m.username ? ` (${m.realName})` : '')) || `用户${activeUserTab}` : `用户${activeUserTab}`;
                       return `${name} (${displayOrders.length})`;
                     })()}
               </span>
@@ -1903,7 +1903,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     style={{ color: activeUserTab === 'all' ? '#1A56DB' : '#374151', fontWeight: activeUserTab === 'all' ? 600 : 400 }}
                   >全部借方 {orders.length > 0 ? `(${orders.length})` : ''}</button>
                   {usersWithOrders.map((m: any) => {
-                    const name = m.nickname || m.username || `用户${m.userId}`;
+                    const name = (m.username + (m.realName && m.realName !== m.username ? ` (${m.realName})` : '')) || `用户${m.userId}`;
                     const count = orders.filter((o: any) => o.user_id === m.userId).length;
                     return (
                       <button
@@ -2096,7 +2096,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                         {(selectedUser.nickname || selectedUser.username || '?')[0].toUpperCase()}
                       </div>
                       <span className="text-sm font-medium flex-1" style={{ color: '#1A2340' }}>
-                        {selectedUser.nickname || selectedUser.username}
+                        {selectedUser.username}{selectedUser.realName && selectedUser.realName !== selectedUser.username ? ` (${selectedUser.realName})` : ''}
                       </span>
                       <button
                         onClick={e => { e.stopPropagation(); setSelectedUserId(null); setUserSearchText(''); }}
@@ -2131,7 +2131,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                         ) : filteredMembers.map((m: any) => (
                           <button
                             key={m.userId}
-                            onClick={() => { setSelectedUserId(m.userId); setUserSearchText(m.nickname || m.username || ''); setShowUserDropdown(false); }}
+                            onClick={() => { setSelectedUserId(m.userId); setUserSearchText(m.username || ''); setShowUserDropdown(false); }}
                             className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 text-left"
                           >
                             <div
@@ -2142,7 +2142,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium truncate" style={{ color: '#1A2340' }}>
-                                {m.nickname || m.username}
+                                {m.username}{m.realName && m.realName !== m.username ? ` (${m.realName})` : ''}
                               </div>
                               <div className="text-xs text-gray-400">{m.role}</div>
                             </div>
