@@ -15868,6 +15868,7 @@ ${klinesSummary}
         collateralCoin: z.string().optional(),
         collateralQty: z.string().optional(),
         collateralAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
+        lentOutAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
         financeType: z.enum(['保本分成', '自负盈亏']).optional(),
         showProfitShare: z.boolean().optional(),
         commissionShare: z.string().optional(),
@@ -15916,6 +15917,11 @@ ${klinesSummary}
             updateVals.push(null);
           }
         }
+        // 特殊处理 lentOutAssets（JSON 序列化）
+        if (input.lentOutAssets !== undefined) {
+          updateCols.push('lent_out_assets = ?');
+          updateVals.push(input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null);
+        }
         if (input.userId !== undefined) { updateCols.push('user_id = ?'); updateVals.push(input.userId); }
         // 结清时记录 settled_at 时间戳，恢复（active）时清除
         if (input.status === 'settled') { updateCols.push('settled_at = ?'); updateVals.push(new Date().toISOString().slice(0, 19).replace('T', ' ')); }
@@ -15957,6 +15963,7 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS interest_rate_currency VARCHAR(20) DEFAULT 'USDT'`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS settled_at DATETIME DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS lent_out_assets TEXT DEFAULT NULL`);
         } catch(e) {}
                 await conn.execute(`UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
         // display_config 联动：同步到同账本所有订单（含跨角色订单）
