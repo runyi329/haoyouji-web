@@ -21,7 +21,7 @@
  */
 import { useState, useMemo, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, ChevronDown, Save, Tag, Users } from "lucide-react";
+import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -238,6 +238,32 @@ export default function LedgerAAInitialBalance() {
   const [viewMode, setViewMode] = useState<"user" | "tag">("user");
   const [selectedTagName, setSelectedTagName] = useState<string | null>(null);
   const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set()); // 默认全部折叠
+
+  // 保证金备注功能
+  const [showMarginNoteModal, setShowMarginNoteModal] = useState<{ userId: number; userName: string } | null>(null);
+  const [newMarginNoteContent, setNewMarginNoteContent] = useState("");
+
+  const { data: marginNotesData, refetch: refetchMarginNotes } = trpc.getAdminNotes.useQuery(
+    { ledgerId, type: 'margin' as const, userId: showMarginNoteModal?.userId ?? 0 },
+    { enabled: !!ledgerId && !!showMarginNoteModal }
+  );
+
+  const addMarginNoteMutation = trpc.adminAddNote.useMutation({
+    onSuccess: () => {
+      toast.success("备注已添加");
+      setNewMarginNoteContent("");
+      refetchMarginNotes();
+    },
+    onError: (err) => { toast.error((err as any).message || "添加失败"); },
+  });
+
+  const deleteMarginNoteMutation = trpc.adminDeleteNote.useMutation({
+    onSuccess: () => {
+      toast.success("备注已删除");
+      refetchMarginNotes();
+    },
+    onError: (err) => { toast.error((err as any).message || "删除失败"); },
+  });
 
   // 标签配置相关状态
   const [tagConfigForm, setTagConfigForm] = useState<{
@@ -1185,6 +1211,15 @@ export default function LedgerAAInitialBalance() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      {isExpanded && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowMarginNoteModal({ userId, userName: member.nickname || member.username || `用户${userId}` }); }}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium"
+                          style={{ backgroundColor: '#EDE7F6', color: '#5E35B1' }}
+                        >
+                          备注
+                        </button>
+                      )}
                       {isDirty && isExpanded && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleSaveMember(userId); }}
@@ -1490,6 +1525,79 @@ export default function LedgerAAInitialBalance() {
               );
             })
           )}
+        </div>
+      )}
+
+      {/* 保证金备注弹窗 */}
+      {showMarginNoteModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setShowMarginNoteModal(null)}
+        >
+          <div
+            className="w-full rounded-t-2xl overflow-hidden"
+            style={{ backgroundColor: '#FFFFFF', maxWidth: 480, maxHeight: '80vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
+              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>保证金备注 - {showMarginNoteModal.userName}</span>
+              <button onClick={() => setShowMarginNoteModal(null)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
+            </div>
+
+            <div className="px-4 py-4 overflow-y-auto" style={{ maxHeight: '50vh' }}>
+              {/* 添加新备注 */}
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  placeholder="输入备注内容"
+                  value={newMarginNoteContent}
+                  onChange={e => setNewMarginNoteContent(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-xl text-sm outline-none border"
+                  style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
+                />
+                <button
+                  onClick={() => {
+                    if (!newMarginNoteContent.trim()) return toast.error("请输入备注内容");
+                    addMarginNoteMutation.mutate({ ledgerId, userId: showMarginNoteModal.userId, type: 'margin', content: newMarginNoteContent.trim() });
+                  }}
+                  disabled={addMarginNoteMutation.isPending}
+                  className="px-4 py-2 rounded-xl text-sm font-medium flex-shrink-0"
+                  style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
+                >
+                  添加
+                </button>
+              </div>
+
+              {/* 备注列表 */}
+              {(marginNotesData?.notes ?? []).length === 0 ? (
+                <div className="text-center py-6" style={{ color: '#BDBDBD' }}>暂无备注</div>
+              ) : (
+                <div className="space-y-2">
+                  {(marginNotesData?.notes ?? []).map((note: any) => (
+                    <div key={note.id} className="flex items-start gap-2 px-3 py-2 rounded-xl" style={{ backgroundColor: '#FAFAFA' }}>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs" style={{ color: '#9E9E9E' }}>
+                          {new Date(note.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                        </div>
+                        <div className="text-sm mt-0.5" style={{ color: '#1A1A1A' }}>{note.content}</div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (confirm('确认删除此备注？')) {
+                            deleteMarginNoteMutation.mutate({ ledgerId, noteId: note.id });
+                          }
+                        }}
+                        className="p-1 rounded flex-shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" style={{ color: '#EF5350' }} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

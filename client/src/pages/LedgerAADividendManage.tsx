@@ -34,6 +34,10 @@ export default function LedgerAADividendManage() {
   const [editAmount, setEditAmount] = useState("");
   const [editNote, setEditNote] = useState("");
 
+  // 管理员备注功能
+  const [showNoteModal, setShowNoteModal] = useState<{ userId: number; userName: string } | null>(null);
+  const [newNoteContent, setNewNoteContent] = useState("");
+
   // 用户端：行内编辑备注
   const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [editingNoteText, setEditingNoteText] = useState("");
@@ -46,6 +50,31 @@ export default function LedgerAADividendManage() {
     { ledgerId },
     { enabled: !!ledgerId }
   );
+
+  // 管理员备注查询
+  const { data: notesData, refetch: refetchNotes } = trpc.getAdminNotes.useQuery(
+    { ledgerId, type: 'dividend' as const, userId: showNoteModal?.userId ?? 0 },
+    { enabled: !!ledgerId && !!showNoteModal }
+  );
+
+  // 管理员添加备注
+  const addNoteMutation = trpc.adminAddNote.useMutation({
+    onSuccess: () => {
+      toast.success("备注已添加");
+      setNewNoteContent("");
+      refetchNotes();
+    },
+    onError: (err) => { toast.error(err.message || "添加失败"); },
+  });
+
+  // 管理员删除备注
+  const deleteNoteMutation = trpc.adminDeleteNote.useMutation({
+    onSuccess: () => {
+      toast.success("备注已删除");
+      refetchNotes();
+    },
+    onError: (err) => { toast.error(err.message || "删除失败"); },
+  });
 
   const isAdmin = ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin';
 
@@ -327,6 +356,13 @@ export default function LedgerAADividendManage() {
                     {total > 0 ? `¥${total.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                   </div>
                   <div className="text-[10px]" style={{ color: '#BDBDBD' }}>累计分红</div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowNoteModal({ userId, userName: userDiv?.userName ?? member.nickname ?? member.username ?? `用户${userId}` }); }}
+                    className="text-[10px] mt-0.5 underline"
+                    style={{ color: '#1565C0' }}
+                  >
+                    备注
+                  </button>
                 </div>
                 {records.length > 0 && (
                   isExpanded
@@ -486,6 +522,79 @@ export default function LedgerAADividendManage() {
               >
                 {addMutation.isPending ? '提交中...' : '确认添加'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 管理员备注弹窗 */}
+      {showNoteModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setShowNoteModal(null)}
+        >
+          <div
+            className="w-full rounded-t-2xl overflow-hidden"
+            style={{ backgroundColor: '#FFFFFF', maxWidth: 480, maxHeight: '80vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
+              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>分红备注 - {showNoteModal.userName}</span>
+              <button onClick={() => setShowNoteModal(null)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
+            </div>
+
+            <div className="px-4 py-4 overflow-y-auto" style={{ maxHeight: '50vh' }}>
+              {/* 添加新备注 */}
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="text"
+                  placeholder="输入备注内容"
+                  value={newNoteContent}
+                  onChange={e => setNewNoteContent(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-xl text-sm outline-none border"
+                  style={{ borderColor: '#E0E0E0', color: '#1A1A1A' }}
+                />
+                <button
+                  onClick={() => {
+                    if (!newNoteContent.trim()) return toast.error("请输入备注内容");
+                    addNoteMutation.mutate({ ledgerId, userId: showNoteModal.userId, type: 'dividend', content: newNoteContent.trim() });
+                  }}
+                  disabled={addNoteMutation.isPending}
+                  className="px-4 py-2 rounded-xl text-sm font-medium"
+                  style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}
+                >
+                  添加
+                </button>
+              </div>
+
+              {/* 备注列表 */}
+              {(notesData?.notes ?? []).length === 0 ? (
+                <div className="text-center py-6" style={{ color: '#BDBDBD' }}>暂无备注</div>
+              ) : (
+                <div className="space-y-2">
+                  {(notesData?.notes ?? []).map((note: any) => (
+                    <div key={note.id} className="flex items-start gap-2 px-3 py-2 rounded-xl" style={{ backgroundColor: '#FAFAFA' }}>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs" style={{ color: '#9E9E9E' }}>
+                          {new Date(note.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                        </div>
+                        <div className="text-sm mt-0.5" style={{ color: '#1A1A1A' }}>{note.content}</div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (confirm('确认删除此备注？')) {
+                            deleteNoteMutation.mutate({ ledgerId, noteId: note.id });
+                          }
+                        }}
+                        className="p-1 rounded flex-shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" style={{ color: '#EF5350' }} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>

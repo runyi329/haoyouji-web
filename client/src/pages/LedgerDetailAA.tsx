@@ -361,6 +361,19 @@ export default function LedgerDetailAA({
   const [showCapitalHistory, setShowCapitalHistory] = useState(false);
   const [showWithdrawHistory, setShowWithdrawHistory] = useState(false);
   const [showPnlExplain, setShowPnlExplain] = useState(false);
+
+  // 客户端查看备注
+  const [showDividendNotes, setShowDividendNotes] = useState(false);
+  const [showMarginNotes, setShowMarginNotes] = useState(false);
+
+  const { data: dividendNotesData } = trpc.getAdminNotes.useQuery(
+    { ledgerId, type: 'dividend' as const },
+    { enabled: !!ledgerId && showDividendNotes }
+  );
+  const { data: marginNotesData } = trpc.getAdminNotes.useQuery(
+    { ledgerId, type: 'margin' as const },
+    { enabled: !!ledgerId && showMarginNotes }
+  );
   const { data: capitalTransferData } = trpc.ledger.getTransactions.useQuery(
     { ledgerId, type: 'transfer' as any, categoryId: selectedTagId ?? undefined, limit: 200 },
     { enabled: !!ledgerId && !!selectedTagId }
@@ -1339,10 +1352,20 @@ export default function LedgerDetailAA({
                         {d.amount.toLocaleString('zh-CN', { maximumFractionDigits: 4 })} {d.coin}
                       </div>
                     ))}
-                    <div className="text-xs opacity-60 mt-0.5">
+                    <div className="text-xs opacity-60 mt-0.5 flex items-center gap-1">
+                      <span>
                       {allTagsStats.cryptoDetails.length > 0 && aaCryptoPrices[allTagsStats.cryptoDetails[0]?.coin]
                         ? `≈ ¥${allTagsStats.totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`
                         : '≈ 获取中...'}
+                      </span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShowMarginNotes(true); }}
+                        className="inline-flex items-center justify-center w-4 h-4 rounded-full active:opacity-60"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
+                        title="查看保证金备注"
+                      >
+                        <span className="text-[10px] font-bold leading-none">…</span>
+                      </button>
                     </div>
                   </>
                 ) : (
@@ -1350,7 +1373,17 @@ export default function LedgerDetailAA({
                     <div className="text-base font-bold">
                       ¥{allTagsStats.totalMargin.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
-                    <div className="text-xs opacity-60 mt-0.5">全部保证金之和</div>
+                    <div className="text-xs opacity-60 mt-0.5 flex items-center gap-1">
+                      <span>全部保证金之和</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setShowMarginNotes(true); }}
+                        className="inline-flex items-center justify-center w-4 h-4 rounded-full active:opacity-60"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
+                        title="查看保证金备注"
+                      >
+                        <span className="text-[10px] font-bold leading-none">…</span>
+                      </button>
+                    </div>
                   </>
                 )}
               </div>
@@ -1371,7 +1404,17 @@ export default function LedgerDetailAA({
                       <div className="text-base font-bold">
                         {value > 0 ? '+' : ''}¥{value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </div>
-                      <div className="text-xs opacity-60 mt-0.5">已分红 ¥{totalDividend.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      <div className="text-xs opacity-60 mt-0.5 flex items-center gap-1">
+                        <span>已分红 ¥{totalDividend.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowDividendNotes(true); }}
+                          className="inline-flex items-center justify-center w-4 h-4 rounded-full active:opacity-60"
+                          style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
+                          title="查看分红备注"
+                        >
+                          <span className="text-[10px] font-bold leading-none">…</span>
+                        </button>
+                      </div>
                     </>
                   );
                 })()}
@@ -3292,6 +3335,78 @@ export default function LedgerDetailAA({
         >
           <Plus className="w-6 h-6 text-white" />
         </button>
+      )}
+
+      {/* 分红备注弹窗（客户端查看） */}
+      {showDividendNotes && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-6"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setShowDividendNotes(false)}
+        >
+          <div
+            className="w-full rounded-2xl overflow-hidden"
+            style={{ backgroundColor: '#FFFFFF', maxWidth: 400, maxHeight: '70vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
+              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>分红备注</span>
+              <button onClick={() => setShowDividendNotes(false)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
+            </div>
+            <div className="px-4 py-4 overflow-y-auto" style={{ maxHeight: '55vh' }}>
+              {(dividendNotesData?.notes ?? []).length === 0 ? (
+                <div className="text-center py-6" style={{ color: '#BDBDBD' }}>暂无备注</div>
+              ) : (
+                <div className="space-y-3">
+                  {(dividendNotesData?.notes ?? []).map((note: any) => (
+                    <div key={note.id} className="px-3 py-2 rounded-xl" style={{ backgroundColor: '#FAFAFA' }}>
+                      <div className="text-xs" style={{ color: '#9E9E9E' }}>
+                        {new Date(note.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                      </div>
+                      <div className="text-sm mt-0.5" style={{ color: '#1A1A1A' }}>{note.content}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 保证金备注弹窗（客户端查看） */}
+      {showMarginNotes && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-6"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setShowMarginNotes(false)}
+        >
+          <div
+            className="w-full rounded-2xl overflow-hidden"
+            style={{ backgroundColor: '#FFFFFF', maxWidth: 400, maxHeight: '70vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
+              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>保证金备注</span>
+              <button onClick={() => setShowMarginNotes(false)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
+            </div>
+            <div className="px-4 py-4 overflow-y-auto" style={{ maxHeight: '55vh' }}>
+              {(marginNotesData?.notes ?? []).length === 0 ? (
+                <div className="text-center py-6" style={{ color: '#BDBDBD' }}>暂无备注</div>
+              ) : (
+                <div className="space-y-3">
+                  {(marginNotesData?.notes ?? []).map((note: any) => (
+                    <div key={note.id} className="px-3 py-2 rounded-xl" style={{ backgroundColor: '#FAFAFA' }}>
+                      <div className="text-xs" style={{ color: '#9E9E9E' }}>
+                        {new Date(note.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                      </div>
+                      <div className="text-sm mt-0.5" style={{ color: '#1A1A1A' }}>{note.content}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

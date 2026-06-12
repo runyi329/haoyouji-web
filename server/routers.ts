@@ -22137,6 +22137,68 @@ insights 数组每项包含：
       const result = await db.execute(sql`SELECT dr.id, dr.user_id, dr.tag_name, dr.amount, dr.note, dr.created_at, u.name as user_name, u.username as user_username, lm.nickname as user_nickname FROM dividend_records dr LEFT JOIN users u ON u.id = dr.user_id LEFT JOIN ledger_members lm ON lm.ledgerId = dr.ledger_id AND lm.userId = dr.user_id WHERE dr.ledger_id = ${input.ledgerId} ORDER BY dr.created_at DESC`);
       return { records: (result as any)[0] as any[] };
     }),
+
+  // ============================================================
+  // 管理员备注功能（分红备注 / 保证金备注）
+  // ============================================================
+
+  // 管理员添加备注
+  adminAddNote: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      userId: z.number(), // 目标用户ID，0表示全局
+      type: z.enum(['dividend', 'margin']),
+      content: z.string().min(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+      if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
+      }
+      const db = await getLedgerDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      await db.execute(sql`INSERT INTO ledger_admin_notes (ledger_id, user_id, type, content) VALUES (${input.ledgerId}, ${input.userId}, ${input.type}, ${input.content})`);
+      return { success: true };
+    }),
+
+  // 管理员删除备注
+  adminDeleteNote: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      noteId: z.number(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+      if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
+      }
+      const db = await getLedgerDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      await db.execute(sql`DELETE FROM ledger_admin_notes WHERE id = ${input.noteId} AND ledger_id = ${input.ledgerId}`);
+      return { success: true };
+    }),
+
+  // 获取备注列表（管理员获取全部，普通用户获取自己的+全局的）
+  getAdminNotes: protectedProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      type: z.enum(['dividend', 'margin']),
+      userId: z.number().optional(), // 管理员可指定用户，普通用户自动用自己的ID
+    }))
+    .query(async ({ ctx, input }) => {
+      const db = await getLedgerDb();
+      if (!db) return { notes: [] };
+      const myMembership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+      const isAdmin = myMembership && (myMembership.role === 'owner' || myMembership.role === 'admin');
+      let targetUserId = ctx.user.id;
+      if (isAdmin && input.userId !== undefined) {
+        targetUserId = input.userId;
+      }
+      // 查询该用户的备注 + 全局备注(user_id=0)
+      const result = await db.execute(sql`SELECT id, ledger_id, user_id, type, content, created_at FROM ledger_admin_notes WHERE ledger_id = ${input.ledgerId} AND type = ${input.type} AND (user_id = ${targetUserId} OR user_id = 0) ORDER BY created_at DESC`);
+      return { notes: (result as any)[0] as any[] };
+    }),
+
   // ============================================================
   // A股全景仪表盘接口
   // ============================================================
