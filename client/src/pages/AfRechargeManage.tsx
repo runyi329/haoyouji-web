@@ -45,12 +45,15 @@ export default function AfRechargeManage() {
   // 获取账本成员列表
   const { data: members } = trpc.ledger.getMembers.useQuery({ ledgerId });
 
-  // 选中成员后查询其当前钱包余额（与钱包余额页口径一致：users.balance + af_manual_balances）
-  const { data: selectedBalance, isFetching: balanceFetching } =
-    trpc.ledger.getBalance.useQuery(
-      { viewAsUserId: selectedUserId, ledgerId },
-      { enabled: !isEditing && !!selectedUserId }
-    );
+  // 选中成员后查询其当前【全局】钱包余额（口径与钱包页一致：users.balance + 全部 af_manual_balances，不按账本隔离）
+  const {
+    data: selectedBalance,
+    isLoading: balanceLoading,
+    isError: balanceError,
+  } = trpc.ledger.getBalance.useQuery(
+    { viewAsUserId: selectedUserId },
+    { enabled: !isEditing && !!selectedUserId }
+  );
 
   // 获取手动调账记录
   const { data: manualRecords, refetch: refetchManual } =
@@ -289,7 +292,7 @@ export default function AfRechargeManage() {
 
       {/* 新增/编辑弹窗 */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="mx-4 rounded-2xl">
+        <DialogContent className="w-[calc(100%-2rem)] max-h-[85vh] overflow-y-auto rounded-2xl">
           <DialogTitle>{isEditing ? "编辑调账" : "新增调账"}</DialogTitle>
 
           {/* 选择用户（仅新增时显示） */}
@@ -329,8 +332,10 @@ export default function AfRechargeManage() {
                 <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-blue-50">
                   <span className="text-sm text-gray-500">当前钱包余额</span>
                   <span className="text-sm font-semibold" style={{ color: '#1A56DB' }}>
-                    {balanceFetching && selectedBalance === undefined
+                    {balanceLoading
                       ? '加载中…'
+                      : balanceError
+                      ? '获取失败'
                       : `${Number(selectedBalance ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`}
                   </span>
                 </div>
