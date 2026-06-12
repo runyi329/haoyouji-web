@@ -331,6 +331,7 @@ export const wcOddsRouter = router({
       isDynamicPrice: z.boolean().optional(),  // 是否触发了k值保护
       baseFeeUsdt: z.string().optional(),       // 基础费用（水钱价，USDT）
       finalFeeUsdt: z.string().optional(),      // 实际费用（k值价，USDT）
+      actualPotentialReturn: z.string().optional(), // k值缩水后的实际潜在回报
     }))
     .mutation(async ({ input }) => {
       const db = await getDb();
@@ -360,7 +361,11 @@ export const wcOddsRouter = router({
         });
       }
 
-      const potentialReturn = (odds * amt).toFixed(2);
+      const basePotentialReturn = (odds * amt).toFixed(2);
+      // 方案B：k值触发时，实际潜在回报缩水
+      const potentialReturn = input.isDynamicPrice && input.actualPotentialReturn
+        ? input.actualPotentialReturn
+        : basePotentialReturn;
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
 

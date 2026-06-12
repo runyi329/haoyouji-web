@@ -160,7 +160,7 @@ function CreateOrderDialog({
   })();
   const odds = adjustedOdds;
   const amtNum = parseFloat(amount);
-  const potentialReturn = odds && !isNaN(amtNum) && amtNum > 0 ? (odds * amtNum).toFixed(2) : null;
+  const basePotentialReturn = odds && !isNaN(amtNum) && amtNum > 0 ? odds * amtNum : null;
 
   // 计算k値动态赔率和费用
   const kValue = kData?.kValue ?? 3;
@@ -171,12 +171,16 @@ function CreateOrderDialog({
   // 实际费用计算：基础赔率 vs k値调整后赔率，取较小的赔率（即较高的费用）
   // 这里简化：直接用 e^(k*pct) 乘以投注金额作为费用比较
   const kMultiplier = Math.exp(kValue * selectedTeamPct);
-  // 基础费用 = amount（即投注金额本身）
-  // k値费用 = amount * kMultiplier（当占比高时额外收费）
-  // 注：这里的费用指的是对应的 USDT 收费金额，不是赔率
-  const baseFeeUsdt = amtNum > 0 ? amtNum : 0;  // 基础费用（水钱价）
-  const dynamicFeeUsdt = amtNum > 0 ? amtNum * kMultiplier : 0;  // k値费用
-  const isDynamicActive = dynamicFeeUsdt > baseFeeUsdt * 1.005;  // 超过0.5%才算触发
+  // 方案B：k值触发时，扣款不变，潜在回报按k值倍数缩水
+  // kMultiplier > 1 时，回报 = 原始回报 / kMultiplier
+  const isDynamicActive = kMultiplier > 1.005;  // 超过0.5%才算触发
+  const actualPotentialReturn = basePotentialReturn
+    ? (isDynamicActive ? basePotentialReturn / kMultiplier : basePotentialReturn)
+    : null;
+  const potentialReturn = actualPotentialReturn ? actualPotentialReturn.toFixed(2) : null;
+  // 用于记录的字段（保持兼容）
+  const baseFeeUsdt = amtNum > 0 ? amtNum : 0;
+  const dynamicFeeUsdt = amtNum > 0 ? amtNum * kMultiplier : 0;
 
   const filteredTeams = (teamList ?? []).filter(t =>
     !teamSearch || t.teamName.includes(teamSearch)
@@ -208,6 +212,7 @@ function CreateOrderDialog({
       isDynamicPrice: isDynamicActive,
       baseFeeUsdt: baseFeeUsdt > 0 ? baseFeeUsdt.toFixed(4) : undefined,
       finalFeeUsdt: isDynamicActive && dynamicFeeUsdt > 0 ? dynamicFeeUsdt.toFixed(4) : undefined,
+      actualPotentialReturn: actualPotentialReturn ? actualPotentialReturn.toFixed(2) : undefined,
     });
   }
 
@@ -490,8 +495,8 @@ function CreateOrderDialog({
             </div>
           )}
 
-          {/* k値动态定价提示（当触发时显示） */}
-          {isDynamicActive && amtNum > 0 && (
+          {/* k値保护提示（当触发时显示：回报缩水） */}
+          {isDynamicActive && amtNum > 0 && basePotentialReturn && (
             <div
               className="rounded-lg px-4 py-3"
               style={{ backgroundColor: "rgba(255,140,0,0.08)", border: "1px solid rgba(255,140,0,0.35)" }}
@@ -501,21 +506,21 @@ function CreateOrderDialog({
               </div>
               <div className="flex items-center justify-between">
                 <div className="text-center">
-                  <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>基础费用（水钱价）</div>
-                  <div className="font-bold text-sm" style={{ color: TEXT }}>
-                    {baseFeeUsdt.toFixed(2)} {currency}
+                  <div className="text-xs mb-0.5" style={{ color: TEXT2 }}>原始回报</div>
+                  <div className="font-bold text-sm" style={{ color: TEXT, textDecoration: "line-through" }}>
+                    {formatAmount(basePotentialReturn.toFixed(2))} {currency}
                   </div>
                 </div>
                 <div className="text-lg" style={{ color: "#FF8C00" }}>→</div>
                 <div className="text-center">
-                  <div className="text-xs mb-0.5" style={{ color: "#FF8C00" }}>实际费用（k値价）</div>
+                  <div className="text-xs mb-0.5" style={{ color: "#FF8C00" }}>实际回报（k値折扣）</div>
                   <div className="font-bold text-sm" style={{ color: "#FF8C00" }}>
-                    {dynamicFeeUsdt.toFixed(2)} {currency}
+                    {formatAmount(actualPotentialReturn!.toFixed(2))} {currency}
                   </div>
                 </div>
               </div>
               <div className="text-xs mt-2" style={{ color: TEXT2 }}>
-                溢价倍数 {kMultiplier.toFixed(2)}x（k={kValue}，占比{(selectedTeamPct * 100).toFixed(1)}%）
+                回报折扣 {(1/kMultiplier*100).toFixed(1)}%（k={kValue}，占比{(selectedTeamPct * 100).toFixed(1)}%）
               </div>
             </div>
           )}
