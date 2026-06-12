@@ -1,5 +1,14 @@
 [
   {
+    "hash": "c70993e1eb21e0559ed3849f9e2c5eede1663399",
+    "author": "deploy",
+    "date": "2026-06-12T14:40:56+00:00",
+    "message": "style: 已结束订单折叠条改为红色醒目风格",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "已结束订单折叠条改为红色醒目风格"
+  },
+  {
     "hash": "b66b90c4011f904f7f2f4209594fd1032f4270c9",
     "author": "deploy",
     "date": "2026-06-12T14:34:13+00:00",

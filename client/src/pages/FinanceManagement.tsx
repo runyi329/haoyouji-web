@@ -1546,11 +1546,22 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     onError: (e) => toast.error(e.message),
   });
   const addPaymentMutation = trpc.ledger.financeAddInterestPayment.useMutation({
-    onSuccess: () => { toast.success('结息记录已添加'); refetchOrders(); setShowPaymentPanel(null); },
+    onSuccess: () => {
+      toast.success('结息记录已添加');
+      refetchOrders();
+      trpcUtils.ledger.financeGetInterestPaymentSummary.invalidate();
+      trpcUtils.ledger.financeGetInterestPayments.invalidate();
+      setShowPaymentPanel(null);
+    },
     onError: (e) => toast.error(e.message),
   });
   const deletePaymentMutation = trpc.ledger.financeDeleteInterestPayment.useMutation({
-    onSuccess: () => { toast.success('结息记录已删除'); refetchOrders(); },
+    onSuccess: () => {
+      toast.success('结息记录已删除');
+      refetchOrders();
+      trpcUtils.ledger.financeGetInterestPaymentSummary.invalidate();
+      trpcUtils.ledger.financeGetInterestPayments.invalidate();
+    },
     onError: (e) => toast.error(e.message),
   });
 
