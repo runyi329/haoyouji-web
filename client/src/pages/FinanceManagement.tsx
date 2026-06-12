@@ -1211,6 +1211,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
 const emptyForm = {
   coin: 'BTC' as CoinType,
   amount: '',
+  amountCurrency: 'USDT' as 'USDT' | 'USD' | 'CNY',
   buyPrice: '',
   buyDate: '',
   buyQuantity: '',
@@ -1673,6 +1674,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     setFormData({
       coin: order.coin || 'BTC',
       amount: order.amount || '',
+      amountCurrency: (order.amount_currency || 'USDT') as 'USDT' | 'USD' | 'CNY',
       buyPrice: order.buy_price || '',
       buyDate: order.buy_date || '',
       buyQuantity: order.buy_quantity || '',
@@ -1785,6 +1787,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         userId: selectedUserId,
         coin: formData.coin,
         amount: formData.amount,
+        amountCurrency: formData.amountCurrency,
         buyPrice: formData.buyPrice,
         buyDate: formData.buyDate,
         buyQuantity: formData.buyQuantity,
@@ -1820,6 +1823,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         userId: selectedUserId,
         coin: formData.coin,
         amount: formData.amount,
+        amountCurrency: formData.amountCurrency,
         buyPrice: formData.buyPrice,
         buyDate: formData.buyDate,
         buyQuantity: formData.buyQuantity,
@@ -2244,7 +2248,25 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                 </div>
                 {/* 融资金额 */}
                 <div className="px-4 py-3 border-b border-gray-100">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5">融资金额 ({formData.coin || 'USDT'})</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-medium text-gray-500">融资金额</label>
+                    <div className="inline-flex rounded-lg overflow-hidden border border-gray-200">
+                      {(['USDT', 'USD', 'CNY'] as const).map(cur => (
+                        <button
+                          key={cur}
+                          type="button"
+                          onClick={() => setFormData(d => ({ ...d, amountCurrency: cur }))}
+                          className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                            formData.amountCurrency === cur
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white text-gray-500'
+                          }`}
+                        >
+                          {cur}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <input
                     type="number"
                     inputMode="decimal"
