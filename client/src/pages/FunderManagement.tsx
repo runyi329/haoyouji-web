@@ -1448,6 +1448,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     },
     onError: (err) => toast.error(err.message),
   });
+  // 借方创建：当所选用户是账本普通成员时，订单归属右侧（借方）
+  const financeCreateMutation = trpc.ledger.financeCreateOrder.useMutation({
+    onSuccess: () => {
+      toast.success('创建成功');
+      setShowForm(false);
+      refetchOrders();
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+    },
+    onError: (err) => toast.error(err.message),
+  });
   const updateMutation = trpc.ledger.financeUpdateOrder.useMutation({
     onSuccess: () => {
       toast.success('更新成功');
@@ -1776,7 +1786,17 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     if (editingOrder) {
       updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...payload });
     } else {
-      createMutation.mutate({ userId: formData.userId, ...payload });
+      // 根据所选用户在账本中的角色自动判断归属：
+      // 资方/管理员(owner/admin) -> 左侧资方订单；普通成员(member) -> 右侧借方订单
+      const allMembers = ((ledgerData as any)?.members || []) as any[];
+      const selMember = allMembers.find((m: any) => m.userId === formData.userId);
+      const selRole = String(selMember?.role || '').toLowerCase();
+      const isFunderSide = selRole === 'owner' || selRole === 'admin';
+      if (isFunderSide) {
+        createMutation.mutate({ userId: formData.userId, ...payload });
+      } else {
+        financeCreateMutation.mutate({ userId: formData.userId, ...payload });
+      }
     }
   };
 
@@ -2080,68 +2100,17 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 </div>
               )}
 
-              {/* 归属用户 */}
+              {/* 用户选择（从账本所有成员中选）：根据所选用户角色自动判断订单归属左侧(资方)或右侧(借方) */}
               {!editingOrder?.participantInfo && (
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-600">归属用户<span className="ml-1.5 text-xs text-gray-400 font-normal">可选</span></label>
-                    <div className="flex gap-1">
-                      <button type="button" onClick={() => setFormData(d => ({ ...d, ownerLabelMode: 'member', ownerLabel: '', userId: 0 }))}
-                        className="text-xs px-2 py-0.5 rounded-lg transition-all"
-                        style={formData.ownerLabelMode === 'member' ? { background: '#1A56DB', color: '#fff' } : { background: '#F3F4F6', color: '#6B7280' }}>
-                        选账本成员
-                      </button>
-                      <button type="button" onClick={() => {
-                        // 切换到手动输入模式时，自动将用户锁定为账本管理员(owner)
-                        const ownerMember = ((ledgerData as any)?.members || []).find((m: any) => m.role === 'owner');
-                        setFormData(d => ({ ...d, ownerLabelMode: 'manual', userId: ownerMember?.userId || d.userId }));
-                      }}
-                        className="text-xs px-2 py-0.5 rounded-lg transition-all"
-                        style={formData.ownerLabelMode === 'manual' ? { background: '#1A56DB', color: '#fff' } : { background: '#F3F4F6', color: '#6B7280' }}>
-                        手动输入
-                      </button>
-                    </div>
-                  </div>
-                  {formData.ownerLabelMode === 'member' ? (
-                    <select
-                      value={formData.ownerLabel}
-                      onChange={e => setFormData(d => ({ ...d, ownerLabel: e.target.value }))}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none bg-white"
-                    >
-                      <option value="">-- 不指定 --</option>
-                      {ledgerMembers.map(m => (
-                        <option key={m.userId} value={m.displayName}>{m.displayName}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={formData.ownerLabel}
-                      onChange={e => {
-                        const val = e.target.value;
-                        const ownerMember = ((ledgerData as any)?.members || []).find((m: any) => m.role === 'owner');
-                        setFormData(d => ({ ...d, ownerLabel: val, userId: val ? (ownerMember?.userId || d.userId) : 0 }));
-                      }}
-                      placeholder="输入显示名称，如：英姐、张总..."
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                    />
-                  )}
-                </div>
-              )}
-              {/* 用户选择（从账本所有成员中选） */}
-              {!editingOrder?.participantInfo && (
-                <div style={{ opacity: formData.ownerLabelMode === 'manual' && formData.ownerLabel ? 0.6 : 1, pointerEvents: formData.ownerLabelMode === 'manual' && formData.ownerLabel ? 'none' : 'auto' }}>
                   <label className="block text-sm font-medium text-gray-600 mb-2">
                     用户 <span className="text-red-400 ml-0.5">*</span>
-                    {formData.ownerLabelMode === 'manual' && formData.ownerLabel && (
-                      <span className="ml-2 text-xs text-blue-500 font-normal">(已自动归属管理员)</span>
-                    )}
                   </label>
                   <div className="relative">
                     {formData.userId > 0 ? (
                       <div
                         className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-blue-300 bg-blue-50 cursor-pointer"
-                        onClick={() => { if (formData.ownerLabelMode !== 'manual' || !formData.ownerLabel) { setFormUserDropdown(true); setFormUserSearch(''); } }}
+                        onClick={() => { setFormUserDropdown(true); setFormUserSearch(''); }}
                       >
                         <div
                           className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
@@ -2160,14 +2129,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             return m?.username || m?.nickname || m?.name || `用户${formData.userId}`;
                           })()}
                         </span>
-                        {!(formData.ownerLabelMode === 'manual' && formData.ownerLabel) && (
-                          <button
-                            onClick={e => { e.stopPropagation(); setFormData(d => ({ ...d, userId: 0 })); setFormUserSearch(''); }}
-                            className="text-gray-400 hover:text-gray-600 text-base leading-none px-1"
-                          >
-                            ×
-                          </button>
-                        )}
+                        <button
+                          onClick={e => { e.stopPropagation(); setFormData(d => ({ ...d, userId: 0 })); setFormUserSearch(''); }}
+                          className="text-gray-400 hover:text-gray-600 text-base leading-none px-1"
+                        >
+                          ×
+                        </button>
                       </div>
                     ) : (
                       <input

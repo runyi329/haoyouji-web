@@ -1935,15 +1935,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
               </div>
             )}
           </div>
-          {/* 添加订单按钮 */}
-          <button
-            onClick={openCreate}
-            className="shrink-0 flex items-center gap-1.5 px-4 py-2.5 rounded-full text-white text-sm font-medium shadow-md"
-            style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
-          >
-            <Plus className="w-4 h-4" />
-            添加订单
-          </button>
+          {/* 添加订单按钮已移除：所有订单统一从左侧（资方）弹窗创建，按所选用户角色自动归属左右两侧 */}
         </div>
 
         <div>
