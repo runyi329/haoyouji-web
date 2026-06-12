@@ -365,15 +365,15 @@ export default function LedgerDetailAA({
   // 客户端查看备注
   // 分红备注按标签维度：记录当前查看的标签名
   const [dividendNoteTag, setDividendNoteTag] = useState<string | null>(null);
-  const [showMarginNotes, setShowMarginNotes] = useState(false);
+  const [marginNoteTag, setMarginNoteTag] = useState<string | null>(null);
 
   const { data: dividendNotesData } = trpc.getAdminNotes.useQuery(
     { ledgerId, type: 'dividend' as const, tagName: dividendNoteTag ?? '', viewAsUserId: viewAsUserId ?? undefined },
     { enabled: !!ledgerId && !!dividendNoteTag }
   );
   const { data: marginNotesData } = trpc.getAdminNotes.useQuery(
-    { ledgerId, type: 'margin' as const, viewAsUserId: viewAsUserId ?? undefined },
-    { enabled: !!ledgerId && showMarginNotes }
+    { ledgerId, type: 'margin' as const, tagName: marginNoteTag ?? '', viewAsUserId: viewAsUserId ?? undefined },
+    { enabled: !!ledgerId && !!marginNoteTag }
   );
   const { data: capitalTransferData } = trpc.ledger.getTransactions.useQuery(
     { ledgerId, type: 'transfer' as any, categoryId: selectedTagId ?? undefined, limit: 200 },
@@ -1353,20 +1353,10 @@ export default function LedgerDetailAA({
                         {d.amount.toLocaleString('zh-CN', { maximumFractionDigits: 4 })} {d.coin}
                       </div>
                     ))}
-                    <div className="text-xs opacity-60 mt-0.5 flex items-center gap-1">
-                      <span>
+                    <div className="text-xs opacity-60 mt-0.5">
                       {allTagsStats.cryptoDetails.length > 0 && aaCryptoPrices[allTagsStats.cryptoDetails[0]?.coin]
                         ? `≈ ¥${allTagsStats.totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`
                         : '≈ 获取中...'}
-                      </span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setShowMarginNotes(true); }}
-                        className="inline-flex items-center justify-center w-4 h-4 rounded-full active:opacity-60"
-                        style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-                        title="查看保证金备注"
-                      >
-                        <span className="text-[10px] font-bold leading-none">…</span>
-                      </button>
                     </div>
                   </>
                 ) : (
@@ -1374,17 +1364,7 @@ export default function LedgerDetailAA({
                     <div className="text-base font-bold">
                       ¥{allTagsStats.totalMargin.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
-                    <div className="text-xs opacity-60 mt-0.5 flex items-center gap-1">
-                      <span>全部保证金之和</span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setShowMarginNotes(true); }}
-                        className="inline-flex items-center justify-center w-4 h-4 rounded-full active:opacity-60"
-                        style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-                        title="查看保证金备注"
-                      >
-                        <span className="text-[10px] font-bold leading-none">…</span>
-                      </button>
-                    </div>
+                    <div className="text-xs opacity-60 mt-0.5">全部保证金之和</div>
                   </>
                 )}
               </div>
@@ -2295,12 +2275,20 @@ export default function LedgerDetailAA({
                       <div className="px-1 py-2 flex flex-col items-center justify-center" style={{ borderBottom: rowBorder }}>
                         {tag.marginCny > 0 ? (
                           <>
-                            <div style={{ fontSize: 13, lineHeight: 1, color: '#424242' }}>{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
+                            <div
+                              onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
+                              style={{ fontSize: 13, lineHeight: 1, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
+                            >{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</div>
                             {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
                               <div style={{ fontSize: 9, marginTop: 2, lineHeight: 1, color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
                             )}
                           </>
-                        ) : <span style={{ fontSize: 13, color: '#424242' }}>0</span>}
+                        ) : (
+                          <span
+                            onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
+                            style={{ fontSize: 13, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
+                          >0</span>
+                        )}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 回报 */}
@@ -3371,12 +3359,12 @@ export default function LedgerDetailAA({
         </div>
       )}
 
-      {/* 保证金备注弹窗（客户端查看） */}
-      {showMarginNotes && (
+      {/* 保证金备注弹窗（客户端查看，按标签） */}
+      {marginNoteTag && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center px-6"
           style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
-          onClick={() => setShowMarginNotes(false)}
+          onClick={() => setMarginNoteTag(null)}
         >
           <div
             className="w-full rounded-2xl overflow-hidden"
@@ -3384,8 +3372,8 @@ export default function LedgerDetailAA({
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
-              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>保证金备注</span>
-              <button onClick={() => setShowMarginNotes(false)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
+              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>保证金备注 · {marginNoteTag}</span>
+              <button onClick={() => setMarginNoteTag(null)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
             </div>
             <div className="px-4 py-4 overflow-y-auto" style={{ maxHeight: '55vh' }}>
               {(marginNotesData?.notes ?? []).length === 0 ? (

@@ -240,11 +240,11 @@ export default function LedgerAAInitialBalance() {
   const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set()); // 默认全部折叠
 
   // 保证金备注功能
-  const [showMarginNoteModal, setShowMarginNoteModal] = useState<{ userId: number; userName: string } | null>(null);
+  const [showMarginNoteModal, setShowMarginNoteModal] = useState<{ userId: number; userName: string; tagName: string } | null>(null);
   const [newMarginNoteContent, setNewMarginNoteContent] = useState("");
 
   const { data: marginNotesData, refetch: refetchMarginNotes } = trpc.getAdminNotes.useQuery(
-    { ledgerId, type: 'margin' as const, userId: showMarginNoteModal?.userId ?? 0 },
+    { ledgerId, type: 'margin' as const, userId: showMarginNoteModal?.userId ?? 0, tagName: showMarginNoteModal?.tagName ?? '' },
     { enabled: !!ledgerId && !!showMarginNoteModal }
   );
 
@@ -1211,15 +1211,6 @@ export default function LedgerAAInitialBalance() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {isExpanded && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setShowMarginNoteModal({ userId, userName: member.nickname || member.username || `用户${userId}` }); }}
-                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium"
-                          style={{ backgroundColor: '#EDE7F6', color: '#5E35B1' }}
-                        >
-                          备注
-                        </button>
-                      )}
                       {isDirty && isExpanded && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleSaveMember(userId); }}
@@ -1514,6 +1505,15 @@ export default function LedgerAAInitialBalance() {
                                 </span>
                               </div>
                             )}
+                            {/* 保证金标签备注入口 */}
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setShowMarginNoteModal({ userId, userName: member.nickname || member.username || `用户${userId}`, tagName: cat.name }); }}
+                                className="text-xs font-medium"
+                                style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }}
+                              >保证金备注</button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -1541,7 +1541,7 @@ export default function LedgerAAInitialBalance() {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: '#F0F0F0' }}>
-              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>保证金备注 - {showMarginNoteModal.userName}</span>
+              <span className="text-base font-semibold" style={{ color: '#1A1A1A' }}>保证金备注 - {showMarginNoteModal.userName} · {showMarginNoteModal.tagName}</span>
               <button onClick={() => setShowMarginNoteModal(null)} className="text-sm" style={{ color: '#9E9E9E' }}>关闭</button>
             </div>
 
@@ -1559,7 +1559,7 @@ export default function LedgerAAInitialBalance() {
                 <button
                   onClick={() => {
                     if (!newMarginNoteContent.trim()) return toast.error("请输入备注内容");
-                    addMarginNoteMutation.mutate({ ledgerId, userId: showMarginNoteModal.userId, type: 'margin', content: newMarginNoteContent.trim() });
+                    addMarginNoteMutation.mutate({ ledgerId, userId: showMarginNoteModal.userId, tagName: showMarginNoteModal.tagName, type: 'margin', content: newMarginNoteContent.trim() });
                   }}
                   disabled={addMarginNoteMutation.isPending}
                   className="px-4 py-2 rounded-xl text-sm font-medium flex-shrink-0"
