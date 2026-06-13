@@ -168,6 +168,26 @@ export const appRouter = router({
         return commits;
       }),
   }),
+
+  // 临时接口：上传牙办商城静态素材到COS（用完即删）
+  uploadShopAssetTemp: publicProcedure
+    .input(z.object({
+      token: z.string(),
+      key: z.string(),
+      imageBase64: z.string(),
+    }))
+    .mutation(async ({ input }) => {
+      if (input.token !== 'yaban-shop-asset-2026') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '口令错误' });
+      }
+      if (!input.key.startsWith('icons/yaban/shop/')) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'key前缀不允许' });
+      }
+      const { uploadImageToCOS } = await import('./cos-upload');
+      const buffer = Buffer.from(input.imageBase64, 'base64');
+      const url = await uploadImageToCOS(buffer, 'posters', input.key);
+      return { success: true, url };
+    }),
   wcOdds: wcOddsRouter,
   nbaOdds: nbaOddsRouter,
   pet: petRouter,
