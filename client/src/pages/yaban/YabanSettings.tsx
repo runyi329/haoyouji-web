@@ -127,22 +127,23 @@ export default function YabanSettings() {
 
           {/* 头像 */}
           <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
-            <label className="relative w-16 h-16 rounded-full bg-[#EAF4FE] ring-1 ring-gray-100 overflow-hidden flex items-center justify-center shrink-0 cursor-pointer">
-              {avatar ? (
-                <img src={avatar} alt="头像" className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-8 h-8 text-[#9CC8EC]" />
-              )}
-              <span className="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-[#1E88D6] flex items-center justify-center ring-2 ring-white">
-                {uploadAvatar.isPending ? (
-                  <Loader2 className="w-3 h-3 text-white animate-spin" />
+            <label className="relative w-16 h-16 shrink-0 cursor-pointer">
+              <span className="block w-16 h-16 rounded-full bg-[#EAF4FE] ring-1 ring-gray-100 overflow-hidden flex items-center justify-center">
+                {avatar ? (
+                  <img src={avatar} alt="头像" className="w-full h-full object-cover" />
                 ) : (
-                  <Camera className="w-3 h-3 text-white" />
+                  <User className="w-8 h-8 text-[#9CC8EC]" />
+                )}
+              </span>
+              <span className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-[#1E88D6] flex items-center justify-center ring-2 ring-white">
+                {uploadAvatar.isPending ? (
+                  <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
+                ) : (
+                  <Camera className="w-3.5 h-3.5 text-white" />
                 )}
               </span>
               <input type="file" accept="image/*" className="hidden" onChange={onPickAvatar} />
             </label>
-            <div className="text-xs text-gray-400">点击头像更换，自动压缩上传</div>
           </div>
 
           {/* 昵称 */}
