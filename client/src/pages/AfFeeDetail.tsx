@@ -79,7 +79,7 @@ export default function AfFeeDetail() {
   const memberUserIds = Array.from(
     new Set(userGroups.map(g => parseInt(g.userId)).filter(n => Number.isFinite(n) && n > 0))
   );
-  const { data: memberBalances } = trpc.ledger.getMembersBalance.useQuery(
+  const { data: memberBalances } = trpc.recharge.getMembersBalance.useQuery(
     { userIds: memberUserIds },
     { enabled: memberUserIds.length > 0 }
   );
