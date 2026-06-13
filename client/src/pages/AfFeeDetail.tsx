@@ -310,6 +310,9 @@ export default function AfFeeDetail() {
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-bold text-gray-900">{item.totalFee.toFixed(4)}</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">
+                          {item.dailyFee.toFixed(4)}/天 × {item.holdDays}天
+                        </p>
                         <p className={`text-[10px] mt-0.5 ${item.feeType === 'settled' ? 'text-emerald-500' : 'text-amber-500'}`}>
                           {item.feeType === 'settled' ? '已结清' : '进行中'}
                         </p>
