@@ -1,5 +1,14 @@
 [
   {
+    "hash": "350ea08f4f08f2e298efa1a5660af52d7cba5178",
+    "author": "dev",
+    "date": "2026-06-13T15:50:15+00:00",
+    "message": "fix(yaban-shop): 领券中心横幅改为蓝色系与商城风格统一",
+    "type": "fix",
+    "scope": "yaban-shop",
+    "cleanMessage": "领券中心横幅改为蓝色系与商城风格统一"
+  },
+  {
     "hash": "fd1f7c074fcc9d2d0840100b00e7146a39a9eb8a",
     "author": "dev",
     "date": "2026-06-13T12:12:30+00:00",

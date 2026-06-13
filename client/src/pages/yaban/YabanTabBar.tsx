@@ -1,7 +1,7 @@
 /**
  * 牙伴齿科管理 - 底部 Tab 栏
  * 路由：/yaban/*
- * 主题色：橙色渐变 #FF8C00 ~ #FFA500
+ * 主题色：蓝色系 #1E88D6（与商城风格统一）
  */
 import { Link, useLocation } from "wouter";
 import { Briefcase, MessageCircle, ShoppingBag, User } from "lucide-react";
@@ -30,11 +30,11 @@ export default function YabanTabBar() {
             <Link key={tab.label} href={tab.href} className="flex-1">
               <button
                 className={`w-full flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
-                  active ? "text-[#FF8C00]" : "text-gray-400"
+                  active ? "text-[#1E88D6]" : "text-gray-400"
                 }`}
               >
                 {tab.icon}
-                <span className={`text-[10px] font-medium ${active ? "text-[#FF8C00]" : "text-gray-400"}`}>
+                <span className={`text-[10px] font-medium ${active ? "text-[#1E88D6]" : "text-gray-400"}`}>
                   {tab.label}
                 </span>
               </button>
