@@ -5,12 +5,13 @@
  */
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { Search, ShoppingCart } from "lucide-react";
+import { Search, ShoppingCart, Settings, Package, ClipboardList, X } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
 import { SHOP_BANNER, type ShopProduct } from "./shopData";
 import { useCart } from "./useCart";
 import { useShopProducts } from "./useShopProducts";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 export default function YabanShop() {
   const [, navigate] = useLocation();
@@ -18,6 +19,9 @@ export default function YabanShop() {
   const [keyword, setKeyword] = useState("");
   const { count } = useCart();
   const { products, categories } = useShopProducts();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "super_admin";
+  const [adminOpen, setAdminOpen] = useState(false);
 
   const list = useMemo(() => {
     let arr = products;
@@ -38,18 +42,30 @@ export default function YabanShop() {
         <div className="max-w-lg mx-auto px-4 pt-3 pb-3">
           <div className="flex items-center justify-between mb-3">
             <span className="text-base font-bold">齿科商城</span>
-            <button
-              onClick={() => navigate("/yaban/shop/cart")}
-              className="relative p-1"
-              aria-label="购物车"
-            >
-              <ShoppingCart className="w-5 h-5" />
-              {count > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-[#FF5A5A] text-white text-[10px] rounded-full flex items-center justify-center">
-                  {count}
-                </span>
+            <div className="flex items-center gap-1">
+              {/* 商城管理设置图标：仅超级管理员可见（临时入口，方便管理） */}
+              {isAdmin && (
+                <button
+                  onClick={() => setAdminOpen(true)}
+                  className="p-1"
+                  aria-label="商城管理"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
               )}
-            </button>
+              <button
+                onClick={() => navigate("/yaban/shop/cart")}
+                className="relative p-1"
+                aria-label="购物车"
+              >
+                <ShoppingCart className="w-5 h-5" />
+                {count > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-[#FF5A5A] text-white text-[10px] rounded-full flex items-center justify-center">
+                    {count}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
           {/* 搜索框 */}
           <div className="flex items-center bg-white/95 rounded-full px-3 py-1.5">
@@ -118,6 +134,58 @@ export default function YabanShop() {
           </div>
         )}
       </div>
+
+      {/* 商城管理菜单弹层：仅超管 */}
+      {isAdmin && adminOpen && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-black/40"
+          onClick={() => setAdminOpen(false)}
+        >
+          <div
+            className="mt-auto bg-white rounded-t-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <span className="text-base font-bold text-gray-800">商城管理</span>
+              <button onClick={() => setAdminOpen(false)} aria-label="关闭">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="px-3 py-3 space-y-2 pb-6">
+              <button
+                onClick={() => {
+                  setAdminOpen(false);
+                  navigate("/yaban/shop/admin/products");
+                }}
+                className="w-full flex items-center gap-3 bg-[#F5F7FA] rounded-xl p-3 active:scale-[0.98] transition-transform"
+              >
+                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
+                  <Package className="w-5 h-5 text-white" />
+                </span>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-medium text-gray-800">商品管理</p>
+                  <p className="text-[11px] text-gray-400">上下架、改价、编辑与新增商品</p>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setAdminOpen(false);
+                  navigate("/yaban/shop/admin/orders");
+                }}
+                className="w-full flex items-center gap-3 bg-[#F5F7FA] rounded-xl p-3 active:scale-[0.98] transition-transform"
+              >
+                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
+                  <ClipboardList className="w-5 h-5 text-white" />
+                </span>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-medium text-gray-800">订单管理</p>
+                  <p className="text-[11px] text-gray-400">查看与处理商城订单</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <YabanTabBar />
     </div>
