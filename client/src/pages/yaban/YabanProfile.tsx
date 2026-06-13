@@ -56,7 +56,7 @@ export default function YabanProfile() {
       label: "我的钱包",
       value: walletBalance.toFixed(2),
       icon: <Wallet className="w-5 h-5 text-[#1E88D6]" />,
-      onClick: () => navigate("/wallet"),
+      onClick: () => navigate("/yaban/wallet"),
     },
   ];
 

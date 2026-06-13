@@ -1,5 +1,14 @@
 [
   {
+    "hash": "ceb203f211420fc1810dc31d62f9948e4d2fede8",
+    "author": "dev",
+    "date": "2026-06-13T17:01:43+00:00",
+    "message": "feat(yaban): 我的牙银改为我的钱包,接入全局智能钱包余额并跳转/wallet",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "我的牙银改为我的钱包,接入全局智能钱包余额并跳转/wallet"
+  },
+  {
     "hash": "e9889661054dcdb3a5d76884478c9570406f7a0e",
     "author": "dev",
     "date": "2026-06-13T16:56:05+00:00",
