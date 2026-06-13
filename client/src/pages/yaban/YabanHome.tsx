@@ -132,29 +132,35 @@ export default function YabanHome() {
         </div>
       </div>
 
-      {/* 诊所选择下拉面板 */}
+      {/* 诊所选择下拉面板 - 蓝白清爽风格，与牙办首页一致 */}
       {showClinicPicker && (
-        <div className="fixed inset-0 z-50" onClick={() => setShowClinicPicker(false)}>
+        <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setShowClinicPicker(false)}>
           <div
-            className="absolute top-[52px] left-0 right-0 bg-[#3D3D4D] text-white max-w-lg mx-auto shadow-2xl overflow-hidden"
+            className="absolute top-[56px] left-3 right-3 bg-white max-w-lg mx-auto rounded-xl shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {CLINICS.map((clinic) => (
-              <div key={clinic.company}>
+            {CLINICS.map((clinic, ci) => (
+              <div key={clinic.company} className={ci > 0 ? "border-t border-gray-100" : ""}>
                 {/* 公司名称 */}
                 <button
-                  className="w-full flex items-center justify-between px-4 py-3.5 bg-[#4A4A5A] border-b border-[#555565]"
+                  className="w-full flex items-center justify-between px-4 py-3.5"
+                  style={{ background: "linear-gradient(135deg, #E8F4FD 0%, #D6EEFB 100%)" }}
                   onClick={() => toggleCompany(clinic.company)}
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded bg-[#00B4D8] flex items-center justify-center">
+                    <div
+                      className="w-6 h-6 rounded flex items-center justify-center"
+                      style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
+                    >
                       <span className="text-[9px] font-bold text-white">企</span>
                     </div>
-                    <span className="text-[13px] font-medium text-white">{clinic.company}</span>
+                    <span className="text-[13px] font-bold text-[#1976D2]">{clinic.company}</span>
                   </div>
-                  <span className="text-xs text-gray-400">
-                    {expandedCompanies.includes(clinic.company) ? "收起" : "展开"}
-                  </span>
+                  {expandedCompanies.includes(clinic.company) ? (
+                    <ChevronUp className="w-4 h-4 text-[#2196C8]" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-[#2196C8]" />
+                  )}
                 </button>
                 {/* 分支机构 */}
                 {expandedCompanies.includes(clinic.company) &&
@@ -163,13 +169,10 @@ export default function YabanHome() {
                       {branch.children ? (
                         <>
                           <button
-                            className="w-full flex items-center justify-between px-5 py-3 border-b border-[#4A4A5A]"
+                            className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100"
                             onClick={() => toggleGroup(branch.name)}
                           >
-                            <span className="text-[13px] text-gray-300">
-                              <span className="text-gray-500 mr-1.5">|-</span>
-                              {branch.name}
-                            </span>
+                            <span className="text-[13px] font-medium text-gray-700">{branch.name}</span>
                             {expandedGroups.includes(branch.name) ? (
                               <ChevronUp className="w-4 h-4 text-gray-400" />
                             ) : (
@@ -177,40 +180,59 @@ export default function YabanHome() {
                             )}
                           </button>
                           {expandedGroups.includes(branch.name) &&
-                            branch.children.map((child) => (
-                              <button
-                                key={child.id}
-                                className="w-full flex items-center justify-between px-8 py-3 border-b border-[#4A4A5A]"
-                                onClick={() => {
-                                  setCurrentClinic(child.name);
-                                  setShowClinicPicker(false);
-                                }}
-                              >
-                                <span className="text-[13px] text-gray-300">
-                                  <span className="text-gray-500 mr-1.5">|-</span>
-                                  {child.name}
-                                </span>
-                                {currentClinic === child.name && (
-                                  <span className="text-[11px] bg-[#00B4D8] text-white px-2.5 py-1 rounded-md font-medium">
-                                    当前
+                            branch.children.map((child) => {
+                              const active = currentClinic === child.name;
+                              return (
+                                <button
+                                  key={child.id}
+                                  className="w-full flex items-center justify-between pl-8 pr-4 py-3 border-b border-gray-100"
+                                  style={active ? { background: "linear-gradient(135deg, #E8F4FD 0%, #D6EEFB 100%)" } : undefined}
+                                  onClick={() => {
+                                    setCurrentClinic(child.name);
+                                    setShowClinicPicker(false);
+                                  }}
+                                >
+                                  <span className={`text-[13px] ${active ? "font-bold text-[#1976D2]" : "text-gray-600"}`}>
+                                    {child.name}
                                   </span>
-                                )}
-                              </button>
-                            ))}
+                                  {active && (
+                                    <span
+                                      className="text-[11px] text-white px-2.5 py-1 rounded-md font-medium"
+                                      style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
+                                    >
+                                      当前
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
                         </>
                       ) : (
-                        <button
-                          className="w-full flex items-center px-5 py-3 border-b border-[#4A4A5A]"
-                          onClick={() => {
-                            setCurrentClinic(branch.name);
-                            setShowClinicPicker(false);
-                          }}
-                        >
-                          <span className="text-[13px] text-gray-300">
-                            <span className="text-gray-500 mr-1.5">|-</span>
-                            {branch.name}
-                          </span>
-                        </button>
+                        (() => {
+                          const active = currentClinic === branch.name;
+                          return (
+                            <button
+                              className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100"
+                              style={active ? { background: "linear-gradient(135deg, #E8F4FD 0%, #D6EEFB 100%)" } : undefined}
+                              onClick={() => {
+                                setCurrentClinic(branch.name);
+                                setShowClinicPicker(false);
+                              }}
+                            >
+                              <span className={`text-[13px] ${active ? "font-bold text-[#1976D2]" : "text-gray-600"}`}>
+                                {branch.name}
+                              </span>
+                              {active && (
+                                <span
+                                  className="text-[11px] text-white px-2.5 py-1 rounded-md font-medium"
+                                  style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
+                                >
+                                  当前
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })()
                       )}
                     </div>
                   ))}
