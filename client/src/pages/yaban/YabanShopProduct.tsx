@@ -6,17 +6,25 @@ import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { ChevronLeft, ShoppingCart, Minus, Plus } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
-import { getProductById } from "./shopData";
 import { useCart } from "./useCart";
+import { useShopProduct } from "./useShopProducts";
 import { toast } from "sonner";
 
 export default function YabanShopProduct() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/yaban/shop/product/:id");
   const id = params?.id || "";
-  const product = getProductById(id);
+  const { product, isLoading } = useShopProduct(id);
   const { add, count } = useCart();
   const [qty, setQty] = useState(1);
+
+  if (isLoading && !product) {
+    return (
+      <div className="min-h-screen bg-[#F5F7FA] flex items-center justify-center">
+        <p className="text-sm text-gray-400">加载中…</p>
+      </div>
+    );
+  }
 
   if (!product) {
     return (

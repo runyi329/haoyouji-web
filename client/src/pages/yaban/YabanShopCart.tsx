@@ -6,20 +6,20 @@ import { useMemo } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, Minus, Plus, Trash2 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
-import { getProductById } from "./shopData";
 import { useCart } from "./useCart";
+import { useProductsByIds } from "./useShopProducts";
 
 export default function YabanShopCart() {
   const [, navigate] = useLocation();
   const { items, setQty, remove } = useCart();
+  const products = useProductsByIds(items.map((it) => it.id));
 
-  const rows = useMemo(
-    () =>
-      items
-        .map((it) => ({ item: it, product: getProductById(it.id) }))
-        .filter((r) => r.product),
-    [items]
-  );
+  const rows = useMemo(() => {
+    const map = new Map(products.map((p) => [p.id, p]));
+    return items
+      .map((it) => ({ item: it, product: map.get(it.id) }))
+      .filter((r) => r.product);
+  }, [items, products]);
 
   const total = rows.reduce((s, r) => s + (r.product!.price * r.item.qty), 0);
 

@@ -57,6 +57,7 @@ import { petRouter } from "./pet-router";
 import { wcOddsRouter } from "./routers/wcOdds";
 import { nbaOddsRouter } from "./routers/nbaOdds";
 import { yabanShopRouter } from "./yaban-shop-router";
+import { yabanProductRouter } from "./yaban-product-router";
 
 // // 在应用启动时初始化数据库
 // initDatabase().catch(err => {
@@ -182,6 +183,7 @@ export const appRouter = router({
   merchant: merchantRouter,
   lottery: lotteryRouter,
   yabanShop: yabanShopRouter,
+  yabanProduct: yabanProductRouter,
   prediction: predictionRouter,
   okxTrader: okxTraderRouter,
 

@@ -65,7 +65,7 @@ async function compressImageToWebP(
  */
 export async function uploadImageToCOS(
   imageData: string | Buffer,
-  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' | 'posters' | 'lottery-images' | 'ag-prompts' | 'beauty-showcase' | 'signatures' = 'avatars',
+  folder: 'avatars' | 'ledger-photos' | 'payment-qrcodes' | 'reimbursement-vouchers' | 'posters' | 'lottery-images' | 'ag-prompts' | 'beauty-showcase' | 'signatures' | 'yaban-shop' = 'avatars',
   filename?: string
 ): Promise<string> {
   try {

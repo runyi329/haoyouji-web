@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Search, Plus, ChevronDown, ChevronUp, Settings, RefreshCw, Store, ChevronRight } from "lucide-react";
+import { Search, Plus, ChevronDown, ChevronUp, Settings, RefreshCw, Store, ChevronRight, Package } from "lucide-react";
 import YabanCalendar from "./YabanCalendar";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
@@ -289,6 +289,20 @@ export default function YabanHome() {
               <div className="flex-1 text-left">
                 <p className="text-sm font-medium text-gray-800">订单管理</p>
                 <p className="text-[11px] text-gray-400">查看与处理商城订单</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-gray-300" />
+            </button>
+            <div className="h-px bg-gray-100 my-3" />
+            <button
+              onClick={() => setLocation("/yaban/shop/admin/products")}
+              className="w-full flex items-center gap-3 active:scale-[0.98] transition-transform"
+            >
+              <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
+                <Package className="w-5 h-5 text-white" />
+              </span>
+              <div className="flex-1 text-left">
+                <p className="text-sm font-medium text-gray-800">商品管理</p>
+                <p className="text-[11px] text-gray-400">上下架、改价、编辑与新增商品</p>
               </div>
               <ChevronRight className="w-5 h-5 text-gray-300" />
             </button>

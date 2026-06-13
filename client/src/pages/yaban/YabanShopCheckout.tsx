@@ -9,8 +9,8 @@ import { ChevronLeft, Check, CheckCircle2, Loader2 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { getProductById } from "./shopData";
 import { useCart } from "./useCart";
+import { useProductsByIds } from "./useShopProducts";
 
 type PayMethod = "wechat" | "alipay";
 
@@ -22,13 +22,13 @@ export default function YabanShopCheckout() {
   const [done, setDone] = useState(false);
   const createOrder = trpc.yabanShop.createOrder.useMutation();
 
-  const rows = useMemo(
-    () =>
-      items
-        .map((it) => ({ item: it, product: getProductById(it.id) }))
-        .filter((r) => r.product),
-    [items]
-  );
+  const products = useProductsByIds(items.map((it) => it.id));
+  const rows = useMemo(() => {
+    const map = new Map(products.map((p) => [p.id, p]));
+    return items
+      .map((it) => ({ item: it, product: map.get(it.id) }))
+      .filter((r) => r.product);
+  }, [items, products]);
 
   const total = rows.reduce((s, r) => s + r.product!.price * r.item.qty, 0);
   const hasService = rows.some((r) => r.product!.kind === "service");

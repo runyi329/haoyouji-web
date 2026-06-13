@@ -8,24 +8,26 @@ import { useLocation } from "wouter";
 import { Search, ShoppingCart } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
-import { SHOP_CATEGORIES, SHOP_PRODUCTS, SHOP_BANNER, type ShopProduct } from "./shopData";
+import { SHOP_BANNER, type ShopProduct } from "./shopData";
 import { useCart } from "./useCart";
+import { useShopProducts } from "./useShopProducts";
 
 export default function YabanShop() {
   const [, navigate] = useLocation();
   const [activeCat, setActiveCat] = useState("all");
   const [keyword, setKeyword] = useState("");
   const { count } = useCart();
+  const { products, categories } = useShopProducts();
 
   const list = useMemo(() => {
-    let arr = SHOP_PRODUCTS;
+    let arr = products;
     if (activeCat !== "all") arr = arr.filter((p) => p.categoryId === activeCat);
     if (keyword.trim()) {
       const k = keyword.trim();
       arr = arr.filter((p) => p.name.includes(k) || p.subtitle.includes(k));
     }
     return arr;
-  }, [activeCat, keyword]);
+  }, [products, activeCat, keyword]);
 
   return (
     <div className="min-h-screen bg-[#F5F7FA]">
@@ -73,7 +75,7 @@ export default function YabanShop() {
       <div className="bg-[#F5F7FA] sticky top-[104px] z-30">
         <div className="max-w-lg mx-auto px-2 overflow-x-auto no-scrollbar">
           <div className="flex gap-2 py-2">
-            {SHOP_CATEGORIES.map((c) => {
+            {categories.map((c) => {
               const active = activeCat === c.id;
               return (
                 <button

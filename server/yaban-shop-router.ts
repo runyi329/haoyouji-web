@@ -60,11 +60,42 @@ export const yabanShopRouter = router({
           message: "数据库连接失败",
         });
 
-      // 服务端按传入快照计算金额（不信任前端总价）
-      const items = input.items.map((it) => ({
-        ...it,
-        subtotal: Math.round(it.price * it.qty * 100) / 100,
-      }));
+      // 服务端按数据库真实价格重算（彻底不信任前端价格）
+      // 先按 product_code(=legacy_code) 批量查库内价格
+      const codes = input.items.map((it) => it.code).filter(Boolean);
+      const priceMap = new Map<string, { price: number; name: string; image: string | null; kind: string }>();
+      if (codes.length > 0) {
+        const placeholders = codes.map(() => "?").join(",");
+        const [prows] = (await (conn as any).execute(
+          `SELECT legacy_code, name, image, kind, price FROM shop_product
+           WHERE tenant_id = ? AND legacy_code IN (${placeholders})`,
+          [DEFAULT_TENANT_ID, ...codes]
+        )) as any;
+        for (const r of prows as any[]) {
+          priceMap.set(String(r.legacy_code), {
+            price: Number(r.price),
+            name: r.name,
+            image: r.image,
+            kind: r.kind === "service" ? "service" : "product",
+          });
+        }
+      }
+      // 命中库内则用库内价/名/图，未命中则回退前端快照（兼容本地兜底商品）
+      const items = input.items.map((it) => {
+        const db = it.code ? priceMap.get(it.code) : undefined;
+        const price = db ? db.price : it.price;
+        const name = db ? db.name : it.name;
+        const image = db ? db.image || it.image : it.image;
+        const kind = (db ? db.kind : it.kind) as "product" | "service";
+        return {
+          ...it,
+          name,
+          image,
+          kind,
+          price,
+          subtotal: Math.round(price * it.qty * 100) / 100,
+        };
+      });
       const total = items.reduce((s, it) => s + it.subtotal, 0);
       const hasService = items.some((it) => it.kind === "service") ? 1 : 0;
       const orderNo = genOrderNo();

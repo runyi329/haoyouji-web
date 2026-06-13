@@ -1,0 +1,324 @@
+/**
+ * 牙办齿科商城 - 商品/分类后端路由（第三步第二批）
+ *
+ * 设计原则：
+ *   - 单店跑通（tenant_id 默认 1），表已预留多租户字段（tenant_id / source / platform_ref_id）
+ *   - 商品唯一对外标识沿用 legacy_code（如 p1001/s2001），与订单明细 product_code 对应
+ *   - description 在库内存 JSON 数组字符串，接口出入参统一为 string[]
+ *   - 公开接口（listProducts/getProduct/listCategories）仅返回上架商品，供前台使用
+ *   - 管理接口仅超级管理员（super_admin）可用，复用 adminProcedure
+ *   - 图片上传走 COS（自动压缩为 WebP），复用 uploadImageToCOS
+ *   - 全部使用 getDbConnection 原生 SQL（与项目现有写法一致）
+ */
+import { z } from "zod";
+import { router, publicProcedure, adminProcedure } from "./_core/trpc";
+import { TRPCError } from "@trpc/server";
+import { getDbConnection } from "./db";
+
+const DEFAULT_TENANT_ID = 1;
+
+// 把库内 description（JSON 数组字符串 / 旧换行文本）统一解析为 string[]
+function parseDescription(raw: any): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map((x) => String(x));
+  const s = String(raw).trim();
+  if (!s) return [];
+  if (s.startsWith("[")) {
+    try {
+      const arr = JSON.parse(s);
+      if (Array.isArray(arr)) return arr.map((x) => String(x));
+    } catch {
+      /* fallthrough */
+    }
+  }
+  // 兼容换行分隔的旧格式
+  return s.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+}
+
+// 把 tags（逗号分隔字符串）解析为 string[]
+function parseTags(raw: any): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.map((x) => String(x)).filter(Boolean);
+  return String(raw).split(",").map((x) => x.trim()).filter(Boolean);
+}
+
+// 数据库行 -> 前端商品对象（字段名贴近原 shopData，便于前台无缝替换）
+function mapProductRow(r: any) {
+  return {
+    id: r.legacy_code || `db${r.id}`, // 前端用的字符串 id，沿用旧编码
+    dbId: r.id, // 数据库自增 id（管理端编辑用）
+    categoryId: r.category_code,
+    kind: (r.kind === "service" ? "service" : "product") as "product" | "service",
+    name: r.name,
+    subtitle: r.subtitle || "",
+    price: Number(r.price),
+    originalPrice: r.original_price != null ? Number(r.original_price) : undefined,
+    image: r.image || "",
+    sales: Number(r.sales || 0),
+    tags: parseTags(r.tags),
+    description: parseDescription(r.description),
+    isActive: Number(r.status) === 1,
+    sortOrder: Number(r.sort_order || 0),
+    source: r.source || "self",
+  };
+}
+
+const adminProductInput = z.object({
+  category_code: z.string().min(1).max(32),
+  kind: z.enum(["product", "service"]).default("product"),
+  name: z.string().min(1).max(128),
+  subtitle: z.string().max(255).optional().default(""),
+  price: z.number().min(0),
+  original_price: z.number().min(0).nullable().optional(),
+  image: z.string().max(255).optional().default(""),
+  sales: z.number().int().min(0).optional().default(0),
+  tags: z.array(z.string().max(32)).optional().default([]),
+  description: z.array(z.string().max(500)).optional().default([]),
+  sort_order: z.number().int().optional().default(0),
+  status: z.union([z.literal(0), z.literal(1)]).optional().default(1),
+});
+
+export const yabanProductRouter = router({
+  // ============ 公开：分类列表（前台用，仅启用项） ============
+  listCategories: publicProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) return [];
+    const [rows] = (await (conn as any).execute(
+      `SELECT code, name, icon, sort_order FROM shop_category
+       WHERE tenant_id = ? AND status = 1 ORDER BY sort_order ASC, id ASC`,
+      [DEFAULT_TENANT_ID]
+    )) as any;
+    return (rows as any[]).map((r) => ({
+      id: r.code,
+      name: r.name,
+      icon: r.icon || "",
+    }));
+  }),
+
+  // ============ 公开：商品列表（前台用，仅上架项） ============
+  listProducts: publicProcedure
+    .input(
+      z
+        .object({
+          categoryId: z.string().max(32).optional(),
+          keyword: z.string().max(64).optional(),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return [];
+      const where: string[] = [`tenant_id = ?`, `status = 1`];
+      const params: any[] = [DEFAULT_TENANT_ID];
+      if (input?.categoryId && input.categoryId !== "all") {
+        where.push(`category_code = ?`);
+        params.push(input.categoryId);
+      }
+      if (input?.keyword && input.keyword.trim()) {
+        const k = `%${input.keyword.trim()}%`;
+        where.push(`(name LIKE ? OR subtitle LIKE ?)`);
+        params.push(k, k);
+      }
+      const [rows] = (await (conn as any).execute(
+        `SELECT * FROM shop_product WHERE ${where.join(" AND ")}
+         ORDER BY sort_order ASC, id ASC`,
+        params
+      )) as any;
+      return (rows as any[]).map(mapProductRow);
+    }),
+
+  // ============ 公开：商品详情（按 legacy_code 或 dbId） ============
+  getProduct: publicProcedure
+    .input(z.object({ id: z.string().max(32) }))
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return null;
+      const idStr = input.id.trim();
+      let rows: any[];
+      // 兼容 dbXX 形式
+      const dbId = idStr.startsWith("db") ? Number(idStr.slice(2)) : NaN;
+      if (!Number.isNaN(dbId)) {
+        [rows] = (await (conn as any).execute(
+          `SELECT * FROM shop_product WHERE id = ? AND tenant_id = ? LIMIT 1`,
+          [dbId, DEFAULT_TENANT_ID]
+        )) as any;
+      } else {
+        [rows] = (await (conn as any).execute(
+          `SELECT * FROM shop_product WHERE legacy_code = ? AND tenant_id = ? LIMIT 1`,
+          [idStr, DEFAULT_TENANT_ID]
+        )) as any;
+      }
+      const r = (rows as any[])[0];
+      if (!r) return null;
+      return mapProductRow(r);
+    }),
+
+  // ============ 管理员：商品列表（含下架，全字段） ============
+  adminListProducts: adminProcedure
+    .input(
+      z
+        .object({
+          categoryId: z.string().max(32).optional(),
+          keyword: z.string().max(64).optional(),
+          status: z.enum(["all", "on", "off"]).optional().default("all"),
+        })
+        .optional()
+    )
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return { list: [], counts: { all: 0, on: 0, off: 0 } };
+      const where: string[] = [`tenant_id = ?`];
+      const params: any[] = [DEFAULT_TENANT_ID];
+      if (input?.categoryId && input.categoryId !== "all") {
+        where.push(`category_code = ?`);
+        params.push(input.categoryId);
+      }
+      if (input?.keyword && input.keyword.trim()) {
+        const k = `%${input.keyword.trim()}%`;
+        where.push(`(name LIKE ? OR subtitle LIKE ?)`);
+        params.push(k, k);
+      }
+      if (input?.status === "on") where.push(`status = 1`);
+      if (input?.status === "off") where.push(`status = 0`);
+
+      const [rows] = (await (conn as any).execute(
+        `SELECT * FROM shop_product WHERE ${where.join(" AND ")}
+         ORDER BY sort_order ASC, id ASC`,
+        params
+      )) as any;
+
+      const [countRows] = (await (conn as any).execute(
+        `SELECT status, COUNT(*) cnt FROM shop_product WHERE tenant_id = ? GROUP BY status`,
+        [DEFAULT_TENANT_ID]
+      )) as any;
+      const counts = { all: 0, on: 0, off: 0 };
+      for (const c of countRows as any[]) {
+        const n = Number(c.cnt);
+        counts.all += n;
+        if (Number(c.status) === 1) counts.on += n;
+        else counts.off += n;
+      }
+      return { list: (rows as any[]).map(mapProductRow), counts };
+    }),
+
+  // ============ 管理员：分类列表（含停用） ============
+  adminListCategories: adminProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) return [];
+    const [rows] = (await (conn as any).execute(
+      `SELECT id, code, name, icon, sort_order, status FROM shop_category
+       WHERE tenant_id = ? ORDER BY sort_order ASC, id ASC`,
+      [DEFAULT_TENANT_ID]
+    )) as any;
+    return rows as any[];
+  }),
+
+  // ============ 管理员：新增商品 ============
+  createProduct: adminProcedure
+    .input(adminProductInput)
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn)
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      // 生成一个 legacy_code（自营商品：x + 时间戳后8位），保证唯一对外标识
+      const legacyCode = `x${Date.now().toString().slice(-10)}`;
+      const [res] = (await (conn as any).execute(
+        `INSERT INTO shop_product
+          (tenant_id, source, category_code, kind, name, subtitle, price, original_price, image, sales, tags, description, legacy_code, sort_order, status)
+         VALUES (?, 'self', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          DEFAULT_TENANT_ID,
+          input.category_code,
+          input.kind,
+          input.name,
+          input.subtitle || null,
+          input.price.toFixed(2),
+          input.original_price != null ? input.original_price.toFixed(2) : null,
+          input.image || null,
+          input.sales || 0,
+          input.tags.join(","),
+          JSON.stringify(input.description),
+          legacyCode,
+          input.sort_order || 0,
+          input.status,
+        ]
+      )) as any;
+      return { success: true, id: res?.insertId, legacyCode };
+    }),
+
+  // ============ 管理员：编辑商品 ============
+  updateProduct: adminProcedure
+    .input(adminProductInput.extend({ id: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn)
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await (conn as any).execute(
+        `UPDATE shop_product SET
+           category_code = ?, kind = ?, name = ?, subtitle = ?, price = ?, original_price = ?,
+           image = ?, sales = ?, tags = ?, description = ?, sort_order = ?, status = ?
+         WHERE id = ? AND tenant_id = ?`,
+        [
+          input.category_code,
+          input.kind,
+          input.name,
+          input.subtitle || null,
+          input.price.toFixed(2),
+          input.original_price != null ? input.original_price.toFixed(2) : null,
+          input.image || null,
+          input.sales || 0,
+          input.tags.join(","),
+          JSON.stringify(input.description),
+          input.sort_order || 0,
+          input.status,
+          input.id,
+          DEFAULT_TENANT_ID,
+        ]
+      );
+      return { success: true };
+    }),
+
+  // ============ 管理员：上下架切换 ============
+  toggleProductStatus: adminProcedure
+    .input(z.object({ id: z.number().int(), status: z.union([z.literal(0), z.literal(1)]) }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn)
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await (conn as any).execute(
+        `UPDATE shop_product SET status = ? WHERE id = ? AND tenant_id = ?`,
+        [input.status, input.id, DEFAULT_TENANT_ID]
+      );
+      return { success: true };
+    }),
+
+  // ============ 管理员：删除商品 ============
+  deleteProduct: adminProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn)
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await (conn as any).execute(
+        `DELETE FROM shop_product WHERE id = ? AND tenant_id = ?`,
+        [input.id, DEFAULT_TENANT_ID]
+      );
+      return { success: true };
+    }),
+
+  // ============ 管理员：上传商品图片（走 COS 压缩） ============
+  uploadProductImage: adminProcedure
+    .input(z.object({ imageData: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        const { uploadImageToCOS } = await import("./cos-upload");
+        const url = await uploadImageToCOS(input.imageData, "yaban-shop");
+        return { success: true, url };
+      } catch (e) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: e instanceof Error ? e.message : "图片上传失败",
+        });
+      }
+    }),
+});
