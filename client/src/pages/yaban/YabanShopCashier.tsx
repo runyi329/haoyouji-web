@@ -65,6 +65,29 @@ export default function YabanShopCashier() {
     if (paying || !orderNo) return;
     setPaying(true);
     try {
+      // live 模式：走真实渠道 HTTP 接口，后端返回可跳转的支付链接
+      if (mode === "live") {
+        const resp = await fetch("/api/yaban-pay/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ orderNo, channel }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data?.error || "发起支付失败");
+        if (data.alreadyPaid) {
+          toast.success("该订单已支付");
+          navigate(`/yaban/shop/pay-result?orderNo=${orderNo}&status=success`);
+          return;
+        }
+        if (data.payUrl) {
+          // 跳转微信/支付宝收银台；支付完成后回跳结果页轮询
+          window.location.href = data.payUrl;
+          return;
+        }
+        throw new Error("未获取到支付链接");
+      }
+
       const res: any = await createPayment.mutateAsync({ orderNo, channel });
       if (res.alreadyPaid) {
         toast.success("该订单已支付");
@@ -79,7 +102,7 @@ export default function YabanShopCashier() {
         );
         return;
       }
-      // live 模式：后端返回真实渠道跳转参数，这里跳转结果页轮询
+      // 不应走到这里（live 已改走下方 HTTP 分支）
       navigate(
         `/yaban/shop/pay-result?orderNo=${orderNo}&paymentNo=${res.paymentNo}`
       );

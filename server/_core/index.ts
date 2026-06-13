@@ -442,6 +442,9 @@ async function startServer() {
   // 支付宝 WAP 支付路由
   const alipayRouterModule = await import('../alipay-router.js');
   app.use(alipayRouterModule.default);
+  // 牙办齿科商城 - 真实支付(微信/支付宝)创建与回调路由
+  const yabanPayModule = await import('../yaban-payment-callback-router.js');
+  app.use(yabanPayModule.default);
   // 食物热量扫描路由
   const foodCalorieModule = await import('../food-calorie-router.js');
   app.use(foodCalorieModule.default);

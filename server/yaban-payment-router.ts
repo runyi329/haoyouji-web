@@ -15,6 +15,7 @@ import { router, publicProcedure, protectedProcedure, adminProcedure } from "./_
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
 import crypto from "crypto";
+import { clearMerchantCache } from "./yaban-payment-service";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -214,6 +215,8 @@ export const yabanPaymentRouter = router({
             ]
           );
         }
+        // 密钥/模式变更后失效该租户的 SDK 实例缓存，下次调用重建
+        try { clearMerchantCache(tenantId); } catch {}
         return { ok: true };
       } finally {
         conn.release?.();

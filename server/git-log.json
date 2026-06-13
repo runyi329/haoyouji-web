@@ -1,5 +1,14 @@
 [
   {
+    "hash": "52709b3c1341db162d0a3158f7fcf895be369990",
+    "author": "dev",
+    "date": "2026-06-13T10:46:21+00:00",
+    "message": "feat(yaban-shop): 多租户双支付框架(H5)-收银台/支付结果/医院支付设置+后端支付router",
+    "type": "feat",
+    "scope": "yaban-shop",
+    "cleanMessage": "多租户双支付框架(H5)-收银台/支付结果/医院支付设置+后端支付router"
+  },
+  {
     "hash": "e99ab05667e174ca382215cd877db9513329f949",
     "author": "dev",
     "date": "2026-06-13T10:12:51+00:00",
