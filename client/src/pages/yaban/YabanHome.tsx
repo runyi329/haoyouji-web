@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Search, Plus, ChevronDown, ChevronUp, Settings, RefreshCw } from "lucide-react";
+import { Search, Plus, ChevronDown, ChevronUp, Settings, RefreshCw, Store, ChevronRight } from "lucide-react";
 import YabanCalendar from "./YabanCalendar";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
@@ -274,6 +274,26 @@ export default function YabanHome() {
           <span className="text-[9px] bg-[#2196C8] text-white px-1 py-0.5 rounded mr-2">NEW</span>
 
         </div>
+
+        {/* 商城管理入口：仅超级管理员可见 */}
+        {user?.role === "super_admin" && (
+          <div className="bg-white mx-3 mt-2 rounded-xl p-4">
+            <div className="text-sm font-bold text-gray-800 mb-3">商城管理</div>
+            <button
+              onClick={() => setLocation("/yaban/shop/admin/orders")}
+              className="w-full flex items-center gap-3 active:scale-[0.98] transition-transform"
+            >
+              <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
+                <Store className="w-5 h-5 text-white" />
+              </span>
+              <div className="flex-1 text-left">
+                <p className="text-sm font-medium text-gray-800">订单管理</p>
+                <p className="text-[11px] text-gray-400">查看与处理商城订单</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-gray-300" />
+            </button>
+          </div>
+        )}
 
         {/* 工作统计 - 3D立体月历 */}
         <YabanCalendar />

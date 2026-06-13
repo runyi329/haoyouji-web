@@ -1,7 +1,7 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as db from "./db";
@@ -56,6 +56,7 @@ import { sendAlertEmail, sendBackupTestEmail } from "./email-service";
 import { petRouter } from "./pet-router";
 import { wcOddsRouter } from "./routers/wcOdds";
 import { nbaOddsRouter } from "./routers/nbaOdds";
+import { yabanShopRouter } from "./yaban-shop-router";
 
 // // 在应用启动时初始化数据库
 // initDatabase().catch(err => {
@@ -180,6 +181,7 @@ export const appRouter = router({
   diet: dietRouter,
   merchant: merchantRouter,
   lottery: lotteryRouter,
+  yabanShop: yabanShopRouter,
   prediction: predictionRouter,
   okxTrader: okxTraderRouter,
 

@@ -5,8 +5,10 @@
  */
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, Check, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, Check, CheckCircle2, Loader2 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
+import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 import { getProductById } from "./shopData";
 import { useCart } from "./useCart";
 
@@ -18,6 +20,7 @@ export default function YabanShopCheckout() {
   const [pay, setPay] = useState<PayMethod>("wechat");
   const [remark, setRemark] = useState("");
   const [done, setDone] = useState(false);
+  const createOrder = trpc.yabanShop.createOrder.useMutation();
 
   const rows = useMemo(
     () =>
@@ -30,10 +33,28 @@ export default function YabanShopCheckout() {
   const total = rows.reduce((s, r) => s + r.product!.price * r.item.qty, 0);
   const hasService = rows.some((r) => r.product!.kind === "service");
 
-  const handleSubmit = () => {
-    // 占位：暂不对接真实支付，直接模拟下单成功
-    clear();
-    setDone(true);
+  const handleSubmit = async () => {
+    if (createOrder.isPending) return;
+    // 支付仍为占位，但订单真实落库
+    const payload = rows.map(({ item, product }) => ({
+      code: product!.id,
+      name: product!.name,
+      image: product!.image || undefined,
+      kind: product!.kind,
+      price: product!.price,
+      qty: item.qty,
+    }));
+    try {
+      await createOrder.mutateAsync({
+        items: payload,
+        payMethod: pay,
+        remark: remark.trim() || undefined,
+      });
+      clear();
+      setDone(true);
+    } catch (e: any) {
+      toast.error(e?.message || "下单失败，请重试");
+    }
   };
 
   // 下单成功页
@@ -174,9 +195,11 @@ export default function YabanShopCheckout() {
           </div>
           <button
             onClick={handleSubmit}
-            className="px-6 py-2.5 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium"
+            disabled={createOrder.isPending}
+            className="px-6 py-2.5 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium flex items-center gap-1.5 disabled:opacity-60"
           >
-            提交订单
+            {createOrder.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            {createOrder.isPending ? "提交中" : "提交订单"}
           </button>
         </div>
       </div>
