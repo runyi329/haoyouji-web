@@ -7,6 +7,9 @@ import WalletCnyTransactions from "./pages/WalletCnyTransactions";
 import YabanSettings from "./pages/yaban/YabanSettings";
 import YabanRoles from "./pages/yaban/YabanRoles";
 import YabanVerifyRecords from "./pages/yaban/YabanVerifyRecords";
+import YabanHome from "./pages/yaban/YabanHome";
+import YabanMessages from "./pages/yaban/YabanMessages";
+import YabanShop from "./pages/yaban/YabanShop";
 // App v2.1 - 强制重新构建
 import { Toaster } from "@/components/ui/sonner";
 import { CenterToastProvider } from "@/components/ui/center-toast";
@@ -730,9 +733,9 @@ function Router() {
         <Route path="/world-cup/teams" component={WcTeams} />
         <Route path="/world-cup/teams/:code" component={WcTeams} />
         {/* 牙伴齿科管理 */}
-        <Route path="/yaban" component={lazy(() => import("./pages/yaban/YabanHome"))} />
-        <Route path="/yaban/messages" component={lazy(() => import("./pages/yaban/YabanMessages"))} />
-        <Route path="/yaban/shop" component={lazy(() => import("./pages/yaban/YabanShop"))} />
+        <Route path="/yaban" component={YabanHome} />
+        <Route path="/yaban/messages" component={YabanMessages} />
+        <Route path="/yaban/shop" component={YabanShop} />
         <Route path="/yaban/shop/product/:id" component={lazy(() => import("./pages/yaban/YabanShopProduct"))} />
         <Route path="/yaban/shop/cart" component={lazy(() => import("./pages/yaban/YabanShopCart"))} />
         <Route path="/yaban/shop/checkout" component={lazy(() => import("./pages/yaban/YabanShopCheckout"))} />
