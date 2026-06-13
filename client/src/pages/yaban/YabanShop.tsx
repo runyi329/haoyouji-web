@@ -5,7 +5,7 @@
  */
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { Search, ShoppingCart, Settings, Package, ClipboardList, X } from "lucide-react";
+import { Search, ShoppingCart, Settings, Package, ClipboardList, Receipt, X } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
 import { SHOP_BANNER, type ShopProduct } from "./shopData";
@@ -45,6 +45,14 @@ export default function YabanShop() {
           <div className="flex items-center justify-between mb-3">
             <span className="text-base font-bold">齿科商城</span>
             <div className="flex items-center gap-1">
+              {/* 我的订单：所有用户可见 */}
+              <button
+                onClick={() => navigate("/yaban/shop/my-orders")}
+                className="p-1"
+                aria-label="我的订单"
+              >
+                <Receipt className="w-5 h-5" />
+              </button>
               {/* 商城管理设置图标：仅超级管理员可见（临时入口，方便管理） */}
               {isAdmin && (
                 <button

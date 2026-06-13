@@ -163,6 +163,30 @@ export const yabanShopRouter = router({
       return rows as any[];
     }),
 
+  // ============ 客人侧：我的订单详情（仅能查自己的订单，含明细） ============
+  myOrderDetail: protectedProcedure
+    .input(z.object({ orderId: z.number().int() }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn)
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "数据库连接失败",
+        });
+      const [orderRows] = (await (conn as any).execute(
+        `SELECT * FROM shop_order WHERE id = ? AND user_id = ? AND tenant_id = ? LIMIT 1`,
+        [input.orderId, ctx.user.id, DEFAULT_TENANT_ID]
+      )) as any;
+      const order = (orderRows as any[])[0];
+      if (!order)
+        throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+      const [itemRows] = (await (conn as any).execute(
+        `SELECT * FROM shop_order_item WHERE order_id = ? ORDER BY id ASC`,
+        [input.orderId]
+      )) as any;
+      return { order, items: itemRows as any[] };
+    }),
+
   // ============ 管理员侧：订单列表（支持状态筛选 + 关键词） ============
   adminListOrders: publicProcedure
     .input(
