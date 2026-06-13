@@ -2,6 +2,11 @@ import { lazy, Suspense, useEffect } from "react";
 // 牙伴高频互跳页改为静态导入,避免互跳时出现Suspense"加载中"过渡闪现
 import YabanProfile from "./pages/yaban/YabanProfile";
 import YabanWallet from "./pages/yaban/YabanWallet";
+import WalletTransactions from "./pages/WalletTransactions";
+import WalletCnyTransactions from "./pages/WalletCnyTransactions";
+import YabanSettings from "./pages/yaban/YabanSettings";
+import YabanRoles from "./pages/yaban/YabanRoles";
+import YabanVerifyRecords from "./pages/yaban/YabanVerifyRecords";
 // App v2.1 - 强制重新构建
 import { Toaster } from "@/components/ui/sonner";
 import { CenterToastProvider } from "@/components/ui/center-toast";
@@ -440,8 +445,8 @@ function Router() {
 
         {/* 钱包相关页面 */}
         <Route path="/wallet" component={lazy(() => import("./pages/Wallet"))} />
-        <Route path="/wallet/transactions" component={lazy(() => import("./pages/WalletTransactions"))} />
-        <Route path="/wallet/cny-transactions" component={lazy(() => import("./pages/WalletCnyTransactions"))} />
+        <Route path="/wallet/transactions" component={WalletTransactions} />
+        <Route path="/wallet/cny-transactions" component={WalletCnyTransactions} />
         <Route path="/payment-accounts" component={lazy(() => import("./pages/PaymentAccounts"))} />
         <Route path="/recharge" component={lazy(() => import("./pages/Recharge"))} />
         <Route path="/recharge/history" component={lazy(() => import("./pages/RechargeHistory"))} />
@@ -744,9 +749,9 @@ function Router() {
         <Route path="/yaban/shop/coupons" component={lazy(() => import("./pages/yaban/YabanShopCoupons"))} />
         <Route path="/yaban/profile" component={YabanProfile} />
         <Route path="/yaban/wallet" component={YabanWallet} />
-        <Route path="/yaban/profile/verify-records" component={lazy(() => import("./pages/yaban/YabanVerifyRecords"))} />
-        <Route path="/yaban/settings" component={lazy(() => import("./pages/yaban/YabanSettings"))} />
-        <Route path="/yaban/settings/roles" component={lazy(() => import("./pages/yaban/YabanRoles"))} />
+        <Route path="/yaban/profile/verify-records" component={YabanVerifyRecords} />
+        <Route path="/yaban/settings" component={YabanSettings} />
+        <Route path="/yaban/settings/roles" component={YabanRoles} />
         <Route path="/yaban/followup" component={lazy(() => import("./pages/yaban/YabanFollowUp"))} />
         <Route path="/yaban/followup/create" component={lazy(() => import("./pages/yaban/YabanFollowUpCreate"))} />
         <Route path="/yaban/followup/patient-select" component={lazy(() => import("./pages/yaban/YabanPatientSelect"))} />
