@@ -146,11 +146,11 @@ export default function YabanShop() {
       <div className="max-w-lg mx-auto px-2 pt-2">
         <button
           onClick={() => navigate("/yaban/shop/coupons")}
-          className="w-full flex items-center gap-2 bg-gradient-to-r from-[#FFF4E5] to-[#FFE9D6] rounded-xl px-3 py-2.5 active:scale-[0.99] transition-transform"
+          className="w-full flex items-center gap-2 bg-gradient-to-r from-[#EAF4FE] to-[#D6EAFB] rounded-xl px-3 py-2.5 active:scale-[0.99] transition-transform"
         >
-          <Ticket className="w-5 h-5 text-[#E2452F] shrink-0" />
-          <span className="text-sm font-medium text-[#9A3412] flex-1 text-left">领券中心·领券下单更优惠</span>
-          <span className="text-xs text-[#E2452F]">去领取 ›</span>
+          <Ticket className="w-5 h-5 text-[#1E88D6] shrink-0" />
+          <span className="text-sm font-medium text-[#0E5A9E] flex-1 text-left">领券中心·领券下单更优惠</span>
+          <span className="text-xs font-medium text-[#1E88D6]">去领取 ›</span>
         </button>
       </div>
 
