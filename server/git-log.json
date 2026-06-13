@@ -1,5 +1,14 @@
 [
   {
+    "hash": "05fea9004b77742089dee7ce8b8e8952e60b94b5",
+    "author": "dev",
+    "date": "2026-06-13T18:36:13+00:00",
+    "message": "fix: 移除钱包/我的页进入即预取chunk的useEffect,消除从我的进钱包时内容闪现重绘",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "移除钱包/我的页进入即预取chunk的useEffect,消除从我的进钱包时内容闪现重绘"
+  },
+  {
     "hash": "25121fe20bcc404aef0747d094449b64efffea7b",
     "author": "dev",
     "date": "2026-06-13T17:59:15+00:00",

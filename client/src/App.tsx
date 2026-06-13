@@ -1,4 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
+// 牙伴高频互跳页改为静态导入,避免互跳时出现Suspense"加载中"过渡闪现
+import YabanProfile from "./pages/yaban/YabanProfile";
+import YabanWallet from "./pages/yaban/YabanWallet";
 // App v2.1 - 强制重新构建
 import { Toaster } from "@/components/ui/sonner";
 import { CenterToastProvider } from "@/components/ui/center-toast";
@@ -739,8 +742,8 @@ function Router() {
         <Route path="/yaban/shop/admin/dashboard" component={lazy(() => import("./pages/yaban/YabanShopAdminDashboard"))} />
         <Route path="/yaban/shop/admin/ops" component={lazy(() => import("./pages/yaban/YabanShopAdminOps"))} />
         <Route path="/yaban/shop/coupons" component={lazy(() => import("./pages/yaban/YabanShopCoupons"))} />
-        <Route path="/yaban/profile" component={lazy(() => import("./pages/yaban/YabanProfile"))} />
-        <Route path="/yaban/wallet" component={lazy(() => import("./pages/yaban/YabanWallet"))} />
+        <Route path="/yaban/profile" component={YabanProfile} />
+        <Route path="/yaban/wallet" component={YabanWallet} />
         <Route path="/yaban/profile/verify-records" component={lazy(() => import("./pages/yaban/YabanVerifyRecords"))} />
         <Route path="/yaban/settings" component={lazy(() => import("./pages/yaban/YabanSettings"))} />
         <Route path="/yaban/settings/roles" component={lazy(() => import("./pages/yaban/YabanRoles"))} />
