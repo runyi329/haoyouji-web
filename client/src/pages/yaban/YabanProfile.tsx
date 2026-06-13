@@ -35,6 +35,9 @@ export default function YabanProfile() {
   const { data: user } = trpc.auth.me.useQuery();
 
   const points = Number((user as any)?.points ?? 0);
+  const balanceQuery = trpc.recharge.getBalance.useQuery();
+  const walletBalance =
+    typeof balanceQuery.data === "number" ? balanceQuery.data : 0;
   const displayName = (user as any)?.name || (user as any)?.username || "牙伴用户";
   const phone = (user as any)?.phone as string | undefined;
   const avatar = (user as any)?.avatar as string | undefined;
@@ -50,10 +53,10 @@ export default function YabanProfile() {
       onClick: () => wip("积分"),
     },
     {
-      label: "我的牙银",
-      value: "0",
+      label: "我的钱包",
+      value: walletBalance.toFixed(2),
       icon: <Wallet className="w-5 h-5 text-[#1E88D6]" />,
-      onClick: () => wip("牙银"),
+      onClick: () => navigate("/wallet"),
     },
   ];
 

@@ -1,5 +1,14 @@
 [
   {
+    "hash": "e9889661054dcdb3a5d76884478c9570406f7a0e",
+    "author": "dev",
+    "date": "2026-06-13T16:56:05+00:00",
+    "message": "fix(yaban): 设置页头像相机图标改为半悬浮不裁切,移除提示文字",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "设置页头像相机图标改为半悬浮不裁切,移除提示文字"
+  },
+  {
     "hash": "df4f927cd643c6ced3e339132a70b322c78cc047",
     "author": "dev",
     "date": "2026-06-13T16:30:19+00:00",
