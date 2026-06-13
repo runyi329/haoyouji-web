@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft, ChevronDown, ChevronRight, RefreshCw } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { PageTag } from "@/components/PageTag";
 
@@ -41,12 +41,11 @@ export default function AfFeeDetail() {
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
   const [feeFilter, setFeeFilter] = useState<'all' | 'ongoing' | 'settled'>('all');
 
-  const { data: orders, isLoading, refetch: refetchOrders } = trpc.ledger.afAdminGetOrders.useQuery(
+  const { data: orders, isLoading } = trpc.ledger.afAdminGetOrders.useQuery(
     { ledgerId },
     { enabled: !!ledgerId }
   );
 
-  const [refreshing, setRefreshing] = useState(false);
 
   const feeItems = ((orders as any[]) ?? [])
     .filter((o: any) => o.side === 'buy' && o.status === 'completed')
@@ -81,20 +80,10 @@ export default function AfFeeDetail() {
   const memberUserIds = Array.from(
     new Set(userGroups.map(g => parseInt(g.userId)).filter(n => Number.isFinite(n) && n > 0))
   );
-  const { data: memberBalances, refetch: refetchBalances } = trpc.ledger.getMembersBalance.useQuery(
+  const { data: memberBalances } = trpc.ledger.getMembersBalance.useQuery(
     { userIds: memberUserIds },
     { enabled: memberUserIds.length > 0 }
   );
-
-  const handleRefresh = async () => {
-    if (refreshing) return;
-    setRefreshing(true);
-    try {
-      await Promise.all([refetchOrders(), refetchBalances()]);
-    } finally {
-      setTimeout(() => setRefreshing(false), 400);
-    }
-  };
 
   const totalOngoing = feeItems.filter(f => f.feeType === 'ongoing').reduce((s, f) => s + f.totalFee, 0);
   const totalSettled = feeItems.filter(f => f.feeType === 'settled').reduce((s, f) => s + f.totalFee, 0);
@@ -125,13 +114,11 @@ export default function AfFeeDetail() {
           </button>
           <span className="text-white font-semibold text-base">管理费明细</span>
           <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="ml-auto w-8 h-8 flex items-center justify-center rounded-full"
-            style={{ background: 'rgba(255,255,255,0.18)' }}
-            aria-label="刷新"
+            onClick={() => window.location.reload()}
+            className="ml-auto text-xs px-3 py-1 rounded-full active:opacity-70"
+            style={{ background: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.9)' }}
           >
-            <RefreshCw className={`w-4 h-4 text-white ${refreshing ? 'animate-spin' : ''}`} />
+            刷新
           </button>
         </div>
 
