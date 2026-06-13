@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-13
+// 生成时间：2026-06-14
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7245,5 +7245,17 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-13T10:46:21Z", type: "feat", cleanMessage: "多租户双支付框架(H5)-收银台/支付结果/医院支付设置+后端支付router" },
     { date: "2026-06-13T11:09:45Z", type: "feat", cleanMessage: "接入微信/支付宝真实支付渠道(多租户下单+回调验签)" },
     { date: "2026-06-13T11:40:46Z", type: "feat", cleanMessage: "交易闭环组 - 订单全流程状态/收货发货/到店核销/退款售后" },
+    { date: "2026-06-13T11:45:17Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-13T11:51:30Z", type: "feat", cleanMessage: "成交营销组 - 优惠券/满减、领券中心、搜索分类、商品分享带参" },
+    { date: "2026-06-13T12:01:06Z", type: "feat", cleanMessage: "商家管理组-数据看板/库存/多规格SKU/订单导出" },
+    { date: "2026-06-13T12:12:30Z", type: "feat", cleanMessage: "运营增强组-商品评价晒单/商家回复/首页Banner轮播配置" },
+    { date: "2026-06-13T15:50:15Z", type: "fix", cleanMessage: "领券中心横幅改为蓝色系与商城风格统一" },
+  ],
+  "2026-06-14": [
+    { date: "2026-06-13T16:12:12Z", type: "feat", cleanMessage: "重构「我的」个人中心页(蓝白风格)+核销记录空态页+底部导航改蓝色系" },
+    { date: "2026-06-13T16:30:19Z", type: "feat", cleanMessage: "新增设置页+门诊员工与角色权限体系(7角色×权限点,前后端+建表)" },
+    { date: "2026-06-13T16:56:05Z", type: "fix", cleanMessage: "设置页头像相机图标改为半悬浮不裁切,移除提示文字" },
+    { date: "2026-06-13T17:01:43Z", type: "feat", cleanMessage: "我的牙银改为我的钱包,接入全局智能钱包余额并跳转/wallet" },
+    { date: "2026-06-13T17:14:14Z", type: "feat", cleanMessage: "新增牙伴专属钱包页(蓝白风格,返回回我的,默认CNY tab)" },
   ],
 };
