@@ -153,7 +153,10 @@ export default function YabanShop() {
                 <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
-            <div className="px-3 py-3 space-y-2 pb-6">
+            <div
+              className="px-3 py-3 space-y-2"
+              style={{ paddingBottom: "calc(76px + env(safe-area-inset-bottom, 0px))" }}
+            >
               <button
                 onClick={() => {
                   setAdminOpen(false);
