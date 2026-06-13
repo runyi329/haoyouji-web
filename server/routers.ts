@@ -896,6 +896,29 @@ ${klinesSummary}
         return await dbRecharge.getUserBalance(targetUserId, input?.ledgerId);
       }),
 
+    // 批量获取多个用户的【全局】钱包余额（users.balance + 全部 af_manual_balances，不按账本隔离）
+    // 返回 { [userId]: balance } 映射，用于成员列表统一展示
+    getMembersBalance: protectedProcedure
+      .input(z.object({ userIds: z.array(z.number()) }))
+      .query(async ({ input }) => {
+        const result: Record<number, number> = {};
+        const ids = Array.from(new Set(input.userIds.filter((n) => Number.isFinite(n) && n > 0)));
+        if (ids.length === 0) return result;
+        const conn = await getDbConnection();
+        if (!conn) return result;
+        const placeholders = ids.map(() => '?').join(',');
+        const [rows] = await (conn as any).execute(
+          `SELECT u.id AS userId,
+                  (COALESCE(u.balance,0) + COALESCE((SELECT SUM(amount) FROM af_manual_balances WHERE user_id = u.id),0)) AS total
+           FROM users u WHERE u.id IN (${placeholders})`,
+          [...ids]
+        ) as any[];
+        for (const r of (Array.isArray(rows) ? rows : [])) {
+          result[Number(r.userId)] = parseFloat(r.total?.toString() || '0');
+        }
+        return result;
+      }),
+
     // 获取余额变动记录
     getBalanceHistory: protectedProcedure
       .input(z.object({ limit: z.number().optional() }))

@@ -75,6 +75,15 @@ export default function AfFeeDetail() {
     orders: g.orders.filter(o => feeFilter === 'all' || o.feeType === feeFilter),
   })).filter(g => g.orders.length > 0);
 
+  // 批量查询各成员的【全局】钱包余额（口径与钱包页一致）
+  const memberUserIds = Array.from(
+    new Set(userGroups.map(g => parseInt(g.userId)).filter(n => Number.isFinite(n) && n > 0))
+  );
+  const { data: memberBalances } = trpc.ledger.getMembersBalance.useQuery(
+    { userIds: memberUserIds },
+    { enabled: memberUserIds.length > 0 }
+  );
+
   const totalOngoing = feeItems.filter(f => f.feeType === 'ongoing').reduce((s, f) => s + f.totalFee, 0);
   const totalSettled = feeItems.filter(f => f.feeType === 'settled').reduce((s, f) => s + f.totalFee, 0);
   const totalAll = totalOngoing + totalSettled;
@@ -227,6 +236,14 @@ export default function AfFeeDetail() {
                       {group.ongoingCount > 0 && <span className="text-amber-500 ml-1">· 进行中 {group.ongoingCount}</span>}
                       {group.settledCount > 0 && <span className="text-emerald-500 ml-1">· 已结清 {group.settledCount}</span>}
                     </p>
+                    {memberBalances && memberBalances[parseInt(group.userId)] !== undefined && (
+                      <p className="text-[11px] mt-0.5">
+                        <span className="text-gray-400">钱包余额 </span>
+                        <span className="font-semibold" style={{ color: '#1A56DB' }}>
+                          {Number(memberBalances[parseInt(group.userId)]).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
+                        </span>
+                      </p>
+                    )}
                   </div>
                   {isExpanded
                     ? <ChevronDown className="w-4 h-4 text-gray-300 flex-shrink-0" />
