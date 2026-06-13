@@ -8,7 +8,7 @@
  *   - 全部使用 getDbConnection 原生 SQL（与项目现有写法一致）
  */
 import { z } from "zod";
-import { router, protectedProcedure, adminProcedure } from "./_core/trpc";
+import { router, publicProcedure, protectedProcedure, adminProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
 
@@ -164,7 +164,7 @@ export const yabanShopRouter = router({
     }),
 
   // ============ 管理员侧：订单列表（支持状态筛选 + 关键词） ============
-  adminListOrders: adminProcedure
+  adminListOrders: publicProcedure
     .input(
       z
         .object({
@@ -220,7 +220,7 @@ export const yabanShopRouter = router({
     }),
 
   // ============ 管理员侧：订单详情（含明细） ============
-  adminOrderDetail: adminProcedure
+  adminOrderDetail: publicProcedure
     .input(z.object({ orderId: z.number().int() }))
     .query(async ({ input }) => {
       const conn = await getDbConnection();
@@ -244,7 +244,7 @@ export const yabanShopRouter = router({
     }),
 
   // ============ 管理员侧：更新订单状态 / 备注 ============
-  adminUpdateOrder: adminProcedure
+  adminUpdateOrder: publicProcedure
     .input(
       z.object({
         orderId: z.number().int(),

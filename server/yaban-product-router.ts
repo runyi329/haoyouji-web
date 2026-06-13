@@ -154,7 +154,7 @@ export const yabanProductRouter = router({
     }),
 
   // ============ 管理员：商品列表（含下架，全字段） ============
-  adminListProducts: adminProcedure
+  adminListProducts: publicProcedure
     .input(
       z
         .object({
@@ -202,7 +202,7 @@ export const yabanProductRouter = router({
     }),
 
   // ============ 管理员：分类列表（含停用） ============
-  adminListCategories: adminProcedure.query(async () => {
+  adminListCategories: publicProcedure.query(async () => {
     const conn = await getDbConnection();
     if (!conn) return [];
     const [rows] = (await (conn as any).execute(
@@ -214,7 +214,7 @@ export const yabanProductRouter = router({
   }),
 
   // ============ 管理员：新增商品 ============
-  createProduct: adminProcedure
+  createProduct: publicProcedure
     .input(adminProductInput)
     .mutation(async ({ input }) => {
       const conn = await getDbConnection();
@@ -247,7 +247,7 @@ export const yabanProductRouter = router({
     }),
 
   // ============ 管理员：编辑商品 ============
-  updateProduct: adminProcedure
+  updateProduct: publicProcedure
     .input(adminProductInput.extend({ id: z.number().int() }))
     .mutation(async ({ input }) => {
       const conn = await getDbConnection();
@@ -279,7 +279,7 @@ export const yabanProductRouter = router({
     }),
 
   // ============ 管理员：上下架切换 ============
-  toggleProductStatus: adminProcedure
+  toggleProductStatus: publicProcedure
     .input(z.object({ id: z.number().int(), status: z.union([z.literal(0), z.literal(1)]) }))
     .mutation(async ({ input }) => {
       const conn = await getDbConnection();
@@ -293,7 +293,7 @@ export const yabanProductRouter = router({
     }),
 
   // ============ 管理员：删除商品 ============
-  deleteProduct: adminProcedure
+  deleteProduct: publicProcedure
     .input(z.object({ id: z.number().int() }))
     .mutation(async ({ input }) => {
       const conn = await getDbConnection();
@@ -307,7 +307,7 @@ export const yabanProductRouter = router({
     }),
 
   // ============ 管理员：上传商品图片（走 COS 压缩） ============
-  uploadProductImage: adminProcedure
+  uploadProductImage: publicProcedure
     .input(z.object({ imageData: z.string().min(1) }))
     .mutation(async ({ input }) => {
       try {

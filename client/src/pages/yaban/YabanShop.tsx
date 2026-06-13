@@ -20,7 +20,9 @@ export default function YabanShop() {
   const { count } = useCart();
   const { products, categories } = useShopProducts();
   const { user } = useAuth();
-  const isAdmin = user?.role === "super_admin";
+  // 临时：商城管理入口暂时对所有人开放，以后再恢复为仅 super_admin
+  // const isAdmin = user?.role === "super_admin";
+  const isAdmin = true;
   const [adminOpen, setAdminOpen] = useState(false);
 
   const list = useMemo(() => {
