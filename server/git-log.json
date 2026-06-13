@@ -1,5 +1,14 @@
 [
   {
+    "hash": "8e02516a04d7231a1ec7d436262555c28cf76a8c",
+    "author": "dev",
+    "date": "2026-06-13T17:14:14+00:00",
+    "message": "feat(yaban): 新增牙伴专属钱包页(蓝白风格,返回回我的,默认CNY tab)",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "新增牙伴专属钱包页(蓝白风格,返回回我的,默认CNY tab)"
+  },
+  {
     "hash": "ceb203f211420fc1810dc31d62f9948e4d2fede8",
     "author": "dev",
     "date": "2026-06-13T17:01:43+00:00",

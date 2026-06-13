@@ -7,9 +7,12 @@ import { PageTag } from "@/components/PageTag";
 
 interface WithdrawProps {
   hideHeader?: boolean;
+  theme?: "yaban";
+  onClose?: () => void;
 }
 
-export default function Withdraw({ hideHeader }: WithdrawProps) {
+export default function Withdraw({ hideHeader, theme, onClose }: WithdrawProps) {
+  const isYaban = theme === "yaban";
   const [, setLocation] = useLocation();
   const search = useSearch();
   const searchParams = new URLSearchParams(search);
@@ -92,6 +95,7 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
   const withdrawals = (withdrawalsQuery.data || []) as any[];
 
   const handleBack = () => {
+    if (isYaban && onClose) { onClose(); return; }
     if (fromLedgerId) {
       setLocation(`/recharge?from=ledger&ledgerId=${fromLedgerId}${viewAsParam}`);
     } else {
@@ -100,6 +104,153 @@ export default function Withdraw({ hideHeader }: WithdrawProps) {
   };
 
   const quickAmounts = [50, 100, 500, 1000];
+
+  // ============ 牙伴蓝白主题 ============
+  if (isYaban) {
+    const blueBtnStyle = { background: "linear-gradient(135deg,#2196C8,#1E88D6)", boxShadow: "0 6px 18px rgba(30,136,214,0.35)" } as const;
+    return (
+      <div className="min-h-screen pb-20" style={{ background: "#F4F8FB" }}>
+        <PageTag code="P010" />
+        {!hideHeader && (
+          <div className="sticky top-0 z-10" style={{ background: "linear-gradient(135deg,#2196C8,#3BA9E0)" }}>
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center">
+                <button onClick={handleBack} className="mr-3 flex items-center justify-center w-9 h-9 rounded-full" style={{ background: "rgba(255,255,255,0.18)" }}>
+                  <ArrowLeft className="w-5 h-5 text-white" />
+                </button>
+                <h1 className="text-lg font-semibold text-white">提现</h1>
+              </div>
+              <button
+                onClick={() => { sessionStorage.setItem('payment_accounts_back', '/yaban/wallet'); setLocation('/payment-accounts?from=yaban'); }}
+                className="flex items-center space-x-1 px-3 py-1.5 rounded-full text-xs font-medium text-white"
+                style={{ background: 'rgba(255,255,255,0.18)' }}
+              >
+                <span>钱包管理</span>
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="sticky top-[56px] z-10 bg-white shadow-sm">
+          <div className="flex px-4">
+            {(['withdraw', 'records'] as const).map(t => {
+              const labels = { withdraw: '申请提现', records: '提现记录' };
+              return (
+                <button key={t} onClick={() => setTab(t)} className="flex-1 py-3 text-center font-medium transition-colors text-sm"
+                  style={tab === t ? { color: '#1E88D6', borderBottom: '2px solid #1E88D6' } : { color: '#8AA0B2', borderBottom: '2px solid transparent' }}>
+                  {labels[t]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {tab === "withdraw" && (
+          <div className="p-4 space-y-4">
+            <div className="rounded-2xl p-5 bg-white" style={{ boxShadow: "0 4px 16px rgba(33,150,200,0.12)" }}>
+              <div className="text-gray-400 text-sm mb-1">可提现余额</div>
+              <div className="text-3xl font-bold text-[#0E5A9E]">{balance.toFixed(2)}<span className="text-base font-normal text-gray-400 ml-2">USDT</span></div>
+            </div>
+            <div className="rounded-2xl p-4 bg-white" style={{ boxShadow: "0 4px 16px rgba(33,150,200,0.1)" }}>
+              <div className="text-sm text-gray-400 mb-3">收款地址</div>
+              {walletsQuery.isLoading ? (
+                <div className="flex items-center justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-[#1E88D6]" /></div>
+              ) : blockchainWallets.length === 0 ? (
+                <div className="rounded-xl p-4 text-center" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                  <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+                  <p className="text-sm text-red-500 mb-3">您尚未绑定收款地址</p>
+                  <button onClick={() => { sessionStorage.setItem('payment_accounts_back', '/yaban/wallet'); setLocation('/payment-accounts?from=yaban'); }} className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={blueBtnStyle}>前往绑定</button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {blockchainWallets.map((wallet: any) => {
+                    const isSelected = selectedWallet?.id === wallet.id;
+                    return (
+                      <button key={wallet.id} onClick={() => setSelectedWalletId(wallet.id)} className="w-full flex items-center justify-between p-3 rounded-xl transition-all text-left"
+                        style={isSelected ? { background: '#EAF4FE', border: '1px solid #1E88D6' } : { background: '#F4F8FB', border: '1px solid #E1ECF5' }}>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-800">{wallet.walletType || wallet.network || '区块链钱包'}</div>
+                          <div className="text-xs text-gray-400 font-mono truncate mt-0.5">{wallet.walletAddress?.slice(0, 12)}...{wallet.walletAddress?.slice(-8)}</div>
+                        </div>
+                        {isSelected && <CheckCircle2 className="w-5 h-5 text-[#1E88D6] ml-3 flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
+                  <button onClick={() => { sessionStorage.setItem('payment_accounts_back', '/yaban/wallet'); setLocation('/payment-accounts?from=yaban'); }} className="w-full flex items-center justify-center py-2 text-sm text-gray-400">
+                    <span>管理收款地址</span><ChevronRight className="w-4 h-4 ml-1" />
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="rounded-2xl p-4 bg-white" style={{ boxShadow: "0 4px 16px rgba(33,150,200,0.1)" }}>
+              <div className="text-sm text-gray-400 mb-3">提现金额</div>
+              <div className="flex items-center rounded-xl px-4 py-3 mb-3" style={{ background: '#F4F8FB', border: '1px solid #E1ECF5' }}>
+                <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="请输入提现金额" className="flex-1 min-w-0 text-xl font-bold outline-none bg-transparent text-gray-800 placeholder-gray-300" step="0.01" min="10" />
+                <span className="text-[#1E88D6] text-sm font-medium ml-2">USDT</span>
+              </div>
+              <div className="flex gap-2 mb-2">
+                {quickAmounts.map(q => (
+                  <button key={q} onClick={() => setAmount(String(q))} className="flex-1 py-2 rounded-lg text-xs font-medium transition-all"
+                    style={amount === String(q) ? { background: '#EAF4FE', color: '#1E88D6', border: '1px solid #1E88D6' } : { background: '#F4F8FB', color: '#8AA0B2', border: '1px solid #E1ECF5' }}>{q}</button>
+                ))}
+                <button onClick={() => setAmount(balance.toFixed(2))} className="flex-1 py-2 rounded-lg text-xs font-medium transition-all"
+                  style={amount === balance.toFixed(2) ? { background: '#EAF4FE', color: '#1E88D6', border: '1px solid #1E88D6' } : { background: '#F4F8FB', color: '#8AA0B2', border: '1px solid #E1ECF5' }}>全部</button>
+              </div>
+              <p className="text-xs text-gray-400">最低提现：10 USDT</p>
+            </div>
+            <button onClick={handleSubmit} disabled={withdrawMutation.isPending || !amount || !selectedWallet} className="w-full py-4 rounded-xl font-semibold text-white tracking-wide disabled:opacity-50 flex items-center justify-center" style={blueBtnStyle}>
+              {withdrawMutation.isPending ? (<><Loader2 className="w-5 h-5 mr-2 animate-spin" />提交中...</>) : (<><ArrowUpCircle className="w-5 h-5 mr-2" />提交提现申请</>)}
+            </button>
+            <div className="rounded-2xl p-4" style={{ background: '#EAF4FE' }}>
+              <div className="text-sm font-medium text-[#1E88D6] mb-2">提现说明</div>
+              <ul className="text-xs text-gray-500 space-y-1.5">
+                <li>· 最低提现金额为 10 USDT</li>
+                <li>· 提现将发送到您选择的区块链钱包地址</li>
+                <li>· 提现申请提交后需要管理员审核</li>
+                <li>· 审核通过后将在 1-3 个工作日内到账</li>
+                <li>· 请确保收款钱包地址准确无误，转错地址无法找回</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {tab === "records" && (
+          <div className="p-4">
+            <div className="rounded-2xl overflow-hidden bg-white" style={{ boxShadow: "0 4px 16px rgba(33,150,200,0.1)" }}>
+              <div className="px-4 py-3 border-b border-gray-100"><h2 className="font-semibold text-[#0E5A9E]">提现记录</h2></div>
+              {withdrawalsQuery.isLoading ? (
+                <div className="p-8 text-center"><Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin text-[#1E88D6]" /><span className="text-gray-400 text-sm">加载中...</span></div>
+              ) : withdrawals.length === 0 ? (
+                <div className="p-8 text-center"><AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-400 text-sm">暂无提现记录</p></div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {withdrawals.map((item: any) => {
+                    const config = statusConfig[item.status] || statusConfig.pending;
+                    const StatusIcon = config.icon;
+                    return (
+                      <div key={item.id} className="px-4 py-3">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="font-semibold text-red-500">-{parseFloat(item.sntAmount).toFixed(2)} USDT</span>
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${config.bgColor} ${config.color} ${config.borderColor}`}><StatusIcon className="w-3 h-3 mr-1" />{config.label}</span>
+                        </div>
+                        <div className="text-xs text-gray-400 space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <span className="font-mono truncate max-w-[200px]">→ {item.bscAddress?.slice(0, 10)}...{item.bscAddress?.slice(-8)}</span>
+                            <span>{formatDate(item.createdAt)}</span>
+                          </div>
+                          {item.txnHash && (<div className="truncate text-gray-500">TxHash: {item.txnHash}</div>)}
+                          {item.adminNote && item.status === 'rejected' && (<div className="text-red-500 mt-1">拒绝原因：{item.adminNote}</div>)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-20" style={{ background: 'linear-gradient(160deg,#111111 0%,#1a1a1a 100%)' }}>

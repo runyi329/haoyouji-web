@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, RefreshCw } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import { PageTag } from "@/components/PageTag";
@@ -18,15 +18,11 @@ function formatTime(dateStr: string) {
 }
 
 // 从交易备注中提取世界杯球队 code（大写），如 [ES] → 'es'
-// 支持格式：世界杯投注-西班牙[ES] / 订单作废-退回投注[ES]
 function extractWcTeamCode(note: string): string | null {
-  // 先检查是否是世界杯相关交易
   const isWcRelated = note.includes('世界杯投注') || note.includes('订单作废-退回投注');
   if (!isWcRelated) return null;
-  // 提取 [XX] 格式的 code（新格式）
   const codeMatch = note.match(/\[([A-Z]{2,10})\]/);
   if (codeMatch) return codeMatch[1].toLowerCase();
-  // 旧格式（无code）：从球队名映射（常见球队）
   const nameToCode: Record<string, string> = {
     '西班牙': 'es', '法国': 'fr', '英格兰': 'gb-eng', '巴西': 'br', '阿根廷': 'ar',
     '葡萄牙': 'pt', '德国': 'de', '荷兰': 'nl', '挪威': 'no', '比利时': 'be',
@@ -47,6 +43,8 @@ function extractWcTeamCode(note: string): string | null {
 
 export default function WalletCnyTransactions() {
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  const isYaban = new URLSearchParams(search).get("from") === "yaban";
   const [filter, setFilter] = useState<"all" | "in" | "out">("all");
 
   const cnyBalanceQuery = trpc.recharge.getCnyBalance.useQuery();
@@ -73,17 +71,153 @@ export default function WalletCnyTransactions() {
     return true;
   });
 
-  // 统计
   const totalIn = allTx.filter((t) => t.isIn).reduce((s, t) => s + t.amount, 0);
   const totalOut = allTx.filter((t) => !t.isIn).reduce((s, t) => s + t.amount, 0);
 
+  // ============ 牙伴蓝白主题 ============
+  if (isYaban) {
+    return (
+      <div className="min-h-screen" style={{ background: "#F4F8FB" }}>
+        <PageTag code="P201" />
+        {/* 顶部导航 */}
+        <div
+          className="sticky top-0 z-20 flex items-center justify-between px-4 py-3"
+          style={{ background: "linear-gradient(135deg,#2196C8,#3BA9E0)" }}
+        >
+          <button
+            onClick={() => setLocation("/yaban/wallet")}
+            className="flex items-center justify-center w-9 h-9 rounded-full"
+            style={{ background: "rgba(255,255,255,0.18)" }}
+          >
+            <ArrowLeft className="w-5 h-5 text-white" />
+          </button>
+          <span className="text-base font-bold text-white">人民币明细</span>
+          <button
+            onClick={() => { cnyBalanceQuery.refetch(); cnyHistoryQuery.refetch(); }}
+            className="flex items-center justify-center w-9 h-9 rounded-full"
+            style={{ background: "rgba(255,255,255,0.18)" }}
+          >
+            <RefreshCw className="w-4 h-4 text-white" />
+          </button>
+        </div>
+
+        <div className="px-4 pb-24 pt-4 space-y-4">
+          {/* 余额 + 统计卡片 */}
+          <div
+            className="rounded-2xl p-5"
+            style={{ background: "#fff", boxShadow: "0 4px 16px rgba(33,150,200,0.12)" }}
+          >
+            <div className="mb-4">
+              <div className="text-xs mb-1 text-gray-400">当前余额</div>
+              <div className="flex items-baseline space-x-2">
+                <span className="text-4xl font-bold tabular-nums text-[#0E5A9E]">
+                  {cnyBalance.toFixed(2)}
+                </span>
+                <span className="text-base font-medium text-[#1E88D6]">CNY</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-100">
+              <div className="flex items-center space-x-2">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(34,197,94,0.12)" }}>
+                  <ArrowDownCircle className="w-4 h-4 text-green-500" />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-400">累计充值</div>
+                  <div className="text-sm font-bold tabular-nums text-green-600">+{totalIn.toFixed(2)}</div>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: "rgba(239,68,68,0.1)" }}>
+                  <ArrowUpCircle className="w-4 h-4 text-red-500" />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-400">累计提现</div>
+                  <div className="text-sm font-bold tabular-nums text-red-500">-{totalOut.toFixed(2)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 筛选 Tab */}
+          <div className="flex rounded-xl p-1" style={{ background: "#E8F3FA" }}>
+            {(["all", "in", "out"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className="flex-1 py-2 rounded-lg text-xs font-semibold transition-all"
+                style={
+                  filter === f
+                    ? { background: "#1E88D6", color: "#fff" }
+                    : { color: "#5A7A92", background: "transparent" }
+                }
+              >
+                {f === "all" ? "全部" : f === "in" ? "充值" : "提现"}
+              </button>
+            ))}
+          </div>
+
+          {/* 流水列表 */}
+          <div className="rounded-2xl overflow-hidden" style={{ background: "#fff", boxShadow: "0 4px 16px rgba(33,150,200,0.1)" }}>
+            {cnyHistoryQuery.isLoading ? (
+              <div className="py-12 text-center text-xs text-gray-400">加载中...</div>
+            ) : filtered.length === 0 ? (
+              <div className="py-12 text-center text-xs text-gray-400">
+                暂无{filter === "in" ? "充值" : filter === "out" ? "提现" : ""}记录
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {filtered.map((tx) => (
+                  <div key={tx.id} className="flex items-center justify-between px-5 py-4">
+                    <div className="flex items-center space-x-3">
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden"
+                        style={{ background: tx.isIn ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.08)" }}
+                      >
+                        {tx.wcCode ? (
+                          <img
+                            src={`/flags/${tx.wcCode}.png`}
+                            alt={tx.wcCode}
+                            className="w-9 h-9 object-cover rounded-full"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          tx.isIn
+                            ? <ArrowDownCircle className="w-4 h-4 text-green-500" />
+                            : <ArrowUpCircle className="w-4 h-4 text-red-500" />
+                        )}
+                      </div>
+                      <div>
+                        {!tx.wcCode && (
+                          <div className="text-sm font-medium text-gray-700">
+                            {tx.note || (tx.isIn ? "充值" : "提现")}
+                          </div>
+                        )}
+                        <div className="text-xs mt-0.5 text-gray-400">{formatTime(tx.createdAt)}</div>
+                      </div>
+                    </div>
+                    <div className="text-base font-bold tabular-nums" style={{ color: tx.isIn ? "#16a34a" : "#ef4444" }}>
+                      {tx.isIn ? "+" : "-"}{tx.amount.toFixed(2)}
+                      <span className="text-xs font-normal ml-1 text-gray-400">CNY</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ============ 原黑红主题 ============
   return (
     <div
       className="min-h-screen"
       style={{ background: "linear-gradient(160deg, #0d0d0d 0%, #1a1a1a 50%, #111111 100%)" }}
     >
         <PageTag code="P201" />
-      {/* 顶部导航 */}
       <div
         className="sticky top-0 z-20 flex items-center justify-between px-4 py-3"
         style={{
@@ -112,7 +246,6 @@ export default function WalletCnyTransactions() {
       </div>
 
       <div className="px-4 pb-24 pt-4 space-y-4">
-        {/* 余额 + 统计卡片 */}
         <div
           className="relative rounded-2xl overflow-hidden p-5"
           style={{
@@ -121,7 +254,6 @@ export default function WalletCnyTransactions() {
             boxShadow: "0 8px 32px rgba(0,0,0,0.7)",
           }}
         >
-          {/* 红色高光线 */}
           <div
             className="absolute inset-x-0 top-0 h-px"
             style={{
@@ -162,7 +294,6 @@ export default function WalletCnyTransactions() {
           </div>
         </div>
 
-        {/* 筛选 Tab */}
         <div
           className="flex rounded-xl p-1"
           style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
@@ -183,7 +314,6 @@ export default function WalletCnyTransactions() {
           ))}
         </div>
 
-        {/* 流水列表 */}
         <div
           className="relative rounded-2xl overflow-hidden"
           style={{
@@ -203,7 +333,6 @@ export default function WalletCnyTransactions() {
             <div className="divide-y" style={{ borderColor: "rgba(255,255,255,0.04)" }}>
               {filtered.map((tx) => (
                 <div key={tx.id} className="flex items-center justify-between px-5 py-4">
-                  {/* 左侧 */}
                   <div className="flex items-center space-x-3">
                     <div
                       className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden"
@@ -230,7 +359,6 @@ export default function WalletCnyTransactions() {
                       )}
                     </div>
                     <div>
-                      {/* 世界杯交易：不显示文字说明，只显示时间 */}
                       {!tx.wcCode && (
                         <div className="text-sm font-medium" style={{ color: "rgba(255,255,255,0.85)" }}>
                           {tx.note || (tx.isIn ? "充值" : "提现")}
@@ -241,7 +369,6 @@ export default function WalletCnyTransactions() {
                       </div>
                     </div>
                   </div>
-                  {/* 右侧金额 */}
                   <div
                     className="text-base font-bold tabular-nums"
                     style={{ color: tx.isIn ? "#4ade80" : "#f87171" }}

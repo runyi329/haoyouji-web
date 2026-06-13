@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import { PageTag } from "@/components/PageTag";
@@ -35,6 +35,9 @@ function extractWcTeamCode(note: string): string | null {
 
 export default function WalletTransactions() {
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  const isYaban = new URLSearchParams(search).get("from") === "yaban";
+  const backTo = isYaban ? "/yaban/wallet" : "/wallet";
   const [activeType, setActiveType] = useState<TransactionType>("all");
 
   // 三个接口：充值订单 + balance_history（含 withdraw/reward）+ AF 手动调账
@@ -154,6 +157,113 @@ export default function WalletTransactions() {
 
   const isLoading = rechargeQuery.isLoading || balanceHistoryQuery.isLoading || manualBalancesQuery.isLoading;
 
+  // ============ 牙伴蓝白主题 ============
+  if (isYaban) {
+    return (
+      <div className="min-h-screen pb-20" style={{ background: '#F4F8FB' }}>
+        <PageTag code="P202" />
+        <div className="sticky top-0 z-10" style={{ background: 'linear-gradient(135deg,#2196C8,#3BA9E0)' }}>
+          <div className="flex items-center px-4 py-3">
+            <button onClick={() => setLocation(backTo)} className="mr-3 flex items-center justify-center w-9 h-9 rounded-full" style={{ background: 'rgba(255,255,255,0.18)' }}>
+              <ArrowLeft className="w-5 h-5 text-white" />
+            </button>
+            <h1 className="text-lg font-semibold text-white">交易明细</h1>
+          </div>
+        </div>
+        <div className="sticky top-[56px] z-10 bg-white shadow-sm">
+          <div className="flex px-4">
+            {(['all', 'recharge', 'withdraw', 'reward'] as TransactionType[]).map(type => {
+              const labels: Record<TransactionType, string> = { all: '全部', recharge: '充值', withdraw: '提现', reward: '奖励' };
+              return (
+                <button
+                  key={type}
+                  onClick={() => setActiveType(type)}
+                  className="flex-1 py-3 text-center font-medium transition-colors text-sm"
+                  style={activeType === type
+                    ? { color: '#1E88D6', borderBottom: '2px solid #1E88D6' }
+                    : { color: '#8AA0B2', borderBottom: '2px solid transparent' }
+                  }
+                >
+                  {labels[type]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div className="p-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-[#1E88D6]" />
+            </div>
+          ) : filteredTransactions.length === 0 ? (
+            <div className="text-center py-20 text-gray-400">暂无交易记录</div>
+          ) : (
+            <div className="space-y-3">
+              {filteredTransactions.map((transaction) => {
+                const statusConfig = getStatusConfig(transaction.status);
+                const StatusIcon = statusConfig.icon;
+                const isRecharge = transaction.type === 'recharge';
+                const isPositive = isRecharge || transaction.type === 'reward';
+                const wcCode = transaction.wcCode as string | null;
+                return (
+                  <div key={transaction.id} className="rounded-2xl p-4 bg-white" style={{ boxShadow: '0 4px 16px rgba(33,150,200,0.1)' }}>
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center mr-2 flex-shrink-0" style={{ background: isPositive ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.08)' }}>
+                          {wcCode ? (
+                            <img src={`/flags/${wcCode}.png`} alt={wcCode} className="w-8 h-8 object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                          ) : (
+                            isPositive ? <ArrowDownCircle className="w-5 h-5 text-green-500" /> : <ArrowUpCircle className="w-5 h-5 text-red-500" />
+                          )}
+                        </div>
+                        <div>
+                          {!wcCode && (
+                            <div className="font-medium text-gray-800 text-sm">
+                              {isRecharge ? '充值' : transaction.type === 'withdraw' ? '提现' : transaction.type === 'reward' ? '奖励' : '扣费'}
+                              {transaction.network && (<span className="text-xs text-gray-400 ml-2">{transaction.network}</span>)}
+                            </div>
+                          )}
+                          <div className="text-xs text-gray-400 mt-0.5">{formatDate(transaction.createdAt)}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-lg font-bold ${isPositive ? 'text-green-600' : 'text-red-500'}`}>
+                          {isPositive ? '+' : '-'}{transaction.amount} USDT
+                        </div>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mt-1 ${statusConfig.bgColor} ${statusConfig.color} ${statusConfig.borderColor} border`}>
+                          <StatusIcon className="w-3 h-3 mr-1" />{statusConfig.label}
+                        </span>
+                      </div>
+                    </div>
+                    {transaction.orderNo && (<div className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">订单号: {transaction.orderNo}</div>)}
+                    {transaction.txnHash && transaction.network && (
+                      <div className="text-xs mt-1">
+                        <span className="text-gray-400">交易哈希: </span>
+                        {getBlockchainExplorerUrl(transaction.network, transaction.txnHash) ? (
+                          <a href={getBlockchainExplorerUrl(transaction.network, transaction.txnHash)!} target="_blank" rel="noopener noreferrer" className="text-[#1E88D6] hover:underline">{transaction.txnHash.slice(0, 10)}...{transaction.txnHash.slice(-8)}</a>
+                        ) : (
+                          <span className="text-gray-500">{transaction.txnHash.slice(0, 10)}...{transaction.txnHash.slice(-8)}</span>
+                        )}
+                      </div>
+                    )}
+                    {!wcCode && transaction.description && (<div className="text-xs text-gray-500 mt-1">{transaction.description}</div>)}
+                    {transaction.balanceAfter != null && (
+                      <div className="text-xs mt-2 pt-2 border-t border-gray-100 flex justify-between items-center">
+                        <span className="text-gray-400">余额</span>
+                        <span className="text-gray-600 font-medium">{transaction.balanceAfter.toFixed(2)} USDT</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ============ 原黑金主题 ============
   return (
     <div className="min-h-screen pb-20" style={{ background: 'linear-gradient(160deg,#111111 0%,#1a1a1a 100%)' }}>
       <PageTag code="P202" />

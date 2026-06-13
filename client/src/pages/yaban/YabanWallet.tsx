@@ -453,7 +453,7 @@ export default function YabanWallet() {
 
           {/* 右侧：明细 */}
           <button
-            onClick={() => setLocation(activeTab === "usdt" ? "/wallet/transactions" : "/wallet/cny-transactions")}
+            onClick={() => setLocation(activeTab === "usdt" ? "/wallet/transactions?from=yaban" : "/wallet/cny-transactions?from=yaban")}
             className="px-2.5 h-7 rounded-full text-xs font-medium text-white"
             style={{ background: "rgba(255,255,255,0.2)" }}
           >
@@ -584,13 +584,13 @@ export default function YabanWallet() {
 
       {/* ── 弹窗 ── */}
       {modal === "recharge" && (
-        <div className="fixed inset-0 z-50">
-          <Recharge onClose={() => setModal(null)} />
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <Recharge theme="yaban" onClose={() => setModal(null)} />
         </div>
       )}
       {modal === "withdraw" && (
-        <div className="fixed inset-0 z-50">
-          <Withdraw onClose={() => setModal(null)} />
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <Withdraw theme="yaban" onClose={() => setModal(null)} />
         </div>
       )}
       {modal === "cny-recharge" && (
