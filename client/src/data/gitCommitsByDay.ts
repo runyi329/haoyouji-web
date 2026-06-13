@@ -7222,5 +7222,17 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-06-13": [
     { date: "2026-06-12T16:07:00Z", type: "fix", cleanMessage: "调账弹窗余额改用全局口径(去ledgerId)并修复弹窗居中" },
+    { date: "2026-06-12T18:07:45Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-13T01:09:27Z", type: "feat", cleanMessage: "管理费明细订单行增加日均×天数说明" },
+    { date: "2026-06-13T01:27:40Z", type: "feat", cleanMessage: "管理费明细成员后显示全局钱包余额(新增批量余额接口)" },
+    { date: "2026-06-13T01:59:21Z", type: "feat", cleanMessage: "管理费明细页右上角添加强制刷新按钮" },
+    { date: "2026-06-13T02:42:40Z", type: "style", cleanMessage: "管理费明细刷新按钮改为与订单管理页一致的文字按钮(强制刷新)" },
+    { date: "2026-06-13T03:04:46Z", type: "other", cleanMessage: "Revert \"style: 管理费明细刷新按钮改为与订单管理页一致的文字按钮(强制刷新)\"" },
+    { date: "2026-06-13T03:04:46Z", type: "other", cleanMessage: "Revert \"feat: 管理费明细页右上角添加强制刷新按钮\"" },
+    { date: "2026-06-13T03:21:55Z", type: "fix", cleanMessage: "管理费明细成员余额接口调用路径修正(ledger->recharge)，修复404导致余额不显示" },
+    { date: "2026-06-13T05:58:14Z", type: "style", cleanMessage: "牙办首页医院选择弹框改为蓝白清爽风格，与页面整体风格一致" },
+    { date: "2026-06-13T06:13:39Z", type: "feat", cleanMessage: "牙办齿科商城首版(分类/商品/详情/购物车/结算+支付占位)" },
+    { date: "2026-06-13T06:49:57Z", type: "chore", cleanMessage: "临时商城素材上传接口(用完即删)" },
+    { date: "2026-06-13T06:57:32Z", type: "feat", cleanMessage: "牙办商城接入AI定制配图与分类图标(蓝色3D拟物风)" },
   ],
 };
