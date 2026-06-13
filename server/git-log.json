@@ -1,5 +1,212 @@
 [
   {
+    "hash": "e99ab05667e174ca382215cd877db9513329f949",
+    "author": "dev",
+    "date": "2026-06-13T10:12:51+00:00",
+    "message": "feat(yaban-shop): 商品管理新增分类管理(增删改/排序)",
+    "type": "feat",
+    "scope": "yaban-shop",
+    "cleanMessage": "商品管理新增分类管理(增删改/排序)"
+  },
+  {
+    "hash": "35f926fa0ecd98c8c15fc8588664574122ee4d26",
+    "author": "dev",
+    "date": "2026-06-13T09:49:37+00:00",
+    "message": "feat(yaban-shop): 新增客人端我的订单页(列表+详情)及商城首页入口",
+    "type": "feat",
+    "scope": "yaban-shop",
+    "cleanMessage": "新增客人端我的订单页(列表+详情)及商城首页入口"
+  },
+  {
+    "hash": "dea5315c29f4c188c37741df9c41c17c98fc44e8",
+    "author": "dev",
+    "date": "2026-06-13T09:40:52+00:00",
+    "message": "fix(yaban-shop): 商城管理弹窗底部增加安全间距,避免被底部导航栏遮挡",
+    "type": "fix",
+    "scope": "yaban-shop",
+    "cleanMessage": "商城管理弹窗底部增加安全间距,避免被底部导航栏遮挡"
+  },
+  {
+    "hash": "8408a45710623cd37ab51e10af241db0baeaffc2",
+    "author": "dev",
+    "date": "2026-06-13T09:34:33+00:00",
+    "message": "tmp(yaban-shop): 商城管理入口与管理接口临时对所有人开放(前端入口+后端public),便于内部管理,以后再收紧权限",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "tmp(yaban-shop): 商城管理入口与管理接口临时对所有人开放(前端入口+后端public),便于内部管理,以后再收紧权限"
+  },
+  {
+    "hash": "eae4b0e55f1aa70f733feec7f6517d6f7350827c",
+    "author": "dev",
+    "date": "2026-06-13T09:06:42+00:00",
+    "message": "feat(yaban-shop): 商城首页右上角加管理入口设置图标(仅超管,临时入口)",
+    "type": "feat",
+    "scope": "yaban-shop",
+    "cleanMessage": "商城首页右上角加管理入口设置图标(仅超管,临时入口)"
+  },
+  {
+    "hash": "37b6792b710fc478397434486c80c38e24bcd230",
+    "author": "dev",
+    "date": "2026-06-13T08:55:44+00:00",
+    "message": "feat(yaban-shop): 商品入库与商品管理后台(第二批)",
+    "type": "feat",
+    "scope": "yaban-shop",
+    "cleanMessage": "商品入库与商品管理后台(第二批)"
+  },
+  {
+    "hash": "cb4d4f5aab1ae0456b6e54d17c65695d5111a454",
+    "author": "dev",
+    "date": "2026-06-13T08:20:59+00:00",
+    "message": "feat: 牙办商城订单落库+订单管理后台(建表/下单接口/管理员订单管理页)",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "牙办商城订单落库+订单管理后台(建表/下单接口/管理员订单管理页)"
+  },
+  {
+    "hash": "879fe076af1718506de1611e1b6f4048218a3711",
+    "author": "github-actions[bot]",
+    "date": "2026-06-13T07:50:59+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "75171fe6ad69a69d28ae2fb9f61d9ffca5a41058",
+    "author": "dev",
+    "date": "2026-06-13T06:57:32+00:00",
+    "message": "feat: 牙办商城接入AI定制配图与分类图标(蓝色3D拟物风)",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "牙办商城接入AI定制配图与分类图标(蓝色3D拟物风)"
+  },
+  {
+    "hash": "be5b1868b503b3598e518d424216a6d51b106d84",
+    "author": "dev",
+    "date": "2026-06-13T06:49:57+00:00",
+    "message": "chore: 临时商城素材上传接口(用完即删)",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "临时商城素材上传接口(用完即删)"
+  },
+  {
+    "hash": "da0e05b23f32ba771b06d183bff51cbe5d7ed26b",
+    "author": "dev",
+    "date": "2026-06-13T06:13:39+00:00",
+    "message": "feat: 牙办齿科商城首版(分类/商品/详情/购物车/结算+支付占位)",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "牙办齿科商城首版(分类/商品/详情/购物车/结算+支付占位)"
+  },
+  {
+    "hash": "26cffec0cef765a31a60ada550389f9b9f7ec7b0",
+    "author": "dev",
+    "date": "2026-06-13T05:58:14+00:00",
+    "message": "style: 牙办首页医院选择弹框改为蓝白清爽风格，与页面整体风格一致",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "牙办首页医院选择弹框改为蓝白清爽风格，与页面整体风格一致"
+  },
+  {
+    "hash": "1b6105d807c5238946990b4f46e8e6d730b4dd79",
+    "author": "dev",
+    "date": "2026-06-13T03:21:55+00:00",
+    "message": "fix: 管理费明细成员余额接口调用路径修正(ledger->recharge)，修复404导致余额不显示",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "管理费明细成员余额接口调用路径修正(ledger->recharge)，修复404导致余额不显示"
+  },
+  {
+    "hash": "3f1732cfdd87d25b4c64a851d003996ce0a97085",
+    "author": "dev",
+    "date": "2026-06-13T03:04:46+00:00",
+    "message": "Revert \"feat: 管理费明细页右上角添加强制刷新按钮\"",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "Revert \"feat: 管理费明细页右上角添加强制刷新按钮\""
+  },
+  {
+    "hash": "a593c28e89f10280535d6fcfdb2e14419790bbad",
+    "author": "dev",
+    "date": "2026-06-13T03:04:46+00:00",
+    "message": "Revert \"style: 管理费明细刷新按钮改为与订单管理页一致的文字按钮(强制刷新)\"",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "Revert \"style: 管理费明细刷新按钮改为与订单管理页一致的文字按钮(强制刷新)\""
+  },
+  {
+    "hash": "e19e9faa0cc657efc3ae1017bc1e2756a17d6913",
+    "author": "dev",
+    "date": "2026-06-13T02:42:40+00:00",
+    "message": "style: 管理费明细刷新按钮改为与订单管理页一致的文字按钮(强制刷新)",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "管理费明细刷新按钮改为与订单管理页一致的文字按钮(强制刷新)"
+  },
+  {
+    "hash": "22c733ab54f980f74526e9df608a7eeccba763a8",
+    "author": "manus",
+    "date": "2026-06-13T01:59:21+00:00",
+    "message": "feat: 管理费明细页右上角添加强制刷新按钮",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "管理费明细页右上角添加强制刷新按钮"
+  },
+  {
+    "hash": "b3eaf90feef9696bca8a8ad5174e82b171870bca",
+    "author": "runyi329",
+    "date": "2026-06-13T01:27:40+00:00",
+    "message": "feat: 管理费明细成员后显示全局钱包余额(新增批量余额接口)",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "管理费明细成员后显示全局钱包余额(新增批量余额接口)"
+  },
+  {
+    "hash": "eba44d7c02c976bd78aa648a6a32d7f9cfd4c0cb",
+    "author": "runyi329",
+    "date": "2026-06-13T01:09:27+00:00",
+    "message": "feat: 管理费明细订单行增加日均×天数说明",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "管理费明细订单行增加日均×天数说明"
+  },
+  {
+    "hash": "434bcc5d80411ca87158845288a8907872cb959c",
+    "author": "github-actions[bot]",
+    "date": "2026-06-12T18:07:45+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "ffdc6cb753580bd83d98c7d4ecc9d8a2697d6b32",
+    "author": "runyi329",
+    "date": "2026-06-12T16:07:00+00:00",
+    "message": "fix: 调账弹窗余额改用全局口径(去ledgerId)并修复弹窗居中",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "调账弹窗余额改用全局口径(去ledgerId)并修复弹窗居中"
+  },
+  {
+    "hash": "d175f823404b3875655292efe40dd1fe9414f4a9",
+    "author": "runyi329",
+    "date": "2026-06-12T15:52:23+00:00",
+    "message": "feat: 手动调账新增弹窗选中成员后显示其当前钱包余额",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "手动调账新增弹窗选中成员后显示其当前钱包余额"
+  },
+  {
+    "hash": "80d52df68a83037e13501cf6fcea30100d507bed",
+    "author": "deploy",
+    "date": "2026-06-12T15:02:00+00:00",
+    "message": "fix: 结息记录增删后自动刷新已付利息汇总，无需手动刷新页面",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "结息记录增删后自动刷新已付利息汇总，无需手动刷新页面"
+  },
+  {
     "hash": "c70993e1eb21e0559ed3849f9e2c5eede1663399",
     "author": "deploy",
     "date": "2026-06-12T14:40:56+00:00",

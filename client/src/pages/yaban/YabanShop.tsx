@@ -5,7 +5,7 @@
  */
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { Search, ShoppingCart, Settings, Package, ClipboardList, Receipt, X } from "lucide-react";
+import { Search, ShoppingCart, Settings, Package, ClipboardList, Receipt, CreditCard, X } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
 import { SHOP_BANNER, type ShopProduct } from "./shopData";
@@ -193,6 +193,21 @@ export default function YabanShop() {
                 <div className="flex-1 text-left">
                   <p className="text-sm font-medium text-gray-800">订单管理</p>
                   <p className="text-[11px] text-gray-400">查看与处理商城订单</p>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setAdminOpen(false);
+                  navigate("/yaban/shop/admin/merchant-config");
+                }}
+                className="w-full flex items-center gap-3 bg-[#F5F7FA] rounded-xl p-3 active:scale-[0.98] transition-transform"
+              >
+                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
+                  <CreditCard className="w-5 h-5 text-white" />
+                </span>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-medium text-gray-800">支付设置</p>
+                  <p className="text-[11px] text-gray-400">配置本店微信/支付宝收款商户</p>
                 </div>
               </button>
             </div>

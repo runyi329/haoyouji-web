@@ -1,11 +1,11 @@
 /**
- * 牙伴齿科商城 - 确认订单页（含微信/支付宝支付方式占位）
+ * 牙伴齿科商城 - 确认订单页
  * 路由：/yaban/shop/checkout
- * 说明：支付暂未对接真实渠道，点击提交后走模拟下单成功
+ * 说明：提交订单后真实落库，并跳转到 H5 收银台选择支付方式
  */
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, Check, CheckCircle2, Loader2 } from "lucide-react";
+import { ChevronLeft, Check, Loader2 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -19,7 +19,6 @@ export default function YabanShopCheckout() {
   const { items, clear } = useCart();
   const [pay, setPay] = useState<PayMethod>("wechat");
   const [remark, setRemark] = useState("");
-  const [done, setDone] = useState(false);
   const createOrder = trpc.yabanShop.createOrder.useMutation();
 
   const products = useProductsByIds(items.map((it) => it.id));
@@ -45,54 +44,23 @@ export default function YabanShopCheckout() {
       qty: item.qty,
     }));
     try {
-      await createOrder.mutateAsync({
+      const res = await createOrder.mutateAsync({
         items: payload,
         payMethod: pay,
         remark: remark.trim() || undefined,
       });
       clear();
-      setDone(true);
+      // 提交成功 → 进入 H5 收银台选择并完成支付
+      const params = new URLSearchParams({
+        orderNo: res.orderNo,
+        amount: String(res.total),
+        channel: pay,
+      });
+      navigate(`/yaban/shop/cashier?${params.toString()}`);
     } catch (e: any) {
       toast.error(e?.message || "下单失败，请重试");
     }
   };
-
-  // 下单成功页
-  if (done) {
-    return (
-      <div className="min-h-screen bg-[#F5F7FA] flex flex-col">
-        <PageTag code="P305" />
-        <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">
-          <div className="max-w-lg mx-auto px-3 py-3 flex items-center">
-            <span className="text-base font-bold mx-auto">下单成功</span>
-          </div>
-        </div>
-        <div className="flex-1 flex flex-col items-center justify-center px-8 -mt-16">
-          <CheckCircle2 className="w-16 h-16 text-[#2196C8] mb-4" />
-          <p className="text-lg font-bold text-gray-800 mb-2">提交成功</p>
-          <p className="text-sm text-gray-500 text-center leading-relaxed mb-8">
-            {hasService
-              ? "您的诊疗预约已提交，门店会尽快与您联系确认到院时间。"
-              : "您的订单已提交，我们会尽快为您安排发货。"}
-          </p>
-          <div className="w-full max-w-xs space-y-2">
-            <button
-              onClick={() => navigate("/yaban/shop")}
-              className="w-full py-2.5 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium"
-            >
-              继续逛商城
-            </button>
-            <button
-              onClick={() => navigate("/yaban")}
-              className="w-full py-2.5 rounded-full border border-gray-200 text-gray-500 text-sm"
-            >
-              返回工作台
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // 空购物车保护
   if (rows.length === 0) {
@@ -166,12 +134,12 @@ export default function YabanShopCheckout() {
           />
         </div>
 
-        {/* 支付方式（占位） */}
+        {/* 支付方式（提交后进入收银台可再次确认） */}
         <div className="bg-white rounded-xl px-3 py-1">
           <p className="text-sm text-gray-700 px-1 pt-2 pb-1">支付方式</p>
           <PayOption
             label="微信支付"
-            desc="暂未对接，提交后为占位流程"
+            desc="提交订单后进入收银台完成支付"
             color="#1AAD19"
             active={pay === "wechat"}
             onClick={() => setPay("wechat")}
@@ -179,7 +147,7 @@ export default function YabanShopCheckout() {
           <div className="h-px bg-gray-100 mx-1" />
           <PayOption
             label="支付宝"
-            desc="暂未对接，提交后为占位流程"
+            desc="提交订单后进入收银台完成支付"
             color="#1677FF"
             active={pay === "alipay"}
             onClick={() => setPay("alipay")}
