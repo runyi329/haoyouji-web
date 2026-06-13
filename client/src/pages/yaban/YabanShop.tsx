@@ -8,7 +8,7 @@ import { useLocation } from "wouter";
 import { Search, ShoppingCart } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
-import { SHOP_CATEGORIES, SHOP_PRODUCTS, type ShopProduct } from "./shopData";
+import { SHOP_CATEGORIES, SHOP_PRODUCTS, SHOP_BANNER, type ShopProduct } from "./shopData";
 import { useCart } from "./useCart";
 
 export default function YabanShop() {
@@ -62,23 +62,41 @@ export default function YabanShop() {
         </div>
       </div>
 
+      {/* 首页 Banner */}
+      <div className="max-w-lg mx-auto px-2 pt-2">
+        <div className="rounded-2xl overflow-hidden shadow-sm">
+          <img src={SHOP_BANNER} alt="齿科商城" className="w-full h-auto block" />
+        </div>
+      </div>
+
       {/* 分类横向导航 */}
-      <div className="bg-white sticky top-[104px] z-30 border-b border-gray-100">
+      <div className="bg-[#F5F7FA] sticky top-[104px] z-30">
         <div className="max-w-lg mx-auto px-2 overflow-x-auto no-scrollbar">
-          <div className="flex gap-1 py-2">
+          <div className="flex gap-2 py-2">
             {SHOP_CATEGORIES.map((c) => {
               const active = activeCat === c.id;
               return (
                 <button
                   key={c.id}
                   onClick={() => setActiveCat(c.id)}
-                  className={`shrink-0 px-3 py-1.5 rounded-full text-[13px] font-medium transition-colors ${
-                    active
-                      ? "bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white"
-                      : "bg-gray-100 text-gray-500"
-                  }`}
+                  className="shrink-0 flex flex-col items-center gap-1 w-14"
                 >
-                  {c.name}
+                  <div
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden transition-all ${
+                      active
+                        ? "bg-gradient-to-br from-[#E8F4FD] to-[#D6EEFB] ring-2 ring-[#2196C8]"
+                        : "bg-white shadow-sm"
+                    }`}
+                  >
+                    {c.icon ? (
+                      <img src={c.icon} alt={c.name} className="w-10 h-10 object-contain" loading="lazy" />
+                    ) : (
+                      <span className={`text-[13px] font-bold ${active ? "text-[#2196C8]" : "text-gray-400"}`}>全</span>
+                    )}
+                  </div>
+                  <span className={`text-[11px] ${active ? "text-[#2196C8] font-medium" : "text-gray-500"}`}>
+                    {c.name}
+                  </span>
                 </button>
               );
             })}

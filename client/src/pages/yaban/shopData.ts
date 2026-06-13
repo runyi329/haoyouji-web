@@ -35,18 +35,18 @@ export type ShopProduct = {
   description: string[];
 };
 
-// 分类（图标暂用占位，后续 AI 定制蓝色系 3D 拟物图标后替换）
+// 商城首页 Banner（AI 定制蓝色系 3D 拟物风）
+export const SHOP_BANNER = "/yaban-shop/banner_home.webp";
+
+// 分类（图标为 AI 定制蓝色系 3D 拟物图标）
 export const SHOP_CATEGORIES: ShopCategory[] = [
   { id: "all", name: "全部", icon: "" },
-  { id: "care", name: "口腔护理", icon: "" },
-  { id: "implant", name: "种植牙", icon: "" },
-  { id: "ortho", name: "正畸矫正", icon: "" },
-  { id: "clean", name: "洁牙美白", icon: "" },
-  { id: "surgery", name: "拔牙补牙", icon: "" },
+  { id: "care", name: "口腔护理", icon: "/yaban-shop/cat_care.webp" },
+  { id: "implant", name: "种植牙", icon: "/yaban-shop/cat_implant.webp" },
+  { id: "ortho", name: "正畸矫正", icon: "/yaban-shop/cat_ortho.webp" },
+  { id: "clean", name: "洁牙美白", icon: "/yaban-shop/cat_clean.webp" },
+  { id: "surgery", name: "拔牙补牙", icon: "/yaban-shop/cat_surgery.webp" },
 ];
-
-// 占位图（统一蓝色系占位，第二步用 AI 定制图替换）
-const PH = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/yaban/shop_placeholder.webp";
 
 export const SHOP_PRODUCTS: ShopProduct[] = [
   // —— 口腔护理（实物） ——
@@ -58,7 +58,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     subtitle: "高频清洁 · 护龈软毛",
     price: 199,
     originalPrice: 299,
-    image: PH,
+    image: "/yaban-shop/p1001_toothbrush.webp",
     sales: 1280,
     tags: ["热销"],
     description: [
@@ -75,7 +75,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     subtitle: "舒缓牙本质敏感",
     price: 39,
     originalPrice: 59,
-    image: PH,
+    image: "/yaban-shop/p1002_toothpaste.webp",
     sales: 3560,
     tags: ["热销"],
     description: [
@@ -91,7 +91,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     name: "牙线棒家庭装",
     subtitle: "细滑不伤龈 · 50 支",
     price: 25,
-    image: PH,
+    image: "/yaban-shop/p1003_floss.webp",
     sales: 2100,
     tags: [],
     description: [
@@ -108,7 +108,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     subtitle: "长效抑菌 · 无酒精",
     price: 49,
     originalPrice: 69,
-    image: PH,
+    image: "/yaban-shop/p1004_mouthwash.webp",
     sales: 1640,
     tags: [],
     description: [
@@ -126,7 +126,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     subtitle: "含植体 + 基台 + 牙冠",
     price: 4980,
     originalPrice: 6800,
-    image: PH,
+    image: "/yaban-shop/s2001_implant_kr.webp",
     sales: 320,
     tags: ["定金", "到院结算"],
     description: [
@@ -143,7 +143,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     subtitle: "高端植体 · 长效稳固",
     price: 8800,
     originalPrice: 12800,
-    image: PH,
+    image: "/yaban-shop/s2002_implant_swiss.webp",
     sales: 156,
     tags: ["定金", "到院结算"],
     description: [
@@ -161,7 +161,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     subtitle: "透明牙套 · 舒适美观",
     price: 19800,
     originalPrice: 25800,
-    image: PH,
+    image: "/yaban-shop/s3001_ortho_clear.webp",
     sales: 88,
     tags: ["定金", "到院结算"],
     description: [
@@ -178,7 +178,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     subtitle: "经济实用 · 矫治高效",
     price: 12800,
     originalPrice: 16800,
-    image: PH,
+    image: "/yaban-shop/s3002_ortho_metal.webp",
     sales: 110,
     tags: ["定金", "到院结算"],
     description: [
@@ -196,7 +196,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     subtitle: "去牙结石 · 护牙龈",
     price: 198,
     originalPrice: 298,
-    image: PH,
+    image: "/yaban-shop/s4001_clean_ultrasonic.webp",
     sales: 680,
     tags: ["到院结算"],
     description: [
@@ -213,7 +213,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     subtitle: "快速提亮牙齿色阶",
     price: 880,
     originalPrice: 1280,
-    image: PH,
+    image: "/yaban-shop/s4002_whitening.webp",
     sales: 240,
     tags: ["定金", "到院结算"],
     description: [
@@ -231,7 +231,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     subtitle: "微创操作 · 含麻醉",
     price: 380,
     originalPrice: 580,
-    image: PH,
+    image: "/yaban-shop/s5001_extraction.webp",
     sales: 520,
     tags: ["到院结算"],
     description: [
@@ -248,7 +248,7 @@ export const SHOP_PRODUCTS: ShopProduct[] = [
     subtitle: "美学修复 · 当次完成",
     price: 280,
     originalPrice: 380,
-    image: PH,
+    image: "/yaban-shop/s5002_filling.webp",
     sales: 760,
     tags: ["到院结算"],
     description: [
