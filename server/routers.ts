@@ -60,6 +60,7 @@ import { yabanShopRouter } from "./yaban-shop-router";
 import { yabanProductRouter } from "./yaban-product-router";
 import { yabanPaymentRouter } from "./yaban-payment-router";
 import { yabanOrderFulfillRouter } from "./yaban-order-fulfill-router";
+import { yabanCouponRouter } from "./yaban-coupon-router";
 
 // // 在应用启动时初始化数据库
 // initDatabase().catch(err => {
@@ -188,6 +189,7 @@ export const appRouter = router({
   yabanProduct: yabanProductRouter,
   yabanPayment: yabanPaymentRouter,
   yabanOrderFulfill: yabanOrderFulfillRouter,
+  yabanCoupon: yabanCouponRouter,
   prediction: predictionRouter,
   okxTrader: okxTraderRouter,
 

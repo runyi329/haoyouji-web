@@ -4,10 +4,11 @@
  */
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, ShoppingCart, Minus, Plus } from "lucide-react";
+import { ChevronLeft, ShoppingCart, Minus, Plus, Share2, Copy, X } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { useCart } from "./useCart";
 import { useShopProduct } from "./useShopProducts";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 
 export default function YabanShopProduct() {
@@ -16,7 +17,40 @@ export default function YabanShopProduct() {
   const id = params?.id || "";
   const { product, isLoading } = useShopProduct(id);
   const { add, count } = useCart();
+  const { user } = useAuth();
   const [qty, setQty] = useState(1);
+  const [showShare, setShowShare] = useState(false);
+
+  // 分享带参链接：携带门店(tenant)与分享人标识，便于裂变源追踪
+  const shareUrl = (() => {
+    const base = typeof window !== "undefined" ? window.location.origin : "";
+    const ref = user?.id ? `&ref=${user.id}` : "";
+    return `${base}/yaban/shop/product/${id}?from=share&t=1${ref}`;
+  })();
+
+  const handleShare = async () => {
+    const title = product ? `${product.name} · 牙伴齿科商城` : "牙伴齿科商城";
+    const text = product ? `推荐给你：${product.name}，¥${product.price}起` : "";
+    // 优先调用手机原生分享
+    if (typeof navigator !== "undefined" && (navigator as any).share) {
+      try {
+        await (navigator as any).share({ title, text, url: shareUrl });
+        return;
+      } catch {
+        // 用户取消或不支持，回退到面板
+      }
+    }
+    setShowShare(true);
+  };
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success("链接已复制，可粘贴发送给好友");
+    } catch {
+      toast.error("复制失败，请长按链接手动复制");
+    }
+  };
 
   if (isLoading && !product) {
     return (
@@ -63,18 +97,23 @@ export default function YabanShopProduct() {
             <ChevronLeft className="w-6 h-6" />
           </button>
           <span className="text-base font-bold">商品详情</span>
-          <button
-            onClick={() => navigate("/yaban/shop/cart")}
-            className="relative"
-            aria-label="购物车"
-          >
-            <ShoppingCart className="w-5 h-5" />
-            {count > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-[#FF5A5A] text-white text-[10px] rounded-full flex items-center justify-center">
-                {count}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-3">
+            <button onClick={handleShare} aria-label="分享">
+              <Share2 className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => navigate("/yaban/shop/cart")}
+              className="relative"
+              aria-label="购物车"
+            >
+              <ShoppingCart className="w-5 h-5" />
+              {count > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-[#FF5A5A] text-white text-[10px] rounded-full flex items-center justify-center">
+                  {count}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -149,6 +188,32 @@ export default function YabanShopProduct() {
           ))}
         </div>
       </div>
+
+      {/* 分享面板 */}
+      {showShare && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/40" onClick={() => setShowShare(false)}>
+          <div className="mt-auto bg-white rounded-t-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <span className="text-base font-bold text-gray-800">分享商品</span>
+              <button onClick={() => setShowShare(false)} aria-label="关闭">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3" style={{ paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))" }}>
+              <p className="text-xs text-gray-500">复制以下链接，发送给好友或发到朋友圈：</p>
+              <div className="flex items-center gap-2 bg-[#F5F7FA] rounded-lg px-3 py-2">
+                <span className="flex-1 text-xs text-gray-600 truncate">{shareUrl}</span>
+                <button onClick={copyLink} className="flex items-center gap-1 text-[#2196C8] text-xs shrink-0">
+                  <Copy className="w-3.5 h-3.5" /> 复制
+                </button>
+              </div>
+              <button onClick={copyLink} className="w-full py-3 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium">
+                复制分享链接
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 底部操作栏 */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 z-40">

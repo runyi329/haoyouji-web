@@ -11,6 +11,7 @@ import { z } from "zod";
 import { router, publicProcedure, protectedProcedure, adminProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
+import { computeCouponDiscount, redeemUserCoupon } from "./yaban-coupon-router";
 
 // 默认租户ID（单店阶段固定为 1，多租户阶段再按医院切换）
 const DEFAULT_TENANT_ID = 1;
@@ -50,6 +51,7 @@ export const yabanShopRouter = router({
         payMethod: z.enum(["wechat", "alipay"]).default("wechat"),
         remark: z.string().max(500).optional(),
         userPhone: z.string().max(20).optional(),
+        userCouponId: z.number().int().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -96,7 +98,12 @@ export const yabanShopRouter = router({
           subtotal: Math.round(price * it.qty * 100) / 100,
         };
       });
-      const total = items.reduce((s, it) => s + it.subtotal, 0);
+      const subtotalSum = items.reduce((s, it) => s + it.subtotal, 0);
+      // 优惠券抵扣（服务端核验，金额以服务端为准）
+      const { couponId, userCouponId, discount } = await computeCouponDiscount(
+        conn, input.userCouponId, ctx.user.id, subtotalSum
+      );
+      const total = Math.max(0, Math.round((subtotalSum - discount) * 100) / 100);
       const hasService = items.some((it) => it.kind === "service") ? 1 : 0;
       const orderNo = genOrderNo();
       const userName = ctx.user.name || ctx.user.username || null;
@@ -104,8 +111,8 @@ export const yabanShopRouter = router({
       // 1) 写订单主表
       const [res] = (await (conn as any).execute(
         `INSERT INTO shop_order
-          (order_no, tenant_id, user_id, user_name, user_phone, total_amount, pay_method, pay_status, order_status, has_service, remark)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'unpaid', 'pending', ?, ?)`,
+          (order_no, tenant_id, user_id, user_name, user_phone, total_amount, discount_amount, coupon_id, pay_method, pay_status, order_status, has_service, remark)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'unpaid', 'pending', ?, ?)`,
         [
           orderNo,
           DEFAULT_TENANT_ID,
@@ -113,12 +120,17 @@ export const yabanShopRouter = router({
           userName,
           input.userPhone || null,
           total.toFixed(2),
+          discount.toFixed(2),
+          couponId,
           input.payMethod,
           hasService,
           input.remark || null,
         ]
       )) as any;
       const orderId = res?.insertId;
+
+      // 标记优惠券已用
+      if (userCouponId) await redeemUserCoupon(conn, userCouponId, orderNo);
 
       // 2) 写订单明细
       for (const it of items) {
@@ -142,7 +154,7 @@ export const yabanShopRouter = router({
         );
       }
 
-      return { success: true, orderNo, orderId, total };
+      return { success: true, orderNo, orderId, total, discount };
     }),
 
   // ============ 客人侧：我的订单列表 ============

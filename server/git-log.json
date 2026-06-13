@@ -1,5 +1,14 @@
 [
   {
+    "hash": "b198ab0988df7e07ba833346b2a18ab53182d4f9",
+    "author": "dev",
+    "date": "2026-06-13T11:40:46+00:00",
+    "message": "feat(yaban-shop): 交易闭环组 - 订单全流程状态/收货发货/到店核销/退款售后",
+    "type": "feat",
+    "scope": "yaban-shop",
+    "cleanMessage": "交易闭环组 - 订单全流程状态/收货发货/到店核销/退款售后"
+  },
+  {
     "hash": "6d36d9237ee2b739c46079f6ce6e0807187b6123",
     "author": "dev",
     "date": "2026-06-13T11:09:45+00:00",

@@ -5,7 +5,7 @@
  */
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { Search, ShoppingCart, Settings, Package, ClipboardList, Receipt, CreditCard, X } from "lucide-react";
+import { Search, ShoppingCart, Settings, Package, ClipboardList, Receipt, CreditCard, Ticket, X } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
 import { SHOP_BANNER, type ShopProduct } from "./shopData";
@@ -95,6 +95,18 @@ export default function YabanShop() {
         <div className="rounded-2xl overflow-hidden shadow-sm">
           <img src={SHOP_BANNER} alt="齿科商城" className="w-full h-auto block" />
         </div>
+      </div>
+
+      {/* 领券中心入口 */}
+      <div className="max-w-lg mx-auto px-2 pt-2">
+        <button
+          onClick={() => navigate("/yaban/shop/coupons")}
+          className="w-full flex items-center gap-2 bg-gradient-to-r from-[#FFF4E5] to-[#FFE9D6] rounded-xl px-3 py-2.5 active:scale-[0.99] transition-transform"
+        >
+          <Ticket className="w-5 h-5 text-[#E2452F] shrink-0" />
+          <span className="text-sm font-medium text-[#9A3412] flex-1 text-left">领券中心·领券下单更优惠</span>
+          <span className="text-xs text-[#E2452F]">去领取 ›</span>
+        </button>
       </div>
 
       {/* 分类横向导航 */}
@@ -193,6 +205,21 @@ export default function YabanShop() {
                 <div className="flex-1 text-left">
                   <p className="text-sm font-medium text-gray-800">订单管理</p>
                   <p className="text-[11px] text-gray-400">查看与处理商城订单</p>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setAdminOpen(false);
+                  navigate("/yaban/shop/admin/coupons");
+                }}
+                className="w-full flex items-center gap-3 bg-[#F5F7FA] rounded-xl p-3 active:scale-[0.98] transition-transform"
+              >
+                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
+                  <Ticket className="w-5 h-5 text-white" />
+                </span>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-medium text-gray-800">优惠券管理</p>
+                  <p className="text-[11px] text-gray-400">创建满减/折扣券，控制发放与上下架</p>
                 </div>
               </button>
               <button
