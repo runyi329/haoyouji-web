@@ -1,5 +1,14 @@
 [
   {
+    "hash": "aa8a8ff32ca7131cfd39cba09df1e5e4714d6394",
+    "author": "dev",
+    "date": "2026-06-13T17:42:29+00:00",
+    "message": "fix(yaban): 消除钱包链路进入/返回/刷新闪烁(蓝白加载态+预取chunk)",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "消除钱包链路进入/返回/刷新闪烁(蓝白加载态+预取chunk)"
+  },
+  {
     "hash": "9c942b2b9c3b643ffa36a0b031806a5f2b9e924a",
     "author": "dev",
     "date": "2026-06-13T17:30:59+00:00",

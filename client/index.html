@@ -40,8 +40,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   </head>
 
-  <body>
-    <div id="root"></div>
+  <body style="background-color:#f4f6f8;margin:0;">
+    <div id="root" style="background-color:#f4f6f8;min-height:100vh;"></div>
     
     <!-- 微信环境检测和适配 -->
     <script>
@@ -70,14 +70,14 @@
         }
       } catch(e) {}
       
-      // 3. pageshow事件：如果从缓存恢复，强制刷新
+      // 3. pageshow事件：从缓存(bfcache)恢复时只静默同步Cookie，不再整页重定向刷新
+      //    （此前的 location.replace 会导致页面"先显示再刷新"出现闪两次/双跳，已移除）
       window.addEventListener('pageshow', function(e) {
         if (e.persisted) {
           try {
             var t = localStorage.getItem('auth-token');
             if (t) document.cookie = 'app_session_id=' + t + '; path=/; max-age=' + (365*24*60*60);
           } catch(ex) {}
-          window.location.replace(window.location.pathname + '?_t=' + Date.now());
         }
       });
     </script>
