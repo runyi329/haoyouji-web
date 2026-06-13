@@ -15,6 +15,11 @@ import {
   Search,
   ImagePlus,
   Trash2,
+  Tags,
+  ArrowUp,
+  ArrowDown,
+  Check,
+  Pencil,
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 
@@ -63,6 +68,7 @@ export default function YabanShopAdminProducts() {
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [keyword, setKeyword] = useState("");
   const [editing, setEditing] = useState<FormState | null>(null);
+  const [catManagerOpen, setCatManagerOpen] = useState(false);
 
   const utils = trpc.useUtils();
 
@@ -85,6 +91,7 @@ export default function YabanShopAdminProducts() {
     utils.yabanProduct.adminListProducts.invalidate();
     utils.yabanProduct.listProducts.invalidate();
     utils.yabanProduct.listCategories.invalidate();
+    utils.yabanProduct.adminListCategories.invalidate();
   };
 
   const toggleStatus = trpc.yabanProduct.toggleProductStatus.useMutation({
@@ -157,7 +164,7 @@ export default function YabanShopAdminProducts() {
 
       {/* 状态筛选 */}
       <div className="max-w-lg mx-auto px-3 pt-3">
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           {STATUS_FILTERS.map((f) => {
             const active = filter === f.key;
             const n = f.key === "all" ? counts.all : f.key === "on" ? counts.on : counts.off;
@@ -176,6 +183,12 @@ export default function YabanShopAdminProducts() {
               </button>
             );
           })}
+          <button
+            onClick={() => setCatManagerOpen(true)}
+            className="ml-auto flex items-center gap-1 px-3 py-1.5 rounded-full text-[13px] bg-white text-[#2196C8] border border-[#2196C8]"
+          >
+            <Tags className="w-3.5 h-3.5" /> 分类管理
+          </button>
         </div>
       </div>
 
@@ -256,6 +269,207 @@ export default function YabanShopAdminProducts() {
           }
         />
       )}
+
+      {/* 分类管理弹层 */}
+      {catManagerOpen && (
+        <CategoryManager
+          categories={categories ?? []}
+          onClose={() => setCatManagerOpen(false)}
+          onChanged={refresh}
+        />
+      )}
+    </div>
+  );
+}
+
+function CategoryManager({
+  categories,
+  onClose,
+  onChanged,
+}: {
+  categories: any[];
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [newName, setNewName] = useState("");
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+
+  const createMut = trpc.yabanProduct.createCategory.useMutation();
+  const updateMut = trpc.yabanProduct.updateCategory.useMutation();
+  const deleteMut = trpc.yabanProduct.deleteCategory.useMutation();
+
+  // 只展示真实分类（排除可能存在的 all 占位）
+  const list = (categories ?? []).filter((c: any) => c.code !== "all");
+  const busy =
+    createMut.isPending || updateMut.isPending || deleteMut.isPending;
+
+  const handleAdd = async () => {
+    const name = newName.trim();
+    if (!name) return toast.error("请填写分类名称");
+    try {
+      await createMut.mutateAsync({ name });
+      setNewName("");
+      toast.success("分类已添加");
+      onChanged();
+    } catch (e: any) {
+      toast.error(e?.message || "添加失败");
+    }
+  };
+
+  const handleRename = async (id: number) => {
+    const name = editName.trim();
+    if (!name) return toast.error("请填写分类名称");
+    try {
+      await updateMut.mutateAsync({ id, name });
+      setEditId(null);
+      setEditName("");
+      toast.success("已重命名");
+      onChanged();
+    } catch (e: any) {
+      toast.error(e?.message || "修改失败");
+    }
+  };
+
+  // 上移/下移：与相邻项交换 sort_order
+  const handleMove = async (index: number, dir: -1 | 1) => {
+    const target = list[index];
+    const swap = list[index + dir];
+    if (!target || !swap) return;
+    try {
+      await Promise.all([
+        updateMut.mutateAsync({ id: target.id, sort_order: swap.sort_order }),
+        updateMut.mutateAsync({ id: swap.id, sort_order: target.sort_order }),
+      ]);
+      onChanged();
+    } catch (e: any) {
+      toast.error(e?.message || "排序失败");
+    }
+  };
+
+  const handleDelete = async (id: number, name: string) => {
+    if (!confirm(`确定删除分类「${name}」？`)) return;
+    try {
+      await deleteMut.mutateAsync({ id });
+      toast.success("分类已删除");
+      onChanged();
+    } catch (e: any) {
+      toast.error(e?.message || "删除失败");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/40" onClick={onClose}>
+      <div
+        className="mt-auto bg-[#F5F7FA] rounded-t-2xl max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white rounded-t-2xl">
+          <span className="text-base font-bold text-gray-800">分类管理</span>
+          <button onClick={onClose} aria-label="关闭">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+
+        {/* 新增分类 */}
+        <div className="px-4 py-3 bg-white border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="新分类名称，如 儿童齿科"
+              className={inputCls}
+              maxLength={20}
+            />
+            <button
+              onClick={handleAdd}
+              disabled={busy}
+              className="shrink-0 flex items-center gap-1 px-3 py-2 rounded-lg bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm disabled:opacity-60"
+            >
+              <Plus className="w-4 h-4" /> 添加
+            </button>
+          </div>
+        </div>
+
+        {/* 分类列表 */}
+        <div
+          className="flex-1 overflow-y-auto px-4 py-3 space-y-2"
+          style={{ paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))" }}
+        >
+          {list.length === 0 ? (
+            <div className="text-center text-sm text-gray-400 pt-10">暂无分类，先添加一个吧</div>
+          ) : (
+            list.map((c: any, i: number) => (
+              <div key={c.id} className="bg-white rounded-xl px-3 py-2.5 flex items-center gap-2">
+                {editId === c.id ? (
+                  <>
+                    <input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className={inputCls}
+                      maxLength={20}
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleRename(c.id)}
+                      disabled={busy}
+                      className="shrink-0 p-2 rounded-lg bg-[#2196C8] text-white disabled:opacity-60"
+                      aria-label="保存"
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => { setEditId(null); setEditName(""); }}
+                      className="shrink-0 p-2 rounded-lg bg-gray-100 text-gray-500"
+                      aria-label="取消"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="flex-1 text-sm text-gray-800 line-clamp-1">{c.name}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleMove(i, -1)}
+                        disabled={busy || i === 0}
+                        className="p-1.5 rounded-lg text-gray-400 disabled:opacity-30 active:bg-gray-100"
+                        aria-label="上移"
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleMove(i, 1)}
+                        disabled={busy || i === list.length - 1}
+                        className="p-1.5 rounded-lg text-gray-400 disabled:opacity-30 active:bg-gray-100"
+                        aria-label="下移"
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => { setEditId(c.id); setEditName(c.name); }}
+                        className="p-1.5 rounded-lg text-[#2196C8] active:bg-[#EAF6FC]"
+                        aria-label="重命名"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(c.id, c.name)}
+                        disabled={busy}
+                        className="p-1.5 rounded-lg text-[#FF5A5A] active:bg-red-50 disabled:opacity-60"
+                        aria-label="删除"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))
+          )}
+          <p className="text-[11px] text-gray-400 px-1 pt-1">提示：分类下还有商品时无法删除，请先把商品改到其他分类或删除。</p>
+        </div>
+      </div>
     </div>
   );
 }

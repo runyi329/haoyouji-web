@@ -213,6 +213,96 @@ export const yabanProductRouter = router({
     return rows as any[];
   }),
 
+  // ============ 管理员：新增分类 ============
+  createCategory: publicProcedure
+    .input(
+      z.object({
+        name: z.string().min(1).max(20),
+        sort_order: z.number().int().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn)
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      // 生成唯一 code（c + 时间戳后8位）
+      const code = `c${Date.now().toString().slice(-9)}`;
+      // 默认排序：现有最大 sort_order + 1
+      let sort = input.sort_order;
+      if (sort == null) {
+        const [m] = (await (conn as any).execute(
+          `SELECT COALESCE(MAX(sort_order),0) AS mx FROM shop_category WHERE tenant_id = ?`,
+          [DEFAULT_TENANT_ID]
+        )) as any;
+        sort = Number(m?.[0]?.mx ?? 0) + 1;
+      }
+      await (conn as any).execute(
+        `INSERT INTO shop_category (tenant_id, code, name, sort_order, status) VALUES (?, ?, ?, ?, 1)`,
+        [DEFAULT_TENANT_ID, code, input.name.trim(), sort]
+      );
+      return { ok: true, code };
+    }),
+
+  // ============ 管理员：重命名/排序分类 ============
+  updateCategory: publicProcedure
+    .input(
+      z.object({
+        id: z.number().int(),
+        name: z.string().min(1).max(20).optional(),
+        sort_order: z.number().int().optional(),
+        status: z.number().int().min(0).max(1).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn)
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const sets: string[] = [];
+      const vals: any[] = [];
+      if (input.name != null) { sets.push("name = ?"); vals.push(input.name.trim()); }
+      if (input.sort_order != null) { sets.push("sort_order = ?"); vals.push(input.sort_order); }
+      if (input.status != null) { sets.push("status = ?"); vals.push(input.status); }
+      if (sets.length === 0) return { ok: true };
+      vals.push(input.id, DEFAULT_TENANT_ID);
+      await (conn as any).execute(
+        `UPDATE shop_category SET ${sets.join(", ")} WHERE id = ? AND tenant_id = ?`,
+        vals
+      );
+      return { ok: true };
+    }),
+
+  // ============ 管理员：删除分类（该分类下有商品时禁止删除）============
+  deleteCategory: publicProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn)
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      // 查出该分类 code
+      const [crows] = (await (conn as any).execute(
+        `SELECT code FROM shop_category WHERE id = ? AND tenant_id = ?`,
+        [input.id, DEFAULT_TENANT_ID]
+      )) as any;
+      const cat = (crows as any[])[0];
+      if (!cat) throw new TRPCError({ code: "NOT_FOUND", message: "分类不存在" });
+      // 校验是否还有商品
+      const [prows] = (await (conn as any).execute(
+        `SELECT COUNT(*) AS cnt FROM shop_product WHERE tenant_id = ? AND category_code = ?`,
+        [DEFAULT_TENANT_ID, cat.code]
+      )) as any;
+      const cnt = Number((prows as any[])[0]?.cnt ?? 0);
+      if (cnt > 0)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `该分类下还有 ${cnt} 件商品，请先移走或删除商品`,
+        });
+      await (conn as any).execute(
+        `DELETE FROM shop_category WHERE id = ? AND tenant_id = ?`,
+        [input.id, DEFAULT_TENANT_ID]
+      );
+      return { ok: true };
+    }),
+
   // ============ 管理员：新增商品 ============
   createProduct: publicProcedure
     .input(adminProductInput)
