@@ -345,6 +345,20 @@ const CustomShowcaseShare = lazy(() => import("./pages/CustomShowcase").then(m =
 
 // 加载中组件
 function LoadingFallback() {
+  // 牙伴(yaban)及钱包链路使用蓝白底加载态,避免进入/返回/刷新时白屏闪烁
+  const path = typeof window !== "undefined" ? window.location.pathname : "";
+  const search = typeof window !== "undefined" ? window.location.search : "";
+  const isYabanArea = path.startsWith("/yaban") || path === "/wallet" || path.startsWith("/wallet/") || search.includes("from=yaban");
+  if (isYabanArea) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#F2F6FA" }}>
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-9 h-9 animate-spin" style={{ color: "#1E88D6" }} />
+          <p className="text-sm" style={{ color: "#1E88D6" }}>加载中...</p>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-4">

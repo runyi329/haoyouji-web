@@ -1,5 +1,32 @@
 [
   {
+    "hash": "9c942b2b9c3b643ffa36a0b031806a5f2b9e924a",
+    "author": "dev",
+    "date": "2026-06-13T17:30:59+00:00",
+    "message": "Merge branch 'main' of https://github.com/runyi329/haoyouji-web",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "Merge branch 'main' of https://github.com/runyi329/haoyouji-web"
+  },
+  {
+    "hash": "7b3f7c38ddb5f5f4e499543689ac33f6ba332486",
+    "author": "dev",
+    "date": "2026-06-13T17:30:49+00:00",
+    "message": "feat(yaban): 钱包子页(明细/充值/提现)统一蓝白主题,返回回钱包",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "钱包子页(明细/充值/提现)统一蓝白主题,返回回钱包"
+  },
+  {
+    "hash": "fb47642326d09b224271ecb72a82731bb21a5299",
+    "author": "github-actions[bot]",
+    "date": "2026-06-13T17:23:04+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
     "hash": "8e02516a04d7231a1ec7d436262555c28cf76a8c",
     "author": "dev",
     "date": "2026-06-13T17:14:14+00:00",

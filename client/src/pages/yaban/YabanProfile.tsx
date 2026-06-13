@@ -3,6 +3,7 @@
  * 路由：/yaban/profile
  * 风格：蓝色系，沿用牙伴整体清爽蓝白风
  */
+import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
@@ -33,6 +34,11 @@ type RowItem = {
 export default function YabanProfile() {
   const [, navigate] = useLocation();
   const { data: user } = trpc.auth.me.useQuery();
+
+  // 预取钱包页 chunk,点"我的钱包"时几乎瞬开
+  useEffect(() => {
+    import("./YabanWallet");
+  }, []);
 
   const points = Number((user as any)?.points ?? 0);
   const balanceQuery = trpc.recharge.getBalance.useQuery();
