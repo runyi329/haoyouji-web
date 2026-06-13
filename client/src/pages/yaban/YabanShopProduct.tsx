@@ -4,18 +4,37 @@
  */
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronLeft, ShoppingCart, Minus, Plus, Share2, Copy, X } from "lucide-react";
+import { ChevronLeft, ShoppingCart, Minus, Plus, Share2, Copy, X, Star } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { useCart } from "./useCart";
 import { useShopProduct } from "./useShopProducts";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+
+function Stars({ rating, size = 14 }: { rating: number; size?: number }) {
+  return (
+    <span className="inline-flex items-center">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star
+          key={n}
+          style={{ width: size, height: size }}
+          className={n <= Math.round(rating) ? "text-[#FFB400] fill-[#FFB400]" : "text-gray-200 fill-gray-200"}
+        />
+      ))}
+    </span>
+  );
+}
 
 export default function YabanShopProduct() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/yaban/shop/product/:id");
   const id = params?.id || "";
   const { product, isLoading } = useShopProduct(id);
+  const { data: reviewData } = trpc.yabanShopOps.listProductReviews.useQuery(
+    { productCode: id, limit: 20 },
+    { enabled: !!id }
+  );
   const { add, count } = useCart();
   const { user } = useAuth();
   const [qty, setQty] = useState(1);
@@ -186,6 +205,51 @@ export default function YabanShopProduct() {
               {line}
             </p>
           ))}
+        </div>
+
+        {/* 用户评价 */}
+        <div className="bg-white px-4 py-4 mt-2">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-bold text-gray-800">
+              用户评价{reviewData && reviewData.total > 0 ? `（${reviewData.total}）` : ""}
+            </h2>
+            {reviewData && reviewData.total > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Stars rating={reviewData.avgRating} />
+                <span className="text-[13px] text-[#FFB400] font-medium">{reviewData.avgRating.toFixed(1)}</span>
+              </div>
+            )}
+          </div>
+          {!reviewData || reviewData.list.length === 0 ? (
+            <p className="text-[13px] text-gray-400 py-2">暂无评价，成交后来分享你的体验吧</p>
+          ) : (
+            <div className="space-y-4">
+              {reviewData.list.map((rv) => (
+                <div key={rv.id} className="border-b border-gray-50 pb-3 last:border-0 last:pb-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] font-medium text-gray-700">{rv.userName}</span>
+                    <Stars rating={rv.rating} size={12} />
+                  </div>
+                  {rv.content && <p className="text-[13px] text-gray-600 mt-1.5 leading-relaxed">{rv.content}</p>}
+                  {rv.images.length > 0 && (
+                    <div className="flex gap-2 mt-2 flex-wrap">
+                      {rv.images.map((img, i) => (
+                        <img key={i} src={img} alt="晒单" className="w-16 h-16 rounded-lg object-cover" />
+                      ))}
+                    </div>
+                  )}
+                  {rv.reply && (
+                    <div className="mt-2 bg-[#F5F7FA] rounded-lg px-3 py-2">
+                      <p className="text-[12px] text-gray-500 leading-relaxed">
+                        <span className="text-[#2196C8] font-medium">商家回复：</span>{rv.reply}
+                      </p>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-gray-300 mt-1.5">{rv.createdAt}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

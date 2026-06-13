@@ -9,7 +9,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
   ChevronLeft, Loader2, X, ShoppingBag, Truck, QrCode,
-  Clock, CheckCircle2, RotateCcw,
+  Clock, CheckCircle2, RotateCcw, Star, ImagePlus,
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 
@@ -202,6 +202,18 @@ function OrderDetailDrawer({
     onError: (e) => alert(e.message),
   });
 
+  // 评价相关
+  const [reviewItem, setReviewItem] = useState<any | null>(null);
+  const reviewableQuery = trpc.yabanShopOps.myReviewableOrders.useQuery(undefined, { enabled: !!orderNo });
+  const reviewedSet = new Set(
+    ((reviewableQuery.data ?? []) as any[])
+      .filter((r) => r.orderNo === orderNo)
+      .map((r) => String(r.productCode || r.productId))
+  );
+  // reviewableQuery 返回的是“可评价”的项；若某商品不在其中则视为已评价
+  const canReview = (it: any) =>
+    order?.order_status === "completed" && reviewedSet.has(String(it.product_code || it.product_id));
+
   const sm = order ? (STATUS_META[order.order_status] ?? STATUS_META.pending) : STATUS_META.pending;
   const ps = order ? (PAY_STATUS_META[order.pay_status] ?? PAY_STATUS_META.unpaid) : PAY_STATUS_META.unpaid;
   const isService = order && Number(order.has_service) === 1;
@@ -349,6 +361,30 @@ function OrderDetailDrawer({
               </div>
             )}
 
+            {/* 评价入口（已完成订单） */}
+            {order.order_status === "completed" && (
+              <div className="bg-[#FFFBF0] rounded-xl p-3">
+                <p className="text-sm font-medium text-gray-700 mb-2">商品评价</p>
+                <div className="space-y-2">
+                  {items.map((it) => (
+                    <div key={it.id} className="flex items-center justify-between">
+                      <span className="text-[13px] text-gray-600 truncate flex-1 min-w-0">{it.product_name}</span>
+                      {canReview(it) ? (
+                        <button
+                          onClick={() => setReviewItem(it)}
+                          className="shrink-0 ml-2 px-3 py-1 rounded-full bg-[#FFB400] text-white text-xs font-medium flex items-center gap-1"
+                        >
+                          <Star className="w-3 h-3" /> 去评价
+                        </button>
+                      ) : (
+                        <span className="shrink-0 ml-2 text-xs text-gray-400">已评价</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* 操作区 */}
             <div className="flex flex-wrap gap-2 pt-1">
               {order.pay_status === "unpaid" && order.order_status === "pending" && (
@@ -417,6 +453,119 @@ function OrderDetailDrawer({
             )}
           </div>
         )}
+      </div>
+
+      {reviewItem && (
+        <ReviewModal
+          orderNo={orderNo}
+          item={reviewItem}
+          onClose={() => setReviewItem(null)}
+          onDone={() => { setReviewItem(null); reviewableQuery.refetch(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ReviewModal({
+  orderNo, item, onClose, onDone,
+}: {
+  orderNo: string;
+  item: any;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [rating, setRating] = useState(5);
+  const [content, setContent] = useState("");
+  const [images, setImages] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  const upload = trpc.yabanProduct.uploadProductImage.useMutation();
+  const submit = trpc.yabanShopOps.submitReview.useMutation({
+    onSuccess: () => onDone(),
+    onError: (e) => alert(e.message),
+  });
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (images.length >= 6) { alert("最多上传6张"); return; }
+    setUploading(true);
+    try {
+      const reader = new FileReader();
+      const dataUrl: string = await new Promise((res, rej) => {
+        reader.onload = () => res(String(reader.result));
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+      const r = await upload.mutateAsync({ imageData: dataUrl });
+      if ((r as any)?.url) setImages((arr) => [...arr, (r as any).url]);
+    } catch (err: any) {
+      alert("图片上传失败：" + (err?.message || ""));
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col bg-black/50" onClick={onClose}>
+      <div className="mt-auto bg-white rounded-t-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <span className="text-base font-bold text-gray-800">发表评价</span>
+          <button onClick={onClose} aria-label="关闭"><X className="w-5 h-5 text-gray-400" /></button>
+        </div>
+        <div className="px-4 py-4 space-y-4" style={{ paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))" }}>
+          <p className="text-[13px] text-gray-600 truncate">{item.product_name}</p>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">评分</span>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button key={n} onClick={() => setRating(n)} aria-label={`${n}星`}>
+                <Star className={`w-7 h-7 ${n <= rating ? "text-[#FFB400] fill-[#FFB400]" : "text-gray-200 fill-gray-200"}`} />
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="分享你的真实体验（选填）"
+            rows={3}
+            maxLength={500}
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+          />
+          <div className="flex gap-2 flex-wrap">
+            {images.map((img, i) => (
+              <div key={i} className="relative">
+                <img src={img} alt="晒单" className="w-16 h-16 rounded-lg object-cover" />
+                <button
+                  onClick={() => setImages((arr) => arr.filter((_, idx) => idx !== i))}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center"
+                  aria-label="删除"
+                ><X className="w-3 h-3" /></button>
+              </div>
+            ))}
+            {images.length < 6 && (
+              <label className="w-16 h-16 rounded-lg border border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 cursor-pointer">
+                {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
+                <input type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={uploading} />
+              </label>
+            )}
+          </div>
+          <button
+            onClick={() => submit.mutate({
+              orderNo,
+              productCode: item.product_code || undefined,
+              productId: item.product_id || undefined,
+              rating,
+              content: content.trim(),
+              images,
+            })}
+            disabled={submit.isPending}
+            className="w-full py-3 rounded-full bg-gradient-to-r from-[#FFB400] to-[#FF9500] text-white text-sm font-semibold disabled:opacity-50"
+          >
+            {submit.isPending ? "提交中..." : "提交评价"}
+          </button>
+        </div>
       </div>
     </div>
   );

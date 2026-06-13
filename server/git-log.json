@@ -1,5 +1,14 @@
 [
   {
+    "hash": "fd12724f9946c6273614088b35081d4138557b05",
+    "author": "dev",
+    "date": "2026-06-13T12:01:06+00:00",
+    "message": "feat(yaban-shop): 商家管理组-数据看板/库存/多规格SKU/订单导出",
+    "type": "feat",
+    "scope": "yaban-shop",
+    "cleanMessage": "商家管理组-数据看板/库存/多规格SKU/订单导出"
+  },
+  {
     "hash": "7e1c73291a08ccc3009971905b6e9f893ef4892c",
     "author": "dev",
     "date": "2026-06-13T11:51:30+00:00",

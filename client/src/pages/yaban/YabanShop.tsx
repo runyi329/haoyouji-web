@@ -3,15 +3,62 @@
  * 路由：/yaban/shop
  * 风格：蓝色系，沿用牙办整体清爽蓝白风
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Search, ShoppingCart, Settings, Package, ClipboardList, Receipt, CreditCard, Ticket, BarChart3, X } from "lucide-react";
+import { Search, ShoppingCart, Settings, Package, ClipboardList, Receipt, CreditCard, Ticket, BarChart3, Megaphone, X } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
 import { SHOP_BANNER, type ShopProduct } from "./shopData";
 import { useCart } from "./useCart";
 import { useShopProducts } from "./useShopProducts";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
+
+function BannerCarousel({ navigate }: { navigate: (to: string) => void }) {
+  const { data } = trpc.yabanShopOps.listBanners.useQuery();
+  const banners = (data ?? []) as any[];
+  const [idx, setIdx] = useState(0);
+
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    const t = setInterval(() => setIdx((i) => (i + 1) % banners.length), 4000);
+    return () => clearInterval(t);
+  }, [banners.length]);
+
+  const onClick = (b: any) => {
+    if (b.linkType === "product" && b.linkValue) navigate(`/yaban/shop/product/${b.linkValue}`);
+    else if (b.linkType === "coupon") navigate("/yaban/shop/coupons");
+    else if (b.linkType === "url" && b.linkValue) window.open(b.linkValue, "_blank");
+  };
+
+  // 无后台配置时回退静态默认图
+  if (banners.length === 0) {
+    return (
+      <div className="rounded-2xl overflow-hidden shadow-sm">
+        <img src={SHOP_BANNER} alt="齿科商城" className="w-full h-auto block" />
+      </div>
+    );
+  }
+
+  const cur = banners[idx];
+  return (
+    <div className="rounded-2xl overflow-hidden shadow-sm relative">
+      <button onClick={() => onClick(cur)} className="block w-full">
+        <img src={cur.image} alt={cur.title || "商城活动"} className="w-full aspect-[2/1] object-cover block" />
+      </button>
+      {banners.length > 1 && (
+        <div className="absolute bottom-2 left-0 right-0 flex items-center justify-center gap-1.5">
+          {banners.map((_, i) => (
+            <span
+              key={i}
+              className={`h-1.5 rounded-full transition-all ${i === idx ? "w-4 bg-white" : "w-1.5 bg-white/50"}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function YabanShop() {
   const [, navigate] = useLocation();
@@ -90,11 +137,9 @@ export default function YabanShop() {
         </div>
       </div>
 
-      {/* 首页 Banner */}
+      {/* 首页 Banner（后台可配置轮播） */}
       <div className="max-w-lg mx-auto px-2 pt-2">
-        <div className="rounded-2xl overflow-hidden shadow-sm">
-          <img src={SHOP_BANNER} alt="齿科商城" className="w-full h-auto block" />
-        </div>
+        <BannerCarousel navigate={navigate} />
       </div>
 
       {/* 领券中心入口 */}
@@ -235,6 +280,21 @@ export default function YabanShop() {
                 <div className="flex-1 text-left">
                   <p className="text-sm font-medium text-gray-800">优惠券管理</p>
                   <p className="text-[11px] text-gray-400">创建满减/折扣券，控制发放与上下架</p>
+                </div>
+              </button>
+              <button
+                onClick={() => {
+                  setAdminOpen(false);
+                  navigate("/yaban/shop/admin/ops");
+                }}
+                className="w-full flex items-center gap-3 bg-[#F5F7FA] rounded-xl p-3 active:scale-[0.98] transition-transform"
+              >
+                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
+                  <Megaphone className="w-5 h-5 text-white" />
+                </span>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-medium text-gray-800">运营管理</p>
+                  <p className="text-[11px] text-gray-400">评价回复、首页 Banner 轮播配置</p>
                 </div>
               </button>
               <button
