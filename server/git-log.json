@@ -1,5 +1,23 @@
 [
   {
+    "hash": "7e1c73291a08ccc3009971905b6e9f893ef4892c",
+    "author": "dev",
+    "date": "2026-06-13T11:51:30+00:00",
+    "message": "feat(yaban-shop): 成交营销组 - 优惠券/满减、领券中心、搜索分类、商品分享带参",
+    "type": "feat",
+    "scope": "yaban-shop",
+    "cleanMessage": "成交营销组 - 优惠券/满减、领券中心、搜索分类、商品分享带参"
+  },
+  {
+    "hash": "1ea8b4137a097188e109df214776219dd26cecf3",
+    "author": "github-actions[bot]",
+    "date": "2026-06-13T11:45:17+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
     "hash": "b198ab0988df7e07ba833346b2a18ab53182d4f9",
     "author": "dev",
     "date": "2026-06-13T11:40:46+00:00",

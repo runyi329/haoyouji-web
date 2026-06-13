@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { ChevronLeft, Loader2, X, Phone, ClipboardList, Truck, QrCode } from "lucide-react";
+import { ChevronLeft, Loader2, X, Phone, ClipboardList, Truck, QrCode, Download } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 
 type StatusKey = "all" | "pending" | "confirmed" | "shipped" | "completed" | "refunding" | "cancelled";
@@ -52,12 +52,38 @@ export default function YabanShopAdminOrders() {
   const [detailId, setDetailId] = useState<number | null>(null);
 
   const utils = trpc.useUtils();
+  const exportMut = trpc.yabanShopAdmin.exportOrders.useQuery(undefined, { enabled: false });
 
   const { data, isLoading } = trpc.yabanShop.adminListOrders.useQuery({
     status: filter,
     keyword: keyword.trim() || undefined,
     limit: 200,
   });
+
+  const handleExport = async () => {
+    try {
+      const res = await exportMut.refetch();
+      const rows = (res.data ?? []) as any[];
+      if (rows.length === 0) { toast.error("暂无可导出订单"); return; }
+      const headers = ["订单号","下单人","电话","实付金额","优惠金额","支付方式","支付状态","订单状态","含诊疗","收货人","收货电话","物流公司","物流单号","下单时间"];
+      const keys = ["order_no","user_name","user_phone","total_amount","discount_amount","pay_method","pay_status","order_status","has_service","receiver_name","receiver_phone","ship_company","ship_no","created_at"];
+      const esc = (v: any) => {
+        const s = v == null ? "" : String(v);
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const csv = [headers.join(","), ...rows.map((r) => keys.map((k) => esc(r[k])).join(","))].join("\n");
+      const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `订单导出_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`已导出 ${rows.length} 条订单`);
+    } catch (e: any) {
+      toast.error(e?.message || "导出失败");
+    }
+  };
 
   const list = data?.list ?? [];
   const counts = data?.counts ?? {};
@@ -92,7 +118,12 @@ export default function YabanShopAdminOrders() {
             <ChevronLeft className="w-6 h-6" />
           </button>
           <span className="text-base font-bold">订单管理</span>
-          <button onClick={() => navigate("/yaban/shop/admin/fulfill")} className="text-xs bg-white/20 px-2.5 py-1 rounded-full">核销/售后</button>
+          <div className="flex items-center gap-2">
+            <button onClick={handleExport} disabled={exportMut.isFetching} className="flex items-center gap-1 text-xs bg-white/20 px-2.5 py-1 rounded-full disabled:opacity-60">
+              {exportMut.isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} 导出
+            </button>
+            <button onClick={() => navigate("/yaban/shop/admin/fulfill")} className="text-xs bg-white/20 px-2.5 py-1 rounded-full">核销/售后</button>
+          </div>
         </div>
       </div>
 

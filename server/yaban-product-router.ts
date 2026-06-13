@@ -59,6 +59,7 @@ function mapProductRow(r: any) {
     description: parseDescription(r.description),
     isActive: Number(r.status) === 1,
     sortOrder: Number(r.sort_order || 0),
+    stock: Number(r.stock || 0),
     source: r.source || "self",
   };
 }

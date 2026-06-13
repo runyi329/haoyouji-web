@@ -20,6 +20,7 @@ import {
   ArrowDown,
   Check,
   Pencil,
+  Layers,
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 
@@ -45,6 +46,7 @@ type FormState = {
   tags: string; // 逗号分隔
   description: string; // 换行分隔
   sort_order: string;
+  stock: string;
   status: 0 | 1;
 };
 
@@ -60,6 +62,7 @@ const EMPTY_FORM: FormState = {
   tags: "",
   description: "",
   sort_order: "0",
+  stock: "0",
   status: 1,
 };
 
@@ -129,6 +132,7 @@ export default function YabanShopAdminProducts() {
       tags: (p.tags || []).join(","),
       description: (p.description || []).join("\n"),
       sort_order: String(p.sortOrder || 0),
+      stock: String(p.stock ?? 0),
       status: p.isActive ? 1 : 0,
     });
   };
@@ -489,11 +493,13 @@ function ProductEditor({
 }) {
   const [form, setForm] = useState<FormState>(initial);
   const [uploading, setUploading] = useState(false);
+  const [skuOpen, setSkuOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const createMut = trpc.yabanProduct.createProduct.useMutation();
   const updateMut = trpc.yabanProduct.updateProduct.useMutation();
   const uploadMut = trpc.yabanProduct.uploadProductImage.useMutation();
+  const setStockMut = trpc.yabanShopAdmin.adminSetStock.useMutation();
 
   const set = (k: keyof FormState, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -544,6 +550,8 @@ function ProductEditor({
     try {
       if (form.id) {
         await updateMut.mutateAsync({ id: form.id, ...payload });
+        // 库存单独保存（独立接口，不动商品主接口）
+        await setStockMut.mutateAsync({ productId: form.id, stock: Number(form.stock) || 0 });
         toast.success("已保存");
       } else {
         await createMut.mutateAsync(payload);
@@ -643,6 +651,23 @@ function ProductEditor({
             </Field>
           </div>
 
+          {/* 库存 */}
+          <Field label="库存数量（为 0 自动下架）">
+            <input className={inputCls} type="number" value={form.stock} onChange={(e) => set("stock", e.target.value)} placeholder="诊疗服务可填较大值或不限" />
+          </Field>
+
+          {/* 多规格管理入口（仅已保存商品） */}
+          {form.id && (
+            <button
+              onClick={() => setSkuOpen(true)}
+              className="w-full bg-white rounded-xl px-3 py-3 flex items-center gap-2 active:bg-gray-50"
+            >
+              <Layers className="w-4 h-4 text-[#2196C8]" />
+              <span className="text-sm text-gray-700 flex-1 text-left">多规格管理（如不同型号/套餐）</span>
+              <span className="text-xs text-gray-400">设置 ›</span>
+            </button>
+          )}
+
           <Field label="标签（逗号分隔，如 热销,定金）">
             <input className={inputCls} value={form.tags} onChange={(e) => set("tags", e.target.value)} placeholder="热销,到院结算" />
           </Field>
@@ -678,6 +703,84 @@ function ProductEditor({
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             {saving ? "保存中" : "保存"}
           </button>
+        </div>
+      </div>
+      {skuOpen && form.id && (
+        <SkuManager productId={form.id} onClose={() => setSkuOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+function SkuManager({ productId, onClose }: { productId: number; onClose: () => void }) {
+  const utils = trpc.useUtils();
+  const { data: skus, isLoading } = trpc.yabanShopAdmin.adminListSku.useQuery({ productId });
+  const saveMut = trpc.yabanShopAdmin.adminSaveSku.useMutation();
+  const delMut = trpc.yabanShopAdmin.adminDeleteSku.useMutation();
+  const [specName, setSpecName] = useState("");
+  const [price, setPrice] = useState("");
+  const [stock, setStock] = useState("0");
+
+  const refresh = () => utils.yabanShopAdmin.adminListSku.invalidate({ productId });
+
+  const handleAdd = async () => {
+    if (!specName.trim()) return toast.error("请填规格名称");
+    const p = Number(price);
+    if (Number.isNaN(p) || p < 0) return toast.error("请填正确价格");
+    try {
+      await saveMut.mutateAsync({ productId, specName: specName.trim(), price: p, stock: Number(stock) || 0 });
+      setSpecName(""); setPrice(""); setStock("0");
+      toast.success("规格已添加");
+      refresh();
+    } catch (e: any) {
+      toast.error(e?.message || "保存失败");
+    }
+  };
+
+  const handleDel = async (id: number) => {
+    if (!confirm("删除该规格？")) return;
+    try {
+      await delMut.mutateAsync({ id });
+      toast.success("已删除");
+      refresh();
+    } catch (e: any) {
+      toast.error(e?.message || "删除失败");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col bg-black/40" onClick={onClose}>
+      <div className="mt-auto bg-[#F5F7FA] rounded-t-2xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white rounded-t-2xl">
+          <span className="text-base font-bold text-gray-800">多规格管理</span>
+          <button onClick={onClose} aria-label="关闭"><X className="w-5 h-5 text-gray-400" /></button>
+        </div>
+        <div className="px-4 py-3 bg-white border-b border-gray-100 space-y-2">
+          <input className={inputCls} value={specName} onChange={(e) => setSpecName(e.target.value)} placeholder="规格名，如：标准装 / 豪华套餐" maxLength={128} />
+          <div className="flex items-center gap-2">
+            <input className={inputCls} type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="价格（元）" />
+            <input className={inputCls} type="number" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="库存" />
+            <button onClick={handleAdd} disabled={saveMut.isPending} className="shrink-0 flex items-center gap-1 px-3 py-2 rounded-lg bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm disabled:opacity-60">
+              <Plus className="w-4 h-4" /> 添加
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2" style={{ paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))" }}>
+          {isLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 text-[#2196C8] animate-spin" /></div>
+          ) : (skus ?? []).length === 0 ? (
+            <p className="text-center text-sm text-gray-400 pt-8">暂无规格，添加后客人可选择不同型号</p>
+          ) : (
+            (skus ?? []).map((s: any) => (
+              <div key={s.id} className="bg-white rounded-xl px-3 py-2.5 flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-800 truncate">{s.spec_text}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">¥{Number(s.price).toFixed(2)} · 库存 {s.stock}</p>
+                </div>
+                <button onClick={() => handleDel(s.id)} className="p-1.5 rounded-lg text-[#FF5A5A] active:bg-red-50" aria-label="删除"><Trash2 className="w-4 h-4" /></button>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

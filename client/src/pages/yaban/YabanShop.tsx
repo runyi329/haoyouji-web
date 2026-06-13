@@ -5,7 +5,7 @@
  */
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
-import { Search, ShoppingCart, Settings, Package, ClipboardList, Receipt, CreditCard, Ticket, X } from "lucide-react";
+import { Search, ShoppingCart, Settings, Package, ClipboardList, Receipt, CreditCard, Ticket, BarChart3, X } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
 import { SHOP_BANNER, type ShopProduct } from "./shopData";
@@ -177,6 +177,21 @@ export default function YabanShop() {
               className="px-3 py-3 space-y-2"
               style={{ paddingBottom: "calc(76px + env(safe-area-inset-bottom, 0px))" }}
             >
+              <button
+                onClick={() => {
+                  setAdminOpen(false);
+                  navigate("/yaban/shop/admin/dashboard");
+                }}
+                className="w-full flex items-center gap-3 bg-[#F5F7FA] rounded-xl p-3 active:scale-[0.98] transition-transform"
+              >
+                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
+                  <BarChart3 className="w-5 h-5 text-white" />
+                </span>
+                <div className="flex-1 text-left">
+                  <p className="text-sm font-medium text-gray-800">经营数据</p>
+                  <p className="text-[11px] text-gray-400">今日/累计成交、订单趋势、热销榜</p>
+                </div>
+              </button>
               <button
                 onClick={() => {
                   setAdminOpen(false);
