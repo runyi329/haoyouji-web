@@ -1,5 +1,14 @@
 [
   {
+    "hash": "25121fe20bcc404aef0747d094449b64efffea7b",
+    "author": "dev",
+    "date": "2026-06-13T17:59:15+00:00",
+    "message": "fix: 消除全站进入/返回/刷新闪两次(移除pageshow强制重定向+中性背景色)",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "消除全站进入/返回/刷新闪两次(移除pageshow强制重定向+中性背景色)"
+  },
+  {
     "hash": "aa8a8ff32ca7131cfd39cba09df1e5e4714d6394",
     "author": "dev",
     "date": "2026-06-13T17:42:29+00:00",

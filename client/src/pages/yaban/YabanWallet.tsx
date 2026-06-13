@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft,
@@ -266,12 +266,6 @@ export default function YabanWallet() {
   const [hideBalance, setHideBalance] = useState(false);
   // 牙伴入口默认停在人民币(CNY)
   const [activeTab, setActiveTab] = useState<"usdt" | "cny">("cny");
-
-  // 进入钱包即预取明细页 chunk,点击"明细"时几乎瞬开,避免二次加载闪烁
-  useEffect(() => {
-    import("../WalletCnyTransactions");
-    import("../WalletTransactions");
-  }, []);
 
   const balanceQuery = trpc.recharge.getBalance.useQuery();
   const recentRechargeQuery = trpc.recharge.getMyOrders.useQuery({ limit: 5 });
