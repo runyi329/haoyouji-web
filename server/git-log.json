@@ -1,5 +1,14 @@
 [
   {
+    "hash": "6d36d9237ee2b739c46079f6ce6e0807187b6123",
+    "author": "dev",
+    "date": "2026-06-13T11:09:45+00:00",
+    "message": "feat(yaban-shop): 接入微信/支付宝真实支付渠道(多租户下单+回调验签)",
+    "type": "feat",
+    "scope": "yaban-shop",
+    "cleanMessage": "接入微信/支付宝真实支付渠道(多租户下单+回调验签)"
+  },
+  {
     "hash": "52709b3c1341db162d0a3158f7fcf895be369990",
     "author": "dev",
     "date": "2026-06-13T10:46:21+00:00",

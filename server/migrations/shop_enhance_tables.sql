@@ -1,0 +1,115 @@
+-- 牙伴齿科商城增强：新建表（MySQL8 兼容，CREATE TABLE IF NOT EXISTS）
+CREATE TABLE IF NOT EXISTS shop_order_log (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 1,
+  order_no VARCHAR(32) NOT NULL,
+  action VARCHAR(32) NOT NULL,
+  from_status VARCHAR(16) NULL,
+  to_status VARCHAR(16) NULL,
+  operator VARCHAR(32) NULL,
+  note VARCHAR(255) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_order_no (order_no),
+  INDEX idx_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS shop_refund (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  refund_no VARCHAR(32) NOT NULL UNIQUE,
+  tenant_id INT NOT NULL DEFAULT 1,
+  order_no VARCHAR(32) NOT NULL,
+  order_id INT NOT NULL,
+  user_id INT NOT NULL,
+  amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  reason VARCHAR(255) NULL,
+  images TEXT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'pending',
+  admin_note VARCHAR(255) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_order_no (order_no),
+  INDEX idx_user (user_id),
+  INDEX idx_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS shop_coupon (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 1,
+  name VARCHAR(64) NOT NULL,
+  type VARCHAR(16) NOT NULL DEFAULT 'full_reduce',
+  threshold DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  discount DECIMAL(4,2) NULL,
+  total_qty INT NOT NULL DEFAULT 0,
+  claimed_qty INT NOT NULL DEFAULT 0,
+  per_user_limit INT NOT NULL DEFAULT 1,
+  valid_days INT NOT NULL DEFAULT 30,
+  start_at TIMESTAMP NULL,
+  end_at TIMESTAMP NULL,
+  status TINYINT NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS shop_user_coupon (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 1,
+  coupon_id INT NOT NULL,
+  user_id INT NOT NULL,
+  status VARCHAR(16) NOT NULL DEFAULT 'unused',
+  order_no VARCHAR(32) NULL,
+  expire_at TIMESTAMP NULL,
+  used_at TIMESTAMP NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_user (user_id),
+  INDEX idx_coupon (coupon_id),
+  INDEX idx_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS shop_review (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 1,
+  order_no VARCHAR(32) NOT NULL,
+  product_id INT NULL,
+  product_code VARCHAR(32) NULL,
+  user_id INT NOT NULL,
+  user_name VARCHAR(64) NULL,
+  rating TINYINT NOT NULL DEFAULT 5,
+  content VARCHAR(500) NULL,
+  images TEXT NULL,
+  reply VARCHAR(500) NULL,
+  status TINYINT NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_product (product_code),
+  INDEX idx_order (order_no),
+  INDEX idx_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS shop_banner (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 1,
+  title VARCHAR(64) NULL,
+  image VARCHAR(255) NOT NULL,
+  link_type VARCHAR(16) NOT NULL DEFAULT 'none',
+  link_value VARCHAR(255) NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  status TINYINT NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS shop_sku (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  tenant_id INT NOT NULL DEFAULT 1,
+  product_id INT NOT NULL,
+  spec_text VARCHAR(128) NOT NULL,
+  price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  stock INT NOT NULL DEFAULT 0,
+  image VARCHAR(255) NULL,
+  status TINYINT NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_product (product_id),
+  INDEX idx_tenant (tenant_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -22,6 +22,7 @@ import {
   createWechatH5Url,
   decryptWxNotify,
 } from "./yaban-payment-service";
+import { onOrderPaid } from "./yaban-order-fulfill-router";
 
 const router = Router();
 const DEFAULT_TENANT_ID = 1;
@@ -65,10 +66,8 @@ async function markPaymentSuccess(conn: any, paymentNo: string, tradeNo: string,
     "UPDATE shop_payment SET status='success', trade_no=?, callback_raw=?, paid_at=CURRENT_TIMESTAMP WHERE id=?",
     [tradeNo, rawJson?.slice(0, 60000) || null, pay.id]
   );
-  await conn.query(
-    "UPDATE shop_order SET pay_status='paid', pay_method=?, order_status=IF(order_status='pending','confirmed',order_status) WHERE id=?",
-    [pay.channel, pay.order_id]
-  );
+  // 驱动订单：支付状态 paid、pending->confirmed、服务单生成核销码、写日志
+  await onOrderPaid(conn, pay.order_id, pay.channel);
   console.log(`[YabanPay] 支付单 ${paymentNo} 成功，订单 ${pay.order_no} 已置为已支付`);
   return true;
 }

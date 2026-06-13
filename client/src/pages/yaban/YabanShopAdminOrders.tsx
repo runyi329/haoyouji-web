@@ -7,27 +7,31 @@ import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { ChevronLeft, Loader2, X, Phone, ClipboardList } from "lucide-react";
+import { ChevronLeft, Loader2, X, Phone, ClipboardList, Truck, QrCode } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 
-type StatusKey = "all" | "pending" | "confirmed" | "completed" | "cancelled";
+type StatusKey = "all" | "pending" | "confirmed" | "shipped" | "completed" | "refunding" | "cancelled";
 
 const STATUS_META: Record<
   string,
   { text: string; color: string; bg: string }
 > = {
-  pending: { text: "待处理", color: "#D97706", bg: "#FEF3C7" },
-  confirmed: { text: "已确认", color: "#2563EB", bg: "#DBEAFE" },
+  pending: { text: "待付款", color: "#D97706", bg: "#FEF3C7" },
+  confirmed: { text: "已付款", color: "#2563EB", bg: "#DBEAFE" },
+  shipped: { text: "已发货", color: "#0891B2", bg: "#CFFAFE" },
   completed: { text: "已完成", color: "#059669", bg: "#D1FAE5" },
+  refunding: { text: "退款中", color: "#DB2777", bg: "#FCE7F3" },
+  refunded: { text: "已退款", color: "#6B7280", bg: "#F3F4F6" },
   cancelled: { text: "已取消", color: "#6B7280", bg: "#F3F4F6" },
 };
 
 const FILTERS: { key: StatusKey; label: string }[] = [
   { key: "all", label: "全部" },
-  { key: "pending", label: "待处理" },
-  { key: "confirmed", label: "已确认" },
+  { key: "pending", label: "待付款" },
+  { key: "confirmed", label: "待发货/核销" },
+  { key: "shipped", label: "已发货" },
   { key: "completed", label: "已完成" },
-  { key: "cancelled", label: "已取消" },
+  { key: "refunding", label: "退款中" },
 ];
 
 const PAY_LABEL: Record<string, string> = {
@@ -88,7 +92,7 @@ export default function YabanShopAdminOrders() {
             <ChevronLeft className="w-6 h-6" />
           </button>
           <span className="text-base font-bold">订单管理</span>
-          <span className="w-6" />
+          <button onClick={() => navigate("/yaban/shop/admin/fulfill")} className="text-xs bg-white/20 px-2.5 py-1 rounded-full">核销/售后</button>
         </div>
       </div>
 
@@ -203,10 +207,22 @@ function OrderDetail({
   onUpdate: (id: number, patch: { orderStatus?: string; adminRemark?: string }) => void;
   updating: boolean;
 }) {
+  const utils = trpc.useUtils();
   const { data, isLoading } = trpc.yabanShop.adminOrderDetail.useQuery({ orderId });
   const order = data?.order;
   const items = data?.items ?? [];
   const [adminRemark, setAdminRemark] = useState<string>("");
+  const [shipCompany, setShipCompany] = useState("");
+  const [shipNo, setShipNo] = useState("");
+
+  const ship = trpc.yabanOrderFulfill.adminShip.useMutation({
+    onSuccess: () => {
+      toast.success("已发货");
+      utils.yabanShop.adminOrderDetail.invalidate({ orderId });
+      utils.yabanShop.adminListOrders.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   const remarkInit = useMemo(() => order?.admin_remark || "", [order?.admin_remark]);
   // 同步初始备注
@@ -330,6 +346,49 @@ function OrderDetail({
                 保存备注
               </button>
             </div>
+
+            {/* 收货信息（实物订单） */}
+            {Number(order.has_service) !== 1 && (order.receiver_name || order.order_status === "confirmed") && (
+              <div className="bg-white rounded-xl p-3">
+                <p className="text-sm text-gray-700 mb-2 flex items-center gap-1"><Truck className="w-4 h-4 text-[#0891B2]" /> 收货信息</p>
+                {order.receiver_name ? (
+                  <div className="text-[13px] text-gray-700 space-y-0.5">
+                    <p>{order.receiver_name} {order.receiver_phone}</p>
+                    <p className="text-gray-500 text-xs">{order.receiver_addr}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400">客人尚未填写收货地址</p>
+                )}
+                {order.pay_status === "paid" && order.order_status === "confirmed" && order.receiver_name && (
+                  <div className="mt-3 space-y-2">
+                    <input value={shipCompany} onChange={(e) => setShipCompany(e.target.value)} placeholder="物流公司（如顺丰）"
+                      className="w-full bg-[#F5F7FA] rounded-lg px-3 py-2 text-sm outline-none" />
+                    <input value={shipNo} onChange={(e) => setShipNo(e.target.value)} placeholder="物流单号"
+                      className="w-full bg-[#F5F7FA] rounded-lg px-3 py-2 text-sm outline-none" />
+                    <button
+                      onClick={() => ship.mutate({ orderId: order.id, shipCompany: shipCompany || undefined, shipNo: shipNo || undefined })}
+                      disabled={ship.isPending}
+                      className="w-full py-2 rounded-lg bg-[#0891B2] text-white text-sm disabled:opacity-60"
+                    >确认发货</button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 核销信息（服务订单） */}
+            {Number(order.has_service) === 1 && order.pay_status === "paid" && (
+              <div className="bg-white rounded-xl p-3">
+                <p className="text-sm text-gray-700 mb-2 flex items-center gap-1"><QrCode className="w-4 h-4 text-[#7C3AED]" /> 到店核销</p>
+                {order.verify_status === "used" ? (
+                  <p className="text-sm text-[#059669]">已核销 {order.verified_at ? `· ${fmtTime(order.verified_at)}` : ""}</p>
+                ) : (
+                  <div className="text-[13px] text-gray-700">
+                    <p>核销码：<span className="font-bold tracking-widest text-[#7C3AED]">{order.verify_code || "-"}</span></p>
+                    <p className="text-xs text-gray-400 mt-1">可在「到店核销」页输入此码核销</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 状态流转 */}
             <div className="bg-white rounded-xl p-3">

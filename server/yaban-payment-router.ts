@@ -16,6 +16,7 @@ import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
 import crypto from "crypto";
 import { clearMerchantCache } from "./yaban-payment-service";
+import { onOrderPaid } from "./yaban-order-fulfill-router";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -331,11 +332,8 @@ export const yabanPaymentRouter = router({
           "UPDATE shop_payment SET status='success', trade_no=?, paid_at=CURRENT_TIMESTAMP WHERE id=?",
           [tradeNo, pay.id]
         );
-        // 驱动订单：支付状态 paid，订单状态从 pending -> confirmed
-        await conn.query(
-          "UPDATE shop_order SET pay_status='paid', pay_method=?, order_status=IF(order_status='pending','confirmed',order_status) WHERE id=?",
-          [pay.channel, pay.order_id]
-        );
+        // 驱动订单：支付状态 paid、pending->confirmed、服务单生成核销码、写日志
+        await onOrderPaid(conn, pay.order_id, pay.channel);
         return { ok: true, tradeNo };
       } finally {
         conn.release?.();
