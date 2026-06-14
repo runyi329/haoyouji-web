@@ -1,5 +1,14 @@
 [
   {
+    "hash": "6a472635c774a57ccf81dba9d006a2adf4c88948",
+    "author": "manus",
+    "date": "2026-06-14T12:19:55+00:00",
+    "message": "feat(yaban): 牙伴首页入口联动，未经开始页统一先跳/yaban/intro",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "牙伴首页入口联动，未经开始页统一先跳/yaban/intro"
+  },
+  {
     "hash": "ecd483a8946b1018e079fc2ca3982c3b9f6044bc",
     "author": "haoyouji-dev",
     "date": "2026-06-14T11:57:51+00:00",
