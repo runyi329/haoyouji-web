@@ -1,5 +1,14 @@
 [
   {
+    "hash": "7f0fb00b6ef5bc9296a760f34af8f3533bf204af",
+    "author": "manus",
+    "date": "2026-06-14T16:26:31+00:00",
+    "message": "feat(yaban): 顾客列表P2优化-彩色标签体系/按标签筛选/批量管理/视图密度切换/下拉刷新",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "顾客列表P2优化-彩色标签体系/按标签筛选/批量管理/视图密度切换/下拉刷新"
+  },
+  {
     "hash": "8e6ad33a16baa3463ae438408485378e62dc417c",
     "author": "manus",
     "date": "2026-06-14T16:04:19+00:00",

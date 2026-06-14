@@ -265,7 +265,7 @@ export default function YabanPatientCreate() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <PageTag code="P304" />
 
-      {/* 顶部导航栏 */}
+      {/* 顶部导航栏 + Tab 切换：合并为同一 sticky 容器，避免中间悬空遮挡点击 */}
       <div className="sticky top-0 z-40 bg-white border-b border-gray-100">
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={handleBack} className="text-base font-medium" style={{ color: ACCENT }}>
@@ -276,12 +276,8 @@ export default function YabanPatientCreate() {
             {createMutation.isPending ? "保存中" : "保存"}
           </button>
         </div>
-        {/* 已取消所有必填项，「仅显示必填字段」开关不再展示 */}
-      </div>
-
-      {/* Tab 切换 */}
-      <div className="bg-white border-b border-gray-100 sticky top-[97px] z-30">
-        <div className="flex items-center overflow-x-auto no-scrollbar px-2">
+        {/* Tab 切换 */}
+        <div className="flex items-center overflow-x-auto no-scrollbar px-2 border-t border-gray-100">
           {TABS.map((tab) => {
             const active = activeTab === tab;
             return (
@@ -312,11 +308,11 @@ export default function YabanPatientCreate() {
       <div className="flex-1 overflow-y-auto pb-8">
         {/* 头像区：仅个人信息 Tab 展示，按年龄+性别自动适配，可点击更换 */}
         {activeTab === "个人信息" && (
-          <div className="bg-white mt-2 px-3 py-4 flex flex-col items-center">
+          <div className="relative z-0 bg-white mt-2 px-3 pt-6 pb-4 flex flex-col items-center">
             <button
               type="button"
               onClick={() => setAvatarOpen(true)}
-              className="relative w-20 h-20 active:opacity-80"
+              className="relative z-10 w-20 h-20 active:opacity-80"
             >
               <span className="block w-full h-full rounded-full overflow-hidden bg-gray-100">
                 {effectiveAvatar ? (
