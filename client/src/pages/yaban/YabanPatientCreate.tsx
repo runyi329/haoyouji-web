@@ -545,6 +545,25 @@ function FieldCell({
         className="w-full px-3 py-2 rounded-lg bg-gray-50 border border-[#D6E6F5] text-sm text-gray-800 placeholder-gray-300 outline-none resize-none transition-colors focus:bg-white focus:border-[#1E88D6]"
       />
     );
+  } else if (field.inputType === "date") {
+    // 生日：隐藏的原生 date input 负责弹出系统选择器（可直接选年份），
+    // 上层用自定义文本展示“2026.06.26”格式，强制单行居中
+    const dotDate = value ? value.replace(/-/g, ".") : "";
+    control = (
+      <div className={`${boxCls} relative justify-center`}>
+        <span
+          className={`whitespace-nowrap ${dotDate ? "text-gray-800" : "text-gray-300"}`}
+        >
+          {dotDate || field.placeholder}
+        </span>
+        <input
+          type="date"
+          value={value}
+          onChange={(e) => onInput(e.target.value)}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        />
+      </div>
+    );
   } else {
     // input
     control = (
@@ -556,7 +575,7 @@ function FieldCell({
           readOnly={field.readOnly}
           onChange={(e) => onInput(e.target.value)}
           placeholder={field.placeholder}
-          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 text-gray-800 ${field.key === "age" || field.key === "zodiac" ? "text-center" : ""} ${field.inputType === "date" ? "date-centered appearance-none" : ""}`}
+          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 text-gray-800 ${field.key === "age" || field.key === "zodiac" ? "text-center" : ""}`}
         />
       </div>
     );

@@ -1,5 +1,14 @@
 [
   {
+    "hash": "bebf1627de47d0b4fae75e1dde5a8ff70111ebd9",
+    "author": "yaban-deploy",
+    "date": "2026-06-14T11:09:06+00:00",
+    "message": "新建顾客：生日原生日期输入内容居中显示，隐藏多余日历图标避免右溢",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "新建顾客：生日原生日期输入内容居中显示，隐藏多余日历图标避免右溢"
+  },
+  {
     "hash": "7a4b565dbfd9521f51376a68f34f7fb13037d112",
     "author": "yaban-deploy",
     "date": "2026-06-14T11:01:28+00:00",
