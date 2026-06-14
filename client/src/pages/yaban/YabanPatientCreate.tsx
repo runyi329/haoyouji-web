@@ -314,29 +314,29 @@ export default function YabanPatientCreate() {
             <button
               type="button"
               onClick={() => setAvatarOpen(true)}
-              className="relative w-20 h-20 rounded-full overflow-hidden bg-gray-100 active:opacity-80"
+              className="relative w-20 h-20 active:opacity-80"
             >
-              {effectiveAvatar ? (
-                <img
-                  src={avatarSrc(effectiveAvatar)}
-                  alt="顾客头像"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span className="absolute inset-0 flex items-center justify-center text-gray-300">
-                  <UserRound className="w-9 h-9" />
-                </span>
-              )}
+              <span className="block w-full h-full rounded-full overflow-hidden bg-gray-100">
+                {effectiveAvatar ? (
+                  <img
+                    src={avatarSrc(effectiveAvatar)}
+                    alt="顾客头像"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="absolute inset-0 flex items-center justify-center text-gray-300">
+                    <UserRound className="w-9 h-9" />
+                  </span>
+                )}
+              </span>
+              {/* 相机角标：小尺寸，下移出头像框，一半露在外面（不被裁断） */}
               <span
-                className="absolute bottom-0 right-0 w-6 h-6 rounded-full flex items-center justify-center border-2 border-white"
+                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border-2 border-white"
                 style={{ backgroundColor: ACCENT }}
               >
-                <Camera className="w-3.5 h-3.5 text-white" />
+                <Camera className="w-3 h-3 text-white" />
               </span>
             </button>
-            <span className="mt-2 text-xs text-gray-400">
-              {avatarManual ? "已手动选择头像" : effectiveAvatar ? "已按年龄性别自动匹配" : "填写年龄性别后自动匹配"}
-            </span>
           </div>
         )}
         <div className="bg-white mt-2 px-3 py-3">
