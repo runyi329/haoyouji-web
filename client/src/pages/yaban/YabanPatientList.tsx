@@ -10,6 +10,7 @@ import { ChevronLeft, Plus, Search, X, ArrowUpDown, Check } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { avatarSrc, ageToBucket, type AvatarKey } from "@/lib/yaban-avatar";
+import { PageTag } from "@/components/PageTag";
 
 // 顾客标签类型及配色
 type TagType = "female" | "male" | "phone";
@@ -449,6 +450,7 @@ export default function YabanPatientList() {
           </>
         )}
       </div>
+      <PageTag code="P320" />
     </div>
   );
 }

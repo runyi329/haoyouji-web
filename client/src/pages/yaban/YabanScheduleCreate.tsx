@@ -4,6 +4,7 @@
  * 表单：患者、时间、诊所、医生、咨询师、助理、项目、诊室、科室、预约来源、备注
  */
 import { useState } from "react";
+import { PageTag } from "@/components/PageTag";
 import { useLocation } from "wouter";
 import { ChevronRight } from "lucide-react";
 
@@ -318,6 +319,7 @@ export default function YabanScheduleCreate() {
           </div>
         </div>
       )}
+      <PageTag code="P323" />
     </div>
   );
 }

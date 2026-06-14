@@ -1,5 +1,14 @@
 [
   {
+    "hash": "fae11c9960cbfa540b7b79e30137d9c45aa5e1c9",
+    "author": "manus",
+    "date": "2026-06-14T15:18:18+00:00",
+    "message": "fix: 牙伴内部页面返回首页不再重复弹开机画面（会话内仅首进显示一次）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "牙伴内部页面返回首页不再重复弹开机画面（会话内仅首进显示一次）"
+  },
+  {
     "hash": "4cc2de0194c09ddbba78370d4c90d8afd889aa49",
     "author": "manus",
     "date": "2026-06-14T15:11:39+00:00",

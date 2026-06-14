@@ -5,6 +5,7 @@
  */
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
+import { PageTag } from "@/components/PageTag";
 import {
   ChevronLeft,
   MoreVertical,
@@ -237,6 +238,7 @@ export default function YabanFollowUpDetail() {
           执行随访
         </button>
       </div>
+      <PageTag code="P325" />
     </div>
   );
 }

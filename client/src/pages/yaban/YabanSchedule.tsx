@@ -5,6 +5,7 @@
  * 右侧筛选抽屉（医生/诊室/状态）
  */
 import { useState, useRef, TouchEvent } from "react";
+import { PageTag } from "@/components/PageTag";
 import { useLocation } from "wouter";
 import {
   ChevronLeft,
@@ -600,6 +601,7 @@ export default function YabanSchedule() {
           </div>
         </div>
       )}
+      <PageTag code="P322" />
     </div>
   );
 }

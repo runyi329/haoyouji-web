@@ -4,6 +4,7 @@
  * 显示患者信息、预约详情、快捷操作按钮
  */
 import { useState } from "react";
+import { PageTag } from "@/components/PageTag";
 import { useLocation, useParams } from "wouter";
 import {
   ChevronLeft,
@@ -212,6 +213,7 @@ export default function YabanScheduleDetail() {
           </div>
         </div>
       )}
+      <PageTag code="P324" />
     </div>
   );
 }

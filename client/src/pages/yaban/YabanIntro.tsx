@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
+import { PageTag } from "@/components/PageTag";
 
 // 牙伴 3D 开始页：以 iframe 承载独立打包的 3D 展示页（public/yaban-intro/index.html）
 // 页面内"进入"按钮通过 postMessage 通知本组件跳转到牙伴首页 /yaban
@@ -33,6 +34,7 @@ export default function YabanIntro() {
         className="w-full h-full border-0 block"
         allow="autoplay; fullscreen"
       />
+      <PageTag code="P326" />
     </div>
   );
 }

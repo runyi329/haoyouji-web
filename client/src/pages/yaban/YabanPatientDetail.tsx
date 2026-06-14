@@ -1,4 +1,5 @@
 import { useLocation, useRoute } from 'wouter';
+import { PageTag } from "@/components/PageTag";
 import {
   ChevronLeft,
   Plus,
@@ -212,6 +213,7 @@ export default function YabanPatientDetail() {
           </button>
         </div>
       </div>
+      <PageTag code="P321" />
     </div>
   );
 }
