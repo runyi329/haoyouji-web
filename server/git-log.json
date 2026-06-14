@@ -1,5 +1,14 @@
 [
   {
+    "hash": "b400ea27bd17fd714d7a1ce54af375ed7d48dd26",
+    "author": "manus",
+    "date": "2026-06-14T13:06:46+00:00",
+    "message": "fix(yaban-intro): 路由读取路径归一化，剥离结尾index.html，修复真机访问/yaban-intro/index.html落到404页问题",
+    "type": "fix",
+    "scope": "yaban-intro",
+    "cleanMessage": "路由读取路径归一化，剥离结尾index.html，修复真机访问/yaban-intro/index.html落到404页问题"
+  },
+  {
     "hash": "7204b2c1807bbe1327f992fa44f61eaec519dae0",
     "author": "manus",
     "date": "2026-06-14T12:58:40+00:00",
