@@ -12,6 +12,7 @@ import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import MedicalHistoryPicker, { serializeHistory, parseHistory } from "./MedicalHistoryPicker";
+import AddressPicker from "./AddressPicker";
 
 // 主题色
 const ACCENT = "#1E88D6";
@@ -26,18 +27,17 @@ const PATIENT_TYPES = ["电子", "临时", "普通"];
 const SOURCES = ["到店", "转介绍", "网络预约", "电话预约", "微信预约", "老顾客推荐", "其他"];
 const NET_CONSULTANTS = ["杨文利", "侯睿", "洪紫钥"];
 const CONSULTANTS = ["洪紫钥", "杨文利", "侯睿"];
-const REGIONS = ["上海市-黄浦区", "上海市-普陀区", "上海市-虹口区", "上海市-浦东新区", "其他"];
 const CHIEF_COMPLAINTS = ["牙疼", "牙齿松动", "洗牙清洁", "缺牙修复", "牙齿矫正", "美白贴面", "智齿冠周炎", "其他"];
 const HEALTH_STATUS = ["健康", "亚健康", "慢性病", "其他"];
 const YES_NO = ["否", "是", "不详"];
 const PREGNANT = ["否", "是", "备孕中", "不适用"];
 
 // 字段类型
-type FieldKind = "input" | "select" | "textarea" | "history";
+type FieldKind = "input" | "select" | "textarea" | "history" | "address";
 
 // 字段宽度档位：窄字段同行并排，宽字段独占
 // narrow ≈ 半屏内可挤 2-3 个；half ≈ 半屏；full ≈ 整行
-type FieldWidth = "narrow" | "half" | "full";
+type FieldWidth = "narrow" | "half" | "full" | "name" | "gender" | "auto";
 
 interface FieldDef {
   key: string;
@@ -54,19 +54,18 @@ interface FieldDef {
 // 各 Tab 字段配置
 const TAB_FIELDS: Record<Tab, FieldDef[]> = {
   个人信息: [
-    { key: "name", label: "姓名", placeholder: "请输入姓名", kind: "input", required: true, width: "half" },
-    { key: "gender", label: "性别", placeholder: "未知", kind: "select", required: true, options: GENDERS, width: "narrow" },
+    { key: "name", label: "姓名", placeholder: "请输入姓名", kind: "input", required: true, width: "name" },
+    { key: "gender", label: "性别", placeholder: "未知", kind: "select", required: true, options: GENDERS, width: "gender" },
+    { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input", width: "auto" },
     { key: "birthday", label: "生日", placeholder: "请选择", kind: "input", required: true, inputType: "date", width: "half" },
     { key: "age", label: "年龄", placeholder: "岁", kind: "input", required: true, inputType: "number", width: "narrow" },
     { key: "zodiac", label: "星座", placeholder: "自动带出", kind: "input", readOnly: true, width: "narrow" },
-    { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", required: true, options: PATIENT_TYPES, width: "narrow" },
+    { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", required: true, options: PATIENT_TYPES, width: "half" },
     { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true, width: "half" },
-    { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input", width: "half" },
     { key: "mobile", label: "手机号", placeholder: "请输入手机号", kind: "input", required: true, inputType: "tel", width: "half" },
     { key: "phone", label: "电话", placeholder: "请输入电话号码", kind: "input", inputType: "tel", width: "half" },
     { key: "email", label: "邮箱", placeholder: "请输入邮箱地址", kind: "input", inputType: "email", width: "full" },
-    { key: "region", label: "地区", placeholder: "请选择地区", kind: "select", options: REGIONS, width: "full" },
-    { key: "address", label: "地址详情", placeholder: "请输入地址详情", kind: "textarea", width: "full" },
+    { key: "address", label: "所在地区", placeholder: "点击选择省市区并填写门牌号", kind: "address", width: "full" },
   ],
   顾客信息: [
     { key: "source", label: "顾客来源", placeholder: "请选择", kind: "select", required: true, options: SOURCES, width: "half" },
@@ -98,6 +97,10 @@ const WIDTH_BASIS: Record<FieldWidth, string> = {
   narrow: "calc(33.333% - 8px)",
   half: "calc(50% - 6px)",
   full: "100%",
+  // 首行：姓名约4字宽、性别约1字宽、昵称占满剩余
+  name: "148px",
+  gender: "104px",
+  auto: "120px",
 };
 
 // 根据生日(YYYY-MM-DD)计算周岁年龄
@@ -109,7 +112,8 @@ function calcAge(birthday: string): string {
   let age = now.getFullYear() - b.getFullYear();
   const m = now.getMonth() - b.getMonth();
   if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
-  if (age < 0 || age > 150) return "";
+  if (age < 0) age = 0; // 选了当天或未来日期时按 0 岁计，不返回空
+  if (age > 150) return "";
   return String(age);
 }
 
@@ -134,6 +138,7 @@ export default function YabanPatientCreate() {
   const [requiredOnly, setRequiredOnly] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [addressOpen, setAddressOpen] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({
     gender: "未知",
     patientType: "电子",
@@ -311,6 +316,7 @@ export default function YabanPatientCreate() {
                     setOpenKey(null);
                   }}
                   onOpenHistory={() => setHistoryOpen(true)}
+                  onOpenAddress={() => setAddressOpen(true)}
                 />
               ))}
             </div>
@@ -334,6 +340,17 @@ export default function YabanPatientCreate() {
           />
         );
       })()}
+
+      {/* 所在地区选择器（省市区级联 + 门牌号） */}
+      <AddressPicker
+        open={addressOpen}
+        value={form.address || ""}
+        onClose={() => setAddressOpen(false)}
+        onConfirm={(full) => {
+          setField("address", full);
+          setAddressOpen(false);
+        }}
+      />
     </div>
   );
 }
@@ -347,6 +364,7 @@ function FieldCell({
   onToggle,
   onSelect,
   onOpenHistory,
+  onOpenAddress,
 }: {
   field: FieldDef;
   value: string;
@@ -355,10 +373,11 @@ function FieldCell({
   onToggle: () => void;
   onSelect: (v: string) => void;
   onOpenHistory?: () => void;
+  onOpenAddress?: () => void;
 }) {
   const basis = WIDTH_BASIS[field.width || "full"];
-  // 长内容字段（多行文本、AI健康标签）标题在上、控件占满整行；其余短字段标题与控件同行
-  const stacked = field.kind === "textarea" || field.kind === "history";
+  // 长内容字段（多行文本、AI健康标签、地址）标题在上、控件占满整行；其余短字段标题与控件同行
+  const stacked = field.kind === "textarea" || field.kind === "history" || field.kind === "address";
 
   const label = (
     <label className={`text-gray-700 truncate shrink-0 ${stacked ? "block text-base mb-1.5" : "text-base"}`}>
@@ -372,7 +391,20 @@ function FieldCell({
 
   let control: JSX.Element;
 
-  if (field.kind === "history") {
+  if (field.kind === "address") {
+    control = (
+      <button
+        type="button"
+        onClick={onOpenAddress}
+        className={`${boxCls} justify-between text-left active:bg-gray-100`}
+      >
+        <span className={`truncate ${value ? "text-gray-800" : "text-gray-300"}`}>
+          {value || field.placeholder}
+        </span>
+        <ChevronDown className="w-4 h-4 text-gray-300 shrink-0 ml-1" />
+      </button>
+    );
+  } else if (field.kind === "history") {
     control = (
       <button
         type="button"
@@ -469,9 +501,33 @@ function FieldCell({
     );
   }
 
+  // 不同宽度档的 flex 行为：
+  //  - auto（昵称）：尽量占满本行剩余空间
+  //  - name/gender：固定较窄、不放大
+  //  - 其余：可放大、半屏基准
+  const w = field.width || "full";
+  let flexStyle: string;
+  let minW: number;
+  if (w === "auto") {
+    flexStyle = `999 1 ${basis}`;
+    minW = 110;
+  } else if (w === "name") {
+    flexStyle = `0 1 ${basis}`;
+    minW = 128;
+  } else if (w === "gender") {
+    flexStyle = `0 1 ${basis}`;
+    minW = 96;
+  } else if (w === "narrow") {
+    flexStyle = `1 1 ${basis}`;
+    minW = 96;
+  } else {
+    flexStyle = `1 1 ${basis}`;
+    minW = 150;
+  }
+
   return (
     <div
-      style={{ flex: `1 1 ${basis}`, minWidth: field.width === "narrow" ? 96 : 150, maxWidth: "100%" }}
+      style={{ flex: flexStyle, minWidth: minW, maxWidth: "100%" }}
       className="py-1.5 flex items-center gap-2"
     >
       {label}

@@ -1,5 +1,14 @@
 [
   {
+    "hash": "ae9bdb7ad5509b2393ecfb39e22b34ac4fe7eacc",
+    "author": "manus",
+    "date": "2026-06-14T06:34:39+00:00",
+    "message": "feat: 新建顾客页实时预览系统将分配的顾客编号",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "新建顾客页实时预览系统将分配的顾客编号"
+  },
+  {
     "hash": "bfe943e1779047e89dbf3e1222ce288f18cc2254",
     "author": "manus",
     "date": "2026-06-14T06:26:31+00:00",
