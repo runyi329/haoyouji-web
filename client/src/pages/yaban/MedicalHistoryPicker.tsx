@@ -11,7 +11,7 @@
  * 严禁 Emoji，仅用 lucide-react 图标。
  */
 import { useMemo, useState } from "react";
-import { Search, X, Check, ChevronDown, ChevronRight } from "lucide-react";
+import { Search, X, ChevronDown, ChevronRight } from "lucide-react";
 import {
   MEDICAL_HISTORY_DICT,
   MEDICAL_HISTORY_CATEGORIES,
@@ -112,25 +112,18 @@ export default function MedicalHistoryPicker({
 
   if (!open) return null;
 
-  const Row = ({ it }: { it: MedicalHistoryItem }) => {
+  // 标签块：未选灰底灰字，选中高亮底+白字（脉动账本风格）
+  const Tag = ({ it }: { it: MedicalHistoryItem }) => {
     const checked = selected.includes(it.name);
     return (
       <button
         onClick={() => toggle(it.name)}
-        className="w-full flex items-center justify-between px-4 py-3 active:bg-gray-50 border-b border-gray-50"
+        className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+          checked ? "text-white shadow-sm" : "bg-gray-100 text-gray-600"
+        }`}
+        style={checked ? { backgroundColor: ACCENT } : undefined}
       >
-        <span className={`text-sm ${checked ? "font-semibold" : "text-gray-700"}`} style={checked ? { color: ACCENT } : undefined}>
-          {it.name}
-        </span>
-        <span
-          className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
-          style={{
-            backgroundColor: checked ? ACCENT : "transparent",
-            border: checked ? "none" : "1.5px solid #D1D5DB",
-          }}
-        >
-          {checked && <Check className="w-3.5 h-3.5 text-white" />}
-        </span>
+        {it.name}
       </button>
     );
   };
@@ -159,7 +152,7 @@ export default function MedicalHistoryPicker({
           <input
             value={kw}
             onChange={(e) => setKw(e.target.value)}
-            placeholder="搜索疾病，如 高血压 / gxy / 血压高"
+            placeholder="AI 智能查找，如 高血压 / gxy / 血压高"
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400"
           />
           {kw && (
@@ -193,19 +186,23 @@ export default function MedicalHistoryPicker({
       {/* 列表区 */}
       <div className="flex-1 overflow-y-auto">
         {searchResults ? (
-          // 搜索模式：扁平结果
+          // 搜索模式：标签流式扁平结果
           searchResults.length > 0 ? (
-            searchResults.map((it) => <Row key={it.id} it={it} />)
+            <div className="flex flex-wrap gap-2.5 px-4 py-3">
+              {searchResults.map((it) => <Tag key={it.id} it={it} />)}
+            </div>
           ) : (
             <div className="px-4 py-10 text-center text-sm text-gray-400">
               未找到相关疾病，可在下方备注中手动填写
             </div>
           )
         ) : (
-          // 浏览模式：常用 + 分类折叠
+          // 浏览模式：常用 + 分类折叠（每组内标签流式）
           <>
-            <div className="px-4 pt-3 pb-1 text-xs font-medium text-gray-400">常用既往史</div>
-            {commonItems.map((it) => <Row key={`common_${it.id}`} it={it} />)}
+            <div className="px-4 pt-3 pb-1.5 text-xs font-medium text-gray-400">常用既往史</div>
+            <div className="flex flex-wrap gap-2.5 px-4 pb-2">
+              {commonItems.map((it) => <Tag key={`common_${it.id}`} it={it} />)}
+            </div>
 
             {MEDICAL_HISTORY_CATEGORIES.map((cat) => {
               const items = grouped[cat] || [];
@@ -224,7 +221,11 @@ export default function MedicalHistoryPicker({
                       <ChevronDown className="w-4 h-4 text-gray-400" />
                     )}
                   </button>
-                  {!isCollapsed && items.map((it) => <Row key={it.id} it={it} />)}
+                  {!isCollapsed && (
+                    <div className="flex flex-wrap gap-2.5 px-4 py-3">
+                      {items.map((it) => <Tag key={it.id} it={it} />)}
+                    </div>
+                  )}
                 </div>
               );
             })}
