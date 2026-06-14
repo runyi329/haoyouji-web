@@ -14,7 +14,6 @@ import { trpc } from "@/lib/trpc";
 import MedicalHistoryPicker, { serializeHistory, parseHistory } from "./MedicalHistoryPicker";
 import AddressPicker from "./AddressPicker";
 import AvatarPicker from "./AvatarPicker";
-import { DatePicker } from "@/components/DatePicker";
 import { autoAvatarKey, avatarSrc, type AvatarKey } from "@/lib/yaban-avatar";
 
 // 主题色
@@ -150,7 +149,6 @@ export default function YabanPatientCreate() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addressOpen, setAddressOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
-  const [dateOpen, setDateOpen] = useState(false);
   // 头像：null 表示跟随年龄+性别自动适配；非 null 表示用户手动指定
   const [avatarManual, setAvatarManual] = useState<AvatarKey | null>(null);
   const [form, setForm] = useState<Record<string, string>>({
@@ -376,25 +374,12 @@ export default function YabanPatientCreate() {
                   }}
                   onOpenHistory={() => setHistoryOpen(true)}
                   onOpenAddress={() => setAddressOpen(true)}
-                  onOpenDate={() => setDateOpen(true)}
                 />
               ))}
             </div>
           )}
         </div>
       </div>
-
-      {/* 生日日期选择器 */}
-      {dateOpen && (
-        <DatePicker
-          value={form.birthday || ""}
-          onChange={(d) => setField("birthday", d)}
-          onClose={() => setDateOpen(false)}
-          onClear={() =>
-            setForm((prev) => ({ ...prev, birthday: "", age: "", zodiac: "" }))
-          }
-        />
-      )}
 
       {/* AI健康标签选择器 */}
       {(() => {
@@ -448,7 +433,6 @@ function FieldCell({
   onSelect,
   onOpenHistory,
   onOpenAddress,
-  onOpenDate,
 }: {
   field: FieldDef;
   value: string;
@@ -458,7 +442,6 @@ function FieldCell({
   onSelect: (v: string) => void;
   onOpenHistory?: () => void;
   onOpenAddress?: () => void;
-  onOpenDate?: () => void;
 }) {
   const basis = WIDTH_BASIS[field.width || "full"];
   // 长内容字段（多行文本、AI健康标签、地址）标题在上、控件占满整行；其余短字段标题与控件同行
@@ -476,20 +459,7 @@ function FieldCell({
 
   let control: JSX.Element;
 
-  if (field.inputType === "date") {
-    // 生日：点击打开自定义日历弹窗，值在框内居中显示
-    control = (
-      <button
-        type="button"
-        onClick={onOpenDate}
-        className={`${boxCls} justify-center text-center active:bg-gray-100`}
-      >
-        <span className={value ? "text-gray-800" : "text-gray-300"}>
-          {value ? value.replace(/-/g, "/") : field.placeholder}
-        </span>
-      </button>
-    );
-  } else if (field.kind === "address") {
+  if (field.kind === "address") {
     control = (
       <button
         type="button"
@@ -586,7 +556,7 @@ function FieldCell({
           readOnly={field.readOnly}
           onChange={(e) => onInput(e.target.value)}
           placeholder={field.placeholder}
-          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 text-gray-800 ${field.key === "age" || field.key === "zodiac" ? "text-center" : ""}`}
+          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 text-gray-800 ${field.key === "age" || field.key === "zodiac" || field.inputType === "date" ? "text-center" : ""}`}
         />
       </div>
     );

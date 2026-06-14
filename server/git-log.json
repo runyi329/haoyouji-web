@@ -1,5 +1,14 @@
 [
   {
+    "hash": "9f5e9c587c3815e3926e6479e402dea84b58205d",
+    "author": "yaban-deploy",
+    "date": "2026-06-14T10:56:22+00:00",
+    "message": "日期选择器：支持点年/月快速选择，方便选生日年份",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "日期选择器：支持点年/月快速选择，方便选生日年份"
+  },
+  {
     "hash": "b61e401171296c37a220ddf3c9c7b102a37f8941",
     "author": "yaban-deploy",
     "date": "2026-06-14T10:50:05+00:00",
