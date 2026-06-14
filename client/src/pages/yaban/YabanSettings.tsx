@@ -16,6 +16,7 @@ import {
   Info,
   LogOut,
   Loader2,
+  Database,
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
@@ -192,6 +193,23 @@ export default function YabanSettings() {
             <span className="flex-1 text-left">
               <span className="block text-sm font-medium text-gray-800">门诊员工与角色权限</span>
               <span className="block text-xs text-gray-400 mt-0.5">为门诊员工分配角色与权限</span>
+            </span>
+            <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
+          </button>
+        </div>
+
+        {/* 数据管理 */}
+        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+          <button
+            onClick={() => navigate("/yaban/settings/data")}
+            className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-[#F0F7FD] transition-colors"
+          >
+            <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
+              <Database className="w-5 h-5 text-[#1E88D6]" />
+            </span>
+            <span className="flex-1 text-left">
+              <span className="block text-sm font-medium text-gray-800">数据管理</span>
+              <span className="block text-xs text-gray-400 mt-0.5">数据导出备份与导入存档</span>
             </span>
             <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
           </button>

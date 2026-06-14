@@ -11,6 +11,14 @@ import { z } from "zod";
 import { router, protectedProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
+import {
+  fetchAllCustomers,
+  buildBackupJson,
+  buildBackupExcel,
+  sendCustomerBackupEmail,
+  ensureBackupSettingsTable,
+  calcNextBackupAt,
+} from "./yaban-backup-service";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -281,5 +289,164 @@ export const yabanCustomerRouter = router({
       }
 
       return { success: true, id: result.insertId, medicalNo };
+    }),
+
+  // ============ 导出顾客数据（JSON / Excel，返回 base64 供前端下载）============
+  exportData: protectedProcedure
+    .input(z.object({ formats: z.array(z.enum(["json", "excel"])).min(1) }))
+    .mutation(async ({ input }) => {
+      const customers = await fetchAllCustomers(DEFAULT_TENANT_ID);
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const files: { name: string; mime: string; base64: string }[] = [];
+      if (input.formats.includes("excel")) {
+        const buf = await buildBackupExcel(customers);
+        files.push({
+          name: `恒愿齿科普陀店_顾客数据备份_${dateStr}.xlsx`,
+          mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          base64: buf.toString("base64"),
+        });
+      }
+      if (input.formats.includes("json")) {
+        const json = buildBackupJson(customers, DEFAULT_TENANT_ID);
+        files.push({
+          name: `恒愿齿科普陀店_顾客数据存档_${dateStr}.json`,
+          mime: "application/json",
+          base64: Buffer.from(JSON.stringify(json, null, 2), "utf-8").toString("base64"),
+        });
+      }
+      return { success: true, count: customers.length, files };
+    }),
+
+  // ============ 立即发送备份到邮箱 ============
+  sendBackupNow: protectedProcedure
+    .input(z.object({ email: z.string().email("邮箱格式不正确"), formats: z.array(z.enum(["json", "excel"])).min(1) }))
+    .mutation(async ({ input }) => {
+      const customers = await fetchAllCustomers(DEFAULT_TENANT_ID);
+      await sendCustomerBackupEmail({
+        to: input.email,
+        storeName: "恒愿齿科普陀店",
+        customers,
+        formats: input.formats,
+        tenantId: DEFAULT_TENANT_ID,
+      });
+      return { success: true, count: customers.length };
+    }),
+
+  // ============ 读取定时备份设置 ============
+  getBackupSettings: protectedProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) return null;
+    await ensureBackupSettingsTable(conn);
+    const [rows] = (await (conn as any).execute(
+      `SELECT * FROM yaban_backup_settings WHERE tenant_id = ? LIMIT 1`,
+      [DEFAULT_TENANT_ID]
+    )) as any;
+    const r = (rows as any[])[0];
+    if (!r) return { enabled: false, email: "", formats: ["excel"], frequency: "monthly", lastBackupAt: null, nextBackupAt: null, backupCount: 0 };
+    return {
+      enabled: r.enabled === 1,
+      email: r.email || "",
+      formats: String(r.formats || "excel").split(",").filter(Boolean),
+      frequency: r.frequency || "monthly",
+      lastBackupAt: r.last_backup_at,
+      nextBackupAt: r.next_backup_at,
+      backupCount: r.backup_count || 0,
+    };
+  }),
+
+  // ============ 保存定时备份设置 ============
+  saveBackupSettings: protectedProcedure
+    .input(
+      z.object({
+        enabled: z.boolean(),
+        email: z.string().optional(),
+        formats: z.array(z.enum(["json", "excel"])).min(1),
+        frequency: z.enum(["daily", "weekly", "monthly", "quarterly"]),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureBackupSettingsTable(conn);
+      if (input.enabled && (!input.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email))) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "开启定时备份需填写正确的邮箱" });
+      }
+      const formatsStr = input.formats.join(",");
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const toMySQL = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      const nextAt = input.enabled ? toMySQL(calcNextBackupAt(input.frequency)) : null;
+      await (conn as any).execute(
+        `INSERT INTO yaban_backup_settings (tenant_id, enabled, email, formats, frequency, next_backup_at)
+         VALUES (?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), email = VALUES(email), formats = VALUES(formats), frequency = VALUES(frequency), next_backup_at = VALUES(next_backup_at)`,
+        [DEFAULT_TENANT_ID, input.enabled ? 1 : 0, input.email || null, formatsStr, input.frequency, nextAt]
+      );
+      return { success: true };
+    }),
+
+  // ============ 导入顾客数据（从 JSON 存档还原）============
+  importData: protectedProcedure
+    .input(
+      z.object({
+        customers: z.array(z.record(z.any())),
+        mode: z.enum(["skip", "insert"]).default("skip"),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureCustomerTable(conn);
+
+      let inserted = 0;
+      let skipped = 0;
+      for (const c of input.customers) {
+        const name = s(c.name);
+        const mobile = s(c.mobile);
+        if (!name || !mobile) {
+          skipped++;
+          continue;
+        }
+        // 跳过模式：手机号或原编号已存在则跳过
+        if (input.mode === "skip") {
+          const externalNo = s(c.medical_no) || s(c.external_no);
+          const [dup] = (await (conn as any).execute(
+            `SELECT id FROM yaban_customer WHERE tenant_id = ? AND (mobile = ? OR (external_no IS NOT NULL AND external_no = ?)) LIMIT 1`,
+            [DEFAULT_TENANT_ID, mobile, externalNo]
+          )) as any;
+          if ((dup as any[]).length > 0) {
+            skipped++;
+            continue;
+          }
+        }
+        // 统一重新分配我方编号，原编号存入 external_no
+        const code = await nextCustomerCode(conn, DEFAULT_TENANT_ID);
+        const externalNo = s(c.external_no) || s(c.medical_no);
+        const ageNum = c.age === undefined || c.age === null || c.age === "" ? null : parseInt(String(c.age), 10) || null;
+        try {
+          await (conn as any).execute(
+            `INSERT INTO yaban_customer
+             (tenant_id, name, gender, birthday, age, zodiac, patient_type, medical_no, external_no, nickname,
+              email, mobile, phone, region, address, source, net_consultant, consultant, history, remark,
+              chief_complaint, health_status, drug_allergy, food_allergy,
+              heart, hypertension, diabetes, kidney, infectious, bleeding, pregnant, medication,
+              last_doctor, last_visit, created_by)
+             VALUES (?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?,?,?)`,
+            [
+              DEFAULT_TENANT_ID, name, s(c.gender) || "未知", s(c.birthday), ageNum, s(c.zodiac),
+              s(c.patient_type) || "电子", code, externalNo, s(c.nickname),
+              s(c.email), mobile, s(c.phone), s(c.region), s(c.address), s(c.source),
+              s(c.net_consultant), s(c.consultant), s(c.history), s(c.remark),
+              s(c.chief_complaint), s(c.health_status), s(c.drug_allergy), s(c.food_allergy),
+              s(c.heart), s(c.hypertension), s(c.diabetes), s(c.kidney), s(c.infectious), s(c.bleeding), s(c.pregnant), s(c.medication),
+              s(c.last_doctor), s(c.last_visit), ctx.user.id,
+            ]
+          );
+          inserted++;
+        } catch (e) {
+          skipped++;
+        }
+      }
+      return { success: true, inserted, skipped, total: input.customers.length };
     }),
 });

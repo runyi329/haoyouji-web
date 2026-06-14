@@ -1,5 +1,14 @@
 [
   {
+    "hash": "763491581fff39a200c6c3f3aaab94d2210b9f94",
+    "author": "dev",
+    "date": "2026-06-14T04:10:57+00:00",
+    "message": "feat(yaban): 病历号改为顾客编号(门店前缀+5位流水顺延去重)，预留外部原编号字段",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "病历号改为顾客编号(门店前缀+5位流水顺延去重)，预留外部原编号字段"
+  },
+  {
     "hash": "ec6d4a1eae9da7270306f077ad837177068cb9ff",
     "author": "dev",
     "date": "2026-06-14T03:51:22+00:00",

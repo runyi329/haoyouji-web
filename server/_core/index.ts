@@ -657,6 +657,13 @@ async function startServer() {
           console.log(`[定时备份] 触发每日备份任务 (BJT 02:00) - ${dateKey}`);
           const { checkAndExecuteBackups } = await import('../backup-service');
           await checkAndExecuteBackups();
+          // 牙伴顾客数据定时备份
+          try {
+            const { checkAndExecuteYabanBackups } = await import('../yaban-backup-service');
+            await checkAndExecuteYabanBackups();
+          } catch (e) {
+            console.error('[定时备份] 牙伴顾客备份执行失败:', e);
+          }
           console.log(`[定时备份] 备份任务完成 - ${dateKey}`);
         } catch (err) {
           console.error('[定时备份] 执行失败:', err);
