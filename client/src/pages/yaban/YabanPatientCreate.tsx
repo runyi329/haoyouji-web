@@ -59,7 +59,7 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "gender", label: "性别", placeholder: "未知", kind: "select", required: true, options: GENDERS, width: "gender" },
     { key: "birthday", label: "生日", placeholder: "请选择", kind: "input", required: true, inputType: "date", width: "half" },
     { key: "age", label: "年龄", placeholder: "岁", kind: "input", required: true, inputType: "number", width: "narrow" },
-    { key: "zodiac", label: "星座", placeholder: "自动带出", kind: "input", readOnly: true, width: "narrow" },
+    { key: "zodiac", label: "星座", placeholder: "", kind: "input", readOnly: true, width: "narrow" },
     { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", required: true, options: PATIENT_TYPES, width: "half" },
     { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true, width: "half" },
     { key: "mobile", label: "手机号", placeholder: "请输入手机号", kind: "input", required: true, inputType: "tel", width: "half" },
@@ -432,9 +432,9 @@ function FieldCell({
           type="button"
           onClick={onToggle}
           style={genderStyle}
-          className={`${boxCls} justify-between active:bg-gray-100`}
+          className={`${boxCls} ${field.key === "gender" && value ? "justify-center" : "justify-between"} active:bg-gray-100`}
         >
-          <span className={`truncate ${value ? "text-gray-800" : "text-gray-300"}`}>
+          <span className={`truncate ${field.key === "gender" && value ? "text-center" : ""} ${value ? "text-gray-800" : "text-gray-300"}`}>
             {value || field.placeholder}
           </span>
           {showArrow && (
@@ -479,6 +479,7 @@ function FieldCell({
     );
   } else {
     // input
+    const showAgeUnit = field.key === "age" && !!value;
     control = (
       <div className={`${boxCls} ${field.readOnly ? "bg-gray-100" : ""}`}>
         <input
@@ -489,7 +490,8 @@ function FieldCell({
           placeholder={field.placeholder}
           className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 ${field.readOnly ? "text-gray-500" : "text-gray-800"}`}
         />
-        {value && !field.readOnly && (field.inputType === "date" || field.inputType === "number") && (
+        {showAgeUnit && <span className="shrink-0 ml-0.5 text-sm text-gray-500">岁</span>}
+        {value && !field.readOnly && field.inputType === "date" && (
           <button
             type="button"
             onClick={() => onInput("")}

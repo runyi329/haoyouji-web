@@ -1,5 +1,14 @@
 [
   {
+    "hash": "a519c878b6cfc391497922125e0d0c671ba9197d",
+    "author": "yaban-deploy",
+    "date": "2026-06-14T07:54:39+00:00",
+    "message": "性别下拉：有值隐藏箭头；女=淡粉/男=淡蓝底色",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "性别下拉：有值隐藏箭头；女=淡粉/男=淡蓝底色"
+  },
+  {
     "hash": "275d9ab6639d996c56ff6270ea80f3deb9fd03c4",
     "author": "yaban-deploy",
     "date": "2026-06-14T07:45:59+00:00",
