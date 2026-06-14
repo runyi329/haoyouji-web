@@ -1,5 +1,14 @@
 [
   {
+    "hash": "cba335f93e5311419fc1c650cbbe518523ea9862",
+    "author": "manus",
+    "date": "2026-06-14T12:43:36+00:00",
+    "message": "fix(yaban-intro): 替换为离线完整包并适配/yaban-intro子目录部署",
+    "type": "fix",
+    "scope": "yaban-intro",
+    "cleanMessage": "替换为离线完整包并适配/yaban-intro子目录部署"
+  },
+  {
     "hash": "6a472635c774a57ccf81dba9d006a2adf4c88948",
     "author": "manus",
     "date": "2026-06-14T12:19:55+00:00",

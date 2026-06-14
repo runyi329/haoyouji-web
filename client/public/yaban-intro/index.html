@@ -60,6 +60,46 @@
 
     </div>
     <div id="root"></div>
+    <script>
+      // 兑底：无论 3D / WebGL / 模型解码是否成功，超时后强制移除预加载层，避免永久卡住。
+      (function () {
+        var KILL_MS = 6000;
+        function dismiss() {
+          var el = document.getElementById('boot-loader');
+          if (el && !el.classList.contains('fade-out')) {
+            el.classList.add('fade-out');
+            setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); }, 800);
+          }
+        }
+        setTimeout(dismiss, KILL_MS);
+        // 诊断浮层：在真机上直接显示错误原因，便于定位
+        function diag(msg) {
+          var d = document.getElementById('yb-diag');
+          if (!d) {
+            d = document.createElement('div'); d.id = 'yb-diag';
+            d.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:100000;background:rgba(0,0,0,0.78);color:#fff;font:12px/1.5 -apple-system,sans-serif;padding:10px 12px;border-radius:10px;white-space:pre-wrap;word-break:break-all;max-height:45vh;overflow:auto;';
+            document.body.appendChild(d);
+          }
+          d.textContent += (d.textContent ? '\n' : '') + msg;
+        }
+        window.__ybdiag = diag;
+        window.addEventListener('error', function (e) {
+          diag('[error] ' + (e && e.message ? e.message : e) + (e && e.filename ? ' @ ' + e.filename + ':' + e.lineno : ''));
+        });
+        window.addEventListener('unhandledrejection', function (e) {
+          diag('[promise] ' + (e && e.reason ? (e.reason.message || e.reason) : 'unknown'));
+        });
+        // WebGL 检测
+        try {
+          var c = document.createElement('canvas');
+          var gl = c.getContext('webgl2') || c.getContext('webgl');
+          if (!gl) { diag('[webgl] 不可用，本设备/浏览器未启用 WebGL'); setTimeout(dismiss, 1500); }
+          else { diag('[webgl] OK: ' + (gl.getParameter(gl.VERSION) || '')); }
+        } catch (e) { diag('[webgl] 异常 ' + e.message); setTimeout(dismiss, 1500); }
+        // Worker 能力检测（draco 解码依赖）
+        try { if (typeof Worker === 'undefined') diag('[worker] 不可用'); } catch (e) {}
+      })();
+    </script>
     <script
       defer
       data-website-id="ad336437-74fb-46ff-8f97-f11e3042e439"></script>
