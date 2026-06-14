@@ -244,9 +244,13 @@ export const yabanCustomerRouter = router({
       const total = Number((cntRows as any[])[0]?.cnt || 0);
 
       // 分页数据
+      // 注意：mysql2 的 prepared statement 对 LIMIT ?/OFFSET ? 绑定参数会报错，
+      // 这里 pageSize/offset 已被 zod 校验并强制为整数，直接安全拼接
+      const safeLimit = Math.max(1, Math.floor(pageSize));
+      const safeOffset = Math.max(0, Math.floor(offset));
       const [rows] = (await (conn as any).execute(
-        `SELECT * FROM yaban_customer WHERE ${whereSql} ORDER BY ${orderSql} LIMIT ? OFFSET ?`,
-        [...params, pageSize, offset]
+        `SELECT * FROM yaban_customer WHERE ${whereSql} ORDER BY ${orderSql} LIMIT ${safeLimit} OFFSET ${safeOffset}`,
+        params
       )) as any;
 
       return {

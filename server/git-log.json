@@ -1,5 +1,14 @@
 [
   {
+    "hash": "ddef5d34445261d0878df1cd64bf584aedede5a7",
+    "author": "manus",
+    "date": "2026-06-14T14:52:48+00:00",
+    "message": "feat: 顾客列表页P0重构-统计条/强化搜索/筛选/排序/无限滚动/紧凑卡片",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "顾客列表页P0重构-统计条/强化搜索/筛选/排序/无限滚动/紧凑卡片"
+  },
+  {
     "hash": "4d5a33a0607b6c9ed938eff546a5496a2150e818",
     "author": "manus",
     "date": "2026-06-14T14:26:36+00:00",
