@@ -12,7 +12,9 @@ export default function YabanIntro() {
       const data = e.data;
       if (data && typeof data === "object" && data.type === "yaban-intro-enter") {
         try { sessionStorage.setItem("yaban_intro_entered", "1"); } catch {}
-        setLocation("/yaban");
+        // 用 replace 替换开始页历史项，使历史栈不残留 /yaban/intro，
+        // 保证进入牙伴首页后点返回不会又回到开机画面
+        setLocation("/yaban", { replace: true });
       }
       if (data && typeof data === "object" && data.type === "yaban-intro-back") {
         if (window.history.length > 1) {

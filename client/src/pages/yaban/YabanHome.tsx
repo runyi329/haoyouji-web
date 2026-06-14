@@ -85,7 +85,9 @@ export default function YabanHome() {
       const entered = sessionStorage.getItem("yaban_intro_entered");
       if (entered !== "1") {
         // 本会话尚未看过开始页，跳转开始页（标记由开始页"进入"按钮写入并保留）
-        setLocation("/yaban/intro");
+        // 用 replace 替换当前 /yaban 历史项，避免历史栈里同时残留 /yaban 与 /yaban/intro，
+        // 从而保证看完开始页进入牙伴后点返回能回到上一个外部页面（如积分商城）
+        setLocation("/yaban/intro", { replace: true });
       }
       // entered === "1" 时：已看过开始页，直接停留首页，不再删除标记
     } catch {
