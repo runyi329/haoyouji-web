@@ -10,6 +10,7 @@ export default function YabanIntro() {
     const onMessage = (e: MessageEvent) => {
       const data = e.data;
       if (data && typeof data === "object" && data.type === "yaban-intro-enter") {
+        try { sessionStorage.setItem("yaban_intro_entered", "1"); } catch {}
         setLocation("/yaban");
       }
     };

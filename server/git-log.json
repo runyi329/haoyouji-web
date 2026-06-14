@@ -1,5 +1,23 @@
 [
   {
+    "hash": "ecd483a8946b1018e079fc2ca3982c3b9f6044bc",
+    "author": "haoyouji-dev",
+    "date": "2026-06-14T11:57:51+00:00",
+    "message": "feat(yaban): 新增3D牙齿展示开始页/yaban/intro，入口先进开始页再进首页",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "新增3D牙齿展示开始页/yaban/intro，入口先进开始页再进首页"
+  },
+  {
+    "hash": "f5ea358b27ce55889c360b349e9d842131a72965",
+    "author": "github-actions[bot]",
+    "date": "2026-06-14T11:48:10+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
     "hash": "45fa59fcc75cb3d34ecd6db26f1f25c0474bc58b",
     "author": "yaban-deploy",
     "date": "2026-06-14T11:43:33+00:00",

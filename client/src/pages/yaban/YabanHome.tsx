@@ -3,7 +3,7 @@
  * 路由：/yaban
  * 蓝色系顶栏 + 白色内容区 + 功能网格
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Search, Plus, ChevronDown, ChevronUp, Settings, RefreshCw, ScanLine, UserPlus, CalendarPlus, PhoneCall, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
@@ -76,6 +76,23 @@ const CREATE_MENU = [
 
 export default function YabanHome() {
   const [, setLocation] = useLocation();
+
+  // 入口联动：无论从底部导航还是积分商城"牙伴"进入首页，
+  // 只要不是从3D开始页点"进入"过来的，都先跳到开始页 /yaban/intro
+  useEffect(() => {
+    try {
+      const entered = sessionStorage.getItem("yaban_intro_entered");
+      if (entered === "1") {
+        // 已经过开始页，消费标记后正常停留在首页
+        sessionStorage.removeItem("yaban_intro_entered");
+      } else {
+        setLocation("/yaban/intro");
+      }
+    } catch {
+      // sessionStorage 不可用时不拦截，直接停留首页
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const { user } = useAuth();
   const [showClinicPicker, setShowClinicPicker] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
