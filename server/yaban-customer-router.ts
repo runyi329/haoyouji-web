@@ -67,6 +67,7 @@ async function ensureCustomerTable(conn: any) {
       phone VARCHAR(32) DEFAULT NULL,
       region VARCHAR(64) DEFAULT NULL,
       address VARCHAR(255) DEFAULT NULL,
+      avatar VARCHAR(255) DEFAULT NULL,
       source VARCHAR(64) DEFAULT NULL,
       net_consultant VARCHAR(64) DEFAULT NULL,
       consultant VARCHAR(64) DEFAULT NULL,
@@ -95,6 +96,12 @@ async function ensureCustomerTable(conn: any) {
       KEY idx_mobile (mobile)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  // 兼容旧表：补充 avatar 列（默认头像标识，如 male_youth）
+  try {
+    await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN avatar VARCHAR(255) DEFAULT NULL AFTER address`);
+  } catch (e) {
+    // 列已存在则忽略
+  }
   // 兼容旧表：将 history 列扩展为 TEXT（既往史改为多选+备注，可能超过 128 字符）
   try {
     await conn.execute(`ALTER TABLE yaban_customer MODIFY COLUMN history TEXT DEFAULT NULL`);
@@ -119,6 +126,7 @@ const createInput = z.object({
   phone: z.string().max(32).optional(),
   region: z.string().max(64).optional(),
   address: z.string().max(255).optional(),
+  avatar: z.string().max(255).optional(),
   source: z.string().max(64).optional(),
   netConsultant: z.string().max(64).optional(),
   consultant: z.string().max(64).optional(),
@@ -239,12 +247,12 @@ export const yabanCustomerRouter = router({
         (await (conn as any).execute(
           `INSERT INTO yaban_customer
            (tenant_id, name, gender, birthday, age, zodiac, patient_type, medical_no, external_no, nickname,
-            email, mobile, phone, region, address,
+            email, mobile, phone, region, address, avatar,
             source, net_consultant, consultant, history, remark,
             chief_complaint, health_status, drug_allergy, food_allergy,
             heart, hypertension, diabetes, kidney, infectious, bleeding, pregnant, medication,
             created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
+           VALUES (?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
           [
             DEFAULT_TENANT_ID,
             input.name.trim(),
@@ -261,6 +269,7 @@ export const yabanCustomerRouter = router({
             s(input.phone),
             s(input.region),
             s(input.address),
+            s(input.avatar),
             s(input.source),
             s(input.netConsultant),
             s(input.consultant),

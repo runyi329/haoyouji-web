@@ -7,12 +7,14 @@
  */
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { ChevronDown, XCircle, Check } from "lucide-react";
+import { ChevronDown, XCircle, Check, UserRound, Camera } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import MedicalHistoryPicker, { serializeHistory, parseHistory } from "./MedicalHistoryPicker";
 import AddressPicker from "./AddressPicker";
+import AvatarPicker from "./AvatarPicker";
+import { autoAvatarKey, avatarSrc, type AvatarKey } from "@/lib/yaban-avatar";
 
 // 主题色
 const ACCENT = "#1E88D6";
@@ -139,6 +141,9 @@ export default function YabanPatientCreate() {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addressOpen, setAddressOpen] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  // 头像：null 表示跟随年龄+性别自动适配；非 null 表示用户手动指定
+  const [avatarManual, setAvatarManual] = useState<AvatarKey | null>(null);
   const [form, setForm] = useState<Record<string, string>>({
     gender: "未知",
     patientType: "电子",
@@ -183,6 +188,10 @@ export default function YabanPatientCreate() {
     },
   });
 
+  // 头像：手动选过则用手动值，否则按年龄+性别自动适配
+  const autoKey = autoAvatarKey(form.age, form.gender);
+  const effectiveAvatar: AvatarKey | null = avatarManual || autoKey;
+
   const handleSave = () => {
     if (createMutation.isPending) return;
     // 校验所有 Tab 的必填字段
@@ -213,6 +222,7 @@ export default function YabanPatientCreate() {
       phone: form.phone,
       region: form.region,
       address: form.address,
+      avatar: effectiveAvatar || undefined,
       source: form.source,
       netConsultant: form.netConsultant,
       consultant: form.consultant,
@@ -298,6 +308,37 @@ export default function YabanPatientCreate() {
 
       {/* 表单内容区：流式栅格 */}
       <div className="flex-1 overflow-y-auto pb-8">
+        {/* 头像区：仅个人信息 Tab 展示，按年龄+性别自动适配，可点击更换 */}
+        {activeTab === "个人信息" && (
+          <div className="bg-white mt-2 px-3 py-4 flex flex-col items-center">
+            <button
+              type="button"
+              onClick={() => setAvatarOpen(true)}
+              className="relative w-20 h-20 rounded-full overflow-hidden bg-gray-100 active:opacity-80"
+            >
+              {effectiveAvatar ? (
+                <img
+                  src={avatarSrc(effectiveAvatar)}
+                  alt="顾客头像"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="absolute inset-0 flex items-center justify-center text-gray-300">
+                  <UserRound className="w-9 h-9" />
+                </span>
+              )}
+              <span
+                className="absolute bottom-0 right-0 w-6 h-6 rounded-full flex items-center justify-center border-2 border-white"
+                style={{ backgroundColor: ACCENT }}
+              >
+                <Camera className="w-3.5 h-3.5 text-white" />
+              </span>
+            </button>
+            <span className="mt-2 text-xs text-gray-400">
+              {avatarManual ? "已手动选择头像" : effectiveAvatar ? "已按年龄性别自动匹配" : "填写年龄性别后自动匹配"}
+            </span>
+          </div>
+        )}
         <div className="bg-white mt-2 px-3 py-3">
           {fields.length === 0 ? (
             <div className="px-1 py-10 text-center text-sm text-gray-300">该分组暂无必填字段</div>
@@ -349,6 +390,17 @@ export default function YabanPatientCreate() {
         onConfirm={(full) => {
           setField("address", full);
           setAddressOpen(false);
+        }}
+      />
+
+      {/* 头像选择器（12 款默认头像） */}
+      <AvatarPicker
+        open={avatarOpen}
+        value={effectiveAvatar}
+        onClose={() => setAvatarOpen(false)}
+        onConfirm={(key) => {
+          setAvatarManual(key);
+          setAvatarOpen(false);
         }}
       />
     </div>
