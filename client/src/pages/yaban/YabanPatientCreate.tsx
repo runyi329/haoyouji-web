@@ -68,7 +68,7 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "source", label: "顾客来源", placeholder: "请选择顾客来源", kind: "select", required: true, options: SOURCES },
     { key: "netConsultant", label: "网电咨询师", placeholder: "请选择网电咨询师", kind: "select", options: NET_CONSULTANTS },
     { key: "consultant", label: "咨询师", placeholder: "请选择咨询师", kind: "select", options: CONSULTANTS },
-    { key: "history", label: "既往史", placeholder: "点击选择或搜索", kind: "history" },
+    { key: "history", label: "AI健康标签", placeholder: "点击选择或搜索", kind: "history" },
     { key: "patientRemark", label: "顾客备注", placeholder: "请输入顾客备注", kind: "textarea" },
   ],
   首诊信息: [

@@ -135,7 +135,7 @@ export default function MedicalHistoryPicker({
         <button onClick={onClose} className="text-base font-medium" style={{ color: ACCENT }}>
           取消
         </button>
-        <h2 className="text-base font-semibold text-gray-900">既往史</h2>
+        <h2 className="text-base font-semibold text-gray-900">AI健康标签</h2>
         <button
           onClick={() => onConfirm(selected, localRemark)}
           className="text-base font-medium"
@@ -208,7 +208,7 @@ export default function MedicalHistoryPicker({
         ) : (
           // 浏览模式：常用 + 分类折叠（每组内标签流式）
           <>
-            <div className="px-4 pt-3 pb-1.5 text-xs font-medium text-gray-400">常用既往史</div>
+            <div className="px-4 pt-3 pb-1.5 text-xs font-medium text-gray-400">常用健康标签</div>
             <div className="flex flex-wrap gap-2.5 px-4 pb-2">
               {commonItems.map((it) => <Tag key={`common_${it.id}`} it={it} />)}
             </div>

@@ -52,7 +52,7 @@ const EXPORT_COLUMNS: { key: string; title: string; width: number }[] = [
   { key: "source", title: "顾客来源", width: 14 },
   { key: "net_consultant", title: "网电咨询师", width: 12 },
   { key: "consultant", title: "咨询师", width: 12 },
-  { key: "history", title: "既往史", width: 14 },
+  { key: "history", title: "健康标签", width: 14 },
   { key: "remark", title: "顾客备注", width: 24 },
   { key: "chief_complaint", title: "就诊主诉", width: 16 },
   { key: "health_status", title: "健康状况", width: 12 },

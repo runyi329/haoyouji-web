@@ -48,7 +48,8 @@ const EXCEL_HEADER_MAP: Record<string, string> = {
   来源: "source",
   网电咨询师: "net_consultant",
   咨询师: "consultant",
-  既往史: "history",
+  健康标签: "history",
+  既往史: "history", // 兼容旧模板表头
   备注: "remark",
   就诊主诉: "chief_complaint",
 };
