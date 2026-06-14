@@ -1,9 +1,10 @@
 /**
- * 牙伴齿科管理 - 顾客列表页（P0 + P1 优化版）
+ * 牙伴齿科管理 - 顾客列表页（P0 + P1 + P2 优化版）
  * 路由：/yaban/patients
  * P0：顶部统计条 + 强化搜索（防抖）+ 快捷筛选 + 排序 + 无限滚动 + 紧凑卡片 + 头像联动
  * P1：拼音索引条(A-Z) + 分组吸顶 + 高级筛选抽屉 + 列表项右滑快捷操作 + 空/异常态 + 搜索历史与联想
- * 数据来源：trpc.yabanCustomer.list / stats / filterOptions（腾讯云 crm_db 真实数据）
+ * P2：顾客彩色标签体系(含按标签筛选) + 批量管理(批量打标签/随访) + 视图密度切换 + 下拉刷新
+ * 数据来源：trpc.yabanCustomer.list / stats / filterOptions / listTags（腾讯云 crm_db 真实数据）
  * 规范：严禁 Emoji；性别用文字标签；图标统一 lucide-react；移动端优先
  */
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
@@ -11,27 +12,28 @@ import { useLocation } from "wouter";
 import {
   ChevronLeft, Plus, Search, X, ArrowUpDown, Check,
   SlidersHorizontal, Phone, ClipboardList, Tag as TagIcon,
-  RotateCw, Clock, Inbox,
+  RotateCw, Clock, Inbox, CheckSquare, Square, Rows3, Rows2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { avatarSrc, ageToBucket, type AvatarKey } from "@/lib/yaban-avatar";
 import { PageTag } from "@/components/PageTag";
 
-// 顾客标签类型及配色
-type TagType = "female" | "male" | "phone";
-
-interface TagConfig {
-  label: string;
-  bg: string;
-  text: string;
-}
-
-const TAG_CONFIG: Record<TagType, TagConfig> = {
+// 性别标签配色（性别用文字，非符号）
+type GenderTag = "female" | "male" | "phone";
+interface TagConfig { label: string; bg: string; text: string; }
+const TAG_CONFIG: Record<GenderTag, TagConfig> = {
   female: { label: "\u5973", bg: "#F97316", text: "#FFFFFF" },
   male: { label: "\u7537", bg: "#0EA5E9", text: "#FFFFFF" },
   phone: { label: "\u7535", bg: "#0EA5E9", text: "#FFFFFF" },
 };
+
+// 顾客自定义标签
+interface CustomerTag {
+  id: number;
+  name: string;
+  color: string;
+}
 
 // 顾客展示模型
 interface CustomerView {
@@ -41,7 +43,8 @@ interface CustomerView {
   age: number;
   gender: "female" | "male";
   avatarKey: AvatarKey;
-  tags: TagType[];
+  genderTags: GenderTag[];
+  customerTags: CustomerTag[];
   recordNo: string;
   source: string;
   lastVisit: string;
@@ -89,6 +92,7 @@ const INDEX_LETTERS = ["#", ...Array.from({ length: 26 }, (_, i) => String.fromC
 const PAGE_SIZE = 30;
 const SEARCH_HISTORY_KEY = "yaban_customer_search_history";
 const MAX_HISTORY = 8;
+const DENSITY_KEY = "yaban_customer_density";
 
 // 高级筛选条件类型
 interface AdvFilters {
@@ -98,20 +102,24 @@ interface AdvFilters {
   consultant: string;
   doctor: string;
   hasMobile: boolean;
+  tagId: number | null;
 }
 const EMPTY_ADV: AdvFilters = {
-  gender: "", ageRange: "", source: "", consultant: "", doctor: "", hasMobile: false,
+  gender: "", ageRange: "", source: "", consultant: "", doctor: "", hasMobile: false, tagId: null,
 };
 
 // 将后端记录映射为展示模型
 function mapRow(row: any): CustomerView {
   const gender: "female" | "male" = row.gender === "\u5973" ? "female" : "male";
   const age = row.age ? Number(row.age) : 0;
-  const tags: TagType[] = [];
-  tags.push(gender);
-  if (row.mobile) tags.push("phone");
+  const genderTags: GenderTag[] = [];
+  genderTags.push(gender);
+  if (row.mobile) genderTags.push("phone");
   const sourceText = [row.source, row.net_consultant, row.consultant].filter(Boolean).join(" | ");
   const avatarKey: AvatarKey = (row.avatar as AvatarKey) || (`${gender}_${ageToBucket(age)}` as AvatarKey);
+  const customerTags: CustomerTag[] = Array.isArray(row.tags)
+    ? row.tags.map((t: any) => ({ id: Number(t.id), name: t.name, color: t.color || "#1E88D6" }))
+    : [];
   return {
     id: Number(row.id),
     name: row.name,
@@ -119,7 +127,8 @@ function mapRow(row: any): CustomerView {
     age,
     gender,
     avatarKey,
-    tags,
+    genderTags,
+    customerTags,
     recordNo: row.medical_no || String(row.id),
     source: sourceText || "\u2014",
     lastVisit: row.last_visit || "",
@@ -130,9 +139,12 @@ function mapRow(row: any): CustomerView {
 }
 
 // 头像组件 - 渲染顾客所选的 12 款默认头像（与新建页联动）
-function PatientAvatar({ avatarKey }: { avatarKey: AvatarKey }) {
+function PatientAvatar({ avatarKey, size = 48 }: { avatarKey: AvatarKey; size?: number }) {
   return (
-    <div className="w-[48px] h-[48px] rounded-full bg-[#F0F7FA] flex-shrink-0 overflow-hidden">
+    <div
+      className="rounded-full bg-[#F0F7FA] flex-shrink-0 overflow-hidden"
+      style={{ width: size, height: size }}
+    >
       <img
         src={avatarSrc(avatarKey)}
         alt={"\u987E\u5BA2\u5934\u50CF"}
@@ -176,35 +188,44 @@ function saveHistory(list: string[]) {
   }
 }
 
-// 单个顾客卡片（支持右滑露出快捷操作）
+// 单个顾客卡片（支持右滑露出快捷操作；支持多选模式；支持密度切换）
 function CustomerRow({
   patient,
+  detailed,
+  selectMode,
+  selected,
   onClick,
   onCopy,
   onCall,
   onFollowUp,
   onTag,
+  onToggleSelect,
 }: {
   patient: CustomerView;
+  detailed: boolean;
+  selectMode: boolean;
+  selected: boolean;
   onClick: () => void;
   onCopy: (e: React.MouseEvent) => void;
   onCall: (e: React.MouseEvent) => void;
   onFollowUp: (e: React.MouseEvent) => void;
   onTag: (e: React.MouseEvent) => void;
+  onToggleSelect: () => void;
 }) {
-  const [offset, setOffset] = useState(0); // 0 收起，负值露出操作区
+  const [offset, setOffset] = useState(0);
   const startX = useRef(0);
   const startOffset = useRef(0);
   const dragging = useRef(false);
-  const ACTION_WIDTH = 180; // 三个操作按钮总宽
+  const ACTION_WIDTH = 180;
 
   const onTouchStart = (e: React.TouchEvent) => {
+    if (selectMode) return;
     startX.current = e.touches[0].clientX;
     startOffset.current = offset;
     dragging.current = true;
   };
   const onTouchMove = (e: React.TouchEvent) => {
-    if (!dragging.current) return;
+    if (!dragging.current || selectMode) return;
     const dx = e.touches[0].clientX - startX.current;
     let next = startOffset.current + dx;
     if (next > 0) next = 0;
@@ -212,11 +233,16 @@ function CustomerRow({
     setOffset(next);
   };
   const onTouchEnd = () => {
+    if (selectMode) return;
     dragging.current = false;
     setOffset((cur) => (cur < -ACTION_WIDTH / 2 ? -ACTION_WIDTH : 0));
   };
 
   const handleCardClick = () => {
+    if (selectMode) {
+      onToggleSelect();
+      return;
+    }
     if (offset !== 0) {
       setOffset(0);
       return;
@@ -224,32 +250,36 @@ function CustomerRow({
     onClick();
   };
 
+  const avatarSize = detailed ? 52 : 44;
+
   return (
     <div className="relative overflow-hidden bg-white">
-      {/* 右滑露出的操作区 */}
-      <div className="absolute right-0 top-0 bottom-0 flex">
-        <button
-          onClick={(e) => { setOffset(0); onCall(e); }}
-          className="w-[60px] flex flex-col items-center justify-center bg-emerald-500 text-white text-[11px] gap-0.5"
-        >
-          <Phone className="w-4 h-4" />
-          {"\u62E8\u6253"}
-        </button>
-        <button
-          onClick={(e) => { setOffset(0); onFollowUp(e); }}
-          className="w-[60px] flex flex-col items-center justify-center bg-sky-500 text-white text-[11px] gap-0.5"
-        >
-          <ClipboardList className="w-4 h-4" />
-          {"\u968F\u8BBF"}
-        </button>
-        <button
-          onClick={(e) => { setOffset(0); onTag(e); }}
-          className="w-[60px] flex flex-col items-center justify-center bg-amber-500 text-white text-[11px] gap-0.5"
-        >
-          <TagIcon className="w-4 h-4" />
-          {"\u6807\u7B7E"}
-        </button>
-      </div>
+      {/* 右滑露出的操作区（多选模式下禁用） */}
+      {!selectMode && (
+        <div className="absolute right-0 top-0 bottom-0 flex">
+          <button
+            onClick={(e) => { setOffset(0); onCall(e); }}
+            className="w-[60px] flex flex-col items-center justify-center bg-emerald-500 text-white text-[11px] gap-0.5"
+          >
+            <Phone className="w-4 h-4" />
+            {"\u62E8\u6253"}
+          </button>
+          <button
+            onClick={(e) => { setOffset(0); onFollowUp(e); }}
+            className="w-[60px] flex flex-col items-center justify-center bg-sky-500 text-white text-[11px] gap-0.5"
+          >
+            <ClipboardList className="w-4 h-4" />
+            {"\u968F\u8BBF"}
+          </button>
+          <button
+            onClick={(e) => { setOffset(0); onTag(e); }}
+            className="w-[60px] flex flex-col items-center justify-center bg-amber-500 text-white text-[11px] gap-0.5"
+          >
+            <TagIcon className="w-4 h-4" />
+            {"\u6807\u7B7E"}
+          </button>
+        </div>
+      )}
 
       {/* 卡片主体 */}
       <div
@@ -258,11 +288,22 @@ function CustomerRow({
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         style={{ transform: `translateX(${offset}px)`, transition: dragging.current ? "none" : "transform 0.2s ease" }}
-        className="relative bg-white px-4 py-3 flex gap-3 cursor-pointer active:bg-gray-50"
+        className={`relative bg-white px-4 flex gap-3 cursor-pointer active:bg-gray-50 ${detailed ? "py-3.5" : "py-2.5"}`}
       >
-        <PatientAvatar avatarKey={patient.avatarKey} />
+        {/* 多选复选框 */}
+        {selectMode && (
+          <div className="flex items-center flex-shrink-0">
+            {selected ? (
+              <CheckSquare className="w-5 h-5 text-sky-500" />
+            ) : (
+              <Square className="w-5 h-5 text-gray-300" />
+            )}
+          </div>
+        )}
+
+        <PatientAvatar avatarKey={patient.avatarKey} size={avatarSize} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-1">
+          <div className="flex items-center gap-1.5 mb-0.5">
             <span className="text-[15px] font-bold text-gray-900 leading-tight truncate">
               {patient.name}
             </span>
@@ -276,7 +317,7 @@ function CustomerRow({
               </span>
             )}
             <span className="flex items-center gap-1 ml-auto flex-shrink-0">
-              {patient.tags.map((tag, idx) => {
+              {patient.genderTags.map((tag, idx) => {
                 const config = TAG_CONFIG[tag];
                 return (
                   <span
@@ -290,6 +331,21 @@ function CustomerRow({
               })}
             </span>
           </div>
+
+          {/* 自定义彩色标签 */}
+          {patient.customerTags.length > 0 && (
+            <div className="flex items-center flex-wrap gap-1 mb-1">
+              {patient.customerTags.map((t) => (
+                <span
+                  key={t.id}
+                  className="inline-flex items-center px-1.5 h-[16px] rounded-[3px] text-[10px] font-medium"
+                  style={{ backgroundColor: `${t.color}1A`, color: t.color }}
+                >
+                  {t.name}
+                </span>
+              ))}
+            </div>
+          )}
 
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="text-[12px] text-gray-500 truncate">
@@ -310,6 +366,22 @@ function CustomerRow({
               <span className="text-[12px] text-gray-400 flex-shrink-0">{patient.lastVisit}</span>
             )}
           </div>
+
+          {/* 详细模式：额外显示手机号与负责医生 */}
+          {detailed && (
+            <div className="flex items-center justify-between gap-2 mt-0.5">
+              <span className="text-[12px] text-gray-400 truncate">
+                {"\u624B\u673A "}
+                {patient.mobile || "\u2014"}
+              </span>
+              {patient.lastDoctor && (
+                <span className="text-[12px] text-gray-400 flex-shrink-0">
+                  {"\u533B\u751F "}
+                  {patient.lastDoctor}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -318,6 +390,7 @@ function CustomerRow({
 
 export default function YabanPatientList() {
   const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
 
   // 搜索输入与防抖后的关键词
   const [searchInput, setSearchInput] = useState("");
@@ -337,12 +410,27 @@ export default function YabanPatientList() {
   const [adv, setAdv] = useState<AdvFilters>(EMPTY_ADV);
   const [advDraft, setAdvDraft] = useState<AdvFilters>(EMPTY_ADV);
 
+  // 视图密度（紧凑/详细）
+  const [detailed, setDetailed] = useState<boolean>(() => {
+    try { return localStorage.getItem(DENSITY_KEY) === "detailed"; } catch { return false; }
+  });
+
+  // 批量管理
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [showBulkTag, setShowBulkTag] = useState(false);
+
+  // 下拉刷新
+  const [pulling, setPulling] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const pullStartY = useRef(0);
+  const pullActive = useRef(false);
+
   // 累积的顾客数据
   const [items, setItems] = useState<any[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
 
-  // 当索引点击时滚动定位
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const groupRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -375,6 +463,12 @@ export default function YabanPatientList() {
   });
   const filterOptions = filterOptionsQuery.data || { sources: [], consultants: [], doctors: [] };
 
+  // 标签列表
+  const tagsQuery = trpc.yabanCustomer.listTags.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+  });
+  const allTags = tagsQuery.data || [];
+
   // 列表查询
   const listQuery = trpc.yabanCustomer.list.useQuery(
     {
@@ -389,6 +483,7 @@ export default function YabanPatientList() {
       consultant: adv.consultant || undefined,
       doctor: adv.doctor || undefined,
       hasMobile: adv.hasMobile || undefined,
+      tagId: adv.tagId || undefined,
     },
     { refetchOnWindowFocus: false }
   );
@@ -433,7 +528,6 @@ export default function YabanPatientList() {
     return map;
   }, [customers, groupByInitial]);
 
-  // 当前数据中存在的首字母（用于索引条高亮可用项）
   const activeLetters = useMemo(() => {
     const set = new Set<string>();
     for (const c of customers) set.add(c.initial || "#");
@@ -460,6 +554,45 @@ export default function YabanPatientList() {
     observer.observe(el);
     return () => observer.disconnect();
   }, [loadMore]);
+
+  // 下拉刷新：仅在滚动容器顶部时生效
+  const onListTouchStart = (e: React.TouchEvent) => {
+    if (selectMode) return;
+    const el = scrollRef.current;
+    if (el && el.scrollTop <= 0) {
+      pullStartY.current = e.touches[0].clientY;
+      pullActive.current = true;
+    } else {
+      pullActive.current = false;
+    }
+  };
+  const onListTouchMove = (e: React.TouchEvent) => {
+    if (!pullActive.current) return;
+    const dy = e.touches[0].clientY - pullStartY.current;
+    if (dy > 0) {
+      setPulling(Math.min(dy * 0.5, 70));
+    }
+  };
+  const onListTouchEnd = async () => {
+    if (!pullActive.current) return;
+    pullActive.current = false;
+    if (pulling > 50) {
+      setRefreshing(true);
+      setPulling(40);
+      try {
+        await Promise.all([
+          utils.yabanCustomer.list.invalidate(),
+          utils.yabanCustomer.stats.invalidate(),
+        ]);
+        await listQuery.refetch();
+      } finally {
+        setRefreshing(false);
+        setPulling(0);
+      }
+    } else {
+      setPulling(0);
+    }
+  };
 
   const handleBack = () => setLocation("/yaban");
   const handleCreate = () => setLocation("/yaban/patient/create");
@@ -521,7 +654,7 @@ export default function YabanPatientList() {
     }
   };
 
-  // 打开高级筛选抽屉时同步草稿
+  // 高级筛选
   const openAdvDrawer = () => {
     setAdvDraft(adv);
     setShowAdvDrawer(true);
@@ -534,11 +667,79 @@ export default function YabanPatientList() {
     setAdvDraft(EMPTY_ADV);
   };
 
+  // 视图密度切换
+  const toggleDensity = () => {
+    setDetailed((v) => {
+      const next = !v;
+      try { localStorage.setItem(DENSITY_KEY, next ? "detailed" : "compact"); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  // 批量管理
+  const enterSelectMode = () => {
+    setSelectMode(true);
+    setSelectedIds(new Set());
+  };
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (prev.size === customers.length) return new Set();
+      return new Set(customers.map((c) => c.id));
+    });
+  };
+
+  const bulkAddTagMutation = trpc.yabanCustomer.bulkAddTag.useMutation({
+    onSuccess: (res) => {
+      toast.success(`\u5DF2\u4E3A ${res.affected} \u4F4D\u987E\u5BA2\u6253\u6807\u7B7E`);
+      setShowBulkTag(false);
+      exitSelectMode();
+      utils.yabanCustomer.list.invalidate();
+      utils.yabanCustomer.listTags.invalidate();
+      listQuery.refetch();
+    },
+    onError: (e) => toast.error(e.message || "\u64CD\u4F5C\u5931\u8D25"),
+  });
+
+  const handleBulkTag = (tagId: number) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) {
+      toast.error("\u8BF7\u5148\u9009\u62E9\u987E\u5BA2");
+      return;
+    }
+    bulkAddTagMutation.mutate({ customerIds: ids, tagId });
+  };
+
+  // 批量随访：暂存选中顾客并跳转随访创建页（随访页可后续读取此暂存逐个建单）
+  const handleBulkFollowUp = () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) {
+      toast.error("\u8BF7\u5148\u9009\u62E9\u987E\u5BA2");
+      return;
+    }
+    try {
+      sessionStorage.setItem("yaban_bulk_followup_ids", JSON.stringify(ids));
+    } catch {
+      // ignore
+    }
+    setLocation(`/yaban/followup/create?bulk=1&count=${ids.length}`);
+  };
+
   const stats = statsQuery.data;
   const isFirstLoading = listQuery.isLoading && page === 1;
   const isError = listQuery.isError;
   const currentSortLabel = SORT_OPTIONS.find((s) => s.id === sort)?.label || "\u6392\u5E8F";
-  // 高级筛选激活数量
   const advCount = useMemo(() => {
     let n = 0;
     if (adv.gender) n++;
@@ -547,56 +748,46 @@ export default function YabanPatientList() {
     if (adv.consultant) n++;
     if (adv.doctor) n++;
     if (adv.hasMobile) n++;
+    if (adv.tagId) n++;
     return n;
   }, [adv]);
 
   // 渲染列表主体内容
+  const renderRow = (patient: CustomerView) => (
+    <CustomerRow
+      key={patient.id}
+      patient={patient}
+      detailed={detailed}
+      selectMode={selectMode}
+      selected={selectedIds.has(patient.id)}
+      onClick={() => handlePatientClick(patient.id)}
+      onCopy={(e) => handleCopyRecordNo(e, patient.recordNo)}
+      onCall={(e) => handleCall(e, patient)}
+      onFollowUp={(e) => handleFollowUp(e, patient)}
+      onTag={(e) => handleTag(e, patient)}
+      onToggleSelect={() => toggleSelect(patient.id)}
+    />
+  );
+
   const renderRows = () => {
     if (groupByInitial && grouped) {
       const orderedKeys = INDEX_LETTERS.filter((l) => grouped.has(l));
       return (
         <div>
           {orderedKeys.map((letter) => (
-            <div
-              key={letter}
-              ref={(el) => { groupRefs.current[letter] = el; }}
-            >
+            <div key={letter} ref={(el) => { groupRefs.current[letter] = el; }}>
               <div className="sticky top-0 z-10 bg-gray-100 px-4 py-1 text-[12px] font-bold text-gray-500">
                 {letter}
               </div>
               <div className="divide-y divide-gray-100">
-                {grouped.get(letter)!.map((patient) => (
-                  <CustomerRow
-                    key={patient.id}
-                    patient={patient}
-                    onClick={() => handlePatientClick(patient.id)}
-                    onCopy={(e) => handleCopyRecordNo(e, patient.recordNo)}
-                    onCall={(e) => handleCall(e, patient)}
-                    onFollowUp={(e) => handleFollowUp(e, patient)}
-                    onTag={(e) => handleTag(e, patient)}
-                  />
-                ))}
+                {grouped.get(letter)!.map(renderRow)}
               </div>
             </div>
           ))}
         </div>
       );
     }
-    return (
-      <div className="divide-y divide-gray-100">
-        {customers.map((patient) => (
-          <CustomerRow
-            key={patient.id}
-            patient={patient}
-            onClick={() => handlePatientClick(patient.id)}
-            onCopy={(e) => handleCopyRecordNo(e, patient.recordNo)}
-            onCall={(e) => handleCall(e, patient)}
-            onFollowUp={(e) => handleFollowUp(e, patient)}
-            onTag={(e) => handleTag(e, patient)}
-          />
-        ))}
-      </div>
-    );
+    return <div className="divide-y divide-gray-100">{customers.map(renderRow)}</div>;
   };
 
   return (
@@ -604,156 +795,207 @@ export default function YabanPatientList() {
       {/* 顶部导航栏 */}
       <div className="sticky top-0 z-50 bg-white border-b border-gray-100">
         <div className="flex items-center justify-between px-4 h-[48px]">
-          <button onClick={handleBack} className="p-1 -ml-1">
-            <ChevronLeft className="w-6 h-6 text-gray-700" />
-          </button>
-          <h1 className="text-[17px] font-bold text-gray-900">{"\u987E\u5BA2"}</h1>
-          <button onClick={handleCreate} className="p-1 -mr-1">
-            <Plus className="w-6 h-6 text-sky-500" />
-          </button>
+          {selectMode ? (
+            <>
+              <button onClick={exitSelectMode} className="text-[14px] text-gray-600">
+                {"\u53D6\u6D88"}
+              </button>
+              <h1 className="text-[16px] font-bold text-gray-900">
+                {"\u5DF2\u9009 "}
+                {selectedIds.size}
+              </h1>
+              <button onClick={toggleSelectAll} className="text-[14px] text-sky-500">
+                {selectedIds.size === customers.length && customers.length > 0 ? "\u53D6\u6D88\u5168\u9009" : "\u5168\u9009"}
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={handleBack} className="p-1 -ml-1">
+                <ChevronLeft className="w-6 h-6 text-gray-700" />
+              </button>
+              <h1 className="text-[17px] font-bold text-gray-900">{"\u987E\u5BA2"}</h1>
+              <div className="flex items-center gap-1">
+                <button onClick={toggleDensity} className="p-1" title={detailed ? "\u7D27\u51D1" : "\u8BE6\u7EC6"}>
+                  {detailed ? (
+                    <Rows2 className="w-5 h-5 text-gray-500" />
+                  ) : (
+                    <Rows3 className="w-5 h-5 text-gray-500" />
+                  )}
+                </button>
+                <button onClick={enterSelectMode} className="p-1 text-[13px] text-gray-600 px-1.5">
+                  {"\u7BA1\u7406"}
+                </button>
+                <button onClick={handleCreate} className="p-1">
+                  <Plus className="w-6 h-6 text-sky-500" />
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* 统计条（点击联动快捷筛选） */}
-        <div className="flex items-stretch px-4 pb-2.5 pt-0.5 gap-2">
-          {[
-            { label: "\u603B\u987E\u5BA2", value: stats?.total, filter: "all" },
-            { label: "\u4ECA\u65E5\u65B0\u589E", value: stats?.today, filter: "today" },
-            { label: "\u672C\u6708\u65B0\u589E", value: stats?.month, filter: "new" },
-          ].map((s) => (
-            <button
-              key={s.label}
-              onClick={() => setQuickFilter(s.filter)}
-              className="flex-1 bg-gray-50 rounded-lg py-2 flex flex-col items-center justify-center active:bg-gray-100"
-            >
-              <span className="text-[18px] font-bold text-gray-900 leading-tight">
-                {statsQuery.isLoading ? "\u2014" : (s.value ?? 0)}
-              </span>
-              <span className="text-[11px] text-gray-500 mt-0.5">{s.label}</span>
-            </button>
-          ))}
-        </div>
+        {/* 统计条（点击联动快捷筛选；多选模式隐藏） */}
+        {!selectMode && (
+          <div className="flex items-stretch px-4 pb-2.5 pt-0.5 gap-2">
+            {[
+              { label: "\u603B\u987E\u5BA2", value: stats?.total, filter: "all" },
+              { label: "\u4ECA\u65E5\u65B0\u589E", value: stats?.today, filter: "today" },
+              { label: "\u672C\u6708\u65B0\u589E", value: stats?.month, filter: "new" },
+            ].map((s) => (
+              <button
+                key={s.label}
+                onClick={() => setQuickFilter(s.filter)}
+                className="flex-1 bg-gray-50 rounded-lg py-2 flex flex-col items-center justify-center active:bg-gray-100"
+              >
+                <span className="text-[18px] font-bold text-gray-900 leading-tight">
+                  {statsQuery.isLoading ? "\u2014" : (s.value ?? 0)}
+                </span>
+                <span className="text-[11px] text-gray-500 mt-0.5">{s.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* 搜索栏 */}
-      <div className="sticky top-[48px] z-40 bg-white px-4 pt-1 pb-2 border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder={"\u641C\u7D22\u59D3\u540D / \u624B\u673A\u53F7 / \u75C5\u5386\u53F7"}
-              value={searchInput}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSearchEnter(); }}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full pl-9 pr-9 py-2 bg-gray-50 rounded-lg text-sm text-gray-700 placeholder-gray-400 outline-none border border-gray-200 focus:border-sky-300 focus:ring-1 focus:ring-sky-100"
-            />
-            {searchInput && (
-              <button
-                onClick={() => setSearchInput("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5"
-              >
-                <X className="w-4 h-4 text-gray-400" />
-              </button>
-            )}
-          </div>
-          {/* 高级筛选入口 */}
-          <button
-            onClick={openAdvDrawer}
-            className="relative flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-gray-50 border border-gray-200"
-          >
-            <SlidersHorizontal className={`w-4 h-4 ${advCount > 0 ? "text-sky-500" : "text-gray-500"}`} />
-            {advCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-sky-500 text-white text-[10px] font-bold flex items-center justify-center">
-                {advCount}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* 搜索历史下拉 */}
-        {searchFocused && history.length > 0 && (
-          <div className="absolute left-4 right-4 mt-1 bg-white rounded-lg shadow-lg border border-gray-100 py-2 z-50">
-            <div className="flex items-center justify-between px-3 pb-1.5">
-              <span className="text-[12px] text-gray-400 flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {"\u641C\u7D22\u5386\u53F2"}
-              </span>
-              <button onClick={clearHistory} className="text-[12px] text-gray-400">
-                {"\u6E05\u7A7A"}
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-1.5 px-3">
-              {history.map((h) => (
+      {/* 搜索栏（多选模式隐藏） */}
+      {!selectMode && (
+        <div className="sticky top-[48px] z-40 bg-white px-4 pt-1 pb-2 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder={"\u641C\u7D22\u59D3\u540D / \u624B\u673A\u53F7 / \u75C5\u5386\u53F7"}
+                value={searchInput}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSearchEnter(); }}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="w-full pl-9 pr-9 py-2 bg-gray-50 rounded-lg text-sm text-gray-700 placeholder-gray-400 outline-none border border-gray-200 focus:border-sky-300 focus:ring-1 focus:ring-sky-100"
+              />
+              {searchInput && (
                 <button
-                  key={h}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => applyHistory(h)}
-                  className="px-2.5 py-1 bg-gray-100 rounded-full text-[12px] text-gray-600"
+                  onClick={() => setSearchInput("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5"
                 >
-                  {h}
+                  <X className="w-4 h-4 text-gray-400" />
                 </button>
-              ))}
+              )}
+            </div>
+            <button
+              onClick={openAdvDrawer}
+              className="relative flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-gray-50 border border-gray-200"
+            >
+              <SlidersHorizontal className={`w-4 h-4 ${advCount > 0 ? "text-sky-500" : "text-gray-500"}`} />
+              {advCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-sky-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {advCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* 搜索历史下拉 */}
+          {searchFocused && history.length > 0 && (
+            <div className="absolute left-4 right-4 mt-1 bg-white rounded-lg shadow-lg border border-gray-100 py-2 z-50">
+              <div className="flex items-center justify-between px-3 pb-1.5">
+                <span className="text-[12px] text-gray-400 flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {"\u641C\u7D22\u5386\u53F2"}
+                </span>
+                <button onClick={clearHistory} className="text-[12px] text-gray-400">
+                  {"\u6E05\u7A7A"}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5 px-3">
+                {history.map((h) => (
+                  <button
+                    key={h}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => applyHistory(h)}
+                    className="px-2.5 py-1 bg-gray-100 rounded-full text-[12px] text-gray-600"
+                  >
+                    {h}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 快捷筛选 + 排序 */}
+          <div className="flex items-center gap-2 mt-2">
+            <div className="flex-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar -mx-0.5 px-0.5">
+              {QUICK_FILTERS.map((f) => {
+                const active = quickFilter === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    onClick={() => setQuickFilter(f.id)}
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[13px] whitespace-nowrap transition-colors ${
+                      active ? "bg-sky-500 text-white font-medium" : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="relative flex-shrink-0">
+              <button
+                onClick={() => setShowSortMenu((v) => !v)}
+                className="flex items-center gap-0.5 px-2 py-1.5 text-[13px] text-gray-600"
+              >
+                <ArrowUpDown className="w-3.5 h-3.5" />
+                <span className="whitespace-nowrap">{currentSortLabel}</span>
+              </button>
+              {showSortMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
+                  <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-100 py-1 min-w-[120px] z-50">
+                    {SORT_OPTIONS.map((option) => (
+                      <button
+                        key={option.id}
+                        onClick={() => {
+                          setSort(option.id);
+                          setShowSortMenu(false);
+                        }}
+                        className={`w-full px-4 py-2.5 text-left text-sm flex items-center justify-between ${
+                          sort === option.id ? "text-sky-600 font-medium" : "text-gray-700"
+                        }`}
+                      >
+                        {option.label}
+                        {sort === option.id && <Check className="w-4 h-4" />}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 顾客列表 */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto relative"
+        onTouchStart={onListTouchStart}
+        onTouchMove={onListTouchMove}
+        onTouchEnd={onListTouchEnd}
+      >
+        {/* 下拉刷新指示 */}
+        {(pulling > 0 || refreshing) && (
+          <div
+            className="flex items-center justify-center text-gray-400 text-[12px] overflow-hidden"
+            style={{ height: pulling }}
+          >
+            <div className="flex items-center gap-1.5">
+              <RotateCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+              {refreshing ? "\u5237\u65B0\u4E2D" : pulling > 50 ? "\u677E\u5F00\u5237\u65B0" : "\u4E0B\u62C9\u5237\u65B0"}
             </div>
           </div>
         )}
 
-        {/* 快捷筛选 + 排序 */}
-        <div className="flex items-center gap-2 mt-2">
-          <div className="flex-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar -mx-0.5 px-0.5">
-            {QUICK_FILTERS.map((f) => {
-              const active = quickFilter === f.id;
-              return (
-                <button
-                  key={f.id}
-                  onClick={() => setQuickFilter(f.id)}
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[13px] whitespace-nowrap transition-colors ${
-                    active ? "bg-sky-500 text-white font-medium" : "bg-gray-100 text-gray-600"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="relative flex-shrink-0">
-            <button
-              onClick={() => setShowSortMenu((v) => !v)}
-              className="flex items-center gap-0.5 px-2 py-1.5 text-[13px] text-gray-600"
-            >
-              <ArrowUpDown className="w-3.5 h-3.5" />
-              <span className="whitespace-nowrap">{currentSortLabel}</span>
-            </button>
-            {showSortMenu && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
-                <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-100 py-1 min-w-[120px] z-50">
-                  {SORT_OPTIONS.map((option) => (
-                    <button
-                      key={option.id}
-                      onClick={() => {
-                        setSort(option.id);
-                        setShowSortMenu(false);
-                      }}
-                      className={`w-full px-4 py-2.5 text-left text-sm flex items-center justify-between ${
-                        sort === option.id ? "text-sky-600 font-medium" : "text-gray-700"
-                      }`}
-                    >
-                      {option.label}
-                      {sort === option.id && <Check className="w-4 h-4" />}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 顾客列表 */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto relative">
         {isFirstLoading ? (
           <div className="divide-y divide-gray-100">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -826,11 +1068,13 @@ export default function YabanPatientList() {
                 </span>
               ) : null}
             </div>
+            {/* 多选模式底部留白，避免被操作条遮挡 */}
+            {selectMode && <div className="h-16" />}
           </>
         )}
 
-        {/* 拼音索引条（仅姓名排序时显示） */}
-        {groupByInitial && customers.length > 0 && (
+        {/* 拼音索引条（仅姓名排序、非多选时显示） */}
+        {groupByInitial && !selectMode && customers.length > 0 && (
           <div className="fixed right-0.5 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center py-1">
             {INDEX_LETTERS.map((letter) => {
               const enabled = activeLetters.has(letter);
@@ -850,13 +1094,76 @@ export default function YabanPatientList() {
         )}
       </div>
 
+      {/* 多选模式底部操作条 */}
+      {selectMode && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 px-4 py-3 flex items-center gap-3">
+          <button
+            onClick={() => {
+              if (selectedIds.size === 0) { toast.error("\u8BF7\u5148\u9009\u62E9\u987E\u5BA2"); return; }
+              setShowBulkTag(true);
+            }}
+            className="flex-1 py-2.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium flex items-center justify-center gap-1.5"
+          >
+            <TagIcon className="w-4 h-4" />
+            {"\u6279\u91CF\u6253\u6807\u7B7E"}
+          </button>
+          <button
+            onClick={handleBulkFollowUp}
+            className="flex-1 py-2.5 rounded-lg bg-sky-500 text-white text-sm font-medium flex items-center justify-center gap-1.5"
+          >
+            <ClipboardList className="w-4 h-4" />
+            {"\u6279\u91CF\u968F\u8BBF"}
+          </button>
+        </div>
+      )}
+
+      {/* 批量打标签选择弹层 */}
+      {showBulkTag && (
+        <div className="fixed inset-0 z-[70] flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowBulkTag(false)} />
+          <div className="relative bg-white rounded-t-2xl max-h-[70vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <span className="text-[16px] font-bold text-gray-900">
+                {"\u9009\u62E9\u6807\u7B7E"}
+                <span className="text-[13px] text-gray-400 font-normal ml-1">
+                  {"\uFF08\u5DF2\u9009 "}
+                  {selectedIds.size}
+                  {" \u4EBA\uFF09"}
+                </span>
+              </span>
+              <button onClick={() => setShowBulkTag(false)} className="p-1">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              {allTags.length === 0 ? (
+                <div className="text-center text-gray-400 text-sm py-8">
+                  {"\u6682\u65E0\u6807\u7B7E\uFF0C\u8BF7\u5148\u5728\u987E\u5BA2\u8BE6\u60C5\u9875\u521B\u5EFA"}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {allTags.map((t: any) => (
+                    <button
+                      key={t.id}
+                      disabled={bulkAddTagMutation.isPending}
+                      onClick={() => handleBulkTag(t.id)}
+                      className="px-3 py-2 rounded-lg text-[13px] font-medium border"
+                      style={{ backgroundColor: `${t.color}1A`, color: t.color, borderColor: `${t.color}40` }}
+                    >
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 高级筛选抽屉 */}
       {showAdvDrawer && (
         <div className="fixed inset-0 z-[60] flex flex-col justify-end">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setShowAdvDrawer(false)}
-          />
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowAdvDrawer(false)} />
           <div className="relative bg-white rounded-t-2xl max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <span className="text-[16px] font-bold text-gray-900">{"\u9AD8\u7EA7\u7B5B\u9009"}</span>
@@ -866,15 +1173,36 @@ export default function YabanPatientList() {
             </div>
 
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+              {/* 标签筛选 */}
+              {allTags.length > 0 && (
+                <FilterGroup title={"\u987E\u5BA2\u6807\u7B7E"}>
+                  {allTags.map((t: any) => {
+                    const active = advDraft.tagId === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => setAdvDraft((d) => ({ ...d, tagId: d.tagId === t.id ? null : t.id }))}
+                        className="px-3 py-1.5 rounded-full text-[13px] font-medium border transition-colors"
+                        style={
+                          active
+                            ? { backgroundColor: t.color, color: "#FFFFFF", borderColor: t.color }
+                            : { backgroundColor: `${t.color}1A`, color: t.color, borderColor: `${t.color}33` }
+                        }
+                      >
+                        {t.name}
+                      </button>
+                    );
+                  })}
+                </FilterGroup>
+              )}
+
               {/* 性别 */}
               <FilterGroup title={"\u6027\u522B"}>
                 {GENDER_OPTIONS.map((o) => (
                   <FilterChip
                     key={o.id}
                     active={advDraft.gender === o.id}
-                    onClick={() =>
-                      setAdvDraft((d) => ({ ...d, gender: d.gender === o.id ? "" : o.id }))
-                    }
+                    onClick={() => setAdvDraft((d) => ({ ...d, gender: d.gender === o.id ? "" : o.id }))}
                   >
                     {o.label}
                   </FilterChip>
@@ -887,9 +1215,7 @@ export default function YabanPatientList() {
                   <FilterChip
                     key={o.id}
                     active={advDraft.ageRange === o.id}
-                    onClick={() =>
-                      setAdvDraft((d) => ({ ...d, ageRange: d.ageRange === o.id ? "" : o.id }))
-                    }
+                    onClick={() => setAdvDraft((d) => ({ ...d, ageRange: d.ageRange === o.id ? "" : o.id }))}
                   >
                     {o.label}
                   </FilterChip>
@@ -903,9 +1229,7 @@ export default function YabanPatientList() {
                     <FilterChip
                       key={o}
                       active={advDraft.source === o}
-                      onClick={() =>
-                        setAdvDraft((d) => ({ ...d, source: d.source === o ? "" : o }))
-                      }
+                      onClick={() => setAdvDraft((d) => ({ ...d, source: d.source === o ? "" : o }))}
                     >
                       {o}
                     </FilterChip>
@@ -920,9 +1244,7 @@ export default function YabanPatientList() {
                     <FilterChip
                       key={o}
                       active={advDraft.consultant === o}
-                      onClick={() =>
-                        setAdvDraft((d) => ({ ...d, consultant: d.consultant === o ? "" : o }))
-                      }
+                      onClick={() => setAdvDraft((d) => ({ ...d, consultant: d.consultant === o ? "" : o }))}
                     >
                       {o}
                     </FilterChip>
@@ -937,9 +1259,7 @@ export default function YabanPatientList() {
                     <FilterChip
                       key={o}
                       active={advDraft.doctor === o}
-                      onClick={() =>
-                        setAdvDraft((d) => ({ ...d, doctor: d.doctor === o ? "" : o }))
-                      }
+                      onClick={() => setAdvDraft((d) => ({ ...d, doctor: d.doctor === o ? "" : o }))}
                     >
                       {o}
                     </FilterChip>

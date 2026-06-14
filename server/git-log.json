@@ -1,5 +1,14 @@
 [
   {
+    "hash": "8e6ad33a16baa3463ae438408485378e62dc417c",
+    "author": "manus",
+    "date": "2026-06-14T16:04:19+00:00",
+    "message": "feat(yaban): 顾客列表页P1优化-拼音索引/高级筛选抽屉/右滑快捷操作/空异常态/搜索历史",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "顾客列表页P1优化-拼音索引/高级筛选抽屉/右滑快捷操作/空异常态/搜索历史"
+  },
+  {
     "hash": "9f6dd15c018e9fb28edc46f2c190de7324763f0c",
     "author": "manus",
     "date": "2026-06-14T15:40:45+00:00",

@@ -146,6 +146,56 @@ async function ensureCustomerTable(conn: any) {
   }
 }
 
+// 确保标签表与关联表存在
+async function ensureTagTables(conn: any) {
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_tag (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      tenant_id INT NOT NULL DEFAULT 1,
+      name VARCHAR(32) NOT NULL,
+      color VARCHAR(16) NOT NULL DEFAULT '#1E88D6',
+      sort INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_tenant (tenant_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_customer_tag (
+      customer_id BIGINT UNSIGNED NOT NULL,
+      tag_id BIGINT UNSIGNED NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (customer_id, tag_id),
+      KEY idx_tag (tag_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  // 首次初始化预置几个常用标签（仅当表为空时）
+  try {
+    const [cntRows] = (await conn.execute(
+      `SELECT COUNT(*) AS cnt FROM yaban_tag WHERE tenant_id = ?`,
+      [DEFAULT_TENANT_ID]
+    )) as any;
+    if (Number((cntRows as any[])[0]?.cnt || 0) === 0) {
+      const presets: Array<[string, string]> = [
+        ["VIP", "#E5A100"],
+        ["\u79cd\u690d\u610f\u5411", "#1E88D6"],
+        ["\u6b63\u7578\u610f\u5411", "#7C4DFF"],
+        ["\u6b20\u8d39", "#E53935"],
+        ["\u5df2\u6d41\u5931", "#9E9E9E"],
+      ];
+      let sort = 0;
+      for (const [name, color] of presets) {
+        await conn.execute(
+          `INSERT INTO yaban_tag (tenant_id, name, color, sort) VALUES (?,?,?,?)`,
+          [DEFAULT_TENANT_ID, name, color, sort++]
+        );
+      }
+    }
+  } catch {
+    // 预置失败不阻断
+  }
+}
+
 // 创建顾客输入校验
 const createInput = z.object({
   name: z.string().min(1, "姓名必填").max(64),
@@ -206,8 +256,9 @@ export const yabanCustomerRouter = router({
           ageRange: z.string().optional(),      // child(0-12) | teen(13-17) | youth(18-39) | middle(40-59) | senior(60+)
           source: z.string().optional(),        // 来源渠道
           consultant: z.string().optional(),    // 咨询师
-          doctor: z.string().optional(),        // 负责医生（last_doctor）
+                    doctor: z.string().optional(),    // 负责医生（last_doctor）
           hasMobile: z.boolean().optional(),    // true=仅有手机号
+          tagId: z.number().int().optional(),   // 按标签筛选
           // 分页
           page: z.number().int().min(1).optional(),
           pageSize: z.number().int().min(1).max(100).optional(),
@@ -278,6 +329,10 @@ export const yabanCustomerRouter = router({
       if (input?.hasMobile === true) {
         where.push(`mobile IS NOT NULL AND mobile <> ''`);
       }
+      if (input?.tagId) {
+        where.push(`id IN (SELECT customer_id FROM yaban_customer_tag WHERE tag_id = ?)`);
+        params.push(input.tagId);
+      }
 
       const whereSql = where.join(" AND ");
 
@@ -311,7 +366,32 @@ export const yabanCustomerRouter = router({
       )) as any;
 
       // 为每条记录附加拼音首字母（用于前端索引分组）
-      const items = (rows as any[]).map((r) => ({ ...r, initial: getInitial(r.name) }));
+      const baseItems = (rows as any[]).map((r) => ({ ...r, initial: getInitial(r.name), tags: [] as any[] }));
+
+      // 批量附加标签（一次查询本页所有顾客的标签）
+      try {
+        const ids = baseItems.map((r) => Number(r.id)).filter(Boolean);
+        if (ids.length > 0) {
+          await ensureTagTables(conn);
+          const placeholders = ids.map(() => "?").join(",");
+          const [tagRows] = (await (conn as any).execute(
+            `SELECT ct.customer_id AS cid, t.id AS tag_id, t.name AS tag_name, t.color AS tag_color
+             FROM yaban_customer_tag ct JOIN yaban_tag t ON ct.tag_id = t.id
+             WHERE ct.customer_id IN (${placeholders}) ORDER BY t.sort ASC, t.id ASC`,
+            ids
+          )) as any;
+          const map = new Map<number, any[]>();
+          for (const tr of tagRows as any[]) {
+            const cid = Number(tr.cid);
+            if (!map.has(cid)) map.set(cid, []);
+            map.get(cid)!.push({ id: Number(tr.tag_id), name: tr.tag_name, color: tr.tag_color });
+          }
+          for (const it of baseItems) it.tags = map.get(Number(it.id)) || [];
+        }
+      } catch {
+        // 标签查询失败不影响列表主体
+      }
+      const items = baseItems;
 
       return {
         items,
@@ -680,5 +760,107 @@ export const yabanCustomerRouter = router({
         }
       }
       return { success: true, inserted, skipped, total: input.customers.length };
+    }),
+
+  // ============ 标签：列表（含每个标签下顾客数量） ============
+  listTags: protectedProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) return [] as any[];
+    await ensureTagTables(conn);
+    const [rows] = (await (conn as any).execute(
+      `SELECT t.id, t.name, t.color, t.sort,
+              (SELECT COUNT(*) FROM yaban_customer_tag ct WHERE ct.tag_id = t.id) AS count
+       FROM yaban_tag t WHERE t.tenant_id = ? ORDER BY t.sort ASC, t.id ASC`,
+      [DEFAULT_TENANT_ID]
+    )) as any;
+    return (rows as any[]).map((r) => ({
+      id: Number(r.id),
+      name: r.name,
+      color: r.color,
+      sort: Number(r.sort || 0),
+      count: Number(r.count || 0),
+    }));
+  }),
+
+  // ============ 标签：新建 ============
+  createTag: protectedProcedure
+    .input(z.object({ name: z.string().min(1, "\u6807\u7b7e\u540d\u5fc5\u586b").max(32), color: z.string().max(16).optional() }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
+      await ensureTagTables(conn);
+      const [maxRows] = (await (conn as any).execute(
+        `SELECT COALESCE(MAX(sort), -1) AS m FROM yaban_tag WHERE tenant_id = ?`,
+        [DEFAULT_TENANT_ID]
+      )) as any;
+      const nextSort = Number((maxRows as any[])[0]?.m ?? -1) + 1;
+      const [res] = (await (conn as any).execute(
+        `INSERT INTO yaban_tag (tenant_id, name, color, sort) VALUES (?,?,?,?)`,
+        [DEFAULT_TENANT_ID, input.name.trim(), input.color || "#1E88D6", nextSort]
+      )) as any;
+      return { id: Number((res as any).insertId) };
+    }),
+
+  // ============ 标签：编辑 ============
+  updateTag: protectedProcedure
+    .input(z.object({ id: z.number().int(), name: z.string().min(1).max(32), color: z.string().max(16) }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
+      await ensureTagTables(conn);
+      await (conn as any).execute(
+        `UPDATE yaban_tag SET name = ?, color = ? WHERE id = ? AND tenant_id = ?`,
+        [input.name.trim(), input.color, input.id, DEFAULT_TENANT_ID]
+      );
+      return { success: true };
+    }),
+
+  // ============ 标签：删除（同时解除关联） ============
+  deleteTag: protectedProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
+      await ensureTagTables(conn);
+      await (conn as any).execute(`DELETE FROM yaban_customer_tag WHERE tag_id = ?`, [input.id]);
+      await (conn as any).execute(`DELETE FROM yaban_tag WHERE id = ? AND tenant_id = ?`, [input.id, DEFAULT_TENANT_ID]);
+      return { success: true };
+    }),
+
+  // ============ 批量：为多位顾客打标签 ============
+  bulkAddTag: protectedProcedure
+    .input(z.object({ customerIds: z.array(z.number().int()).min(1), tagId: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
+      await ensureTagTables(conn);
+      let affected = 0;
+      for (const cid of input.customerIds) {
+        try {
+          await (conn as any).execute(
+            `INSERT IGNORE INTO yaban_customer_tag (customer_id, tag_id) VALUES (?,?)`,
+            [cid, input.tagId]
+          );
+          affected++;
+        } catch {
+          // 忽略单条失败
+        }
+      }
+      return { success: true, affected };
+    }),
+
+  // ============ 批量：移除多位顾客的某标签 ============
+  bulkRemoveTag: protectedProcedure
+    .input(z.object({ customerIds: z.array(z.number().int()).min(1), tagId: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
+      await ensureTagTables(conn);
+      const placeholders = input.customerIds.map(() => "?").join(",");
+      await (conn as any).execute(
+        `DELETE FROM yaban_customer_tag WHERE tag_id = ? AND customer_id IN (${placeholders})`,
+        [input.tagId, ...input.customerIds]
+      );
+      return { success: true };
     }),
 });
