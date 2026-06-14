@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-14
+// 生成时间：2026-06-15
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7309,5 +7309,27 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-14T11:14:49Z", type: "other", cleanMessage: "新建顾客：生日显示改为点分隔(2026.06.26)单行居中，隐藏input负责系统选择器" },
     { date: "2026-06-14T11:35:33Z", type: "other", cleanMessage: "新建顾客：手机前/编号后，紧急联系人+关系同行、联系人电话单独行，顾客类型移至顾客信息Tab" },
     { date: "2026-06-14T11:43:33Z", type: "other", cleanMessage: "新建顾客：地址标签改两字并与输入框同行；地区弹层门牌号移至列表上方、字体放大" },
+    { date: "2026-06-14T11:48:10Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-14T11:57:51Z", type: "feat", cleanMessage: "新增3D牙齿展示开始页/yaban/intro，入口先进开始页再进首页" },
+    { date: "2026-06-14T12:19:55Z", type: "feat", cleanMessage: "牙伴首页入口联动，未经开始页统一先跳/yaban/intro" },
+    { date: "2026-06-14T12:43:36Z", type: "fix", cleanMessage: "替换为离线完整包并适配/yaban-intro子目录部署" },
+    { date: "2026-06-14T12:58:40Z", type: "fix", cleanMessage: "预加载层加超时兜底+真机诊断浮层，防止WebGL/模型加载失败导致永久卡住" },
+    { date: "2026-06-14T13:06:46Z", type: "fix", cleanMessage: "路由读取路径归一化，剥离结尾index.html，修复真机访问/yaban-intro/index.html落到404页问题" },
+    { date: "2026-06-14T13:16:49Z", type: "chore", cleanMessage: "移除排障用诊断浮层，保留预加载超时兜底" },
+    { date: "2026-06-14T13:46:14Z", type: "perf", cleanMessage: "开启nginx gzip压缩、移除主线程昂贵法线平滑、加载进度反馈，画质零妥协提速3D开始页" },
+    { date: "2026-06-14T14:01:13Z", type: "style", cleanMessage: "背景渐变上下对调为上深下浅，顶部与主站无缝衔接" },
+    { date: "2026-06-14T14:13:46Z", type: "feat", cleanMessage: "右上角新增返回按钮，字体与AI牙伴一致，主站监听返回消息" },
+    { date: "2026-06-14T14:26:36Z", type: "feat", cleanMessage: "顾客新建页取消所有必填项，隐藏仅显示必填字段开关" },
+    { date: "2026-06-14T14:52:48Z", type: "feat", cleanMessage: "顾客列表页P0重构-统计条/强化搜索/筛选/排序/无限滚动/紧凑卡片" },
+    { date: "2026-06-14T15:02:04Z", type: "fix", cleanMessage: "顾客列表list接口LIMIT/OFFSET改整数拼接，修复mysql2预处理报错导致列表空白" },
+    { date: "2026-06-14T15:11:39Z", type: "feat", cleanMessage: "顾客列表头像与12款默认头像联动，未设置时按年龄性别自动适配" },
+    { date: "2026-06-14T15:18:18Z", type: "fix", cleanMessage: "牙伴内部页面返回首页不再重复弹开机画面（会话内仅首进显示一次）" },
+    { date: "2026-06-14T15:31:47Z", type: "feat", cleanMessage: "牙伴定位角标补齐7个缺失页面(列表/详情/排班x3/随访详情/开机画面)并唯一编号P320-P326" },
+    { date: "2026-06-14T15:40:45Z", type: "fix", cleanMessage: "牙伴开机画面用replace跳转，修复从积分商城进入后返回循环回开机画面" },
+  ],
+  "2026-06-15": [
+    { date: "2026-06-14T16:04:19Z", type: "feat", cleanMessage: "顾客列表页P1优化-拼音索引/高级筛选抽屉/右滑快捷操作/空异常态/搜索历史" },
+    { date: "2026-06-14T16:26:31Z", type: "feat", cleanMessage: "顾客列表P2优化-彩色标签体系/按标签筛选/批量管理/视图密度切换/下拉刷新" },
+    { date: "2026-06-14T16:38:14Z", type: "fix", cleanMessage: "修复新建顾客页头像区被sticky Tab栏覆盖导致部分不可点击" },
   ],
 };
