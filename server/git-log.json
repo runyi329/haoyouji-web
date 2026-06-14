@@ -1,5 +1,14 @@
 [
   {
+    "hash": "0aea280060efc89b349961027a83bfc640d581f9",
+    "author": "yaban-deploy",
+    "date": "2026-06-14T10:02:48+00:00",
+    "message": "新建顾客：生日/年龄/星座三等分同行",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "新建顾客：生日/年龄/星座三等分同行"
+  },
+  {
     "hash": "e6037d735c78b71cb015c14ada2e07fff1deca90",
     "author": "yaban-deploy",
     "date": "2026-06-14T09:55:46+00:00",

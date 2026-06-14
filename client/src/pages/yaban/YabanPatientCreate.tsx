@@ -40,7 +40,7 @@ type FieldKind = "input" | "select" | "textarea" | "history" | "address";
 
 // 字段宽度档位：窄字段同行并排，宽字段独占
 // narrow ≈ 半屏内可挤 2-3 个；half ≈ 半屏；full ≈ 整行
-type FieldWidth = "narrow" | "half" | "full" | "name" | "gender" | "auto";
+type FieldWidth = "narrow" | "half" | "full" | "name" | "gender" | "auto" | "date" | "tiny" | "zodiac";
 
 interface FieldDef {
   key: string;
@@ -60,9 +60,9 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "name", label: "姓名", placeholder: "请输入姓名", kind: "input", required: true, width: "name" },
     { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input", width: "auto" },
     { key: "gender", label: "性别", placeholder: "无", kind: "select", required: true, options: GENDERS, width: "gender" },
-    { key: "birthday", label: "生日", placeholder: "请选择", kind: "input", required: true, inputType: "date", width: "narrow" },
-    { key: "age", label: "年龄", placeholder: "岁", kind: "input", required: true, inputType: "number", width: "narrow" },
-    { key: "zodiac", label: "星座", placeholder: "", kind: "input", readOnly: true, width: "narrow" },
+    { key: "birthday", label: "生日", placeholder: "请选择", kind: "input", required: true, inputType: "date", width: "date" },
+    { key: "age", label: "年龄", placeholder: "请输入", kind: "input", required: true, inputType: "number", width: "tiny" },
+    { key: "zodiac", label: "星座", placeholder: "", kind: "input", readOnly: true, width: "zodiac" },
     { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true, width: "half" },
     { key: "mobile", label: "手机", placeholder: "请输入手机号", kind: "input", required: true, inputType: "tel", width: "half" },
     { key: "emergencyContact", label: "紧急联系人", placeholder: "姓名", kind: "input", width: "narrow" },
@@ -106,6 +106,10 @@ const WIDTH_BASIS: Record<FieldWidth, string> = {
   name: "108px",
   gender: "92px",
   auto: "100px",
+  // 生日/年龄/星座同行：生日弹性占余，年龄最窄，星座够3字
+  date: "0",
+  tiny: "0",
+  zodiac: "0",
 };
 
 // 根据生日(YYYY-MM-DD)计算周岁年龄
@@ -355,7 +359,7 @@ export default function YabanPatientCreate() {
           {fields.length === 0 ? (
             <div className="px-1 py-10 text-center text-sm text-gray-300">该分组暂无必填字段</div>
           ) : (
-            <div className="flex flex-wrap gap-x-3 gap-y-1">
+            <div className="flex flex-wrap gap-x-2 gap-y-1">
               {fields.map((f) => (
                 <FieldCell
                   key={f.key}
@@ -543,7 +547,6 @@ function FieldCell({
     );
   } else {
     // input
-    const showAgeUnit = field.key === "age" && !!value;
     control = (
       <div className={`${boxCls} ${field.readOnly ? "bg-gray-100" : ""}`}>
         <input
@@ -555,7 +558,6 @@ function FieldCell({
           placeholder={field.placeholder}
           className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 ${field.readOnly ? "text-gray-800" : "text-gray-800"}`}
         />
-        {showAgeUnit && <span className="shrink-0 ml-0.5 text-sm text-gray-500">岁</span>}
         {value && !field.readOnly && field.inputType === "date" && (
           <button
             type="button"
@@ -598,6 +600,18 @@ function FieldCell({
   } else if (w === "narrow") {
     flexStyle = `1 1 ${basis}`;
     minW = 96;
+  } else if (w === "date") {
+    // 生日：占本行剩余弹性宽，保证“2026年6月6日”不被压缩
+    flexStyle = `1 1 0`;
+    minW = 124;
+  } else if (w === "tiny") {
+    // 年龄：最窄，不放大
+    flexStyle = `0 1 0`;
+    minW = 84;
+  } else if (w === "zodiac") {
+    // 星座：紧凑但够放 3 个字
+    flexStyle = `0 1 0`;
+    minW = 104;
   } else {
     flexStyle = `1 1 ${basis}`;
     minW = 150;
@@ -606,7 +620,7 @@ function FieldCell({
   return (
     <div
       style={{ flex: flexStyle, minWidth: minW, maxWidth: "100%" }}
-      className="py-1.5 flex items-center gap-2"
+      className={`py-1.5 flex items-center ${w === "tiny" || w === "zodiac" || w === "date" ? "gap-1.5" : "gap-2"}`}
     >
       {label}
       <div className="flex-1 min-w-0">{control}</div>
