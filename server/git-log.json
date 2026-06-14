@@ -1,5 +1,14 @@
 [
   {
+    "hash": "13ed77050f8f0718b40f5f93b3a9c5bb806e2951",
+    "author": "dev",
+    "date": "2026-06-14T03:12:02+00:00",
+    "message": "style(yaban): 新建顾客选择器改为就地内联下拉，取消底部弹出",
+    "type": "style",
+    "scope": "yaban",
+    "cleanMessage": "新建顾客选择器改为就地内联下拉，取消底部弹出"
+  },
+  {
     "hash": "8e826b08efca53c543b50cad6ca884b8ba4343f3",
     "author": "dev",
     "date": "2026-06-14T02:59:55+00:00",

@@ -305,7 +305,7 @@ function FormRow({
 
   if (field.kind === "select") {
     return (
-      <div className="border-b border-gray-50">
+      <div className="relative border-b border-gray-50">
         <button
           onClick={onToggle}
           className="w-full flex items-center justify-between px-4 py-3.5 active:bg-gray-50"
@@ -321,22 +321,27 @@ function FormRow({
           </div>
         </button>
         {open && (
-          <div className="bg-gray-50/60">
-            {(field.options || []).map((opt) => {
-              const selected = value === opt;
-              return (
-                <button
-                  key={opt}
-                  onClick={() => onSelect(opt)}
-                  className="w-full px-4 py-3 text-left text-sm border-t border-gray-100 active:bg-gray-100 flex items-center justify-between"
-                  style={selected ? { color: ACCENT, fontWeight: 600 } : { color: "#374151" }}
-                >
-                  {opt}
-                  {selected && <span style={{ color: ACCENT }}>✓</span>}
-                </button>
-              );
-            })}
-          </div>
+          <>
+            {/* 透明遮罩，点击外部关闭 */}
+            <div className="fixed inset-0 z-20" onClick={onToggle} />
+            {/* 贴近按钮右侧的气泡浮层 */}
+            <div className="absolute right-3 top-full z-30 -mt-1 min-w-[120px] max-w-[200px] bg-white rounded-lg shadow-lg ring-1 ring-black/5 overflow-hidden">
+              {(field.options || []).map((opt, i) => {
+                const selected = value === opt;
+                return (
+                  <button
+                    key={opt}
+                    onClick={() => onSelect(opt)}
+                    className={`w-full px-4 py-2.5 text-left text-sm active:bg-gray-100 flex items-center justify-between gap-3 ${i > 0 ? "border-t border-gray-50" : ""}`}
+                    style={selected ? { color: ACCENT, fontWeight: 600 } : { color: "#374151" }}
+                  >
+                    {opt}
+                    {selected && <span style={{ color: ACCENT }}>✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
     );
