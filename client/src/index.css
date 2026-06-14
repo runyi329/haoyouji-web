@@ -1263,3 +1263,22 @@ img {
 img.clickable-img {
   pointer-events: auto !important;
 }
+
+/* 生日等原生日期输入框：内容居中显示，避免左空右溢 */
+input[type="date"].date-centered {
+  text-align: center;
+}
+input[type="date"].date-centered::-webkit-date-and-time-value {
+  text-align: center;
+  width: 100%;
+  margin: 0;
+}
+input[type="date"].date-centered::-webkit-datetime-edit {
+  text-align: center;
+  width: 100%;
+  justify-content: center;
+}
+input[type="date"].date-centered::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+}

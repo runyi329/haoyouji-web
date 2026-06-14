@@ -556,7 +556,7 @@ function FieldCell({
           readOnly={field.readOnly}
           onChange={(e) => onInput(e.target.value)}
           placeholder={field.placeholder}
-          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 text-gray-800 ${field.key === "age" || field.key === "zodiac" || field.inputType === "date" ? "text-center" : ""}`}
+          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 text-gray-800 ${field.key === "age" || field.key === "zodiac" ? "text-center" : ""} ${field.inputType === "date" ? "date-centered appearance-none" : ""}`}
         />
       </div>
     );
