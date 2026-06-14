@@ -1,5 +1,14 @@
 [
   {
+    "hash": "134396f57e16f09636e66f3567cf1dc0d3abd0b8",
+    "author": "yaban-deploy",
+    "date": "2026-06-14T10:21:45+00:00",
+    "message": "新建顾客：修复生日/年龄/星座同行重叠，去掉岁单位并重排宽度",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "新建顾客：修复生日/年龄/星座同行重叠，去掉岁单位并重排宽度"
+  },
+  {
     "hash": "0aea280060efc89b349961027a83bfc640d581f9",
     "author": "yaban-deploy",
     "date": "2026-06-14T10:02:48+00:00",

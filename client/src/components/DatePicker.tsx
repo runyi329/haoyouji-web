@@ -5,9 +5,10 @@ interface DatePickerProps {
   value: string; // YYYY-MM-DD格式
   onChange: (date: string) => void;
   onClose: () => void;
+  onClear?: () => void; // 可选：提供时底部显示“清除”按钮
 }
 
-export function DatePicker({ value, onChange, onClose }: DatePickerProps) {
+export function DatePicker({ value, onChange, onClose, onClear }: DatePickerProps) {
   const [currentDate, setCurrentDate] = useState(() => {
     if (value) {
       return new Date(value);
@@ -139,6 +140,17 @@ export function DatePicker({ value, onChange, onClose }: DatePickerProps) {
           >
             今天
           </button>
+          {onClear && (
+            <button
+              onClick={() => {
+                onClear();
+                onClose();
+              }}
+              className="flex-1 py-1.5 text-xs text-red-500 hover:bg-gray-50 rounded transition-colors"
+            >
+              清除
+            </button>
+          )}
           <button
             onClick={onClose}
             className="flex-1 py-1.5 text-xs text-gray-600 hover:bg-gray-50 rounded transition-colors"

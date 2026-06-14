@@ -14,6 +14,7 @@ import { trpc } from "@/lib/trpc";
 import MedicalHistoryPicker, { serializeHistory, parseHistory } from "./MedicalHistoryPicker";
 import AddressPicker from "./AddressPicker";
 import AvatarPicker from "./AvatarPicker";
+import { DatePicker } from "@/components/DatePicker";
 import { autoAvatarKey, avatarSrc, type AvatarKey } from "@/lib/yaban-avatar";
 
 // 主题色
@@ -61,7 +62,7 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input", width: "auto" },
     { key: "gender", label: "性别", placeholder: "无", kind: "select", required: true, options: GENDERS, width: "gender" },
     { key: "birthday", label: "生日", placeholder: "请选择", kind: "input", required: true, inputType: "date", width: "date" },
-    { key: "age", label: "年龄", placeholder: "请输入", kind: "input", required: true, inputType: "number", width: "tiny" },
+    { key: "age", label: "年龄", placeholder: "", kind: "input", required: true, inputType: "number", width: "tiny" },
     { key: "zodiac", label: "星座", placeholder: "", kind: "input", readOnly: true, width: "zodiac" },
     { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true, width: "half" },
     { key: "mobile", label: "手机", placeholder: "请输入手机号", kind: "input", required: true, inputType: "tel", width: "half" },
@@ -135,8 +136,8 @@ function calcZodiac(birthday: string): string {
   const day = d.getDate();
   const edges = [20, 19, 21, 20, 21, 22, 23, 23, 23, 24, 23, 22];
   const names = [
-    "摩羯座", "水瓶座", "双鱼座", "白羊座", "金牛座", "双子座",
-    "巨蟹座", "狮子座", "处女座", "天秤座", "天蝎座", "射手座", "摩羯座",
+    "摩羯", "水瓶", "双鱼", "白羊", "金牛", "双子",
+    "巨蟹", "狮子", "处女", "天秤", "天蝎", "射手", "摩羯",
   ];
   return day < edges[month - 1] ? names[month - 1] : names[month];
 }
@@ -149,6 +150,7 @@ export default function YabanPatientCreate() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addressOpen, setAddressOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [dateOpen, setDateOpen] = useState(false);
   // 头像：null 表示跟随年龄+性别自动适配；非 null 表示用户手动指定
   const [avatarManual, setAvatarManual] = useState<AvatarKey | null>(null);
   const [form, setForm] = useState<Record<string, string>>({
@@ -374,12 +376,25 @@ export default function YabanPatientCreate() {
                   }}
                   onOpenHistory={() => setHistoryOpen(true)}
                   onOpenAddress={() => setAddressOpen(true)}
+                  onOpenDate={() => setDateOpen(true)}
                 />
               ))}
             </div>
           )}
         </div>
       </div>
+
+      {/* 生日日期选择器 */}
+      {dateOpen && (
+        <DatePicker
+          value={form.birthday || ""}
+          onChange={(d) => setField("birthday", d)}
+          onClose={() => setDateOpen(false)}
+          onClear={() =>
+            setForm((prev) => ({ ...prev, birthday: "", age: "", zodiac: "" }))
+          }
+        />
+      )}
 
       {/* AI健康标签选择器 */}
       {(() => {
@@ -433,6 +448,7 @@ function FieldCell({
   onSelect,
   onOpenHistory,
   onOpenAddress,
+  onOpenDate,
 }: {
   field: FieldDef;
   value: string;
@@ -442,6 +458,7 @@ function FieldCell({
   onSelect: (v: string) => void;
   onOpenHistory?: () => void;
   onOpenAddress?: () => void;
+  onOpenDate?: () => void;
 }) {
   const basis = WIDTH_BASIS[field.width || "full"];
   // 长内容字段（多行文本、AI健康标签、地址）标题在上、控件占满整行；其余短字段标题与控件同行
@@ -459,7 +476,20 @@ function FieldCell({
 
   let control: JSX.Element;
 
-  if (field.kind === "address") {
+  if (field.inputType === "date") {
+    // 生日：点击打开自定义日历弹窗，值在框内居中显示
+    control = (
+      <button
+        type="button"
+        onClick={onOpenDate}
+        className={`${boxCls} justify-center text-center active:bg-gray-100`}
+      >
+        <span className={value ? "text-gray-800" : "text-gray-300"}>
+          {value ? value.replace(/-/g, "/") : field.placeholder}
+        </span>
+      </button>
+    );
+  } else if (field.kind === "address") {
     control = (
       <button
         type="button"
@@ -558,16 +588,6 @@ function FieldCell({
           placeholder={field.placeholder}
           className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 ${field.readOnly ? "text-gray-800" : "text-gray-800"}`}
         />
-        {value && !field.readOnly && field.inputType === "date" && (
-          <button
-            type="button"
-            onClick={() => onInput("")}
-            className="ml-1 shrink-0 text-gray-300 active:text-gray-500"
-            aria-label={`清空${field.label}`}
-          >
-            <XCircle className="w-4 h-4" />
-          </button>
-        )}
       </div>
     );
   }
@@ -609,9 +629,9 @@ function FieldCell({
     flexStyle = `0 1 0`;
     minW = 84;
   } else if (w === "zodiac") {
-    // 星座：紧凑但够放 3 个字
+    // 星座：只显示两字，可再缩小一个汉字宽，把空间让给生日
     flexStyle = `0 1 0`;
-    minW = 104;
+    minW = 84;
   } else {
     flexStyle = `1 1 ${basis}`;
     minW = 150;
