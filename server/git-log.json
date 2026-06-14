@@ -1,5 +1,14 @@
 [
   {
+    "hash": "70ac900da47c032708cffeaaf9b3b89202e8f25b",
+    "author": "dev",
+    "date": "2026-06-14T02:51:21+00:00",
+    "message": "feat(yaban): 新建顾客打通真实后端数据(建表/创建/列表/详情)，全站患者文案统一改为顾客",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "新建顾客打通真实后端数据(建表/创建/列表/详情)，全站患者文案统一改为顾客"
+  },
+  {
     "hash": "cb539f0d46bb894c2958ee3dc0072c17c38f837c",
     "author": "dev",
     "date": "2026-06-14T02:26:11+00:00",

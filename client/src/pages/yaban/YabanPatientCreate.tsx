@@ -6,7 +6,7 @@
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ChevronRight, Plus, MinusCircle } from "lucide-react";
+import { ChevronRight, Plus, MinusCircle, XCircle } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -363,13 +363,25 @@ function FormRow({
   return (
     <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-50">
       {labelNode}
-      <input
-        type={field.inputType || "text"}
-        value={value}
-        onChange={(e) => onInput(e.target.value)}
-        placeholder={field.placeholder}
-        className="text-sm text-right text-gray-800 bg-transparent outline-none flex-1 ml-4 placeholder:text-gray-300"
-      />
+      <div className="flex items-center flex-1 ml-4">
+        <input
+          type={field.inputType || "text"}
+          value={value}
+          onChange={(e) => onInput(e.target.value)}
+          placeholder={field.placeholder}
+          className="text-sm text-right text-gray-800 bg-transparent outline-none flex-1 placeholder:text-gray-300"
+        />
+        {value && (field.inputType === "date" || field.inputType === "number") && (
+          <button
+            type="button"
+            onClick={() => onInput("")}
+            className="ml-2 shrink-0 text-gray-300 active:text-gray-500"
+            aria-label={`清空${field.label}`}
+          >
+            <XCircle className="w-4 h-4" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
