@@ -1,5 +1,14 @@
 [
   {
+    "hash": "1a1c13ad9cb1e7913fb313726bda1b087f991010",
+    "author": "manus",
+    "date": "2026-06-14T14:01:13+00:00",
+    "message": "style(yaban-intro): 背景渐变上下对调为上深下浅，顶部与主站无缝衔接",
+    "type": "style",
+    "scope": "yaban-intro",
+    "cleanMessage": "背景渐变上下对调为上深下浅，顶部与主站无缝衔接"
+  },
+  {
     "hash": "07cdc57ff18be91620c67bf43ef43202a1617b27",
     "author": "manus",
     "date": "2026-06-14T13:46:14+00:00",

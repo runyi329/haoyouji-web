@@ -13,6 +13,13 @@ export default function YabanIntro() {
         try { sessionStorage.setItem("yaban_intro_entered", "1"); } catch {}
         setLocation("/yaban");
       }
+      if (data && typeof data === "object" && data.type === "yaban-intro-back") {
+        if (window.history.length > 1) {
+          window.history.back();
+        } else {
+          setLocation("/");
+        }
+      }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
