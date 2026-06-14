@@ -186,10 +186,19 @@ export default function MedicalHistoryPicker({
       {/* 列表区 */}
       <div className="flex-1 overflow-y-auto">
         {searchResults ? (
-          // 搜索模式：标签流式扁平结果
+          // 搜索模式：展示命中的主病，并紧跟其细项标签（若有）
           searchResults.length > 0 ? (
-            <div className="flex flex-wrap gap-2.5 px-4 py-3">
-              {searchResults.map((it) => <Tag key={it.id} it={it} />)}
+            <div className="px-4 py-3">
+              {searchResults.map((it) => (
+                <div key={it.id} className="mb-4 last:mb-0">
+                  <div className="flex flex-wrap gap-2.5">
+                    <Tag it={it} />
+                    {it.relatedTags && it.relatedTags.map((rt) => (
+                      <Tag key={rt} it={{ id: `${it.id}_${rt}`, name: rt, category: "", pinyin: "", aliases: [] }} />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="px-4 py-10 text-center text-sm text-gray-400">

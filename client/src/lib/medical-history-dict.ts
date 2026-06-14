@@ -4,6 +4,7 @@ export interface MedicalHistoryItem {
   category: string; // 所属系统分类
   pinyin: string; // 拼音首字母（用于快速搜索）
   aliases: string[]; // 同义词/俗称（用于模糊搜索匹配）
+  relatedTags?: string[]; // 隐藏的关联细项标签（如分级/用药/并发症/家族史等，搜索命中时展开）
 }
 
 export const MEDICAL_HISTORY_CATEGORIES = [
@@ -23,48 +24,90 @@ export const MEDICAL_HISTORY_CATEGORIES = [
 
 export const MEDICAL_HISTORY_DICT: MedicalHistoryItem[] = [
   // 心血管系统
-  { id: "cv_1", name: "高血压", category: "心血管系统", pinyin: "gxy", aliases: ["血压高", "血压偏高", "高血压病"] },
+  { 
+    id: "cv_1", name: "高血压", category: "心血管系统", pinyin: "gxy", aliases: ["血压高", "血压偏高", "高血压病"],
+    relatedTags: ["高血压1级(轻度)", "高血压2级(中度)", "高血压3级(重度)", "规律服降压药", "未规律服药", "血压控制良好", "血压控制不稳定", "高血压性心脏病", "高血压肾病", "有家族遗传史"]
+  },
   { id: "cv_2", name: "低血压", category: "心血管系统", pinyin: "dxy", aliases: ["血压低", "血压偏低"] },
-  { id: "cv_3", name: "冠心病", category: "心血管系统", pinyin: "gxb", aliases: ["冠状动脉粥样硬化", "心肌缺血", "心绞痛"] },
-  { id: "cv_4", name: "心脏支架植入史", category: "心血管系统", pinyin: "xzzjzrs", aliases: ["心脏支架", "冠脉支架", "有支架"] },
+  { 
+    id: "cv_3", name: "冠心病", category: "心血管系统", pinyin: "gxb", aliases: ["冠状动脉粥样硬化", "心肌缺血", "心绞痛"],
+    relatedTags: ["心绞痛频发", "陈旧性心肌梗死", "长期服抗凝/抗血小板药", "有家族遗传史"]
+  },
+  { 
+    id: "cv_4", name: "心脏支架植入史", category: "心血管系统", pinyin: "xzzjzrs", aliases: ["心脏支架", "冠脉支架", "有支架"],
+    relatedTags: ["近半年内植入", "一年以上植入", "长期服双抗药", "长期服单抗药"]
+  },
   { id: "cv_5", name: "心脏起搏器植入史", category: "心血管系统", pinyin: "xzqbqzrs", aliases: ["起搏器", "心脏起搏器"] },
-  { id: "cv_6", name: "心律失常", category: "心血管系统", pinyin: "xlsc", aliases: ["心律不齐", "早搏", "房颤", "心颤", "心动过速"] },
+  { 
+    id: "cv_6", name: "心律失常", category: "心血管系统", pinyin: "xlsc", aliases: ["心律不齐", "早搏", "房颤", "心颤", "心动过速"],
+    relatedTags: ["房颤", "室性早搏", "心动过缓", "心动过速", "长期服抗凝药"]
+  },
   { id: "cv_7", name: "心力衰竭", category: "心血管系统", pinyin: "xlsj", aliases: ["心衰", "心脏扩张", "心肌病"] },
   { id: "cv_8", name: "先天性心脏病", category: "心血管系统", pinyin: "xtxxzb", aliases: ["先心病", "心脏有杂音"] },
   { id: "cv_9", name: "心脏瓣膜病", category: "心血管系统", pinyin: "xzbmb", aliases: ["二尖瓣", "心脏瓣膜手术"] },
 
   // 内分泌与代谢
-  { id: "ed_1", name: "糖尿病", category: "内分泌与代谢", pinyin: "tnb", aliases: ["血糖高", "高血糖", "血糖偏高"] },
+  { 
+    id: "ed_1", name: "糖尿病", category: "内分泌与代谢", pinyin: "tnb", aliases: ["血糖高", "高血糖", "血糖偏高"],
+    relatedTags: ["1型糖尿病", "2型糖尿病", "口服降糖药", "注射胰岛素", "血糖控制良好", "血糖控制不稳定", "有低血糖发作史", "糖尿病视网膜病变", "糖尿病肾病", "糖尿病足", "有家族遗传史"]
+  },
   { id: "ed_2", name: "低血糖", category: "内分泌与代谢", pinyin: "dxt", aliases: ["血糖低", "血糖偏低"] },
-  { id: "ed_3", name: "高脂血症", category: "内分泌与代谢", pinyin: "gzxz", aliases: ["高血脂", "血脂高", "高胆固醇", "胆固醇高"] },
-  { id: "ed_4", name: "甲状腺功能亢进", category: "内分泌与代谢", pinyin: "jzxgnkj", aliases: ["甲亢"] },
-  { id: "ed_5", name: "甲状腺功能减退", category: "内分泌与代谢", pinyin: "jzxgnjt", aliases: ["甲减"] },
+  { 
+    id: "ed_3", name: "高脂血症", category: "内分泌与代谢", pinyin: "gzxz", aliases: ["高血脂", "血脂高", "高胆固醇", "胆固醇高"],
+    relatedTags: ["长期服降脂药(他汀类)", "有家族遗传史"]
+  },
+  { 
+    id: "ed_4", name: "甲状腺功能亢进", category: "内分泌与代谢", pinyin: "jzxgnkj", aliases: ["甲亢"],
+    relatedTags: ["规律服抗甲状腺药", "碘131治疗史", "甲亢控制良好", "甲亢未控制"]
+  },
+  { 
+    id: "ed_5", name: "甲状腺功能减退", category: "内分泌与代谢", pinyin: "jzxgnjt", aliases: ["甲减"],
+    relatedTags: ["长期服优甲乐", "甲功指标正常"]
+  },
   { id: "ed_6", name: "甲状腺炎/结节", category: "内分泌与代谢", pinyin: "jzxyjj", aliases: ["桥本氏甲状腺炎", "甲状腺结节", "甲状腺瘤"] },
-  { id: "ed_7", name: "痛风", category: "内分泌与代谢", pinyin: "tf", aliases: ["高尿酸", "尿酸高"] },
+  { 
+    id: "ed_7", name: "痛风", category: "内分泌与代谢", pinyin: "tf", aliases: ["高尿酸", "尿酸高"],
+    relatedTags: ["长期服降尿酸药", "急性发作期", "痛风石"]
+  },
 
   // 呼吸系统
-  { id: "rs_1", name: "支气管哮喘", category: "呼吸系统", pinyin: "zqgxc", aliases: ["哮喘"] },
+  { 
+    id: "rs_1", name: "支气管哮喘", category: "呼吸系统", pinyin: "zqgxc", aliases: ["哮喘"],
+    relatedTags: ["随身携带气雾剂", "近期有急性发作", "控制良好", "有家族遗传史"]
+  },
   { id: "rs_2", name: "慢性支气管炎", category: "呼吸系统", pinyin: "mxzqgy", aliases: ["慢支", "老慢支"] },
   { id: "rs_3", name: "慢性阻塞性肺病", category: "呼吸系统", pinyin: "mxzsxfb", aliases: ["慢阻肺", "COPD"] },
   { id: "rs_4", name: "鼻炎", category: "呼吸系统", pinyin: "by", aliases: ["过敏性鼻炎", "慢性鼻炎"] },
   { id: "rs_5", name: "肺炎史", category: "呼吸系统", pinyin: "fys", aliases: ["肺炎"] },
 
   // 消化系统
-  { id: "gi_1", name: "胃溃疡/十二指肠溃疡", category: "消化系统", pinyin: "wkysezcky", aliases: ["胃肠溃疡", "胃溃疡", "有点胃病", "慢性胃病"] },
+  { 
+    id: "gi_1", name: "胃溃疡/十二指肠溃疡", category: "消化系统", pinyin: "wkysezcky", aliases: ["胃肠溃疡", "胃溃疡", "有点胃病", "慢性胃病"],
+    relatedTags: ["近期有胃出血史", "幽门螺杆菌(Hp)阳性", "规律服抑酸药"]
+  },
   { id: "gi_2", name: "胃食管反流病", category: "消化系统", pinyin: "wsgflb", aliases: ["反流性胃炎", "反酸", "容易恶心"] },
   { id: "gi_3", name: "脂肪肝", category: "消化系统", pinyin: "zfg", aliases: ["肝脏问题"] },
   { id: "gi_4", name: "胆结石/胆囊炎", category: "消化系统", pinyin: "djsdny", aliases: ["胆结石", "胆囊手术"] },
   { id: "gi_5", name: "肝硬化", category: "消化系统", pinyin: "gyh", aliases: ["肝功能不全"] },
 
   // 神经与精神
-  { id: "ns_1", name: "脑梗死/脑缺血", category: "神经与精神", pinyin: "ngsnqx", aliases: ["脑梗", "轻微脑梗", "脑血栓", "中风", "供血不足"] },
+  { 
+    id: "ns_1", name: "脑梗死/脑缺血", category: "神经与精神", pinyin: "ngsnqx", aliases: ["脑梗", "轻微脑梗", "脑血栓", "中风", "供血不足"],
+    relatedTags: ["半年内新发", "陈旧性脑梗", "长期服抗凝/抗血小板药", "遗留肢体障碍"]
+  },
   { id: "ns_2", name: "脑出血", category: "神经与精神", pinyin: "ncx", aliases: ["脑溢血", "中风"] },
-  { id: "ns_3", name: "癫痫", category: "神经与精神", pinyin: "dx", aliases: ["羊癫疯"] },
+  { 
+    id: "ns_3", name: "癫痫", category: "神经与精神", pinyin: "dx", aliases: ["羊癫疯"],
+    relatedTags: ["规律服抗癫痫药", "近期有发作", "控制良好", "有家族遗传史"]
+  },
   { id: "ns_4", name: "帕金森病", category: "神经与精神", pinyin: "pjsb", aliases: ["帕金森"] },
   { id: "ns_5", name: "抑郁/焦虑症", category: "神经与精神", pinyin: "yyjlz", aliases: ["抑郁症", "焦虑症"] },
 
   // 泌尿与生殖
-  { id: "ur_1", name: "慢性肾脏病", category: "泌尿与生殖", pinyin: "mxszb", aliases: ["肾炎", "肾功能不全", "肾脏问题"] },
+  { 
+    id: "ur_1", name: "慢性肾脏病", category: "泌尿与生殖", pinyin: "mxszb", aliases: ["肾炎", "肾功能不全", "肾脏问题"],
+    relatedTags: ["肾功能不全代偿期", "尿毒症期", "维持性血液透析"]
+  },
   { id: "ur_2", name: "肾结石/囊肿", category: "泌尿与生殖", pinyin: "sjsnz", aliases: ["肾囊肿", "肾结石"] },
   { id: "ur_3", name: "前列腺增生", category: "泌尿与生殖", pinyin: "qlxzs", aliases: ["前列腺肥大"] },
   { id: "ur_4", name: "尿失禁", category: "泌尿与生殖", pinyin: "nsj", aliases: ["膀胱不好"] },
@@ -75,12 +118,18 @@ export const MEDICAL_HISTORY_DICT: MedicalHistoryItem[] = [
   { id: "bo_3", name: "颈椎/腰椎病", category: "骨骼与关节", pinyin: "jzyzb", aliases: ["腰椎不好", "腰椎手术", "颈椎病"] },
 
   // 肿瘤与免疫
-  { id: "on_1", name: "恶性肿瘤史", category: "肿瘤与免疫", pinyin: "exzls", aliases: ["癌症", "肿瘤", "癌症术后", "胃癌", "肝癌", "肠癌", "乳腺癌", "甲状腺癌", "肾癌"] },
+  { 
+    id: "on_1", name: "恶性肿瘤史", category: "肿瘤与免疫", pinyin: "exzls", aliases: ["癌症", "肿瘤", "癌症术后", "胃癌", "肝癌", "肠癌", "乳腺癌", "甲状腺癌", "肾癌"],
+    relatedTags: ["手术切除史", "化疗史", "放疗史", "靶向/免疫治疗中", "有家族遗传史"]
+  },
   { id: "on_2", name: "良性肿瘤/息肉", category: "肿瘤与免疫", pinyin: "lxzlxr", aliases: ["息肉", "胃息肉", "囊肿"] },
   { id: "on_3", name: "血液系统疾病", category: "肿瘤与免疫", pinyin: "xyxtjb", aliases: ["贫血", "有点贫血", "血小板低", "白血病"] },
 
   // 传染病
-  { id: "in_1", name: "乙型肝炎", category: "传染病", pinyin: "yxgy", aliases: ["乙肝", "小三阳", "大三阳"] },
+  { 
+    id: "in_1", name: "乙型肝炎", category: "传染病", pinyin: "yxgy", aliases: ["乙肝", "小三阳", "大三阳"],
+    relatedTags: ["乙肝携带者(肝功正常)", "活动性乙肝", "大三阳", "小三阳", "长期服抗病毒药"]
+  },
   { id: "in_2", name: "结核病", category: "传染病", pinyin: "jhb", aliases: ["肺结核"] },
   { id: "in_3", name: "梅毒", category: "传染病", pinyin: "md", aliases: [] },
   { id: "in_4", name: "艾滋病", category: "传染病", pinyin: "azb", aliases: ["HIV"] },
