@@ -1,5 +1,14 @@
 [
   {
+    "hash": "9f6dd15c018e9fb28edc46f2c190de7324763f0c",
+    "author": "manus",
+    "date": "2026-06-14T15:40:45+00:00",
+    "message": "fix: 牙伴开机画面用replace跳转，修复从积分商城进入后返回循环回开机画面",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "牙伴开机画面用replace跳转，修复从积分商城进入后返回循环回开机画面"
+  },
+  {
     "hash": "f0a47b5e3f7c877388b072736e8cdd12dc545576",
     "author": "manus",
     "date": "2026-06-14T15:31:47+00:00",

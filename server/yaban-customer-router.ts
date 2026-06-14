@@ -8,6 +8,7 @@
  *   - 严禁 Emoji
  */
 import { z } from "zod";
+import { pinyin } from "pinyin-pro";
 import { router, protectedProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
@@ -21,6 +22,26 @@ import {
 } from "./yaban-backup-service";
 
 const DEFAULT_TENANT_ID = 1;
+
+// 根据姓名计算 A-Z 首字母（用于拼音索引分组）。非中英文/无法识别归入 "#"
+function getInitial(name?: string | null): string {
+  const n = (name || "").trim();
+  if (!n) return "#";
+  const first = n[0];
+  // 英文字母直接归类
+  if (/[a-zA-Z]/.test(first)) return first.toUpperCase();
+  // 中文取拼音首字母
+  if (/[\u4e00-\u9fa5]/.test(first)) {
+    try {
+      const py = pinyin(first, { pattern: "first", toneType: "none", type: "string" }) as string;
+      const letter = (py || "").trim()[0];
+      if (letter && /[a-zA-Z]/.test(letter)) return letter.toUpperCase();
+    } catch {
+      // ignore
+    }
+  }
+  return "#";
+}
 
 // 门店编号前缀（拼音字母缩写）。多门店阶段可按 tenant 映射，单店阶段固定。
 const STORE_PREFIX_MAP: Record<number, string> = {
@@ -180,6 +201,13 @@ export const yabanCustomerRouter = router({
           quickFilter: z.string().optional(),
           // 排序：recent(最近就诊) | created(创建时间) | name(姓名拼音) | age(年龄)
           sort: z.string().optional(),
+          // 高级筛选（组合条件，均为可选）
+          gender: z.string().optional(),        // 男 | 女 | 未知
+          ageRange: z.string().optional(),      // child(0-12) | teen(13-17) | youth(18-39) | middle(40-59) | senior(60+)
+          source: z.string().optional(),        // 来源渠道
+          consultant: z.string().optional(),    // 咨询师
+          doctor: z.string().optional(),        // 负责医生（last_doctor）
+          hasMobile: z.boolean().optional(),    // true=仅有手机号
           // 分页
           page: z.number().int().min(1).optional(),
           pageSize: z.number().int().min(1).max(100).optional(),
@@ -222,6 +250,35 @@ export const yabanCustomerRouter = router({
         where.push(`last_visit IS NOT NULL AND last_visit <> '' AND STR_TO_DATE(REPLACE(last_visit,'.','-'), '%Y-%m-%d') < DATE_SUB(CURDATE(), INTERVAL 90 DAY)`);
       }
 
+      // 高级筛选（组合条件）
+      if (input?.gender) {
+        where.push(`gender = ?`);
+        params.push(input.gender);
+      }
+      if (input?.ageRange) {
+        const r = input.ageRange;
+        if (r === "child") where.push(`age IS NOT NULL AND age <= 12`);
+        else if (r === "teen") where.push(`age >= 13 AND age <= 17`);
+        else if (r === "youth") where.push(`age >= 18 AND age <= 39`);
+        else if (r === "middle") where.push(`age >= 40 AND age <= 59`);
+        else if (r === "senior") where.push(`age >= 60`);
+      }
+      if (input?.source) {
+        where.push(`source = ?`);
+        params.push(input.source);
+      }
+      if (input?.consultant) {
+        where.push(`(consultant = ? OR net_consultant = ?)`);
+        params.push(input.consultant, input.consultant);
+      }
+      if (input?.doctor) {
+        where.push(`last_doctor = ?`);
+        params.push(input.doctor);
+      }
+      if (input?.hasMobile === true) {
+        where.push(`mobile IS NOT NULL AND mobile <> ''`);
+      }
+
       const whereSql = where.join(" AND ");
 
       // 排序映射（白名单，防注入）
@@ -253,14 +310,50 @@ export const yabanCustomerRouter = router({
         params
       )) as any;
 
+      // 为每条记录附加拼音首字母（用于前端索引分组）
+      const items = (rows as any[]).map((r) => ({ ...r, initial: getInitial(r.name) }));
+
       return {
-        items: rows as any[],
+        items,
         total,
         page,
         pageSize,
         hasMore: offset + (rows as any[]).length < total,
       };
     }),
+
+  // ============ 高级筛选可选项（动态从全表去重生成） ============
+  filterOptions: protectedProcedure.query(async () => {
+    const conn = await getDbConnection();
+    const empty = { sources: [] as string[], consultants: [] as string[], doctors: [] as string[] };
+    if (!conn) return empty;
+    await ensureCustomerTable(conn);
+    const distinct = async (sql: string): Promise<string[]> => {
+      try {
+        const [rows] = (await (conn as any).execute(sql, [DEFAULT_TENANT_ID])) as any;
+        return (rows as any[])
+          .map((r) => (r.v == null ? "" : String(r.v).trim()))
+          .filter((v) => v !== "");
+      } catch {
+        return [];
+      }
+    };
+    const sources = await distinct(
+      `SELECT DISTINCT source AS v FROM yaban_customer WHERE tenant_id = ? AND source IS NOT NULL AND source <> '' ORDER BY source`
+    );
+    // 咨询师合并 consultant 与 net_consultant
+    const c1 = await distinct(
+      `SELECT DISTINCT consultant AS v FROM yaban_customer WHERE tenant_id = ? AND consultant IS NOT NULL AND consultant <> ''`
+    );
+    const c2 = await distinct(
+      `SELECT DISTINCT net_consultant AS v FROM yaban_customer WHERE tenant_id = ? AND net_consultant IS NOT NULL AND net_consultant <> ''`
+    );
+    const consultants = Array.from(new Set([...c1, ...c2])).sort();
+    const doctors = await distinct(
+      `SELECT DISTINCT last_doctor AS v FROM yaban_customer WHERE tenant_id = ? AND last_doctor IS NOT NULL AND last_doctor <> '' ORDER BY last_doctor`
+    );
+    return { sources, consultants, doctors };
+  }),
 
   // ============ 顾客统计（总数 / 今日新增 / 本月新增） ============
   stats: protectedProcedure.query(async () => {
