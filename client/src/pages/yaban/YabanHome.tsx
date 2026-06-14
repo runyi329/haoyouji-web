@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Search, Plus, ChevronDown, ChevronUp, Settings, RefreshCw, Store, ChevronRight, Package } from "lucide-react";
+import { Search, Plus, ChevronDown, ChevronUp, Settings, RefreshCw, Store, ChevronRight, Package, ScanLine, UserPlus, CalendarPlus, PhoneCall, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import YabanCalendar from "./YabanCalendar";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
@@ -64,15 +64,35 @@ const CLINICS = [
 
 
 
+// 右上角「+」新增菜单项
+const CREATE_MENU = [
+  { name: "扫一扫", icon: ScanLine, route: "" },
+  { name: "新建患者", icon: UserPlus, route: "/yaban/patient/create" },
+  { name: "新建预约", icon: CalendarPlus, route: "/yaban/schedule/create" },
+  { name: "新建随访", icon: PhoneCall, route: "/yaban/followup/create" },
+  { name: "新建入库", icon: ArrowDownToLine, route: "" },
+  { name: "新建出库", icon: ArrowUpFromLine, route: "" },
+];
+
 export default function YabanHome() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const [showClinicPicker, setShowClinicPicker] = useState(false);
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [currentClinic, setCurrentClinic] = useState("恒愿齿科北外滩店");
   const [expandedCompanies, setExpandedCompanies] = useState<string[]>(["恒愿齿科"]);
   const [expandedGroups, setExpandedGroups] = useState<string[]>(["总部"]);
 
   const handleFeatureClick = (name: string, route?: string) => {
+    if (route) {
+      setLocation(route);
+    } else {
+      toast.info(`"${name}" 功能开发中，敬请期待`);
+    }
+  };
+
+  const handleCreateMenuClick = (name: string, route: string) => {
+    setShowCreateMenu(false);
     if (route) {
       setLocation(route);
     } else {
@@ -125,12 +145,37 @@ export default function YabanHome() {
             <button onClick={() => toast.info("搜索功能开发中")}>
               <Search className="w-5 h-5" />
             </button>
-            <button onClick={() => toast.info("新增功能开发中")}>
+            <button onClick={() => setShowCreateMenu(!showCreateMenu)}>
               <Plus className="w-5 h-5" />
             </button>
           </div>
         </div>
       </div>
+
+      {/* 右上角「+」新增菜单 - 深色卡片下拉，参考原生样式 */}
+      {showCreateMenu && (
+        <div className="fixed inset-0 z-50" onClick={() => setShowCreateMenu(false)}>
+          <div
+            className="absolute top-[52px] right-3 max-w-[200px] rounded-xl overflow-hidden shadow-2xl"
+            style={{ backgroundColor: "#2C3038" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {CREATE_MENU.map((item, idx) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.name}
+                  className={`w-full flex items-center gap-3 px-5 py-3.5 active:bg-white/10 ${idx > 0 ? "border-t border-white/10" : ""}`}
+                  onClick={() => handleCreateMenuClick(item.name, item.route)}
+                >
+                  <Icon className="w-5 h-5 text-white shrink-0" strokeWidth={1.8} />
+                  <span className="text-[15px] text-white whitespace-nowrap">{item.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 诊所选择下拉面板 - 蓝白清爽风格，与牙办首页一致 */}
       {showClinicPicker && (

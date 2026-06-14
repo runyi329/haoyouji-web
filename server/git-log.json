@@ -1,5 +1,14 @@
 [
   {
+    "hash": "1b99a1b5df43f27059721b1e6230921e2e71f319",
+    "author": "dev",
+    "date": "2026-06-14T01:58:28+00:00",
+    "message": "fix(yaban): 补回YabanShop缺失的Ticket图标导入,修复商城页白屏报错",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "补回YabanShop缺失的Ticket图标导入,修复商城页白屏报错"
+  },
+  {
     "hash": "7a2e075a2277b2dbfc2283d38aa452ea2538312a",
     "author": "dev",
     "date": "2026-06-14T01:48:14+00:00",
