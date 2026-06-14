@@ -9,6 +9,7 @@ import { useLocation } from "wouter";
 import { ChevronLeft, Plus, Search, X, ArrowUpDown, Check } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { avatarSrc, ageToBucket, type AvatarKey } from "@/lib/yaban-avatar";
 
 // 顾客标签类型及配色
 type TagType = "female" | "male" | "phone";
@@ -32,6 +33,7 @@ interface CustomerView {
   nickname?: string;
   age: number;
   gender: "female" | "male";
+  avatarKey: AvatarKey;
   tags: TagType[];
   recordNo: string;
   source: string;
@@ -61,16 +63,20 @@ const PAGE_SIZE = 30;
 // 将后端记录映射为展示模型
 function mapRow(row: any): CustomerView {
   const gender: "female" | "male" = row.gender === "\u5973" ? "female" : "male";
+  const age = row.age ? Number(row.age) : 0;
   const tags: TagType[] = [];
   tags.push(gender);
   if (row.mobile) tags.push("phone");
   const sourceText = [row.source, row.net_consultant, row.consultant].filter(Boolean).join(" | ");
+  // 头像：优先用顾客保存的 avatar；未保存时按年龄+性别自动适配（与新建页一致）
+  const avatarKey: AvatarKey = (row.avatar as AvatarKey) || (`${gender}_${ageToBucket(age)}` as AvatarKey);
   return {
     id: Number(row.id),
     name: row.name,
     nickname: row.nickname || undefined,
-    age: row.age ? Number(row.age) : 0,
+    age,
     gender,
+    avatarKey,
     tags,
     recordNo: row.medical_no || String(row.id),
     source: sourceText || "\u2014",
@@ -79,39 +85,16 @@ function mapRow(row: any): CustomerView {
   };
 }
 
-// 头像组件 - 戴口罩头像样式
-function PatientAvatar({ gender }: { gender: "female" | "male" }) {
-  const skinColor = gender === "female" ? "#FDDCBD" : "#E8D5C4";
-  const hairColor = gender === "female" ? "#4A3728" : "#3D3D3D";
-  const maskColor = "#B2E0F0";
-  const maskStrap = "#8ECFE0";
-
+// 头像组件 - 渲染顾客所选的 12 款默认头像（与新建页联动）
+function PatientAvatar({ avatarKey }: { avatarKey: AvatarKey }) {
   return (
-    <div className="w-[48px] h-[48px] rounded-full bg-[#F0F7FA] flex items-center justify-center flex-shrink-0 overflow-hidden">
-      <svg viewBox="0 0 56 56" className="w-full h-full">
-        {gender === "female" ? (
-          <>
-            <ellipse cx="28" cy="20" rx="13" ry="14" fill={hairColor} />
-            <ellipse cx="28" cy="22" rx="10" ry="11" fill={skinColor} />
-            <path d="M18 18 Q22 10 28 12 Q34 10 38 18 Q36 14 28 15 Q20 14 18 18Z" fill={hairColor} />
-          </>
-        ) : (
-          <>
-            <ellipse cx="28" cy="20" rx="12" ry="13" fill={hairColor} />
-            <ellipse cx="28" cy="22" rx="10" ry="11" fill={skinColor} />
-            <rect x="17" y="12" width="22" height="8" rx="4" fill={hairColor} />
-          </>
-        )}
-        <rect x="19" y="24" width="18" height="10" rx="4" fill={maskColor} />
-        <line x1="19" y1="28" x2="14" y2="24" stroke={maskStrap} strokeWidth="1.2" />
-        <line x1="37" y1="28" x2="42" y2="24" stroke={maskStrap} strokeWidth="1.2" />
-        <line x1="22" y1="27" x2="34" y2="27" stroke={maskStrap} strokeWidth="0.5" opacity="0.6" />
-        <line x1="22" y1="29.5" x2="34" y2="29.5" stroke={maskStrap} strokeWidth="0.5" opacity="0.6" />
-        <line x1="22" y1="32" x2="34" y2="32" stroke={maskStrap} strokeWidth="0.5" opacity="0.6" />
-        <circle cx="24" cy="21" r="1.2" fill="#333" />
-        <circle cx="32" cy="21" r="1.2" fill="#333" />
-        <ellipse cx="28" cy="50" rx="14" ry="12" fill={maskColor} />
-      </svg>
+    <div className="w-[48px] h-[48px] rounded-full bg-[#F0F7FA] flex-shrink-0 overflow-hidden">
+      <img
+        src={avatarSrc(avatarKey)}
+        alt={"\u987E\u5BA2\u5934\u50CF"}
+        className="w-full h-full object-cover"
+        loading="lazy"
+      />
     </div>
   );
 }
@@ -385,7 +368,7 @@ export default function YabanPatientList() {
                   onClick={() => handlePatientClick(patient.id)}
                   className="bg-white px-4 py-3 flex gap-3 cursor-pointer active:bg-gray-50 transition-colors"
                 >
-                  <PatientAvatar gender={patient.gender} />
+                  <PatientAvatar avatarKey={patient.avatarKey} />
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-1">

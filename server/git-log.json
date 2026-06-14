@@ -1,5 +1,14 @@
 [
   {
+    "hash": "67c3c7b3a0b088976ca98e187adb77be31f5b2da",
+    "author": "manus",
+    "date": "2026-06-14T15:02:04+00:00",
+    "message": "fix: 顾客列表list接口LIMIT/OFFSET改整数拼接，修复mysql2预处理报错导致列表空白",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "顾客列表list接口LIMIT/OFFSET改整数拼接，修复mysql2预处理报错导致列表空白"
+  },
+  {
     "hash": "ddef5d34445261d0878df1cd64bf584aedede5a7",
     "author": "manus",
     "date": "2026-06-14T14:52:48+00:00",
