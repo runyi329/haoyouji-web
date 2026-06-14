@@ -365,9 +365,11 @@ function FieldCell({
   onOpenHistory?: () => void;
 }) {
   const basis = WIDTH_BASIS[field.width || "full"];
+  // 长内容字段（多行文本、AI健康标签）标题在上、控件占满整行；其余短字段标题与控件同行
+  const stacked = field.kind === "textarea" || field.kind === "history";
 
   const label = (
-    <label className="block text-xs font-medium text-gray-500 mb-1 truncate">
+    <label className={`text-gray-700 truncate shrink-0 ${stacked ? "block text-base mb-1.5" : "text-base"}`}>
       {field.label}
     </label>
   );
@@ -466,10 +468,22 @@ function FieldCell({
     );
   }
 
+  if (stacked) {
+    return (
+      <div style={{ flex: `1 1 ${basis}`, minWidth: 140, maxWidth: "100%" }} className="py-1.5">
+        {label}
+        {control}
+      </div>
+    );
+  }
+
   return (
-    <div style={{ flex: `1 1 ${basis}`, minWidth: field.width === "narrow" ? 96 : 140, maxWidth: "100%" }} className="py-1.5">
+    <div
+      style={{ flex: `1 1 ${basis}`, minWidth: field.width === "narrow" ? 96 : 150, maxWidth: "100%" }}
+      className="py-1.5 flex items-center gap-2"
+    >
       {label}
-      {control}
+      <div className="flex-1 min-w-0">{control}</div>
     </div>
   );
 }
