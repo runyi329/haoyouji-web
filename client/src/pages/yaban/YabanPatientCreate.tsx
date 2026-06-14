@@ -97,10 +97,10 @@ const WIDTH_BASIS: Record<FieldWidth, string> = {
   narrow: "calc(33.333% - 8px)",
   half: "calc(50% - 6px)",
   full: "100%",
-  // 首行：姓名约4字宽、性别约1字宽、昵称占满剩余
-  name: "148px",
-  gender: "104px",
-  auto: "120px",
+  // 首行：姓名约4字宽、性别约1字宽、昵称占满剩余（姓名+性别+昵称同一行）
+  name: "108px",
+  gender: "92px",
+  auto: "100px",
 };
 
 // 根据生日(YYYY-MM-DD)计算周岁年龄
@@ -510,13 +510,13 @@ function FieldCell({
   let minW: number;
   if (w === "auto") {
     flexStyle = `999 1 ${basis}`;
-    minW = 110;
+    minW = 88;
   } else if (w === "name") {
     flexStyle = `0 1 ${basis}`;
-    minW = 128;
+    minW = 96;
   } else if (w === "gender") {
     flexStyle = `0 1 ${basis}`;
-    minW = 96;
+    minW = 84;
   } else if (w === "narrow") {
     flexStyle = `1 1 ${basis}`;
     minW = 96;
