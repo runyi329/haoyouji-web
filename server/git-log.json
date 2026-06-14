@@ -1,5 +1,14 @@
 [
   {
+    "hash": "7a2e075a2277b2dbfc2283d38aa452ea2538312a",
+    "author": "dev",
+    "date": "2026-06-14T01:48:14+00:00",
+    "message": "feat(yaban): 移除商城页后台入口,我的页商城订单改为商城管理并新增独立菜单页",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "移除商城页后台入口,我的页商城订单改为商城管理并新增独立菜单页"
+  },
+  {
     "hash": "6fbb1300f4269ac3ba2b81a76bb8ab07ff4690e1",
     "author": "dev",
     "date": "2026-06-13T22:57:24+00:00",
