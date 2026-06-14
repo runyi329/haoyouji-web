@@ -151,7 +151,13 @@ export default function YabanPatientCreate() {
 
   const setField = (key: string, value: string) => {
     setForm((prev) => {
-      const next = { ...prev, [key]: value };
+      let v = value;
+      // 年龄：仅保留整数，去除小数点与非数字字符，并去除前导零（06 -> 6）
+      if (key === "age") {
+        v = v.replace(/[^0-9]/g, "");
+        if (v) v = String(parseInt(v, 10));
+      }
+      const next = { ...prev, [key]: v };
       // 选择生日时自动计算年龄与星座
       if (key === "birthday") {
         next.age = calcAge(value);
@@ -535,12 +541,13 @@ function FieldCell({
     control = (
       <div className={`${boxCls} ${field.readOnly ? "bg-gray-100" : ""}`}>
         <input
-          type={field.inputType || "text"}
+          type={field.key === "age" ? "text" : field.inputType || "text"}
+          inputMode={field.key === "age" ? "numeric" : undefined}
           value={value}
           readOnly={field.readOnly}
           onChange={(e) => onInput(e.target.value)}
           placeholder={field.placeholder}
-          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 ${field.readOnly ? "text-gray-500" : "text-gray-800"}`}
+          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 ${field.readOnly ? "text-gray-800" : "text-gray-800"}`}
         />
         {showAgeUnit && <span className="shrink-0 ml-0.5 text-sm text-gray-500">岁</span>}
         {value && !field.readOnly && field.inputType === "date" && (
