@@ -1,5 +1,14 @@
 [
   {
+    "hash": "cb539f0d46bb894c2958ee3dc0072c17c38f837c",
+    "author": "dev",
+    "date": "2026-06-14T02:26:11+00:00",
+    "message": "feat(yaban): 首页+菜单接入功能项,新增蓝白风新建客户页(5个Tab表单)",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "首页+菜单接入功能项,新增蓝白风新建客户页(5个Tab表单)"
+  },
+  {
     "hash": "1b99a1b5df43f27059721b1e6230921e2e71f319",
     "author": "dev",
     "date": "2026-06-14T01:58:28+00:00",

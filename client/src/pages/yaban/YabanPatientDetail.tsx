@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useLocation } from 'wouter';
+import { useLocation, useRoute } from 'wouter';
 import {
   ChevronLeft,
   Plus,
@@ -9,25 +8,9 @@ import {
   Mail,
   Edit,
 } from 'lucide-react';
+import { trpc } from '@/lib/trpc';
 
 const ICON_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/yaban/patient";
-
-// 模拟患者数据
-const MOCK_PATIENT = {
-  id: '1',
-  name: '王榕涛',
-  age: 26,
-  gender: 'male',
-  avatar: '',
-  medicalNo: '007754',
-  source: '他人介绍 | 员工介绍 | 洪紫钥',
-  clinic: '上海恒愿口腔门诊部',
-  lastDoctor: '郑奎',
-  lastVisit: '2026-06-09 17:00',
-  remark: '治疗8折',
-  tags: ['电', '门', 'B1'],
-  hasWechat: true,
-};
 
 // 功能入口配置 - 使用COS图片
 const FEATURE_ENTRIES = [
@@ -47,10 +30,56 @@ const FEATURE_ENTRIES = [
 
 export default function YabanPatientDetail() {
   const [, navigate] = useLocation();
-  const patient = MOCK_PATIENT;
+  const [, params] = useRoute('/yaban/patient/:id');
+  const id = params?.id ? Number(params.id) : 0;
+
+  const detailQuery = trpc.yabanCustomer.detail.useQuery(
+    { id },
+    { enabled: id > 0, refetchOnWindowFocus: false }
+  );
+  const row = detailQuery.data as any;
+
+  const patient = {
+    name: row?.name || '',
+    age: row?.age ? Number(row.age) : 0,
+    gender: row?.gender === '女' ? 'female' : 'male',
+    avatar: '',
+    medicalNo: row?.medical_no || '',
+    source: [row?.source, row?.net_consultant, row?.consultant].filter(Boolean).join(' | ') || '—',
+    clinic: '上海恒愿口腔门诊部',
+    lastDoctor: row?.last_doctor || '—',
+    lastVisit: row?.last_visit || '',
+    remark: row?.remark || '—',
+    tags: [row?.patient_type].filter(Boolean) as string[],
+    hasWechat: false,
+  };
 
   // 性别标签颜色
   const genderColor = patient.gender === 'male' ? 'bg-sky-500' : 'bg-pink-400';
+
+  if (detailQuery.isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!row) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        <div className="bg-gradient-to-r from-sky-500 to-sky-400 text-white">
+          <div className="flex items-center justify-between px-4 py-3">
+            <button onClick={() => navigate('/yaban/patients')} className="p-1">
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+            <span className="text-lg font-bold">顾客详情</span>
+            <span className="w-6" />
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">未找到该顾客</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -60,7 +89,7 @@ export default function YabanPatientDetail() {
           <button onClick={() => navigate('/yaban')} className="p-1">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-lg font-bold">患者详情</span>
+          <span className="text-lg font-bold">顾客详情</span>
           <button className="p-1">
             <Plus className="w-6 h-6" />
           </button>
@@ -72,10 +101,10 @@ export default function YabanPatientDetail() {
         <div className="flex items-start">
           {/* 头像 */}
           <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-            {patient.avatar ? (
+              {patient.avatar ? (
               <img src={patient.avatar} alt={patient.name} className="w-full h-full object-cover" />
             ) : (
-              <span className="text-2xl text-gray-400">{patient.name[0]}</span>
+              <span className="text-2xl text-gray-400">{patient.name[0] || '客'}</span>
             )}
           </div>
 
@@ -84,7 +113,7 @@ export default function YabanPatientDetail() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-lg font-bold text-gray-900">{patient.name}</span>
-                <span className="text-gray-500">. {patient.age}岁</span>
+                {patient.age > 0 && <span className="text-gray-500">. {patient.age}岁</span>}
               </div>
               <button
                 onClick={() => {}}

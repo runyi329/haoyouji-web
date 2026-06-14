@@ -25,8 +25,8 @@ const TAG_COLORS: Record<string, { bg: string; text: string }> = {
 
 // 分组Tab
 const GROUP_TABS = [
-  { id: "all", label: "全部患者" },
-  { id: "mine", label: "我的患者" },
+  { id: "all", label: "全部顾客" },
+  { id: "mine", label: "我的顾客" },
   { id: "auto", label: "自动分组" },
   { id: "manual", label: "手动分组" },
 ];
@@ -140,7 +140,7 @@ export default function YabanPatientSelect() {
           <button onClick={handleBack} className="p-1">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-lg font-semibold">选择患者</h1>
+          <h1 className="text-lg font-semibold">选择顾客</h1>
           <div className="w-6" />
         </div>
       </div>
@@ -155,7 +155,7 @@ export default function YabanPatientSelect() {
               type="text"
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              placeholder="输入患者名字、手机号"
+              placeholder="输入顾客名字、手机号"
               className="flex-1 text-sm bg-transparent outline-none placeholder-gray-400"
             />
           </div>
@@ -164,7 +164,7 @@ export default function YabanPatientSelect() {
             onClick={() => setShowGroupTabs(!showGroupTabs)}
             className="flex items-center gap-0.5 text-sky-500 text-sm font-medium whitespace-nowrap"
           >
-            全部患者
+            全部顾客
             <ChevronDown className="w-3.5 h-3.5" />
           </button>
           <span className="text-gray-300">|</span>

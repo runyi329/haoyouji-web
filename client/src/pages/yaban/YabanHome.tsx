@@ -18,7 +18,7 @@ const ICON_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.c
 // 我常用的
 const FREQUENT_FEATURES = [
   { name: "日程", icon: `${ICON_BASE}/richeng.webp`, route: "/yaban/schedule" },
-  { name: "患者", icon: `${ICON_BASE}/huanzhe.webp`, route: "/yaban/patients" },
+  { name: "顾客", icon: `${ICON_BASE}/huanzhe.webp`, route: "/yaban/patients" },
   { name: "考勤打卡", icon: `${ICON_BASE}/kaoqin_daka.webp`, route: "" },
 ];
 
@@ -67,7 +67,7 @@ const CLINICS = [
 // 右上角「+」新增菜单项
 const CREATE_MENU = [
   { name: "扫一扫", icon: ScanLine, route: "" },
-  { name: "新建患者", icon: UserPlus, route: "/yaban/patient/create" },
+  { name: "新建顾客", icon: UserPlus, route: "/yaban/patient/create" },
   { name: "新建预约", icon: CalendarPlus, route: "/yaban/schedule/create" },
   { name: "新建随访", icon: PhoneCall, route: "/yaban/followup/create" },
   { name: "新建入库", icon: ArrowDownToLine, route: "" },

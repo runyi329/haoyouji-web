@@ -14,7 +14,7 @@ const TABS = [
   { id: "suifang", label: "随访", unit: "", prefix: "" },
   { id: "yishoufei", label: "已收费", unit: "", prefix: "" },
   { id: "shishou", label: "实收业绩", unit: "", prefix: "\u00A5", isRevenue: true },
-  { id: "xinzeng", label: "新增患者", unit: "", prefix: "" },
+  { id: "xinzeng", label: "新增顾客", unit: "", prefix: "" },
 ];
 
 // 模拟数据生成

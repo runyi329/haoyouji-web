@@ -23,7 +23,7 @@ import { trpc } from "@/lib/trpc";
 
 // 权限点中文名
 const PERM_LABELS: Record<string, string> = {
-  patient: "患者管理",
+  patient: "顾客管理",
   followup: "随访管理",
   schedule: "预约排班",
   shop_order: "商城订单",

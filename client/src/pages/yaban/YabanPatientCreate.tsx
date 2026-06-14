@@ -1,26 +1,27 @@
 /**
- * 牙伴齿科管理 - 新建患者（新建客户）
+ * 牙伴齿科管理 - 新建顾客
  * 路由：/yaban/patient/create
- * 蓝白风格，5 个 Tab：个人信息 / 联系方式 / 患者信息 / 首诊信息 / 自由项
- * 顶栏：取消 / 新建客户 / 保存；含「仅显示必填字段」开关
+ * 蓝白风格，5 个 Tab：个人信息 / 联系方式 / 顾客信息 / 首诊信息 / 自由项
+ * 顶栏：取消 / 新建顾客 / 保存；含「仅显示必填字段」开关
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronRight, Plus, MinusCircle } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
 // 主题色
 const ACCENT = "#1E88D6";
 
 // Tab 定义
-const TABS = ["个人信息", "联系方式", "患者信息", "首诊信息", "自由项"] as const;
+const TABS = ["个人信息", "联系方式", "顾客信息", "首诊信息", "自由项"] as const;
 type Tab = (typeof TABS)[number];
 
 // 选项配置
 const GENDERS = ["未知", "男", "女"];
 const PATIENT_TYPES = ["电子", "纸质"];
-const SOURCES = ["到店", "转介绍", "网络预约", "电话预约", "微信预约", "老患者推荐", "其他"];
+const SOURCES = ["到店", "转介绍", "网络预约", "电话预约", "微信预约", "老顾客推荐", "其他"];
 const NET_CONSULTANTS = ["杨文利", "侯睿", "洪紫钥"];
 const CONSULTANTS = ["洪紫钥", "杨文利", "侯睿"];
 const MEDICAL_HISTORY = ["无", "高血压", "糖尿病", "心脏病", "过敏史", "其他"];
@@ -50,7 +51,7 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "gender", label: "性别", placeholder: "未知", kind: "select", required: true, options: GENDERS },
     { key: "birthday", label: "生日", placeholder: "请选择生日", kind: "input", required: true, inputType: "date" },
     { key: "age", label: "年龄", placeholder: "请输入年龄", kind: "input", required: true, inputType: "number" },
-    { key: "patientType", label: "患者类型", placeholder: "电子", kind: "select", required: true, options: PATIENT_TYPES },
+    { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", required: true, options: PATIENT_TYPES },
     { key: "medicalNo", label: "病历号", placeholder: "系统自动生成", kind: "input", required: true },
     { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input" },
   ],
@@ -61,12 +62,12 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "region", label: "地区", placeholder: "请选择地区", kind: "select", options: REGIONS },
     { key: "address", label: "地址详情", placeholder: "请输入地址详情", kind: "textarea" },
   ],
-  患者信息: [
-    { key: "source", label: "患者来源", placeholder: "请选择患者来源", kind: "select", required: true, options: SOURCES },
+  顾客信息: [
+    { key: "source", label: "顾客来源", placeholder: "请选择顾客来源", kind: "select", required: true, options: SOURCES },
     { key: "netConsultant", label: "网电咨询师", placeholder: "请选择网电咨询师", kind: "select", options: NET_CONSULTANTS },
     { key: "consultant", label: "咨询师", placeholder: "请选择咨询师", kind: "select", options: CONSULTANTS },
     { key: "history", label: "既往史", placeholder: "请选择既往史", kind: "select", options: MEDICAL_HISTORY },
-    { key: "patientRemark", label: "患者备注", placeholder: "请输入患者备注", kind: "textarea" },
+    { key: "patientRemark", label: "顾客备注", placeholder: "请输入顾客备注", kind: "textarea" },
   ],
   首诊信息: [
     { key: "chiefComplaint", label: "就诊主诉", placeholder: "请选择就诊主诉", kind: "select", options: CHIEF_COMPLAINTS },
@@ -110,7 +111,20 @@ export default function YabanPatientCreate() {
     setLocation("/yaban");
   };
 
+  const utils = trpc.useUtils();
+  const createMutation = trpc.yabanCustomer.create.useMutation({
+    onSuccess: () => {
+      toast.success("保存成功");
+      utils.yabanCustomer.list.invalidate();
+      setLocation("/yaban/patients");
+    },
+    onError: (e) => {
+      toast.error(e.message || "保存失败，请重试");
+    },
+  });
+
   const handleSave = () => {
+    if (createMutation.isPending) return;
     // 校验所有 Tab 的必填字段
     const missing: string[] = [];
     (Object.keys(TAB_FIELDS) as Tab[]).forEach((tab) => {
@@ -124,9 +138,37 @@ export default function YabanPatientCreate() {
       toast.error(`请完善必填项：${missing.slice(0, 3).join("、")}${missing.length > 3 ? " 等" : ""}`);
       return;
     }
-    // TODO: 接入后端保存接口
-    toast.success("保存成功");
-    setLocation("/yaban");
+    createMutation.mutate({
+      name: form.name,
+      gender: form.gender,
+      birthday: form.birthday,
+      age: form.age,
+      patientType: form.patientType,
+      medicalNo: form.medicalNo,
+      nickname: form.nickname,
+      email: form.email,
+      mobile: form.mobile,
+      phone: form.phone,
+      region: form.region,
+      address: form.address,
+      source: form.source,
+      netConsultant: form.netConsultant,
+      consultant: form.consultant,
+      history: form.history,
+      remark: form.patientRemark,
+      chiefComplaint: form.chiefComplaint,
+      healthStatus: form.healthStatus,
+      drugAllergy: form.drugAllergy,
+      foodAllergy: form.foodAllergy,
+      heart: form.heart,
+      hypertension: form.hypertension,
+      diabetes: form.diabetes,
+      kidney: form.kidney,
+      infectious: form.infectious,
+      bleeding: form.bleeding,
+      pregnant: form.pregnant,
+      medication: form.medication,
+    });
   };
 
   // 当前 Tab 字段（受「仅显示必填字段」过滤）
@@ -142,9 +184,9 @@ export default function YabanPatientCreate() {
           <button onClick={handleBack} className="text-base font-medium" style={{ color: ACCENT }}>
             取消
           </button>
-          <h1 className="text-base font-semibold text-gray-900">新建客户</h1>
+          <h1 className="text-base font-semibold text-gray-900">新建顾客</h1>
           <button onClick={handleSave} className="text-base font-medium" style={{ color: ACCENT }}>
-            保存
+            {createMutation.isPending ? "保存中" : "保存"}
           </button>
         </div>
         {/* 仅显示必填字段开关 */}

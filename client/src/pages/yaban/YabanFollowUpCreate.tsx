@@ -134,7 +134,7 @@ export default function YabanFollowUpCreate() {
                 <p className="text-base font-medium text-gray-900">{formData.patientName}</p>
               </div>
             ) : (
-              <span className="text-gray-400 text-base">请选择患者</span>
+              <span className="text-gray-400 text-base">请选择顾客</span>
             )}
           </div>
           <ChevronRight className="w-5 h-5 text-gray-300" />

@@ -59,7 +59,7 @@ export default function YabanScheduleCreate() {
 
   const handleSave = () => {
     if (!form.patientName) {
-      alert("请选择患者");
+      alert("请选择顾客");
       return;
     }
     if (!form.doctor) {
@@ -180,7 +180,7 @@ export default function YabanScheduleCreate() {
             )}
           </div>
         ) : (
-          <span className="flex-1 text-sm text-gray-400">请选择患者</span>
+          <span className="flex-1 text-sm text-gray-400">请选择顾客</span>
         )}
         <ChevronRight size={16} className="text-gray-300" />
       </div>
