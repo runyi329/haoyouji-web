@@ -586,7 +586,7 @@ function FieldCell({
           readOnly={field.readOnly}
           onChange={(e) => onInput(e.target.value)}
           placeholder={field.placeholder}
-          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 ${field.readOnly ? "text-gray-800" : "text-gray-800"}`}
+          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 text-gray-800 ${field.key === "age" || field.key === "zodiac" ? "text-center" : ""}`}
         />
       </div>
     );
@@ -621,17 +621,17 @@ function FieldCell({
     flexStyle = `1 1 ${basis}`;
     minW = 96;
   } else if (w === "date") {
-    // 生日：占本行剩余弹性宽，保证“2026年6月6日”不被压缩
-    flexStyle = `1 1 0`;
-    minW = 124;
+    // 生日：固定较小宽，够显示 2026/06/18 即可，不贪占，为星座留出两字空间
+    flexStyle = `0 1 auto`;
+    minW = 120;
   } else if (w === "tiny") {
-    // 年龄：最窄，不放大
-    flexStyle = `0 1 0`;
-    minW = 84;
+    // 年龄：可伸展平分剩余空间
+    flexStyle = `1 1 0`;
+    minW = 70;
   } else if (w === "zodiac") {
-    // 星座：只显示两字，可再缩小一个汉字宽，把空间让给生日
-    flexStyle = `0 1 0`;
-    minW = 84;
+    // 星座：可伸展，保证两字不被截断
+    flexStyle = `1 1 0`;
+    minW = 78;
   } else {
     flexStyle = `1 1 ${basis}`;
     minW = 150;
@@ -639,7 +639,7 @@ function FieldCell({
 
   return (
     <div
-      style={{ flex: flexStyle, minWidth: minW, maxWidth: "100%" }}
+      style={{ flex: flexStyle, minWidth: minW, maxWidth: w === "date" ? 150 : "100%" }}
       className={`py-1.5 flex items-center ${w === "tiny" || w === "zodiac" || w === "date" ? "gap-1.5" : "gap-2"}`}
     >
       {label}
