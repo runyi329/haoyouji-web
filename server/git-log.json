@@ -1,5 +1,14 @@
 [
   {
+    "hash": "ec6d4a1eae9da7270306f077ad837177068cb9ff",
+    "author": "dev",
+    "date": "2026-06-14T03:51:22+00:00",
+    "message": "feat(yaban): 新建顾客选生日自动算年龄与星座，顾客类型改为电子/临时/普通",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "新建顾客选生日自动算年龄与星座，顾客类型改为电子/临时/普通"
+  },
+  {
     "hash": "b5efdcbf918165ca6a53701507fd8ff2565cedee",
     "author": "dev",
     "date": "2026-06-14T03:41:41+00:00",

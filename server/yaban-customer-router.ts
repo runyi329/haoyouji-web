@@ -14,6 +14,31 @@ import { getDbConnection } from "./db";
 
 const DEFAULT_TENANT_ID = 1;
 
+// 门店编号前缀（拼音字母缩写）。多门店阶段可按 tenant 映射，单店阶段固定。
+const STORE_PREFIX_MAP: Record<number, string> = {
+  1: "PT", // 恒愿齿科普陀店
+};
+function getStorePrefix(tenantId: number): string {
+  return STORE_PREFIX_MAP[tenantId] || "PT";
+}
+const SEQ_WIDTH = 5; // 流水号位数
+
+// 生成下一个顾客编号：门店前缀 + 5位流水（取该门店现有最大流水 +1）
+async function nextCustomerCode(conn: any, tenantId: number): Promise<string> {
+  const prefix = getStorePrefix(tenantId);
+  // 仅匹配 "前缀+纯数字" 的编号，取数字部分最大值
+  const [rows] = (await conn.execute(
+    `SELECT medical_no FROM yaban_customer
+     WHERE tenant_id = ? AND medical_no REGEXP ?
+     ORDER BY CAST(SUBSTRING(medical_no, ?) AS UNSIGNED) DESC LIMIT 1`,
+    [tenantId, `^${prefix}[0-9]+$`, prefix.length + 1]
+  )) as any;
+  const last = (rows as any[])[0]?.medical_no as string | undefined;
+  const lastSeq = last ? parseInt(last.slice(prefix.length), 10) || 0 : 0;
+  const next = lastSeq + 1;
+  return prefix + String(next).padStart(SEQ_WIDTH, "0");
+}
+
 // 确保顾客表存在
 async function ensureCustomerTable(conn: any) {
   await conn.execute(`
@@ -27,6 +52,7 @@ async function ensureCustomerTable(conn: any) {
       zodiac VARCHAR(16) DEFAULT NULL,
       patient_type VARCHAR(16) DEFAULT '电子',
       medical_no VARCHAR(40) DEFAULT NULL,
+      external_no VARCHAR(64) DEFAULT NULL,
       nickname VARCHAR(64) DEFAULT NULL,
       email VARCHAR(128) DEFAULT NULL,
       mobile VARCHAR(32) DEFAULT NULL,
@@ -72,6 +98,7 @@ const createInput = z.object({
   zodiac: z.string().max(16).optional(),
   patientType: z.string().max(16).optional(),
   medicalNo: z.string().max(40).optional(),
+  externalNo: z.string().max(64).optional(),
   nickname: z.string().max(64).optional(),
   email: z.string().max(128).optional(),
   mobile: z.string().min(1, "手机号必填").max(32),
@@ -145,22 +172,39 @@ export const yabanCustomerRouter = router({
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureCustomerTable(conn);
 
-      // 病历号：传入则用传入，否则自动生成
-      let medicalNo = s(input.medicalNo);
-      if (!medicalNo) {
-        const [maxRows] = (await (conn as any).execute(
-          `SELECT medical_no FROM yaban_customer WHERE tenant_id = ? AND medical_no REGEXP '^[0-9]+$' ORDER BY CAST(medical_no AS UNSIGNED) DESC LIMIT 1`,
-          [DEFAULT_TENANT_ID]
-        )) as any;
-        const last = (maxRows as any[])[0]?.medical_no;
-        medicalNo = String((last ? parseInt(last, 10) : 19120) + 1);
-      }
-
       // 兼容旧表：补充 zodiac 列
       try {
         await (conn as any).execute(`ALTER TABLE yaban_customer ADD COLUMN zodiac VARCHAR(16) DEFAULT NULL AFTER age`);
       } catch (e) {
         // 列已存在则忽略
+      }
+      // 兼容旧表：补充 external_no（导入时保留原始编号）
+      try {
+        await (conn as any).execute(`ALTER TABLE yaban_customer ADD COLUMN external_no VARCHAR(64) DEFAULT NULL AFTER medical_no`);
+      } catch (e) {
+        // 列已存在则忽略
+      }
+      // 兼容旧表：为 (tenant_id, medical_no) 加唯一索引，从数据库层防重
+      try {
+        await (conn as any).execute(`ALTER TABLE yaban_customer ADD UNIQUE KEY uniq_tenant_medical (tenant_id, medical_no)`);
+      } catch (e) {
+        // 索引已存在则忽略
+      }
+
+      // 顾客编号：传入则用传入值，否则按门店前缀+流水顺延生成
+      let medicalNo = s(input.medicalNo);
+      const autoGen = !medicalNo;
+      if (autoGen) {
+        medicalNo = await nextCustomerCode(conn, DEFAULT_TENANT_ID);
+      } else {
+        // 传入编号需查重，避免与现有顾客重复
+        const [dupRows] = (await (conn as any).execute(
+          `SELECT id FROM yaban_customer WHERE tenant_id = ? AND medical_no = ? LIMIT 1`,
+          [DEFAULT_TENANT_ID, medicalNo]
+        )) as any;
+        if ((dupRows as any[]).length > 0) {
+          throw new TRPCError({ code: "CONFLICT", message: `顾客编号 ${medicalNo} 已存在，请更换` });
+        }
       }
 
       const ageNum =
@@ -168,50 +212,73 @@ export const yabanCustomerRouter = router({
           ? null
           : parseInt(String(input.age), 10) || null;
 
-      const [result] = (await (conn as any).execute(
-        `INSERT INTO yaban_customer
-         (tenant_id, name, gender, birthday, age, zodiac, patient_type, medical_no, nickname,
-          email, mobile, phone, region, address,
-          source, net_consultant, consultant, history, remark,
-          chief_complaint, health_status, drug_allergy, food_allergy,
-          heart, hypertension, diabetes, kidney, infectious, bleeding, pregnant, medication,
-          created_by)
-         VALUES (?,?,?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
-        [
-          DEFAULT_TENANT_ID,
-          input.name.trim(),
-          s(input.gender) || "未知",
-          s(input.birthday),
-          ageNum,
-          s(input.zodiac),
-          s(input.patientType) || "电子",
-          medicalNo,
-          s(input.nickname),
-          s(input.email),
-          input.mobile.trim(),
-          s(input.phone),
-          s(input.region),
-          s(input.address),
-          s(input.source),
-          s(input.netConsultant),
-          s(input.consultant),
-          s(input.history),
-          s(input.remark),
-          s(input.chiefComplaint),
-          s(input.healthStatus),
-          s(input.drugAllergy),
-          s(input.foodAllergy),
-          s(input.heart),
-          s(input.hypertension),
-          s(input.diabetes),
-          s(input.kidney),
-          s(input.infectious),
-          s(input.bleeding),
-          s(input.pregnant),
-          s(input.medication),
-          ctx.user.id,
-        ]
-      )) as any;
+      const doInsert = async (code: string) =>
+        (await (conn as any).execute(
+          `INSERT INTO yaban_customer
+           (tenant_id, name, gender, birthday, age, zodiac, patient_type, medical_no, external_no, nickname,
+            email, mobile, phone, region, address,
+            source, net_consultant, consultant, history, remark,
+            chief_complaint, health_status, drug_allergy, food_allergy,
+            heart, hypertension, diabetes, kidney, infectious, bleeding, pregnant, medication,
+            created_by)
+           VALUES (?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
+          [
+            DEFAULT_TENANT_ID,
+            input.name.trim(),
+            s(input.gender) || "未知",
+            s(input.birthday),
+            ageNum,
+            s(input.zodiac),
+            s(input.patientType) || "电子",
+            code,
+            s(input.externalNo),
+            s(input.nickname),
+            s(input.email),
+            input.mobile.trim(),
+            s(input.phone),
+            s(input.region),
+            s(input.address),
+            s(input.source),
+            s(input.netConsultant),
+            s(input.consultant),
+            s(input.history),
+            s(input.remark),
+            s(input.chiefComplaint),
+            s(input.healthStatus),
+            s(input.drugAllergy),
+            s(input.foodAllergy),
+            s(input.heart),
+            s(input.hypertension),
+            s(input.diabetes),
+            s(input.kidney),
+            s(input.infectious),
+            s(input.bleeding),
+            s(input.pregnant),
+            s(input.medication),
+            ctx.user.id,
+          ]
+        )) as any;
+
+      // 插入；若唯一冲突且为自动生成编号，重新取号重试（最多5次）
+      let result: any;
+      let attempt = 0;
+      while (true) {
+        try {
+          [result] = await doInsert(medicalNo!);
+          break;
+        } catch (e: any) {
+          const dup = e?.code === "ER_DUP_ENTRY" || /Duplicate entry/i.test(e?.message || "");
+          if (dup && autoGen && attempt < 5) {
+            attempt++;
+            medicalNo = await nextCustomerCode(conn, DEFAULT_TENANT_ID);
+            continue;
+          }
+          if (dup) {
+            throw new TRPCError({ code: "CONFLICT", message: `顾客编号 ${medicalNo} 已存在，请更换` });
+          }
+          throw e;
+        }
+      }
 
       return { success: true, id: result.insertId, medicalNo };
     }),

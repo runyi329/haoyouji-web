@@ -54,7 +54,7 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "age", label: "年龄", placeholder: "请输入年龄", kind: "input", required: true, inputType: "number" },
     { key: "zodiac", label: "星座", placeholder: "选择生日后自动带出", kind: "input", readOnly: true },
     { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", required: true, options: PATIENT_TYPES },
-    { key: "medicalNo", label: "病历号", placeholder: "系统自动生成", kind: "input", required: true },
+    { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true },
     { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input" },
   ],
   联系方式: [
@@ -88,11 +88,6 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "medication", label: "服药史", placeholder: "请输入服药史", kind: "input" },
   ],
 };
-
-// 默认病历号（占位生成）
-function genMedicalNo(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
 
 // 根据生日(YYYY-MM-DD)计算周岁年龄
 function calcAge(birthday: string): string {
@@ -130,7 +125,6 @@ export default function YabanPatientCreate() {
   const [form, setForm] = useState<Record<string, string>>({
     gender: "未知",
     patientType: "电子",
-    medicalNo: genMedicalNo(),
   });
 
   const setField = (key: string, value: string) => {
@@ -183,7 +177,7 @@ export default function YabanPatientCreate() {
       age: form.age,
       zodiac: form.zodiac,
       patientType: form.patientType,
-      medicalNo: form.medicalNo,
+      medicalNo: form.medicalNo || undefined,
       nickname: form.nickname,
       email: form.email,
       mobile: form.mobile,
