@@ -1,5 +1,14 @@
 [
   {
+    "hash": "275d9ab6639d996c56ff6270ea80f3deb9fd03c4",
+    "author": "yaban-deploy",
+    "date": "2026-06-14T07:45:59+00:00",
+    "message": "新建顾客页：姓名+昵称同行，性别顺延到生日行",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "新建顾客页：姓名+昵称同行，性别顺延到生日行"
+  },
+  {
     "hash": "0f17ce8d39800a4ea9fe4b6bfdbce83bb474d52e",
     "author": "yaban-deploy",
     "date": "2026-06-14T07:39:11+00:00",

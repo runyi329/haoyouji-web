@@ -418,19 +418,30 @@ function FieldCell({
       </button>
     );
   } else if (field.kind === "select") {
+    // 性别选中时的淡色底色（女=淡粉 男=淡蓝），不影响字色
+    let genderStyle: React.CSSProperties = {};
+    if (field.key === "gender") {
+      if (value === "女") genderStyle = { backgroundColor: "#FCE7F0", borderColor: "#F7C5DA" };
+      else if (value === "男") genderStyle = { backgroundColor: "#E3F0FB", borderColor: "#BBD9F2" };
+    }
+    // 有值时隐藏箭头，避免挡住文字
+    const showArrow = !value;
     control = (
       <div className="relative">
         <button
           type="button"
           onClick={onToggle}
+          style={genderStyle}
           className={`${boxCls} justify-between active:bg-gray-100`}
         >
           <span className={`truncate ${value ? "text-gray-800" : "text-gray-300"}`}>
             {value || field.placeholder}
           </span>
-          <ChevronDown
-            className={`w-4 h-4 text-gray-300 shrink-0 ml-1 transition-transform ${open ? "rotate-180" : ""}`}
-          />
+          {showArrow && (
+            <ChevronDown
+              className={`w-4 h-4 text-gray-300 shrink-0 ml-1 transition-transform ${open ? "rotate-180" : ""}`}
+            />
+          )}
         </button>
         {open && (
           <>
