@@ -3,10 +3,11 @@
  * 路由：/yaban/patient/create
  * 蓝白风格，5 个 Tab：个人信息 / 联系方式 / 顾客信息 / 首诊信息 / 自由项
  * 顶栏：取消 / 新建顾客 / 保存；含「仅显示必填字段」开关
+ * 布局：字段按实际输入宽度自适应流式排布，窄字段同行并排，充分利用横向空间
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ChevronRight, Plus, MinusCircle, XCircle, Check } from "lucide-react";
+import { ChevronDown, Plus, MinusCircle, XCircle, Check } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -34,6 +35,10 @@ const PREGNANT = ["否", "是", "备孕中", "不适用"];
 // 字段类型
 type FieldKind = "input" | "select" | "textarea" | "history";
 
+// 字段宽度档位：窄字段同行并排，宽字段独占
+// narrow ≈ 半屏内可挤 2-3 个；half ≈ 半屏；full ≈ 整行
+type FieldWidth = "narrow" | "half" | "full";
+
 interface FieldDef {
   key: string;
   label: string;
@@ -43,50 +48,58 @@ interface FieldDef {
   options?: string[];
   inputType?: string;
   readOnly?: boolean;
+  width?: FieldWidth; // 默认 full
 }
 
 // 各 Tab 字段配置
 const TAB_FIELDS: Record<Tab, FieldDef[]> = {
   个人信息: [
-    { key: "name", label: "姓名", placeholder: "请输入姓名", kind: "input", required: true },
-    { key: "gender", label: "性别", placeholder: "未知", kind: "select", required: true, options: GENDERS },
-    { key: "birthday", label: "生日", placeholder: "请选择生日", kind: "input", required: true, inputType: "date" },
-    { key: "age", label: "年龄", placeholder: "请输入年龄", kind: "input", required: true, inputType: "number" },
-    { key: "zodiac", label: "星座", placeholder: "选择生日后自动带出", kind: "input", readOnly: true },
-    { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", required: true, options: PATIENT_TYPES },
-    { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true },
-    { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input" },
+    { key: "name", label: "姓名", placeholder: "请输入姓名", kind: "input", required: true, width: "half" },
+    { key: "gender", label: "性别", placeholder: "未知", kind: "select", required: true, options: GENDERS, width: "narrow" },
+    { key: "birthday", label: "生日", placeholder: "请选择", kind: "input", required: true, inputType: "date", width: "half" },
+    { key: "age", label: "年龄", placeholder: "岁", kind: "input", required: true, inputType: "number", width: "narrow" },
+    { key: "zodiac", label: "星座", placeholder: "自动带出", kind: "input", readOnly: true, width: "narrow" },
+    { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", required: true, options: PATIENT_TYPES, width: "narrow" },
+    { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true, width: "half" },
+    { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input", width: "half" },
   ],
   联系方式: [
-    { key: "email", label: "邮箱", placeholder: "请输入邮箱地址", kind: "input", inputType: "email" },
-    { key: "mobile", label: "手机号", placeholder: "请输入手机号", kind: "input", required: true, inputType: "tel" },
-    { key: "phone", label: "电话", placeholder: "请输入电话号码", kind: "input", inputType: "tel" },
-    { key: "region", label: "地区", placeholder: "请选择地区", kind: "select", options: REGIONS },
-    { key: "address", label: "地址详情", placeholder: "请输入地址详情", kind: "textarea" },
+    { key: "mobile", label: "手机号", placeholder: "请输入手机号", kind: "input", required: true, inputType: "tel", width: "half" },
+    { key: "phone", label: "电话", placeholder: "请输入电话号码", kind: "input", inputType: "tel", width: "half" },
+    { key: "email", label: "邮箱", placeholder: "请输入邮箱地址", kind: "input", inputType: "email", width: "full" },
+    { key: "region", label: "地区", placeholder: "请选择地区", kind: "select", options: REGIONS, width: "full" },
+    { key: "address", label: "地址详情", placeholder: "请输入地址详情", kind: "textarea", width: "full" },
   ],
   顾客信息: [
-    { key: "source", label: "顾客来源", placeholder: "请选择顾客来源", kind: "select", required: true, options: SOURCES },
-    { key: "netConsultant", label: "网电咨询师", placeholder: "请选择网电咨询师", kind: "select", options: NET_CONSULTANTS },
-    { key: "consultant", label: "咨询师", placeholder: "请选择咨询师", kind: "select", options: CONSULTANTS },
-    { key: "history", label: "AI健康标签", placeholder: "点击选择或搜索", kind: "history" },
-    { key: "patientRemark", label: "顾客备注", placeholder: "请输入顾客备注", kind: "textarea" },
+    { key: "source", label: "顾客来源", placeholder: "请选择", kind: "select", required: true, options: SOURCES, width: "half" },
+    { key: "netConsultant", label: "网电咨询师", placeholder: "请选择", kind: "select", options: NET_CONSULTANTS, width: "half" },
+    { key: "consultant", label: "咨询师", placeholder: "请选择", kind: "select", options: CONSULTANTS, width: "half" },
+    { key: "history", label: "AI健康标签", placeholder: "点击选择或搜索", kind: "history", width: "full" },
+    { key: "patientRemark", label: "顾客备注", placeholder: "请输入顾客备注", kind: "textarea", width: "full" },
   ],
   首诊信息: [
-    { key: "chiefComplaint", label: "就诊主诉", placeholder: "请选择就诊主诉", kind: "select", options: CHIEF_COMPLAINTS },
+    { key: "chiefComplaint", label: "就诊主诉", placeholder: "请选择就诊主诉", kind: "select", options: CHIEF_COMPLAINTS, width: "full" },
   ],
   自由项: [
-    { key: "healthStatus", label: "健康状况", placeholder: "请选择健康状况", kind: "select", options: HEALTH_STATUS },
-    { key: "drugAllergy", label: "药物过敏史", placeholder: "请输入药物过敏史", kind: "input" },
-    { key: "foodAllergy", label: "食物过敏史", placeholder: "请输入食物过敏史", kind: "input" },
-    { key: "heart", label: "是否患有心脏病", placeholder: "请选择是否患有", kind: "select", options: YES_NO },
-    { key: "hypertension", label: "是否患有高血压", placeholder: "请选择是否患有", kind: "select", options: YES_NO },
-    { key: "diabetes", label: "是否患有糖尿病", placeholder: "请选择是否患有", kind: "select", options: YES_NO },
-    { key: "kidney", label: "是否患有肾脏病", placeholder: "请选择是否患有", kind: "select", options: YES_NO },
-    { key: "infectious", label: "是否患有传染病", placeholder: "请选择是否患有", kind: "select", options: YES_NO },
-    { key: "bleeding", label: "是否存在容易出血不止", placeholder: "请选择是否存在", kind: "select", options: YES_NO },
-    { key: "pregnant", label: "女性：是否怀孕", placeholder: "请选择是否怀孕", kind: "select", options: PREGNANT },
-    { key: "medication", label: "服药史", placeholder: "请输入服药史", kind: "input" },
+    { key: "healthStatus", label: "健康状况", placeholder: "请选择", kind: "select", options: HEALTH_STATUS, width: "half" },
+    { key: "drugAllergy", label: "药物过敏史", placeholder: "请输入", kind: "input", width: "half" },
+    { key: "foodAllergy", label: "食物过敏史", placeholder: "请输入", kind: "input", width: "half" },
+    { key: "medication", label: "服药史", placeholder: "请输入", kind: "input", width: "half" },
+    { key: "heart", label: "心脏病", placeholder: "请选择", kind: "select", options: YES_NO, width: "narrow" },
+    { key: "hypertension", label: "高血压", placeholder: "请选择", kind: "select", options: YES_NO, width: "narrow" },
+    { key: "diabetes", label: "糖尿病", placeholder: "请选择", kind: "select", options: YES_NO, width: "narrow" },
+    { key: "kidney", label: "肾脏病", placeholder: "请选择", kind: "select", options: YES_NO, width: "narrow" },
+    { key: "infectious", label: "传染病", placeholder: "请选择", kind: "select", options: YES_NO, width: "narrow" },
+    { key: "bleeding", label: "出血不止", placeholder: "请选择", kind: "select", options: YES_NO, width: "narrow" },
+    { key: "pregnant", label: "是否怀孕", placeholder: "请选择", kind: "select", options: PREGNANT, width: "half" },
   ],
+};
+
+// 宽度档位 → flex-basis（基于容器百分比，配合 flex-wrap 自动换行）
+const WIDTH_BASIS: Record<FieldWidth, string> = {
+  narrow: "calc(33.333% - 8px)",
+  half: "calc(50% - 6px)",
+  full: "100%",
 };
 
 // 根据生日(YYYY-MM-DD)计算周岁年龄
@@ -268,27 +281,29 @@ export default function YabanPatientCreate() {
         </div>
       </div>
 
-      {/* 表单内容区 */}
+      {/* 表单内容区：流式栅格 */}
       <div className="flex-1 overflow-y-auto pb-8">
-        <div className="bg-white mt-2">
+        <div className="bg-white mt-2 px-3 py-3">
           {fields.length === 0 ? (
-            <div className="px-4 py-10 text-center text-sm text-gray-300">该分组暂无必填字段</div>
+            <div className="px-1 py-10 text-center text-sm text-gray-300">该分组暂无必填字段</div>
           ) : (
-            fields.map((f) => (
-              <FormRow
-                key={f.key}
-                field={f}
-                value={form[f.key] || ""}
-                open={openKey === f.key}
-                onInput={(v) => setField(f.key, v)}
-                onToggle={() => setOpenKey(openKey === f.key ? null : f.key)}
-                onSelect={(v) => {
-                  setField(f.key, v);
-                  setOpenKey(null);
-                }}
-                onOpenHistory={() => setHistoryOpen(true)}
-              />
-            ))
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              {fields.map((f) => (
+                <FieldCell
+                  key={f.key}
+                  field={f}
+                  value={form[f.key] || ""}
+                  open={openKey === f.key}
+                  onInput={(v) => setField(f.key, v)}
+                  onToggle={() => setOpenKey(openKey === f.key ? null : f.key)}
+                  onSelect={(v) => {
+                    setField(f.key, v);
+                    setOpenKey(null);
+                  }}
+                  onOpenHistory={() => setHistoryOpen(true)}
+                />
+              ))}
+            </div>
           )}
         </div>
 
@@ -311,7 +326,7 @@ export default function YabanPatientCreate() {
         )}
       </div>
 
-      {/* 既往史选择器 */}
+      {/* AI健康标签选择器 */}
       {(() => {
         const parsed = parseHistory(form.history || "");
         return (
@@ -331,8 +346,8 @@ export default function YabanPatientCreate() {
   );
 }
 
-// 表单行
-function FormRow({
+// 字段单元格：label 在上、控件在下，按 width 档位自适应宽度并随屏幕换行
+function FieldCell({
   field,
   value,
   open,
@@ -349,59 +364,58 @@ function FormRow({
   onSelect: (v: string) => void;
   onOpenHistory?: () => void;
 }) {
-  const labelNode = (
-    <span className="text-sm font-medium text-gray-900 shrink-0">
+  const basis = WIDTH_BASIS[field.width || "full"];
+
+  const label = (
+    <label className="block text-xs font-medium text-gray-500 mb-1 truncate">
       {field.label}
-      {field.required && <span className="text-red-500 ml-0.5">*</span>}
-    </span>
+    </label>
   );
 
-  // 既往史：点击打开专用搜索选择器，行内展示已选摘要
+  // 统一的控件外框样式（浅灰底，聚焦时蓝边）
+  const boxCls =
+    "w-full h-10 px-3 rounded-lg bg-gray-50 border border-transparent flex items-center text-sm transition-colors focus-within:bg-white focus-within:border-[#1E88D6]";
+
+  let control: JSX.Element;
+
   if (field.kind === "history") {
-    return (
+    control = (
       <button
+        type="button"
         onClick={onOpenHistory}
-        className="w-full flex items-start justify-between px-4 py-3.5 border-b border-gray-50 active:bg-gray-50 text-left"
+        className={`${boxCls} justify-between text-left active:bg-gray-100`}
       >
-        {labelNode}
-        <div className="flex items-center gap-1 flex-1 ml-4 justify-end min-w-0">
-          <span className={`text-sm truncate ${value ? "text-gray-800" : "text-gray-300"}`}>
-            {value || field.placeholder}
-          </span>
-          <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
-        </div>
+        <span className={`truncate ${value ? "text-gray-800" : "text-gray-300"}`}>
+          {value || field.placeholder}
+        </span>
+        <ChevronDown className="w-4 h-4 text-gray-300 shrink-0 ml-1" />
       </button>
     );
-  }
-
-  if (field.kind === "select") {
-    return (
-      <div className="relative border-b border-gray-50">
+  } else if (field.kind === "select") {
+    control = (
+      <div className="relative">
         <button
+          type="button"
           onClick={onToggle}
-          className="w-full flex items-center justify-between px-4 py-3.5 active:bg-gray-50"
+          className={`${boxCls} justify-between active:bg-gray-100`}
         >
-          {labelNode}
-          <div className="flex items-center gap-1">
-            <span className={`text-sm ${value ? "text-gray-800" : "text-gray-300"}`}>
-              {value || field.placeholder}
-            </span>
-            <ChevronRight
-              className={`w-4 h-4 text-gray-300 transition-transform ${open ? "rotate-90" : ""}`}
-            />
-          </div>
+          <span className={`truncate ${value ? "text-gray-800" : "text-gray-300"}`}>
+            {value || field.placeholder}
+          </span>
+          <ChevronDown
+            className={`w-4 h-4 text-gray-300 shrink-0 ml-1 transition-transform ${open ? "rotate-180" : ""}`}
+          />
         </button>
         {open && (
           <>
-            {/* 透明遮罩，点击外部关闭 */}
             <div className="fixed inset-0 z-20" onClick={onToggle} />
-            {/* 贴近按钮右侧的气泡浮层 */}
-            <div className="absolute right-3 top-full z-30 -mt-1 min-w-[120px] max-w-[200px] bg-white rounded-lg shadow-lg ring-1 ring-black/5 overflow-hidden">
+            <div className="absolute left-0 top-full z-30 mt-1 min-w-full max-w-[220px] bg-white rounded-lg shadow-lg ring-1 ring-black/5 overflow-hidden">
               {(field.options || []).map((opt, i) => {
                 const selected = value === opt;
                 return (
                   <button
                     key={opt}
+                    type="button"
                     onClick={() => onSelect(opt)}
                     className={`w-full px-4 py-2.5 text-left text-sm active:bg-gray-100 flex items-center justify-between gap-3 ${i > 0 ? "border-t border-gray-50" : ""}`}
                     style={selected ? { color: ACCENT, fontWeight: 600 } : { color: "#374151" }}
@@ -416,47 +430,46 @@ function FormRow({
         )}
       </div>
     );
-  }
-
-  if (field.kind === "textarea") {
-    return (
-      <div className="px-4 py-3.5 border-b border-gray-50">
-        {labelNode}
-        <textarea
-          value={value}
-          onChange={(e) => onInput(e.target.value)}
-          placeholder={field.placeholder}
-          rows={2}
-          className="mt-2 w-full text-sm text-gray-700 placeholder-gray-300 outline-none resize-none"
-        />
-      </div>
+  } else if (field.kind === "textarea") {
+    control = (
+      <textarea
+        value={value}
+        onChange={(e) => onInput(e.target.value)}
+        placeholder={field.placeholder}
+        rows={2}
+        className="w-full px-3 py-2 rounded-lg bg-gray-50 border border-transparent text-sm text-gray-800 placeholder-gray-300 outline-none resize-none transition-colors focus:bg-white focus:border-[#1E88D6]"
+      />
     );
-  }
-
-  // input
-  return (
-    <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-50">
-      {labelNode}
-      <div className="flex items-center flex-1 ml-4">
+  } else {
+    // input
+    control = (
+      <div className={`${boxCls} ${field.readOnly ? "bg-gray-100" : ""}`}>
         <input
           type={field.inputType || "text"}
           value={value}
           readOnly={field.readOnly}
           onChange={(e) => onInput(e.target.value)}
           placeholder={field.placeholder}
-          className={`text-sm text-right bg-transparent outline-none flex-1 placeholder:text-gray-300 ${field.readOnly ? "text-gray-500" : "text-gray-800"}`}
+          className={`flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 ${field.readOnly ? "text-gray-500" : "text-gray-800"}`}
         />
         {value && !field.readOnly && (field.inputType === "date" || field.inputType === "number") && (
           <button
             type="button"
             onClick={() => onInput("")}
-            className="ml-2 shrink-0 text-gray-300 active:text-gray-500"
+            className="ml-1 shrink-0 text-gray-300 active:text-gray-500"
             aria-label={`清空${field.label}`}
           >
             <XCircle className="w-4 h-4" />
           </button>
         )}
       </div>
+    );
+  }
+
+  return (
+    <div style={{ flex: `1 1 ${basis}`, minWidth: field.width === "narrow" ? 96 : 140, maxWidth: "100%" }} className="py-1.5">
+      {label}
+      {control}
     </div>
   );
 }

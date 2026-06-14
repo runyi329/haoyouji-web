@@ -1,5 +1,14 @@
 [
   {
+    "hash": "66ed2f9352a850cb1fdefcc2ffdc73ea4f36a7c1",
+    "author": "manus",
+    "date": "2026-06-14T05:58:59+00:00",
+    "message": "feat: 既往史更名为AI健康标签（字段标签/弹层标题/导入导出表头，兼容旧表头）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "既往史更名为AI健康标签（字段标签/弹层标题/导入导出表头，兼容旧表头）"
+  },
+  {
     "hash": "008bd58e65ce56da0aefa081c185ba12f2d7e48d",
     "author": "dev",
     "date": "2026-06-14T05:43:40+00:00",
