@@ -1,5 +1,14 @@
 [
   {
+    "hash": "6fbb1300f4269ac3ba2b81a76bb8ab07ff4690e1",
+    "author": "dev",
+    "date": "2026-06-13T22:57:24+00:00",
+    "message": "perf(yaban): 工作首页/消息/商城Tab改为静态导入,消除切换闪烁",
+    "type": "perf",
+    "scope": "yaban",
+    "cleanMessage": "工作首页/消息/商城Tab改为静态导入,消除切换闪烁"
+  },
+  {
     "hash": "ef1ce3325dce578bf59d3a91aeda1eecc11306d5",
     "author": "dev",
     "date": "2026-06-13T18:49:07+00:00",

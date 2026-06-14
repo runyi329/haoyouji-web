@@ -10,6 +10,7 @@ import YabanVerifyRecords from "./pages/yaban/YabanVerifyRecords";
 import YabanHome from "./pages/yaban/YabanHome";
 import YabanMessages from "./pages/yaban/YabanMessages";
 import YabanShop from "./pages/yaban/YabanShop";
+import YabanShopAdmin from "./pages/yaban/YabanShopAdmin";
 // App v2.1 - 强制重新构建
 import { Toaster } from "@/components/ui/sonner";
 import { CenterToastProvider } from "@/components/ui/center-toast";
@@ -742,6 +743,7 @@ function Router() {
         <Route path="/yaban/shop/cashier" component={lazy(() => import("./pages/yaban/YabanShopCashier"))} />
         <Route path="/yaban/shop/pay-result" component={lazy(() => import("./pages/yaban/YabanShopPayResult"))} />
         <Route path="/yaban/shop/my-orders" component={lazy(() => import("./pages/yaban/YabanShopMyOrders"))} />
+        <Route path="/yaban/shop/admin" component={YabanShopAdmin} />
         <Route path="/yaban/shop/admin/orders" component={lazy(() => import("./pages/yaban/YabanShopAdminOrders"))} />
         <Route path="/yaban/shop/admin/products" component={lazy(() => import("./pages/yaban/YabanShopAdminProducts"))} />
         <Route path="/yaban/shop/admin/merchant-config" component={lazy(() => import("./pages/yaban/YabanShopAdminMerchantConfig"))} />

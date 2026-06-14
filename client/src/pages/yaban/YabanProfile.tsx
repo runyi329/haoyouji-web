@@ -83,8 +83,8 @@ export default function YabanProfile() {
     {
       key: "orders",
       icon: <ShoppingBag className="w-5 h-5 text-[#1E88D6]" />,
-      label: "商城订单",
-      onClick: () => navigate("/yaban/shop/my-orders"),
+      label: "商城管理",
+      onClick: () => navigate("/yaban/shop/admin"),
     },
     {
       key: "verify",

@@ -5,13 +5,12 @@
  */
 import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Search, ShoppingCart, Settings, Package, ClipboardList, Receipt, CreditCard, Ticket, BarChart3, Megaphone, X } from "lucide-react";
+import { Search, ShoppingCart, Receipt } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
 import { SHOP_BANNER, type ShopProduct } from "./shopData";
 import { useCart } from "./useCart";
 import { useShopProducts } from "./useShopProducts";
-import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 
 function BannerCarousel({ navigate }: { navigate: (to: string) => void }) {
@@ -66,11 +65,6 @@ export default function YabanShop() {
   const [keyword, setKeyword] = useState("");
   const { count } = useCart();
   const { products, categories } = useShopProducts();
-  const { user } = useAuth();
-  // 临时：商城管理入口暂时对所有人开放，以后再恢复为仅 super_admin
-  // const isAdmin = user?.role === "super_admin";
-  const isAdmin = true;
-  const [adminOpen, setAdminOpen] = useState(false);
 
   const list = useMemo(() => {
     let arr = products;
@@ -100,16 +94,6 @@ export default function YabanShop() {
               >
                 <Receipt className="w-5 h-5" />
               </button>
-              {/* 商城管理设置图标：仅超级管理员可见（临时入口，方便管理） */}
-              {isAdmin && (
-                <button
-                  onClick={() => setAdminOpen(true)}
-                  className="p-1"
-                  aria-label="商城管理"
-                >
-                  <Settings className="w-5 h-5" />
-                </button>
-              )}
               <button
                 onClick={() => navigate("/yaban/shop/cart")}
                 className="relative p-1"
@@ -201,121 +185,6 @@ export default function YabanShop() {
           </div>
         )}
       </div>
-
-      {/* 商城管理菜单弹层：仅超管 */}
-      {isAdmin && adminOpen && (
-        <div
-          className="fixed inset-0 z-50 flex flex-col bg-black/40"
-          onClick={() => setAdminOpen(false)}
-        >
-          <div
-            className="mt-auto bg-white rounded-t-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <span className="text-base font-bold text-gray-800">商城管理</span>
-              <button onClick={() => setAdminOpen(false)} aria-label="关闭">
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-            <div
-              className="px-3 py-3 space-y-2"
-              style={{ paddingBottom: "calc(76px + env(safe-area-inset-bottom, 0px))" }}
-            >
-              <button
-                onClick={() => {
-                  setAdminOpen(false);
-                  navigate("/yaban/shop/admin/dashboard");
-                }}
-                className="w-full flex items-center gap-3 bg-[#F5F7FA] rounded-xl p-3 active:scale-[0.98] transition-transform"
-              >
-                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
-                  <BarChart3 className="w-5 h-5 text-white" />
-                </span>
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-medium text-gray-800">经营数据</p>
-                  <p className="text-[11px] text-gray-400">今日/累计成交、订单趋势、热销榜</p>
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  setAdminOpen(false);
-                  navigate("/yaban/shop/admin/products");
-                }}
-                className="w-full flex items-center gap-3 bg-[#F5F7FA] rounded-xl p-3 active:scale-[0.98] transition-transform"
-              >
-                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
-                  <Package className="w-5 h-5 text-white" />
-                </span>
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-medium text-gray-800">商品管理</p>
-                  <p className="text-[11px] text-gray-400">上下架、改价、编辑与新增商品</p>
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  setAdminOpen(false);
-                  navigate("/yaban/shop/admin/orders");
-                }}
-                className="w-full flex items-center gap-3 bg-[#F5F7FA] rounded-xl p-3 active:scale-[0.98] transition-transform"
-              >
-                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
-                  <ClipboardList className="w-5 h-5 text-white" />
-                </span>
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-medium text-gray-800">订单管理</p>
-                  <p className="text-[11px] text-gray-400">查看与处理商城订单</p>
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  setAdminOpen(false);
-                  navigate("/yaban/shop/admin/coupons");
-                }}
-                className="w-full flex items-center gap-3 bg-[#F5F7FA] rounded-xl p-3 active:scale-[0.98] transition-transform"
-              >
-                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
-                  <Ticket className="w-5 h-5 text-white" />
-                </span>
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-medium text-gray-800">优惠券管理</p>
-                  <p className="text-[11px] text-gray-400">创建满减/折扣券，控制发放与上下架</p>
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  setAdminOpen(false);
-                  navigate("/yaban/shop/admin/ops");
-                }}
-                className="w-full flex items-center gap-3 bg-[#F5F7FA] rounded-xl p-3 active:scale-[0.98] transition-transform"
-              >
-                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
-                  <Megaphone className="w-5 h-5 text-white" />
-                </span>
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-medium text-gray-800">运营管理</p>
-                  <p className="text-[11px] text-gray-400">评价回复、首页 Banner 轮播配置</p>
-                </div>
-              </button>
-              <button
-                onClick={() => {
-                  setAdminOpen(false);
-                  navigate("/yaban/shop/admin/merchant-config");
-                }}
-                className="w-full flex items-center gap-3 bg-[#F5F7FA] rounded-xl p-3 active:scale-[0.98] transition-transform"
-              >
-                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
-                  <CreditCard className="w-5 h-5 text-white" />
-                </span>
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-medium text-gray-800">支付设置</p>
-                  <p className="text-[11px] text-gray-400">配置本店微信/支付宝收款商户</p>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <YabanTabBar />
     </div>
