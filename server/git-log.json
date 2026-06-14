@@ -1,5 +1,14 @@
 [
   {
+    "hash": "e6037d735c78b71cb015c14ada2e07fff1deca90",
+    "author": "yaban-deploy",
+    "date": "2026-06-14T09:55:46+00:00",
+    "message": "新建顾客：去掉电话字段，顾客类型移至紧急联系人下方",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "新建顾客：去掉电话字段，顾客类型移至紧急联系人下方"
+  },
+  {
     "hash": "4d085d836c8530c3627b9b225889f2f33ab65857",
     "author": "yaban-deploy",
     "date": "2026-06-14T09:47:31+00:00",

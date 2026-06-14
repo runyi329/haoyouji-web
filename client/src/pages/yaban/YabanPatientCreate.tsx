@@ -60,7 +60,7 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "name", label: "姓名", placeholder: "请输入姓名", kind: "input", required: true, width: "name" },
     { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input", width: "auto" },
     { key: "gender", label: "性别", placeholder: "无", kind: "select", required: true, options: GENDERS, width: "gender" },
-    { key: "birthday", label: "生日", placeholder: "请选择", kind: "input", required: true, inputType: "date", width: "half" },
+    { key: "birthday", label: "生日", placeholder: "请选择", kind: "input", required: true, inputType: "date", width: "narrow" },
     { key: "age", label: "年龄", placeholder: "岁", kind: "input", required: true, inputType: "number", width: "narrow" },
     { key: "zodiac", label: "星座", placeholder: "", kind: "input", readOnly: true, width: "narrow" },
     { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true, width: "half" },
