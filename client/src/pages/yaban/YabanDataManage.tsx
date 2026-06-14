@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
 import {
   ChevronLeft,
   Download,
@@ -27,6 +28,48 @@ import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 
 type Fmt = "json" | "excel";
+
+// Excel 导入：中文表头 -> 数据库字段映射
+const EXCEL_HEADER_MAP: Record<string, string> = {
+  姓名: "name",
+  性别: "gender",
+  生日: "birthday",
+  年龄: "age",
+  星座: "zodiac",
+  顾客类型: "patient_type",
+  原编号: "external_no",
+  顾客编号: "medical_no",
+  昵称: "nickname",
+  邮箱: "email",
+  手机号: "mobile",
+  电话: "phone",
+  地区: "region",
+  地址: "address",
+  来源: "source",
+  网电咨询师: "net_consultant",
+  咨询师: "consultant",
+  既往史: "history",
+  备注: "remark",
+  就诊主诉: "chief_complaint",
+};
+
+// 模板表头顺序（与映射一致，供下载模板使用）
+const TEMPLATE_HEADERS = [
+  "姓名",
+  "性别",
+  "生日",
+  "年龄",
+  "顾客类型",
+  "原编号",
+  "昵称",
+  "邮箱",
+  "手机号",
+  "电话",
+  "地区",
+  "地址",
+  "来源",
+  "备注",
+];
 
 // 可导出内容模块（可扩展：后续预约/随访/收费等接入后往这里加）
 const CONTENT_MODULES = [
@@ -159,28 +202,89 @@ export default function YabanDataManage() {
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const lower = file.name.toLowerCase();
+    const isExcel = lower.endsWith(".xlsx") || lower.endsWith(".xls");
     const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const data = JSON.parse(String(reader.result || "{}"));
-        const list = Array.isArray(data) ? data : data.customers;
-        if (!Array.isArray(list)) {
-          toast.error("文件格式不正确，请选择牙伴导出的 JSON 存档");
-          return;
+
+    if (isExcel) {
+      // 解析 Excel：按中文表头映射成顾客对象
+      reader.onload = () => {
+        try {
+          const wb = XLSX.read(reader.result, { type: "array" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: "" });
+          const list = rows
+            .map((row) => {
+              const obj: Record<string, any> = {};
+              for (const [zh, val] of Object.entries(row)) {
+                const key = EXCEL_HEADER_MAP[String(zh).trim()];
+                if (key) obj[key] = typeof val === "string" ? val.trim() : val;
+              }
+              return obj;
+            })
+            .filter((o) => o.name && o.mobile);
+          if (list.length === 0) {
+            toast.error("未解析到有效数据，请确认表头与模板一致，且姓名、手机号不为空");
+            return;
+          }
+          setImportPreview({ count: list.length, customers: list });
+          toast.success(`已读取 ${list.length} 条顾客记录，点击下方按钮导入`);
+        } catch {
+          toast.error("无法解析该 Excel 文件，请使用下方模板整理后再上传");
         }
-        setImportPreview({ count: list.length, customers: list });
-        toast.success(`已读取 ${list.length} 条顾客记录，点击下方按钮导入`);
-      } catch {
-        toast.error("无法解析该文件，请选择正确的 JSON 存档");
-      }
-    };
-    reader.readAsText(file);
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      // 解析 JSON 存档
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(String(reader.result || "{}"));
+          const list = Array.isArray(data) ? data : data.customers;
+          if (!Array.isArray(list)) {
+            toast.error("文件格式不正确，请选择牙伴导出的 JSON 存档");
+            return;
+          }
+          setImportPreview({ count: list.length, customers: list });
+          toast.success(`已读取 ${list.length} 条顾客记录，点击下方按钮导入`);
+        } catch {
+          toast.error("无法解析该文件，请选择正确的 JSON 存档或 Excel 文件");
+        }
+      };
+      reader.readAsText(file);
+    }
     e.target.value = "";
+  };
+
+  // 下载 Excel 导入模板（含表头与一行示例）
+  const onDownloadTemplate = () => {
+    const example = [
+      "张三",
+      "男",
+      "1990-01-01",
+      "",
+      "电子",
+      "",
+      "",
+      "",
+      "13800000000",
+      "",
+      "",
+      "",
+      "老顾客推荐",
+      "示例数据，可删除",
+    ];
+    const aoa = [TEMPLATE_HEADERS, example];
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = TEMPLATE_HEADERS.map(() => ({ wch: 14 }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "顾客导入模板");
+    XLSX.writeFile(wb, "牙伴顾客导入模板.xlsx");
+    toast.success("模板已下载，请按表头填写后上传");
   };
 
   const onImport = () => {
     if (!importPreview || importPreview.customers.length === 0) {
-      toast.error("请先选择要导入的 JSON 存档文件");
+      toast.error("请先选择要导入的文件");
       return;
     }
     importData.mutate({ customers: importPreview.customers, mode: "skip" });
@@ -403,14 +507,24 @@ export default function YabanDataManage() {
           <>
             {/* 导入存档 */}
             <div className="bg-white rounded-2xl shadow-sm p-4">
-              <span className="text-sm font-bold text-gray-800 block mb-2">导入 JSON 存档</span>
+              <span className="text-sm font-bold text-gray-800 block mb-2">导入存档（JSON / Excel）</span>
               <p className="text-xs text-gray-400 leading-relaxed mb-3">
-                选择此前在「数据导出备份」中导出的 JSON 存档文件，系统会将其中的顾客数据导入。已存在的顾客（同手机号或同原编号）会自动跳过，导入的顾客将按本店规则重新分配顾客编号。
+                支持两种文件：本系统导出的 JSON 存档（精确还原），或按模板整理的 Excel 表格（从其他系统迁移顾客）。已存在的顾客（同手机号或同原编号）会自动跳过，导入的顾客将按本店规则重新分配顾客编号，原编号保留备查。
               </p>
+
+              {/* 下载模板 */}
+              <button
+                onClick={onDownloadTemplate}
+                className="w-full flex items-center justify-center gap-2 border border-[#1E88D6] text-[#1E88D6] rounded-xl py-2.5 text-sm font-medium active:bg-[#F0F7FD] mb-3"
+              >
+                <FileSpreadsheet className="w-4 h-4" /> 下载 Excel 导入模板
+              </button>
+
               <label className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[#9CC8EC] rounded-2xl py-8 cursor-pointer active:bg-[#F0F7FD]">
                 <Upload className="w-7 h-7 text-[#1E88D6]" />
-                <span className="text-sm text-[#1E88D6] font-medium">点击选择 JSON 存档文件</span>
-                <input type="file" accept=".json,application/json" className="hidden" onChange={onPickFile} />
+                <span className="text-sm text-[#1E88D6] font-medium">点击选择 JSON 或 Excel 文件</span>
+                <span className="text-xs text-gray-400">支持 .json / .xlsx / .xls</span>
+                <input type="file" accept=".json,application/json,.xlsx,.xls" className="hidden" onChange={onPickFile} />
               </label>
 
               {importPreview && (
@@ -431,7 +545,7 @@ export default function YabanDataManage() {
 
             <div className="bg-white rounded-2xl shadow-sm p-4">
               <p className="text-xs text-gray-400 leading-relaxed">
-                提示：如需从其他系统导入历史顾客，请先整理为本系统的 JSON 存档格式，或联系管理员协助批量导入。
+                提示：Excel 导入请务必使用上方模板的表头（姓名、手机号为必填）。如数据量大或字段复杂，也可把原始表发我协助批量导入。
               </p>
             </div>
           </>

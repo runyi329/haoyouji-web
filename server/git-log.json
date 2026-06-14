@@ -1,5 +1,14 @@
 [
   {
+    "hash": "7647044678dbfc71f2c1c7864d970bb50d959a24",
+    "author": "dev",
+    "date": "2026-06-14T04:29:07+00:00",
+    "message": "feat(yaban): 新增数据管理页(导出备份/导入存档双Tab),支持JSON/Excel格式与内容勾选,复用邮件备份与每日定时器",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "新增数据管理页(导出备份/导入存档双Tab),支持JSON/Excel格式与内容勾选,复用邮件备份与每日定时器"
+  },
+  {
     "hash": "763491581fff39a200c6c3f3aaab94d2210b9f94",
     "author": "dev",
     "date": "2026-06-14T04:10:57+00:00",
