@@ -1,5 +1,14 @@
 [
   {
+    "hash": "78e87adab3118916694550894f4a4bd9d1bae5a6",
+    "author": "dev",
+    "date": "2026-06-14T05:02:14+00:00",
+    "message": "feat: 数据管理页导入支持Excel与下载导入模板",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "数据管理页导入支持Excel与下载导入模板"
+  },
+  {
     "hash": "7647044678dbfc71f2c1c7864d970bb50d959a24",
     "author": "dev",
     "date": "2026-06-14T04:29:07+00:00",

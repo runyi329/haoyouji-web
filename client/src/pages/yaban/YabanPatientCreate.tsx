@@ -6,10 +6,11 @@
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ChevronRight, Plus, MinusCircle, XCircle } from "lucide-react";
+import { ChevronRight, Plus, MinusCircle, XCircle, Check } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import MedicalHistoryPicker, { serializeHistory, parseHistory } from "./MedicalHistoryPicker";
 
 // 主题色
 const ACCENT = "#1E88D6";
@@ -24,7 +25,6 @@ const PATIENT_TYPES = ["电子", "临时", "普通"];
 const SOURCES = ["到店", "转介绍", "网络预约", "电话预约", "微信预约", "老顾客推荐", "其他"];
 const NET_CONSULTANTS = ["杨文利", "侯睿", "洪紫钥"];
 const CONSULTANTS = ["洪紫钥", "杨文利", "侯睿"];
-const MEDICAL_HISTORY = ["无", "高血压", "糖尿病", "心脏病", "过敏史", "其他"];
 const REGIONS = ["上海市-黄浦区", "上海市-普陀区", "上海市-虹口区", "上海市-浦东新区", "其他"];
 const CHIEF_COMPLAINTS = ["牙疼", "牙齿松动", "洗牙清洁", "缺牙修复", "牙齿矫正", "美白贴面", "智齿冠周炎", "其他"];
 const HEALTH_STATUS = ["健康", "亚健康", "慢性病", "其他"];
@@ -32,7 +32,7 @@ const YES_NO = ["否", "是", "不详"];
 const PREGNANT = ["否", "是", "备孕中", "不适用"];
 
 // 字段类型
-type FieldKind = "input" | "select" | "textarea";
+type FieldKind = "input" | "select" | "textarea" | "history";
 
 interface FieldDef {
   key: string;
@@ -68,7 +68,7 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "source", label: "顾客来源", placeholder: "请选择顾客来源", kind: "select", required: true, options: SOURCES },
     { key: "netConsultant", label: "网电咨询师", placeholder: "请选择网电咨询师", kind: "select", options: NET_CONSULTANTS },
     { key: "consultant", label: "咨询师", placeholder: "请选择咨询师", kind: "select", options: CONSULTANTS },
-    { key: "history", label: "既往史", placeholder: "请选择既往史", kind: "select", options: MEDICAL_HISTORY },
+    { key: "history", label: "既往史", placeholder: "点击选择或搜索", kind: "history" },
     { key: "patientRemark", label: "顾客备注", placeholder: "请输入顾客备注", kind: "textarea" },
   ],
   首诊信息: [
@@ -122,6 +122,7 @@ export default function YabanPatientCreate() {
   const [activeTab, setActiveTab] = useState<Tab>("个人信息");
   const [requiredOnly, setRequiredOnly] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({
     gender: "未知",
     patientType: "电子",
@@ -285,6 +286,7 @@ export default function YabanPatientCreate() {
                   setField(f.key, v);
                   setOpenKey(null);
                 }}
+                onOpenHistory={() => setHistoryOpen(true)}
               />
             ))
           )}
@@ -309,6 +311,22 @@ export default function YabanPatientCreate() {
         )}
       </div>
 
+      {/* 既往史选择器 */}
+      {(() => {
+        const parsed = parseHistory(form.history || "");
+        return (
+          <MedicalHistoryPicker
+            open={historyOpen}
+            value={parsed.names}
+            remark={parsed.remark}
+            onClose={() => setHistoryOpen(false)}
+            onConfirm={(names, remark) => {
+              setField("history", serializeHistory(names, remark));
+              setHistoryOpen(false);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -321,6 +339,7 @@ function FormRow({
   onInput,
   onToggle,
   onSelect,
+  onOpenHistory,
 }: {
   field: FieldDef;
   value: string;
@@ -328,6 +347,7 @@ function FormRow({
   onInput: (v: string) => void;
   onToggle: () => void;
   onSelect: (v: string) => void;
+  onOpenHistory?: () => void;
 }) {
   const labelNode = (
     <span className="text-sm font-medium text-gray-900 shrink-0">
@@ -335,6 +355,24 @@ function FormRow({
       {field.required && <span className="text-red-500 ml-0.5">*</span>}
     </span>
   );
+
+  // 既往史：点击打开专用搜索选择器，行内展示已选摘要
+  if (field.kind === "history") {
+    return (
+      <button
+        onClick={onOpenHistory}
+        className="w-full flex items-start justify-between px-4 py-3.5 border-b border-gray-50 active:bg-gray-50 text-left"
+      >
+        {labelNode}
+        <div className="flex items-center gap-1 flex-1 ml-4 justify-end min-w-0">
+          <span className={`text-sm truncate ${value ? "text-gray-800" : "text-gray-300"}`}>
+            {value || field.placeholder}
+          </span>
+          <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
+        </div>
+      </button>
+    );
+  }
 
   if (field.kind === "select") {
     return (
@@ -369,7 +407,7 @@ function FormRow({
                     style={selected ? { color: ACCENT, fontWeight: 600 } : { color: "#374151" }}
                   >
                     {opt}
-                    {selected && <span style={{ color: ACCENT }}>✓</span>}
+                    {selected && <Check className="w-4 h-4" style={{ color: ACCENT }} />}
                   </button>
                 );
               })}

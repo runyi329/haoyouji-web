@@ -70,7 +70,7 @@ async function ensureCustomerTable(conn: any) {
       source VARCHAR(64) DEFAULT NULL,
       net_consultant VARCHAR(64) DEFAULT NULL,
       consultant VARCHAR(64) DEFAULT NULL,
-      history VARCHAR(128) DEFAULT NULL,
+      history TEXT DEFAULT NULL,
       remark VARCHAR(255) DEFAULT NULL,
       chief_complaint VARCHAR(128) DEFAULT NULL,
       health_status VARCHAR(64) DEFAULT NULL,
@@ -95,6 +95,12 @@ async function ensureCustomerTable(conn: any) {
       KEY idx_mobile (mobile)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  // 兼容旧表：将 history 列扩展为 TEXT（既往史改为多选+备注，可能超过 128 字符）
+  try {
+    await conn.execute(`ALTER TABLE yaban_customer MODIFY COLUMN history TEXT DEFAULT NULL`);
+  } catch (e) {
+    // 已是 TEXT 或无权限时忽略
+  }
 }
 
 // 创建顾客输入校验
@@ -116,7 +122,7 @@ const createInput = z.object({
   source: z.string().max(64).optional(),
   netConsultant: z.string().max(64).optional(),
   consultant: z.string().max(64).optional(),
-  history: z.string().max(128).optional(),
+  history: z.string().max(2000).optional(),
   remark: z.string().max(255).optional(),
   chiefComplaint: z.string().max(128).optional(),
   healthStatus: z.string().max(64).optional(),
