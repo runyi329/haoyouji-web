@@ -1,13 +1,13 @@
 /**
  * 牙伴齿科管理 - 新建顾客
  * 路由：/yaban/patient/create
- * 蓝白风格，5 个 Tab：个人信息 / 联系方式 / 顾客信息 / 首诊信息 / 自由项
+ * 蓝白风格，4 个 Tab：个人信息（含联系方式）/ 顾客信息 / 首诊信息 / 自由项
  * 顶栏：取消 / 新建顾客 / 保存；含「仅显示必填字段」开关
  * 布局：字段按实际输入宽度自适应流式排布，窄字段同行并排，充分利用横向空间
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ChevronDown, Plus, MinusCircle, XCircle, Check } from "lucide-react";
+import { ChevronDown, XCircle, Check } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -17,7 +17,7 @@ import MedicalHistoryPicker, { serializeHistory, parseHistory } from "./MedicalH
 const ACCENT = "#1E88D6";
 
 // Tab 定义
-const TABS = ["个人信息", "联系方式", "顾客信息", "首诊信息", "自由项"] as const;
+const TABS = ["个人信息", "顾客信息", "首诊信息", "自由项"] as const;
 type Tab = (typeof TABS)[number];
 
 // 选项配置
@@ -62,8 +62,6 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", required: true, options: PATIENT_TYPES, width: "narrow" },
     { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true, width: "half" },
     { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input", width: "half" },
-  ],
-  联系方式: [
     { key: "mobile", label: "手机号", placeholder: "请输入手机号", kind: "input", required: true, inputType: "tel", width: "half" },
     { key: "phone", label: "电话", placeholder: "请输入电话号码", kind: "input", inputType: "tel", width: "half" },
     { key: "email", label: "邮箱", placeholder: "请输入邮箱地址", kind: "input", inputType: "email", width: "full" },
@@ -306,24 +304,6 @@ export default function YabanPatientCreate() {
             </div>
           )}
         </div>
-
-        {/* 联系方式 Tab 的「添加号码」占位说明 */}
-        {activeTab === "联系方式" && !requiredOnly && (
-          <div className="bg-white mt-2 px-4 py-3">
-            <button
-              onClick={() => toast.info("「添加号码」功能开发中，敬请期待")}
-              className="flex items-center gap-1.5 text-sm font-medium"
-              style={{ color: ACCENT }}
-            >
-              <Plus className="w-4 h-4" />
-              添加号码
-            </button>
-            <div className="mt-3 flex items-center gap-2 text-xs text-gray-400">
-              <MinusCircle className="w-4 h-4 text-gray-300" />
-              本人 / 家庭等号码分组（开发中）
-            </div>
-          </div>
-        )}
       </div>
 
       {/* AI健康标签选择器 */}

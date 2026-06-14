@@ -1,5 +1,14 @@
 [
   {
+    "hash": "3934544af89e4311d01ef7ca69be015b4b96e336",
+    "author": "manus",
+    "date": "2026-06-14T06:19:08+00:00",
+    "message": "style: 字段标题与输入框同行展示，标题字号放大且不加粗",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "字段标题与输入框同行展示，标题字号放大且不加粗"
+  },
+  {
     "hash": "b2e065b92932e3133397720a8affe86aca5ef153",
     "author": "manus",
     "date": "2026-06-14T06:12:17+00:00",
