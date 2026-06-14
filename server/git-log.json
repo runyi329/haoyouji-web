@@ -1,5 +1,14 @@
 [
   {
+    "hash": "404defb91bb81c0a570a5892a7b6623630b59d85",
+    "author": "manus",
+    "date": "2026-06-14T14:13:46+00:00",
+    "message": "feat(yaban-intro): 右上角新增返回按钮，字体与AI牙伴一致，主站监听返回消息",
+    "type": "feat",
+    "scope": "yaban-intro",
+    "cleanMessage": "右上角新增返回按钮，字体与AI牙伴一致，主站监听返回消息"
+  },
+  {
     "hash": "1a1c13ad9cb1e7913fb313726bda1b087f991010",
     "author": "manus",
     "date": "2026-06-14T14:01:13+00:00",

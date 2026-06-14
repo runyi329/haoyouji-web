@@ -57,13 +57,13 @@ interface FieldDef {
 // 各 Tab 字段配置
 const TAB_FIELDS: Record<Tab, FieldDef[]> = {
   个人信息: [
-    { key: "name", label: "姓名", placeholder: "请输入姓名", kind: "input", required: true, width: "name" },
+    { key: "name", label: "姓名", placeholder: "请输入姓名", kind: "input", width: "name" },
     { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input", width: "auto" },
-    { key: "gender", label: "性别", placeholder: "无", kind: "select", required: true, options: GENDERS, width: "gender" },
-    { key: "birthday", label: "生日", placeholder: "请选择", kind: "input", required: true, inputType: "date", width: "date" },
-    { key: "age", label: "年龄", placeholder: "", kind: "input", required: true, inputType: "number", width: "tiny" },
+    { key: "gender", label: "性别", placeholder: "无", kind: "select", options: GENDERS, width: "gender" },
+    { key: "birthday", label: "生日", placeholder: "请选择", kind: "input", inputType: "date", width: "date" },
+    { key: "age", label: "年龄", placeholder: "", kind: "input", inputType: "number", width: "tiny" },
     { key: "zodiac", label: "星座", placeholder: "", kind: "input", readOnly: true, width: "zodiac" },
-    { key: "mobile", label: "手机", placeholder: "请输入手机号", kind: "input", required: true, inputType: "tel", width: "half" },
+    { key: "mobile", label: "手机", placeholder: "请输入手机号", kind: "input", inputType: "tel", width: "half" },
     { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true, width: "half" },
     { key: "emergencyContact", label: "紧急联系人", placeholder: "姓名", kind: "input", width: "half" },
     { key: "emergencyRelation", label: "关系", placeholder: "请选择", kind: "select", options: RELATIONS, width: "half" },
@@ -72,8 +72,8 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "address", label: "地址", placeholder: "点击选择省市区并填写门牌号", kind: "address", width: "full" },
   ],
   顾客信息: [
-    { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", required: true, options: PATIENT_TYPES, width: "half" },
-    { key: "source", label: "顾客来源", placeholder: "请选择", kind: "select", required: true, options: SOURCES, width: "half" },
+    { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", options: PATIENT_TYPES, width: "half" },
+    { key: "source", label: "顾客来源", placeholder: "请选择", kind: "select", options: SOURCES, width: "half" },
     { key: "netConsultant", label: "网电咨询师", placeholder: "请选择", kind: "select", options: NET_CONSULTANTS, width: "half" },
     { key: "consultant", label: "咨询师", placeholder: "请选择", kind: "select", options: CONSULTANTS, width: "half" },
     { key: "history", label: "AI健康标签", placeholder: "点击选择或搜索", kind: "history", width: "full" },
@@ -144,7 +144,6 @@ function calcZodiac(birthday: string): string {
 export default function YabanPatientCreate() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<Tab>("个人信息");
-  const [requiredOnly, setRequiredOnly] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addressOpen, setAddressOpen] = useState(false);
@@ -259,8 +258,8 @@ export default function YabanPatientCreate() {
     });
   };
 
-  // 当前 Tab 字段（受「仅显示必填字段」过滤）
-  const fields = TAB_FIELDS[activeTab].filter((f) => (requiredOnly ? f.required : true));
+  // 当前 Tab 字段（已取消必填项，展示全部字段）
+  const fields = TAB_FIELDS[activeTab];
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -277,20 +276,7 @@ export default function YabanPatientCreate() {
             {createMutation.isPending ? "保存中" : "保存"}
           </button>
         </div>
-        {/* 仅显示必填字段开关 */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-50">
-          <span className="text-sm text-gray-700">仅显示必填字段</span>
-          <button
-            onClick={() => setRequiredOnly((v) => !v)}
-            className="relative w-11 h-6 rounded-full transition-colors"
-            style={{ backgroundColor: requiredOnly ? ACCENT : "#E2E5EA" }}
-          >
-            <span
-              className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"
-              style={{ left: 2, transform: requiredOnly ? "translateX(20px)" : "translateX(0)" }}
-            />
-          </button>
-        </div>
+        {/* 已取消所有必填项，「仅显示必填字段」开关不再展示 */}
       </div>
 
       {/* Tab 切换 */}
