@@ -20,7 +20,7 @@ type Tab = (typeof TABS)[number];
 
 // 选项配置
 const GENDERS = ["未知", "男", "女"];
-const PATIENT_TYPES = ["电子", "纸质"];
+const PATIENT_TYPES = ["电子", "临时", "普通"];
 const SOURCES = ["到店", "转介绍", "网络预约", "电话预约", "微信预约", "老顾客推荐", "其他"];
 const NET_CONSULTANTS = ["杨文利", "侯睿", "洪紫钥"];
 const CONSULTANTS = ["洪紫钥", "杨文利", "侯睿"];
@@ -42,6 +42,7 @@ interface FieldDef {
   required?: boolean;
   options?: string[];
   inputType?: string;
+  readOnly?: boolean;
 }
 
 // 各 Tab 字段配置
@@ -51,6 +52,7 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "gender", label: "性别", placeholder: "未知", kind: "select", required: true, options: GENDERS },
     { key: "birthday", label: "生日", placeholder: "请选择生日", kind: "input", required: true, inputType: "date" },
     { key: "age", label: "年龄", placeholder: "请输入年龄", kind: "input", required: true, inputType: "number" },
+    { key: "zodiac", label: "星座", placeholder: "选择生日后自动带出", kind: "input", readOnly: true },
     { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", required: true, options: PATIENT_TYPES },
     { key: "medicalNo", label: "病历号", placeholder: "系统自动生成", kind: "input", required: true },
     { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input" },
@@ -92,6 +94,34 @@ function genMedicalNo(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+// 根据生日(YYYY-MM-DD)计算周岁年龄
+function calcAge(birthday: string): string {
+  if (!birthday) return "";
+  const b = new Date(birthday);
+  if (isNaN(b.getTime())) return "";
+  const now = new Date();
+  let age = now.getFullYear() - b.getFullYear();
+  const m = now.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+  if (age < 0 || age > 150) return "";
+  return String(age);
+}
+
+// 根据生日计算星座
+function calcZodiac(birthday: string): string {
+  if (!birthday) return "";
+  const d = new Date(birthday);
+  if (isNaN(d.getTime())) return "";
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  const edges = [20, 19, 21, 20, 21, 22, 23, 23, 23, 24, 23, 22];
+  const names = [
+    "摩羯座", "水瓶座", "双鱼座", "白羊座", "金牛座", "双子座",
+    "巨蟹座", "狮子座", "处女座", "天秤座", "天蝎座", "射手座", "摩羯座",
+  ];
+  return day < edges[month - 1] ? names[month - 1] : names[month];
+}
+
 export default function YabanPatientCreate() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<Tab>("个人信息");
@@ -104,7 +134,15 @@ export default function YabanPatientCreate() {
   });
 
   const setField = (key: string, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      // 选择生日时自动计算年龄与星座
+      if (key === "birthday") {
+        next.age = calcAge(value);
+        next.zodiac = calcZodiac(value);
+      }
+      return next;
+    });
   };
 
   const handleBack = () => {
@@ -143,6 +181,7 @@ export default function YabanPatientCreate() {
       gender: form.gender,
       birthday: form.birthday,
       age: form.age,
+      zodiac: form.zodiac,
       patientType: form.patientType,
       medicalNo: form.medicalNo,
       nickname: form.nickname,
@@ -370,11 +409,12 @@ function FormRow({
         <input
           type={field.inputType || "text"}
           value={value}
+          readOnly={field.readOnly}
           onChange={(e) => onInput(e.target.value)}
           placeholder={field.placeholder}
-          className="text-sm text-right text-gray-800 bg-transparent outline-none flex-1 placeholder:text-gray-300"
+          className={`text-sm text-right bg-transparent outline-none flex-1 placeholder:text-gray-300 ${field.readOnly ? "text-gray-500" : "text-gray-800"}`}
         />
-        {value && (field.inputType === "date" || field.inputType === "number") && (
+        {value && !field.readOnly && (field.inputType === "date" || field.inputType === "number") && (
           <button
             type="button"
             onClick={() => onInput("")}

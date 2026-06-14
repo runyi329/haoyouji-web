@@ -24,6 +24,7 @@ async function ensureCustomerTable(conn: any) {
       gender VARCHAR(8) DEFAULT '未知',
       birthday VARCHAR(20) DEFAULT NULL,
       age INT DEFAULT NULL,
+      zodiac VARCHAR(16) DEFAULT NULL,
       patient_type VARCHAR(16) DEFAULT '电子',
       medical_no VARCHAR(40) DEFAULT NULL,
       nickname VARCHAR(64) DEFAULT NULL,
@@ -68,6 +69,7 @@ const createInput = z.object({
   gender: z.string().max(8).optional(),
   birthday: z.string().max(20).optional(),
   age: z.union([z.number(), z.string()]).optional(),
+  zodiac: z.string().max(16).optional(),
   patientType: z.string().max(16).optional(),
   medicalNo: z.string().max(40).optional(),
   nickname: z.string().max(64).optional(),
@@ -154,6 +156,13 @@ export const yabanCustomerRouter = router({
         medicalNo = String((last ? parseInt(last, 10) : 19120) + 1);
       }
 
+      // 兼容旧表：补充 zodiac 列
+      try {
+        await (conn as any).execute(`ALTER TABLE yaban_customer ADD COLUMN zodiac VARCHAR(16) DEFAULT NULL AFTER age`);
+      } catch (e) {
+        // 列已存在则忽略
+      }
+
       const ageNum =
         input.age === undefined || input.age === null || input.age === ""
           ? null
@@ -161,19 +170,20 @@ export const yabanCustomerRouter = router({
 
       const [result] = (await (conn as any).execute(
         `INSERT INTO yaban_customer
-         (tenant_id, name, gender, birthday, age, patient_type, medical_no, nickname,
+         (tenant_id, name, gender, birthday, age, zodiac, patient_type, medical_no, nickname,
           email, mobile, phone, region, address,
           source, net_consultant, consultant, history, remark,
           chief_complaint, health_status, drug_allergy, food_allergy,
           heart, hypertension, diabetes, kidney, infectious, bleeding, pregnant, medication,
           created_by)
-         VALUES (?,?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
+         VALUES (?,?,?,?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
         [
           DEFAULT_TENANT_ID,
           input.name.trim(),
           s(input.gender) || "未知",
           s(input.birthday),
           ageNum,
+          s(input.zodiac),
           s(input.patientType) || "电子",
           medicalNo,
           s(input.nickname),

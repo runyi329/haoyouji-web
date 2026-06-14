@@ -1,5 +1,14 @@
 [
   {
+    "hash": "b5efdcbf918165ca6a53701507fd8ff2565cedee",
+    "author": "dev",
+    "date": "2026-06-14T03:41:41+00:00",
+    "message": "refactor(yaban): 移除首页商城管理板块(已在我的页提供)",
+    "type": "refactor",
+    "scope": "yaban",
+    "cleanMessage": "移除首页商城管理板块(已在我的页提供)"
+  },
+  {
     "hash": "b307afced8165da15c28302c874bc60864722e0b",
     "author": "dev",
     "date": "2026-06-14T03:22:55+00:00",
