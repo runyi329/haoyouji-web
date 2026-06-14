@@ -1,5 +1,14 @@
 [
   {
+    "hash": "4d5a33a0607b6c9ed938eff546a5496a2150e818",
+    "author": "manus",
+    "date": "2026-06-14T14:26:36+00:00",
+    "message": "feat(yaban): 顾客新建页取消所有必填项，隐藏仅显示必填字段开关",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "顾客新建页取消所有必填项，隐藏仅显示必填字段开关"
+  },
+  {
     "hash": "404defb91bb81c0a570a5892a7b6623630b59d85",
     "author": "manus",
     "date": "2026-06-14T14:13:46+00:00",

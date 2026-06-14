@@ -172,23 +172,112 @@ function s(v: any): string | null {
 export const yabanCustomerRouter = router({
   // ============ 顾客列表 ============
   list: protectedProcedure
-    .input(z.object({ keyword: z.string().optional() }).optional())
+    .input(
+      z
+        .object({
+          keyword: z.string().optional(),
+          // 快捷筛选：all | today | week | new | followup
+          quickFilter: z.string().optional(),
+          // 排序：recent(最近就诊) | created(创建时间) | name(姓名拼音) | age(年龄)
+          sort: z.string().optional(),
+          // 分页
+          page: z.number().int().min(1).optional(),
+          pageSize: z.number().int().min(1).max(100).optional(),
+        })
+        .optional()
+    )
     .query(async ({ input }) => {
       const conn = await getDbConnection();
-      if (!conn) return [];
+      if (!conn) return { items: [], total: 0, page: 1, pageSize: 30, hasMore: false };
       await ensureCustomerTable(conn);
+
       const keyword = input?.keyword?.trim();
-      let sql = `SELECT * FROM yaban_customer WHERE tenant_id = ?`;
+      const quickFilter = input?.quickFilter || "all";
+      const sort = input?.sort || "created";
+      const page = input?.page && input.page > 0 ? input.page : 1;
+      const pageSize = input?.pageSize && input.pageSize > 0 ? input.pageSize : 30;
+      const offset = (page - 1) * pageSize;
+
+      const where: string[] = [`tenant_id = ?`];
       const params: any[] = [DEFAULT_TENANT_ID];
+
       if (keyword) {
-        sql += ` AND (name LIKE ? OR mobile LIKE ? OR medical_no LIKE ? OR nickname LIKE ?)`;
+        where.push(`(name LIKE ? OR mobile LIKE ? OR medical_no LIKE ? OR nickname LIKE ?)`);
         const like = `%${keyword}%`;
         params.push(like, like, like, like);
       }
-      sql += ` ORDER BY id DESC LIMIT 500`;
-      const [rows] = (await (conn as any).execute(sql, params)) as any;
-      return rows as any[];
+
+      // 快捷筛选
+      if (quickFilter === "today") {
+        // 今日新增
+        where.push(`DATE(created_at) = CURDATE()`);
+      } else if (quickFilter === "week") {
+        // 本周新增（周一为起点）
+        where.push(`YEARWEEK(created_at, 1) = YEARWEEK(CURDATE(), 1)`);
+      } else if (quickFilter === "new") {
+        // 新顾客：近30天创建
+        where.push(`created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)`);
+      } else if (quickFilter === "followup") {
+        // 待回访：有上次就诊且距今超过90天
+        where.push(`last_visit IS NOT NULL AND last_visit <> '' AND STR_TO_DATE(REPLACE(last_visit,'.','-'), '%Y-%m-%d') < DATE_SUB(CURDATE(), INTERVAL 90 DAY)`);
+      }
+
+      const whereSql = where.join(" AND ");
+
+      // 排序映射（白名单，防注入）
+      let orderSql = "id DESC";
+      if (sort === "recent") {
+        orderSql = "(last_visit IS NULL OR last_visit = '') ASC, last_visit DESC, id DESC";
+      } else if (sort === "created") {
+        orderSql = "id DESC";
+      } else if (sort === "name") {
+        orderSql = "CONVERT(name USING gbk) ASC, id DESC";
+      } else if (sort === "age") {
+        orderSql = "(age IS NULL) ASC, age DESC, id DESC";
+      }
+
+      // 总数
+      const [cntRows] = (await (conn as any).execute(
+        `SELECT COUNT(*) AS cnt FROM yaban_customer WHERE ${whereSql}`,
+        params
+      )) as any;
+      const total = Number((cntRows as any[])[0]?.cnt || 0);
+
+      // 分页数据
+      const [rows] = (await (conn as any).execute(
+        `SELECT * FROM yaban_customer WHERE ${whereSql} ORDER BY ${orderSql} LIMIT ? OFFSET ?`,
+        [...params, pageSize, offset]
+      )) as any;
+
+      return {
+        items: rows as any[],
+        total,
+        page,
+        pageSize,
+        hasMore: offset + (rows as any[]).length < total,
+      };
     }),
+
+  // ============ 顾客统计（总数 / 今日新增 / 本月新增） ============
+  stats: protectedProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) return { total: 0, today: 0, month: 0 };
+    await ensureCustomerTable(conn);
+    const [rows] = (await (conn as any).execute(
+      `SELECT
+         COUNT(*) AS total,
+         SUM(DATE(created_at) = CURDATE()) AS today,
+         SUM(YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE())) AS month
+       FROM yaban_customer WHERE tenant_id = ?`,
+      [DEFAULT_TENANT_ID]
+    )) as any;
+    const r = (rows as any[])[0] || {};
+    return {
+      total: Number(r.total || 0),
+      today: Number(r.today || 0),
+      month: Number(r.month || 0),
+    };
+  }),
 
   // ============ 预览下一个顾客编号（仅供新建页展示，实际以保存时生成为准） ============
   previewCode: protectedProcedure.query(async () => {
