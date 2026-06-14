@@ -10,7 +10,7 @@
     
     
     <link href="/yaban-intro/fonts/fonts.css" rel="stylesheet" />
-    <link rel="preload" href="/yaban-intro/models/tooth_morph_draco.glb" as="fetch" crossorigin />
+    <link rel="preload" href="/yaban-intro/models/tooth_morph_draco.glb" as="fetch" crossorigin="anonymous" fetchpriority="high" />
     <style>
       #boot-loader {
         position: fixed; inset: 0; z-index: 9999;
@@ -28,6 +28,12 @@
         font-size: 18px; font-weight: 700; color: #1a4a6e;
         letter-spacing: 4px;
         opacity: 0.8;
+      }
+      #boot-progress {
+        font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+        font-size: 15px; font-weight: 600; color: #ffffff;
+        letter-spacing: 1px; opacity: 0.9; margin-top: 4px;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.15);
       }
       .loader-dots {
         display: flex; gap: 6px; margin-top: 8px;
@@ -54,10 +60,9 @@
 
   <body>
 
-    <div id="boot-loader">
+        <div id="boot-loader">
       <img class="loader-logo" src="/yaban-intro/images/logo.webp" alt="牙伴" />
-
-
+      <div id="boot-progress"></div>
     </div>
     <div id="root"></div>
     <script>
