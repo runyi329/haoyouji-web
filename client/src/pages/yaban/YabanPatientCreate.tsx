@@ -5,7 +5,7 @@
  * 顶栏：取消 / 新建顾客 / 保存；含「仅显示必填字段」开关
  * 布局：字段按实际输入宽度自适应流式排布，窄字段同行并排，充分利用横向空间
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { ChevronDown, XCircle, Check } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
@@ -151,6 +151,17 @@ export default function YabanPatientCreate() {
     });
   };
 
+  // 预取系统将分配的顾客编号，实时展示在「顾客编号」框（实际以保存时生成为准）
+  const previewCode = trpc.yabanCustomer.previewCode.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+  });
+  useEffect(() => {
+    const code = previewCode.data?.code;
+    if (code) {
+      setForm((prev) => (prev.medicalNo ? prev : { ...prev, medicalNo: code }));
+    }
+  }, [previewCode.data?.code]);
+
   const handleBack = () => {
     setLocation("/yaban");
   };
@@ -189,7 +200,8 @@ export default function YabanPatientCreate() {
       age: form.age,
       zodiac: form.zodiac,
       patientType: form.patientType,
-      medicalNo: form.medicalNo || undefined,
+      // 顾客编号为只读预览值，保存时不传入，由后端按实际流水生成（避免并发同号）
+      medicalNo: undefined,
       nickname: form.nickname,
       email: form.email,
       mobile: form.mobile,

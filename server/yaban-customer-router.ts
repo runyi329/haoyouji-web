@@ -164,6 +164,15 @@ export const yabanCustomerRouter = router({
       return rows as any[];
     }),
 
+  // ============ 预览下一个顾客编号（仅供新建页展示，实际以保存时生成为准） ============
+  previewCode: protectedProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) return { code: "" };
+    await ensureCustomerTable(conn);
+    const code = await nextCustomerCode(conn, DEFAULT_TENANT_ID);
+    return { code };
+  }),
+
   // ============ 顾客详情 ============
   detail: protectedProcedure
     .input(z.object({ id: z.number().int() }))

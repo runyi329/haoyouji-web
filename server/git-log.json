@@ -1,5 +1,14 @@
 [
   {
+    "hash": "bfe943e1779047e89dbf3e1222ce288f18cc2254",
+    "author": "manus",
+    "date": "2026-06-14T06:26:31+00:00",
+    "message": "feat: 取消联系方式Tab，将联系方式字段合并到个人信息",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "取消联系方式Tab，将联系方式字段合并到个人信息"
+  },
+  {
     "hash": "3934544af89e4311d01ef7ca69be015b4b96e336",
     "author": "manus",
     "date": "2026-06-14T06:19:08+00:00",
