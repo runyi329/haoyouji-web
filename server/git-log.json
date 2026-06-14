@@ -1,5 +1,14 @@
 [
   {
+    "hash": "b307afced8165da15c28302c874bc60864722e0b",
+    "author": "dev",
+    "date": "2026-06-14T03:22:55+00:00",
+    "message": "style(yaban): 新建顾客选择器改为贴近按钮的气泡浮层(popover)",
+    "type": "style",
+    "scope": "yaban",
+    "cleanMessage": "新建顾客选择器改为贴近按钮的气泡浮层(popover)"
+  },
+  {
     "hash": "13ed77050f8f0718b40f5f93b3a9c5bb806e2951",
     "author": "dev",
     "date": "2026-06-14T03:12:02+00:00",
