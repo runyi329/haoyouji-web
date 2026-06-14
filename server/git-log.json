@@ -1,5 +1,14 @@
 [
   {
+    "hash": "8e826b08efca53c543b50cad6ca884b8ba4343f3",
+    "author": "dev",
+    "date": "2026-06-14T02:59:55+00:00",
+    "message": "fix(yaban): 新建顾客页生日/年龄已填写后可点X清空",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "新建顾客页生日/年龄已填写后可点X清空"
+  },
+  {
     "hash": "70ac900da47c032708cffeaaf9b3b89202e8f25b",
     "author": "dev",
     "date": "2026-06-14T02:51:21+00:00",

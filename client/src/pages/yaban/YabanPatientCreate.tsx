@@ -96,7 +96,7 @@ export default function YabanPatientCreate() {
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<Tab>("个人信息");
   const [requiredOnly, setRequiredOnly] = useState(false);
-  const [picker, setPicker] = useState<FieldDef | null>(null);
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const [form, setForm] = useState<Record<string, string>>({
     gender: "未知",
     patientType: "电子",
@@ -245,8 +245,13 @@ export default function YabanPatientCreate() {
                 key={f.key}
                 field={f}
                 value={form[f.key] || ""}
+                open={openKey === f.key}
                 onInput={(v) => setField(f.key, v)}
-                onPick={() => setPicker(f)}
+                onToggle={() => setOpenKey(openKey === f.key ? null : f.key)}
+                onSelect={(v) => {
+                  setField(f.key, v);
+                  setOpenKey(null);
+                }}
               />
             ))
           )}
@@ -271,39 +276,6 @@ export default function YabanPatientCreate() {
         )}
       </div>
 
-      {/* 底部抽屉选择器 */}
-      {picker && (
-        <div className="fixed inset-0 z-[100]">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setPicker(null)} />
-          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl overflow-hidden max-h-[60vh]">
-            <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
-              <span className="text-base font-medium text-gray-900">{picker.label}</span>
-              <button onClick={() => setPicker(null)} className="text-sm font-medium" style={{ color: ACCENT }}>
-                取消
-              </button>
-            </div>
-            <div className="overflow-y-auto max-h-[50vh]">
-              {(picker.options || []).map((opt) => {
-                const selected = form[picker.key] === opt;
-                return (
-                  <button
-                    key={opt}
-                    onClick={() => {
-                      setField(picker.key, opt);
-                      setPicker(null);
-                    }}
-                    className="w-full px-4 py-3.5 text-left text-sm border-b border-gray-50 active:bg-gray-50 flex items-center justify-between"
-                    style={selected ? { color: ACCENT, fontWeight: 600 } : { color: "#374151" }}
-                  >
-                    {opt}
-                    {selected && <span style={{ color: ACCENT }}>✓</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -312,13 +284,17 @@ export default function YabanPatientCreate() {
 function FormRow({
   field,
   value,
+  open,
   onInput,
-  onPick,
+  onToggle,
+  onSelect,
 }: {
   field: FieldDef;
   value: string;
+  open: boolean;
   onInput: (v: string) => void;
-  onPick: () => void;
+  onToggle: () => void;
+  onSelect: (v: string) => void;
 }) {
   const labelNode = (
     <span className="text-sm font-medium text-gray-900 shrink-0">
@@ -329,18 +305,40 @@ function FormRow({
 
   if (field.kind === "select") {
     return (
-      <button
-        onClick={onPick}
-        className="w-full flex items-center justify-between px-4 py-3.5 border-b border-gray-50 active:bg-gray-50"
-      >
-        {labelNode}
-        <div className="flex items-center gap-1">
-          <span className={`text-sm ${value ? "text-gray-800" : "text-gray-300"}`}>
-            {value || field.placeholder}
-          </span>
-          <ChevronRight className="w-4 h-4 text-gray-300" />
-        </div>
-      </button>
+      <div className="border-b border-gray-50">
+        <button
+          onClick={onToggle}
+          className="w-full flex items-center justify-between px-4 py-3.5 active:bg-gray-50"
+        >
+          {labelNode}
+          <div className="flex items-center gap-1">
+            <span className={`text-sm ${value ? "text-gray-800" : "text-gray-300"}`}>
+              {value || field.placeholder}
+            </span>
+            <ChevronRight
+              className={`w-4 h-4 text-gray-300 transition-transform ${open ? "rotate-90" : ""}`}
+            />
+          </div>
+        </button>
+        {open && (
+          <div className="bg-gray-50/60">
+            {(field.options || []).map((opt) => {
+              const selected = value === opt;
+              return (
+                <button
+                  key={opt}
+                  onClick={() => onSelect(opt)}
+                  className="w-full px-4 py-3 text-left text-sm border-t border-gray-100 active:bg-gray-100 flex items-center justify-between"
+                  style={selected ? { color: ACCENT, fontWeight: 600 } : { color: "#374151" }}
+                >
+                  {opt}
+                  {selected && <span style={{ color: ACCENT }}>✓</span>}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     );
   }
 
