@@ -69,7 +69,7 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "emergencyRelation", label: "关系", placeholder: "请选择", kind: "select", options: RELATIONS, width: "half" },
     { key: "emergencyPhone", label: "联系人电话", placeholder: "电话", kind: "input", inputType: "tel", width: "full" },
     { key: "email", label: "邮箱", placeholder: "请输入邮箱地址", kind: "input", inputType: "email", width: "full" },
-    { key: "address", label: "所在地区", placeholder: "点击选择省市区并填写门牌号", kind: "address", width: "full" },
+    { key: "address", label: "地址", placeholder: "点击选择省市区并填写门牌号", kind: "address", width: "full" },
   ],
   顾客信息: [
     { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", required: true, options: PATIENT_TYPES, width: "half" },
@@ -445,7 +445,7 @@ function FieldCell({
 }) {
   const basis = WIDTH_BASIS[field.width || "full"];
   // 长内容字段（多行文本、AI健康标签、地址）标题在上、控件占满整行；其余短字段标题与控件同行
-  const stacked = field.kind === "textarea" || field.kind === "history" || field.kind === "address";
+  const stacked = field.kind === "textarea" || field.kind === "history";
 
   const label = (
     <label className={`text-gray-700 truncate shrink-0 ${stacked ? "block text-base mb-1.5" : "text-base"}`}>

@@ -153,16 +153,39 @@ export default function AddressPicker({
       </div>
 
       {/* 当前已选区划面包屑 */}
-      <div className="px-4 py-2.5 border-b border-gray-100 shrink-0 flex items-start gap-2">
-        <MapPin className="w-4 h-4 mt-0.5 shrink-0" style={{ color: ACCENT }} />
+      <div className="px-4 py-3 border-b border-gray-100 shrink-0 flex items-start gap-2">
+        <MapPin className="w-5 h-5 mt-0.5 shrink-0" style={{ color: ACCENT }} />
         <Breadcrumb />
+      </div>
+
+      {/* 详细门牌号输入（置于列表上方，靠上展示，字体正常大小） */}
+      <div className="px-4 py-3 border-b border-gray-100 shrink-0">
+        <div className="text-sm text-gray-500 mb-2">详细门牌号（街道、楼栋、门牌号等）</div>
+        <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-200 focus-within:border-[#1E88D6] focus-within:bg-white">
+          <input
+            value={detail}
+            onChange={(e) => setDetail(e.target.value)}
+            placeholder="如：张江路 88 号 3 号楼 502"
+            className="flex-1 bg-transparent text-base outline-none placeholder:text-gray-300"
+          />
+          {detail && (
+            <button onClick={() => setDetail("")} className="shrink-0 text-gray-300">
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+        {regionDone && (
+          <div className="mt-2 text-sm text-gray-400">
+            完整地址：{serializeAddress([province?.name || "", city?.name || "", district || ""], detail) || "—"}
+          </div>
+        )}
       </div>
 
       {/* 区划列表 */}
       <div className="flex-1 overflow-y-auto">
         {level === 2 && !needDistrict ? (
-          <div className="px-4 py-6 text-center text-sm text-gray-400">
-            已选择「{regionText}」，可在下方填写详细门牌号
+          <div className="px-4 py-6 text-center text-base text-gray-400">
+            已选择「{regionText}」，门牌号请在上方填写
           </div>
         ) : (
           <div>
@@ -179,14 +202,14 @@ export default function AddressPicker({
                     else if (level === 1) pickCity(node);
                     else pickDistrict(node.name);
                   }}
-                  className="w-full px-4 py-3 text-left text-sm border-b border-gray-50 flex items-center justify-between active:bg-gray-50"
+                  className="w-full px-4 py-3.5 text-left text-base border-b border-gray-50 flex items-center justify-between active:bg-gray-50"
                   style={selected ? { color: ACCENT, fontWeight: 600 } : { color: "#374151" }}
                 >
                   <span>{node.name}</span>
                   {selected ? (
-                    <Check className="w-4 h-4" style={{ color: ACCENT }} />
+                    <Check className="w-5 h-5" style={{ color: ACCENT }} />
                   ) : node.children && node.children.length > 0 ? (
-                    <ChevronRight className="w-4 h-4 text-gray-300" />
+                    <ChevronRight className="w-5 h-5 text-gray-300" />
                   ) : null}
                 </button>
               );
@@ -195,28 +218,6 @@ export default function AddressPicker({
         )}
       </div>
 
-      {/* 详细门牌号输入 */}
-      <div className="px-4 py-3 border-t border-gray-100 shrink-0 bg-gray-50">
-        <div className="text-xs text-gray-500 mb-1.5">详细门牌号（街道、楼栋、门牌号等）</div>
-        <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-gray-200 focus-within:border-[#1E88D6]">
-          <input
-            value={detail}
-            onChange={(e) => setDetail(e.target.value)}
-            placeholder="如：张江路 88 号 3 号楼 502"
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-300"
-          />
-          {detail && (
-            <button onClick={() => setDetail("")} className="shrink-0 text-gray-300">
-              <X className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-        {regionDone && (
-          <div className="mt-2 text-xs text-gray-400">
-            完整地址：{serializeAddress([province?.name || "", city?.name || "", district || ""], detail) || "—"}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

@@ -1,5 +1,14 @@
 [
   {
+    "hash": "d82000beb8497d1eaaf32209e1ee4985cb5d4a17",
+    "author": "yaban-deploy",
+    "date": "2026-06-14T11:35:33+00:00",
+    "message": "新建顾客：手机前/编号后，紧急联系人+关系同行、联系人电话单独行，顾客类型移至顾客信息Tab",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "新建顾客：手机前/编号后，紧急联系人+关系同行、联系人电话单独行，顾客类型移至顾客信息Tab"
+  },
+  {
     "hash": "82a060ec9e3b7e453c01abf538a8f53cf48bb9e7",
     "author": "yaban-deploy",
     "date": "2026-06-14T11:14:49+00:00",
