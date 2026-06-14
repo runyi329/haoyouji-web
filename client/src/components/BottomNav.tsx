@@ -76,9 +76,9 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
       setShowLedgerMenu(false);
       setLocation('/jiang/shop');
     } else if (isYaban) {
-      // 牙伴用户：跳转到牙伴首页
+      // 牙伴用户：先进入3D开始页，再由开始页进入牙伴首页
       setShowLedgerMenu(false);
-      setLocation('/yaban');
+      setLocation('/yaban/intro');
     } else if (isYJH) {
       // YJH：跳转到数金研投网站
       setShowLedgerMenu(false);

@@ -738,6 +738,7 @@ function Router() {
         <Route path="/world-cup/teams" component={WcTeams} />
         <Route path="/world-cup/teams/:code" component={WcTeams} />
         {/* 牙伴齿科管理 */}
+        <Route path="/yaban/intro" component={lazy(() => import("./pages/yaban/YabanIntro"))} />
         <Route path="/yaban" component={YabanHome} />
         <Route path="/yaban/messages" component={YabanMessages} />
         <Route path="/yaban/shop" component={YabanShop} />

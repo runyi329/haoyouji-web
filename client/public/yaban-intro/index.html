@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+    <title>牙伴 - 3D口腔健康</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Outfit:wght@600;700&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet" />
+    <link rel="preload" href="/yaban-intro/models/tooth_morph_draco.glb" as="fetch" crossorigin />
+    <style>
+      #boot-loader {
+        position: fixed; inset: 0; z-index: 9999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+        background: linear-gradient(180deg, #c2e0f4 0%, #7ab8e0 40%, #4a9ad4 100%);
+        transition: opacity 0.8s ease-out;
+      }
+      #boot-loader.fade-out { opacity: 0; pointer-events: none; }
+      .loader-logo {
+        width: 64px; height: 64px;
+        animation: logo-bounce 1.5s ease-in-out infinite;
+      }
+      .loader-text {
+        font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', sans-serif;
+        font-size: 18px; font-weight: 700; color: #1a4a6e;
+        letter-spacing: 4px;
+        opacity: 0.8;
+      }
+      .loader-dots {
+        display: flex; gap: 6px; margin-top: 8px;
+      }
+      .loader-dots span {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: rgba(255,255,255,0.7);
+        animation: dot-fade 1.2s ease-in-out infinite;
+      }
+      .loader-dots span:nth-child(2) { animation-delay: 0.2s; }
+      .loader-dots span:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes logo-bounce {
+        0%, 100% { transform: translateY(0) scale(1); }
+        50% { transform: translateY(-8px) scale(1.05); }
+      }
+      @keyframes dot-fade {
+        0%, 100% { opacity: 0.3; transform: scale(0.8); }
+        50% { opacity: 1; transform: scale(1.2); }
+      }
+    </style>
+    <script type="module" crossorigin src="/yaban-intro/assets/index-C1fxY2FE.js"></script>
+    <link rel="stylesheet" crossorigin href="/yaban-intro/assets/index-4nLsLi__.css">
+  </head>
+
+  <body>
+
+    <div id="boot-loader">
+      <img class="loader-logo" src="/yaban-intro/images/logo.webp" alt="牙伴" />
+
+
+    </div>
+    <div id="root"></div>
+    <script
+      defer
+      data-website-id="ad336437-74fb-46ff-8f97-f11e3042e439"></script>
+  </body>
+
+</html>
