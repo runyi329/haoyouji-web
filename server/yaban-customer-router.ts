@@ -256,7 +256,7 @@ export const yabanCustomerRouter = router({
           [
             DEFAULT_TENANT_ID,
             input.name.trim(),
-            s(input.gender) || "未知",
+            s(input.gender) || "无",
             s(input.birthday),
             ageNum,
             s(input.zodiac),

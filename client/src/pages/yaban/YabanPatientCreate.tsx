@@ -24,7 +24,7 @@ const TABS = ["个人信息", "顾客信息", "首诊信息", "自由项"] as co
 type Tab = (typeof TABS)[number];
 
 // 选项配置
-const GENDERS = ["未知", "男", "女"];
+const GENDERS = ["无", "男", "女"];
 const PATIENT_TYPES = ["电子", "临时", "普通"];
 const SOURCES = ["到店", "转介绍", "网络预约", "电话预约", "微信预约", "老顾客推荐", "其他"];
 const NET_CONSULTANTS = ["杨文利", "侯睿", "洪紫钥"];
@@ -58,7 +58,7 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
   个人信息: [
     { key: "name", label: "姓名", placeholder: "请输入姓名", kind: "input", required: true, width: "name" },
     { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input", width: "auto" },
-    { key: "gender", label: "性别", placeholder: "未知", kind: "select", required: true, options: GENDERS, width: "gender" },
+    { key: "gender", label: "性别", placeholder: "无", kind: "select", required: true, options: GENDERS, width: "gender" },
     { key: "birthday", label: "生日", placeholder: "请选择", kind: "input", required: true, inputType: "date", width: "half" },
     { key: "age", label: "年龄", placeholder: "岁", kind: "input", required: true, inputType: "number", width: "narrow" },
     { key: "zodiac", label: "星座", placeholder: "", kind: "input", readOnly: true, width: "narrow" },
@@ -145,7 +145,7 @@ export default function YabanPatientCreate() {
   // 头像：null 表示跟随年龄+性别自动适配；非 null 表示用户手动指定
   const [avatarManual, setAvatarManual] = useState<AvatarKey | null>(null);
   const [form, setForm] = useState<Record<string, string>>({
-    gender: "未知",
+    gender: "无",
     patientType: "电子",
   });
 
@@ -329,10 +329,10 @@ export default function YabanPatientCreate() {
                   </span>
                 )}
               </span>
-              {/* 相机角标：小尺寸，下移出头像框，一半露在外面（不被裁断） */}
+              {/* 相机角标：小尺寸，压在圆圈右下边缘，一半在圈内、一半在圈外 */}
               <span
-                className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border-2 border-white"
-                style={{ backgroundColor: ACCENT }}
+                className="absolute w-5 h-5 rounded-full flex items-center justify-center border-2 border-white"
+                style={{ backgroundColor: ACCENT, right: 4, bottom: 4 }}
               >
                 <Camera className="w-3 h-3 text-white" />
               </span>
@@ -439,7 +439,7 @@ function FieldCell({
 
   // 统一的控件外框样式（浅灰底，聚焦时蓝边）
   const boxCls =
-    "w-full h-10 px-3 rounded-lg bg-gray-50 border border-transparent flex items-center text-sm transition-colors focus-within:bg-white focus-within:border-[#1E88D6]";
+    "w-full h-10 px-3 rounded-lg bg-gray-50 border border-[#D6E6F5] flex items-center text-sm transition-colors focus-within:bg-white focus-within:border-[#1E88D6]";
 
   let control: JSX.Element;
 
@@ -526,7 +526,7 @@ function FieldCell({
         onChange={(e) => onInput(e.target.value)}
         placeholder={field.placeholder}
         rows={2}
-        className="w-full px-3 py-2 rounded-lg bg-gray-50 border border-transparent text-sm text-gray-800 placeholder-gray-300 outline-none resize-none transition-colors focus:bg-white focus:border-[#1E88D6]"
+        className="w-full px-3 py-2 rounded-lg bg-gray-50 border border-[#D6E6F5] text-sm text-gray-800 placeholder-gray-300 outline-none resize-none transition-colors focus:bg-white focus:border-[#1E88D6]"
       />
     );
   } else {

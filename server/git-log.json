@@ -1,5 +1,14 @@
 [
   {
+    "hash": "52eec3cbc1e09f97fbf476b4edfbfe5a19688710",
+    "author": "yaban-deploy",
+    "date": "2026-06-14T08:46:14+00:00",
+    "message": "新建顾客头像：相机角标缩小并外移半露，去掉自动匹配提示文字",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "新建顾客头像：相机角标缩小并外移半露，去掉自动匹配提示文字"
+  },
+  {
     "hash": "495587f2de76129df8c143ecaf75f73fc5dc2be6",
     "author": "yaban-deploy",
     "date": "2026-06-14T08:32:47+00:00",
