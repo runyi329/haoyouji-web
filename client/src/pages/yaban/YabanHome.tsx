@@ -77,17 +77,17 @@ const CREATE_MENU = [
 export default function YabanHome() {
   const [, setLocation] = useLocation();
 
-  // 入口联动：无论从底部导航还是积分商城"牙伴"进入首页，
-  // 只要不是从3D开始页点"进入"过来的，都先跳到开始页 /yaban/intro
+  // 入口联动：本次会话首次进入牙伴时，先经过 3D 开始页 /yaban/intro。
+  // 进过开始页后标记会一直保留，牙伴内部各页面返回首页时不再重复弹开始页，
+  // 避免每次返回都要重新过一遍开机画面。
   useEffect(() => {
     try {
       const entered = sessionStorage.getItem("yaban_intro_entered");
-      if (entered === "1") {
-        // 已经过开始页，消费标记后正常停留在首页
-        sessionStorage.removeItem("yaban_intro_entered");
-      } else {
+      if (entered !== "1") {
+        // 本会话尚未看过开始页，跳转开始页（标记由开始页"进入"按钮写入并保留）
         setLocation("/yaban/intro");
       }
+      // entered === "1" 时：已看过开始页，直接停留首页，不再删除标记
     } catch {
       // sessionStorage 不可用时不拦截，直接停留首页
     }

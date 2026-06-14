@@ -1,5 +1,14 @@
 [
   {
+    "hash": "4cc2de0194c09ddbba78370d4c90d8afd889aa49",
+    "author": "manus",
+    "date": "2026-06-14T15:11:39+00:00",
+    "message": "feat: 顾客列表头像与12款默认头像联动，未设置时按年龄性别自动适配",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "顾客列表头像与12款默认头像联动，未设置时按年龄性别自动适配"
+  },
+  {
     "hash": "67c3c7b3a0b088976ca98e187adb77be31f5b2da",
     "author": "manus",
     "date": "2026-06-14T15:02:04+00:00",
