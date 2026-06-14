@@ -68,6 +68,9 @@ async function ensureCustomerTable(conn: any) {
       region VARCHAR(64) DEFAULT NULL,
       address VARCHAR(255) DEFAULT NULL,
       avatar VARCHAR(255) DEFAULT NULL,
+      emergency_contact VARCHAR(64) DEFAULT NULL,
+      emergency_relation VARCHAR(32) DEFAULT NULL,
+      emergency_phone VARCHAR(32) DEFAULT NULL,
       source VARCHAR(64) DEFAULT NULL,
       net_consultant VARCHAR(64) DEFAULT NULL,
       consultant VARCHAR(64) DEFAULT NULL,
@@ -108,6 +111,18 @@ async function ensureCustomerTable(conn: any) {
   } catch (e) {
     // 已是 TEXT 或无权限时忽略
   }
+  // 兼容旧表：补充紧急联系人相关列
+  for (const col of [
+    `emergency_contact VARCHAR(64) DEFAULT NULL`,
+    `emergency_relation VARCHAR(32) DEFAULT NULL`,
+    `emergency_phone VARCHAR(32) DEFAULT NULL`,
+  ]) {
+    try {
+      await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN ${col}`);
+    } catch (e) {
+      // 列已存在则忽略
+    }
+  }
 }
 
 // 创建顾客输入校验
@@ -127,6 +142,9 @@ const createInput = z.object({
   region: z.string().max(64).optional(),
   address: z.string().max(255).optional(),
   avatar: z.string().max(255).optional(),
+  emergencyContact: z.string().max(64).optional(),
+  emergencyRelation: z.string().max(32).optional(),
+  emergencyPhone: z.string().max(32).optional(),
   source: z.string().max(64).optional(),
   netConsultant: z.string().max(64).optional(),
   consultant: z.string().max(64).optional(),
@@ -248,11 +266,12 @@ export const yabanCustomerRouter = router({
           `INSERT INTO yaban_customer
            (tenant_id, name, gender, birthday, age, zodiac, patient_type, medical_no, external_no, nickname,
             email, mobile, phone, region, address, avatar,
+            emergency_contact, emergency_relation, emergency_phone,
             source, net_consultant, consultant, history, remark,
             chief_complaint, health_status, drug_allergy, food_allergy,
             heart, hypertension, diabetes, kidney, infectious, bleeding, pregnant, medication,
             created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
+           VALUES (?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?, ?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
           [
             DEFAULT_TENANT_ID,
             input.name.trim(),
@@ -270,6 +289,9 @@ export const yabanCustomerRouter = router({
             s(input.region),
             s(input.address),
             s(input.avatar),
+            s(input.emergencyContact),
+            s(input.emergencyRelation),
+            s(input.emergencyPhone),
             s(input.source),
             s(input.netConsultant),
             s(input.consultant),

@@ -33,6 +33,7 @@ const CHIEF_COMPLAINTS = ["牙疼", "牙齿松动", "洗牙清洁", "缺牙修�
 const HEALTH_STATUS = ["健康", "亚健康", "慢性病", "其他"];
 const YES_NO = ["否", "是", "不详"];
 const PREGNANT = ["否", "是", "备孕中", "不适用"];
+const RELATIONS = ["配偶", "父母", "子女", "兄弟姐妹", "亲戚", "朋友", "其他"];
 
 // 字段类型
 type FieldKind = "input" | "select" | "textarea" | "history" | "address";
@@ -64,8 +65,11 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "zodiac", label: "星座", placeholder: "", kind: "input", readOnly: true, width: "narrow" },
     { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", required: true, options: PATIENT_TYPES, width: "half" },
     { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true, width: "half" },
-    { key: "mobile", label: "手机号", placeholder: "请输入手机号", kind: "input", required: true, inputType: "tel", width: "half" },
+    { key: "mobile", label: "手机", placeholder: "请输入手机号", kind: "input", required: true, inputType: "tel", width: "half" },
     { key: "phone", label: "电话", placeholder: "请输入电话号码", kind: "input", inputType: "tel", width: "half" },
+    { key: "emergencyContact", label: "紧急联系人", placeholder: "姓名", kind: "input", width: "narrow" },
+    { key: "emergencyRelation", label: "关系", placeholder: "请选择", kind: "select", options: RELATIONS, width: "narrow" },
+    { key: "emergencyPhone", label: "联系人电话", placeholder: "电话", kind: "input", inputType: "tel", width: "narrow" },
     { key: "email", label: "邮箱", placeholder: "请输入邮箱地址", kind: "input", inputType: "email", width: "full" },
     { key: "address", label: "所在地区", placeholder: "点击选择省市区并填写门牌号", kind: "address", width: "full" },
   ],
@@ -228,6 +232,9 @@ export default function YabanPatientCreate() {
       phone: form.phone,
       region: form.region,
       address: form.address,
+      emergencyContact: form.emergencyContact,
+      emergencyRelation: form.emergencyRelation,
+      emergencyPhone: form.emergencyPhone,
       avatar: effectiveAvatar || undefined,
       source: form.source,
       netConsultant: form.netConsultant,
