@@ -30,24 +30,48 @@ function val(v: any): string {
   return s || "—";
 }
 
-// 一行字段（标签 + 值）
-function Row({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
+// 时间格式化：统一显示为「年-月-日 时:分」，去掉时区与英文
+function fmtTime(v: any): string {
+  if (v == null) return "—";
+  const s = String(v).trim();
+  if (!s) return "—";
+  const d = new Date(s.replace(" ", "T"));
+  if (isNaN(d.getTime())) {
+    // 解析失败时退化为截取前 16 位（YYYY-MM-DD HH:mm）
+    return s.slice(0, 16);
+  }
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// 单个字段单元：上标签下内容，half=半宽（两列并排），full=整行
+function Cell({
+  label,
+  value,
+  half = true,
+  highlight,
+}: {
+  label: string;
+  value: string;
+  half?: boolean;
+  highlight?: boolean;
+}) {
   return (
-    <div className="flex items-start justify-between gap-3 py-2 border-b border-gray-50 last:border-0">
-      <span className="text-[13px] text-gray-400 shrink-0">{label}</span>
-      <span className={`text-[13px] text-right break-all ${highlight ? "text-orange-500 font-medium" : "text-gray-700"}`}>
+    <div className={half ? "w-1/2 px-2 py-2" : "w-full px-2 py-2"}>
+      <div className="text-[11px] text-gray-400 mb-0.5">{label}</div>
+      <div className={`text-[13px] break-all ${highlight ? "text-orange-500 font-medium" : "text-gray-800"}`}>
         {value}
-      </span>
+      </div>
     </div>
   );
 }
 
-// 卡片容器
+// 卡片容器（内部以 flex-wrap 实现多列信息表布局）
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl px-4 py-1 mb-3">
-      <div className="text-[13px] font-bold text-gray-800 pt-3 pb-1">{title}</div>
-      {children}
+    <div className="bg-white rounded-2xl px-2 pt-3 pb-2 mb-3">
+      <div className="text-[13px] font-bold text-gray-800 px-2 pb-1">{title}</div>
+      <div className="flex flex-wrap divide-gray-50">{children}</div>
     </div>
   );
 }
@@ -123,14 +147,10 @@ export default function YabanPatientProfile() {
         </div>
       </div>
 
-      {/* 头部摘要 */}
+      {/* 头部摘要（头像与详情页一致：仅显示姓名首字灰底圆框） */}
       <div className="bg-white px-4 py-4 flex items-center gap-3">
         <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden shrink-0">
-          {r.avatar ? (
-            <img src={r.avatar} alt={r.name} className="w-full h-full object-cover" />
-          ) : (
-            <span className="text-xl text-gray-400">{(r.name || "客")[0]}</span>
-          )}
+          <span className="text-xl text-gray-400">{(r.name || "客")[0]}</span>
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -141,7 +161,7 @@ export default function YabanPatientProfile() {
             </span>
           </div>
           <div className="text-[12px] text-gray-400 mt-1 flex items-center gap-1">
-            病历号 <span className="text-gray-600">{val(r.medical_no)}</span>
+            顾客编号 <span className="text-gray-600">{val(r.medical_no)}</span>
             {r.medical_no && (
               <button onClick={() => copy(r.medical_no)} className="text-sky-500 ml-0.5">
                 <Copy className="w-3 h-3" />
@@ -154,51 +174,51 @@ export default function YabanPatientProfile() {
       <div className="px-3 pt-3">
         {/* 个人信息 */}
         <Card title="个人信息">
-          <Row label="姓名" value={val(r.name)} />
-          <Row label="昵称" value={val(r.nickname)} />
-          <Row label="性别" value={val(r.gender)} />
-          <Row label="生日" value={val(r.birthday)} />
-          <Row label="年龄" value={r.age != null && r.age !== "" ? `${r.age}岁` : "—"} />
-          <Row label="星座/生肖" value={val(r.zodiac)} />
-          <Row label="顾客类型" value={val(r.patient_type)} />
-          <Row label="顾客编号" value={val(r.medical_no)} />
-          <Row label="外部编号" value={val(r.external_no)} />
+          <Cell label="姓名" value={val(r.name)} />
+          <Cell label="昵称" value={val(r.nickname)} />
+          <Cell label="性别" value={val(r.gender)} />
+          <Cell label="生日" value={val(r.birthday)} />
+          <Cell label="年龄" value={r.age != null && r.age !== "" ? `${r.age}岁` : "—"} />
+          <Cell label="星座/生肖" value={val(r.zodiac)} />
+          <Cell label="顾客类型" value={val(r.patient_type)} />
+          <Cell label="顾客编号" value={val(r.medical_no)} />
+          <Cell label="外部编号" value={val(r.external_no)} />
         </Card>
 
         {/* 联系方式 */}
         <Card title="联系方式">
-          <Row label="手机" value={val(r.mobile)} />
-          <Row label="固定电话" value={val(r.phone)} />
-          <Row label="邮箱" value={val(r.email)} />
-          <Row label="所在地区" value={val(r.region)} />
-          <Row label="地址" value={val(r.address)} />
+          <Cell label="手机" value={val(r.mobile)} />
+          <Cell label="固定电话" value={val(r.phone)} />
+          <Cell label="邮箱" value={val(r.email)} full />
+          <Cell label="所在地区" value={val(r.region)} />
+          <Cell label="地址" value={val(r.address)} full />
         </Card>
 
         {/* 紧急联系人 */}
         <Card title="紧急联系人">
-          <Row label="联系人" value={val(r.emergency_contact)} />
-          <Row label="关系" value={val(r.emergency_relation)} />
-          <Row label="联系人电话" value={val(r.emergency_phone)} />
+          <Cell label="联系人" value={val(r.emergency_contact)} />
+          <Cell label="关系" value={val(r.emergency_relation)} />
+          <Cell label="联系人电话" value={val(r.emergency_phone)} full />
         </Card>
 
         {/* 顾客信息 */}
         <Card title="顾客信息">
-          <Row label="顾客来源" value={val(r.source)} />
-          <Row label="网电咨询师" value={val(r.net_consultant)} />
-          <Row label="咨询师" value={val(r.consultant)} />
-          <Row label="AI健康标签" value={val(r.history)} />
+          <Cell label="顾客来源" value={val(r.source)} />
+          <Cell label="网电咨询师" value={val(r.net_consultant)} />
+          <Cell label="咨询师" value={val(r.consultant)} />
+          <Cell label="AI健康标签" value={val(r.history)} full />
         </Card>
 
         {/* 健康与既往病史 */}
         <Card title="健康与既往病史">
-          <Row label="就诊主诉" value={val(r.chief_complaint)} />
-          <Row label="健康状况" value={val(r.health_status)} />
-          <Row label="药物过敏" value={val(r.drug_allergy)} highlight={isPositive(r.drug_allergy)} />
-          <Row label="食物过敏" value={val(r.food_allergy)} highlight={isPositive(r.food_allergy)} />
-          <Row label="正在用药" value={val(r.medication)} highlight={isPositive(r.medication)} />
+          <Cell label="就诊主诉" value={val(r.chief_complaint)} />
+          <Cell label="健康状况" value={val(r.health_status)} />
+          <Cell label="药物过敏" value={val(r.drug_allergy)} highlight={isPositive(r.drug_allergy)} />
+          <Cell label="食物过敏" value={val(r.food_allergy)} highlight={isPositive(r.food_allergy)} />
+          <Cell label="正在用药" value={val(r.medication)} full highlight={isPositive(r.medication)} />
           {/* 七项病史标记：有异常的高亮汇总 */}
-          <div className="py-2 border-b border-gray-50">
-            <div className="text-[13px] text-gray-400 mb-2">既往病史</div>
+          <div className="w-full px-2 py-2">
+            <div className="text-[11px] text-gray-400 mb-1.5">既往病史</div>
             <div className="flex flex-wrap gap-1.5">
               {HISTORY_FIELDS.map((h) => {
                 const pos = isPositive(r[h.key]);
@@ -223,10 +243,10 @@ export default function YabanPatientProfile() {
 
         {/* 备注与建档 */}
         <Card title="备注与建档">
-          <Row label="顾客备注" value={val(r.remark)} />
-          <Row label="上次就诊医生" value={val(r.last_doctor)} />
-          <Row label="上次就诊" value={val(r.last_visit)} />
-          <Row label="建档时间" value={val(r.created_at)} />
+          <Cell label="顾客备注" value={val(r.remark)} full />
+          <Cell label="上次就诊医生" value={val(r.last_doctor)} />
+          <Cell label="上次就诊" value={val(r.last_visit)} />
+          <Cell label="建档时间" value={fmtTime(r.created_at)} full />
         </Card>
 
         {/* 编辑入口 */}
