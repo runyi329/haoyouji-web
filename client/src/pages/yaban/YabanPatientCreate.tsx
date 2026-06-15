@@ -20,8 +20,6 @@ import { autoAvatarKey, avatarSrc, type AvatarKey } from "@/lib/yaban-avatar";
 const ACCENT = "#1E88D6";
 
 // Tab 定义
-const TABS = ["个人信息", "顾客信息", "首诊信息"] as const;
-type Tab = (typeof TABS)[number];
 
 // 选项配置
 const GENDERS = ["无", "男", "女"];
@@ -29,7 +27,6 @@ const PATIENT_TYPES = ["电子", "临时", "普通"];
 const SOURCES = ["到店", "转介绍", "网络预约", "电话预约", "微信预约", "老顾客推荐", "其他"];
 const NET_CONSULTANTS = ["杨文利", "侯睿", "洪紫钥"];
 const CONSULTANTS = ["洪紫钥", "杨文利", "侯睿"];
-const CHIEF_COMPLAINTS = ["牙疼", "牙齿松动", "洗牙清洁", "缺牙修复", "牙齿矫正", "美白贴面", "智齿冠周炎", "其他"];
 const RELATIONS = ["配偶", "父母", "子女", "兄弟姐妹", "亲戚", "朋友", "其他"];
 
 // 字段类型
@@ -51,36 +48,33 @@ interface FieldDef {
   width?: FieldWidth; // 默认 full
 }
 
-// 各 Tab 字段配置
-const TAB_FIELDS: Record<Tab, FieldDef[]> = {
-  个人信息: [
-    { key: "name", label: "姓名", placeholder: "请输入姓名", kind: "input", width: "name" },
-    { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input", width: "auto" },
-    { key: "gender", label: "性别", placeholder: "无", kind: "select", options: GENDERS, width: "gender" },
-    { key: "birthday", label: "生日", placeholder: "请选择", kind: "input", inputType: "date", width: "date" },
-    { key: "age", label: "年龄", placeholder: "", kind: "input", inputType: "number", width: "tiny" },
-    { key: "zodiac", label: "星座", placeholder: "", kind: "input", readOnly: true, width: "zodiac" },
-    { key: "chineseZodiac", label: "生肖", placeholder: "", kind: "input", readOnly: true, width: "zodiac" },
-    { key: "mobile", label: "手机", placeholder: "请输入手机号", kind: "input", inputType: "tel", width: "half" },
-    { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true, width: "half" },
-    { key: "emergencyContact", label: "紧急联系人", placeholder: "姓名", kind: "input", width: "half" },
-    { key: "emergencyRelation", label: "关系", placeholder: "请选择", kind: "select", options: RELATIONS, width: "half" },
-    { key: "emergencyPhone", label: "联系人电话", placeholder: "电话", kind: "input", inputType: "tel", width: "full" },
-    { key: "email", label: "邮箱", placeholder: "请输入邮箱地址", kind: "input", inputType: "email", width: "full" },
-    { key: "address", label: "地址", placeholder: "点击选择省市区并填写门牌号", kind: "address", width: "full" },
-  ],
-  顾客信息: [
-    { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", options: PATIENT_TYPES, width: "half" },
-    { key: "source", label: "顾客来源", placeholder: "请选择", kind: "select", options: SOURCES, width: "half" },
-    { key: "netConsultant", label: "网电咨询师", placeholder: "请选择", kind: "select", options: NET_CONSULTANTS, width: "half" },
-    { key: "consultant", label: "咨询师", placeholder: "请选择", kind: "select", options: CONSULTANTS, width: "half" },
-    { key: "history", label: "AI健康标签", placeholder: "点击选择或搜索", kind: "history", width: "full" },
-    { key: "patientRemark", label: "顾客备注", placeholder: "请输入顾客备注", kind: "textarea", width: "full" },
-  ],
-  首诊信息: [
-    { key: "chiefComplaint", label: "就诊主诉", placeholder: "请选择就诊主诉", kind: "select", options: CHIEF_COMPLAINTS, width: "full" },
-  ],
-};
+// 字段分组（取消 Tab，改为连续表单：个人信息 -> 顾客信息；首诊信息已移入「诊疗记录」）
+const PERSONAL_FIELDS: FieldDef[] = [
+  { key: "name", label: "姓名", placeholder: "请输入姓名", kind: "input", width: "name" },
+  { key: "nickname", label: "昵称", placeholder: "请输入昵称", kind: "input", width: "auto" },
+  { key: "gender", label: "性别", placeholder: "无", kind: "select", options: GENDERS, width: "gender" },
+  { key: "birthday", label: "生日", placeholder: "请选择", kind: "input", inputType: "date", width: "date" },
+  { key: "age", label: "年龄", placeholder: "", kind: "input", inputType: "number", width: "tiny" },
+  { key: "zodiac", label: "星座", placeholder: "", kind: "input", readOnly: true, width: "zodiac" },
+  { key: "chineseZodiac", label: "生肖", placeholder: "", kind: "input", readOnly: true, width: "zodiac" },
+  { key: "mobile", label: "手机", placeholder: "请输入手机号", kind: "input", inputType: "tel", width: "half" },
+  { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true, width: "half" },
+  { key: "emergencyContact", label: "紧急联系人", placeholder: "姓名", kind: "input", width: "half" },
+  { key: "emergencyRelation", label: "关系", placeholder: "请选择", kind: "select", options: RELATIONS, width: "half" },
+  { key: "emergencyPhone", label: "联系人电话", placeholder: "电话", kind: "input", inputType: "tel", width: "full" },
+  { key: "email", label: "邮箱", placeholder: "请输入邮箱地址", kind: "input", inputType: "email", width: "full" },
+  { key: "address", label: "地址", placeholder: "点击选择省市区并填写门牌号", kind: "address", width: "full" },
+];
+const CUSTOMER_FIELDS: FieldDef[] = [
+  { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", options: PATIENT_TYPES, width: "half" },
+  { key: "source", label: "顾客来源", placeholder: "请选择", kind: "select", options: SOURCES, width: "half" },
+  { key: "netConsultant", label: "网电咨询师", placeholder: "请选择", kind: "select", options: NET_CONSULTANTS, width: "half" },
+  { key: "consultant", label: "咨询师", placeholder: "请选择", kind: "select", options: CONSULTANTS, width: "half" },
+  { key: "history", label: "AI健康标签", placeholder: "点击选择或搜索", kind: "history", width: "full" },
+  { key: "patientRemark", label: "顾客备注", placeholder: "请输入顾客备注", kind: "textarea", width: "full" },
+];
+// 所有字段（用于必填校验等遍历）
+const ALL_FIELDS: FieldDef[] = [...PERSONAL_FIELDS, ...CUSTOMER_FIELDS];
 
 // 宽度档位 → flex-basis（基于容器百分比，配合 flex-wrap 自动换行）
 const WIDTH_BASIS: Record<FieldWidth, string> = {
@@ -143,7 +137,6 @@ export default function YabanPatientCreate() {
   const [isEditRoute, editParams] = useRoute("/yaban/patient/:id/edit");
   const editId = isEditRoute && editParams?.id ? Number(editParams.id) : 0;
   const isEdit = editId > 0;
-  const [activeTab, setActiveTab] = useState<Tab>("个人信息");
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addressOpen, setAddressOpen] = useState(false);
@@ -260,14 +253,12 @@ export default function YabanPatientCreate() {
 
   const handleSave = () => {
     if (createMutation.isPending || updateMutation.isPending) return;
-    // 校验所有 Tab 的必填字段
+    // 校验必填字段
     const missing: string[] = [];
-    (Object.keys(TAB_FIELDS) as Tab[]).forEach((tab) => {
-      TAB_FIELDS[tab].forEach((f) => {
-        if (f.required && !form[f.key]?.trim()) {
-          missing.push(f.label);
-        }
-      });
+    ALL_FIELDS.forEach((f) => {
+      if (f.required && !form[f.key]?.trim()) {
+        missing.push(f.label);
+      }
     });
     if (missing.length > 0) {
       toast.error(`请完善必填项：${missing.slice(0, 3).join("、")}${missing.length > 3 ? " 等" : ""}`);
@@ -296,7 +287,6 @@ export default function YabanPatientCreate() {
       consultant: form.consultant,
       history: form.history,
       remark: form.patientRemark,
-      chiefComplaint: form.chiefComplaint,
     };
     if (isEdit) {
       // 编辑：不修改顾客编号，传入 id
@@ -307,14 +297,11 @@ export default function YabanPatientCreate() {
     }
   };
 
-  // 当前 Tab 字段（已取消必填项，展示全部字段）
-  const fields = TAB_FIELDS[activeTab];
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <PageTag code="P304" />
 
-      {/* 顶部导航栏 + Tab 切换：合并为同一 sticky 容器，避免中间悬空遮挡点击 */}
+      {/* 顶部导航栏 */}
       <div className="sticky top-0 z-40 bg-white border-b border-gray-100">
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={handleBack} className="text-base font-medium" style={{ color: ACCENT }}>
@@ -325,38 +312,12 @@ export default function YabanPatientCreate() {
             {createMutation.isPending || updateMutation.isPending ? "保存中" : "保存"}
           </button>
         </div>
-        {/* Tab 切换 */}
-        <div className="flex items-center overflow-x-auto no-scrollbar px-2 border-t border-gray-100">
-          {TABS.map((tab) => {
-            const active = activeTab === tab;
-            return (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className="relative px-3 py-3 whitespace-nowrap"
-              >
-                <span
-                  className={`text-sm ${active ? "font-semibold" : "text-gray-400"}`}
-                  style={active ? { color: "#1A1A1A" } : undefined}
-                >
-                  {tab}
-                </span>
-                {active && (
-                  <span
-                    className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full"
-                    style={{ backgroundColor: ACCENT }}
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
-      {/* 表单内容区：流式栅格 */}
+      {/* 表单内容区：连续表单（个人信息 -> 顾客信息） */}
       <div className="flex-1 overflow-y-auto pb-8">
-        {/* 头像区：仅个人信息 Tab 展示，按年龄+性别自动适配，可点击更换 */}
-        {activeTab === "个人信息" && (
+        {/* 头像区：按年龄+性别自动适配，可点击更换 */}
+        {(
           <div className="relative z-0 bg-white mt-2 px-3 pt-6 pb-4 flex flex-col items-center">
             <button
               type="button"
@@ -386,29 +347,50 @@ export default function YabanPatientCreate() {
             </button>
           </div>
         )}
+        {/* 个人信息 */}
         <div className="bg-white mt-2 px-3 py-3">
-          {fields.length === 0 ? (
-            <div className="px-1 py-10 text-center text-sm text-gray-300">该分组暂无必填字段</div>
-          ) : (
-            <div className="flex flex-wrap gap-x-2 gap-y-1">
-              {fields.map((f) => (
-                <FieldCell
-                  key={f.key}
-                  field={f}
-                  value={form[f.key] || ""}
-                  open={openKey === f.key}
-                  onInput={(v) => setField(f.key, v)}
-                  onToggle={() => setOpenKey(openKey === f.key ? null : f.key)}
-                  onSelect={(v) => {
-                    setField(f.key, v);
-                    setOpenKey(null);
-                  }}
-                  onOpenHistory={() => setHistoryOpen(true)}
-                  onOpenAddress={() => setAddressOpen(true)}
-                />
-              ))}
-            </div>
-          )}
+          <div className="px-1 pb-2 text-[13px] font-semibold text-gray-800">个人信息</div>
+          <div className="flex flex-wrap gap-x-2 gap-y-1">
+            {PERSONAL_FIELDS.map((f) => (
+              <FieldCell
+                key={f.key}
+                field={f}
+                value={form[f.key] || ""}
+                open={openKey === f.key}
+                onInput={(v) => setField(f.key, v)}
+                onToggle={() => setOpenKey(openKey === f.key ? null : f.key)}
+                onSelect={(v) => {
+                  setField(f.key, v);
+                  setOpenKey(null);
+                }}
+                onOpenHistory={() => setHistoryOpen(true)}
+                onOpenAddress={() => setAddressOpen(true)}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* 顾客信息 */}
+        <div className="bg-white mt-2 px-3 py-3">
+          <div className="px-1 pb-2 text-[13px] font-semibold text-gray-800">顾客信息</div>
+          <div className="flex flex-wrap gap-x-2 gap-y-1">
+            {CUSTOMER_FIELDS.map((f) => (
+              <FieldCell
+                key={f.key}
+                field={f}
+                value={form[f.key] || ""}
+                open={openKey === f.key}
+                onInput={(v) => setField(f.key, v)}
+                onToggle={() => setOpenKey(openKey === f.key ? null : f.key)}
+                onSelect={(v) => {
+                  setField(f.key, v);
+                  setOpenKey(null);
+                }}
+                onOpenHistory={() => setHistoryOpen(true)}
+                onOpenAddress={() => setAddressOpen(true)}
+              />
+            ))}
+          </div>
         </div>
       </div>
 

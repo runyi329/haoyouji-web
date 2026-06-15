@@ -37,7 +37,9 @@ export default function YabanPatientDetail() {
     avatar: '',
     medicalNo: row?.medical_no || '',
     avatarKey: ((row?.avatar as AvatarKey) || (`${row?.gender === '女' ? 'female' : 'male'}_${ageToBucket(row?.age ? Number(row.age) : 0)}` as AvatarKey)),
-    source: [row?.source, row?.net_consultant, row?.consultant].filter(Boolean).join(' | ') || '—',
+    source: row?.source || '—',
+    netConsultant: row?.net_consultant || '',
+    consultant: row?.consultant || '',
     clinic: '上海恒愿口腔门诊部',
     lastDoctor: row?.last_doctor || '—',
     lastVisit: row?.last_visit || '',
@@ -63,6 +65,14 @@ export default function YabanPatientDetail() {
     const rel = row?.emergency_relation ? `（${row.emergency_relation}）` : '';
     const phone = row?.emergency_phone ? ` ${row.emergency_phone}` : '';
     return `${row.emergency_contact}${rel}${phone}`;
+  })();
+
+  // AI健康标签：history 存为 "名称|名称##备注"，取名称部分显示
+  const healthTags = (() => {
+    const raw = (row?.history || '').toString();
+    if (!raw) return '';
+    const names = raw.split('##')[0] || '';
+    return names.replace(/\|/g, '、').trim();
   })();
 
   // 性别标签颜色
@@ -173,12 +183,15 @@ export default function YabanPatientDetail() {
           <InfoItem label="地址" value={patient.address} full />
         </div>
 
-        {/* 诊所/跟进信息 */}
+        {/* 顾客信息 / 跟进信息（已填才显示） */}
         <div className="mt-2 pt-2 border-t border-gray-50 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
-          <InfoItem label="来源" value={patient.source} full />
+          <InfoItem label="来源" value={patient.source} />
+          {patient.netConsultant && <InfoItem label="网电咨询师" value={patient.netConsultant} />}
+          {patient.consultant && <InfoItem label="咨询师" value={patient.consultant} />}
           <InfoItem label="门店" value={patient.clinic} full />
           <InfoItem label="上次就诊医生" value={patient.lastDoctor} />
           <InfoItem label="上次就诊" value={patient.lastVisit || '—'} />
+          {healthTags && <InfoItem label="健康标签" value={healthTags} full />}
           <InfoItem label="备注" value={patient.remark} full />
         </div>
       </div>
