@@ -27,6 +27,10 @@ import {
   Crown,
   Settings2,
   RotateCcw,
+  Stethoscope,
+  HeartPulse,
+  ConciergeBell,
+  Wallet,
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
@@ -175,11 +179,11 @@ export default function YabanRoles() {
           </div>
           {isFounder ? (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium rounded-full px-2.5 py-1 inline-flex items-center gap-1 bg-gradient-to-r from-[#C77700] to-[#E0A030] text-white">
+              <span className="text-xs font-medium rounded-full px-2.5 py-1 inline-flex items-center gap-1 bg-gradient-to-b from-[#1E88D6] to-[#0E5A9E] text-white">
                 <Crown className="w-3 h-3" />
-                牙伴创始人
+                院长
               </span>
-              <span className="text-xs text-gray-400">平台级最高权限，可管理所有门诊</span>
+              <span className="text-xs text-gray-400">最高权限，可管理所有员工的权限开关</span>
             </div>
           ) : my?.member ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -323,7 +327,7 @@ export default function YabanRoles() {
         ) : (
           <div className="bg-white rounded-2xl shadow-sm p-6 text-center">
             <Lock className="w-8 h-8 text-[#9CC8EC] mx-auto mb-2" />
-            <p className="text-sm text-gray-500">仅门诊院长/股东或牙伴创始人可管理员工与权限</p>
+            <p className="text-sm text-gray-500">仅门诊院长可管理员工与权限</p>
           </div>
         )}
       </div>
@@ -494,55 +498,56 @@ export default function YabanRoles() {
         <MemberPermSheet member={permMember} onClose={() => setPermMember(null)} />
       )}
 
-      {/* 角色说明弹窗 */}
+      {/* 角色说明弹窗：客户视角，院长为最高，下属角色并列 */}
       {showRoleInfo && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[80vh] overflow-y-auto">
+          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-base font-bold text-gray-800">角色与权限说明</span>
+              <span className="text-base font-bold text-gray-800">角色说明</span>
               <button onClick={() => setShowRoleInfo(false)} aria-label="关闭">
                 <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
-            <div className="mb-4 rounded-xl bg-[#FFF8EE] border border-[#F0E0C0] p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Crown className="w-3.5 h-3.5 text-[#C77700]" />
-                <span className="text-xs font-bold text-[#C77700]">牙伴创始人</span>
+
+            {/* 院长（最高） */}
+            <div className="flex flex-col items-center">
+              <div className="w-40 rounded-2xl bg-gradient-to-b from-[#1E88D6] to-[#0E5A9E] text-white shadow-sm px-4 py-3 flex flex-col items-center">
+                <Crown className="w-6 h-6 mb-1" />
+                <span className="text-base font-bold tracking-wide">院长</span>
               </div>
-              <p className="text-[11px] text-[#8A6A2A]">
-                平台级最高权限，可管理所有门诊与数据，由脉动网系统管理员任命。
-              </p>
+              <p className="text-[11px] text-gray-400 mt-2">最高权限 · 可管理所有员工的权限开关</p>
+
+              {/* 连接线 */}
+              <div className="w-px h-5 bg-[#CFE3F5]" />
+              <div className="w-[80%] h-px bg-[#CFE3F5]" />
             </div>
-            <div className="space-y-3">
-              {(roles || []).map((r: any) => (
-                <div key={r.role_key} className="border border-gray-100 rounded-xl p-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span
-                      className={`text-xs font-medium rounded-full px-2 py-0.5 ${
-                        ROLE_BADGE[r.role_key] || "bg-gray-100 text-gray-500"
-                      }`}
-                    >
-                      {r.name}
-                    </span>
-                  </div>
-                  {r.description && (
-                    <p className="text-xs text-gray-500 mb-2">{r.description}</p>
-                  )}
-                  <div className="flex flex-wrap gap-1.5">
-                    {(r.permissions || []).map((p: string) => (
-                      <span
-                        key={p}
-                        className="text-[11px] text-[#1E88D6] bg-[#EAF4FE] rounded px-2 py-0.5"
-                      >
-                        {PERM_LABELS[p] || p}
-                      </span>
-                    ))}
-                    {(r.permissions || []).length === 0 && (
-                      <span className="text-[11px] text-gray-300">无</span>
-                    )}
-                  </div>
+
+            {/* 下属角色（并列） */}
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              {[
+                { key: "doctor", name: "医生", Icon: Stethoscope },
+                { key: "assistant", name: "护士 / 助理", Icon: HeartPulse },
+                { key: "receptionist", name: "前台", Icon: ConciergeBell },
+                { key: "finance", name: "财务", Icon: Wallet },
+              ].map(({ key, name, Icon }) => (
+                <div
+                  key={key}
+                  className="rounded-2xl bg-[#EAF4FE] border border-[#DCEBFB] px-3 py-4 flex flex-col items-center"
+                >
+                  <Icon className="w-6 h-6 text-[#1E88D6] mb-1.5" />
+                  <span className="text-sm font-medium text-[#1E5C92]">{name}</span>
                 </div>
               ))}
+            </div>
+
+            {/* 说明文字 */}
+            <div className="mt-5 rounded-xl bg-[#F6F9FC] border border-[#E6EEF6] p-3.5 space-y-2">
+              <p className="text-xs text-gray-600 leading-relaxed">
+                院长是门诊的最高身份，拥有全部权限，并可在「权限开关」里为每位员工逐项开启或关闭功能。
+              </p>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                医生、护士/助理、前台、财务为并列角色，他们能使用哪些功能，由院长在权限开关中按需分配——院长开通什么，他们就拥有什么。
+              </p>
             </div>
           </div>
         </div>

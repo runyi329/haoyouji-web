@@ -1,5 +1,14 @@
 [
   {
+    "hash": "f4448c4328fdbb5f8c2e41a14084de41a1dcdf65",
+    "author": "manus",
+    "date": "2026-06-15T00:56:31+00:00",
+    "message": "修复影像同时上传两张其一失败：上传请求改走非batch链路避免合并超体积+COS key加随机后缀防碰撞+失败带出原因",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "修复影像同时上传两张其一失败：上传请求改走非batch链路避免合并超体积+COS key加随机后缀防碰撞+失败带出原因"
+  },
+  {
     "hash": "b6c748f633949ed7e99fc125735bb28fce6c58a9",
     "author": "manus",
     "date": "2026-06-15T00:41:33+00:00",
