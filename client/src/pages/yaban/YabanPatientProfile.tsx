@@ -148,7 +148,7 @@ export default function YabanPatientProfile() {
           </button>
           <span className="text-lg font-bold">详细资料</span>
           <button
-            onClick={() => navigate(`/yaban/patient/${id}`)}
+            onClick={() => navigate(`/yaban/patient/${id}/edit`)}
             className="flex items-center text-white/90 text-sm"
           >
             <Edit className="w-4 h-4 mr-0.5" /> 编辑
@@ -259,7 +259,7 @@ export default function YabanPatientProfile() {
 
         {/* 编辑入口 */}
         <button
-          onClick={() => navigate(`/yaban/patient/${id}`)}
+          onClick={() => navigate(`/yaban/patient/${id}/edit`)}
           className="w-full flex items-center justify-center gap-1.5 bg-sky-500 text-white rounded-full py-3 font-medium mt-3"
         >
           <Edit className="w-5 h-5" /> 编辑资料

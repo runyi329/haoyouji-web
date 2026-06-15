@@ -888,6 +888,82 @@ export const yabanCustomerRouter = router({
       return { success: true, id: result.insertId, medicalNo };
     }),
 
+  // ============ 更新顾客 ============
+  update: protectedProcedure
+    .input(createInput.extend({ id: z.number().int().positive() }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureCustomerTable(conn);
+
+      // 校验顾客存在
+      const [exist] = (await (conn as any).execute(
+        `SELECT id FROM yaban_customer WHERE id = ? AND tenant_id = ? LIMIT 1`,
+        [input.id, DEFAULT_TENANT_ID]
+      )) as any;
+      if ((exist as any[]).length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "顾客不存在或无权修改" });
+      }
+
+      const ageNum =
+        input.age === undefined || input.age === null || input.age === ""
+          ? null
+          : parseInt(String(input.age), 10) || null;
+
+      // 不修改 medical_no（顾客编号）、tenant_id、created_by
+      await (conn as any).execute(
+        `UPDATE yaban_customer SET
+           name = ?, gender = ?, birthday = ?, age = ?, zodiac = ?, chinese_zodiac = ?, patient_type = ?,
+           external_no = ?, nickname = ?, email = ?, mobile = ?, phone = ?, region = ?, address = ?, avatar = ?,
+           emergency_contact = ?, emergency_relation = ?, emergency_phone = ?,
+           source = ?, net_consultant = ?, consultant = ?, history = ?, remark = ?,
+           chief_complaint = ?, health_status = ?, drug_allergy = ?, food_allergy = ?,
+           heart = ?, hypertension = ?, diabetes = ?, kidney = ?, infectious = ?, bleeding = ?, pregnant = ?, medication = ?
+         WHERE id = ? AND tenant_id = ?`,
+        [
+          input.name.trim(),
+          s(input.gender) || "无",
+          s(input.birthday),
+          ageNum,
+          s(input.zodiac),
+          s(input.chineseZodiac),
+          s(input.patientType) || "电子",
+          s(input.externalNo),
+          s(input.nickname),
+          s(input.email),
+          input.mobile.trim(),
+          s(input.phone),
+          s(input.region),
+          s(input.address),
+          s(input.avatar),
+          s(input.emergencyContact),
+          s(input.emergencyRelation),
+          s(input.emergencyPhone),
+          s(input.source),
+          s(input.netConsultant),
+          s(input.consultant),
+          s(input.history),
+          s(input.remark),
+          s(input.chiefComplaint),
+          s(input.healthStatus),
+          s(input.drugAllergy),
+          s(input.foodAllergy),
+          s(input.heart),
+          s(input.hypertension),
+          s(input.diabetes),
+          s(input.kidney),
+          s(input.infectious),
+          s(input.bleeding),
+          s(input.pregnant),
+          s(input.medication),
+          input.id,
+          DEFAULT_TENANT_ID,
+        ]
+      );
+
+      return { success: true, id: input.id };
+    }),
+
   // ============ 我可导出的医院列表 ============
   // 资格：在该医院 status=active，且对该医院拥有 data_export 权限（owner 默认有；其他角色需院长单独开启）
   listExportableClinics: protectedProcedure.query(async ({ ctx }) => {

@@ -6,7 +6,7 @@
  * 布局：字段按实际输入宽度自适应流式排布，窄字段同行并排，充分利用横向空间
  */
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useRoute } from "wouter";
 import { ChevronDown, XCircle, Check, UserRound, Camera } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
@@ -139,6 +139,10 @@ function calcZodiac(birthday: string): string {
 
 export default function YabanPatientCreate() {
   const [, setLocation] = useLocation();
+  // 编辑模式：路由形如 /yaban/patient/:id/edit
+  const [isEditRoute, editParams] = useRoute("/yaban/patient/:id/edit");
+  const editId = isEditRoute && editParams?.id ? Number(editParams.id) : 0;
+  const isEdit = editId > 0;
   const [activeTab, setActiveTab] = useState<Tab>("个人信息");
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -170,19 +174,61 @@ export default function YabanPatientCreate() {
     });
   };
 
-  // 预取系统将分配的顾客编号，实时展示在「顾客编号」框（实际以保存时生成为准）
+  // 预取系统将分配的顾客编号，仅新增模式使用（编辑模式编号由原数据回填）
   const previewCode = trpc.yabanCustomer.previewCode.useQuery(undefined, {
     refetchOnWindowFocus: false,
+    enabled: !isEdit,
   });
   useEffect(() => {
+    if (isEdit) return;
     const code = previewCode.data?.code;
     if (code) {
       setForm((prev) => (prev.medicalNo ? prev : { ...prev, medicalNo: code }));
     }
-  }, [previewCode.data?.code]);
+  }, [previewCode.data?.code, isEdit]);
+
+  // 编辑模式：加载原顾客数据并回填表单
+  const detailQuery = trpc.yabanCustomer.detail.useQuery(
+    { id: editId },
+    { enabled: isEdit, refetchOnWindowFocus: false }
+  );
+  useEffect(() => {
+    const d = detailQuery.data as any;
+    if (!isEdit || !d) return;
+    setForm({
+      name: d.name ?? "",
+      gender: d.gender ?? "无",
+      birthday: d.birthday ?? "",
+      age: d.age != null ? String(d.age) : "",
+      zodiac: d.zodiac ?? "",
+      chineseZodiac: d.chinese_zodiac ?? "",
+      patientType: d.patient_type ?? "电子",
+      medicalNo: d.medical_no ?? "",
+      nickname: d.nickname ?? "",
+      email: d.email ?? "",
+      mobile: d.mobile ?? "",
+      phone: d.phone ?? "",
+      region: d.region ?? "",
+      address: d.address ?? "",
+      emergencyContact: d.emergency_contact ?? "",
+      emergencyRelation: d.emergency_relation ?? "",
+      emergencyPhone: d.emergency_phone ?? "",
+      source: d.source ?? "",
+      netConsultant: d.net_consultant ?? "",
+      consultant: d.consultant ?? "",
+      history: d.history ?? "",
+      patientRemark: d.remark ?? "",
+      chiefComplaint: d.chief_complaint ?? "",
+    });
+    if (d.avatar) setAvatarManual(d.avatar as AvatarKey);
+  }, [detailQuery.data, isEdit]);
 
   const handleBack = () => {
-    setLocation("/yaban");
+    if (isEdit) {
+      setLocation(`/yaban/patient/${editId}`);
+    } else {
+      setLocation("/yaban");
+    }
   };
 
   const utils = trpc.useUtils();
@@ -196,13 +242,24 @@ export default function YabanPatientCreate() {
       toast.error(e.message || "保存失败，请重试");
     },
   });
+  const updateMutation = trpc.yabanCustomer.update.useMutation({
+    onSuccess: () => {
+      toast.success("修改成功");
+      utils.yabanCustomer.list.invalidate();
+      utils.yabanCustomer.detail.invalidate({ id: editId });
+      setLocation(`/yaban/patient/${editId}`);
+    },
+    onError: (e) => {
+      toast.error(e.message || "保存失败，请重试");
+    },
+  });
 
   // 头像：手动选过则用手动值，否则按年龄+性别自动适配
   const autoKey = autoAvatarKey(form.age, form.gender);
   const effectiveAvatar: AvatarKey | null = avatarManual || autoKey;
 
   const handleSave = () => {
-    if (createMutation.isPending) return;
+    if (createMutation.isPending || updateMutation.isPending) return;
     // 校验所有 Tab 的必填字段
     const missing: string[] = [];
     (Object.keys(TAB_FIELDS) as Tab[]).forEach((tab) => {
@@ -216,7 +273,7 @@ export default function YabanPatientCreate() {
       toast.error(`请完善必填项：${missing.slice(0, 3).join("、")}${missing.length > 3 ? " 等" : ""}`);
       return;
     }
-    createMutation.mutate({
+    const payload = {
       name: form.name,
       gender: form.gender,
       birthday: form.birthday,
@@ -224,8 +281,6 @@ export default function YabanPatientCreate() {
       zodiac: form.zodiac,
       chineseZodiac: form.chineseZodiac,
       patientType: form.patientType,
-      // 顾客编号为只读预览值，保存时不传入，由后端按实际流水生成（避免并发同号）
-      medicalNo: undefined,
       nickname: form.nickname,
       email: form.email,
       mobile: form.mobile,
@@ -242,7 +297,14 @@ export default function YabanPatientCreate() {
       history: form.history,
       remark: form.patientRemark,
       chiefComplaint: form.chiefComplaint,
-    });
+    };
+    if (isEdit) {
+      // 编辑：不修改顾客编号，传入 id
+      updateMutation.mutate({ ...payload, id: editId });
+    } else {
+      // 新增：顾客编号为只读预览值，由后端按实际流水生成（避免并发同号）
+      createMutation.mutate({ ...payload, medicalNo: undefined });
+    }
   };
 
   // 当前 Tab 字段（已取消必填项，展示全部字段）
@@ -258,9 +320,9 @@ export default function YabanPatientCreate() {
           <button onClick={handleBack} className="text-base font-medium" style={{ color: ACCENT }}>
             取消
           </button>
-          <h1 className="text-base font-semibold text-gray-900">新建顾客</h1>
+          <h1 className="text-base font-semibold text-gray-900">{isEdit ? "编辑顾客" : "新建顾客"}</h1>
           <button onClick={handleSave} className="text-base font-medium" style={{ color: ACCENT }}>
-            {createMutation.isPending ? "保存中" : "保存"}
+            {createMutation.isPending || updateMutation.isPending ? "保存中" : "保存"}
           </button>
         </div>
         {/* Tab 切换 */}

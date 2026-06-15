@@ -112,7 +112,7 @@ export default function YabanPatientDetail() {
                 {patient.age > 0 && <span className="text-gray-500">. {patient.age}岁</span>}
               </div>
               <button
-                onClick={() => {}}
+                onClick={() => navigate(`/yaban/patient/${id}/edit`)}
                 className="flex items-center text-sky-500 text-sm"
               >
                 <Edit className="w-4 h-4 mr-0.5" />
