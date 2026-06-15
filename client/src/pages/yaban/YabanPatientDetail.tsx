@@ -2,8 +2,6 @@ import { useLocation, useRoute } from 'wouter';
 import { PageTag } from "@/components/PageTag";
 import {
   ChevronLeft,
-  Plus,
-  ChevronRight,
   Edit,
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
@@ -111,86 +109,59 @@ export default function YabanPatientDetail() {
             <ChevronLeft className="w-6 h-6" />
           </button>
           <span className="text-lg font-bold">顾客详情</span>
-          <button className="p-1">
-            <Plus className="w-6 h-6" />
+          <button
+            onClick={() => navigate(`/yaban/patient/${id}/edit`)}
+            className="p-1 text-white"
+            aria-label="编辑"
+          >
+            <Edit className="w-5 h-5" />
           </button>
         </div>
       </div>
 
-      {/* 患者信息卡片 */}
+      {/* 顾客信息卡片（电子档案表风格） */}
       <div className="bg-white px-4 py-4">
-        <div className="flex items-start">
-          {/* 头像 */}
-          <div className="w-16 h-16 rounded-full bg-[#F0F7FA] flex items-center justify-center overflow-hidden flex-shrink-0">
-            <img src={avatarSrc(patient.avatarKey)} alt={patient.name} className="w-full h-full object-cover" />
-          </div>
-
-          {/* 信息区域 */}
-          <div className="ml-3 flex-1">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-bold text-gray-900">{patient.name}</span>
-                {patient.age > 0 && <span className="text-gray-500">. {patient.age}岁</span>}
-              </div>
-              <button
-                onClick={() => navigate(`/yaban/patient/${id}/edit`)}
-                className="flex items-center text-sky-500 text-sm"
-              >
-                <Edit className="w-4 h-4 mr-0.5" />
-                编辑
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* 标签 */}
-            <div className="flex items-center gap-1 mt-1">
+        {/* 表头：左侧关键信息 + 右上角证件照头像 */}
+        <div className="flex items-start justify-between">
+          <div className="flex-1 pr-3">
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-bold text-gray-900">{patient.name}</span>
+              {patient.age > 0 && <span className="text-gray-500 text-sm">{patient.age}岁</span>}
               <span className={`w-5 h-5 rounded-full ${genderColor} flex items-center justify-center`}>
-                <span className="text-white text-[10px]">
-                  {patient.gender === 'male' ? 'M' : 'F'}
-                </span>
+                <span className="text-white text-[10px]">{patient.gender === 'male' ? 'M' : 'F'}</span>
               </span>
-              {patient.hasWechat && (
-                <span className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
-                  <span className="text-white text-[10px]">W</span>
-                </span>
-              )}
               {patient.tags.map((tag, idx) => (
-                <span
-                  key={idx}
-                  className="px-1.5 py-0.5 rounded text-[10px] font-bold text-white bg-sky-500"
-                >
-                  {tag}
-                </span>
+                <span key={idx} className="px-1.5 py-0.5 rounded text-[10px] font-bold text-white bg-sky-500">{tag}</span>
               ))}
             </div>
-
-            {/* 顾客编号（带复制） */}
-            <div className="mt-1.5 text-[13px] text-gray-500">
-              顾客编号: <span className="text-gray-700 font-medium">{patient.medicalNo}</span>
+            <div className="mt-2 text-[13px] text-gray-500">
+              顾客编号：<span className="text-gray-700 font-medium">{patient.medicalNo}</span>
             </div>
+            <div className="mt-1 text-[13px] text-gray-500">
+              手机：<span className="text-gray-700">{patient.mobile}</span>
+            </div>
+          </div>
+          {/* 右上角头像方框（一寸照样式） */}
+          <div className="w-[72px] h-[88px] rounded-md border border-gray-200 bg-[#F0F7FA] overflow-hidden flex-shrink-0">
+            <img src={avatarSrc(patient.avatarKey)} alt={patient.name} className="w-full h-full object-cover" />
           </div>
         </div>
 
-        {/* 资料概览：将个人信息尽量铺出，其余完整字段在「编辑」中查看 */}
-        <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
+        {/* 资料档案表：线框网格，字段自适应横排（能放几个放几个） */}
+        <div className="mt-3 flex flex-wrap border-t border-l border-gray-200 rounded-md overflow-hidden">
           <InfoItem label="昵称" value={patient.nickname} />
           <InfoItem label="生日" value={patient.birthday} />
           <InfoItem label="星座" value={patient.zodiac} />
           <InfoItem label="生肖" value={patient.chineseZodiac} />
-          <InfoItem label="手机" value={patient.mobile} />
-          <InfoItem label="邮箱" value={patient.email} />
-          <InfoItem label="紧急联系人" value={emergencyText} full />
+          <InfoItem label="邮箱" value={patient.email} wide />
+          <InfoItem label="紧急联系人" value={emergencyText} wide />
           <InfoItem label="地址" value={patient.address} full />
-        </div>
-
-        {/* 顾客信息 / 跟进信息（已填才显示） */}
-        <div className="mt-2 pt-2 border-t border-gray-50 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
           <InfoItem label="来源" value={patient.source} />
           {patient.netConsultant && <InfoItem label="网电咨询师" value={patient.netConsultant} />}
           {patient.consultant && <InfoItem label="咨询师" value={patient.consultant} />}
-          <InfoItem label="门店" value={patient.clinic} full />
           <InfoItem label="上次就诊医生" value={patient.lastDoctor} />
           <InfoItem label="上次就诊" value={patient.lastVisit || '—'} />
+          <InfoItem label="门店" value={patient.clinic} full />
           {healthTags && <InfoItem label="健康标签" value={healthTags} full />}
           <InfoItem label="备注" value={patient.remark} full />
         </div>
@@ -225,12 +196,14 @@ export default function YabanPatientDetail() {
   );
 }
 
-// 资料概览小项：标签 + 值，full 为整行显示
-function InfoItem({ label, value, full }: { label: string; value: string; full?: boolean }) {
+// 资料档案格子：带右/下边框，label 在上、value 在下
+// full=整行；wide=约半行；默认窄格随内容自适应横排
+function InfoItem({ label, value, full, wide }: { label: string; value: string; full?: boolean; wide?: boolean }) {
+  const basis = full ? 'w-full' : wide ? 'basis-[48%] grow' : 'grow basis-[30%]';
   return (
-    <div className={full ? 'col-span-2' : ''}>
-      <span className="text-gray-400">{label}：</span>
-      <span className="text-gray-700">{value}</span>
+    <div className={`${basis} min-w-0 border-r border-b border-gray-200 px-2.5 py-1.5`}>
+      <div className="text-[11px] text-gray-400 leading-tight">{label}</div>
+      <div className="text-[13px] text-gray-700 leading-snug break-words">{value}</div>
     </div>
   );
 }
