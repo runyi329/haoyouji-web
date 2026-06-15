@@ -12,12 +12,9 @@ import {
   ChevronRight,
   User,
   Camera,
-  ShieldCheck,
   Info,
   LogOut,
   Loader2,
-  Database,
-  ReceiptText,
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
@@ -99,7 +96,7 @@ export default function YabanSettings() {
           <button onClick={() => navigate("/yaban/profile")} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold">设置</span>
+          <span className="text-base font-bold">账号资料</span>
         </div>
       </div>
 
@@ -180,57 +177,6 @@ export default function YabanSettings() {
               <span className="text-sm text-gray-800">{phone || "未绑定"}</span>
             )}
           </div>
-        </div>
-
-        {/* 门诊与权限 */}
-        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
-          <button
-            onClick={() => navigate("/yaban/settings/roles")}
-            className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-[#F0F7FD] transition-colors"
-          >
-            <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-5 h-5 text-[#1E88D6]" />
-            </span>
-            <span className="flex-1 text-left">
-              <span className="block text-sm font-medium text-gray-800">权限管理</span>
-              <span className="block text-xs text-gray-400 mt-0.5">为员工与顾客逐项设置权限</span>
-            </span>
-            <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
-          </button>
-        </div>
-
-        {/* 收费项目库 */}
-        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
-          <button
-            onClick={() => navigate("/yaban/settings/charge-products")}
-            className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-[#F0F7FD] transition-colors"
-          >
-            <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
-              <ReceiptText className="w-5 h-5 text-[#1E88D6]" />
-            </span>
-            <span className="flex-1 text-left">
-              <span className="block text-sm font-medium text-gray-800">收费项目库</span>
-              <span className="block text-xs text-gray-400 mt-0.5">维护收费项目分类、单价与常用</span>
-            </span>
-            <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
-          </button>
-        </div>
-
-        {/* 数据管理 */}
-        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
-          <button
-            onClick={() => navigate("/yaban/settings/data")}
-            className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-[#F0F7FD] transition-colors"
-          >
-            <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
-              <Database className="w-5 h-5 text-[#1E88D6]" />
-            </span>
-            <span className="flex-1 text-left">
-              <span className="block text-sm font-medium text-gray-800">数据管理</span>
-              <span className="block text-xs text-gray-400 mt-0.5">数据导出备份与导入存档</span>
-            </span>
-            <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
-          </button>
         </div>
 
         {/* 关于 */}

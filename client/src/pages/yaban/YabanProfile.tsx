@@ -15,6 +15,8 @@ import {
   ShoppingBag,
   Ticket,
   Settings,
+  ReceiptText,
+  Database,
   ChevronRight,
   Phone,
   LogOut,
@@ -137,14 +139,47 @@ export default function YabanProfile() {
     },
   ];
 
-  // 团队/企业组（企业信息仅院长/股东可见）
-  const orgRows: RowItem[] = [
+  // ── 医院经营角度：单家医院日常经营管理用到的功能 ──
+  const clinicRows: RowItem[] = [
     {
       key: "team",
       icon: <Users className="w-5 h-5 text-[#1E88D6]" />,
       label: "团队账号开通",
       hint: "为门诊员工开通账号",
       onClick: () => navigate("/yaban/settings/roles"),
+    },
+    {
+      key: "roles",
+      icon: <ShieldCheck className="w-5 h-5 text-[#1E88D6]" />,
+      label: "权限管理",
+      hint: "为员工与顾客逐项设置权限",
+      onClick: () => navigate("/yaban/settings/roles"),
+    },
+    {
+      key: "charge",
+      icon: <ReceiptText className="w-5 h-5 text-[#1E88D6]" />,
+      label: "收费项目库",
+      hint: "维护收费项目分类、单价与常用",
+      onClick: () => navigate("/yaban/settings/charge-products"),
+    },
+    {
+      key: "data",
+      icon: <Database className="w-5 h-5 text-[#1E88D6]" />,
+      label: "数据管理",
+      hint: "数据导出备份与导入存档",
+      onClick: () => navigate("/yaban/settings/data"),
+    },
+    {
+      key: "orders",
+      icon: <ShoppingBag className="w-5 h-5 text-[#1E88D6]" />,
+      label: "商城管理",
+      onClick: () => navigate("/yaban/shop/admin"),
+    },
+    {
+      key: "verify",
+      icon: <Ticket className="w-5 h-5 text-[#1E88D6]" />,
+      label: "核销记录",
+      onClick: () => navigate("/yaban/profile/verify-records"),
     },
     ...(isOwner
       ? [
@@ -159,8 +194,8 @@ export default function YabanProfile() {
       : []),
   ];
 
-  // 创始人专属：后台管理（大数据看板）
-  const founderRows: RowItem[] = [
+  // ── 平台管理角度：平台/创始人层面的管理动作 ──
+  const platformRows: RowItem[] = [
     {
       key: "admin",
       icon: <LayoutDashboard className="w-5 h-5 text-[#1E88D6]" />,
@@ -170,29 +205,14 @@ export default function YabanProfile() {
     },
   ];
 
-  // 商城/服务组
-  const serviceRows: RowItem[] = [
-    {
-      key: "orders",
-      icon: <ShoppingBag className="w-5 h-5 text-[#1E88D6]" />,
-      label: "商城管理",
-      onClick: () => navigate("/yaban/shop/admin"),
-    },
-    {
-      key: "verify",
-      icon: <Ticket className="w-5 h-5 text-[#1E88D6]" />,
-      label: "核销记录",
-      onClick: () => navigate("/yaban/profile/verify-records"),
-    },
-  ];
-
-  // 系统组
+  // 账号组（仅个人资料，原“设置”聚合页已拆除）
   const systemRows: RowItem[] = [
     {
-      key: "settings",
+      key: "account",
       icon: <Settings className="w-5 h-5 text-[#1E88D6]" />,
-      label: "设置",
-      onClick: () => navigate("/yaban/settings"),
+      label: "账号资料",
+      hint: "编辑昵称、手机号与头像",
+      onClick: () => navigate("/yaban/account"),
     },
   ];
 
@@ -315,12 +335,27 @@ export default function YabanProfile() {
         </div>
       </div>
 
-      {/* 功能分组列表 */}
-      <div className="max-w-lg mx-auto px-4 mt-4 space-y-3">
-        {renderGroup(orgRows)}
-        {isFounder && renderGroup(founderRows)}
-        {renderGroup(serviceRows)}
-        {renderGroup(systemRows)}
+      {/* 功能分组列表：按「医院经营」与「平台管理」两个角度分区 */}
+      <div className="max-w-lg mx-auto px-4 mt-4 space-y-5">
+        {/* 医院经营 */}
+        <div className="space-y-2">
+          <div className="px-1 text-xs font-semibold text-gray-400">医院经营</div>
+          {renderGroup(clinicRows)}
+        </div>
+
+        {/* 平台管理（仅创始人可见） */}
+        {isFounder && (
+          <div className="space-y-2">
+            <div className="px-1 text-xs font-semibold text-gray-400">平台管理</div>
+            {renderGroup(platformRows)}
+          </div>
+        )}
+
+        {/* 账号 */}
+        <div className="space-y-2">
+          <div className="px-1 text-xs font-semibold text-gray-400">账号</div>
+          {renderGroup(systemRows)}
+        </div>
       </div>
 
       <YabanTabBar />

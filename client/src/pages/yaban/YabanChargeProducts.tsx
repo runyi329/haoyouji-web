@@ -182,7 +182,7 @@ export default function YabanChargeProducts() {
       {/* 头部 */}
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="flex items-center gap-2 px-4 py-3">
-          <button onClick={() => navigate("/yaban/settings")} aria-label="返回">
+          <button onClick={() => navigate("/yaban/profile")} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <span className="text-base font-bold">收费项目库</span>

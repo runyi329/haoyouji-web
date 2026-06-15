@@ -749,7 +749,7 @@ function Router() {
         <Route path="/yaban/admin" component={lazy(() => import("./pages/yaban/YabanAdmin"))} />
         <Route path="/yaban/wallet" component={YabanWallet} />
         <Route path="/yaban/profile/verify-records" component={YabanVerifyRecords} />
-        <Route path="/yaban/settings" component={YabanSettings} />
+        <Route path="/yaban/account" component={YabanSettings} />
         <Route path="/yaban/settings/roles" component={YabanRoles} />
         <Route path="/yaban/settings/data" component={YabanDataManage} />
         <Route path="/yaban/settings/charge-products" component={YabanChargeProducts} />
