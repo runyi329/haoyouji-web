@@ -21,6 +21,7 @@ import {
   calcNextBackupAt,
 } from "./yaban-backup-service";
 import { uploadYabanMedia, deleteYabanMedia, type YabanMediaTier } from "./cos-upload";
+import { checkYabanPerm } from "./yaban-role-router";
 
 // ========= 影像记录：分类 → 高清份处理档位映射 =========
 // 诊断级（无损原图直传）
@@ -974,8 +975,8 @@ export const yabanCustomerRouter = router({
       return { total, byCategory };
     }),
 
-  // 上传影像（仅 super_admin）
-  uploadMedia: adminProcedure
+  // 上传影像（需 media_upload 权限）
+  uploadMedia: protectedProcedure
     .input(z.object({
       customerId: z.union([z.number(), z.string()]),
       category: z.string().min(1).max(32),
@@ -985,8 +986,11 @@ export const yabanCustomerRouter = router({
       takenAt: z.string().max(20).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
+      if (!(await checkYabanPerm(ctx, "media_upload"))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无影像上传权限" });
+      }
       const conn = await getDbConnection();
-      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureMediaTable(conn);
       const cid = Number(input.customerId);
       const tier = tierForCategory(input.category, input.fileName);
@@ -1013,15 +1017,18 @@ export const yabanCustomerRouter = router({
       return { id: Number((res as any).insertId), fullUrl: uploaded.fullUrl, thumbUrl: uploaded.thumbUrl };
     }),
 
-  // 更新影像备注/分类/拍摄日期（仅 super_admin）
-  updateMedia: adminProcedure
+  // 更新影像备注/分类/拍摄日期（需 media_upload 权限）
+  updateMedia: protectedProcedure
     .input(z.object({
       id: z.union([z.number(), z.string()]),
       remark: z.string().max(500).optional(),
       category: z.string().max(32).optional(),
       takenAt: z.string().max(20).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      if (!(await checkYabanPerm(ctx, "media_upload"))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无影像编辑权限" });
+      }
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
       await ensureMediaTable(conn);
@@ -1042,10 +1049,13 @@ export const yabanCustomerRouter = router({
       return { success: true };
     }),
 
-  // 删除影像（仅 super_admin）：先删 COS 再删数据库
-  deleteMedia: adminProcedure
+  // 删除影像（需 media_delete 权限）：先删 COS 再删数据库
+  deleteMedia: protectedProcedure
     .input(z.object({ id: z.union([z.number(), z.string()]) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      if (!(await checkYabanPerm(ctx, "media_delete"))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无影像删除权限" });
+      }
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
       await ensureMediaTable(conn);

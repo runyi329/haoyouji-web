@@ -77,7 +77,12 @@ export default function YabanPatientMedia() {
   const customerId = params?.id ? Number(params.id) : 0;
 
   const { user } = useAuth();
-  const isAdmin = user?.role === "super_admin";
+  const { data: membership } = trpc.yabanRole.myMembership.useQuery();
+  const perms: string[] = membership?.permissions || [];
+  const isSuper = user?.role === "super_admin" || !!membership?.isFounder;
+  // 上传/编辑：media_upload 权限；删除：media_delete 权限
+  const canUpload = isSuper || perms.includes("media_upload");
+  const canDelete = isSuper || perms.includes("media_delete");
 
   const utils = trpc.useUtils();
   const listQuery = trpc.yabanCustomer.listMedia.useQuery(
@@ -229,7 +234,7 @@ export default function YabanPatientMedia() {
             <ChevronLeft className="w-6 h-6" />
           </button>
           <span className="text-lg font-bold">影像记录</span>
-          {isAdmin ? (
+          {canUpload ? (
             <button onClick={() => setShowUploadMenu(true)} className="p-1">
               <Plus className="w-6 h-6" />
             </button>
@@ -276,7 +281,7 @@ export default function YabanPatientMedia() {
           <div className="py-24 flex flex-col items-center justify-center text-gray-400">
             <ImageOff className="w-12 h-12 mb-3" />
             <p className="text-sm">暂无影像记录</p>
-            {isAdmin && (
+            {canUpload && (
               <button
                 onClick={() => setShowUploadMenu(true)}
                 className="mt-4 px-4 py-2 rounded-full bg-sky-500 text-white text-sm flex items-center gap-1"
@@ -467,14 +472,18 @@ export default function YabanPatientMedia() {
             <span className="text-sm">
               {viewerIndex + 1} / {filtered.length}
             </span>
-            {isAdmin ? (
+            {(canUpload || canDelete) ? (
               <div className="flex items-center gap-3">
-                <button onClick={() => setEditing(viewerItem)} className="p-1">
-                  <Pencil className="w-5 h-5" />
-                </button>
-                <button onClick={() => handleDelete(viewerItem)} className="p-1">
-                  <Trash2 className="w-5 h-5" />
-                </button>
+                {canUpload && (
+                  <button onClick={() => setEditing(viewerItem)} className="p-1">
+                    <Pencil className="w-5 h-5" />
+                  </button>
+                )}
+                {canDelete && (
+                  <button onClick={() => handleDelete(viewerItem)} className="p-1">
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
               </div>
             ) : (
               <span className="w-12" />

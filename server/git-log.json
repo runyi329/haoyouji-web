@@ -1,5 +1,23 @@
 [
   {
+    "hash": "6520350299faae418a325a7e76d3de9a737d3a10",
+    "author": "manus",
+    "date": "2026-06-15T00:13:42+00:00",
+    "message": "feat(yaban): 影像记录P0 - 真实COS分层存储+权限收口+前端影像页重做",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "影像记录P0 - 真实COS分层存储+权限收口+前端影像页重做"
+  },
+  {
+    "hash": "22fe7d8dee65ab49b9ee5b4e5cc3f243462e54b0",
+    "author": "github-actions[bot]",
+    "date": "2026-06-14T17:21:12+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
     "hash": "e85108654c3e260573636ef80280364f253b6189",
     "author": "manus",
     "date": "2026-06-14T16:38:14+00:00",
