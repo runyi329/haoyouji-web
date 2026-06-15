@@ -152,11 +152,11 @@ export default function YabanPatientDetail() {
           {/* 第二区：其余字段（4列Grid，按需跨列） */}
           <div className="grid grid-cols-4">
             <InfoItem label="手机" value={patient.mobile} span={2} />
-            <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} span={2} />
             <InfoItem label="邮箱" value={patient.email} span={2} />
-            <InfoItem label="紧急联系人" value={emergencyText} span={2} />
+            <InfoItem label="紧急联系人" value={emergencyText} span={4} />
             <InfoItem label="地址" value={patient.address} span={4} />
-            <InfoItem label="来源" value={patient.source} />
+            <InfoItem label="来源" value={patient.source} span={2} />
+            <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} span={2} />
             {patient.netConsultant && <InfoItem label="网电咨询师" value={patient.netConsultant} />}
             {patient.consultant && <InfoItem label="咨询师" value={patient.consultant} />}
             <InfoItem label="上次就诊医生" value={patient.lastDoctor} span={2} />
