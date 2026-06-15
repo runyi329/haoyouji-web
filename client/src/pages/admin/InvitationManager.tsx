@@ -379,9 +379,9 @@ export function InvitationManager() {
               onClick={() => setSelectedUserId(user.id)}
             >
               <CardContent className="p-4">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col gap-3">
                   {/* 用户信息 */}
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="font-medium truncate">
                         {user.name || user.username}
@@ -413,27 +413,27 @@ export function InvitationManager() {
                         </Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
-                      <span>@{user.username}</span>
+                    <div className="flex items-center gap-x-4 gap-y-1 text-xs text-muted-foreground flex-wrap">
+                      <span className="whitespace-nowrap">@{user.username}</span>
                       {user.inviteCode && (
-                        <span className="font-mono">{user.inviteCode}</span>
+                        <span className="font-mono whitespace-nowrap">{user.inviteCode}</span>
                       )}
-                      <span>已邀请: {user.inviteCount}人</span>
+                      <span className="whitespace-nowrap">已邀请 {user.inviteCount} 人</span>
                       {referrer && (
-                        <span className="text-[#D32F2F]">
-                          推荐人: {referrer.name || referrer.username}
+                        <span className="text-[#D32F2F] whitespace-nowrap">
+                          推荐人：{referrer.name || referrer.username}
                         </span>
                       )}
                       {versionLabel && (
-                        <span className="text-[#1976D2]">
-                          版本来源: {versionLabel.sourceText}
+                        <span className="text-[#1976D2] whitespace-nowrap">
+                          版本来源：{versionLabel.sourceText}
                         </span>
                       )}
                     </div>
                   </div>
 
                   {/* 操作按钮 */}
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1 flex-wrap pt-2 border-t">
                     {/* 设置版本 */}
                     <Button
                       size="sm"
@@ -443,8 +443,10 @@ export function InvitationManager() {
                         handleOpenVersionDialog(user);
                       }}
                       title="设置版本"
+                      className="px-2"
                     >
-                      <Layers className="w-4 h-4" />
+                      <Layers className="w-4 h-4 mr-1" />
+                      <span className="text-xs">版本</span>
                     </Button>
 
                     {/* 编辑推荐人 */}
@@ -456,8 +458,10 @@ export function InvitationManager() {
                         handleOpenEditReferrer(user);
                       }}
                       title="编辑推荐人"
+                      className="px-2"
                     >
-                      <UserPlus className="w-4 h-4" />
+                      <UserPlus className="w-4 h-4 mr-1" />
+                      <span className="text-xs">推荐人</span>
                     </Button>
 
                     {/* 复制邀请码 */}
@@ -470,8 +474,10 @@ export function InvitationManager() {
                       }}
                       disabled={!user.inviteCode}
                       title="复制邀请码"
+                      className="px-2"
                     >
-                      <Copy className="w-4 h-4" />
+                      <Copy className="w-4 h-4 mr-1" />
+                      <span className="text-xs">邀请码</span>
                     </Button>
 
                     {/* 复制邀请链接 */}
@@ -484,14 +490,16 @@ export function InvitationManager() {
                       }}
                       disabled={!user.inviteCode}
                       title="复制邀请链接"
+                      className="px-2"
                     >
-                      <Link2 className="w-4 h-4" />
+                      <Link2 className="w-4 h-4 mr-1" />
+                      <span className="text-xs">链接</span>
                     </Button>
 
                     {/* 权限开关 */}
-                    <div className="flex items-center gap-2 pl-2 border-l">
-                      <Label htmlFor={`switch-${user.id}`} className="text-xs cursor-pointer">
-                        {user.inviteEnabled ? '开启' : '关闭'}
+                    <div className="flex items-center gap-2 ml-auto pl-2">
+                      <Label htmlFor={`switch-${user.id}`} className="text-xs cursor-pointer text-muted-foreground">
+                        {user.inviteEnabled ? '邀请开' : '邀请关'}
                       </Label>
                       <Switch
                         id={`switch-${user.id}`}
