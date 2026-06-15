@@ -316,10 +316,10 @@ export default function YabanPatientCreate() {
               </span>
               {/* 相机角标：小尺寸，压在圆圈右下边缘，一半在圈内、一半在圈外 */}
               <span
-                className="absolute w-5 h-5 rounded-full flex items-center justify-center border-2 border-white"
-                style={{ backgroundColor: ACCENT, right: 4, bottom: 4 }}
+                className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full flex items-center justify-center ring-2 ring-white shadow-md"
+                style={{ backgroundColor: ACCENT }}
               >
-                <Camera className="w-3 h-3 text-white" />
+                <Camera className="w-3.5 h-3.5 text-white" strokeWidth={2.2} />
               </span>
             </button>
           </div>

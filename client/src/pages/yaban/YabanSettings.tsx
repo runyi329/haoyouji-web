@@ -137,11 +137,11 @@ export default function YabanSettings() {
                   <User className="w-8 h-8 text-[#9CC8EC]" />
                 )}
               </span>
-              <span className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-[#1E88D6] flex items-center justify-center ring-2 ring-white">
+              <span className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-[#1E88D6] flex items-center justify-center ring-2 ring-white shadow-md">
                 {uploadAvatar.isPending ? (
                   <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
                 ) : (
-                  <Camera className="w-3.5 h-3.5 text-white" />
+                  <Camera className="w-3.5 h-3.5 text-white" strokeWidth={2.2} />
                 )}
               </span>
               <input type="file" accept="image/*" className="hidden" onChange={onPickAvatar} />
