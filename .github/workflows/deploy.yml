@@ -57,6 +57,10 @@ jobs:
               echo "📦 依赖无变化，跳过安装"
             fi
 
+            echo "🧹 清理旧的构建产物（避免 vite prepare-out-dir ENOTEMPTY）..."
+            rm -rf /root/haoyouji-web/dist 2>/dev/null || true
+            find /root/haoyouji-web/dist -mindepth 0 -delete 2>/dev/null || true
+
             echo "🔨 开始构建项目..."
             export NODE_OPTIONS="--max-old-space-size=4096"
             set -o pipefail
