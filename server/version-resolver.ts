@@ -6,9 +6,12 @@
  *   - version_key：管理员为该用户单独指定的版本（为空表示沿推荐链继承）
  *   - version_switch_enabled：是否允许在右上角自由切换版本
  *   - version_switch_scope：允许切换到的版本 key 列表（逗号分隔，为空表示全部已启用版本）
- * - 用户「生效版本」判定采用「最高优先追溯」：
- *   从用户自己开始，沿 invited_by_user_id 一路向上，记录沿途所有被管理员明确设置过 version_key 的祖先，
- *   取「最顶层」那个设置者的版本为准；若一路到顶都没人设置过，则使用系统默认版本（is_default=1，通常为脉动版）。
+ * - 用户「生效版本」判定规则：
+ *   1. 若用户自己被明确设置过 version_key（本人设定），则以自己的为准（self），
+ *      该设置只影响他自己，不被上线覆盖；
+ *   2. 若用户自己未设置（选择「继承上线」），则沿 invited_by_user_id 一路向上，
+ *      取「最顶层」那个设置过 version_key 的祖先的版本为准（inherited）；
+ *   3. 若一路到顶都没人设置过，则使用系统默认版本（is_default=1，通常为脉动版）。
  */
 import { getDbConnection } from "./db";
 
@@ -83,9 +86,9 @@ async function getDefaultVersion(versions: SiteVersion[]): Promise<SiteVersion> 
 }
 
 /**
- * 沿推荐链向上追溯，返回「最顶层被设置过 version_key 的祖先」的 { userId, name, versionKey }。
- * 实现：从自己开始向上走，每遇到一个设置过 version_key 的节点就记录为候选（覆盖之前的候选），
- * 走到顶端后，最后一次记录的就是「最顶层设置者」。
+ * 解析决定某用户生效版本的设置者：
+ * - 若用户自己设置过 version_key（本人设定），直接返回自己（self 优先，不再向上追溯）；
+ * - 否则沿推荐链向上走，返回「最顶层被设置过 version_key 的祖先」（继承）。
  */
 async function resolveTopSetter(
   startUserId: number
@@ -93,6 +96,20 @@ async function resolveTopSetter(
   const conn = await getDbConnection();
   if (!conn) return null;
 
+  // 先看用户自己是否被明确设置过版本——若有则以自己为准
+  const [selfRows]: any = await conn.execute(
+    `SELECT id, name, version_key FROM users WHERE id = ? LIMIT 1`,
+    [startUserId]
+  );
+  const selfRow = (selfRows as any[])[0];
+  if (selfRow) {
+    const selfVk = selfRow.version_key ? String(selfRow.version_key).trim() : "";
+    if (selfVk) {
+      return { userId: Number(selfRow.id), name: selfRow.name ?? null, versionKey: selfVk };
+    }
+  }
+
+  // 用户自己未设置（继承上线）：沿推荐链向上，取最顶层设置者
   let currentId: number | null = startUserId;
   let depth = 0;
   let topSetter: { userId: number; name: string | null; versionKey: string } | null = null;

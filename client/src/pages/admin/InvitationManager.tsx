@@ -221,13 +221,19 @@ export function InvitationManager() {
     return allUsers?.find(u => u.id === userId);
   };
 
-  // 计算某用户的「生效版本 + 来源」（前端按最高优先追溯，与后端一致）
+  // 计算某用户的「生效版本 + 来源」（与后端一致：自身设置优先，否则沿链追溯最顶层设置者）
   const resolveUserVersionLabel = (user: any): { key: string; name: string; sourceText: string } | null => {
     if (!allUsers || allUsers.length === 0) return null;
     const byId = new Map<number, any>();
     allUsers.forEach((u) => byId.set(u.id, u));
 
-    // 沿推荐链向上，记录最顶层设置过 versionKey 的祖先
+    // 1. 用户自己被明确设置过版本 → 以自己为准（本人设定，不被上线覆盖）
+    if (user.versionKey && String(user.versionKey).trim()) {
+      const selfKey = String(user.versionKey).trim();
+      return { key: selfKey, name: versionNameMap[selfKey] || selfKey, sourceText: "本人设定" };
+    }
+
+    // 2. 自己未设置（继承上线）→ 沿推荐链向上，记录最顶层设置过 versionKey 的祖先
     let cur: any = user;
     let depth = 0;
     let topSetter: any = null;
@@ -248,9 +254,6 @@ export function InvitationManager() {
     }
     const key = String(topSetter.versionKey).trim();
     const name = versionNameMap[key] || key;
-    if (topSetter.id === user.id) {
-      return { key, name, sourceText: "本人设定" };
-    }
     return { key, name, sourceText: `继承自 ${topSetter.name || topSetter.username}` };
   };
 
@@ -665,7 +668,7 @@ export function InvitationManager() {
             <div className="space-y-2">
               <Label className="text-sm">该用户的版本</Label>
               <p className="text-xs text-muted-foreground">
-                选「继承上线」表示不单独设置,沿推荐链向上由最顶层设置者决定;选定某版本则该用户及其下线默认跟随。
+                选「继承上线」表示不单独设置,沿推荐链向上由最顶层设置者决定;选定某版本则只影响该用户本人（不被上线覆盖，也不强制下线跟随）。
               </p>
               <div className="grid grid-cols-1 gap-2 mt-1">
                 {/* 继承上线选项 */}
