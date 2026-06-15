@@ -189,7 +189,7 @@ export default function YabanAdmin() {
           </button>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-lg font-bold">后台管理 · 大数据看板</div>
+              <div className="text-lg font-bold">牙伴平台大数据管理</div>
               <p className="text-xs text-white/85 mt-1">全平台医院经营数据总览，数据来自各院实际运营</p>
             </div>
             <button
