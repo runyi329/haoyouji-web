@@ -2,7 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from '@shared/const';
 import { toast } from 'sonner';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink, TRPCClientError } from "@trpc/client";
+import { httpBatchLink, httpLink, splitLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
@@ -57,36 +57,37 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
+// 共享 fetch：注入 token / viewAs 头，供 batch 与非 batch 两条 link 复用
+const trpcFetch: typeof globalThis.fetch = (input, init) => {
+  const token = localStorage.getItem('auth-token');
+  const headers = new Headers(init?.headers);
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+    try {
+      document.cookie = `app_session_id=${token}; path=/; max-age=${365 * 24 * 60 * 60}`;
+    } catch (e) {}
+  }
+  const viewAsUserId = sessionStorage.getItem('view-as-user-id');
+  if (viewAsUserId) {
+    headers.set('x-view-as-user-id', viewAsUserId);
+  }
+  return globalThis.fetch(input, {
+    ...(init ?? {}),
+    headers,
+    credentials: "include",
+    cache: "no-store",
+  });
+};
+
 const trpcClient = trpc.createClient({
   links: [
-    httpBatchLink({
-      url: "/api/trpc",
-      transformer: superjson,
-      fetch(input, init) {
-        // 从 localStorage 读取最新登录的 token（restoreToken 已在启动时写入）
-        const token = localStorage.getItem('auth-token');
-        const headers = new Headers(init?.headers);
-
-        if (token) {
-          headers.set('Authorization', `Bearer ${token}`);
-          // 顺便同步到 Cookie，保持三层一致
-          try {
-            document.cookie = `app_session_id=${token}; path=/; max-age=${365 * 24 * 60 * 60}`;
-          } catch (e) {}
-        }
-        // viewAs 身份代入：如果 sessionStorage 中有目标用户ID，加入请求头
-        const viewAsUserId = sessionStorage.getItem('view-as-user-id');
-        if (viewAsUserId) {
-          headers.set('x-view-as-user-id', viewAsUserId);
-        }
-
-        return globalThis.fetch(input, {
-          ...(init ?? {}),
-          headers,
-          credentials: "include",
-          cache: "no-store",
-        });
+    splitLink({
+      // 影像上传等大体积请求不走 batch，避免多条合并后超体积导致整批失败
+      condition(op) {
+        return op.path === "yabanCustomer.uploadMedia";
       },
+      true: httpLink({ url: "/api/trpc", transformer: superjson, fetch: trpcFetch }),
+      false: httpBatchLink({ url: "/api/trpc", transformer: superjson, fetch: trpcFetch }),
     }),
   ],
 });

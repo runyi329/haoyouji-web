@@ -153,6 +153,7 @@ export default function YabanPatientMedia() {
       setUploading(true);
       let ok = 0;
       let fail = 0;
+      let lastErr = "";
       for (const file of Array.from(files)) {
         try {
           const dataUrl = await fileToDataUrl(file);
@@ -165,12 +166,13 @@ export default function YabanPatientMedia() {
           ok++;
         } catch (e: any) {
           fail++;
+          lastErr = e?.message || "未知错误";
           // 单条失败继续下一条
         }
       }
       setUploading(false);
       if (ok > 0) toast.success(`已上传 ${ok} 张影像`);
-      if (fail > 0) toast.error(`${fail} 张上传失败`);
+      if (fail > 0) toast.error(`${fail} 张上传失败：${lastErr}`);
       utils.yabanCustomer.listMedia.invalidate({ customerId });
     },
     [customerId, pendingCategory, uploadMutation, utils]

@@ -277,6 +277,8 @@ export async function uploadYabanMedia(
   const { buffer: rawBuffer, mime: rawMime } = parseToBuffer(data);
   const ts = Date.now();
   const hash = crypto.createHash('md5').update(rawBuffer).digest('hex').slice(0, 12);
+  // 随机后缀：即使同毫秒、同内容（hash相同）也保证 key 唯一，避免并发上传相互覆盖
+  const rand = crypto.randomBytes(4).toString('hex');
 
   let fullBuffer = rawBuffer;
   let fullMime = rawMime;
@@ -314,14 +316,14 @@ export async function uploadYabanMedia(
   // 高清份的key：rawFile保留原扩展名，其余按mime
   const safeName = (fileName || 'file').replace(/[^\w.\-]/g, '_');
   const fullExt = tier === 'rawFile' ? (safeName.split('.').pop() || extFromMime(fullMime)) : extFromMime(fullMime);
-  const fullKey = `${folder}/${ts}-${hash}-full.${fullExt}`;
+  const fullKey = `${folder}/${ts}-${hash}-${rand}-full.${fullExt}`;
   const fullUrl = await putBuffer(fullKey, fullBuffer, fullMime);
 
   // 缩略图（专业格式可能为null）
   const thumbBuffer = await makeThumb(rawBuffer);
   let thumbUrl: string | null = null;
   if (thumbBuffer) {
-    const thumbKey = `${folder}/${ts}-${hash}-thumb.webp`;
+    const thumbKey = `${folder}/${ts}-${hash}-${rand}-thumb.webp`;
     thumbUrl = await putBuffer(thumbKey, thumbBuffer, 'image/webp');
   }
 
