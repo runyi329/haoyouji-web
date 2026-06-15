@@ -245,6 +245,92 @@ async function ensureMediaTable(conn: any) {
   mediaTableReady = true;
 }
 
+// ========= 收费记录建表 =========
+let chargeTablesReady = false;
+async function ensureChargeTables(conn: any) {
+  if (chargeTablesReady) return;
+  // 收费单主表
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_charge (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      tenant_id INT NOT NULL DEFAULT 1,
+      customer_id BIGINT UNSIGNED NOT NULL,
+      charge_no VARCHAR(40) NOT NULL,
+      charge_type VARCHAR(16) NOT NULL DEFAULT 'quick',
+      summary VARCHAR(255),
+      total_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+      discount_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+      receivable DECIMAL(12,2) NOT NULL DEFAULT 0,
+      paid DECIMAL(12,2) NOT NULL DEFAULT 0,
+      owed DECIMAL(12,2) NOT NULL DEFAULT 0,
+      change_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+      status VARCHAR(16) NOT NULL DEFAULT 'paid',
+      doctor VARCHAR(64),
+      cashier_id BIGINT,
+      cashier_name VARCHAR(64),
+      dept VARCHAR(64),
+      remark VARCHAR(500),
+      visit_at DATETIME,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_customer (customer_id),
+      KEY idx_tenant_customer (tenant_id, customer_id),
+      KEY idx_status (tenant_id, status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  // 收费项目明细表
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_charge_item (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      charge_id BIGINT UNSIGNED NOT NULL,
+      name VARCHAR(128) NOT NULL,
+      tooth VARCHAR(32),
+      unit_price DECIMAL(12,2) NOT NULL DEFAULT 0,
+      quantity DECIMAL(10,2) NOT NULL DEFAULT 1,
+      discount DECIMAL(6,2) NOT NULL DEFAULT 100,
+      subtotal DECIMAL(12,2) NOT NULL DEFAULT 0,
+      sort INT NOT NULL DEFAULT 0,
+      PRIMARY KEY (id),
+      KEY idx_charge (charge_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  // 支付明细表（支持组合支付）
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_charge_payment (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      charge_id BIGINT UNSIGNED NOT NULL,
+      method VARCHAR(32) NOT NULL,
+      amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+      paid_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      operator_id BIGINT,
+      PRIMARY KEY (id),
+      KEY idx_charge (charge_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  chargeTablesReady = true;
+}
+
+// 生成收费单号：SF + yyyyMMdd + 4位序号
+async function nextChargeNo(conn: any, tenantId: number): Promise<string> {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, "0");
+  const d = String(today.getDate()).padStart(2, "0");
+  const prefix = `SF${y}${m}${d}`;
+  const [rows] = (await conn.execute(
+    `SELECT charge_no FROM yaban_charge WHERE tenant_id = ? AND charge_no LIKE ? ORDER BY id DESC LIMIT 1`,
+    [tenantId, prefix + "%"]
+  )) as any;
+  let seq = 1;
+  const last = (rows as any[])[0];
+  if (last && last.charge_no) {
+    const tail = String(last.charge_no).slice(prefix.length);
+    const n = parseInt(tail, 10);
+    if (!isNaN(n)) seq = n + 1;
+  }
+  return prefix + String(seq).padStart(4, "0");
+}
+
 // 创建顾客输入校验
 const createInput = z.object({
   name: z.string().min(1, "姓名必填").max(64),
@@ -1072,6 +1158,274 @@ export const yabanCustomerRouter = router({
       }
       await (conn as any).execute(
         `DELETE FROM yaban_media WHERE tenant_id = ? AND id = ?`,
+        [DEFAULT_TENANT_ID, Number(input.id)]
+      );
+      return { success: true };
+    }),
+
+  // ==================== 收费记录 ====================
+
+  // 顾客收费统计（消费总额/已收/欠费）——登录即可查看
+  chargeStats: protectedProcedure
+    .input(z.object({ customerId: z.union([z.number(), z.string()]) }))
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureChargeTables(conn);
+      const cid = Number(input.customerId);
+      const [rows] = (await (conn as any).execute(
+        `SELECT
+           COALESCE(SUM(CASE WHEN status <> 'void' THEN receivable ELSE 0 END), 0) AS total_receivable,
+           COALESCE(SUM(CASE WHEN status <> 'void' THEN paid ELSE 0 END), 0) AS total_paid,
+           COALESCE(SUM(CASE WHEN status <> 'void' THEN owed ELSE 0 END), 0) AS total_owed
+         FROM yaban_charge
+         WHERE tenant_id = ? AND customer_id = ?`,
+        [DEFAULT_TENANT_ID, cid]
+      )) as any;
+      const r = (rows as any[])[0] || {};
+      return {
+        totalReceivable: Number(r.total_receivable || 0),
+        totalPaid: Number(r.total_paid || 0),
+        totalOwed: Number(r.total_owed || 0),
+      };
+    }),
+
+  // 收费单列表——登录即可查看
+  listCharges: protectedProcedure
+    .input(z.object({ customerId: z.union([z.number(), z.string()]) }))
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureChargeTables(conn);
+      const cid = Number(input.customerId);
+      const [rows] = (await (conn as any).execute(
+        `SELECT id, charge_no, charge_type, summary, total_amount, discount_amount,
+                receivable, paid, owed, change_amount, status, doctor, cashier_name, dept, remark,
+                DATE_FORMAT(visit_at, '%Y-%m-%d %H:%i') AS visit_at,
+                created_at
+           FROM yaban_charge
+          WHERE tenant_id = ? AND customer_id = ?
+          ORDER BY created_at DESC, id DESC`,
+        [DEFAULT_TENANT_ID, cid]
+      )) as any;
+      const list = (rows as any[]).map((r) => ({
+        id: Number(r.id),
+        chargeNo: r.charge_no as string,
+        chargeType: r.charge_type as string,
+        summary: r.summary as string | null,
+        totalAmount: Number(r.total_amount),
+        discountAmount: Number(r.discount_amount),
+        receivable: Number(r.receivable),
+        paid: Number(r.paid),
+        owed: Number(r.owed),
+        changeAmount: Number(r.change_amount),
+        status: r.status as string,
+        doctor: r.doctor as string | null,
+        cashierName: r.cashier_name as string | null,
+        dept: r.dept as string | null,
+        remark: r.remark as string | null,
+        visitAt: r.visit_at as string | null,
+        createdAt: r.created_at,
+      }));
+      return { list };
+    }),
+
+  // 收费单详情（含项目明细与支付明细）——登录即可查看
+  chargeDetail: protectedProcedure
+    .input(z.object({ id: z.union([z.number(), z.string()]) }))
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureChargeTables(conn);
+      const id = Number(input.id);
+      const [headRows] = (await (conn as any).execute(
+        `SELECT id, customer_id, charge_no, charge_type, summary, total_amount, discount_amount,
+                receivable, paid, owed, change_amount, status, doctor, cashier_name, dept, remark,
+                DATE_FORMAT(visit_at, '%Y-%m-%d %H:%i') AS visit_at, created_at
+           FROM yaban_charge WHERE tenant_id = ? AND id = ? LIMIT 1`,
+        [DEFAULT_TENANT_ID, id]
+      )) as any;
+      const h = (headRows as any[])[0];
+      if (!h) throw new TRPCError({ code: "NOT_FOUND", message: "收费单不存在" });
+      const [itemRows] = (await (conn as any).execute(
+        `SELECT id, name, tooth, unit_price, quantity, discount, subtotal FROM yaban_charge_item WHERE charge_id = ? ORDER BY sort ASC, id ASC`,
+        [id]
+      )) as any;
+      const [payRows] = (await (conn as any).execute(
+        `SELECT id, method, amount, DATE_FORMAT(paid_at, '%Y-%m-%d %H:%i') AS paid_at FROM yaban_charge_payment WHERE charge_id = ? ORDER BY id ASC`,
+        [id]
+      )) as any;
+      return {
+        id: Number(h.id),
+        customerId: Number(h.customer_id),
+        chargeNo: h.charge_no as string,
+        chargeType: h.charge_type as string,
+        summary: h.summary as string | null,
+        totalAmount: Number(h.total_amount),
+        discountAmount: Number(h.discount_amount),
+        receivable: Number(h.receivable),
+        paid: Number(h.paid),
+        owed: Number(h.owed),
+        changeAmount: Number(h.change_amount),
+        status: h.status as string,
+        doctor: h.doctor as string | null,
+        cashierName: h.cashier_name as string | null,
+        dept: h.dept as string | null,
+        remark: h.remark as string | null,
+        visitAt: h.visit_at as string | null,
+        createdAt: h.created_at,
+        items: (itemRows as any[]).map((it) => ({
+          id: Number(it.id),
+          name: it.name as string,
+          tooth: it.tooth as string | null,
+          unitPrice: Number(it.unit_price),
+          quantity: Number(it.quantity),
+          discount: Number(it.discount),
+          subtotal: Number(it.subtotal),
+        })),
+        payments: (payRows as any[]).map((p) => ({
+          id: Number(p.id),
+          method: p.method as string,
+          amount: Number(p.amount),
+          paidAt: p.paid_at as string,
+        })),
+      };
+    }),
+
+  // 新建收费单（快速收费）——需 finance 权限
+  createCharge: protectedProcedure
+    .input(z.object({
+      customerId: z.union([z.number(), z.string()]),
+      chargeType: z.enum(["quick", "item"]).default("quick"),
+      items: z.array(z.object({
+        name: z.string().min(1).max(128),
+        tooth: z.string().max(32).optional(),
+        unitPrice: z.number().min(0),
+        quantity: z.number().min(0).default(1),
+        discount: z.number().min(0).max(100).default(100),
+      })).min(1, "至少一个收费项目"),
+      discountAmount: z.number().min(0).default(0),
+      payments: z.array(z.object({
+        method: z.string().min(1).max(32),
+        amount: z.number().min(0),
+      })).default([]),
+      doctor: z.string().max(64).optional(),
+      dept: z.string().max(64).optional(),
+      remark: z.string().max(500).optional(),
+      visitAt: z.string().max(32).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!(await checkYabanPerm(ctx, "finance"))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无收费权限" });
+      }
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureChargeTables(conn);
+      const cid = Number(input.customerId);
+
+      // 计算金额（服务端为准）
+      let totalAmount = 0;
+      const computedItems = input.items.map((it, idx) => {
+        const qty = it.quantity > 0 ? it.quantity : 1;
+        const disc = it.discount >= 0 && it.discount <= 100 ? it.discount : 100;
+        const subtotal = Math.round(it.unitPrice * qty * (disc / 100) * 100) / 100;
+        totalAmount += subtotal;
+        return { ...it, quantity: qty, discount: disc, subtotal, sort: idx };
+      });
+      totalAmount = Math.round(totalAmount * 100) / 100;
+      const discountAmount = Math.round((input.discountAmount || 0) * 100) / 100;
+      const receivable = Math.max(0, Math.round((totalAmount - discountAmount) * 100) / 100);
+      let paid = 0;
+      for (const p of input.payments) paid += p.amount;
+      paid = Math.round(paid * 100) / 100;
+      const owed = Math.max(0, Math.round((receivable - paid) * 100) / 100);
+      const changeAmount = Math.max(0, Math.round((paid - receivable) * 100) / 100);
+      const status = owed > 0 ? (paid > 0 ? "partial" : "unpaid") : "paid";
+      const summary = computedItems.map((i) => i.name).join("、").slice(0, 200);
+      const visitAt = input.visitAt && /^\d{4}-\d{2}-\d{2}/.test(input.visitAt) ? input.visitAt.replace("T", " ").slice(0, 19) : null;
+      const chargeNo = await nextChargeNo(conn, DEFAULT_TENANT_ID);
+
+      const [res] = (await (conn as any).execute(
+        `INSERT INTO yaban_charge
+           (tenant_id, customer_id, charge_no, charge_type, summary, total_amount, discount_amount,
+            receivable, paid, owed, change_amount, status, doctor, cashier_id, cashier_name, dept, remark, visit_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          DEFAULT_TENANT_ID, cid, chargeNo, input.chargeType, summary, totalAmount, discountAmount,
+          receivable, paid, owed, changeAmount, status,
+          s(input.doctor), ctx.user.id ?? null, s(ctx.user.name), s(input.dept), s(input.remark), visitAt,
+        ]
+      )) as any;
+      const chargeId = Number((res as any).insertId);
+
+      for (const it of computedItems) {
+        await (conn as any).execute(
+          `INSERT INTO yaban_charge_item (charge_id, name, tooth, unit_price, quantity, discount, subtotal, sort)
+           VALUES (?,?,?,?,?,?,?,?)`,
+          [chargeId, it.name, s(it.tooth), it.unitPrice, it.quantity, it.discount, it.subtotal, it.sort]
+        );
+      }
+      for (const p of input.payments) {
+        if (p.amount <= 0) continue;
+        await (conn as any).execute(
+          `INSERT INTO yaban_charge_payment (charge_id, method, amount, operator_id) VALUES (?,?,?,?)`,
+          [chargeId, p.method, Math.round(p.amount * 100) / 100, ctx.user.id ?? null]
+        );
+      }
+      return { id: chargeId, chargeNo, receivable, paid, owed, changeAmount, status };
+    }),
+
+  // 补收欠款——需 finance 权限
+  settleCharge: protectedProcedure
+    .input(z.object({
+      id: z.union([z.number(), z.string()]),
+      method: z.string().min(1).max(32),
+      amount: z.number().min(0.01),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!(await checkYabanPerm(ctx, "finance"))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无收费权限" });
+      }
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureChargeTables(conn);
+      const id = Number(input.id);
+      const [rows] = (await (conn as any).execute(
+        `SELECT receivable, paid, owed, status FROM yaban_charge WHERE tenant_id = ? AND id = ? LIMIT 1`,
+        [DEFAULT_TENANT_ID, id]
+      )) as any;
+      const row = (rows as any[])[0];
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "收费单不存在" });
+      if (row.status === "void") throw new TRPCError({ code: "BAD_REQUEST", message: "该单已作废" });
+      const addAmt = Math.round(input.amount * 100) / 100;
+      const newPaid = Math.round((Number(row.paid) + addAmt) * 100) / 100;
+      const receivable = Number(row.receivable);
+      const newOwed = Math.max(0, Math.round((receivable - newPaid) * 100) / 100);
+      const changeAmount = Math.max(0, Math.round((newPaid - receivable) * 100) / 100);
+      const status = newOwed > 0 ? "partial" : "paid";
+      await (conn as any).execute(
+        `INSERT INTO yaban_charge_payment (charge_id, method, amount, operator_id) VALUES (?,?,?,?)`,
+        [id, input.method, addAmt, ctx.user.id ?? null]
+      );
+      await (conn as any).execute(
+        `UPDATE yaban_charge SET paid = ?, owed = ?, change_amount = ?, status = ? WHERE tenant_id = ? AND id = ?`,
+        [newPaid, newOwed, changeAmount, status, DEFAULT_TENANT_ID, id]
+      );
+      return { paid: newPaid, owed: newOwed, changeAmount, status };
+    }),
+
+  // 作废收费单——需 finance 权限
+  voidCharge: protectedProcedure
+    .input(z.object({ id: z.union([z.number(), z.string()]) }))
+    .mutation(async ({ input, ctx }) => {
+      if (!(await checkYabanPerm(ctx, "finance"))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无收费权限" });
+      }
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureChargeTables(conn);
+      await (conn as any).execute(
+        `UPDATE yaban_charge SET status = 'void' WHERE tenant_id = ? AND id = ?`,
         [DEFAULT_TENANT_ID, Number(input.id)]
       );
       return { success: true };

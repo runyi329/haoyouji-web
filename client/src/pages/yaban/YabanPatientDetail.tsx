@@ -21,7 +21,7 @@ const FEATURE_ENTRIES = [
   { icon: `${ICON_BASE}/suifang_jilu.webp`, label: '随访记录', route: '' },
   { icon: `${ICON_BASE}/bingli_jilu.webp`, label: '病历记录', route: '' },
   { icon: `${ICON_BASE}/yingxiang_jilu.webp`, label: '影像记录', route: 'media' },
-  { icon: `${ICON_BASE}/shoufei_jilu.webp`, label: '收费记录', route: '' },
+  { icon: `${ICON_BASE}/shoufei_jilu.webp`, label: '收费记录', route: 'charge' },
   { icon: `${ICON_BASE}/qinyou_guanxi.webp`, label: '亲友关系', route: '' },
   { icon: `${ICON_BASE}/zixun_jilu.webp`, label: '咨询记录', route: '' },
   { icon: `${ICON_BASE}/huifang_jilu.webp`, label: '回访记录', route: '' },
@@ -185,6 +185,8 @@ export default function YabanPatientDetail() {
               onClick={() => {
                 if (feat.route === 'media') {
                   navigate(`/yaban/patient/${id}/media`);
+                } else if (feat.route === 'charge') {
+                  navigate(`/yaban/patient/${id}/charge`);
                 } else if (feat.route) {
                   navigate(feat.route);
                 }
