@@ -22,7 +22,6 @@ const FREQUENT_FEATURES = [
 const MORE_FEATURES = [
   { name: "随访", icon: `${ICON_BASE}/suifang.webp`, route: "/yaban/followup" },
   { name: "运营报表", icon: `${ICON_BASE}/yunying_baobiao.webp`, route: "" },
-  { name: "有数", icon: `${ICON_BASE}/youshu.webp`, route: "" },
   { name: "库存", icon: `${ICON_BASE}/kucun.webp`, route: "" },
   { name: "采购", icon: `${ICON_BASE}/caigou.webp`, route: "" },
   { name: "物品", icon: `${ICON_BASE}/wupin.webp`, route: "" },

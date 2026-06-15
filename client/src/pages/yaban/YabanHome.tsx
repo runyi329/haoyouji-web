@@ -16,13 +16,13 @@ import { trpc } from "@/lib/trpc";
 // COS 图标 URL 基础路径
 const ICON_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/yaban";
 
-// 首页上半部分展示的功能（指定顺序）：日程、顾客、随访、运营报表、诊所排班、库存；末位留给「更多」
+// 首页上半部分展示的功能（指定顺序）：日程、诊所排班、顾客、随访、运营报表、库存；末位留给「更多」
 const HOME_FEATURES = [
-  { name: "日程", icon: `${ICON_BASE}/richeng.webp`, route: "/yaban/schedule" },
+  { name: "预约日程", icon: `${ICON_BASE}/richeng.webp`, route: "/yaban/schedule" },
+  { name: "诊所排班", icon: `${ICON_BASE}/zhensuo_paiban.webp`, route: "" },
   { name: "顾客", icon: `${ICON_BASE}/huanzhe.webp`, route: "/yaban/patients" },
   { name: "随访", icon: `${ICON_BASE}/suifang.webp`, route: "/yaban/followup" },
   { name: "运营报表", icon: `${ICON_BASE}/yunying_baobiao.webp`, route: "" },
-  { name: "诊所排班", icon: `${ICON_BASE}/zhensuo_paiban.webp`, route: "" },
   { name: "库存", icon: `${ICON_BASE}/kucun.webp`, route: "" },
 ];
 
