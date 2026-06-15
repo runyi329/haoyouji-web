@@ -62,3 +62,26 @@ export function autoAvatarKey(ageStr: string | undefined, gender: string | undef
   const bucket = ageToBucket(age);
   return `${genderToKey(gender || "")}_${bucket}` as AvatarKey;
 }
+
+// 12 款头像各自的圆内背景色（自原图提取），用于在方形照片格中铺底，
+// 让放大裁切后残留的圆弧角与背景融合，避免出现白边。
+export const AVATAR_BG: Record<string, string> = {
+  female_child: "#FCB3B8",
+  female_teen: "#F88871",
+  female_youth: "#F68C8A",
+  female_middle: "#D0807A",
+  female_senior: "#B18D7C",
+  female_elder: "#A56F5D",
+  male_child: "#A2DBF8",
+  male_teen: "#1B9CFB",
+  male_youth: "#2097FB",
+  male_middle: "#5C83AB",
+  male_senior: "#A08776",
+  male_elder: "#5E351E",
+};
+
+// 取某头像的背景色，未知时回退浅灰
+export function avatarBg(key: AvatarKey | string | undefined): string {
+  if (!key) return "#F0F7FA";
+  return AVATAR_BG[key as string] || "#F0F7FA";
+}

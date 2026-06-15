@@ -5,7 +5,7 @@ import {
   Edit,
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
-import { avatarSrc, ageToBucket, type AvatarKey } from '@/lib/yaban-avatar';
+import { avatarSrc, avatarBg, ageToBucket, type AvatarKey } from '@/lib/yaban-avatar';
 
 const ICON_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/yaban/patient";
 
@@ -128,9 +128,16 @@ export default function YabanPatientDetail() {
             <InfoItem label="顾客编号" value={patient.medicalNo || '—'} wide />
             <InfoItem label="手机" value={patient.mobile} wide />
           </div>
-          {/* 右上角：照片单元格（跨多行，铺满） */}
-          <div className="w-[78px] self-stretch border-r border-b border-gray-200 bg-[#F0F7FA] overflow-hidden flex-shrink-0">
-            <img src={avatarSrc(patient.avatarKey)} alt={patient.name} className="w-full h-full object-cover" />
+          {/* 右上角：照片单元格（方形，放大上对齐裁切，去除圆环与留白） */}
+          <div
+            className="w-[96px] aspect-square self-start border-r border-b border-gray-200 overflow-hidden flex-shrink-0"
+            style={{ backgroundColor: avatarBg(patient.avatarKey) }}
+          >
+            <img
+              src={avatarSrc(patient.avatarKey)}
+              alt={patient.name}
+              className="w-full h-full object-cover object-top scale-[1.55] origin-top"
+            />
           </div>
         </div>
 
