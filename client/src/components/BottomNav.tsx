@@ -97,15 +97,9 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
 
   const switchItems: SwitchItem[] = [];
 
-  // 「当前所在版本」：以实际位置/手动选择为准，而非归属版本
-  // 优先级：sessionStorage 手动选择 _viewing_version > 按当前路径推断（/yaban/* 为牙伴，其余为脉动）
-  let activeVersionKey = "";
-  try {
-    activeVersionKey = sessionStorage.getItem("_viewing_version") || "";
-  } catch {}
-  if (!activeVersionKey) {
-    activeVersionKey = location.startsWith("/yaban") ? "yaban" : "maidong";
-  }
+  // 「当前所在版本」：直接按当前路径实时判定（同 liulifan 的 isBeautyPage 做法），
+  // 以实际所在页面为准，不被 sessionStorage 残留值盖住。/yaban/* 为牙伴，其余为脉动。
+  const activeVersionKey = location.startsWith("/yaban") ? "yaban" : "maidong";
 
   // 命中当前用户的定制入口（按 username 或 id）
   const myCustomEntries = CUSTOM_ENTRIES.filter(
