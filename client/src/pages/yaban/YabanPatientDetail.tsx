@@ -126,16 +126,16 @@ export default function YabanPatientDetail() {
             </div>
             <div className="text-[11.5px] text-gray-500 flex-shrink-0 ml-2">档案编号：{patient.medicalNo || '—'}</div>
           </div>
-          {/* 第一区：左侧前两行字段 + 右侧跨两行照片单元格 */}
+          {/* 第一区：左侧前两行字段（4列Grid） + 右侧跨两行照片单元格 */}
           <div className="flex">
-            <div className="flex-1 min-w-0 flex flex-wrap content-start">
-              <InfoItem label="姓名" value={patient.name || '—'} quarter />
-              <InfoItem label="昵称" value={patient.nickname} quarter />
-              <InfoItem label="性别" value={patient.gender === 'male' ? '男' : '女'} quarter />
-              <InfoItem label="年龄" value={patient.age > 0 ? `${patient.age}岁` : '—'} quarter />
-              <InfoItem label="生日" value={patient.birthday} wide />
-              <InfoItem label="星座" value={patient.zodiac} quarter />
-              <InfoItem label="生肖" value={patient.chineseZodiac} quarter />
+            <div className="flex-1 min-w-0 grid grid-cols-4">
+              <InfoItem label="姓名" value={patient.name || '—'} />
+              <InfoItem label="昵称" value={patient.nickname} />
+              <InfoItem label="性别" value={patient.gender === 'male' ? '男' : '女'} />
+              <InfoItem label="年龄" value={patient.age > 0 ? `${patient.age}岁` : '—'} />
+              <InfoItem label="生日" value={patient.birthday} span={2} />
+              <InfoItem label="星座" value={patient.zodiac} />
+              <InfoItem label="生肖" value={patient.chineseZodiac} />
             </div>
             {/* 照片：作为表内单元格，跨这两行高度，四边有线 */}
             <div
@@ -149,20 +149,20 @@ export default function YabanPatientDetail() {
               />
             </div>
           </div>
-          {/* 第二区：其余字段整行铺排 */}
-          <div className="flex flex-wrap">
-            <InfoItem label="手机" value={patient.mobile} wide />
-          <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} wide />
-          <InfoItem label="邮箱" value={patient.email} wide />
-          <InfoItem label="紧急联系人" value={emergencyText} wide />
-          <InfoItem label="地址" value={patient.address} full />
-          <InfoItem label="来源" value={patient.source} />
-          {patient.netConsultant && <InfoItem label="网电咨询师" value={patient.netConsultant} />}
-          {patient.consultant && <InfoItem label="咨询师" value={patient.consultant} />}
-          <InfoItem label="上次就诊医生" value={patient.lastDoctor} />
-          <InfoItem label="上次就诊" value={patient.lastVisit || '—'} />
-          {healthTags &&           <InfoItem label="健康标签" value={healthTags} full />}
-            <InfoItem label="备注" value={patient.remark} full />
+          {/* 第二区：其余字段（4列Grid，按需跨列） */}
+          <div className="grid grid-cols-4">
+            <InfoItem label="手机" value={patient.mobile} span={2} />
+            <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} span={2} />
+            <InfoItem label="邮箱" value={patient.email} span={2} />
+            <InfoItem label="紧急联系人" value={emergencyText} span={2} />
+            <InfoItem label="地址" value={patient.address} span={4} />
+            <InfoItem label="来源" value={patient.source} />
+            {patient.netConsultant && <InfoItem label="网电咨询师" value={patient.netConsultant} />}
+            {patient.consultant && <InfoItem label="咨询师" value={patient.consultant} />}
+            <InfoItem label="上次就诊医生" value={patient.lastDoctor} span={2} />
+            <InfoItem label="上次就诊" value={patient.lastVisit || '—'} span={2} />
+            {healthTags && <InfoItem label="健康标签" value={healthTags} span={4} />}
+            <InfoItem label="备注" value={patient.remark} span={4} />
           </div>
         </div>
       </div>
@@ -196,14 +196,14 @@ export default function YabanPatientDetail() {
   );
 }
 
-// 资料档案格子：带右/下边框，label 在上、value 在下
-// full=整行；wide=约半行；默认窄格随内容自适应横排
-function InfoItem({ label, value, full, wide, quarter }: { label: string; value: string; full?: boolean; wide?: boolean; quarter?: boolean }) {
-  const basis = full ? 'w-full' : wide ? 'basis-[48%] grow' : quarter ? 'grow basis-[22%]' : 'grow basis-[30%]';
+// 资料档案格子：带右/下边框，label 在上、value 在下，内容居中
+// span=占据的列数（1~4），基于父容器 4 列 Grid
+function InfoItem({ label, value, span = 1 }: { label: string; value: string; span?: number }) {
+  const spanCls = span >= 4 ? 'col-span-4' : span === 3 ? 'col-span-3' : span === 2 ? 'col-span-2' : 'col-span-1';
   return (
-    <div className={`${basis} min-w-0 border-r border-b border-gray-200 px-2.5 py-1`}>
+    <div className={`${spanCls} min-w-0 border-r border-b border-gray-200 px-2 py-1.5 flex flex-col items-center justify-center text-center`}>
       <div className="text-[10px] text-gray-400 leading-tight">{label}</div>
-      <div className="text-[12.5px] text-gray-700 leading-tight break-words">{value}</div>
+      <div className="text-[12.5px] text-gray-700 leading-tight break-words w-full">{value}</div>
     </div>
   );
 }
