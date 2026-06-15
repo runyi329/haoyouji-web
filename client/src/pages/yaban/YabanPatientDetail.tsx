@@ -4,9 +4,6 @@ import {
   ChevronLeft,
   Plus,
   ChevronRight,
-  MessageSquare,
-  Phone,
-  Mail,
   Edit,
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
@@ -200,23 +197,6 @@ export default function YabanPatientDetail() {
         </div>
       </div>
 
-      {/* 底部操作栏 */}
-      <div className="mt-auto bg-white border-t border-gray-100 px-4 py-3">
-        <div className="flex items-center justify-around">
-          <button className="flex items-center gap-1 text-gray-600 text-[13px]">
-            <MessageSquare className="w-5 h-5 text-sky-500" />
-            发微信
-          </button>
-          <button className="flex items-center gap-1 text-gray-600 text-[13px]">
-            <Mail className="w-5 h-5 text-sky-500" />
-            发短信
-          </button>
-          <button className="flex items-center gap-1 text-gray-600 text-[13px]">
-            <Phone className="w-5 h-5 text-sky-500" />
-            打电话
-          </button>
-        </div>
-      </div>
       <PageTag code="P321" />
     </div>
   );
