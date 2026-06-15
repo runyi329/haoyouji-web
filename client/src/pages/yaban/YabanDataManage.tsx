@@ -638,9 +638,6 @@ export default function YabanDataManage() {
                   </button>
                 }
               />
-              <p className="text-xs text-gray-400 -mt-1 mb-1 flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5" /> 按所选周期自动把以上内容发送到绑定邮箱（辅助功能，可不开启）
-              </p>
               {autoEnabled && (
                 <>
                   <div className="grid grid-cols-4 gap-2 mt-3">
@@ -656,8 +653,8 @@ export default function YabanDataManage() {
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">
-                    将按所选周期，于北京时间凌晨自动把备份发送到个人中心绑定的邮箱{hasBoundEmail ? `（${boundEmail}）` : ""}。
+                  <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 shrink-0" /> 到期当天将于北京时间凌晨 2:00 自动发送。
                   </p>
                   {!hasBoundEmail && (
                     <p className="text-xs text-amber-500 mt-2 flex items-center gap-1">

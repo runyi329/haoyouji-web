@@ -225,6 +225,8 @@ export function calcNextBackupAt(frequency: string, from = new Date()): Date {
   else if (frequency === "weekly") next.setDate(from.getDate() + 7);
   else if (frequency === "quarterly") next.setMonth(from.getMonth() + 3);
   else next.setMonth(from.getMonth() + 1); // monthly 默认
+  // 统一固定在到期当天的凌晨 2:00（与前端提示保持一致）
+  next.setHours(2, 0, 0, 0);
   return next;
 }
 
