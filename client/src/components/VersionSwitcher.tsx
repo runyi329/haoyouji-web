@@ -111,6 +111,10 @@ export default function VersionSwitcher({
   const handleSwitch = (target: { versionKey: string; landingPath: string }) => {
     setOpen(false);
     if (target.versionKey === currentKey) return;
+    // 记录用户手动选择的「查看版本」，让 VersionGuard 尊重此选择、不再按归属版本强制拽回
+    try {
+      sessionStorage.setItem("_viewing_version", target.versionKey);
+    } catch {}
     setLocation(target.landingPath || "/");
   };
 

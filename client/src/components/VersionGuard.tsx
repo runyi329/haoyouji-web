@@ -37,6 +37,14 @@ export default function VersionGuard() {
   const locationRef = useRef(location);
   locationRef.current = location;
 
+  // 版本列表（用于把 sessionStorage 里的查看版本 key 映射到其 landingPath）
+  const { data: versions } = trpc.version.listVersions.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const versionsRef = useRef(versions);
+  versionsRef.current = versions;
+
   useEffect(() => {
     let cancelled = false;
 
@@ -45,9 +53,24 @@ export default function VersionGuard() {
         const me: any = await utils.auth.me.fetch();
         if (cancelled || !me) return;
         const version = me.version as
-          | { landingPath?: string }
+          | { landingPath?: string; switchableVersionKeys?: string[] }
           | undefined;
-        const landingPath = version?.landingPath || "/";
+
+        // 优先尊重用户在「版本切换器」里手动选择的查看版本：
+        // 若用户主动切到了某版本（且该版本在其可切换范围内），则以该版本的领地为准，
+        // 不再按归属版本强制拽回。这样「牙伴归属用户手动切到脉动版」不会被守卫拉回牙伴。
+        let landingPath = version?.landingPath || "/";
+        try {
+          const viewing = sessionStorage.getItem("_viewing_version");
+          const allowed = version?.switchableVersionKeys || [];
+          if (viewing && allowed.includes(viewing)) {
+            const v = (versionsRef.current || []).find(
+              (x: any) => x.versionKey === viewing
+            );
+            if (v) landingPath = (v.landingPath as string) || "/";
+          }
+        } catch {}
+
         const area = deriveVersionArea(landingPath);
         // 脉动版（landingPath="/"）不约束：人脉首页本就是默认领地
         if (!area) return;
