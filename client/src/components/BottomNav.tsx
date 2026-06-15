@@ -23,6 +23,31 @@ const VERSION_ICONS: Record<string, string> = {
 // 奢贝设备网站入口图标（liulifan 专属，非正式版本体系）
 const SHEBEI_ICON = "/shebei-icon.webp";
 
+// 定制入口表（非正式版本体系：某些用户的中间按钮原本是“跳转专属页”）。
+// 统一登记为结构化数据：只要用户被授予“允许切换版本”且总可进入项≥ 2，
+// 中间键就自动变为切换键，并把该定制入口一并放进切换菜单；以后新增定制用户只需在此登记一条。
+// match：命中条件（按 username 或 id）。icon 为空则用通用切换箭头。
+const SHEBEI_ENTRY_ICON = SHEBEI_ICON;
+type CustomEntryDef = {
+  key: string;
+  name: string;
+  icon?: string;
+  path: string;
+  external?: boolean; // 外链（window.open）
+  matchUsername?: string;
+  matchId?: number;
+  pageMatch?: (loc: string) => boolean; // 当前是否处于该入口页
+};
+const CUSTOM_ENTRIES: CustomEntryDef[] = [
+  { key: "wine", name: "红酒商会", icon: undefined, path: "/wine", matchUsername: "cx8618", pageMatch: (l) => l.startsWith("/wine") },
+  { key: "jiang", name: "润仪算力研发中心", icon: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/avatars/bottomnav-r1.jpg", path: "/jiang", matchUsername: "jiang", pageMatch: (l) => l.startsWith("/jiang") },
+  { key: "idealight", name: "IDEALIGHT 红颜派", icon: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/idealight-icon-white.png", path: "/idealight", matchUsername: "STEVEN_HUANG", pageMatch: (l) => l.startsWith("/idealight") },
+  { key: "hanming", name: "汉明专属", icon: undefined, path: "/hanming", matchId: 4957321, pageMatch: (l) => l.startsWith("/hanming") },
+  { key: "yunting", name: "算力中心商城", icon: undefined, path: "/jiang/shop", matchId: 540801, pageMatch: (l) => l.startsWith("/jiang/shop") },
+  { key: "yjh", name: "数金研投", icon: undefined, path: "https://runyi.manus.space", external: true, matchUsername: "YJH" },
+  { key: "beauty", name: "奢贝设备", icon: SHEBEI_ENTRY_ICON, path: "/beauty", matchUsername: "liulifan", pageMatch: (l) => l.startsWith("/beauty") },
+];
+
 export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavProps) {
   const [location, setLocation] = useLocation();
   const [showLedgerMenu, setShowLedgerMenu] = useState(false);
@@ -61,11 +86,12 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
     | undefined;
 
   type SwitchItem = {
-    key: string;          // 唯一标识（versionKey 或 'beauty'）
+    key: string;          // 唯一标识（versionKey 或定制入口 key）
     name: string;         // 显示名称
     icon?: string;        // 图标 URL（无则用通用箭头）
     path: string;         // 跳转地址
     viewingKey?: string;  // 写入 _viewing_version 的值（仅正式版本需要）
+    external?: boolean;   // 外链（window.open）
     active: boolean;      // 是否当前所在
   };
 
@@ -81,10 +107,20 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
     activeVersionKey = location.startsWith("/yaban") ? "yaban" : "maidong";
   }
 
+  // 命中当前用户的定制入口（按 username 或 id）
+  const myCustomEntries = CUSTOM_ENTRIES.filter(
+    (e) =>
+      (e.matchUsername && user?.username === e.matchUsername) ||
+      (e.matchId && user?.id === e.matchId)
+  );
+
   // 1) 正式版本切换项
   if (version?.switchEnabled) {
     // 可去的正式版本：可切换范围 + 归属版本（归属版本始终可回去，即使未列入 scope）+ 当前所在版本
-    const allowedKeys = new Set<string>(version.switchableVersionKeys || []);
+    // 可切换范围为空 = 允许切换到全部已启用版本（与后台“不勾选任何项”语义一致）
+    const scopeKeys = version.switchableVersionKeys || [];
+    const allEnabledKeys = (versions || []).filter((v: any) => v.enabled !== false).map((v: any) => v.versionKey);
+    const allowedKeys = new Set<string>(scopeKeys.length > 0 ? scopeKeys : allEnabledKeys);
     if (version.versionKey) allowedKeys.add(version.versionKey);
     if (activeVersionKey) allowedKeys.add(activeVersionKey);
     (versions || [])
@@ -101,15 +137,23 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
       });
   }
 
-  // 2) 奢贝设备网站入口（liulifan 专属）
-  if (isLiulifan) {
-    switchItems.push({
-      key: "beauty",
-      name: "奢贝设备",
-      icon: SHEBEI_ICON,
-      path: "/beauty",
-      active: isBeautyPage,
+  // 2) 定制入口（通用）：
+  //    - 若用户已开启“允许切换版本”，把其命中的定制入口并入切换菜单（与版本一起切换）；
+  //    - 若未开启切换，则保持旧行为（中间键直接跳定制页，见 handlePlusClick 兜底）。
+  if (version?.switchEnabled) {
+    myCustomEntries.forEach((e) => {
+      switchItems.push({
+        key: e.key,
+        name: e.name,
+        icon: e.icon,
+        path: e.path,
+        external: e.external,
+        active: e.pageMatch ? e.pageMatch(location) : false,
+      });
     });
+  } else if (isLiulifan) {
+    // 向后兼容：liulifan 即便未走正式切换，也保留奢贝入口与脉动版双入口
+    switchItems.push({ key: "beauty", name: "奢贝设备", icon: SHEBEI_ICON, path: "/beauty", active: isBeautyPage });
   }
 
   // 弹框里只展示「除当前所在版本之外」的可去目的地
@@ -143,10 +187,20 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
   const handleSwitchItemClick = (item: SwitchItem) => {
     setShowSwitchMenu(false);
     if (item.active) return;
-    // 正式版本：记录用户手动选择的「查看版本」，让 HomeEntry / VersionGuard 尊重此选择
+    // 外链定制入口：新窗口打开
+    if (item.external) {
+      window.open(item.path, "_blank");
+      return;
+    }
     if (item.viewingKey) {
+      // 正式版本：记录用户手动选择的「查看版本」，让 HomeEntry / VersionGuard 尊重此选择
       try {
         sessionStorage.setItem("_viewing_version", item.viewingKey);
+      } catch {}
+    } else {
+      // 定制入口（非正式版本）：清除查看版本标记，避免被版本守卫拽回
+      try {
+        sessionStorage.removeItem("_viewing_version");
       } catch {}
     }
     setLocation(item.path);
