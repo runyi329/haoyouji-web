@@ -17,10 +17,12 @@ import {
   Settings,
   ChevronRight,
   Phone,
+  LogOut,
 } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 type RowItem = {
   key: string;
@@ -33,6 +35,17 @@ type RowItem = {
 export default function YabanProfile() {
   const [, navigate] = useLocation();
   const { data: user } = trpc.auth.me.useQuery();
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    if (!window.confirm("确认退出当前账号？")) return;
+    try {
+      // 退出前清掉会话级「查看版本」选择，避免下一个登录用户沿用
+      try { sessionStorage.removeItem("_viewing_version"); } catch {}
+      await logout();
+    } catch {}
+    navigate("/login");
+  };
 
   const points = Number((user as any)?.points ?? 0);
   const balanceQuery = trpc.recharge.getBalance.useQuery();
@@ -149,13 +162,22 @@ export default function YabanProfile() {
                 <User className="w-8 h-8 text-white" />
               )}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="text-lg font-bold truncate">{displayName}</div>
               <div className="flex items-center gap-1 text-xs text-white/85 mt-1">
                 <Phone className="w-3.5 h-3.5" />
                 <span>{phone || "未绑定手机号"}</span>
               </div>
             </div>
+            {/* 退出账号按钮 */}
+            <button
+              onClick={handleLogout}
+              className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/20 active:bg-white/30 ring-1 ring-white/40 text-white text-sm transition-colors"
+              aria-label="退出登录"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>退出</span>
+            </button>
           </div>
         </div>
       </div>
