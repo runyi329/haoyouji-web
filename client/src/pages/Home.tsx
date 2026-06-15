@@ -1140,7 +1140,6 @@ const MegaSevenStrip = React.memo(function MegaSevenStrip() {
 export default function Home() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
-  const isLiulifan = user?.username === 'liulifan';
   // 积分商城商品详情 - 跳转独立页面
 
   // 未登录时弹出登录提示，已登录则执行回调
@@ -1192,12 +1191,6 @@ export default function Home() {
   
   // 获取晋升数据（用于显礼等级）
   const { data: promotionStats } = trpc.equity.getPromotionStats.useQuery();
-
-  // 仅liulifan用户：获取需要关注的人数
-  const { data: overviewStats } = trpc.contacts.overviewStats.useQuery(undefined, {
-    enabled: isLiulifan,
-    staleTime: 30000,
-  });
 
   // 积分商城：获取平台共享商品列表（公开接口，无需登录）
   const { data: pointsShopProducts, isLoading: isLoadingShopProducts } = trpc.merchant.getPointsShopProducts.useQuery(
@@ -1662,7 +1655,6 @@ export default function Home() {
   }, []);
 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(false);
 
   // AI 社交容器轮播 state
   const SOCIAL_PAGES = 4;
@@ -1674,8 +1666,6 @@ export default function Home() {
   const socialTouchStartY = useRef(0);
   const socialIsTransitioning = useRef(false);
   const socialAutoTimer = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const needsAttentionCount = overviewStats?.needsAttentionCount ?? 0;
 
   // 解决Safari PWA模式中点×/右滑返回时显示旧缓存数据的问题
   // 策略：记录当前用户ID，页面变为可见时检查用户是否变化，如果变化则强制导航到带时间戳的新URL
@@ -1749,18 +1739,6 @@ export default function Home() {
       document.removeEventListener('touchmove', handleTouchMove);
     };
   }, []);
-
-  // 跳动动画：页面加载后如果有需要关注的人，启动跳动动画
-  useEffect(() => {
-    if (isLiulifan && needsAttentionCount > 0) {
-      const timer = setTimeout(() => {
-        setIsAnimating(true);
-        // 跳动动画持续5秒后停止（但角标始终显示）
-        setTimeout(() => setIsAnimating(false), 5000);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [isLiulifan, needsAttentionCount]);
 
 
   // AI 社交轮播：ResizeObserver

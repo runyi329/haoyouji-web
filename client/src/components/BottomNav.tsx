@@ -17,7 +17,6 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
   const [location, setLocation] = useLocation();
   const [showLedgerMenu, setShowLedgerMenu] = useState(false);
   const { data: user } = trpc.auth.me.useQuery();
-  const isLiulifan = user?.username === 'liulifan';
   const isCx8618 = user?.username === 'cx8618';
   const isJiang = user?.username === 'jiang';
   const isYJH = user?.username === 'YJH';
@@ -51,11 +50,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
 
   // 加号/奢贝/红酒/润仪按鈕点击逻辑
   const handlePlusClick = () => {
-    if (isLiulifan) {
-      // liulifan：跳转到奢贝首页
-      setShowLedgerMenu(false);
-      setLocation('/beauty');
-    } else if (isCx8618) {
+    if (isCx8618) {
       // cx8618：跳转到红酒商会首页
       setShowLedgerMenu(false);
       setLocation('/wine');
@@ -204,9 +199,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
               className="relative -mt-6"
             >
               <div className={`w-14 h-14 rounded-full flex flex-col items-center justify-center shadow-lg transition-all duration-200 overflow-hidden ${centerBtnBg}`}>
-                {isLiulifan ? (
-                  <span className="text-white text-xs font-bold leading-tight text-center">奢贝</span>
-                ) : isCx8618 ? (
+                {isCx8618 ? (
                   <Wine className="w-7 h-7 text-[#C9A84C]" />
                 ) : isJiang ? (
                   <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/avatars/bottomnav-r1.jpg" className="w-10 h-10 object-cover rounded-full" alt="R1" />

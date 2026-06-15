@@ -20,7 +20,7 @@ import YabanShopAdmin from "./pages/yaban/YabanShopAdmin";
 import { Toaster } from "@/components/ui/sonner";
 import { CenterToastProvider } from "@/components/ui/center-toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Route, Switch, useLocation } from "wouter";
+import { Route, Switch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -387,22 +387,7 @@ function LoadingFallback() {
 }
 
 function Router() {
-  const [location, setLocation] = useLocation();
-  const { data: user, isLoading } = trpc.auth.me.useQuery();
-
-  useEffect(() => {
-    if (isLoading) return;
-    // liulifan 首次打开网站时自动跳到奢贝首页
-    // 使用 sessionStorage 标记确保每次会话只跳转一次
-    // 之后点人脉/钱脉/奢贝都是平行切换，不会强制跳转
-    if (user?.username === 'liulifan' && location === '/') {
-      const hasRedirected = sessionStorage.getItem('_beauty_redirected');
-      if (!hasRedirected) {
-        sessionStorage.setItem('_beauty_redirected', '1');
-        setLocation('/beauty');
-      }
-    }
-  }, [user, isLoading, location]);
+  const { isLoading } = trpc.auth.me.useQuery();
 
   // 认证状态加载中时直接显示Loading，避免Switch提前命中NotFound导致刷新页面闪现404
   if (isLoading) {
