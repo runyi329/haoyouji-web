@@ -133,7 +133,9 @@ export default function YabanPatientDetail() {
               <InfoItem label="昵称" value={patient.nickname} quarter />
               <InfoItem label="性别" value={patient.gender === 'male' ? '男' : '女'} quarter />
               <InfoItem label="年龄" value={patient.age > 0 ? `${patient.age}岁` : '—'} quarter />
-              <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} full />
+              <InfoItem label="生日" value={patient.birthday} wide />
+              <InfoItem label="星座" value={patient.zodiac} quarter />
+              <InfoItem label="生肖" value={patient.chineseZodiac} quarter />
             </div>
             {/* 照片：作为表内单元格，跨这两行高度，四边有线 */}
             <div
@@ -150,9 +152,7 @@ export default function YabanPatientDetail() {
           {/* 第二区：其余字段整行铺排 */}
           <div className="flex flex-wrap">
             <InfoItem label="手机" value={patient.mobile} wide />
-          <InfoItem label="生日" value={patient.birthday} />
-          <InfoItem label="星座" value={patient.zodiac} />
-          <InfoItem label="生肖" value={patient.chineseZodiac} />
+          <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} wide />
           <InfoItem label="邮箱" value={patient.email} wide />
           <InfoItem label="紧急联系人" value={emergencyText} wide />
           <InfoItem label="地址" value={patient.address} full />
