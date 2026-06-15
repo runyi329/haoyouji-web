@@ -128,15 +128,15 @@ export default function YabanPatientDetail() {
             <InfoItem label="顾客编号" value={patient.medicalNo || '—'} wide />
             <InfoItem label="手机" value={patient.mobile} wide />
           </div>
-          {/* 右上角：照片单元格（方形，放大上对齐裁切，去除圆环与留白） */}
+          {/* 右上角：照片单元格（方格渐变底 + 居中圆形头像） */}
           <div
-            className="w-[96px] aspect-square self-start border-r border-b border-gray-200 overflow-hidden flex-shrink-0"
-            style={{ backgroundColor: avatarBg(patient.avatarKey) }}
+            className="w-[96px] aspect-square self-start border-r border-b border-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center"
+            style={{ background: `linear-gradient(135deg, ${avatarBg(patient.avatarKey)} 0%, ${avatarBg(patient.avatarKey)}99 100%)` }}
           >
             <img
               src={avatarSrc(patient.avatarKey)}
               alt={patient.name}
-              className="w-full h-full object-cover object-top scale-[1.55] origin-top"
+              className="w-[78px] h-[78px] rounded-full object-cover bg-white/30"
             />
           </div>
         </div>
