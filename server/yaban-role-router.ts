@@ -925,9 +925,44 @@ export const yabanRoleRouter = router({
     return rows as any[];
   }),
 
+  // ============ 创始人专属：全局用户模糊搜索（任命创始股东用） ============
+  searchGlobalUser: protectedProcedure
+    .input(z.object({ keyword: z.string().min(1).max(50), limit: z.number().int().min(1).max(30).default(20) }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureRoleTables(conn);
+      if (!(await isFounder(conn, ctx))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅牙伴创始人可操作" });
+      }
+      const kw = input.keyword.trim();
+      if (!kw) return [];
+      const like = `%${kw}%`;
+      // 全局用户模糊查询：用户名 / 姓名 / 手机号
+      const [rows] = (await conn.execute(
+        `SELECT u.id, u.username, u.name, u.phone, u.avatar,
+                pr.role_key AS founder_role
+         FROM users u
+         LEFT JOIN yaban_platform_role pr
+           ON pr.user_id = u.id AND pr.role_key IN ('founder','co_founder') AND pr.status='active'
+         WHERE u.username LIKE ? OR u.name LIKE ? OR u.phone LIKE ?
+         ORDER BY (u.name = ? OR u.username = ?) DESC, u.id DESC
+         LIMIT ?`,
+        [like, like, like, kw, kw, input.limit]
+      )) as any;
+      return (rows as any[]).map((r) => ({
+        id: Number(r.id),
+        username: r.username || "",
+        name: r.name || "",
+        phone: r.phone || "",
+        avatar: r.avatar || "",
+        founderRole: r.founder_role || null,
+      }));
+    }),
+
   // ============ 创始人专属：授予创始人/创始股东 ============
   grantFounder: protectedProcedure
-    .input(z.object({ identifier: z.string().min(1), title: z.enum(["founder", "co_founder"]).default("co_founder") }))
+    .input(z.object({ identifier: z.string().min(1).optional(), userId: z.number().int().optional(), title: z.enum(["founder", "co_founder"]).default("co_founder") }))
     .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
@@ -935,12 +970,21 @@ export const yabanRoleRouter = router({
       if (!(await isFounder(conn, ctx))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "仅牙伴创始人可操作" });
       }
-      const id = input.identifier.trim();
-      const [userRows] = (await conn.execute(
-        `SELECT id, username, name FROM users WHERE id=? OR username=? OR phone=? LIMIT 1`,
-        [/^\d+$/.test(id) ? Number(id) : 0, id, id]
-      )) as any;
-      const targetUser = (userRows as any[])[0];
+      let targetUser: any = null;
+      if (input.userId) {
+        const [userRows] = (await conn.execute(
+          `SELECT id, username, name FROM users WHERE id=? LIMIT 1`,
+          [input.userId]
+        )) as any;
+        targetUser = (userRows as any[])[0];
+      } else if (input.identifier) {
+        const id = input.identifier.trim();
+        const [userRows] = (await conn.execute(
+          `SELECT id, username, name FROM users WHERE id=? OR username=? OR phone=? LIMIT 1`,
+          [/^\d+$/.test(id) ? Number(id) : 0, id, id]
+        )) as any;
+        targetUser = (userRows as any[])[0];
+      }
       if (!targetUser) throw new TRPCError({ code: "NOT_FOUND", message: "未找到该用户" });
       await conn.execute(
         `DELETE FROM yaban_platform_role WHERE user_id=? AND role_key IN ('founder','co_founder')`,

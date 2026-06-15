@@ -9,7 +9,7 @@
  *   - 医院详情：成员名册（按角色分组）、搜索用户任命院长/股东
  * 规范：移动端优先、蓝白风格、严禁 Emoji，全部用 lucide 图标
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
@@ -604,10 +604,23 @@ function FounderTeamPanel() {
   const [kw, setKw] = useState("");
   const founders = trpc.yabanRole.listFounders.useQuery();
 
+  // 输入防抖，实时模糊搜索全局用户
+  const [debouncedKw, setDebouncedKw] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedKw(kw.trim()), 300);
+    return () => clearTimeout(t);
+  }, [kw]);
+  const searchRes = trpc.yabanRole.searchGlobalUser.useQuery(
+    { keyword: debouncedKw },
+    { enabled: debouncedKw.length > 0 }
+  );
+  const candidates = (searchRes.data || []) as any[];
+
   const grant = trpc.yabanRole.grantFounder.useMutation({
     onSuccess: (r: any) => {
       toast.success(`已任命「${r?.name || "用户"}」为创始股东`);
       setKw("");
+      setDebouncedKw("");
       utils.yabanRole.listFounders.invalidate();
     },
     onError: (e) => toast.error(e.message || "操作失败"),
@@ -669,30 +682,64 @@ function FounderTeamPanel() {
             </div>
           )}
 
-          {/* 任命创始股东 */}
+          {/* 任命创始股东：全局用户模糊搜索后点选 */}
           <div className="border-t border-gray-100 pt-3">
-            <div className="text-xs text-gray-500 mb-1.5">任命创始股东（按用户名 / 姓名 / 手机号）</div>
-            <div className="flex gap-2">
+            <div className="text-xs text-gray-500 mb-1.5">任命创始股东（输入用户名 / 姓名 / 手机号搜索）</div>
+            <div className="relative">
+              <Search className="w-4 h-4 text-gray-300 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 value={kw}
                 onChange={(e) => setKw(e.target.value)}
-                placeholder="输入用户名 / 姓名 / 手机号"
-                className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8]"
+                placeholder="输入关键字即时搜索全平台用户"
+                className="w-full pl-9 pr-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8]"
               />
-              <button
-                onClick={() => {
-                  if (!kw.trim()) {
-                    toast.error("请输入用户名 / 姓名 / 手机号");
-                    return;
-                  }
-                  grant.mutate({ identifier: kw.trim(), title: "co_founder" });
-                }}
-                disabled={grant.isPending}
-                className="px-4 py-2 rounded-xl bg-[#2196C8] text-white text-sm active:bg-[#1B7FB0] disabled:opacity-60 flex items-center gap-1"
-              >
-                {grant.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />} 任命
-              </button>
             </div>
+
+            {/* 候选用户列表 */}
+            {debouncedKw.length > 0 && (
+              <div className="mt-2 border border-gray-100 rounded-xl overflow-hidden">
+                {searchRes.isLoading ? (
+                  <div className="py-4 flex justify-center"><Loader2 className="w-4 h-4 text-[#2196C8] animate-spin" /></div>
+                ) : candidates.length === 0 ? (
+                  <div className="text-xs text-gray-400 py-3 text-center">未找到匹配的用户</div>
+                ) : (
+                  <div className="max-h-64 overflow-y-auto divide-y divide-gray-50">
+                    {candidates.map((u: any) => {
+                      const isFounderRole = u.founderRole === "founder";
+                      const isCoFounder = u.founderRole === "co_founder";
+                      return (
+                        <div key={u.id} className="flex items-center gap-2 px-3 py-2">
+                          <div className="w-8 h-8 rounded-full bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+                            {u.avatar ? (
+                              <img src={u.avatar} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <Users className="w-4 h-4 text-gray-300" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm text-gray-800 truncate">{u.name || u.username}</div>
+                            <div className="text-[11px] text-gray-400 truncate">{u.username}{u.phone ? ` · ${u.phone}` : ""}</div>
+                          </div>
+                          {isFounderRole ? (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#FFF1CC] text-[#9A6A00]">创始人</span>
+                          ) : isCoFounder ? (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#FFF6DD] text-[#9A6A00]">已是创始股东</span>
+                          ) : (
+                            <button
+                              onClick={() => grant.mutate({ userId: u.id, title: "co_founder" })}
+                              disabled={grant.isPending}
+                              className="px-3 py-1 rounded-full bg-[#2196C8] text-white text-[11px] active:bg-[#1B7FB0] disabled:opacity-60 flex items-center gap-1 shrink-0"
+                            >
+                              {grant.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />} 任命
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
