@@ -349,7 +349,7 @@ function CustomerRow({
 
           <div className="flex items-center gap-1.5 mb-0.5">
             <span className="text-[12px] text-gray-500 truncate">
-              {"\u75C5\u5386\u53F7 "}
+              {"\u987E\u5BA2\u7F16\u53F7 "}
               {patient.recordNo}
             </span>
             <button onClick={onCopy} className="text-[11px] text-sky-500 flex-shrink-0">

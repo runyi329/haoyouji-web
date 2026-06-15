@@ -10,6 +10,7 @@ import {
   Edit,
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
+import { avatarSrc, ageToBucket, type AvatarKey } from '@/lib/yaban-avatar';
 
 const ICON_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/yaban/patient";
 
@@ -46,6 +47,7 @@ export default function YabanPatientDetail() {
     gender: row?.gender === '女' ? 'female' : 'male',
     avatar: '',
     medicalNo: row?.medical_no || '',
+    avatarKey: ((row?.avatar as AvatarKey) || (`${row?.gender === '女' ? 'female' : 'male'}_${ageToBucket(row?.age ? Number(row.age) : 0)}` as AvatarKey)),
     source: [row?.source, row?.net_consultant, row?.consultant].filter(Boolean).join(' | ') || '—',
     clinic: '上海恒愿口腔门诊部',
     lastDoctor: row?.last_doctor || '—',
@@ -101,12 +103,8 @@ export default function YabanPatientDetail() {
       <div className="bg-white px-4 py-4">
         <div className="flex items-start">
           {/* 头像 */}
-          <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-              {patient.avatar ? (
-              <img src={patient.avatar} alt={patient.name} className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-2xl text-gray-400">{patient.name[0] || '客'}</span>
-            )}
+          <div className="w-16 h-16 rounded-full bg-[#F0F7FA] flex items-center justify-center overflow-hidden flex-shrink-0">
+            <img src={avatarSrc(patient.avatarKey)} alt={patient.name} className="w-full h-full object-cover" />
           </div>
 
           {/* 信息区域 */}
@@ -151,7 +149,7 @@ export default function YabanPatientDetail() {
             {/* 详细信息 */}
             <div className="mt-2 space-y-1 text-[13px] text-gray-500">
               <div>
-                病历号: <span className="text-gray-700 font-medium">{patient.medicalNo}</span>
+                顾客编号: <span className="text-gray-700 font-medium">{patient.medicalNo}</span>
                 <span className="ml-2 text-sky-500 text-[12px]">复制</span>
               </div>
               <div>来源: {patient.source}</div>

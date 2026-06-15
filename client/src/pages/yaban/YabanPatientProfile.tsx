@@ -3,6 +3,7 @@ import { PageTag } from "@/components/PageTag";
 import { ChevronLeft, Edit, Copy } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { avatarSrc, ageToBucket, type AvatarKey } from "@/lib/yaban-avatar";
 
 // 既往病史七项标记字段（与建表字段一一对应）
 const HISTORY_FIELDS: { key: string; label: string }[] = [
@@ -155,10 +156,14 @@ export default function YabanPatientProfile() {
         </div>
       </div>
 
-      {/* 头部摘要（头像与详情页一致：仅显示姓名首字灰底圆框） */}
+      {/* 头部摘要（头像与列表/详情页一致：按性别+年龄的卡通头像） */}
       <div className="bg-white px-4 py-4 flex items-center gap-3">
-        <div className="w-14 h-14 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden shrink-0">
-          <span className="text-xl text-gray-400">{(r.name || "客")[0]}</span>
+        <div className="w-14 h-14 rounded-full bg-[#F0F7FA] flex items-center justify-center overflow-hidden shrink-0">
+          <img
+            src={avatarSrc(((r.avatar as AvatarKey) || (`${r.gender === "女" ? "female" : "male"}_${ageToBucket(r.age ? Number(r.age) : 0)}` as AvatarKey)))}
+            alt={r.name || "顾客"}
+            className="w-full h-full object-cover"
+          />
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
