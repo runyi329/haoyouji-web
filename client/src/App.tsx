@@ -23,6 +23,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import ErrorBoundary from "./components/ErrorBoundary";
+import VersionGuard from "./components/VersionGuard";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { ColorThemeProvider } from "./contexts/ColorThemeContext";
 import { Loader2 } from "lucide-react";
@@ -823,6 +824,7 @@ function App() {
           <TooltipProvider>
             <CenterToastProvider>
             <Toaster />
+            <VersionGuard />
             <Router />
             <SuperViewBanner />
             </CenterToastProvider>
