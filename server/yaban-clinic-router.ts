@@ -2,15 +2,15 @@
  * 牙伴齿科 - 医院(企业信息)管理 后端路由
  *
  * 业务闭环：
- *   1. 院长/股东(owner) 在"我的-企业信息"提交 企业名称 + 税号 -> 生成一条 pending 医院记录
- *   2. 创始人(founder) 在后台"大数据管理"看到所有医院申请，确认开通(active)/驳回(rejected)
+ *   1. 院长/股东(owner) 在"我的-企业信息"提交/补全 企业信息(名称/税号/地址等)
+ *   2. 创始人(founder) 在后台"大数据管理"看到所有医院，可命名/编辑详情、确认开通/驳回
  *   3. 创始人可搜索用户名，任命某用户为某医院的院长/股东(owner)
- *   4. 看板统计：每家医院的 院长/股东、医生、护士助理、前台、财务 人数，顾客数，营业额(实收)
- *      数据全部来自各院在系统中产生的真实数据（yaban_clinic_member / yaban_customer / yaban_charge）
+ *   4. 看板统计：每家医院各角色人数 / 顾客数 / 营业额，全部来自系统真实数据
  *
  * 说明：
- *   - 医院主表 yaban_clinic 的 id 即作为 tenant_id 维度
- *   - 历史单店数据 tenant_id=1，会作为"默认门诊"展示
+ *   - 医院主表 yaban_clinic.tenant_id 关联各业务表(yaban_clinic_member/yaban_customer/yaban_charge)
+ *   - 历史单店数据 tenant_id=1，已建占位记录
+ *   - 双向维护：院长可提交，创始人也可直接编辑，写同一条记录
  *   - 全部使用 getDbConnection 原生 SQL；严禁 Emoji
  */
 import { z } from "zod";
@@ -19,28 +19,66 @@ import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
 import { isYabanFounder } from "./yaban-role-router";
 
-// 确保医院主表存在
-let clinicInitialized = false;
-async function ensureClinicTable(conn: any) {
-  if (clinicInitialized) return;
-  await conn.execute(`
-    CREATE TABLE IF NOT EXISTS yaban_clinic (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      name VARCHAR(128) NOT NULL,
-      tax_no VARCHAR(64) DEFAULT '',
-      status VARCHAR(16) NOT NULL DEFAULT 'pending',
-      apply_user_id INT DEFAULT NULL,
-      apply_user_name VARCHAR(64) DEFAULT '',
-      reject_reason VARCHAR(255) DEFAULT '',
-      approved_by INT DEFAULT NULL,
-      approved_at DATETIME DEFAULT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      INDEX idx_status (status),
-      INDEX idx_apply_user (apply_user_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='牙伴医院(企业信息)'
-  `);
-  clinicInitialized = true;
+// 医院详情可编辑字段（创始人/院长共用）
+const clinicDetailSchema = z.object({
+  name: z.string().max(128).optional(),
+  shortName: z.string().max(64).optional(),
+  taxNo: z.string().max(64).optional(),
+  clinicType: z.string().max(32).optional(),
+  legalPerson: z.string().max(64).optional(),
+  contactName: z.string().max(64).optional(),
+  contactPhone: z.string().max(32).optional(),
+  province: z.string().max(32).optional(),
+  city: z.string().max(32).optional(),
+  district: z.string().max(32).optional(),
+  address: z.string().max(255).optional(),
+  licenseNo: z.string().max(64).optional(),
+  businessLicenseNo: z.string().max(64).optional(),
+  licenseImage: z.string().max(512).optional(),
+  logoImage: z.string().max(512).optional(),
+  establishedDate: z.string().max(20).optional(),
+  scale: z.string().max(32).optional(),
+  intro: z.string().max(1000).optional(),
+  remark: z.string().max(500).optional(),
+});
+
+// 字段名 -> 数据库列名 映射
+const FIELD_COL: Record<string, string> = {
+  name: "name",
+  shortName: "short_name",
+  taxNo: "tax_no",
+  clinicType: "clinic_type",
+  legalPerson: "legal_person",
+  contactName: "contact_name",
+  contactPhone: "contact_phone",
+  province: "province",
+  city: "city",
+  district: "district",
+  address: "address",
+  licenseNo: "license_no",
+  businessLicenseNo: "business_license_no",
+  licenseImage: "license_image",
+  logoImage: "logo_image",
+  establishedDate: "established_date",
+  scale: "scale",
+  intro: "intro",
+  remark: "remark",
+};
+
+function buildUpdateSet(input: Record<string, any>): { sql: string; params: any[] } {
+  const sets: string[] = [];
+  const params: any[] = [];
+  for (const key of Object.keys(FIELD_COL)) {
+    if (input[key] !== undefined) {
+      const col = FIELD_COL[key];
+      let val: any = input[key];
+      if (col === "established_date") val = val ? val : null;
+      else if (typeof val === "string") val = val.trim();
+      sets.push(`${col}=?`);
+      params.push(val);
+    }
+  }
+  return { sql: sets.join(", "), params };
 }
 
 async function assertFounder(conn: any, ctx: any) {
@@ -48,8 +86,8 @@ async function assertFounder(conn: any, ctx: any) {
   if (!ok) throw new TRPCError({ code: "FORBIDDEN", message: "仅牙伴创始人可操作" });
 }
 
-// 判断用户是否为院长/股东(owner)；返回其所在医院 id 列表
-async function getOwnerClinicIds(conn: any, userId: number): Promise<number[]> {
+// 判断用户是否为院长/股东(owner)；返回其所在医院 tenant_id 列表
+async function getOwnerTenantIds(conn: any, userId: number): Promise<number[]> {
   const [rows] = (await conn.execute(
     `SELECT tenant_id FROM yaban_clinic_member WHERE user_id=? AND role_key='owner' AND status='active'`,
     [userId]
@@ -57,95 +95,138 @@ async function getOwnerClinicIds(conn: any, userId: number): Promise<number[]> {
   return (rows as any[]).map((r) => Number(r.tenant_id));
 }
 
+const SELECT_COLS = `id, tenant_id, name, short_name, tax_no, clinic_type, legal_person,
+  contact_name, contact_phone, province, city, district, address,
+  license_no, business_license_no, license_image, logo_image,
+  established_date, scale, intro, remark,
+  status, apply_user_id, apply_user_name, reject_reason, approved_by, approved_at, created_at, updated_at`;
+
+function mapClinicRow(c: any) {
+  if (!c) return null;
+  return {
+    id: c.id,
+    tenantId: c.tenant_id,
+    name: c.name || "",
+    shortName: c.short_name || "",
+    taxNo: c.tax_no || "",
+    clinicType: c.clinic_type || "",
+    legalPerson: c.legal_person || "",
+    contactName: c.contact_name || "",
+    contactPhone: c.contact_phone || "",
+    province: c.province || "",
+    city: c.city || "",
+    district: c.district || "",
+    address: c.address || "",
+    licenseNo: c.license_no || "",
+    businessLicenseNo: c.business_license_no || "",
+    licenseImage: c.license_image || "",
+    logoImage: c.logo_image || "",
+    establishedDate: c.established_date || "",
+    scale: c.scale || "",
+    intro: c.intro || "",
+    remark: c.remark || "",
+    status: c.status,
+    applyUserId: c.apply_user_id,
+    applyUserName: c.apply_user_name || "",
+    rejectReason: c.reject_reason || "",
+    approvedAt: c.approved_at,
+    createdAt: c.created_at,
+  };
+}
+
 export const yabanClinicRouter = router({
   // ==================== 院长/股东侧 ====================
 
-  // 我的企业信息（owner 才有意义）：返回我名下的医院（按 owner 成员关系 或 我提交的申请）
+  // 我的企业信息（owner 才有意义）
   myClinic: protectedProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) return { isOwner: false, clinic: null as any };
-    await ensureClinicTable(conn);
-    const ownerClinicIds = await getOwnerClinicIds(conn, ctx.user.id);
-    // 取我作为 owner 关联的医院（优先），或我自己提交过的申请
+    const ownerTenantIds = await getOwnerTenantIds(conn, ctx.user.id);
     let clinic: any = null;
-    if (ownerClinicIds.length > 0) {
+    if (ownerTenantIds.length > 0) {
+      // 优先取我作为 owner 关联的医院（按 tenant_id 匹配主表）
       const [rows] = (await conn.execute(
-        `SELECT * FROM yaban_clinic WHERE id IN (${ownerClinicIds.map(() => "?").join(",")}) ORDER BY id DESC LIMIT 1`,
-        ownerClinicIds
+        `SELECT ${SELECT_COLS} FROM yaban_clinic WHERE tenant_id IN (${ownerTenantIds.map(() => "?").join(",")}) ORDER BY id DESC LIMIT 1`,
+        ownerTenantIds
       )) as any;
       clinic = (rows as any[])[0] || null;
+      // 如果该 tenant 还没主表记录，自动建一条占位（active），便于院长填写
+      if (!clinic) {
+        const [res] = (await conn.execute(
+          `INSERT INTO yaban_clinic (tenant_id, name, status) VALUES (?, '', 'active')`,
+          [ownerTenantIds[0]]
+        )) as any;
+        const [r2] = (await conn.execute(`SELECT ${SELECT_COLS} FROM yaban_clinic WHERE id=?`, [res.insertId])) as any;
+        clinic = (r2 as any[])[0] || null;
+      }
     }
     if (!clinic) {
       const [rows] = (await conn.execute(
-        `SELECT * FROM yaban_clinic WHERE apply_user_id=? ORDER BY id DESC LIMIT 1`,
+        `SELECT ${SELECT_COLS} FROM yaban_clinic WHERE apply_user_id=? ORDER BY id DESC LIMIT 1`,
         [ctx.user.id]
       )) as any;
       clinic = (rows as any[])[0] || null;
     }
-    return { isOwner: ownerClinicIds.length > 0, clinic };
+    return { isOwner: ownerTenantIds.length > 0, clinic: mapClinicRow(clinic) };
   }),
 
-  // 提交/更新企业信息申请（企业名称 + 税号）
+  // 院长提交/补全企业信息（全字段）
   applyClinic: protectedProcedure
-    .input(
-      z.object({
-        name: z.string().min(2).max(128),
-        taxNo: z.string().min(0).max(64).optional().default(""),
-      })
-    )
+    .input(clinicDetailSchema.extend({ name: z.string().min(2).max(128) }))
     .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await ensureClinicTable(conn);
-      const name = input.name.trim();
-      const taxNo = (input.taxNo || "").trim();
-      // 当前用户名
       const [uRows] = (await conn.execute(`SELECT name, username FROM users WHERE id=? LIMIT 1`, [ctx.user.id])) as any;
       const applyName = (uRows as any[])[0]?.name || (uRows as any[])[0]?.username || "";
-      // 如果该用户已是某医院 owner，则更新该医院信息；否则若已有自己提交的待审/驳回申请则更新，否则新建
-      const ownerClinicIds = await getOwnerClinicIds(conn, ctx.user.id);
-      if (ownerClinicIds.length > 0) {
-        await conn.execute(
-          `UPDATE yaban_clinic SET name=?, tax_no=? WHERE id=?`,
-          [name, taxNo, ownerClinicIds[0]]
-        );
-        return { success: true, clinicId: ownerClinicIds[0], updated: true };
+      const { sql: setSql, params: setParams } = buildUpdateSet(input);
+      const ownerTenantIds = await getOwnerTenantIds(conn, ctx.user.id);
+
+      if (ownerTenantIds.length > 0) {
+        // 已是 owner：更新其医院（按 tenant_id），不存在则建
+        const [exist] = (await conn.execute(`SELECT id FROM yaban_clinic WHERE tenant_id=? LIMIT 1`, [ownerTenantIds[0]])) as any;
+        const row = (exist as any[])[0];
+        if (row) {
+          await conn.execute(`UPDATE yaban_clinic SET ${setSql} WHERE id=?`, [...setParams, row.id]);
+          return { success: true, clinicId: row.id, updated: true };
+        }
+        const [res] = (await conn.execute(
+          `INSERT INTO yaban_clinic (tenant_id, ${Object.keys(FIELD_COL).filter((k)=>(input as any)[k]!==undefined).map((k)=>FIELD_COL[k]).join(",")}, status)
+           VALUES (?, ${setParams.map(()=>"?").join(",")}, 'active')`,
+          [ownerTenantIds[0], ...setParams]
+        )) as any;
+        return { success: true, clinicId: res.insertId, updated: false };
       }
+
+      // 非 owner：作为开通申请提交（pending），覆盖自己未通过的旧申请
       const [existRows] = (await conn.execute(
         `SELECT id, status FROM yaban_clinic WHERE apply_user_id=? ORDER BY id DESC LIMIT 1`,
         [ctx.user.id]
       )) as any;
       const exist = (existRows as any[])[0];
       if (exist && exist.status !== "active") {
-        // 重新提交：覆盖原申请，状态回到 pending
         await conn.execute(
-          `UPDATE yaban_clinic SET name=?, tax_no=?, status='pending', reject_reason='' WHERE id=?`,
-          [name, taxNo, exist.id]
+          `UPDATE yaban_clinic SET ${setSql}, status='pending', reject_reason='' WHERE id=?`,
+          [...setParams, exist.id]
         );
         return { success: true, clinicId: exist.id, updated: true };
       }
+      const cols = Object.keys(FIELD_COL).filter((k) => (input as any)[k] !== undefined).map((k) => FIELD_COL[k]);
       const [res] = (await conn.execute(
-        `INSERT INTO yaban_clinic (name, tax_no, status, apply_user_id, apply_user_name)
-         VALUES (?, ?, 'pending', ?, ?)`,
-        [name, taxNo, ctx.user.id, applyName]
+        `INSERT INTO yaban_clinic (${cols.join(",")}, status, apply_user_id, apply_user_name)
+         VALUES (${setParams.map(() => "?").join(",")}, 'pending', ?, ?)`,
+        [...setParams, ctx.user.id, applyName]
       )) as any;
       return { success: true, clinicId: res.insertId, updated: false };
     }),
 
   // ==================== 创始人侧：大数据看板 ====================
 
-  // 顶部总览汇总
   adminOverview: protectedProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-    await ensureClinicTable(conn);
     await assertFounder(conn, ctx);
     const [[clinicAgg]] = (await conn.execute(
-      `SELECT
-         COUNT(*) AS total,
-         SUM(status='active') AS active,
-         SUM(status='pending') AS pending
-       FROM yaban_clinic`
+      `SELECT COUNT(*) AS total, SUM(status='active') AS active, SUM(status='pending') AS pending FROM yaban_clinic`
     )) as any;
     const [[ownerAgg]] = (await conn.execute(
       `SELECT COUNT(*) AS owners FROM yaban_clinic_member WHERE role_key='owner' AND status='active'`
@@ -154,9 +235,7 @@ export const yabanClinicRouter = router({
       `SELECT COUNT(*) AS staff FROM yaban_clinic_member WHERE status='active'`
     )) as any;
     const [[custAgg]] = (await conn.execute(`SELECT COUNT(*) AS customers FROM yaban_customer`)) as any;
-    const [[revAgg]] = (await conn.execute(
-      `SELECT COALESCE(SUM(paid),0) AS revenue FROM yaban_charge`
-    )) as any;
+    const [[revAgg]] = (await conn.execute(`SELECT COALESCE(SUM(paid),0) AS revenue FROM yaban_charge`)) as any;
     return {
       clinicTotal: Number(clinicAgg.total || 0),
       clinicActive: Number(clinicAgg.active || 0),
@@ -168,28 +247,25 @@ export const yabanClinicRouter = router({
     };
   }),
 
-  // 医院列表（含各角色人数 + 顾客数 + 营业额统计）
+  // 医院列表（含各角色人数 + 顾客数 + 营业额）
   adminListClinics: protectedProcedure
     .input(z.object({ keyword: z.string().optional().default("") }).optional())
     .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await ensureClinicTable(conn);
       await assertFounder(conn, ctx);
       const kw = (input?.keyword || "").trim();
 
-      // 1) 医院主表记录
-      let clinicSql = `SELECT id, name, tax_no, status, apply_user_id, apply_user_name, reject_reason, created_at, approved_at FROM yaban_clinic`;
+      let clinicSql = `SELECT ${SELECT_COLS} FROM yaban_clinic`;
       const params: any[] = [];
       if (kw) {
-        clinicSql += ` WHERE name LIKE ? OR tax_no LIKE ?`;
-        params.push(`%${kw}%`, `%${kw}%`);
+        clinicSql += ` WHERE name LIKE ? OR tax_no LIKE ? OR city LIKE ?`;
+        params.push(`%${kw}%`, `%${kw}%`, `%${kw}%`);
       }
       clinicSql += ` ORDER BY FIELD(status,'pending','active','rejected'), id DESC`;
       const [clinicRows] = (await conn.execute(clinicSql, params)) as any;
       const clinics = clinicRows as any[];
 
-      // 2) 按 tenant_id 聚合各角色人数
       const [memberAgg] = (await conn.execute(
         `SELECT tenant_id,
                 SUM(role_key='owner') AS owner_cnt,
@@ -203,7 +279,6 @@ export const yabanClinicRouter = router({
       const memberMap: Record<number, any> = {};
       for (const m of memberAgg as any[]) memberMap[Number(m.tenant_id)] = m;
 
-      // 3) 顾客数 / 营业额 按 tenant_id 聚合
       const [custAgg] = (await conn.execute(
         `SELECT tenant_id, COUNT(*) AS cust_cnt FROM yaban_customer GROUP BY tenant_id`
       )) as any;
@@ -215,66 +290,35 @@ export const yabanClinicRouter = router({
       const revMap: Record<number, number> = {};
       for (const r of revAgg as any[]) revMap[Number(r.tenant_id)] = Number(r.rev);
 
-      const result = clinics.map((c) => {
-        const m = memberMap[c.id] || {};
+      return clinics.map((c) => {
+        const tid = Number(c.tenant_id);
+        const m = memberMap[tid] || {};
+        const base = mapClinicRow(c)!;
         return {
-          id: c.id,
-          name: c.name,
-          taxNo: c.tax_no,
-          status: c.status,
-          applyUserId: c.apply_user_id,
-          applyUserName: c.apply_user_name,
-          rejectReason: c.reject_reason,
-          createdAt: c.created_at,
-          approvedAt: c.approved_at,
+          ...base,
           ownerCount: Number(m.owner_cnt || 0),
           doctorCount: Number(m.doctor_cnt || 0),
           assistantCount: Number(m.assistant_cnt || 0),
           receptionistCount: Number(m.receptionist_cnt || 0),
           financeCount: Number(m.finance_cnt || 0),
           staffCount: Number(m.staff_cnt || 0),
-          customerCount: custMap[c.id] || 0,
-          revenue: revMap[c.id] || 0,
+          customerCount: custMap[tid] || 0,
+          revenue: revMap[tid] || 0,
         };
       });
-
-      // 附带：历史默认门诊(tenant_id=1) 如果有成员但没有医院主记录，也展示出来
-      const hasTenant1 = clinics.some((c) => c.id === 1);
-      if (!hasTenant1 && (memberMap[1] || custMap[1] || revMap[1]) && !kw) {
-        const m = memberMap[1] || {};
-        result.unshift({
-          id: 1,
-          name: "默认门诊（历史数据）",
-          taxNo: "",
-          status: "active",
-          applyUserId: null,
-          applyUserName: "",
-          rejectReason: "",
-          createdAt: null,
-          approvedAt: null,
-          ownerCount: Number(m.owner_cnt || 0),
-          doctorCount: Number(m.doctor_cnt || 0),
-          assistantCount: Number(m.assistant_cnt || 0),
-          receptionistCount: Number(m.receptionist_cnt || 0),
-          financeCount: Number(m.finance_cnt || 0),
-          staffCount: Number(m.staff_cnt || 0),
-          customerCount: custMap[1] || 0,
-          revenue: revMap[1] || 0,
-        });
-      }
-      return result;
     }),
 
-  // 单家医院详情：成员名册（按角色分组）
+  // 单家医院详情：完整信息 + 成员名册
   adminClinicDetail: protectedProcedure
     .input(z.object({ clinicId: z.number().int() }))
     .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await ensureClinicTable(conn);
       await assertFounder(conn, ctx);
-      const [cRows] = (await conn.execute(`SELECT * FROM yaban_clinic WHERE id=? LIMIT 1`, [input.clinicId])) as any;
-      const clinic = (cRows as any[])[0] || (input.clinicId === 1 ? { id: 1, name: "默认门诊（历史数据）", status: "active" } : null);
+      const [cRows] = (await conn.execute(`SELECT ${SELECT_COLS} FROM yaban_clinic WHERE id=? LIMIT 1`, [input.clinicId])) as any;
+      const raw = (cRows as any[])[0];
+      if (!raw) throw new TRPCError({ code: "NOT_FOUND", message: "医院不存在" });
+      const tid = Number(raw.tenant_id);
       const [members] = (await conn.execute(
         `SELECT m.user_id, m.role_key, m.status, m.created_at, u.username, u.name, u.phone, u.avatar,
                 r.name AS role_name
@@ -283,46 +327,92 @@ export const yabanClinicRouter = router({
          LEFT JOIN yaban_clinic_role r ON r.role_key=m.role_key
          WHERE m.tenant_id=? AND m.status='active'
          ORDER BY FIELD(m.role_key,'owner','doctor','assistant','receptionist','finance'), m.created_at ASC`,
-        [input.clinicId]
+        [tid]
       )) as any;
-      const [[custAgg]] = (await conn.execute(
-        `SELECT COUNT(*) AS c FROM yaban_customer WHERE tenant_id=?`,
-        [input.clinicId]
-      )) as any;
-      const [[revAgg]] = (await conn.execute(
-        `SELECT COALESCE(SUM(paid),0) AS rev FROM yaban_charge WHERE tenant_id=?`,
-        [input.clinicId]
-      )) as any;
+      const [[custAgg]] = (await conn.execute(`SELECT COUNT(*) AS c FROM yaban_customer WHERE tenant_id=?`, [tid])) as any;
+      const [[revAgg]] = (await conn.execute(`SELECT COALESCE(SUM(paid),0) AS rev FROM yaban_charge WHERE tenant_id=?`, [tid])) as any;
       return {
-        clinic,
+        clinic: mapClinicRow(raw),
         members: members as any[],
         customerCount: Number(custAgg.c || 0),
         revenue: Number(revAgg.rev || 0),
       };
     }),
 
-  // 确认开通（批准）：将医院置为 active，并把申请人任命为该医院 owner
+  // 创始人：新建医院（可指定 tenant_id，留空则自动分配新的）
+  adminCreateClinic: protectedProcedure
+    .input(clinicDetailSchema.extend({ name: z.string().min(1).max(128), tenantId: z.number().int().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await assertFounder(conn, ctx);
+      let tenantId = input.tenantId;
+      if (!tenantId) {
+        // 自动分配：取 member/customer/clinic 中最大 tenant_id + 1
+        const [[r]] = (await conn.execute(
+          `SELECT GREATEST(
+              COALESCE((SELECT MAX(tenant_id) FROM yaban_clinic),0),
+              COALESCE((SELECT MAX(tenant_id) FROM yaban_clinic_member),0),
+              COALESCE((SELECT MAX(tenant_id) FROM yaban_customer),0)
+           ) AS maxt`
+        )) as any;
+        tenantId = Number(r.maxt || 0) + 1;
+      }
+      const cols = Object.keys(FIELD_COL).filter((k) => input[k as keyof typeof input] !== undefined).map((k) => FIELD_COL[k]);
+      const { params: setParams } = buildUpdateSet(input as any);
+      const [res] = (await conn.execute(
+        `INSERT INTO yaban_clinic (tenant_id, ${cols.join(",")}, status, approved_by, approved_at)
+         VALUES (?, ${setParams.map(() => "?").join(",")}, 'active', ?, NOW())`,
+        [tenantId, ...setParams, ctx.user.id]
+      )) as any;
+      return { success: true, clinicId: res.insertId, tenantId };
+    }),
+
+  // 创始人：编辑医院全字段（命名/补全详情）
+  adminUpdateClinic: protectedProcedure
+    .input(clinicDetailSchema.extend({ clinicId: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await assertFounder(conn, ctx);
+      const { sql: setSql, params: setParams } = buildUpdateSet(input as any);
+      if (!setSql) return { success: true };
+      await conn.execute(`UPDATE yaban_clinic SET ${setSql} WHERE id=?`, [...setParams, input.clinicId]);
+      return { success: true };
+    }),
+
+  // 确认开通（批准）
   adminApprove: protectedProcedure
     .input(z.object({ clinicId: z.number().int() }))
     .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await ensureClinicTable(conn);
       await assertFounder(conn, ctx);
       const [cRows] = (await conn.execute(`SELECT * FROM yaban_clinic WHERE id=? LIMIT 1`, [input.clinicId])) as any;
       const clinic = (cRows as any[])[0];
       if (!clinic) throw new TRPCError({ code: "NOT_FOUND", message: "医院不存在" });
+      // 批准时若没有 tenant_id 则分配一个
+      let tenantId = clinic.tenant_id;
+      if (!tenantId) {
+        const [[r]] = (await conn.execute(
+          `SELECT GREATEST(
+              COALESCE((SELECT MAX(tenant_id) FROM yaban_clinic),0),
+              COALESCE((SELECT MAX(tenant_id) FROM yaban_clinic_member),0),
+              COALESCE((SELECT MAX(tenant_id) FROM yaban_customer),0)
+           ) AS maxt`
+        )) as any;
+        tenantId = Number(r.maxt || 0) + 1;
+      }
       await conn.execute(
-        `UPDATE yaban_clinic SET status='active', reject_reason='', approved_by=?, approved_at=NOW() WHERE id=?`,
-        [ctx.user.id, input.clinicId]
+        `UPDATE yaban_clinic SET status='active', tenant_id=?, reject_reason='', approved_by=?, approved_at=NOW() WHERE id=?`,
+        [tenantId, ctx.user.id, input.clinicId]
       );
-      // 把申请人任命为该医院 owner（以医院 id 作为 tenant_id）
       if (clinic.apply_user_id) {
         await conn.execute(
           `INSERT INTO yaban_clinic_member (tenant_id, user_id, role_key, status, invited_by)
            VALUES (?, ?, 'owner', 'active', ?)
            ON DUPLICATE KEY UPDATE role_key='owner', status='active', updated_at=CURRENT_TIMESTAMP`,
-          [input.clinicId, clinic.apply_user_id, ctx.user.id]
+          [tenantId, clinic.apply_user_id, ctx.user.id]
         );
       }
       return { success: true };
@@ -334,7 +424,6 @@ export const yabanClinicRouter = router({
     .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await ensureClinicTable(conn);
       await assertFounder(conn, ctx);
       await conn.execute(
         `UPDATE yaban_clinic SET status='rejected', reject_reason=? WHERE id=?`,
@@ -343,13 +432,12 @@ export const yabanClinicRouter = router({
       return { success: true };
     }),
 
-  // 创始人搜索用户（按用户名/姓名/手机号）
+  // 创始人搜索用户
   adminSearchUser: protectedProcedure
     .input(z.object({ keyword: z.string().min(1).max(50) }))
     .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await ensureClinicTable(conn);
       await assertFounder(conn, ctx);
       const kw = `%${input.keyword.trim()}%`;
       const [rows] = (await conn.execute(
@@ -360,34 +448,38 @@ export const yabanClinicRouter = router({
       return rows as any[];
     }),
 
-  // 创始人任命某用户为某医院的 院长/股东(owner)
+  // 创始人任命某用户为某医院 院长/股东(owner)
   adminAppointOwner: protectedProcedure
     .input(z.object({ clinicId: z.number().int(), userId: z.number().int() }))
     .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await ensureClinicTable(conn);
       await assertFounder(conn, ctx);
+      const [cRows] = (await conn.execute(`SELECT tenant_id FROM yaban_clinic WHERE id=? LIMIT 1`, [input.clinicId])) as any;
+      const tid = Number((cRows as any[])[0]?.tenant_id || 0);
+      if (!tid) throw new TRPCError({ code: "BAD_REQUEST", message: "该医院尚未分配租户，请先确认开通" });
       await conn.execute(
         `INSERT INTO yaban_clinic_member (tenant_id, user_id, role_key, status, invited_by)
          VALUES (?, ?, 'owner', 'active', ?)
          ON DUPLICATE KEY UPDATE role_key='owner', status='active', updated_at=CURRENT_TIMESTAMP`,
-        [input.clinicId, input.userId, ctx.user.id]
+        [tid, input.userId, ctx.user.id]
       );
       return { success: true };
     }),
 
-  // 创始人取消某用户在某医院的 owner 任命（移除成员）
+  // 创始人取消某用户 owner 任命
   adminRemoveOwner: protectedProcedure
     .input(z.object({ clinicId: z.number().int(), userId: z.number().int() }))
     .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await ensureClinicTable(conn);
       await assertFounder(conn, ctx);
+      const [cRows] = (await conn.execute(`SELECT tenant_id FROM yaban_clinic WHERE id=? LIMIT 1`, [input.clinicId])) as any;
+      const tid = Number((cRows as any[])[0]?.tenant_id || 0);
+      if (!tid) return { success: true };
       await conn.execute(
         `DELETE FROM yaban_clinic_member WHERE tenant_id=? AND user_id=? AND role_key='owner'`,
-        [input.clinicId, input.userId]
+        [tid, input.userId]
       );
       return { success: true };
     }),

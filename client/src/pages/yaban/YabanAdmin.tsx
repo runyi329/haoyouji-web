@@ -31,9 +31,14 @@ import {
   UserPlus,
   X,
   Crown,
+  Plus,
+  Pencil,
+  MapPin,
+  Save,
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
+import ClinicForm, { ClinicFormValue, EMPTY_CLINIC, fromClinic } from "./ClinicForm";
 
 const fmtMoney = (n: number) =>
   "¥" + Number(n || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -51,6 +56,7 @@ export default function YabanAdmin() {
   const utils = trpc.useUtils();
   const [keyword, setKeyword] = useState("");
   const [detailId, setDetailId] = useState<number | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   const overview = trpc.yabanClinic.adminOverview.useQuery();
   const list = trpc.yabanClinic.adminListClinics.useQuery({ keyword });
@@ -105,9 +111,16 @@ export default function YabanAdmin() {
           <span className="min-w-0">
             <span className="block text-sm font-semibold text-gray-800 truncate">{c.name}</span>
             <span className="block text-xs text-gray-400 mt-0.5 truncate">
-              {c.taxNo ? `税号 ${c.taxNo}` : "未填写税号"}
+              {c.clinicType ? c.clinicType : "未填类型"}
+              {c.contactPhone ? ` · ${c.contactPhone}` : ""}
               {c.applyUserName ? ` · 申请人 ${c.applyUserName}` : ""}
             </span>
+            {(c.province || c.city || c.address) && (
+              <span className="flex items-center gap-0.5 text-[11px] text-gray-400 mt-0.5 truncate">
+                <MapPin className="w-3 h-3 shrink-0" />
+                {[c.province, c.city, c.district, c.address].filter(Boolean).join("")}
+              </span>
+            )}
           </span>
         </button>
         <StatusTag status={c.status} />
@@ -128,7 +141,7 @@ export default function YabanAdmin() {
       <div className="mt-2 flex items-center justify-between text-xs text-gray-500 px-1">
         <span className="inline-flex items-center gap-1"><Users className="w-3.5 h-3.5 text-[#2196C8]" />顾客 {c.customerCount ?? 0}</span>
         <span className="inline-flex items-center gap-1"><Wallet className="w-3.5 h-3.5 text-[#16A34A]" />营业额 {fmtMoney(c.revenue)}</span>
-        <button onClick={() => setDetailId(c.id)} className="inline-flex items-center gap-0.5 text-[#1E88D6]">详情<ChevronRight className="w-3.5 h-3.5" /></button>
+        <button onClick={() => setDetailId(c.id)} className="inline-flex items-center gap-0.5 text-[#1E88D6]"><Pencil className="w-3 h-3" />编辑详情<ChevronRight className="w-3.5 h-3.5" /></button>
       </div>
 
       {c.status === "rejected" && c.rejectReason && (
@@ -221,8 +234,16 @@ export default function YabanAdmin() {
 
       {/* 医院列表 */}
       <div className="max-w-lg mx-auto px-4 mt-4">
-        <div className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1">
-          <Building2 className="w-4 h-4 text-[#1E88D6]" /> 医院列表（{activeClinics.length}）
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-sm font-bold text-gray-700 flex items-center gap-1">
+            <Building2 className="w-4 h-4 text-[#1E88D6]" /> 医院列表（{activeClinics.length}）
+          </div>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#2196C8] text-white text-xs font-medium active:bg-[#1B7FB0]"
+          >
+            <Plus className="w-3.5 h-3.5" /> 新建医院
+          </button>
         </div>
         {list.isLoading ? (
           <div className="bg-white rounded-2xl shadow-sm p-8 flex justify-center"><Loader2 className="w-6 h-6 text-[#2196C8] animate-spin" /></div>
@@ -238,6 +259,70 @@ export default function YabanAdmin() {
       {detailId !== null && (
         <ClinicDetailSheet clinicId={detailId} onClose={() => setDetailId(null)} />
       )}
+
+      {showCreate && <ClinicCreateSheet onClose={() => setShowCreate(false)} />}
+    </div>
+  );
+}
+
+/* ============ 新建医院弹窗 ============ */
+function ClinicCreateSheet({ onClose }: { onClose: () => void }) {
+  const utils = trpc.useUtils();
+  const [form, setForm] = useState<ClinicFormValue>(EMPTY_CLINIC);
+  const [tenantId, setTenantId] = useState<string>("");
+
+  const create = trpc.yabanClinic.adminCreateClinic.useMutation({
+    onSuccess: () => {
+      toast.success("医院已创建");
+      utils.yabanClinic.adminListClinics.invalidate();
+      utils.yabanClinic.adminOverview.invalidate();
+      onClose();
+    },
+    onError: (e) => toast.error(e.message || "创建失败"),
+  });
+
+  const onSubmit = () => {
+    if (!form.name.trim()) {
+      toast.error("请填写医院名称");
+      return;
+    }
+    const payload: any = { ...form };
+    if (tenantId.trim()) {
+      const t = Number(tenantId.trim());
+      if (!Number.isNaN(t) && t > 0) payload.tenantId = t;
+    }
+    create.mutate(payload);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={onClose}>
+      <div className="w-full max-w-lg bg-[#F0F4F8] rounded-t-3xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 bg-white px-4 py-3 flex items-center justify-between border-b border-gray-100 rounded-t-3xl">
+          <span className="text-base font-bold text-gray-800">新建医院</span>
+          <button onClick={onClose} className="p-1 active:bg-gray-100 rounded-full"><X className="w-5 h-5 text-gray-500" /></button>
+        </div>
+        <div className="p-4 space-y-3">
+          <div className="bg-white rounded-2xl p-4">
+            <ClinicForm value={form} onChange={setForm} showRemark />
+            <div className="mt-3">
+              <label className="block text-xs text-gray-500 mb-1">指定租户ID（选填，留空自动分配）</label>
+              <input
+                value={tenantId}
+                onChange={(e) => setTenantId(e.target.value)}
+                placeholder="留空则自动分配新租户"
+                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8] bg-white"
+              />
+            </div>
+          </div>
+          <button
+            onClick={onSubmit}
+            disabled={create.isPending}
+            className="w-full py-3 rounded-2xl bg-[#2196C8] text-white text-sm font-semibold active:bg-[#1B7FB0] disabled:opacity-60 flex items-center justify-center gap-1"
+          >
+            {create.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} 创建医院
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -248,6 +333,19 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
   const detail = trpc.yabanClinic.adminClinicDetail.useQuery({ clinicId });
   const [userKw, setUserKw] = useState("");
   const [searching, setSearching] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<ClinicFormValue>(EMPTY_CLINIC);
+
+  const update = trpc.yabanClinic.adminUpdateClinic.useMutation({
+    onSuccess: () => {
+      toast.success("医院信息已保存");
+      utils.yabanClinic.adminClinicDetail.invalidate({ clinicId });
+      utils.yabanClinic.adminListClinics.invalidate();
+      utils.yabanClinic.adminOverview.invalidate();
+      setEditing(false);
+    },
+    onError: (e) => toast.error(e.message || "保存失败"),
+  });
   const searchUser = trpc.yabanClinic.adminSearchUser.useQuery(
     { keyword: userKw },
     { enabled: searching && userKw.trim().length > 0 }
@@ -318,6 +416,63 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
                 <div className="text-base font-bold text-[#16A34A]">{fmtMoney(d?.revenue ?? 0)}</div>
                 <div className="text-[11px] text-gray-400 mt-0.5">营业额</div>
               </div>
+            </div>
+
+            {/* 医院详细信息（创始人可命名/编辑） */}
+            <div className="bg-white rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-bold text-gray-700 flex items-center gap-1">
+                  <Building2 className="w-4 h-4 text-[#1E88D6]" /> 医院详细信息
+                </div>
+                {!editing ? (
+                  <button
+                    onClick={() => {
+                      setForm(fromClinic(d?.clinic));
+                      setEditing(true);
+                    }}
+                    className="inline-flex items-center gap-1 text-xs text-[#1E88D6] active:opacity-60"
+                  >
+                    <Pencil className="w-3.5 h-3.5" /> {d?.clinic?.name ? "编辑" : "命名/补全"}
+                  </button>
+                ) : (
+                  <button onClick={() => setEditing(false)} className="text-xs text-gray-400 active:opacity-60">取消</button>
+                )}
+              </div>
+
+              {!editing ? (
+                <div className="space-y-1.5">
+                  <DetailRow label="名称" value={d?.clinic?.name} />
+                  <DetailRow label="简称" value={d?.clinic?.shortName} />
+                  <DetailRow label="类型" value={d?.clinic?.clinicType} />
+                  <DetailRow label="法人" value={d?.clinic?.legalPerson} />
+                  <DetailRow label="联系人" value={[d?.clinic?.contactName, d?.clinic?.contactPhone].filter(Boolean).join(" / ")} />
+                  <DetailRow label="地址" value={[d?.clinic?.province, d?.clinic?.city, d?.clinic?.district, d?.clinic?.address].filter(Boolean).join("")} />
+                  <DetailRow label="营业执照" value={d?.clinic?.businessLicenseNo} />
+                  <DetailRow label="许可证号" value={d?.clinic?.licenseNo} />
+                  <DetailRow label="税号" value={d?.clinic?.taxNo} />
+                  <DetailRow label="开业日期" value={d?.clinic?.establishedDate ? String(d.clinic.establishedDate).slice(0, 10) : ""} />
+                  <DetailRow label="规模" value={d?.clinic?.scale} />
+                  <DetailRow label="简介" value={d?.clinic?.intro} />
+                  <DetailRow label="备注" value={d?.clinic?.remark} />
+                </div>
+              ) : (
+                <div>
+                  <ClinicForm value={form} onChange={setForm} showRemark />
+                  <button
+                    onClick={() => {
+                      if (!form.name.trim()) {
+                        toast.error("请填写医院名称");
+                        return;
+                      }
+                      update.mutate({ clinicId, ...form });
+                    }}
+                    disabled={update.isPending}
+                    className="mt-3 w-full py-2.5 rounded-2xl bg-[#2196C8] text-white text-sm font-semibold active:bg-[#1B7FB0] disabled:opacity-60 flex items-center justify-center gap-1"
+                  >
+                    {update.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} 保存医院信息
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 任命院长/股东 */}
@@ -409,6 +564,16 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ============ 详情只读行 ============ */
+function DetailRow({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="flex items-start gap-2 text-xs">
+      <span className="text-gray-400 shrink-0 w-16">{label}</span>
+      <span className={`flex-1 break-all ${value ? "text-gray-700" : "text-gray-300"}`}>{value || "未填写"}</span>
     </div>
   );
 }

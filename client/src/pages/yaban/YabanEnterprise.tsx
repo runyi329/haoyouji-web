@@ -1,14 +1,16 @@
 /**
  * 牙伴齿科 - 企业信息（院长/股东侧）
  * 路由：/yaban/enterprise
- * 仅院长/股东(owner) 可进入：填写 企业名称 + 税号，提交开通申请；显示审核状态
+ * 仅院长/股东(owner) 可进入：填写完整企业详情，提交后由创始人审核开通；已开通后仍可补全/编辑详情（与创始人写同一条记录）
+ * 规范：移动端优先、蓝白风格、严禁 Emoji
  */
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { ChevronLeft, Building2, Loader2, CheckCircle2, Clock, XCircle } from "lucide-react";
+import { ChevronLeft, Building2, Loader2, CheckCircle2, Clock, XCircle, Save } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
+import ClinicForm, { ClinicFormValue, EMPTY_CLINIC, fromClinic } from "./ClinicForm";
 
 export default function YabanEnterprise() {
   const [, navigate] = useLocation();
@@ -16,19 +18,15 @@ export default function YabanEnterprise() {
   const { data, isLoading } = trpc.yabanClinic.myClinic.useQuery();
   const clinic = data?.clinic as any;
 
-  const [name, setName] = useState("");
-  const [taxNo, setTaxNo] = useState("");
+  const [form, setForm] = useState<ClinicFormValue>(EMPTY_CLINIC);
 
   useEffect(() => {
-    if (clinic) {
-      setName(clinic.name || "");
-      setTaxNo(clinic.tax_no || "");
-    }
+    if (clinic) setForm(fromClinic(clinic));
   }, [clinic]);
 
   const apply = trpc.yabanClinic.applyClinic.useMutation({
-    onSuccess: () => {
-      toast.success("已提交，请等待创始人审核开通");
+    onSuccess: (res: any) => {
+      toast.success(res?.updated ? "企业信息已保存" : "已提交，请等待创始人审核开通");
       utils.yabanClinic.myClinic.invalidate();
     },
     onError: (e) => toast.error(e.message || "提交失败"),
@@ -38,11 +36,11 @@ export default function YabanEnterprise() {
   const isActive = status === "active";
 
   const submit = () => {
-    if (name.trim().length < 2) {
+    if (form.name.trim().length < 2) {
       toast.error("请输入正确的企业名称");
       return;
     }
-    apply.mutate({ name: name.trim(), taxNo: taxNo.trim() });
+    apply.mutate({ ...form, name: form.name.trim() });
   };
 
   const StatusBadge = () => {
@@ -79,7 +77,7 @@ export default function YabanEnterprise() {
             <Building2 className="w-6 h-6" />
             <span className="text-lg font-bold">企业信息</span>
           </div>
-          <p className="text-xs text-white/85 mt-1">填写企业名称与税号，提交后由牙伴创始人审核开通</p>
+          <p className="text-xs text-white/85 mt-1">完善门诊详细信息，提交后由牙伴创始人审核开通</p>
         </div>
       </div>
 
@@ -97,53 +95,28 @@ export default function YabanEnterprise() {
                 <StatusBadge />
               </div>
             )}
-            {status === "rejected" && clinic?.reject_reason && (
+            {status === "rejected" && clinic?.rejectReason && (
               <div className="bg-[#FDECEC] rounded-2xl p-3 text-xs text-[#DC2626]">
-                驳回原因：{clinic.reject_reason}
+                驳回原因：{clinic.rejectReason}
               </div>
             )}
 
-            {/* 表单 */}
-            <div className="bg-white rounded-2xl shadow-sm p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">企业名称</label>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  disabled={isActive}
-                  placeholder="请输入营业执照上的企业全称"
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8] disabled:bg-gray-50 disabled:text-gray-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">企业税号</label>
-                <input
-                  value={taxNo}
-                  onChange={(e) => setTaxNo(e.target.value)}
-                  disabled={isActive}
-                  placeholder="统一社会信用代码"
-                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8] disabled:bg-gray-50 disabled:text-gray-500"
-                />
-              </div>
-
-              {isActive ? (
-                <div className="text-center text-xs text-[#16A34A] py-1">
-                  企业信息已开通，如需修改请联系牙伴创始人
-                </div>
-              ) : (
-                <button
-                  onClick={submit}
-                  disabled={apply.isPending}
-                  className="w-full py-3 rounded-xl bg-[#2196C8] text-white text-sm font-medium active:bg-[#1B7FB0] disabled:opacity-60 flex items-center justify-center gap-2"
-                >
-                  {apply.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {status === "rejected" ? "重新提交申请" : status === "pending" ? "更新申请信息" : "提交开通申请"}
-                </button>
-              )}
+            {/* 详情表单 */}
+            <div className="bg-white rounded-2xl shadow-sm p-4">
+              <ClinicForm value={form} onChange={setForm} />
             </div>
 
+            <button
+              onClick={submit}
+              disabled={apply.isPending}
+              className="w-full py-3 rounded-2xl bg-[#2196C8] text-white text-sm font-semibold active:bg-[#1B7FB0] disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              {apply.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {isActive ? "保存企业信息" : status === "rejected" ? "重新提交申请" : status === "pending" ? "更新申请信息" : "提交开通申请"}
+            </button>
+
             <p className="text-xs text-gray-400 px-1 leading-relaxed">
-              说明：企业信息用于将您的门诊接入牙伴齿科管理平台。提交后，平台创始人将核验您的企业名称与税号并确认开通，开通后即可使用门诊员工管理、营收统计等功能。
+              说明：企业信息用于将您的门诊接入牙伴齿科管理平台。{isActive ? "您的门诊已开通，可随时在此补全或修改详细信息。" : "提交后，平台创始人将核验信息并确认开通，开通后即可使用门诊员工管理、营收统计等功能。"}
             </p>
           </>
         )}
