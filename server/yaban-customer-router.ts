@@ -235,7 +235,7 @@ async function ensureCustomerTable(conn: any) {
 }
 
 // 确保标签表与关联表存在
-async function ensureTagTables(conn: any) {
+async function ensureTagTables(conn: any, tenantId: number = DEFAULT_TENANT_ID) {
   await conn.execute(`
     CREATE TABLE IF NOT EXISTS yaban_tag (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -261,7 +261,7 @@ async function ensureTagTables(conn: any) {
   try {
     const [cntRows] = (await conn.execute(
       `SELECT COUNT(*) AS cnt FROM yaban_tag WHERE tenant_id = ?`,
-      [DEFAULT_TENANT_ID]
+      [tenantId]
     )) as any;
     if (Number((cntRows as any[])[0]?.cnt || 0) === 0) {
       const presets: Array<[string, string]> = [
@@ -275,7 +275,7 @@ async function ensureTagTables(conn: any) {
       for (const [name, color] of presets) {
         await conn.execute(
           `INSERT INTO yaban_tag (tenant_id, name, color, sort) VALUES (?,?,?,?)`,
-          [DEFAULT_TENANT_ID, name, color, sort++]
+          [tenantId, name, color, sort++]
         );
       }
     }
@@ -400,9 +400,10 @@ async function nextChargeNo(conn: any, tenantId: number): Promise<string> {
 }
 
 // 收费项目库：分类表 + 项目表
-let chargeItemLibReady = false;
-async function ensureChargeItemLib(conn: any) {
-  if (chargeItemLibReady) return;
+let chargeItemLibStructureReady = false;
+const chargeItemLibSeeded = new Set<number>();
+async function ensureChargeItemLib(conn: any, tenantId: number = DEFAULT_TENANT_ID) {
+  if (chargeItemLibStructureReady && chargeItemLibSeeded.has(tenantId)) return;
   // 项目分类表
   await conn.execute(`
     CREATE TABLE IF NOT EXISTS yaban_charge_category (
@@ -438,7 +439,7 @@ async function ensureChargeItemLib(conn: any) {
   // 首次为空时写入默认分类与常用项目，便于诊所直接使用
   const [catCnt] = (await conn.execute(
     `SELECT COUNT(*) AS c FROM yaban_charge_category WHERE tenant_id = ?`,
-    [DEFAULT_TENANT_ID]
+    [tenantId]
   )) as any;
   if (Number((catCnt as any[])[0]?.c || 0) === 0) {
     const defaults: { cat: string; items: { name: string; price: number; unit: string; common?: boolean }[] }[] = [
@@ -486,19 +487,20 @@ async function ensureChargeItemLib(conn: any) {
     for (const group of defaults) {
       const [r] = (await conn.execute(
         `INSERT INTO yaban_charge_category (tenant_id, name, sort, enabled) VALUES (?, ?, ?, 1)`,
-        [DEFAULT_TENANT_ID, group.cat, catSort++]
+        [tenantId, group.cat, catSort++]
       )) as any;
       const catId = (r as any).insertId;
       let itemSort = 0;
       for (const it of group.items) {
         await conn.execute(
           `INSERT INTO yaban_charge_product (tenant_id, category_id, name, unit, price, is_common, enabled, sort) VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
-          [DEFAULT_TENANT_ID, catId, it.name, it.unit, it.price, it.common ? 1 : 0, itemSort++]
+          [tenantId, catId, it.name, it.unit, it.price, it.common ? 1 : 0, itemSort++]
         );
       }
     }
   }
-  chargeItemLibReady = true;
+  chargeItemLibStructureReady = true;
+  chargeItemLibSeeded.add(tenantId);
 }
 
 // 收费业绩分配表（一单可分配给多个员工）
@@ -702,7 +704,7 @@ export const yabanCustomerRouter = router({
       try {
         const ids = baseItems.map((r) => Number(r.id)).filter(Boolean);
         if (ids.length > 0) {
-          await ensureTagTables(conn);
+          await ensureTagTables(conn, TENANT_ID);
           const placeholders = ids.map(() => "?").join(",");
           const [tagRows] = (await (conn as any).execute(
             `SELECT ct.customer_id AS cid, t.id AS tag_id, t.name AS tag_name, t.color AS tag_color
@@ -1287,18 +1289,19 @@ export const yabanCustomerRouter = router({
   // ============ 标签：新建 ============
   createTag: protectedProcedure
     .input(z.object({ name: z.string().min(1, "\u6807\u7b7e\u540d\u5fc5\u586b").max(32), color: z.string().max(16).optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
-      await ensureTagTables(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
+      await ensureTagTables(conn, TENANT_ID);
       const [maxRows] = (await (conn as any).execute(
         `SELECT COALESCE(MAX(sort), -1) AS m FROM yaban_tag WHERE tenant_id = ?`,
-        [DEFAULT_TENANT_ID]
+        [TENANT_ID]
       )) as any;
       const nextSort = Number((maxRows as any[])[0]?.m ?? -1) + 1;
       const [res] = (await (conn as any).execute(
         `INSERT INTO yaban_tag (tenant_id, name, color, sort) VALUES (?,?,?,?)`,
-        [DEFAULT_TENANT_ID, input.name.trim(), input.color || "#1E88D6", nextSort]
+        [TENANT_ID, input.name.trim(), input.color || "#1E88D6", nextSort]
       )) as any;
       return { id: Number((res as any).insertId) };
     }),
@@ -1306,13 +1309,14 @@ export const yabanCustomerRouter = router({
   // ============ 标签：编辑 ============
   updateTag: protectedProcedure
     .input(z.object({ id: z.number().int(), name: z.string().min(1).max(32), color: z.string().max(16) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
-      await ensureTagTables(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
+      await ensureTagTables(conn, TENANT_ID);
       await (conn as any).execute(
         `UPDATE yaban_tag SET name = ?, color = ? WHERE id = ? AND tenant_id = ?`,
-        [input.name.trim(), input.color, input.id, DEFAULT_TENANT_ID]
+        [input.name.trim(), input.color, input.id, TENANT_ID]
       );
       return { success: true };
     }),
@@ -1320,12 +1324,13 @@ export const yabanCustomerRouter = router({
   // ============ 标签：删除（同时解除关联） ============
   deleteTag: protectedProcedure
     .input(z.object({ id: z.number().int() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
-      await ensureTagTables(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
+      await ensureTagTables(conn, TENANT_ID);
       await (conn as any).execute(`DELETE FROM yaban_customer_tag WHERE tag_id = ?`, [input.id]);
-      await (conn as any).execute(`DELETE FROM yaban_tag WHERE id = ? AND tenant_id = ?`, [input.id, DEFAULT_TENANT_ID]);
+      await (conn as any).execute(`DELETE FROM yaban_tag WHERE id = ? AND tenant_id = ?`, [input.id, TENANT_ID]);
       return { success: true };
     }),
 
@@ -1370,10 +1375,11 @@ export const yabanCustomerRouter = router({
   // 查看某顾客的影像列表（登录即可查看）
   listMedia: protectedProcedure
     .input(z.object({ customerId: z.union([z.number(), z.string()]) }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
       await ensureMediaTable(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
       const cid = Number(input.customerId);
       const [rows] = (await (conn as any).execute(
         `SELECT id, customer_id, category, full_url, thumb_url, mime, file_size, is_lossless,
@@ -1383,7 +1389,7 @@ export const yabanCustomerRouter = router({
            FROM yaban_media
           WHERE tenant_id = ? AND customer_id = ?
           ORDER BY COALESCE(taken_at, DATE(created_at)) DESC, id DESC`,
-        [DEFAULT_TENANT_ID, cid]
+        [TENANT_ID, cid]
       )) as any;
       const list = (rows as any[]).map((r) => ({
         id: Number(r.id),
@@ -1407,16 +1413,17 @@ export const yabanCustomerRouter = router({
   // 各分类影像数量统计（登录即可查看）
   mediaStats: protectedProcedure
     .input(z.object({ customerId: z.union([z.number(), z.string()]) }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
       await ensureMediaTable(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
       const cid = Number(input.customerId);
       const [rows] = (await (conn as any).execute(
         `SELECT category, COUNT(*) AS cnt FROM yaban_media
           WHERE tenant_id = ? AND customer_id = ?
           GROUP BY category`,
-        [DEFAULT_TENANT_ID, cid]
+        [TENANT_ID, cid]
       )) as any;
       const byCategory: Record<string, number> = {};
       let total = 0;
@@ -1445,6 +1452,7 @@ export const yabanCustomerRouter = router({
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureMediaTable(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
       const cid = Number(input.customerId);
       const tier = tierForCategory(input.category, input.fileName);
       let uploaded;
@@ -1460,7 +1468,7 @@ export const yabanCustomerRouter = router({
             file_name, remark, uploader_id, uploader_role, taken_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          DEFAULT_TENANT_ID, cid, input.category,
+          TENANT_ID, cid, input.category,
           uploaded.fullUrl, uploaded.thumbUrl, uploaded.mime, uploaded.fileSize,
           uploaded.isLossless ? 1 : 0,
           s(input.fileName), s(input.remark),
@@ -1485,6 +1493,7 @@ export const yabanCustomerRouter = router({
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
       await ensureMediaTable(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
       const sets: string[] = [];
       const vals: any[] = [];
       if (input.remark !== undefined) { sets.push("remark = ?"); vals.push(s(input.remark)); }
@@ -1494,7 +1503,7 @@ export const yabanCustomerRouter = router({
         sets.push("taken_at = ?"); vals.push(t);
       }
       if (sets.length === 0) return { success: true };
-      vals.push(DEFAULT_TENANT_ID, Number(input.id));
+      vals.push(TENANT_ID, Number(input.id));
       await (conn as any).execute(
         `UPDATE yaban_media SET ${sets.join(", ")} WHERE tenant_id = ? AND id = ?`,
         vals
@@ -1512,9 +1521,10 @@ export const yabanCustomerRouter = router({
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
       await ensureMediaTable(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
       const [rows] = (await (conn as any).execute(
         `SELECT full_url, thumb_url FROM yaban_media WHERE tenant_id = ? AND id = ? LIMIT 1`,
-        [DEFAULT_TENANT_ID, Number(input.id)]
+        [TENANT_ID, Number(input.id)]
       )) as any;
       const row = (rows as any[])[0];
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "\u5f71\u50cf\u4e0d\u5b58\u5728" });
@@ -1525,7 +1535,7 @@ export const yabanCustomerRouter = router({
       }
       await (conn as any).execute(
         `DELETE FROM yaban_media WHERE tenant_id = ? AND id = ?`,
-        [DEFAULT_TENANT_ID, Number(input.id)]
+        [TENANT_ID, Number(input.id)]
       );
       return { success: true };
     }),
@@ -1535,10 +1545,11 @@ export const yabanCustomerRouter = router({
   // 顾客收费统计（消费总额/已收/欠费）——登录即可查看
   chargeStats: protectedProcedure
     .input(z.object({ customerId: z.union([z.number(), z.string()]) }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureChargeTables(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
       const cid = Number(input.customerId);
       const [rows] = (await (conn as any).execute(
         `SELECT
@@ -1547,7 +1558,7 @@ export const yabanCustomerRouter = router({
            COALESCE(SUM(CASE WHEN status <> 'void' THEN owed ELSE 0 END), 0) AS total_owed
          FROM yaban_charge
          WHERE tenant_id = ? AND customer_id = ?`,
-        [DEFAULT_TENANT_ID, cid]
+        [TENANT_ID, cid]
       )) as any;
       const r = (rows as any[])[0] || {};
       return {
@@ -1560,10 +1571,11 @@ export const yabanCustomerRouter = router({
   // 收费单列表——登录即可查看
   listCharges: protectedProcedure
     .input(z.object({ customerId: z.union([z.number(), z.string()]) }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureChargeTables(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
       const cid = Number(input.customerId);
       const [rows] = (await (conn as any).execute(
         `SELECT id, charge_no, charge_type, summary, total_amount, discount_amount,
@@ -1573,7 +1585,7 @@ export const yabanCustomerRouter = router({
            FROM yaban_charge
           WHERE tenant_id = ? AND customer_id = ?
           ORDER BY created_at DESC, id DESC`,
-        [DEFAULT_TENANT_ID, cid]
+        [TENANT_ID, cid]
       )) as any;
       const list = (rows as any[]).map((r) => ({
         id: Number(r.id),
@@ -1600,17 +1612,18 @@ export const yabanCustomerRouter = router({
   // 收费单详情（含项目明细与支付明细）——登录即可查看
   chargeDetail: protectedProcedure
     .input(z.object({ id: z.union([z.number(), z.string()]) }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureChargeTables(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
       const id = Number(input.id);
       const [headRows] = (await (conn as any).execute(
         `SELECT id, customer_id, charge_no, charge_type, summary, total_amount, discount_amount,
                 receivable, paid, owed, change_amount, status, doctor, cashier_name, dept, remark,
                 DATE_FORMAT(visit_at, '%Y-%m-%d %H:%i') AS visit_at, created_at
            FROM yaban_charge WHERE tenant_id = ? AND id = ? LIMIT 1`,
-        [DEFAULT_TENANT_ID, id]
+        [TENANT_ID, id]
       )) as any;
       const h = (headRows as any[])[0];
       if (!h) throw new TRPCError({ code: "NOT_FOUND", message: "收费单不存在" });
@@ -1709,6 +1722,7 @@ export const yabanCustomerRouter = router({
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureChargeTables(conn);
       await ensureChargePerf(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
       const cid = Number(input.customerId);
 
       // 计算金额（服务端为准）
@@ -1731,7 +1745,7 @@ export const yabanCustomerRouter = router({
       const status = owed > 0 ? (paid > 0 ? "partial" : "unpaid") : "paid";
       const summary = computedItems.map((i) => i.name).join("、").slice(0, 200);
       const visitAt = input.visitAt && /^\d{4}-\d{2}-\d{2}/.test(input.visitAt) ? input.visitAt.replace("T", " ").slice(0, 19) : null;
-      const chargeNo = await nextChargeNo(conn, DEFAULT_TENANT_ID);
+      const chargeNo = await nextChargeNo(conn, TENANT_ID);
 
       const [res] = (await (conn as any).execute(
         `INSERT INTO yaban_charge
@@ -1739,7 +1753,7 @@ export const yabanCustomerRouter = router({
             receivable, paid, owed, change_amount, status, doctor, cashier_id, cashier_name, dept, remark, visit_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          DEFAULT_TENANT_ID, cid, chargeNo, input.chargeType, summary, totalAmount, discountAmount,
+          TENANT_ID, cid, chargeNo, input.chargeType, summary, totalAmount, discountAmount,
           receivable, paid, owed, changeAmount, status,
           s(input.doctor), ctx.user.id ?? null, s(ctx.user.name), s(input.dept), s(input.remark), visitAt,
         ]
@@ -1769,7 +1783,7 @@ export const yabanCustomerRouter = router({
         await (conn as any).execute(
           `INSERT INTO yaban_charge_performance (charge_id, tenant_id, staff_id, staff_name, role_key, share_type, share_value, amount)
            VALUES (?,?,?,?,?,?,?,?)`,
-          [chargeId, DEFAULT_TENANT_ID, perf.staffId ? Number(perf.staffId) : null, perf.staffName, s(perf.roleKey), perf.shareType, perf.shareValue, amount]
+          [chargeId, TENANT_ID, perf.staffId ? Number(perf.staffId) : null, perf.staffName, s(perf.roleKey), perf.shareType, perf.shareValue, amount]
         );
       }
       return { id: chargeId, chargeNo, receivable, paid, owed, changeAmount, status };
@@ -1789,10 +1803,11 @@ export const yabanCustomerRouter = router({
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureChargeTables(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
       const id = Number(input.id);
       const [rows] = (await (conn as any).execute(
         `SELECT receivable, paid, owed, status FROM yaban_charge WHERE tenant_id = ? AND id = ? LIMIT 1`,
-        [DEFAULT_TENANT_ID, id]
+        [TENANT_ID, id]
       )) as any;
       const row = (rows as any[])[0];
       if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "收费单不存在" });
@@ -1809,7 +1824,7 @@ export const yabanCustomerRouter = router({
       );
       await (conn as any).execute(
         `UPDATE yaban_charge SET paid = ?, owed = ?, change_amount = ?, status = ? WHERE tenant_id = ? AND id = ?`,
-        [newPaid, newOwed, changeAmount, status, DEFAULT_TENANT_ID, id]
+        [newPaid, newOwed, changeAmount, status, TENANT_ID, id]
       );
       return { paid: newPaid, owed: newOwed, changeAmount, status };
     }),
@@ -1824,9 +1839,10 @@ export const yabanCustomerRouter = router({
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureChargeTables(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
       await (conn as any).execute(
         `UPDATE yaban_charge SET status = 'void' WHERE tenant_id = ? AND id = ?`,
-        [DEFAULT_TENANT_ID, Number(input.id)]
+        [TENANT_ID, Number(input.id)]
       );
       return { success: true };
     }),
@@ -1834,21 +1850,22 @@ export const yabanCustomerRouter = router({
   // ============ 收费项目库：分类 + 项目列表（按分类分组返回） ============
   listChargeProducts: protectedProcedure
     .input(z.object({ includeDisabled: z.boolean().default(false) }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await ensureChargeItemLib(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
+      await ensureChargeItemLib(conn, TENANT_ID);
       const includeDisabled = input?.includeDisabled ?? false;
       const [catRows] = (await (conn as any).execute(
         `SELECT id, name, sort, enabled FROM yaban_charge_category WHERE tenant_id = ? ORDER BY sort ASC, id ASC`,
-        [DEFAULT_TENANT_ID]
+        [TENANT_ID]
       )) as any;
       const [prodRows] = (await (conn as any).execute(
         `SELECT id, category_id, name, unit, price, is_common, enabled, sort
            FROM yaban_charge_product WHERE tenant_id = ?
            ${includeDisabled ? "" : "AND enabled = 1"}
            ORDER BY sort ASC, id ASC`,
-        [DEFAULT_TENANT_ID]
+        [TENANT_ID]
       )) as any;
       const prods = (prodRows as any[]).map((p) => ({
         id: Number(p.id),
@@ -1885,17 +1902,18 @@ export const yabanCustomerRouter = router({
       }
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await ensureChargeItemLib(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
+      await ensureChargeItemLib(conn, TENANT_ID);
       if (input.id) {
         await (conn as any).execute(
           `UPDATE yaban_charge_category SET name = ?, sort = ?, enabled = ? WHERE tenant_id = ? AND id = ?`,
-          [input.name, input.sort, input.enabled ? 1 : 0, DEFAULT_TENANT_ID, Number(input.id)]
+          [input.name, input.sort, input.enabled ? 1 : 0, TENANT_ID, Number(input.id)]
         );
         return { id: Number(input.id) };
       }
       const [r] = (await (conn as any).execute(
         `INSERT INTO yaban_charge_category (tenant_id, name, sort, enabled) VALUES (?, ?, ?, ?)`,
-        [DEFAULT_TENANT_ID, input.name, input.sort, input.enabled ? 1 : 0]
+        [TENANT_ID, input.name, input.sort, input.enabled ? 1 : 0]
       )) as any;
       return { id: Number((r as any).insertId) };
     }),
@@ -1909,18 +1927,19 @@ export const yabanCustomerRouter = router({
       }
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await ensureChargeItemLib(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
+      await ensureChargeItemLib(conn, TENANT_ID);
       const cid = Number(input.id);
       const [cnt] = (await (conn as any).execute(
         `SELECT COUNT(*) AS c FROM yaban_charge_product WHERE tenant_id = ? AND category_id = ? AND enabled = 1`,
-        [DEFAULT_TENANT_ID, cid]
+        [TENANT_ID, cid]
       )) as any;
       if (Number((cnt as any[])[0]?.c || 0) > 0) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "该分类下仍有项目，无法删除" });
       }
       await (conn as any).execute(
         `DELETE FROM yaban_charge_category WHERE tenant_id = ? AND id = ?`,
-        [DEFAULT_TENANT_ID, cid]
+        [TENANT_ID, cid]
       );
       return { success: true };
     }),
@@ -1943,20 +1962,21 @@ export const yabanCustomerRouter = router({
       }
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await ensureChargeItemLib(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
+      await ensureChargeItemLib(conn, TENANT_ID);
       const catId = input.categoryId ? Number(input.categoryId) : null;
       if (input.id) {
         await (conn as any).execute(
           `UPDATE yaban_charge_product SET category_id = ?, name = ?, unit = ?, price = ?, is_common = ?, enabled = ?, sort = ?
              WHERE tenant_id = ? AND id = ?`,
-          [catId, input.name, input.unit, input.price, input.isCommon ? 1 : 0, input.enabled ? 1 : 0, input.sort, DEFAULT_TENANT_ID, Number(input.id)]
+          [catId, input.name, input.unit, input.price, input.isCommon ? 1 : 0, input.enabled ? 1 : 0, input.sort, TENANT_ID, Number(input.id)]
         );
         return { id: Number(input.id) };
       }
       const [r] = (await (conn as any).execute(
         `INSERT INTO yaban_charge_product (tenant_id, category_id, name, unit, price, is_common, enabled, sort)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [DEFAULT_TENANT_ID, catId, input.name, input.unit, input.price, input.isCommon ? 1 : 0, input.enabled ? 1 : 0, input.sort]
+        [TENANT_ID, catId, input.name, input.unit, input.price, input.isCommon ? 1 : 0, input.enabled ? 1 : 0, input.sort]
       )) as any;
       return { id: Number((r as any).insertId) };
     }),
@@ -1970,10 +1990,11 @@ export const yabanCustomerRouter = router({
       }
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await ensureChargeItemLib(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
+      await ensureChargeItemLib(conn, TENANT_ID);
       await (conn as any).execute(
         `UPDATE yaban_charge_product SET enabled = 0, is_common = 0 WHERE tenant_id = ? AND id = ?`,
-        [DEFAULT_TENANT_ID, Number(input.id)]
+        [TENANT_ID, Number(input.id)]
       );
       return { success: true };
     }),
@@ -1987,16 +2008,18 @@ export const yabanCustomerRouter = router({
       }
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await ensureChargeItemLib(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
+      await ensureChargeItemLib(conn, TENANT_ID);
       await (conn as any).execute(
         `UPDATE yaban_charge_product SET is_common = ? WHERE tenant_id = ? AND id = ?`,
-        [input.isCommon ? 1 : 0, DEFAULT_TENANT_ID, Number(input.id)]
+        [input.isCommon ? 1 : 0, TENANT_ID, Number(input.id)]
       );
       return { success: true };
     }),
 
   // ============ 诊所员工列表（供业绩分配选人） ============
-  listClinicMembers: protectedProcedure.query(async () => {
+  listClinicMembers: protectedProcedure.query(async ({ ctx }) => {
+      const TENANT_ID = await resolveTenantId(ctx);
     const conn = await getDbConnection();
     if (!conn) return [];
     await ensureRoleTables(conn);
@@ -2007,7 +2030,7 @@ export const yabanCustomerRouter = router({
          LEFT JOIN yaban_clinic_role r ON r.role_key = m.role_key
         WHERE m.tenant_id = ? AND m.status = 'active'
         ORDER BY FIELD(m.role_key,'owner','doctor','assistant','receptionist','finance'), m.created_at ASC`,
-      [DEFAULT_TENANT_ID]
+      [TENANT_ID]
     )) as any;
     return (rows as any[]).map((m) => ({
       userId: Number(m.user_id),
