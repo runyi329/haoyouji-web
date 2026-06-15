@@ -21,6 +21,7 @@ import {
   LogOut,
   Camera,
   Loader2,
+  LayoutDashboard,
 } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
@@ -41,6 +42,10 @@ export default function YabanProfile() {
   const utils = trpc.useUtils();
   const { data: user } = trpc.auth.me.useQuery();
   const { logout } = useAuth();
+  // 角色信息：判断是否院长/股东(owner) 或 创始人(founder)
+  const { data: membership } = trpc.yabanRole.myMembership.useQuery();
+  const isOwner = (membership as any)?.member?.role_key === "owner";
+  const isFounder = !!(membership as any)?.isFounder || !!(membership as any)?.isSuperAdmin;
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // 头像上传：复用 auth.uploadAvatar（与脉动版同一接口），先压缩再上传
@@ -110,21 +115,36 @@ export default function YabanProfile() {
     },
   ];
 
-  // 团队/企业组
+  // 团队/企业组（企业信息仅院长/股东可见）
   const orgRows: RowItem[] = [
     {
       key: "team",
       icon: <Users className="w-5 h-5 text-[#1E88D6]" />,
       label: "团队账号开通",
       hint: "为门诊员工开通账号",
-      onClick: () => wip("团队账号开通"),
+      onClick: () => navigate("/yaban/settings/roles"),
     },
+    ...(isOwner
+      ? [
+          {
+            key: "company",
+            icon: <Building2 className="w-5 h-5 text-[#1E88D6]" />,
+            label: "企业信息",
+            hint: "填写企业名称与税号，申请开通门诊",
+            onClick: () => navigate("/yaban/enterprise"),
+          } as RowItem,
+        ]
+      : []),
+  ];
+
+  // 创始人专属：后台管理（大数据看板）
+  const founderRows: RowItem[] = [
     {
-      key: "company",
-      icon: <Building2 className="w-5 h-5 text-[#1E88D6]" />,
-      label: "企业信息",
-      hint: "暂未关联门诊",
-      onClick: () => wip("企业信息"),
+      key: "admin",
+      icon: <LayoutDashboard className="w-5 h-5 text-[#1E88D6]" />,
+      label: "后台管理",
+      hint: "医院数据看板 · 企业审批 · 院长任命",
+      onClick: () => navigate("/yaban/admin"),
     },
   ];
 
@@ -269,6 +289,7 @@ export default function YabanProfile() {
       {/* 功能分组列表 */}
       <div className="max-w-lg mx-auto px-4 mt-4 space-y-3">
         {renderGroup(orgRows)}
+        {isFounder && renderGroup(founderRows)}
         {renderGroup(serviceRows)}
         {renderGroup(systemRows)}
       </div>

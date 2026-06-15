@@ -64,6 +64,7 @@ import { yabanCouponRouter } from "./yaban-coupon-router";
 import { yabanShopAdminRouter } from "./yaban-shop-admin-router";
 import { yabanShopOpsRouter } from "./yaban-shop-ops-router";
 import { yabanRoleRouter } from "./yaban-role-router";
+import { yabanClinicRouter } from "./yaban-clinic-router";
 import { yabanCustomerRouter } from "./yaban-customer-router";
 import { versionRouter } from "./version-router";
 
@@ -198,6 +199,7 @@ export const appRouter = router({
   yabanShopAdmin: yabanShopAdminRouter,
   yabanShopOps: yabanShopOpsRouter,
   yabanRole: yabanRoleRouter,
+  yabanClinic: yabanClinicRouter,
   yabanCustomer: yabanCustomerRouter,
   version: versionRouter,
   prediction: predictionRouter,
