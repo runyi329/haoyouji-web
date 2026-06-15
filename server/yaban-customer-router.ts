@@ -21,7 +21,7 @@ import {
   calcNextBackupAt,
 } from "./yaban-backup-service";
 import { uploadYabanMedia, deleteYabanMedia, type YabanMediaTier } from "./cos-upload";
-import { checkYabanPerm } from "./yaban-role-router";
+import { checkYabanPerm, ensureRoleTables } from "./yaban-role-router";
 
 // ========= 影像记录：分类 → 高清份处理档位映射 =========
 // 诊断级（无损原图直传）
@@ -329,6 +329,131 @@ async function nextChargeNo(conn: any, tenantId: number): Promise<string> {
     if (!isNaN(n)) seq = n + 1;
   }
   return prefix + String(seq).padStart(4, "0");
+}
+
+// 收费项目库：分类表 + 项目表
+let chargeItemLibReady = false;
+async function ensureChargeItemLib(conn: any) {
+  if (chargeItemLibReady) return;
+  // 项目分类表
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_charge_category (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      tenant_id INT NOT NULL DEFAULT 1,
+      name VARCHAR(64) NOT NULL,
+      sort INT NOT NULL DEFAULT 0,
+      enabled TINYINT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_tenant (tenant_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  // 收费项目表
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_charge_product (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      tenant_id INT NOT NULL DEFAULT 1,
+      category_id BIGINT UNSIGNED,
+      name VARCHAR(128) NOT NULL,
+      unit VARCHAR(16) NOT NULL DEFAULT '次',
+      price DECIMAL(12,2) NOT NULL DEFAULT 0,
+      is_common TINYINT NOT NULL DEFAULT 0,
+      enabled TINYINT NOT NULL DEFAULT 1,
+      sort INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_tenant (tenant_id),
+      KEY idx_category (category_id),
+      KEY idx_common (tenant_id, is_common)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  // 首次为空时写入默认分类与常用项目，便于诊所直接使用
+  const [catCnt] = (await conn.execute(
+    `SELECT COUNT(*) AS c FROM yaban_charge_category WHERE tenant_id = ?`,
+    [DEFAULT_TENANT_ID]
+  )) as any;
+  if (Number((catCnt as any[])[0]?.c || 0) === 0) {
+    const defaults: { cat: string; items: { name: string; price: number; unit: string; common?: boolean }[] }[] = [
+      { cat: "检查诊断", items: [
+        { name: "口腔检查", price: 0, unit: "次", common: true },
+        { name: "全景片", price: 80, unit: "次", common: true },
+        { name: "小牙片", price: 30, unit: "次" },
+        { name: "CBCT", price: 200, unit: "次" },
+      ] },
+      { cat: "补牙修复", items: [
+        { name: "树脂补牙", price: 200, unit: "颗", common: true },
+        { name: "嵌体修复", price: 1500, unit: "颗" },
+        { name: "窝沟封闭", price: 80, unit: "颗" },
+      ] },
+      { cat: "根管治疗", items: [
+        { name: "根管治疗(前牙)", price: 800, unit: "颗", common: true },
+        { name: "根管治疗(后牙)", price: 1200, unit: "颗", common: true },
+      ] },
+      { cat: "拔牙", items: [
+        { name: "普通拔牙", price: 150, unit: "颗", common: true },
+        { name: "复杂拔牙", price: 400, unit: "颗" },
+        { name: "阻生齿拔除", price: 800, unit: "颗" },
+      ] },
+      { cat: "洁治美白", items: [
+        { name: "超声波洁牙", price: 200, unit: "次", common: true },
+        { name: "喷砂抛光", price: 150, unit: "次" },
+        { name: "冷光美白", price: 1500, unit: "次" },
+      ] },
+      { cat: "种植", items: [
+        { name: "种植牙", price: 8000, unit: "颗" },
+      ] },
+      { cat: "正畸", items: [
+        { name: "金属托槽矫正", price: 12000, unit: "疗程" },
+        { name: "隐形矫正", price: 25000, unit: "疗程" },
+      ] },
+      { cat: "镶牙义齿", items: [
+        { name: "烤瓷牙", price: 800, unit: "颗" },
+        { name: "全瓷牙", price: 2000, unit: "颗" },
+      ] },
+      { cat: "材料费", items: [
+        { name: "材料费", price: 0, unit: "项" },
+      ] },
+    ];
+    let catSort = 0;
+    for (const group of defaults) {
+      const [r] = (await conn.execute(
+        `INSERT INTO yaban_charge_category (tenant_id, name, sort, enabled) VALUES (?, ?, ?, 1)`,
+        [DEFAULT_TENANT_ID, group.cat, catSort++]
+      )) as any;
+      const catId = (r as any).insertId;
+      let itemSort = 0;
+      for (const it of group.items) {
+        await conn.execute(
+          `INSERT INTO yaban_charge_product (tenant_id, category_id, name, unit, price, is_common, enabled, sort) VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
+          [DEFAULT_TENANT_ID, catId, it.name, it.unit, it.price, it.common ? 1 : 0, itemSort++]
+        );
+      }
+    }
+  }
+  chargeItemLibReady = true;
+}
+
+// 收费业绩分配表（一单可分配给多个员工）
+let chargePerfReady = false;
+async function ensureChargePerf(conn: any) {
+  if (chargePerfReady) return;
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_charge_performance (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      charge_id BIGINT UNSIGNED NOT NULL,
+      tenant_id INT NOT NULL DEFAULT 1,
+      staff_id BIGINT,
+      staff_name VARCHAR(64) NOT NULL,
+      role_key VARCHAR(32),
+      share_type VARCHAR(8) NOT NULL DEFAULT 'amount',
+      share_value DECIMAL(12,2) NOT NULL DEFAULT 0,
+      amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+      PRIMARY KEY (id),
+      KEY idx_charge (charge_id),
+      KEY idx_staff (tenant_id, staff_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  chargePerfReady = true;
 }
 
 // 创建顾客输入校验
@@ -1255,6 +1380,11 @@ export const yabanCustomerRouter = router({
         `SELECT id, method, amount, DATE_FORMAT(paid_at, '%Y-%m-%d %H:%i') AS paid_at FROM yaban_charge_payment WHERE charge_id = ? ORDER BY id ASC`,
         [id]
       )) as any;
+      await ensureChargePerf(conn);
+      const [perfRows] = (await (conn as any).execute(
+        `SELECT id, staff_name, role_key, share_type, share_value, amount FROM yaban_charge_performance WHERE charge_id = ? ORDER BY id ASC`,
+        [id]
+      )) as any;
       return {
         id: Number(h.id),
         customerId: Number(h.customer_id),
@@ -1289,6 +1419,14 @@ export const yabanCustomerRouter = router({
           amount: Number(p.amount),
           paidAt: p.paid_at as string,
         })),
+        performances: (perfRows as any[]).map((pf) => ({
+          id: Number(pf.id),
+          staffName: pf.staff_name as string,
+          roleKey: pf.role_key as string | null,
+          shareType: pf.share_type as string,
+          shareValue: Number(pf.share_value),
+          amount: Number(pf.amount),
+        })),
       };
     }),
 
@@ -1313,6 +1451,13 @@ export const yabanCustomerRouter = router({
       dept: z.string().max(64).optional(),
       remark: z.string().max(500).optional(),
       visitAt: z.string().max(32).optional(),
+      performances: z.array(z.object({
+        staffId: z.union([z.number(), z.string()]).optional(),
+        staffName: z.string().min(1).max(64),
+        roleKey: z.string().max(32).optional(),
+        shareType: z.enum(["amount", "percent"]).default("amount"),
+        shareValue: z.number().min(0).default(0),
+      })).default([]),
     }))
     .mutation(async ({ input, ctx }) => {
       if (!(await checkYabanPerm(ctx, "finance"))) {
@@ -1321,6 +1466,7 @@ export const yabanCustomerRouter = router({
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureChargeTables(conn);
+      await ensureChargePerf(conn);
       const cid = Number(input.customerId);
 
       // 计算金额（服务端为准）
@@ -1370,6 +1516,18 @@ export const yabanCustomerRouter = router({
         await (conn as any).execute(
           `INSERT INTO yaban_charge_payment (charge_id, method, amount, operator_id) VALUES (?,?,?,?)`,
           [chargeId, p.method, Math.round(p.amount * 100) / 100, ctx.user.id ?? null]
+        );
+      }
+      // 业绩分配：按金额或百分比折算到实际业绩金额（以应收为基数）
+      for (const perf of input.performances) {
+        if (!perf.staffName) continue;
+        const amount = perf.shareType === "percent"
+          ? Math.round(receivable * (perf.shareValue / 100) * 100) / 100
+          : Math.round(perf.shareValue * 100) / 100;
+        await (conn as any).execute(
+          `INSERT INTO yaban_charge_performance (charge_id, tenant_id, staff_id, staff_name, role_key, share_type, share_value, amount)
+           VALUES (?,?,?,?,?,?,?,?)`,
+          [chargeId, DEFAULT_TENANT_ID, perf.staffId ? Number(perf.staffId) : null, perf.staffName, s(perf.roleKey), perf.shareType, perf.shareValue, amount]
         );
       }
       return { id: chargeId, chargeNo, receivable, paid, owed, changeAmount, status };
@@ -1430,4 +1588,190 @@ export const yabanCustomerRouter = router({
       );
       return { success: true };
     }),
+
+  // ============ 收费项目库：分类 + 项目列表（按分类分组返回） ============
+  listChargeProducts: protectedProcedure
+    .input(z.object({ includeDisabled: z.boolean().default(false) }).optional())
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureChargeItemLib(conn);
+      const includeDisabled = input?.includeDisabled ?? false;
+      const [catRows] = (await (conn as any).execute(
+        `SELECT id, name, sort, enabled FROM yaban_charge_category WHERE tenant_id = ? ORDER BY sort ASC, id ASC`,
+        [DEFAULT_TENANT_ID]
+      )) as any;
+      const [prodRows] = (await (conn as any).execute(
+        `SELECT id, category_id, name, unit, price, is_common, enabled, sort
+           FROM yaban_charge_product WHERE tenant_id = ?
+           ${includeDisabled ? "" : "AND enabled = 1"}
+           ORDER BY sort ASC, id ASC`,
+        [DEFAULT_TENANT_ID]
+      )) as any;
+      const prods = (prodRows as any[]).map((p) => ({
+        id: Number(p.id),
+        categoryId: p.category_id != null ? Number(p.category_id) : null,
+        name: p.name as string,
+        unit: p.unit as string,
+        price: Number(p.price),
+        isCommon: !!p.is_common,
+        enabled: !!p.enabled,
+        sort: Number(p.sort),
+      }));
+      const categories = (catRows as any[]).map((c) => ({
+        id: Number(c.id),
+        name: c.name as string,
+        sort: Number(c.sort),
+        enabled: !!c.enabled,
+        items: prods.filter((p) => p.categoryId === Number(c.id)),
+      }));
+      const commons = prods.filter((p) => p.isCommon && p.enabled);
+      return { categories, commons };
+    }),
+
+  // 新建/编辑分类——需 finance 权限
+  saveChargeCategory: protectedProcedure
+    .input(z.object({
+      id: z.union([z.number(), z.string()]).optional(),
+      name: z.string().min(1).max(64),
+      sort: z.number().int().min(0).default(0),
+      enabled: z.boolean().default(true),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!(await checkYabanPerm(ctx, "finance"))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无收费权限" });
+      }
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureChargeItemLib(conn);
+      if (input.id) {
+        await (conn as any).execute(
+          `UPDATE yaban_charge_category SET name = ?, sort = ?, enabled = ? WHERE tenant_id = ? AND id = ?`,
+          [input.name, input.sort, input.enabled ? 1 : 0, DEFAULT_TENANT_ID, Number(input.id)]
+        );
+        return { id: Number(input.id) };
+      }
+      const [r] = (await (conn as any).execute(
+        `INSERT INTO yaban_charge_category (tenant_id, name, sort, enabled) VALUES (?, ?, ?, ?)`,
+        [DEFAULT_TENANT_ID, input.name, input.sort, input.enabled ? 1 : 0]
+      )) as any;
+      return { id: Number((r as any).insertId) };
+    }),
+
+  // 删除分类（仅当其下无项目时允许）——需 finance 权限
+  deleteChargeCategory: protectedProcedure
+    .input(z.object({ id: z.union([z.number(), z.string()]) }))
+    .mutation(async ({ input, ctx }) => {
+      if (!(await checkYabanPerm(ctx, "finance"))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无收费权限" });
+      }
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureChargeItemLib(conn);
+      const cid = Number(input.id);
+      const [cnt] = (await (conn as any).execute(
+        `SELECT COUNT(*) AS c FROM yaban_charge_product WHERE tenant_id = ? AND category_id = ? AND enabled = 1`,
+        [DEFAULT_TENANT_ID, cid]
+      )) as any;
+      if (Number((cnt as any[])[0]?.c || 0) > 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "该分类下仍有项目，无法删除" });
+      }
+      await (conn as any).execute(
+        `DELETE FROM yaban_charge_category WHERE tenant_id = ? AND id = ?`,
+        [DEFAULT_TENANT_ID, cid]
+      );
+      return { success: true };
+    }),
+
+  // 新建/编辑项目——需 finance 权限
+  saveChargeProduct: protectedProcedure
+    .input(z.object({
+      id: z.union([z.number(), z.string()]).optional(),
+      categoryId: z.union([z.number(), z.string()]).optional(),
+      name: z.string().min(1).max(128),
+      unit: z.string().min(1).max(16).default("次"),
+      price: z.number().min(0).default(0),
+      isCommon: z.boolean().default(false),
+      enabled: z.boolean().default(true),
+      sort: z.number().int().min(0).default(0),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!(await checkYabanPerm(ctx, "finance"))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无收费权限" });
+      }
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureChargeItemLib(conn);
+      const catId = input.categoryId ? Number(input.categoryId) : null;
+      if (input.id) {
+        await (conn as any).execute(
+          `UPDATE yaban_charge_product SET category_id = ?, name = ?, unit = ?, price = ?, is_common = ?, enabled = ?, sort = ?
+             WHERE tenant_id = ? AND id = ?`,
+          [catId, input.name, input.unit, input.price, input.isCommon ? 1 : 0, input.enabled ? 1 : 0, input.sort, DEFAULT_TENANT_ID, Number(input.id)]
+        );
+        return { id: Number(input.id) };
+      }
+      const [r] = (await (conn as any).execute(
+        `INSERT INTO yaban_charge_product (tenant_id, category_id, name, unit, price, is_common, enabled, sort)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [DEFAULT_TENANT_ID, catId, input.name, input.unit, input.price, input.isCommon ? 1 : 0, input.enabled ? 1 : 0, input.sort]
+      )) as any;
+      return { id: Number((r as any).insertId) };
+    }),
+
+  // 软删除项目（置为禁用）——需 finance 权限
+  deleteChargeProduct: protectedProcedure
+    .input(z.object({ id: z.union([z.number(), z.string()]) }))
+    .mutation(async ({ input, ctx }) => {
+      if (!(await checkYabanPerm(ctx, "finance"))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无收费权限" });
+      }
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureChargeItemLib(conn);
+      await (conn as any).execute(
+        `UPDATE yaban_charge_product SET enabled = 0, is_common = 0 WHERE tenant_id = ? AND id = ?`,
+        [DEFAULT_TENANT_ID, Number(input.id)]
+      );
+      return { success: true };
+    }),
+
+  // 切换常用状态——需 finance 权限
+  toggleProductCommon: protectedProcedure
+    .input(z.object({ id: z.union([z.number(), z.string()]), isCommon: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!(await checkYabanPerm(ctx, "finance"))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无收费权限" });
+      }
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureChargeItemLib(conn);
+      await (conn as any).execute(
+        `UPDATE yaban_charge_product SET is_common = ? WHERE tenant_id = ? AND id = ?`,
+        [input.isCommon ? 1 : 0, DEFAULT_TENANT_ID, Number(input.id)]
+      );
+      return { success: true };
+    }),
+
+  // ============ 诊所员工列表（供业绩分配选人） ============
+  listClinicMembers: protectedProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) return [];
+    await ensureRoleTables(conn);
+    const [rows] = (await (conn as any).execute(
+      `SELECT m.user_id, m.role_key, u.name, u.username, r.name AS role_name
+         FROM yaban_clinic_member m
+         JOIN users u ON u.id = m.user_id
+         LEFT JOIN yaban_clinic_role r ON r.role_key = m.role_key
+        WHERE m.tenant_id = ? AND m.status = 'active'
+        ORDER BY FIELD(m.role_key,'owner','doctor','assistant','receptionist','finance'), m.created_at ASC`,
+      [DEFAULT_TENANT_ID]
+    )) as any;
+    return (rows as any[]).map((m) => ({
+      userId: Number(m.user_id),
+      name: (m.name || m.username || "员工") as string,
+      roleKey: m.role_key as string,
+      roleName: (m.role_name || "") as string,
+    }));
+  }),
 });

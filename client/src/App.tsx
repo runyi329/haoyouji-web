@@ -7,6 +7,7 @@ import WalletCnyTransactions from "./pages/WalletCnyTransactions";
 import YabanSettings from "./pages/yaban/YabanSettings";
 import YabanDataManage from "./pages/yaban/YabanDataManage";
 import YabanRoles from "./pages/yaban/YabanRoles";
+import YabanChargeProducts from "./pages/yaban/YabanChargeProducts";
 import YabanVerifyRecords from "./pages/yaban/YabanVerifyRecords";
 import YabanHome from "./pages/yaban/YabanHome";
 import YabanPatientCreate from "./pages/yaban/YabanPatientCreate";
@@ -763,6 +764,7 @@ function Router() {
         <Route path="/yaban/settings" component={YabanSettings} />
         <Route path="/yaban/settings/roles" component={YabanRoles} />
         <Route path="/yaban/settings/data" component={YabanDataManage} />
+        <Route path="/yaban/settings/charge-products" component={YabanChargeProducts} />
         <Route path="/yaban/followup" component={lazy(() => import("./pages/yaban/YabanFollowUp"))} />
         <Route path="/yaban/followup/create" component={lazy(() => import("./pages/yaban/YabanFollowUpCreate"))} />
         <Route path="/yaban/followup/patient-select" component={lazy(() => import("./pages/yaban/YabanPatientSelect"))} />

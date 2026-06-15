@@ -16,7 +16,12 @@ import {
   Loader2,
   Ban,
   CheckCircle2,
+  Search,
+  Users,
+  Award,
 } from "lucide-react";
+import ToothPicker from "./ToothPicker";
+import ChargeProductPicker, { type ChargeProductPick } from "./ChargeProductPicker";
 
 // 支付方式选项
 const PAY_METHODS = ["现金", "微信", "支付宝", "银行卡", "预付款", "医保", "其他"];
@@ -63,6 +68,15 @@ interface ItemDraft {
 interface PayDraft {
   method: string;
   amount: string;
+}
+
+// 业绩分配的一行（前端编辑态）
+interface PerfDraft {
+  staffId: number | null;
+  staffName: string;
+  roleKey: string;
+  shareType: "amount" | "percent";
+  shareValue: string;
 }
 
 function money(n: number): string {
@@ -114,6 +128,18 @@ export default function YabanPatientCharge() {
   const [doctor, setDoctor] = useState("");
   const [remark, setRemark] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // 业绩分配草稿
+  const [perfs, setPerfs] = useState<PerfDraft[]>([]);
+  // 选择器开关：项目库（记录目标行）/ 牙位（记录目标行）
+  const [prodPickerIdx, setProdPickerIdx] = useState<number | null>(null);
+  const [toothPickerIdx, setToothPickerIdx] = useState<number | null>(null);
+
+  // 诊所员工列表（业绩分配选人）
+  const membersQuery = trpc.yabanCustomer.listClinicMembers.useQuery(undefined, {
+    enabled: showCreate,
+    refetchOnWindowFocus: false,
+  });
+  const members = (membersQuery.data as { userId: number; name: string; roleKey: string; roleName: string }[]) || [];
 
   // 实时金额计算
   const calc = useMemo(() => {
@@ -138,6 +164,7 @@ export default function YabanPatientCharge() {
     setPayments([{ method: "现金", amount: "" }]);
     setDoctor("");
     setRemark("");
+    setPerfs([]);
   }, []);
 
   const handleSubmit = useCallback(async () => {
@@ -158,6 +185,15 @@ export default function YabanPatientCharge() {
     const validPays = payments
       .filter((p) => (parseFloat(p.amount) || 0) > 0)
       .map((p) => ({ method: p.method, amount: parseFloat(p.amount) || 0 }));
+    const validPerfs = perfs
+      .filter((p) => p.staffName.trim())
+      .map((p) => ({
+        staffId: p.staffId ?? undefined,
+        staffName: p.staffName.trim(),
+        roleKey: p.roleKey || undefined,
+        shareType: p.shareType,
+        shareValue: parseFloat(p.shareValue) || 0,
+      }));
     setSubmitting(true);
     try {
       await createMutation.mutateAsync({
@@ -168,6 +204,7 @@ export default function YabanPatientCharge() {
         payments: validPays,
         doctor: doctor.trim() || undefined,
         remark: remark.trim() || undefined,
+        performances: validPerfs,
       });
       toast.success("收费单已生成");
       setShowCreate(false);
@@ -179,7 +216,7 @@ export default function YabanPatientCharge() {
     } finally {
       setSubmitting(false);
     }
-  }, [items, payments, orderDiscount, doctor, remark, customerId, createMutation, utils, resetCreate]);
+  }, [items, payments, perfs, orderDiscount, doctor, remark, customerId, createMutation, utils, resetCreate]);
 
   // ============ 详情/补收/作废弹层 ============
   const [detailId, setDetailId] = useState<number | null>(null);
@@ -231,7 +268,7 @@ export default function YabanPatientCharge() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-24">
-      <PageTag tag="P321" />
+      <PageTag code="P329" />
 
       {/* 顶部导航栏 */}
       <div className="bg-gradient-to-r from-sky-500 to-sky-400 text-white sticky top-0 z-20">
@@ -365,6 +402,12 @@ export default function YabanPatientCharge() {
                           placeholder="项目名称，如 树脂补牙"
                           className="flex-1 min-w-0 text-sm px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
                         />
+                        <button
+                          onClick={() => setProdPickerIdx(idx)}
+                          className="shrink-0 flex items-center gap-0.5 text-xs text-sky-600 border border-sky-200 rounded-lg px-2 py-1.5 bg-sky-50 active:bg-sky-100"
+                        >
+                          <Search className="w-3.5 h-3.5" /> 项目库
+                        </button>
                         {items.length > 1 && (
                           <button
                             onClick={() => setItems((prev) => prev.filter((_, i) => i !== idx))}
@@ -377,12 +420,12 @@ export default function YabanPatientCharge() {
                       <div className="grid grid-cols-4 gap-2">
                         <div>
                           <label className="text-[10px] text-gray-400">牙位</label>
-                          <input
-                            value={it.tooth}
-                            onChange={(e) => setItems((prev) => prev.map((p, i) => (i === idx ? { ...p, tooth: e.target.value } : p)))}
-                            placeholder="如16"
-                            className="w-full text-sm px-1.5 py-1 rounded-lg border border-gray-200 bg-white"
-                          />
+                          <button
+                            onClick={() => setToothPickerIdx(idx)}
+                            className={`w-full text-sm px-1.5 py-1 rounded-lg border border-gray-200 bg-white text-left truncate ${it.tooth ? "text-gray-700" : "text-gray-300"}`}
+                          >
+                            {it.tooth || "选牙位"}
+                          </button>
                         </div>
                         <div>
                           <label className="text-[10px] text-gray-400">单价</label>
@@ -509,6 +552,94 @@ export default function YabanPatientCharge() {
                   />
                 </div>
               </div>
+
+              {/* 业绩分配 */}
+              <div className="bg-white rounded-2xl p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="flex items-center gap-1 text-sm font-medium text-gray-700">
+                    <Award className="w-4 h-4 text-sky-500" /> 业绩分配
+                    <span className="text-[11px] text-gray-400 font-normal">（选填，可多人）</span>
+                  </span>
+                  <button
+                    onClick={() => setPerfs((prev) => [...prev, { staffId: null, staffName: "", roleKey: "", shareType: "percent", shareValue: "" }])}
+                    className="flex items-center gap-0.5 text-sky-500 text-xs"
+                  >
+                    <Plus className="w-4 h-4" /> 添加人员
+                  </button>
+                </div>
+                {perfs.length === 0 ? (
+                  <div className="text-xs text-gray-300 py-1">未分配。点击「添加人员」为医生、护士等记录业绩。</div>
+                ) : (
+                  <div className="space-y-2">
+                    {perfs.map((pf, idx) => {
+                      const pct = pf.shareType === "percent";
+                      const amt = pct
+                        ? Math.round(calc.receivable * ((parseFloat(pf.shareValue) || 0) / 100) * 100) / 100
+                        : Math.round((parseFloat(pf.shareValue) || 0) * 100) / 100;
+                      return (
+                        <div key={idx} className="border border-gray-100 rounded-xl p-2.5 bg-[#FAFCFE]">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Users className="w-4 h-4 text-gray-300 shrink-0" />
+                            <select
+                              value={pf.staffId != null ? String(pf.staffId) : (pf.staffName ? `name:${pf.staffName}` : "")}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setPerfs((prev) => prev.map((p, i) => {
+                                  if (i !== idx) return p;
+                                  if (!v) return { ...p, staffId: null, staffName: "", roleKey: "" };
+                                  const m = members.find((mm) => String(mm.userId) === v);
+                                  if (m) return { ...p, staffId: m.userId, staffName: m.name, roleKey: m.roleKey };
+                                  return p;
+                                }));
+                              }}
+                              className="flex-1 min-w-0 text-sm px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
+                            >
+                              <option value="">选择员工</option>
+                              {members.map((m) => (
+                                <option key={m.userId} value={String(m.userId)}>
+                                  {m.name}{m.roleName ? `（${m.roleName}）` : ""}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => setPerfs((prev) => prev.filter((_, i) => i !== idx))}
+                              className="p-1 text-gray-300"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex bg-gray-100 rounded-lg p-0.5">
+                              {(["percent", "amount"] as const).map((t) => (
+                                <button
+                                  key={t}
+                                  onClick={() => setPerfs((prev) => prev.map((p, i) => (i === idx ? { ...p, shareType: t } : p)))}
+                                  className={`px-2.5 py-1 rounded-md text-xs font-medium ${pf.shareType === t ? "bg-white shadow-sm text-sky-600" : "text-gray-400"}`}
+                                >
+                                  {t === "percent" ? "按比例" : "按金额"}
+                                </button>
+                              ))}
+                            </div>
+                            <div className="flex-1 flex items-center gap-1 border border-gray-200 rounded-lg px-2 bg-white">
+                              <input
+                                value={pf.shareValue}
+                                onChange={(e) => setPerfs((prev) => prev.map((p, i) => (i === idx ? { ...p, shareValue: e.target.value } : p)))}
+                                inputMode="decimal"
+                                placeholder={pct ? "如 50" : "如 200"}
+                                className="flex-1 min-w-0 text-sm py-1.5 text-right"
+                              />
+                              <span className="text-gray-400 text-sm shrink-0">{pct ? "%" : "元"}</span>
+                            </div>
+                          </div>
+                          <div className="text-right text-xs text-gray-500 mt-1.5">
+                            计业绩 <span className="text-sky-600 font-medium">¥{money(amt)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* 底部金额汇总 + 提交 */}
@@ -608,6 +739,26 @@ export default function YabanPatientCharge() {
                     </div>
                   )}
 
+                  {/* 业绩分配明细 */}
+                  {detail.performances && detail.performances.length > 0 && (
+                    <div className="bg-white rounded-2xl p-4">
+                      <span className="flex items-center gap-1 text-sm font-medium text-gray-700">
+                        <Award className="w-4 h-4 text-sky-500" /> 业绩分配
+                      </span>
+                      <div className="mt-2 space-y-1.5">
+                        {detail.performances.map((pf: any) => (
+                          <div key={pf.id} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-600">{pf.staffName}</span>
+                            <span className="text-gray-400 text-xs flex-1 text-center">
+                              {pf.shareType === "percent" ? `${pf.shareValue}%` : `按金额`}
+                            </span>
+                            <span className="text-sky-600 font-medium">¥{money(pf.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* 医生/备注 */}
                   {(detail.doctor || detail.cashierName || detail.remark) && (
                     <div className="bg-white rounded-2xl p-4 text-sm space-y-1.5">
@@ -684,6 +835,39 @@ export default function YabanPatientCharge() {
           </div>
         </div>
       )}
+
+      {/* 图形牙位选择器 */}
+      <ToothPicker
+        open={toothPickerIdx !== null}
+        value={toothPickerIdx !== null ? items[toothPickerIdx]?.tooth || "" : ""}
+        onClose={() => setToothPickerIdx(null)}
+        onConfirm={(code) => {
+          if (toothPickerIdx !== null) {
+            const idx = toothPickerIdx;
+            setItems((prev) => prev.map((p, i) => (i === idx ? { ...p, tooth: code } : p)));
+          }
+          setToothPickerIdx(null);
+        }}
+      />
+
+      {/* 收费项目库选择器 */}
+      <ChargeProductPicker
+        open={prodPickerIdx !== null}
+        onClose={() => setProdPickerIdx(null)}
+        onPick={(prod: ChargeProductPick) => {
+          if (prodPickerIdx !== null) {
+            const idx = prodPickerIdx;
+            setItems((prev) =>
+              prev.map((p, i) =>
+                i === idx
+                  ? { ...p, name: prod.name, unitPrice: prod.price > 0 ? String(prod.price) : p.unitPrice }
+                  : p
+              )
+            );
+          }
+          setProdPickerIdx(null);
+        }}
+      />
     </div>
   );
 }

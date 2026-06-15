@@ -17,6 +17,7 @@ import {
   LogOut,
   Loader2,
   Database,
+  ReceiptText,
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
@@ -193,6 +194,23 @@ export default function YabanSettings() {
             <span className="flex-1 text-left">
               <span className="block text-sm font-medium text-gray-800">门诊员工与角色权限</span>
               <span className="block text-xs text-gray-400 mt-0.5">为门诊员工分配角色与权限</span>
+            </span>
+            <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
+          </button>
+        </div>
+
+        {/* 收费项目库 */}
+        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+          <button
+            onClick={() => navigate("/yaban/settings/charge-products")}
+            className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-[#F0F7FD] transition-colors"
+          >
+            <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
+              <ReceiptText className="w-5 h-5 text-[#1E88D6]" />
+            </span>
+            <span className="flex-1 text-left">
+              <span className="block text-sm font-medium text-gray-800">收费项目库</span>
+              <span className="block text-xs text-gray-400 mt-0.5">维护收费项目分类、单价与常用</span>
             </span>
             <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
           </button>

@@ -93,7 +93,7 @@ export const ROLE_DEFAULT_PERMS: Record<string, string[]> = {
 
 // ==================== 建表与初始化 ====================
 let initialized = false;
-async function ensureRoleTables(conn: any) {
+export async function ensureRoleTables(conn: any) {
   if (initialized) return;
 
   // 角色表
