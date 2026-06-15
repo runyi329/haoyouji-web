@@ -11,18 +11,12 @@ import { avatarSrc, ageToBucket, type AvatarKey } from '@/lib/yaban-avatar';
 
 const ICON_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/yaban/patient";
 
-// 功能入口配置 - 使用COS图片
+// 功能入口配置（精简为 4 个核心记录入口）- 使用COS图片
 const FEATURE_ENTRIES = [
-  { icon: `${ICON_BASE}/xiangxi_ziliao.webp`, label: '详细资料', route: 'profile' },
-  { icon: `${ICON_BASE}/huiyuan_xinxi.webp`, label: '会员信息', route: '' },
-  { icon: `${ICON_BASE}/yuyue_jilu.webp`, label: '预约记录', route: '' },
-  { icon: `${ICON_BASE}/suifang_jilu.webp`, label: '随访记录', route: '' },
-  { icon: `${ICON_BASE}/bingli_jilu.webp`, label: '病历记录', route: '' },
+  { icon: `${ICON_BASE}/bingli_jilu.webp`, label: '诊疗记录', route: '' },
   { icon: `${ICON_BASE}/yingxiang_jilu.webp`, label: '影像记录', route: 'media' },
   { icon: `${ICON_BASE}/shoufei_jilu.webp`, label: '收费记录', route: 'charge' },
-  { icon: `${ICON_BASE}/zixun_jilu.webp`, label: '咨询记录', route: '' },
-  { icon: `${ICON_BASE}/huifang_jilu.webp`, label: '回访记录', route: '' },
-  { icon: `${ICON_BASE}/jiancha.webp`, label: '检查', route: '' },
+  { icon: `${ICON_BASE}/yuyue_jilu.webp`, label: '售前售后', route: '' },
 ];
 
 export default function YabanPatientDetail() {
@@ -48,6 +42,9 @@ export default function YabanPatientDetail() {
     lastDoctor: row?.last_doctor || '—',
     lastVisit: row?.last_visit || '',
     remark: row?.remark || '—',
+    mobile: row?.mobile || '—',
+    address: row?.address || '—',
+    history: row?.history || '',
     tags: [row?.patient_type].filter(Boolean) as string[],
     hasWechat: false,
   };
@@ -141,44 +138,33 @@ export default function YabanPatientDetail() {
               ))}
             </div>
 
-            {/* 详细信息 */}
-            <div className="mt-2 space-y-1 text-[13px] text-gray-500">
-              <div>
-                顾客编号: <span className="text-gray-700 font-medium">{patient.medicalNo}</span>
-                <span className="ml-2 text-sky-500 text-[12px]">复制</span>
-              </div>
-              <div>来源: {patient.source}</div>
-              <div>门店: {patient.clinic}</div>
-              <div>上次就诊医生: {patient.lastDoctor}</div>
-              <div>备注: {patient.remark}</div>
-            </div>
-
-            {/* 快捷标签按钮 */}
-            <div className="flex items-center gap-2 mt-2">
-              <span className="px-2 py-1 rounded text-[11px] font-bold text-white bg-green-500">
-                医生微信
-              </span>
-              <span className="px-2 py-1 rounded text-[11px] font-bold text-white bg-sky-500">
-                门诊微信
-              </span>
-              <span className="px-2 py-1 rounded text-[11px] font-bold text-white bg-amber-500">
-                B1
-              </span>
+            {/* 顾客编号（带复制） */}
+            <div className="mt-1.5 text-[13px] text-gray-500">
+              顾客编号: <span className="text-gray-700 font-medium">{patient.medicalNo}</span>
             </div>
           </div>
         </div>
+
+        {/* 资料概览：能显示的尽量铺出，其余完整字段在「编辑」中查看 */}
+        <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
+          <InfoItem label="手机" value={patient.mobile} />
+          <InfoItem label="来源" value={patient.source} />
+          <InfoItem label="门店" value={patient.clinic} full />
+          <InfoItem label="上次就诊医生" value={patient.lastDoctor} />
+          <InfoItem label="上次就诊" value={patient.lastVisit || '—'} />
+          <InfoItem label="地址" value={patient.address} full />
+          <InfoItem label="备注" value={patient.remark} full />
+        </div>
       </div>
 
-      {/* 功能入口网格 */}
+      {/* 下半部分：4 个核心记录入口（2×2 大按钮） */}
       <div className="bg-white mt-2 px-4 py-4">
-        <div className="grid grid-cols-4 gap-y-5">
+        <div className="grid grid-cols-2 gap-3">
           {FEATURE_ENTRIES.map((feat, idx) => (
             <button
               key={idx}
               onClick={() => {
-                if (feat.route === 'profile') {
-                  navigate(`/yaban/patient/${id}/profile`);
-                } else if (feat.route === 'media') {
+                if (feat.route === 'media') {
                   navigate(`/yaban/patient/${id}/media`);
                 } else if (feat.route === 'charge') {
                   navigate(`/yaban/patient/${id}/charge`);
@@ -186,16 +172,26 @@ export default function YabanPatientDetail() {
                   navigate(feat.route);
                 }
               }}
-              className="flex flex-col items-center gap-1.5"
+              className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 active:bg-gray-100"
             >
-              <img src={feat.icon} alt={feat.label} className="w-12 h-12 object-contain" />
-              <span className="text-[12px] text-gray-700">{feat.label}</span>
+              <img src={feat.icon} alt={feat.label} className="w-10 h-10 object-contain flex-shrink-0" />
+              <span className="text-[15px] font-medium text-gray-800">{feat.label}</span>
             </button>
           ))}
         </div>
       </div>
 
       <PageTag code="P321" />
+    </div>
+  );
+}
+
+// 资料概览小项：标签 + 值，full 为整行显示
+function InfoItem({ label, value, full }: { label: string; value: string; full?: boolean }) {
+  return (
+    <div className={full ? 'col-span-2' : ''}>
+      <span className="text-gray-400">{label}：</span>
+      <span className="text-gray-700">{value}</span>
     </div>
   );
 }
