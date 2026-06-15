@@ -45,9 +45,25 @@ export default function YabanPatientDetail() {
     mobile: row?.mobile || '—',
     address: row?.address || '—',
     history: row?.history || '',
+    nickname: row?.nickname || '—',
+    birthday: row?.birthday || '—',
+    zodiac: row?.zodiac || '—',
+    chineseZodiac: row?.chinese_zodiac || '—',
+    email: row?.email || '—',
+    emergencyContact: row?.emergency_contact || '—',
+    emergencyRelation: row?.emergency_relation || '',
+    emergencyPhone: row?.emergency_phone || '',
     tags: [row?.patient_type].filter(Boolean) as string[],
     hasWechat: false,
   };
+
+  // 紧急联系人：姓名（关系）电话 拼接
+  const emergencyText = (() => {
+    if (!row?.emergency_contact) return '—';
+    const rel = row?.emergency_relation ? `（${row.emergency_relation}）` : '';
+    const phone = row?.emergency_phone ? ` ${row.emergency_phone}` : '';
+    return `${row.emergency_contact}${rel}${phone}`;
+  })();
 
   // 性别标签颜色
   const genderColor = patient.gender === 'male' ? 'bg-sky-500' : 'bg-pink-400';
@@ -145,14 +161,24 @@ export default function YabanPatientDetail() {
           </div>
         </div>
 
-        {/* 资料概览：能显示的尽量铺出，其余完整字段在「编辑」中查看 */}
+        {/* 资料概览：将个人信息尽量铺出，其余完整字段在「编辑」中查看 */}
         <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
+          <InfoItem label="昵称" value={patient.nickname} />
+          <InfoItem label="生日" value={patient.birthday} />
+          <InfoItem label="星座" value={patient.zodiac} />
+          <InfoItem label="生肖" value={patient.chineseZodiac} />
           <InfoItem label="手机" value={patient.mobile} />
-          <InfoItem label="来源" value={patient.source} />
+          <InfoItem label="邮箱" value={patient.email} />
+          <InfoItem label="紧急联系人" value={emergencyText} full />
+          <InfoItem label="地址" value={patient.address} full />
+        </div>
+
+        {/* 诊所/跟进信息 */}
+        <div className="mt-2 pt-2 border-t border-gray-50 grid grid-cols-2 gap-x-3 gap-y-2 text-[13px]">
+          <InfoItem label="来源" value={patient.source} full />
           <InfoItem label="门店" value={patient.clinic} full />
           <InfoItem label="上次就诊医生" value={patient.lastDoctor} />
           <InfoItem label="上次就诊" value={patient.lastVisit || '—'} />
-          <InfoItem label="地址" value={patient.address} full />
           <InfoItem label="备注" value={patient.remark} full />
         </div>
       </div>
