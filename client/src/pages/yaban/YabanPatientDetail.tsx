@@ -20,10 +20,8 @@ const FEATURE_ENTRIES = [
   { icon: `${ICON_BASE}/bingli_jilu.webp`, label: '病历记录', route: '' },
   { icon: `${ICON_BASE}/yingxiang_jilu.webp`, label: '影像记录', route: 'media' },
   { icon: `${ICON_BASE}/shoufei_jilu.webp`, label: '收费记录', route: 'charge' },
-  { icon: `${ICON_BASE}/qinyou_guanxi.webp`, label: '亲友关系', route: '' },
   { icon: `${ICON_BASE}/zixun_jilu.webp`, label: '咨询记录', route: '' },
   { icon: `${ICON_BASE}/huifang_jilu.webp`, label: '回访记录', route: '' },
-  { icon: `${ICON_BASE}/wendang_jilu.webp`, label: '文档记录', route: '' },
   { icon: `${ICON_BASE}/jiancha.webp`, label: '检查', route: '' },
 ];
 
