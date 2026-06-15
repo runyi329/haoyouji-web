@@ -64,6 +64,7 @@ const EXCEL_HEADER_MAP: Record<string, string> = {
 };
 
 // 模板表头顺序（与映射一致，供下载模板使用）
+// 含基础信息 + 咨询师 + 健康档案（就诊主诉、健康标签）
 const TEMPLATE_HEADERS = [
   "姓名",
   "性别",
@@ -78,6 +79,10 @@ const TEMPLATE_HEADERS = [
   "地区",
   "地址",
   "来源",
+  "网电咨询师",
+  "咨询师",
+  "就诊主诉",
+  "健康标签",
   "备注",
 ];
 
@@ -302,7 +307,7 @@ export default function YabanDataManage() {
 
   const onDownloadTemplate = () => {
     const example = [
-      "张三", "男", "1990-01-01", "", "电子", "", "", "", "13800000000", "", "", "", "老顾客推荐", "示例数据，可删除",
+      "张三", "男", "1990-01-01", "", "电子", "", "", "", "13800000000", "", "", "", "老顾客推荐", "", "", "牙齿敏感", "无特殊病史", "示例数据，可删除",
     ];
     const aoa = [TEMPLATE_HEADERS, example];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -684,7 +689,7 @@ export default function YabanDataManage() {
             <div className="bg-white rounded-2xl shadow-sm p-4">
               <span className="text-sm font-bold text-gray-800 block mb-2">导入存档（JSON / Excel）</span>
               <p className="text-xs text-gray-400 leading-relaxed mb-3">
-                支持两种文件：本系统导出的 JSON 存档（精确还原），或按模板整理的 Excel 表格（从其他系统迁移顾客）。已存在的顾客（同手机号或同原编号）会自动跳过，导入的顾客将按本店规则重新分配顾客编号，原编号保留备查。
+                支持两种文件：本系统导出的 JSON 存档（精确还原），或按模板整理的 Excel 表格（从其他系统迁移顾客）。模板已覆盖基础信息、咨询师与健康档案（就诊主诉、健康标签）。已存在的顾客（同手机号或同原编号）会自动跳过，导入的顾客将按本店规则重新分配顾客编号，原编号保留备查。
               </p>
               <button
                 onClick={onDownloadTemplate}
