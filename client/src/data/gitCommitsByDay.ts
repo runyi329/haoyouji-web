@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-15
+// 生成时间：2026-06-16
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7395,5 +7395,27 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-15T15:12:12Z", type: "other", cleanMessage: "牙伴顾客详情：上半部分概览铺满个人信息(昵称/生日/星座/生肖/邮箱/紧急联系人等)" },
     { date: "2026-06-15T15:22:57Z", type: "other", cleanMessage: "牙伴：编辑页取消Tab改连续表单(个人信息+顾客信息,移除首诊)；详情页概览补充咨询师/健康标签" },
     { date: "2026-06-15T15:33:30Z", type: "other", cleanMessage: "牙伴顾客详情：改为电子档案表版式(头像移右上角证件照、顶部编辑图标、资料线框网格自适应横排)" },
+    { date: "2026-06-15T15:34:32Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-15T15:40:39Z", type: "other", cleanMessage: "牙伴顾客详情：上半部分统一为电子档案表，照片为表内跨行单元格铺满，姓名/性别/年龄/手机/编号等并入表格" },
+    { date: "2026-06-15T15:52:28Z", type: "other", cleanMessage: "牙伴顾客详情：照片格改为方形放大上对齐裁切，按各头像背景色铺底消除圆环违和感" },
+  ],
+  "2026-06-16": [
+    { date: "2026-06-15T16:00:24Z", type: "other", cleanMessage: "牙伴顾客详情：照片格改为渐变方格内居中圆形头像" },
+    { date: "2026-06-15T16:06:24Z", type: "other", cleanMessage: "牙伴顾客详情：照片高度限为两行，压缩档案格子内边距与字号" },
+    { date: "2026-06-15T16:12:37Z", type: "other", cleanMessage: "牙伴顾客详情：照片改为表内跨两行单元格，四边有线，整表闭合" },
+    { date: "2026-06-15T16:18:13Z", type: "other", cleanMessage: "牙伴顾客详情：昵称移到第一行，第一行放4个字段" },
+    { date: "2026-06-15T16:24:35Z", type: "other", cleanMessage: "牙伴顾客详情：表格加横眉(门店+顾客档案/档案编号)，移除表内编号与门店" },
+    { date: "2026-06-15T16:30:34Z", type: "other", cleanMessage: "牙伴顾客详情：第二行改为生日/星座/生肖，顾客类型下移" },
+    { date: "2026-06-15T16:37:07Z", type: "other", cleanMessage: "牙伴顾客详情：档案表改为4列Grid整齐铺满，内容居中" },
+    { date: "2026-06-15T16:43:57Z", type: "other", cleanMessage: "牙伴顾客详情：邮箱上移至手机后，顾客类型移到来源旁" },
+    { date: "2026-06-15T16:48:31Z", type: "other", cleanMessage: "牙伴顾客详情：档案格内容改回左对齐（报名表样式）" },
+    { date: "2026-06-15T16:58:58Z", type: "other", cleanMessage: "牙伴首页：门店下拉框改为按当前用户实际加入门店动态联动（新增myClinics接口）" },
+    { date: "2026-06-15T17:13:55Z", type: "other", cleanMessage: "牙伴首页：重排为上下两部分，功能网格2行末位更多，下方日历图，新增全部功能页" },
+    { date: "2026-06-15T17:26:44Z", type: "other", cleanMessage: "牙伴首页：上半部分功能固定为日程/顾客/随访/运营报表/诊所排班/库存+更多" },
+    { date: "2026-06-15T17:32:08Z", type: "other", cleanMessage: "牙伴首页：第2诊所排班第3顾客，全部功能删除有数" },
+    { date: "2026-06-15T17:35:00Z", type: "other", cleanMessage: "牙伴全部功能页：排除首页已有功能、删除有数、不分组平铺显示" },
+    { date: "2026-06-15T17:42:16Z", type: "other", cleanMessage: "牙伴首页：顾客改名为顾客档案" },
+    { date: "2026-06-15T17:54:21Z", type: "other", cleanMessage: "牙伴我的页：去掉左上角我的标题，内容上移" },
+    { date: "2026-06-15T18:17:09Z", type: "feat", cleanMessage: "多门店数据隔离-顾客模块按当前门店tenant动态切换" },
   ],
 };
