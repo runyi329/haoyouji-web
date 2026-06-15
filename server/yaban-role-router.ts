@@ -544,6 +544,14 @@ export async function isYabanFounder(ctx: any): Promise<boolean> {
   return isFounder(conn, ctx);
 }
 
+// 纯创始人（founder 或 super_admin，不含创始股东 co_founder）：平台最高权限特例
+export async function isYabanPureFounder(ctx: any): Promise<boolean> {
+  const conn = await getDbConnection();
+  if (!conn) return false;
+  await ensureRoleTables(conn);
+  return isPureFounder(conn, ctx);
+}
+
 // ==================== 路由 ====================
 export const yabanRoleRouter = router({
   // ============ 当前用户的角色与生效权限 ============

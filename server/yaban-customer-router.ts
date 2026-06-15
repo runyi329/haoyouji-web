@@ -21,7 +21,7 @@ import {
   calcNextBackupAt,
 } from "./yaban-backup-service";
 import { uploadYabanMedia, deleteYabanMedia, type YabanMediaTier } from "./cos-upload";
-import { checkYabanPerm, ensureRoleTables } from "./yaban-role-router";
+import { checkYabanPerm, ensureRoleTables, isYabanPureFounder } from "./yaban-role-router";
 
 // ========= 影像记录：分类 → 高清份处理档位映射 =========
 // 诊断级（无损原图直传）
@@ -893,6 +893,19 @@ export const yabanCustomerRouter = router({
   listExportableClinics: protectedProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) return { clinics: [] as { tenantId: number; name: string; roleKey: string }[] };
+    await ensureRoleTables(conn);
+    // 创始人/超管：特例，无视医院成员关系，可导出全部医院（创始股东不在此列）
+    if (await isYabanPureFounder(ctx)) {
+      const [allRows] = (await (conn as any).execute(
+        `SELECT tenant_id, name, short_name FROM yaban_clinic ORDER BY tenant_id ASC`
+      )) as any;
+      const clinics = (allRows as any[]).map((r) => ({
+        tenantId: Number(r.tenant_id),
+        name: r.name || r.short_name || `医院 #${r.tenant_id}`,
+        roleKey: "founder",
+      }));
+      return { clinics };
+    }
     // 取我所有在职成员关系
     const [rows] = (await (conn as any).execute(
       `SELECT m.tenant_id, m.role_key, c.name, c.short_name, c.status AS clinic_status
@@ -1041,7 +1054,7 @@ export const yabanCustomerRouter = router({
     .input(
       z.object({
         tenantId: z.number().int().positive().optional(),
-        customers: z.array(z.record(z.any())),
+        customers: z.array(z.record(z.string(), z.any())),
         mode: z.enum(["skip", "insert"]).default("skip"),
       })
     )
