@@ -1,7 +1,7 @@
 /**
  * 牙伴齿科管理 - 新建顾客
  * 路由：/yaban/patient/create
- * 蓝白风格，4 个 Tab：个人信息（含联系方式）/ 顾客信息 / 首诊信息 / 自由项
+ * 蓝白风格，3 个 Tab：个人信息（含联系方式）/ 顾客信息（含AI健康标签）/ 首诊信息
  * 顶栏：取消 / 新建顾客 / 保存；含「仅显示必填字段」开关
  * 布局：字段按实际输入宽度自适应流式排布，窄字段同行并排，充分利用横向空间
  */
@@ -20,7 +20,7 @@ import { autoAvatarKey, avatarSrc, type AvatarKey } from "@/lib/yaban-avatar";
 const ACCENT = "#1E88D6";
 
 // Tab 定义
-const TABS = ["个人信息", "顾客信息", "首诊信息", "自由项"] as const;
+const TABS = ["个人信息", "顾客信息", "首诊信息"] as const;
 type Tab = (typeof TABS)[number];
 
 // 选项配置
@@ -30,9 +30,6 @@ const SOURCES = ["到店", "转介绍", "网络预约", "电话预约", "微信�
 const NET_CONSULTANTS = ["杨文利", "侯睿", "洪紫钥"];
 const CONSULTANTS = ["洪紫钥", "杨文利", "侯睿"];
 const CHIEF_COMPLAINTS = ["牙疼", "牙齿松动", "洗牙清洁", "缺牙修复", "牙齿矫正", "美白贴面", "智齿冠周炎", "其他"];
-const HEALTH_STATUS = ["健康", "亚健康", "慢性病", "其他"];
-const YES_NO = ["否", "是", "不详"];
-const PREGNANT = ["否", "是", "备孕中", "不适用"];
 const RELATIONS = ["配偶", "父母", "子女", "兄弟姐妹", "亲戚", "朋友", "其他"];
 
 // 字段类型
@@ -81,19 +78,6 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
   ],
   首诊信息: [
     { key: "chiefComplaint", label: "就诊主诉", placeholder: "请选择就诊主诉", kind: "select", options: CHIEF_COMPLAINTS, width: "full" },
-  ],
-  自由项: [
-    { key: "healthStatus", label: "健康状况", placeholder: "请选择", kind: "select", options: HEALTH_STATUS, width: "half" },
-    { key: "drugAllergy", label: "药物过敏史", placeholder: "请输入", kind: "input", width: "half" },
-    { key: "foodAllergy", label: "食物过敏史", placeholder: "请输入", kind: "input", width: "half" },
-    { key: "medication", label: "服药史", placeholder: "请输入", kind: "input", width: "half" },
-    { key: "heart", label: "心脏病", placeholder: "请选择", kind: "select", options: YES_NO, width: "narrow" },
-    { key: "hypertension", label: "高血压", placeholder: "请选择", kind: "select", options: YES_NO, width: "narrow" },
-    { key: "diabetes", label: "糖尿病", placeholder: "请选择", kind: "select", options: YES_NO, width: "narrow" },
-    { key: "kidney", label: "肾脏病", placeholder: "请选择", kind: "select", options: YES_NO, width: "narrow" },
-    { key: "infectious", label: "传染病", placeholder: "请选择", kind: "select", options: YES_NO, width: "narrow" },
-    { key: "bleeding", label: "出血不止", placeholder: "请选择", kind: "select", options: YES_NO, width: "narrow" },
-    { key: "pregnant", label: "是否怀孕", placeholder: "请选择", kind: "select", options: PREGNANT, width: "half" },
   ],
 };
 
@@ -244,17 +228,6 @@ export default function YabanPatientCreate() {
       history: form.history,
       remark: form.patientRemark,
       chiefComplaint: form.chiefComplaint,
-      healthStatus: form.healthStatus,
-      drugAllergy: form.drugAllergy,
-      foodAllergy: form.foodAllergy,
-      heart: form.heart,
-      hypertension: form.hypertension,
-      diabetes: form.diabetes,
-      kidney: form.kidney,
-      infectious: form.infectious,
-      bleeding: form.bleeding,
-      pregnant: form.pregnant,
-      medication: form.medication,
     });
   };
 
