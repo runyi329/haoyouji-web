@@ -22,6 +22,13 @@ import {
   Camera,
   Loader2,
   LayoutDashboard,
+  Crown,
+  ShieldCheck,
+  Stethoscope,
+  HeartPulse,
+  ConciergeBell,
+  Wallet as WalletBadge,
+  UserRound,
 } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
@@ -46,6 +53,22 @@ export default function YabanProfile() {
   const { data: membership } = trpc.yabanRole.myMembership.useQuery();
   const isOwner = (membership as any)?.member?.role_key === "owner";
   const isFounder = !!(membership as any)?.isFounder || !!(membership as any)?.isSuperAdmin;
+  const founderTitle = (membership as any)?.founderTitle as string | undefined;
+  const roleBadgeKeys = ((membership as any)?.roleBadges as string[] | undefined) || [];
+
+  // 徽标元数据：角色 key -> 显示样式（角色仅作身份标识，与权限解耦）
+  const BADGE_META: Record<string, { label: string; Icon: any; text: string; bg: string; border: string }> = {
+    founder: { label: "创始人", Icon: Crown, text: "#7A4E00", bg: "#FFF1CC", border: "#E6B800" },
+    co_founder: { label: "创始股东", Icon: Crown, text: "#9A6A00", bg: "#FFF6DD", border: "#EBC85A" },
+    owner: { label: "院长/股东", Icon: ShieldCheck, text: "#0E5A9E", bg: "#DCEBFB", border: "#9CC8EC" },
+    doctor: { label: "医生", Icon: Stethoscope, text: "#1E88D6", bg: "#E3F1FC", border: "#A9D3F2" },
+    assistant: { label: "护士/助理", Icon: HeartPulse, text: "#0E8C8C", bg: "#DDF3F2", border: "#A2DEDB" },
+    receptionist: { label: "前台", Icon: ConciergeBell, text: "#5B53C7", bg: "#E6E4FA", border: "#BBB6EE" },
+    finance: { label: "财务", Icon: WalletBadge, text: "#2E8B57", bg: "#DEF3E6", border: "#A7DCBC" },
+    user: { label: "用户", Icon: UserRound, text: "#64748B", bg: "#EEF2F6", border: "#D5DEE8" },
+  };
+  // 一人可多角色：取后端返回的 roleBadges；为空时退回“用户”
+  const badges = (roleBadgeKeys.length > 0 ? roleBadgeKeys : ["user"]).map((k) => BADGE_META[k] || BADGE_META.user);
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // 头像上传：复用 auth.uploadAvatar（与脉动版同一接口），先压缩再上传
@@ -247,6 +270,19 @@ export default function YabanProfile() {
             />
             <div className="min-w-0 flex-1">
               <div className="text-lg font-bold truncate">{displayName}</div>
+              {/* 角色徽标：一人可多角色，并排显示（仅身份标识） */}
+              <div className="flex items-center gap-1 flex-wrap mt-1">
+                {badges.map((b, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold leading-none"
+                    style={{ color: b.text, backgroundColor: b.bg, border: `1px solid ${b.border}` }}
+                  >
+                    <b.Icon className="w-3 h-3" strokeWidth={2.4} />
+                    {b.label}
+                  </span>
+                ))}
+              </div>
               <div className="flex items-center gap-1 text-xs text-white/85 mt-1">
                 <Phone className="w-3.5 h-3.5" />
                 <span>{phone || "未绑定手机号"}</span>

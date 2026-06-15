@@ -1,24 +1,33 @@
 /**
- * 牙伴齿科管理 - 门诊员工与角色权限
+ * 牙伴齿科管理 - 权限管理
  * 路由：/yaban/settings/roles
- * 入口：我的 -> 设置 -> 门诊员工与角色权限
- * 风格：蓝白风格，移动端优先
- * 功能：
- *   - 我的门诊角色卡片（含创始人标识）
- *   - 门诊员工管理（添加/改角色/移除）
- *   - 权限开关面板：角色 x 功能项 矩阵开关（院长/股东可控）
- *   - 单成员个人权限覆盖
- *   - 角色说明
- * 严禁 Emoji，图标统一 lucide-react
+ * 入口：我的 -> 设置 -> 权限管理
+ * 风格：蓝白风格，移动端优先，严禁 Emoji，图标统一 lucide-react
+ *
+ * 结构：
+ *   - 顶部双 Tab：员工权限 / 顾客权限（让店长知道两边都可设置）
+ *   - 多店切换：院长名下多家医院分别设置（按 tenant 隔离）
+ *   - 员工 Tab：
+ *       · 成员表格总览（行=员工，列=关键权限当前取值）
+ *       · 点进某员工 -> 个人权限面板（开关型显示开/关；范围型显示 全部/仅自己/不允许）
+ *       · 角色默认模板入口（设定各角色新员工默认权限）
+ *       · 添加员工 / 改角色 / 移除
+ *   - 顾客 Tab：
+ *       · 顾客表格（行=顾客，列=可开通权限）
+ *       · 点进某顾客 -> 设置其权限
+ *
+ * 取值三档：all=全部 / self=仅自己 / none=不允许；toggle 型仅 all(开)/none(关)
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
   ChevronLeft,
+  ChevronDown,
   ShieldCheck,
   UserPlus,
   Users,
+  UserCircle,
   Trash2,
   X,
   Loader2,
@@ -31,30 +40,18 @@ import {
   HeartPulse,
   ConciergeBell,
   Wallet,
+  Search,
+  Building2,
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 
-// 权限点中文名
-const PERM_LABELS: Record<string, string> = {
-  patient: "顾客管理",
-  patient_create: "顾客建档",
-  followup: "随访管理",
-  media_view: "影像查看",
-  media_upload: "影像上传",
-  media_delete: "影像删除",
-  schedule: "预约排班",
-  shop_order: "商城订单",
-  shop_verify: "到店核销",
-  finance: "财务营收",
-  data_export: "数据导出",
-  member_manage: "员工管理",
-  clinic_setting: "门诊设置",
-};
+type Scope = "all" | "self" | "none";
 
 // 角色标签配色（蓝色系深浅区分）
 const ROLE_BADGE: Record<string, string> = {
   founder: "bg-gradient-to-r from-[#C77700] to-[#E0A030] text-white",
+  co_founder: "bg-gradient-to-r from-[#C77700] to-[#E0A030] text-white",
   owner: "bg-[#0E5A9E] text-white",
   doctor: "bg-[#1E88D6] text-white",
   assistant: "bg-[#EAF4FE] text-[#1E88D6]",
@@ -62,93 +59,60 @@ const ROLE_BADGE: Record<string, string> = {
   finance: "bg-[#FFF3E0] text-[#C77700]",
 };
 
-// owner 不可关闭的权限（与后端一致）
 const OWNER_LOCKED = ["member_manage", "clinic_setting"];
+
+// scope 取值的展示
+const SCOPE_LABEL: Record<Scope, string> = { all: "全部", self: "仅自己", none: "不允许" };
+const SCOPE_COLOR: Record<Scope, string> = {
+  all: "text-[#1E88D6]",
+  self: "text-[#C77700]",
+  none: "text-gray-300",
+};
+// toggle 型展示
+const TOGGLE_LABEL: Record<"all" | "none", string> = { all: "开", none: "关" };
+
+// 三档循环：toggle 在 all/none 间切；scope 在 all/self/none 间循环
+function nextScope(cur: Scope, type: "toggle" | "scope"): Scope {
+  if (type === "toggle") return cur === "all" ? "none" : "all";
+  if (cur === "all") return "self";
+  if (cur === "self") return "none";
+  return "all";
+}
 
 export default function YabanRoles() {
   const [, navigate] = useLocation();
-  const utils = trpc.useUtils();
 
   const { data: my } = trpc.yabanRole.myMembership.useQuery();
-  const { data: roles } = trpc.yabanRole.listRoles.useQuery();
   const canManage = !!my?.canManage;
-  const isFounder = !!my?.isFounder;
 
-  const membersQuery = trpc.yabanRole.listMembers.useQuery(undefined, {
+  // 可管理的医院列表
+  const clinicsQuery = trpc.yabanRole.myManageableClinics.useQuery(undefined, {
     enabled: canManage,
     retry: false,
   });
-
-  // 权限矩阵
-  const matrixQuery = trpc.yabanRole.getPermMatrix.useQuery(undefined, {
-    enabled: canManage,
-    retry: false,
-  });
-
-  const [showAdd, setShowAdd] = useState(false);
-  const [identifier, setIdentifier] = useState("");
-  const [roleKey, setRoleKey] = useState("doctor");
-  const [showRoleInfo, setShowRoleInfo] = useState(false);
-  const [editingMember, setEditingMember] = useState<any | null>(null);
-  const [showPanel, setShowPanel] = useState(false);
-  const [permMember, setPermMember] = useState<any | null>(null);
-
-  // 可分配角色（含全部诊所角色）
-  const assignableRoles = useMemo(
-    () => (roles || []).filter((r: any) => r.role_key !== "founder"),
-    [roles]
-  );
-
-  const addMember = trpc.yabanRole.addMember.useMutation({
-    onSuccess: () => {
-      toast.success("已添加门诊员工");
-      setShowAdd(false);
-      setIdentifier("");
-      setRoleKey("doctor");
-      utils.yabanRole.listMembers.invalidate();
-    },
-    onError: (e) => toast.error(e.message || "添加失败"),
-  });
-
-  const updateRole = trpc.yabanRole.updateMemberRole.useMutation({
-    onSuccess: () => {
-      toast.success("角色已更新");
-      setEditingMember(null);
-      utils.yabanRole.listMembers.invalidate();
-    },
-    onError: (e) => toast.error(e.message || "更新失败"),
-  });
-
-  const removeMember = trpc.yabanRole.removeMember.useMutation({
-    onSuccess: () => {
-      toast.success("已移除");
-      utils.yabanRole.listMembers.invalidate();
-    },
-    onError: (e) => toast.error(e.message || "移除失败"),
-  });
-
-  const setRolePerm = trpc.yabanRole.setRolePerm.useMutation({
-    onSuccess: () => {
-      utils.yabanRole.getPermMatrix.invalidate();
-      utils.yabanRole.listRoles.invalidate();
-    },
-    onError: (e) => toast.error(e.message || "操作失败"),
-  });
-
-  const onAdd = () => {
-    if (!identifier.trim()) {
-      toast.error("请输入手机号或用户名");
-      return;
+  const clinics = clinicsQuery.data || [];
+  // 支持通过 URL ?tenant=ID 指定初始医院（创始人后台下钻进入）
+  const urlTenantId = (() => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const v = sp.get("tenant");
+      return v ? Number(v) : null;
+    } catch {
+      return null;
     }
-    addMember.mutate({ identifier: identifier.trim(), roleKey });
-  };
+  })();
+  const [tenantId, setTenantId] = useState<number | null>(null);
+  useEffect(() => {
+    if (tenantId == null && clinics.length > 0) {
+      const fromUrl = urlTenantId != null && clinics.some((c: any) => c.tenantId === urlTenantId) ? urlTenantId : null;
+      setTenantId(fromUrl ?? clinics[0].tenantId);
+    }
+  }, [clinics, tenantId, urlTenantId]);
+  const [showClinicPicker, setShowClinicPicker] = useState(false);
+  const currentClinic = clinics.find((c: any) => c.tenantId === tenantId);
 
-  const onRemove = (m: any) => {
-    if (!window.confirm(`确认将「${m.name || m.username}」移出门诊？`)) return;
-    removeMember.mutate({ memberId: m.id });
-  };
-
-  const members = membersQuery.data || [];
+  const [tab, setTab] = useState<"staff" | "customer">("staff");
+  const [showRoleInfo, setShowRoleInfo] = useState(false);
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-24">
@@ -160,7 +124,7 @@ export default function YabanRoles() {
           <button onClick={() => navigate("/yaban/settings")} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold flex-1">门诊员工与角色权限</span>
+          <span className="text-base font-bold flex-1">权限管理</span>
           <button
             onClick={() => setShowRoleInfo(true)}
             className="text-xs bg-white/20 rounded-full px-3 py-1 active:opacity-80"
@@ -168,491 +132,913 @@ export default function YabanRoles() {
             角色说明
           </button>
         </div>
+
+        {/* 多店切换 */}
+        {canManage && clinics.length > 0 && (
+          <div className="px-4 pb-2">
+            <button
+              onClick={() => clinics.length > 1 && setShowClinicPicker(true)}
+              className="inline-flex items-center gap-1.5 bg-white/15 rounded-full px-3 py-1.5 text-xs active:opacity-80"
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span className="font-medium">{currentClinic?.name || "选择医院"}</span>
+              {clinics.length > 1 && <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        )}
+
+        {/* 双 Tab */}
+        {canManage && (
+          <div className="flex px-4">
+            {[
+              { key: "staff", label: "员工权限" },
+              { key: "customer", label: "顾客权限" },
+            ].map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key as any)}
+                className={`flex-1 py-2.5 text-sm font-medium relative ${
+                  tab === t.key ? "text-white" : "text-white/60"
+                }`}
+              >
+                {t.label}
+                {tab === t.key && (
+                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-white rounded-full" />
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
-        {/* 我的角色卡片 */}
-        <div className="bg-white rounded-2xl shadow-sm p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <ShieldCheck className="w-4 h-4 text-[#1E88D6]" />
-            <span className="text-sm font-bold text-gray-800">我的门诊角色</span>
+        {!canManage ? (
+          <>
+            <MyRoleCard my={my} />
+            <div className="bg-white rounded-2xl shadow-sm p-6 text-center">
+              <Lock className="w-8 h-8 text-[#9CC8EC] mx-auto mb-2" />
+              <p className="text-sm text-gray-500">仅门诊院长可管理员工与权限</p>
+            </div>
+          </>
+        ) : tenantId == null ? (
+          <div className="py-16 flex justify-center">
+            <Loader2 className="w-6 h-6 text-[#9CC8EC] animate-spin" />
           </div>
-          {isFounder ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium rounded-full px-2.5 py-1 inline-flex items-center gap-1 bg-gradient-to-b from-[#1E88D6] to-[#0E5A9E] text-white">
-                <Crown className="w-3 h-3" />
-                院长
-              </span>
-              <span className="text-xs text-gray-400">最高权限，可管理所有员工的权限开关</span>
-            </div>
-          ) : my?.member ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`text-xs font-medium rounded-full px-2.5 py-1 ${
-                  ROLE_BADGE[my.member.role_key] || "bg-gray-100 text-gray-500"
-                }`}
-              >
-                {roles?.find((r: any) => r.role_key === my.member.role_key)?.name ||
-                  my.member.role_key}
-              </span>
-              <span className="text-xs text-gray-400">
-                共 {my.permissions.length} 项权限
-              </span>
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400">您还不是该门诊的员工</p>
-          )}
-          {!isFounder && my?.member && my.permissions.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {my.permissions.map((p: string) => (
-                <span
-                  key={p}
-                  className="text-[11px] text-[#1E88D6] bg-[#EAF4FE] rounded px-2 py-0.5"
-                >
-                  {PERM_LABELS[p] || p}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 权限开关面板入口（仅管理者可见） */}
-        {canManage && (
-          <button
-            onClick={() => setShowPanel(true)}
-            className="w-full bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:opacity-80"
-          >
-            <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
-              <SlidersHorizontal className="w-4 h-4 text-[#1E88D6]" />
-            </span>
-            <span className="flex-1 text-left">
-              <span className="block text-sm font-medium text-gray-800">权限开关面板</span>
-              <span className="block text-xs text-gray-400 mt-0.5">
-                为每个角色逐项开启或关闭功能权限
-              </span>
-            </span>
-            <ChevronLeft className="w-4 h-4 text-gray-300 rotate-180" />
-          </button>
-        )}
-
-        {/* 成员管理（仅管理者可见） */}
-        {canManage ? (
-          <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-[#1E88D6]" />
-                <span className="text-sm font-bold text-gray-800">
-                  门诊员工（{members.length}）
-                </span>
-              </div>
-              <button
-                onClick={() => setShowAdd(true)}
-                className="flex items-center gap-1 text-xs font-medium text-white bg-[#1E88D6] rounded-full px-3 py-1.5 active:opacity-80"
-              >
-                <UserPlus className="w-3.5 h-3.5" />
-                添加员工
-              </button>
-            </div>
-
-            {membersQuery.isLoading ? (
-              <div className="py-10 flex justify-center">
-                <Loader2 className="w-6 h-6 text-[#9CC8EC] animate-spin" />
-              </div>
-            ) : members.length === 0 ? (
-              <div className="py-10 text-center text-sm text-gray-400">暂无门诊员工</div>
-            ) : (
-              <ul>
-                {members.map((m: any) => (
-                  <li
-                    key={m.id}
-                    className="flex items-center gap-3 px-4 py-3 border-b border-gray-50 last:border-0"
-                  >
-                    <span className="w-10 h-10 rounded-full bg-[#EAF4FE] overflow-hidden flex items-center justify-center shrink-0">
-                      {m.avatar ? (
-                        <img src={m.avatar} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-sm text-[#1E88D6] font-bold">
-                          {(m.name || m.username || "?").slice(0, 1)}
-                        </span>
-                      )}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-800 truncate">
-                          {m.name || m.username}
-                        </span>
-                        <span
-                          className={`text-[11px] font-medium rounded-full px-2 py-0.5 shrink-0 ${
-                            ROLE_BADGE[m.role_key] || "bg-gray-100 text-gray-500"
-                          }`}
-                        >
-                          {m.role_name || m.role_key}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-400 truncate">
-                        {m.phone || m.username}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => setPermMember(m)}
-                        className="text-gray-400 active:text-[#1E88D6] p-1"
-                        aria-label="个人权限"
-                        title="个人权限"
-                      >
-                        <Settings2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditingMember(m);
-                          setRoleKey(m.role_key);
-                        }}
-                        className="text-xs text-[#1E88D6] px-2 py-1 active:opacity-70"
-                      >
-                        改角色
-                      </button>
-                      <button
-                        onClick={() => onRemove(m)}
-                        className="text-gray-300 active:text-[#E2553C] p-1"
-                        aria-label="移除"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+        ) : tab === "staff" ? (
+          <StaffTab tenantId={tenantId} my={my} />
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm p-6 text-center">
-            <Lock className="w-8 h-8 text-[#9CC8EC] mx-auto mb-2" />
-            <p className="text-sm text-gray-500">仅门诊院长可管理员工与权限</p>
-          </div>
+          <CustomerTab tenantId={tenantId} />
         )}
       </div>
 
-      {/* 添加员工弹窗 */}
-      {showAdd && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5">
+      {/* 医院选择 */}
+      {showClinicPicker && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" onClick={() => setShowClinicPicker(false)}>
+          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <span className="text-base font-bold text-gray-800">添加门诊员工</span>
-              <button onClick={() => setShowAdd(false)} aria-label="关闭">
+              <span className="text-base font-bold text-gray-800">选择医院</span>
+              <button onClick={() => setShowClinicPicker(false)} aria-label="关闭">
                 <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
-            <label className="block text-xs text-gray-500 mb-1">员工手机号或用户名</label>
-            <input
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="请输入已注册的手机号或用户名"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#1E88D6] mb-4"
-            />
-            <label className="block text-xs text-gray-500 mb-2">分配角色</label>
-            <div className="grid grid-cols-2 gap-2 mb-5">
-              {assignableRoles.map((r: any) => (
-                <button
-                  key={r.role_key}
-                  onClick={() => setRoleKey(r.role_key)}
-                  className={`text-sm rounded-xl py-2.5 border transition-colors ${
-                    roleKey === r.role_key
-                      ? "border-[#1E88D6] bg-[#EAF4FE] text-[#1E88D6] font-medium"
-                      : "border-gray-200 text-gray-600"
-                  }`}
-                >
-                  {r.name}
-                </button>
+            <ul className="space-y-2">
+              {clinics.map((c: any) => (
+                <li key={c.tenantId}>
+                  <button
+                    onClick={() => {
+                      setTenantId(c.tenantId);
+                      setShowClinicPicker(false);
+                    }}
+                    className={`w-full flex items-center gap-2 rounded-xl px-3 py-3 border ${
+                      c.tenantId === tenantId
+                        ? "border-[#1E88D6] bg-[#EAF4FE]"
+                        : "border-gray-200"
+                    }`}
+                  >
+                    <Building2 className="w-4 h-4 text-[#1E88D6]" />
+                    <span className="text-sm font-medium text-gray-800">{c.name}</span>
+                  </button>
+                </li>
               ))}
-            </div>
-            <button
-              onClick={onAdd}
-              disabled={addMember.isPending}
-              className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-xl py-3 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {showRoleInfo && <RoleInfoSheet onClose={() => setShowRoleInfo(false)} />}
+    </div>
+  );
+}
+
+// ============ 我的角色卡片 ============
+function MyRoleCard({ my }: { my: any }) {
+  const ROLE_NAME: Record<string, string> = {
+    founder: "创始人", co_founder: "创始股东", owner: "院长/股东",
+    doctor: "医生", assistant: "护士/助理", receptionist: "前台", finance: "财务",
+  };
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <ShieldCheck className="w-4 h-4 text-[#1E88D6]" />
+        <span className="text-sm font-bold text-gray-800">我的门诊角色</span>
+      </div>
+      {my?.roleBadges?.length ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {my.roleBadges.map((k: string) => (
+            <span
+              key={k}
+              className={`text-xs font-medium rounded-full px-2.5 py-1 inline-flex items-center gap-1 ${
+                ROLE_BADGE[k] || "bg-gray-100 text-gray-500"
+              }`}
             >
-              {addMember.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              确认添加
-            </button>
-          </div>
+              {(k === "founder" || k === "co_founder") && <Crown className="w-3 h-3" />}
+              {ROLE_NAME[k] || k}
+            </span>
+          ))}
         </div>
-      )}
-
-      {/* 改角色弹窗 */}
-      {editingMember && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-base font-bold text-gray-800">
-                修改「{editingMember.name || editingMember.username}」的角色
-              </span>
-              <button onClick={() => setEditingMember(null)} aria-label="关闭">
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2 mb-5">
-              {assignableRoles.map((r: any) => (
-                <button
-                  key={r.role_key}
-                  onClick={() => setRoleKey(r.role_key)}
-                  className={`text-sm rounded-xl py-2.5 border transition-colors ${
-                    roleKey === r.role_key
-                      ? "border-[#1E88D6] bg-[#EAF4FE] text-[#1E88D6] font-medium"
-                      : "border-gray-200 text-gray-600"
-                  }`}
-                >
-                  {r.name}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() =>
-                updateRole.mutate({ memberId: editingMember.id, roleKey })
-              }
-              disabled={updateRole.isPending}
-              className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-xl py-3 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
-            >
-              {updateRole.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              保存
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 权限开关面板（角色 x 功能项矩阵） */}
-      {showPanel && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-          <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[88vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-base font-bold text-gray-800">权限开关面板</span>
-              <button onClick={() => setShowPanel(false)} aria-label="关闭">
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 mb-4">
-              为每个角色逐项开启或关闭功能。修改即时生效，仅影响本门诊。
-            </p>
-            {matrixQuery.isLoading ? (
-              <div className="py-10 flex justify-center">
-                <Loader2 className="w-6 h-6 text-[#9CC8EC] animate-spin" />
-              </div>
-            ) : matrixQuery.data ? (
-              <div className="space-y-4">
-                {matrixQuery.data.roles.map((r: any) => (
-                  <div key={r.role_key} className="border border-gray-100 rounded-xl overflow-hidden">
-                    <div className="px-3 py-2 bg-[#F6FAFE] flex items-center gap-2">
-                      <span
-                        className={`text-[11px] font-medium rounded-full px-2 py-0.5 ${
-                          ROLE_BADGE[r.role_key] || "bg-gray-100 text-gray-500"
-                        }`}
-                      >
-                        {r.name}
-                      </span>
-                      <span className="text-[11px] text-gray-400">{r.description}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-2">
-                      {matrixQuery.data.perms.map((p: any) => {
-                        const on = matrixQuery.data.matrix[r.role_key]?.[p.key];
-                        const locked =
-                          r.role_key === "owner" && OWNER_LOCKED.includes(p.key);
-                        return (
-                          <button
-                            key={p.key}
-                            disabled={locked || setRolePerm.isPending}
-                            onClick={() =>
-                              setRolePerm.mutate({
-                                roleKey: r.role_key,
-                                permKey: p.key,
-                                enabled: !on,
-                              })
-                            }
-                            className="flex items-center justify-between px-3 py-2.5 border-b border-gray-50 active:bg-gray-50 disabled:opacity-60"
-                          >
-                            <span className="text-xs text-gray-700">{p.name}</span>
-                            <span
-                              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                                on ? "bg-[#1E88D6]" : "bg-gray-200"
-                              }`}
-                            >
-                              <span
-                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                  on ? "translate-x-4" : "translate-x-0.5"
-                                }`}
-                              />
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="py-10 text-center text-sm text-gray-400">暂无数据</div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 单成员个人权限覆盖 */}
-      {permMember && (
-        <MemberPermSheet member={permMember} onClose={() => setPermMember(null)} />
-      )}
-
-      {/* 角色说明弹窗：客户视角，院长为最高，下属角色并列 */}
-      {showRoleInfo && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-base font-bold text-gray-800">角色说明</span>
-              <button onClick={() => setShowRoleInfo(false)} aria-label="关闭">
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-
-            {/* 院长（最高） */}
-            <div className="flex flex-col items-center">
-              <div className="w-40 rounded-2xl bg-gradient-to-b from-[#1E88D6] to-[#0E5A9E] text-white shadow-sm px-4 py-3 flex flex-col items-center">
-                <Crown className="w-6 h-6 mb-1" />
-                <span className="text-base font-bold tracking-wide">院长</span>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-2">最高权限 · 可管理所有员工的权限开关</p>
-
-              {/* 连接线 */}
-              <div className="w-px h-5 bg-[#CFE3F5]" />
-              <div className="w-[80%] h-px bg-[#CFE3F5]" />
-            </div>
-
-            {/* 下属角色（并列） */}
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              {[
-                { key: "doctor", name: "医生", Icon: Stethoscope },
-                { key: "assistant", name: "护士 / 助理", Icon: HeartPulse },
-                { key: "receptionist", name: "前台", Icon: ConciergeBell },
-                { key: "finance", name: "财务", Icon: Wallet },
-              ].map(({ key, name, Icon }) => (
-                <div
-                  key={key}
-                  className="rounded-2xl bg-[#EAF4FE] border border-[#DCEBFB] px-3 py-4 flex flex-col items-center"
-                >
-                  <Icon className="w-6 h-6 text-[#1E88D6] mb-1.5" />
-                  <span className="text-sm font-medium text-[#1E5C92]">{name}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* 说明文字 */}
-            <div className="mt-5 rounded-xl bg-[#F6F9FC] border border-[#E6EEF6] p-3.5 space-y-2">
-              <p className="text-xs text-gray-600 leading-relaxed">
-                院长是门诊的最高身份，拥有全部权限，并可在「权限开关」里为每位员工逐项开启或关闭功能。
-              </p>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                医生、护士/助理、前台、财务为并列角色，他们能使用哪些功能，由院长在权限开关中按需分配——院长开通什么，他们就拥有什么。
-              </p>
-            </div>
-          </div>
-        </div>
+      ) : (
+        <p className="text-sm text-gray-400">您还不是该门诊的员工</p>
       )}
     </div>
   );
 }
 
-// ============ 单成员个人权限覆盖弹层 ============
-function MemberPermSheet({ member, onClose }: { member: any; onClose: () => void }) {
+// ============ 员工权限 Tab ============
+function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
   const utils = trpc.useUtils();
-  const { data, isLoading } = trpc.yabanRole.getMemberPerms.useQuery({ userId: member.user_id });
+  const matrixQuery = trpc.yabanRole.getStaffMatrix.useQuery({ tenantId }, { retry: false });
+  const { data: roles } = trpc.yabanRole.listRoles.useQuery();
 
-  const setMemberPerm = trpc.yabanRole.setMemberPerm.useMutation({
+  const [showAdd, setShowAdd] = useState(false);
+  const [identifier, setIdentifier] = useState("");
+  const [roleKey, setRoleKey] = useState("doctor");
+  const [editingMember, setEditingMember] = useState<any | null>(null);
+  const [showTemplate, setShowTemplate] = useState(false);
+  const [permMember, setPermMember] = useState<any | null>(null);
+
+  const assignableRoles = useMemo(
+    () => (roles || []).filter((r: any) => r.role_key !== "founder" && r.role_key !== "co_founder"),
+    [roles]
+  );
+
+  const addMember = trpc.yabanRole.addMember.useMutation({
     onSuccess: () => {
-      utils.yabanRole.getMemberPerms.invalidate({ userId: member.user_id });
+      toast.success("已添加门诊员工");
+      setShowAdd(false);
+      setIdentifier("");
+      setRoleKey("doctor");
+      utils.yabanRole.getStaffMatrix.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "添加失败"),
+  });
+  const updateRole = trpc.yabanRole.updateMemberRole.useMutation({
+    onSuccess: () => {
+      toast.success("角色已更新");
+      setEditingMember(null);
+      utils.yabanRole.getStaffMatrix.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "更新失败"),
+  });
+  const removeMember = trpc.yabanRole.removeMember.useMutation({
+    onSuccess: () => {
+      toast.success("已移除");
+      utils.yabanRole.getStaffMatrix.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "移除失败"),
+  });
+
+  const data = matrixQuery.data;
+  const members = data?.members || [];
+  // 表格展示的关键列（避免过宽，挑选代表性列）
+  const KEY_COLS = ["patient", "patient_edit", "media_view", "finance", "data_export"];
+
+  return (
+    <>
+      <MyRoleCard my={my} />
+
+      {/* 角色默认模板入口 */}
+      <button
+        onClick={() => setShowTemplate(true)}
+        className="w-full bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:opacity-80"
+      >
+        <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
+          <SlidersHorizontal className="w-4 h-4 text-[#1E88D6]" />
+        </span>
+        <span className="flex-1 text-left">
+          <span className="block text-sm font-medium text-gray-800">角色默认权限模板</span>
+          <span className="block text-xs text-gray-400 mt-0.5">
+            设定各角色新员工进来时的默认权限
+          </span>
+        </span>
+        <ChevronLeft className="w-4 h-4 text-gray-300 rotate-180" />
+      </button>
+
+      {/* 成员表格 */}
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-[#1E88D6]" />
+            <span className="text-sm font-bold text-gray-800">门诊员工（{members.length}）</span>
+          </div>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-1 text-xs font-medium text-white bg-[#1E88D6] rounded-full px-3 py-1.5 active:opacity-80"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            添加员工
+          </button>
+        </div>
+
+        {matrixQuery.isLoading ? (
+          <div className="py-10 flex justify-center">
+            <Loader2 className="w-6 h-6 text-[#9CC8EC] animate-spin" />
+          </div>
+        ) : members.length === 0 ? (
+          <div className="py-10 text-center text-sm text-gray-400">暂无门诊员工</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-[#F6FAFE] text-[11px] text-gray-500">
+                  <th className="sticky left-0 bg-[#F6FAFE] px-3 py-2 font-medium z-10">成员</th>
+                  {KEY_COLS.map((k) => {
+                    const def = data!.perms.find((p: any) => p.key === k);
+                    return (
+                      <th key={k} className="px-2 py-2 font-medium text-center whitespace-nowrap">
+                        {def?.name}
+                      </th>
+                    );
+                  })}
+                  <th className="px-2 py-2 font-medium text-center">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {members.map((m: any) => (
+                  <tr key={m.userId} className="border-t border-gray-50">
+                    <td className="sticky left-0 bg-white px-3 py-2.5 z-10">
+                      <div className="flex items-center gap-2 min-w-[100px]">
+                        <span className="w-8 h-8 rounded-full bg-[#EAF4FE] overflow-hidden flex items-center justify-center shrink-0">
+                          {m.avatar ? (
+                            <img src={m.avatar} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-xs text-[#1E88D6] font-bold">
+                              {(m.name || m.username || "?").slice(0, 1)}
+                            </span>
+                          )}
+                        </span>
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium text-gray-800 truncate max-w-[72px]">
+                            {m.name || m.username}
+                          </div>
+                          <span
+                            className={`text-[10px] rounded px-1 py-0.5 ${
+                              ROLE_BADGE[m.roleKey] || "bg-gray-100 text-gray-500"
+                            }`}
+                          >
+                            {roles?.find((r: any) => r.role_key === m.roleKey)?.name || m.roleKey}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    {KEY_COLS.map((k) => {
+                      const def = data!.perms.find((p: any) => p.key === k);
+                      const sc = (m.scopes[k] || "none") as Scope;
+                      const txt = def?.type === "toggle" ? TOGGLE_LABEL[sc === "none" ? "none" : "all"] : SCOPE_LABEL[sc];
+                      return (
+                        <td key={k} className="px-2 py-2.5 text-center">
+                          <span className={`text-xs font-medium ${SCOPE_COLOR[sc]}`}>{txt}</span>
+                        </td>
+                      );
+                    })}
+                    <td className="px-2 py-2.5 text-center">
+                      <button
+                        onClick={() => setPermMember(m)}
+                        className="text-xs text-[#1E88D6] font-medium active:opacity-70 whitespace-nowrap"
+                      >
+                        设置
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="px-4 py-2.5 border-t border-gray-50 flex flex-wrap gap-x-4 gap-y-1">
+          <span className="text-[11px] text-[#1E88D6]">全部：可操作全院记录</span>
+          <span className="text-[11px] text-[#C77700]">仅自己：只能操作本人登记的</span>
+          <span className="text-[11px] text-gray-400">不允许：无此权限</span>
+        </div>
+      </div>
+
+      {/* 添加员工弹窗 */}
+      {showAdd && (
+        <RoleSelectModal
+          title="添加门诊员工"
+          roles={assignableRoles}
+          roleKey={roleKey}
+          setRoleKey={setRoleKey}
+          showIdentifier
+          identifier={identifier}
+          setIdentifier={setIdentifier}
+          loading={addMember.isPending}
+          onClose={() => setShowAdd(false)}
+          onConfirm={() => {
+            if (!identifier.trim()) return toast.error("请输入手机号或用户名");
+            addMember.mutate({ tenantId, identifier: identifier.trim(), roleKey });
+          }}
+        />
+      )}
+
+      {/* 改角色弹窗 */}
+      {editingMember && (
+        <RoleSelectModal
+          title={`修改「${editingMember.name || editingMember.username}」的角色`}
+          roles={assignableRoles}
+          roleKey={roleKey}
+          setRoleKey={setRoleKey}
+          loading={updateRole.isPending}
+          onClose={() => setEditingMember(null)}
+          onConfirm={() => updateRole.mutate({ tenantId, memberId: editingMember.memberId, roleKey })}
+        />
+      )}
+
+      {/* 角色默认模板 */}
+      {showTemplate && <RoleTemplateSheet tenantId={tenantId} onClose={() => setShowTemplate(false)} />}
+
+      {/* 个人权限面板 */}
+      {permMember && (
+        <MemberPermSheet
+          tenantId={tenantId}
+          member={permMember}
+          onChangeRole={() => {
+            setRoleKey(permMember.roleKey);
+            setEditingMember(permMember);
+            setPermMember(null);
+          }}
+          onRemove={() => {
+            if (!window.confirm(`确认将「${permMember.name || permMember.username}」移出门诊？`)) return;
+            removeMember.mutate({ tenantId, memberId: permMember.memberId });
+            setPermMember(null);
+          }}
+          onClose={() => setPermMember(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// ============ 角色选择弹窗（添加/改角色复用） ============
+function RoleSelectModal({
+  title, roles, roleKey, setRoleKey, showIdentifier, identifier, setIdentifier, loading, onClose, onConfirm,
+}: {
+  title: string;
+  roles: any[];
+  roleKey: string;
+  setRoleKey: (v: string) => void;
+  showIdentifier?: boolean;
+  identifier?: string;
+  setIdentifier?: (v: string) => void;
+  loading: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-base font-bold text-gray-800">{title}</span>
+          <button onClick={onClose} aria-label="关闭">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+        {showIdentifier && (
+          <>
+            <label className="block text-xs text-gray-500 mb-1">员工手机号或用户名</label>
+            <input
+              value={identifier}
+              onChange={(e) => setIdentifier?.(e.target.value)}
+              placeholder="请输入已注册的手机号或用户名"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#1E88D6] mb-4"
+            />
+          </>
+        )}
+        <label className="block text-xs text-gray-500 mb-2">分配角色</label>
+        <div className="grid grid-cols-2 gap-2 mb-5">
+          {roles.map((r: any) => (
+            <button
+              key={r.role_key}
+              onClick={() => setRoleKey(r.role_key)}
+              className={`text-sm rounded-xl py-2.5 border transition-colors ${
+                roleKey === r.role_key
+                  ? "border-[#1E88D6] bg-[#EAF4FE] text-[#1E88D6] font-medium"
+                  : "border-gray-200 text-gray-600"
+              }`}
+            >
+              {r.name}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={onConfirm}
+          disabled={loading}
+          className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-xl py-3 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+        >
+          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+          确认
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============ 三档/开关 控件 ============
+function ScopeControl({
+  type, value, onChange, disabled,
+}: {
+  type: "toggle" | "scope";
+  value: Scope;
+  onChange: (v: Scope) => void;
+  disabled?: boolean;
+}) {
+  if (type === "toggle") {
+    const on = value !== "none";
+    return (
+      <button
+        disabled={disabled}
+        onClick={() => onChange(on ? "none" : "all")}
+        className="disabled:opacity-60"
+        aria-label="切换"
+      >
+        <span
+          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+            on ? "bg-[#1E88D6]" : "bg-gray-200"
+          }`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+              on ? "translate-x-4" : "translate-x-0.5"
+            }`}
+          />
+        </span>
+      </button>
+    );
+  }
+  // scope 三档：分段控件
+  const opts: Scope[] = ["all", "self", "none"];
+  return (
+    <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+      {opts.map((o) => (
+        <button
+          key={o}
+          disabled={disabled}
+          onClick={() => onChange(o)}
+          className={`text-[11px] px-2 py-1 transition-colors disabled:opacity-60 ${
+            value === o
+              ? o === "all"
+                ? "bg-[#1E88D6] text-white"
+                : o === "self"
+                ? "bg-[#C77700] text-white"
+                : "bg-gray-400 text-white"
+              : "bg-white text-gray-500"
+          }`}
+        >
+          {SCOPE_LABEL[o]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ============ 角色默认模板设置弹层 ============
+function RoleTemplateSheet({ tenantId, onClose }: { tenantId: number; onClose: () => void }) {
+  const utils = trpc.useUtils();
+  const { data, isLoading } = trpc.yabanRole.getRoleTemplateMatrix.useQuery({ tenantId }, { retry: false });
+  const setRolePerm = trpc.yabanRole.setRolePerm.useMutation({
+    onSuccess: () => {
+      utils.yabanRole.getRoleTemplateMatrix.invalidate({ tenantId });
+      utils.yabanRole.getStaffMatrix.invalidate({ tenantId });
+      utils.yabanRole.listRoles.invalidate();
     },
     onError: (e) => toast.error(e.message || "操作失败"),
   });
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[85vh] overflow-y-auto">
+      <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[88vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-base font-bold text-gray-800">
-            {member.name || member.username} 的个人权限
-          </span>
+          <span className="text-base font-bold text-gray-800">角色默认权限模板</span>
           <button onClick={onClose} aria-label="关闭">
             <X className="w-5 h-5 text-gray-400" />
           </button>
         </div>
         <p className="text-xs text-gray-400 mb-4">
-          单独为该员工开关功能，优先级高于角色设置。带「自定义」标记的项已偏离角色默认。
+          设定每个角色的默认权限，新员工按此初始化。个人可在其上单独定制覆盖。
         </p>
         {isLoading ? (
           <div className="py-10 flex justify-center">
             <Loader2 className="w-6 h-6 text-[#9CC8EC] animate-spin" />
           </div>
         ) : data ? (
-          <div className="space-y-1">
-            {data.perms.map((p: any) => {
-              const on = data.effective[p.key];
-              const overridden = p.key in data.override;
-              return (
-                <div
-                  key={p.key}
-                  className="flex items-center justify-between px-3 py-2.5 border-b border-gray-50"
-                >
-                  <span className="flex items-center gap-2">
-                    <span className="text-sm text-gray-700">{p.name}</span>
-                    {overridden && (
-                      <span className="text-[10px] text-[#C77700] bg-[#FFF3E0] rounded px-1.5 py-0.5">
-                        自定义
-                      </span>
-                    )}
+          <div className="space-y-4">
+            {data.roles.map((r: any) => (
+              <div key={r.role_key} className="border border-gray-100 rounded-xl overflow-hidden">
+                <div className="px-3 py-2 bg-[#F6FAFE] flex items-center gap-2">
+                  <span
+                    className={`text-[11px] font-medium rounded-full px-2 py-0.5 ${
+                      ROLE_BADGE[r.role_key] || "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {r.name}
                   </span>
-                  <span className="flex items-center gap-2">
-                    {overridden && (
-                      <button
-                        onClick={() =>
-                          setMemberPerm.mutate({
-                            userId: member.user_id,
-                            permKey: p.key,
-                            enabled: false,
-                            reset: true,
-                          })
-                        }
-                        className="text-gray-300 active:text-[#1E88D6] p-1"
-                        aria-label="恢复角色默认"
-                        title="恢复角色默认"
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    <button
-                      disabled={setMemberPerm.isPending}
-                      onClick={() =>
-                        setMemberPerm.mutate({
-                          userId: member.user_id,
-                          permKey: p.key,
-                          enabled: !on,
-                        })
-                      }
-                      className="disabled:opacity-60"
-                    >
-                      <span
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                          on ? "bg-[#1E88D6]" : "bg-gray-200"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            on ? "translate-x-4" : "translate-x-0.5"
-                          }`}
-                        />
-                      </span>
-                    </button>
-                  </span>
+                  <span className="text-[11px] text-gray-400 truncate">{r.description}</span>
                 </div>
-              );
-            })}
+                <div>
+                  {data.perms.map((p: any) => {
+                    const sc = (data.matrix[r.role_key]?.[p.key] || "none") as Scope;
+                    const locked = r.role_key === "owner" && OWNER_LOCKED.includes(p.key);
+                    return (
+                      <div
+                        key={p.key}
+                        className="flex items-center justify-between px-3 py-2 border-b border-gray-50 last:border-0"
+                      >
+                        <span className="text-xs text-gray-700">
+                          {p.name}
+                          <span className="text-[10px] text-gray-300 ml-1">
+                            {p.type === "scope" ? "范围" : "开关"}
+                          </span>
+                        </span>
+                        <ScopeControl
+                          type={p.type}
+                          value={sc}
+                          disabled={locked || setRolePerm.isPending}
+                          onChange={(v) =>
+                            setRolePerm.mutate({ tenantId, roleKey: r.role_key, permKey: p.key, scope: v })
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="py-10 text-center text-sm text-gray-400">暂无数据</div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ============ 单成员个人权限面板 ============
+function MemberPermSheet({
+  tenantId, member, onChangeRole, onRemove, onClose,
+}: {
+  tenantId: number;
+  member: any;
+  onChangeRole: () => void;
+  onRemove: () => void;
+  onClose: () => void;
+}) {
+  const utils = trpc.useUtils();
+  const { data, isLoading } = trpc.yabanRole.getMemberPerms.useQuery({ tenantId, userId: member.userId }, { retry: false });
+  const setMemberPerm = trpc.yabanRole.setMemberPerm.useMutation({
+    onSuccess: () => {
+      utils.yabanRole.getMemberPerms.invalidate({ tenantId, userId: member.userId });
+      utils.yabanRole.getStaffMatrix.invalidate({ tenantId });
+    },
+    onError: (e) => toast.error(e.message || "操作失败"),
+  });
+
+  // 按分组归类
+  const grouped = useMemo(() => {
+    const g: Record<string, any[]> = {};
+    (data?.perms || []).forEach((p: any) => {
+      (g[p.group] = g[p.group] || []).push(p);
+    });
+    return g;
+  }, [data]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[88vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-base font-bold text-gray-800 flex items-center gap-2">
+            {member.name || member.username} 的权限
+            <span
+              className={`text-[10px] rounded px-1.5 py-0.5 ${
+                ROLE_BADGE[member.roleKey] || "bg-gray-100 text-gray-500"
+              }`}
+            >
+              {data?.roleKey === member.roleKey ? "" : ""}
+              {member.roleKey}
+            </span>
+          </span>
+          <button onClick={onClose} aria-label="关闭">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mb-3">
+          单独为该员工设置，优先级高于角色默认。带「定制」的项已偏离角色默认。
+        </p>
+
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={onChangeRole}
+            className="flex-1 text-xs text-[#1E88D6] border border-[#CFE3F5] rounded-lg py-2 active:bg-[#EAF4FE]"
+          >
+            修改角色
+          </button>
+          <button
+            onClick={onRemove}
+            className="flex-1 text-xs text-[#E2553C] border border-[#F3D2CB] rounded-lg py-2 active:bg-[#FCEEEB]"
+          >
+            移出门诊
+          </button>
+        </div>
+
+        {isLoading ? (
+          <div className="py-10 flex justify-center">
+            <Loader2 className="w-6 h-6 text-[#9CC8EC] animate-spin" />
+          </div>
+        ) : data ? (
+          <div className="space-y-4">
+            {Object.entries(grouped).map(([group, perms]) => (
+              <div key={group} className="border border-gray-100 rounded-xl overflow-hidden">
+                <div className="px-3 py-2 bg-[#F6FAFE] text-xs font-medium text-gray-600">{group}</div>
+                <div>
+                  {perms.map((p: any) => {
+                    const eff = (data.effective[p.key] || "none") as Scope;
+                    const customized = data.customized.includes(p.key);
+                    return (
+                      <div
+                        key={p.key}
+                        className="flex items-center justify-between px-3 py-2.5 border-b border-gray-50 last:border-0"
+                      >
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-xs text-gray-700">{p.name}</span>
+                          {customized && (
+                            <span className="text-[10px] text-[#C77700] bg-[#FFF3E0] rounded px-1 py-0.5 shrink-0">
+                              定制
+                            </span>
+                          )}
+                        </span>
+                        <span className="flex items-center gap-2 shrink-0">
+                          {customized && (
+                            <button
+                              onClick={() =>
+                                setMemberPerm.mutate({ tenantId, userId: member.userId, permKey: p.key, reset: true })
+                              }
+                              className="text-gray-300 active:text-[#1E88D6] p-1"
+                              aria-label="恢复角色默认"
+                              title="恢复角色默认"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <ScopeControl
+                            type={p.type}
+                            value={eff}
+                            disabled={setMemberPerm.isPending}
+                            onChange={(v) =>
+                              setMemberPerm.mutate({ tenantId, userId: member.userId, permKey: p.key, scope: v })
+                            }
+                          />
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="py-10 text-center text-sm text-gray-400">暂无数据</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============ 顾客权限 Tab ============
+function CustomerTab({ tenantId }: { tenantId: number }) {
+  const [keyword, setKeyword] = useState("");
+  const [search, setSearch] = useState("");
+  const customerQuery = trpc.yabanRole.getCustomerMatrix.useQuery(
+    { tenantId, keyword: search, limit: 50 },
+    { retry: false }
+  );
+  const [permCustomer, setPermCustomer] = useState<any | null>(null);
+
+  const data = customerQuery.data;
+  const customers = data?.customers || [];
+
+  return (
+    <>
+      <div className="bg-white rounded-2xl shadow-sm p-3">
+        <div className="flex items-center gap-2 bg-[#F6FAFE] rounded-xl px-3 py-2">
+          <Search className="w-4 h-4 text-gray-400" />
+          <input
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && setSearch(keyword.trim())}
+            placeholder="搜索顾客姓名或手机号"
+            className="flex-1 bg-transparent text-sm outline-none"
+          />
+          <button
+            onClick={() => setSearch(keyword.trim())}
+            className="text-xs text-[#1E88D6] font-medium"
+          >
+            搜索
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
+          <UserCircle className="w-4 h-4 text-[#1E88D6]" />
+          <span className="text-sm font-bold text-gray-800">顾客（{customers.length}）</span>
+        </div>
+        {customerQuery.isLoading ? (
+          <div className="py-10 flex justify-center">
+            <Loader2 className="w-6 h-6 text-[#9CC8EC] animate-spin" />
+          </div>
+        ) : customers.length === 0 ? (
+          <div className="py-10 text-center text-sm text-gray-400">暂无顾客</div>
+        ) : (
+          <ul>
+            {customers.map((c: any) => {
+              const onCount = data!.perms.filter((p: any) => (c.scopes[p.key] || "none") !== "none").length;
+              return (
+                <li
+                  key={c.userId}
+                  className="flex items-center gap-3 px-4 py-3 border-b border-gray-50 last:border-0"
+                >
+                  <span className="w-10 h-10 rounded-full bg-[#EAF4FE] overflow-hidden flex items-center justify-center shrink-0">
+                    {c.avatar ? (
+                      <img src={c.avatar} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-sm text-[#1E88D6] font-bold">
+                        {(c.name || "?").slice(0, 1)}
+                      </span>
+                    )}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-800 truncate">{c.name || "未命名"}</div>
+                    <div className="text-xs text-gray-400 truncate">{c.phone || ""}</div>
+                  </div>
+                  <span className="text-xs text-gray-400 mr-1">已开通 {onCount} 项</span>
+                  <button
+                    onClick={() => setPermCustomer(c)}
+                    className="text-xs text-[#1E88D6] font-medium active:opacity-70"
+                  >
+                    设置
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {permCustomer && (
+        <CustomerPermSheet
+          tenantId={tenantId}
+          customer={permCustomer}
+          perms={data?.perms || []}
+          onClose={() => setPermCustomer(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// ============ 顾客权限设置弹层 ============
+function CustomerPermSheet({
+  tenantId, customer, perms, onClose,
+}: {
+  tenantId: number;
+  customer: any;
+  perms: any[];
+  onClose: () => void;
+}) {
+  const utils = trpc.useUtils();
+  const [local, setLocal] = useState<Record<string, Scope>>(customer.scopes || {});
+  const setCustomerPerm = trpc.yabanRole.setCustomerPerm.useMutation({
+    onSuccess: () => utils.yabanRole.getCustomerMatrix.invalidate({ tenantId }),
+    onError: (e) => toast.error(e.message || "操作失败"),
+  });
+
+  const grouped = useMemo(() => {
+    const g: Record<string, any[]> = {};
+    perms.forEach((p: any) => {
+      (g[p.group] = g[p.group] || []).push(p);
+    });
+    return g;
+  }, [perms]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[88vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-base font-bold text-gray-800">{customer.name || "顾客"} 的权限</span>
+          <button onClick={onClose} aria-label="关闭">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mb-4">为该顾客单独开通或关闭可见功能，仅影响本门诊。</p>
+        <div className="space-y-4">
+          {Object.entries(grouped).map(([group, gperms]) => (
+            <div key={group} className="border border-gray-100 rounded-xl overflow-hidden">
+              <div className="px-3 py-2 bg-[#F6FAFE] text-xs font-medium text-gray-600">{group}</div>
+              <div>
+                {gperms.map((p: any) => {
+                  const val = (local[p.key] || "none") as Scope;
+                  const on = val !== "none";
+                  return (
+                    <div
+                      key={p.key}
+                      className="flex items-center justify-between px-3 py-2.5 border-b border-gray-50 last:border-0"
+                    >
+                      <span className="text-xs text-gray-700">{p.name}</span>
+                      <button
+                        disabled={setCustomerPerm.isPending}
+                        onClick={() => {
+                          const next: Scope = on ? "none" : "all";
+                          setLocal((s) => ({ ...s, [p.key]: next }));
+                          setCustomerPerm.mutate({ tenantId, userId: customer.userId, permKey: p.key, scope: next });
+                        }}
+                        className="disabled:opacity-60"
+                      >
+                        <span
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                            on ? "bg-[#1E88D6]" : "bg-gray-200"
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              on ? "translate-x-4" : "translate-x-0.5"
+                            }`}
+                          />
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============ 角色说明弹层 ============
+function RoleInfoSheet({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-base font-bold text-gray-800">角色说明</span>
+          <button onClick={onClose} aria-label="关闭">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+        <div className="flex flex-col items-center">
+          <div className="w-40 rounded-2xl bg-gradient-to-b from-[#1E88D6] to-[#0E5A9E] text-white shadow-sm px-4 py-3 flex flex-col items-center">
+            <Crown className="w-6 h-6 mb-1" />
+            <span className="text-base font-bold tracking-wide">院长 / 股东</span>
+          </div>
+          <p className="text-[11px] text-gray-400 mt-2">诊所最高身份 · 可管理员工与权限</p>
+          <div className="w-px h-5 bg-[#CFE3F5]" />
+          <div className="w-[80%] h-px bg-[#CFE3F5]" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          {[
+            { key: "doctor", name: "医生", Icon: Stethoscope },
+            { key: "assistant", name: "护士 / 助理", Icon: HeartPulse },
+            { key: "receptionist", name: "前台", Icon: ConciergeBell },
+            { key: "finance", name: "财务", Icon: Wallet },
+          ].map(({ key, name, Icon }) => (
+            <div
+              key={key}
+              className="rounded-2xl bg-[#EAF4FE] border border-[#DCEBFB] px-3 py-4 flex flex-col items-center"
+            >
+              <Icon className="w-6 h-6 text-[#1E88D6] mb-1.5" />
+              <span className="text-sm font-medium text-[#1E5C92]">{name}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-5 rounded-xl bg-[#F6F9FC] border border-[#E6EEF6] p-3.5 space-y-2">
+          <p className="text-xs text-gray-600 leading-relaxed">
+            角色决定了一个人进来时的默认权限，并作为身份标识显示。真正能做什么，以「权限管理」里逐人逐项的设置为准。
+          </p>
+          <p className="text-xs text-gray-600 leading-relaxed">
+            取值分三档：全部（可操作全院记录）、仅自己（只能操作本人登记的）、不允许（无此权限）。院长可为每位员工与顾客单独定制。
+          </p>
+        </div>
       </div>
     </div>
   );

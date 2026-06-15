@@ -232,6 +232,11 @@ export default function YabanAdmin() {
         </div>
       )}
 
+      {/* 平台创始团队 */}
+      <div className="max-w-lg mx-auto px-4 mt-4">
+        <FounderTeamPanel />
+      </div>
+
       {/* 医院列表 */}
       <div className="max-w-lg mx-auto px-4 mt-4">
         <div className="flex items-center justify-between mb-2">
@@ -330,6 +335,7 @@ function ClinicCreateSheet({ onClose }: { onClose: () => void }) {
 /* ============ 医院详情抽屉：成员名册 + 搜索任命院长 ============ */
 function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: () => void }) {
   const utils = trpc.useUtils();
+  const [, navigate] = useLocation();
   const detail = trpc.yabanClinic.adminClinicDetail.useQuery({ clinicId });
   const [userKw, setUserKw] = useState("");
   const [searching, setSearching] = useState(false);
@@ -417,6 +423,19 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
                 <div className="text-[11px] text-gray-400 mt-0.5">营业额</div>
               </div>
             </div>
+
+            {/* 权限管理入口（创始人下钻到该院成员×权限矩阵） */}
+            {d?.clinic?.tenantId ? (
+              <button
+                onClick={() => navigate(`/yaban/settings/roles?tenant=${d.clinic.tenantId}`)}
+                className="w-full bg-white rounded-2xl p-4 flex items-center justify-between active:bg-gray-50"
+              >
+                <span className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
+                  <UserCog className="w-4 h-4 text-[#1E88D6]" /> 权限管理（成员 × 权限矩阵）
+                </span>
+                <ChevronRight className="w-4 h-4 text-gray-300" />
+              </button>
+            ) : null}
 
             {/* 医院详细信息（创始人可命名/编辑） */}
             <div className="bg-white rounded-2xl p-4">
@@ -574,6 +593,109 @@ function DetailRow({ label, value }: { label: string; value?: string }) {
     <div className="flex items-start gap-2 text-xs">
       <span className="text-gray-400 shrink-0 w-16">{label}</span>
       <span className={`flex-1 break-all ${value ? "text-gray-700" : "text-gray-300"}`}>{value || "未填写"}</span>
+    </div>
+  );
+}
+
+/* ============ 平台创始团队：创始人 / 创始股东 管理 ============ */
+function FounderTeamPanel() {
+  const utils = trpc.useUtils();
+  const [open, setOpen] = useState(false);
+  const [kw, setKw] = useState("");
+  const founders = trpc.yabanRole.listFounders.useQuery();
+
+  const grant = trpc.yabanRole.grantFounder.useMutation({
+    onSuccess: (r: any) => {
+      toast.success(`已任命「${r?.name || "用户"}」为创始股东`);
+      setKw("");
+      utils.yabanRole.listFounders.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "操作失败"),
+  });
+  const revoke = trpc.yabanRole.revokeFounder.useMutation({
+    onSuccess: () => {
+      toast.success("已撤销");
+      utils.yabanRole.listFounders.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "操作失败"),
+  });
+
+  const list = founders.data || [];
+  const titleLabel = (k: string) => (k === "founder" ? "创始人" : "创始股东");
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm p-4">
+      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between">
+        <span className="text-sm font-bold text-gray-700 flex items-center gap-1">
+          <Crown className="w-4 h-4 text-[#D97706]" /> 平台创始团队（{list.length}）
+        </span>
+        <ChevronRight className={`w-4 h-4 text-gray-300 transition-transform ${open ? "rotate-90" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-3">
+          {/* 列表 */}
+          {founders.isLoading ? (
+            <div className="py-4 flex justify-center"><Loader2 className="w-5 h-5 text-[#2196C8] animate-spin" /></div>
+          ) : list.length === 0 ? (
+            <div className="text-xs text-gray-400 py-2 text-center">暂无创始团队成员</div>
+          ) : (
+            <div className="space-y-2">
+              {list.map((f: any) => (
+                <div key={f.id} className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-[#FEF6E6] flex items-center justify-center shrink-0">
+                    <Crown className="w-4 h-4 text-[#D97706]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-800 truncate">{f.name || f.username}</div>
+                    <div className="text-[11px] text-gray-400 truncate">{f.username}{f.phone ? ` · ${f.phone}` : ""}</div>
+                  </div>
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full ${f.role_key === "founder" ? "bg-[#FFF1CC] text-[#9A6A00]" : "bg-[#FFF6DD] text-[#9A6A00]"}`}>
+                    {titleLabel(f.role_key)}
+                  </span>
+                  {f.role_key === "co_founder" && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`撤销「${f.name || f.username}」的创始股东身份？`)) revoke.mutate({ userId: f.user_id });
+                      }}
+                      disabled={revoke.isPending}
+                      className="text-[11px] text-[#DC2626] active:opacity-60 disabled:opacity-40"
+                    >
+                      撤销
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 任命创始股东 */}
+          <div className="border-t border-gray-100 pt-3">
+            <div className="text-xs text-gray-500 mb-1.5">任命创始股东（按用户名 / 姓名 / 手机号）</div>
+            <div className="flex gap-2">
+              <input
+                value={kw}
+                onChange={(e) => setKw(e.target.value)}
+                placeholder="输入用户名 / 姓名 / 手机号"
+                className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8]"
+              />
+              <button
+                onClick={() => {
+                  if (!kw.trim()) {
+                    toast.error("请输入用户名 / 姓名 / 手机号");
+                    return;
+                  }
+                  grant.mutate({ identifier: kw.trim(), title: "co_founder" });
+                }}
+                disabled={grant.isPending}
+                className="px-4 py-2 rounded-xl bg-[#2196C8] text-white text-sm active:bg-[#1B7FB0] disabled:opacity-60 flex items-center gap-1"
+              >
+                {grant.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />} 任命
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
