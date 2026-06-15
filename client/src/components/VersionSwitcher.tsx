@@ -3,22 +3,68 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 
 /**
- * VersionSwitcher - 多版本快捷切换器（小圆圈 + 点击弹出下拉）
+ * VersionSwitcher - 多版本快捷切换器（圆形版本图标 + 点击弹出下拉）
  *
- * 显示规则：
- * - 仅当当前登录用户被管理员授予「允许切换(switchEnabled)」且可切换版本 >= 2 时才显示；
- *   否则完全不渲染（用户看不到任何按钮）。
- * - 点击小圆圈弹出下拉，列出可切换版本，当前版本带勾选；点击某版本即切换到其落地地址。
+ * 交互（与产品确认）：
+ * - 圆圈显示「当前所在版本」自己的图标（脉动版=脉动波形图标，牙伴版=牙伴牙齿logo）。
+ * - 点击圆圈弹出下拉，列出可切换版本（图标 + 名称），当前版本带勾选；点击某版本即切换到其落地地址。
+ * - 仅当用户被管理员授予「允许切换(switchEnabled)」且可切换版本 >= 2 时才显示，否则不渲染。
  *
  * 两种摆放模式：
- * - 默认（floating）：固定浮在屏幕右上角，适用于无顶栏图标行的页面（如脉动版人脉首页）。
- * - inline：内嵌进顶栏图标行（如牙伴版顶栏「刷新/搜索/新增」一行），渲染为与顶栏同色系的小圆圈。
- *
- * 通过 variant 控制内嵌时圆圈的配色：
- * - "light"（默认 inline）：浅色顶栏，图标用深色
- * - "onColor"：彩色顶栏（如牙伴蓝色 Header），圆圈为白底、图标深色，贴合截图样式
+ * - floating（默认）：固定浮在屏幕右上角，适用于无顶栏图标行的页面（脉动版人脉首页）。
+ * - inline：内嵌进顶栏图标行（牙伴版顶栏「刷新/搜索/新增」一行）。
  */
 type Variant = "floating" | "inline";
+
+// versionKey → 版本图标。未知版本回退到通用切换图标。
+const VERSION_ICONS: Record<string, string> = {
+  maidong: "/maidong-switch-icon.webp",
+  yaban:
+    "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/yaban/yaban_logo_bottomnav.webp",
+};
+
+function VersionIcon({
+  versionKey,
+  size,
+  className,
+}: {
+  versionKey: string;
+  size: number;
+  className?: string;
+}) {
+  const src = VERSION_ICONS[versionKey];
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        className={`object-cover rounded-full ${className || ""}`}
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+  // 回退：通用切换箭头图标
+  return (
+    <svg
+      width={size * 0.7}
+      height={size * 0.7}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`text-gray-700 ${className || ""}`}
+    >
+      <path d="M17 1l4 4-4 4" />
+      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+      <path d="M7 23l-4-4 4-4" />
+      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+    </svg>
+  );
+}
 
 export default function VersionSwitcher({
   variant = "floating",
@@ -60,7 +106,7 @@ export default function VersionSwitcher({
   // 少于2个可切换版本时无需展示切换器
   if (options.length < 2) return null;
 
-  const currentKey = version.versionKey;
+  const currentKey = version.versionKey || "";
 
   const handleSwitch = (target: { versionKey: string; landingPath: string }) => {
     setOpen(false);
@@ -68,29 +114,9 @@ export default function VersionSwitcher({
     setLocation(target.landingPath || "/");
   };
 
-  // 切换图标（两个相对箭头，表示切换）
-  const SwitchIcon = ({ className }: { className?: string }) => (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M17 1l4 4-4 4" />
-      <path d="M3 11V9a4 4 0 0 1 4-4h14" />
-      <path d="M7 23l-4-4 4-4" />
-      <path d="M21 13v2a4 4 0 0 1-4 4H3" />
-    </svg>
-  );
-
   // 下拉菜单（两种模式共用）
   const Dropdown = (
-    <div className="absolute right-0 mt-2 w-44 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50">
+    <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50">
       <div className="px-3 py-2 text-xs text-gray-400 border-b border-gray-50">
         切换版本
       </div>
@@ -101,11 +127,12 @@ export default function VersionSwitcher({
             key={opt.versionKey}
             type="button"
             onClick={() => handleSwitch(opt)}
-            className={`w-full text-left px-3 py-2.5 text-sm flex items-center justify-between hover:bg-gray-50 ${
+            className={`w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 hover:bg-gray-50 ${
               active ? "text-[#D32F2F] font-semibold" : "text-gray-700"
             }`}
           >
-            <span>{opt.name}</span>
+            <VersionIcon versionKey={opt.versionKey} size={24} />
+            <span className="flex-1">{opt.name}</span>
             {active && (
               <svg
                 width="16"
@@ -126,25 +153,22 @@ export default function VersionSwitcher({
     </div>
   );
 
-  // ── inline 模式：内嵌进顶栏图标行（白底小圆圈，贴合彩色 Header）──────────────
+  // ── inline 模式：内嵌进顶栏图标行（圆形版本图标）────────────────────────────
   if (variant === "inline") {
     return (
       <div className="relative inline-flex">
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center active:scale-95 transition"
+          className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center overflow-hidden active:scale-95 transition"
           title="切换版本"
           aria-label="切换版本"
         >
-          <SwitchIcon className="text-gray-700" />
+          <VersionIcon versionKey={currentKey} size={32} />
         </button>
         {open && (
           <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setOpen(false)}
-            />
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
             {Dropdown}
           </>
         )}
@@ -159,18 +183,15 @@ export default function VersionSwitcher({
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="w-10 h-10 rounded-full bg-white/90 backdrop-blur shadow-lg border border-gray-200 flex items-center justify-center active:scale-95 transition"
+          className="w-10 h-10 rounded-full bg-white shadow-lg border border-gray-200 flex items-center justify-center overflow-hidden active:scale-95 transition"
           title="切换版本"
           aria-label="切换版本"
         >
-          <SwitchIcon className="text-gray-700" />
+          <VersionIcon versionKey={currentKey} size={40} />
         </button>
         {open && (
           <>
-            <div
-              className="fixed inset-0 z-[-1]"
-              onClick={() => setOpen(false)}
-            />
+            <div className="fixed inset-0 z-[-1]" onClick={() => setOpen(false)} />
             {Dropdown}
           </>
         )}
