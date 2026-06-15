@@ -905,6 +905,17 @@ export const yabanCustomerRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "顾客不存在或无权修改" });
       }
 
+      // 兼容旧表：补齐可能缺失的列，避免 UPDATE 报 Unknown column
+      try {
+        await (conn as any).execute(`ALTER TABLE yaban_customer ADD COLUMN zodiac VARCHAR(16) DEFAULT NULL AFTER age`);
+      } catch (e) { /* 列已存在则忽略 */ }
+      try {
+        await (conn as any).execute(`ALTER TABLE yaban_customer ADD COLUMN chinese_zodiac VARCHAR(16) DEFAULT NULL AFTER zodiac`);
+      } catch (e) { /* 列已存在则忽略 */ }
+      try {
+        await (conn as any).execute(`ALTER TABLE yaban_customer ADD COLUMN external_no VARCHAR(64) DEFAULT NULL AFTER medical_no`);
+      } catch (e) { /* 列已存在则忽略 */ }
+
       const ageNum =
         input.age === undefined || input.age === null || input.age === ""
           ? null
