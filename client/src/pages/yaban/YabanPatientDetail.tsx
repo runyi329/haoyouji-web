@@ -122,9 +122,10 @@ export default function YabanPatientDetail() {
           {/* 第一区：左侧前两行字段 + 右侧跨两行照片单元格 */}
           <div className="flex">
             <div className="flex-1 min-w-0 flex flex-wrap content-start">
-              <InfoItem label="姓名" value={patient.name || '—'} />
-              <InfoItem label="性别" value={patient.gender === 'male' ? '男' : '女'} />
-              <InfoItem label="年龄" value={patient.age > 0 ? `${patient.age}岁` : '—'} />
+              <InfoItem label="姓名" value={patient.name || '—'} quarter />
+              <InfoItem label="昵称" value={patient.nickname} quarter />
+              <InfoItem label="性别" value={patient.gender === 'male' ? '男' : '女'} quarter />
+              <InfoItem label="年龄" value={patient.age > 0 ? `${patient.age}岁` : '—'} quarter />
               <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} />
               <InfoItem label="顾客编号" value={patient.medicalNo || '—'} wide />
             </div>
@@ -143,7 +144,6 @@ export default function YabanPatientDetail() {
           {/* 第二区：其余字段整行铺排 */}
           <div className="flex flex-wrap">
             <InfoItem label="手机" value={patient.mobile} wide />
-            <InfoItem label="昵称" value={patient.nickname} />
           <InfoItem label="生日" value={patient.birthday} />
           <InfoItem label="星座" value={patient.zodiac} />
           <InfoItem label="生肖" value={patient.chineseZodiac} />
@@ -193,8 +193,8 @@ export default function YabanPatientDetail() {
 
 // 资料档案格子：带右/下边框，label 在上、value 在下
 // full=整行；wide=约半行；默认窄格随内容自适应横排
-function InfoItem({ label, value, full, wide }: { label: string; value: string; full?: boolean; wide?: boolean }) {
-  const basis = full ? 'w-full' : wide ? 'basis-[48%] grow' : 'grow basis-[30%]';
+function InfoItem({ label, value, full, wide, quarter }: { label: string; value: string; full?: boolean; wide?: boolean; quarter?: boolean }) {
+  const basis = full ? 'w-full' : wide ? 'basis-[48%] grow' : quarter ? 'grow basis-[22%]' : 'grow basis-[30%]';
   return (
     <div className={`${basis} min-w-0 border-r border-b border-gray-200 px-2.5 py-1`}>
       <div className="text-[10px] text-gray-400 leading-tight">{label}</div>
