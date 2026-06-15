@@ -98,16 +98,25 @@ export default function YabanDataManage() {
   const [autoFreq, setAutoFreq] = useState<"daily" | "weekly" | "monthly" | "quarterly">("monthly");
 
   const { data: backupSettings } = trpc.yabanCustomer.getBackupSettings.useQuery();
+  const { data: me } = trpc.auth.me.useQuery();
   const utils = trpc.useUtils();
+
+  // 个人中心（脉动网）绑定的邮箱：作为唯一接收地址来源
+  const boundEmail = ((me as any)?.email as string | undefined) || "";
+  const hasBoundEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(boundEmail);
 
   useEffect(() => {
     if (backupSettings) {
       setAutoEnabled(!!backupSettings.enabled);
-      if (backupSettings.email) setEmail(backupSettings.email);
       if (backupSettings.frequency) setAutoFreq(backupSettings.frequency as any);
       if (backupSettings.formats?.length) setFormats(backupSettings.formats as Fmt[]);
     }
   }, [backupSettings]);
+
+  // 邮箱始终以个人中心绑定的为准，不再手动输入
+  useEffect(() => {
+    if (hasBoundEmail) setEmail(boundEmail);
+  }, [hasBoundEmail, boundEmail]);
 
   const toggleContent = (key: string) => {
     const mod = CONTENT_MODULES.find((m) => m.key === key);
@@ -178,23 +187,23 @@ export default function YabanDataManage() {
 
   const onSendEmail = () => {
     if (!guardBeforeExport()) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.error("请输入正确的邮箱地址");
+    if (!hasBoundEmail) {
+      toast.error("请先在个人中心绑定邮箱");
       return;
     }
-    sendBackupNow.mutate({ email, formats });
+    sendBackupNow.mutate({ email: boundEmail, formats });
   };
 
   const onSaveAuto = () => {
-    if (autoEnabled && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.error("开启定时备份需填写正确的邮箱");
+    if (autoEnabled && !hasBoundEmail) {
+      toast.error("开启定时备份需先在个人中心绑定邮箱");
       return;
     }
     if (formats.length === 0) {
       toast.error("请至少选择一种文件格式");
       return;
     }
-    saveSettings.mutate({ enabled: autoEnabled, email, formats, frequency: autoFreq });
+    saveSettings.mutate({ enabled: autoEnabled, email: boundEmail, formats, frequency: autoFreq });
   };
 
   // ===== 导入相关 =====
@@ -332,10 +341,13 @@ export default function YabanDataManage() {
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
         {tab === "export" ? (
           <>
-            {/* 选择导出内容 */}
+            {/* 步骤一：选择导出内容 */}
             <div className="bg-white rounded-2xl shadow-sm p-4">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-bold text-gray-800">选择导出内容</span>
+                <span className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-[#1E88D6] text-white text-[11px] flex items-center justify-center shrink-0">1</span>
+                  选择要导出的内容
+                </span>
                 <button
                   className="text-xs text-[#1E88D6] active:opacity-70"
                   onClick={() =>
@@ -346,7 +358,7 @@ export default function YabanDataManage() {
                     )
                   }
                 >
-                  {contents.length === CONTENT_MODULES.filter((m) => m.available).length ? "取消全选" : "全选"}
+                  <span className="font-normal">{contents.length === CONTENT_MODULES.filter((m) => m.available).length ? "取消全选" : "全选"}</span>
                 </button>
               </div>
               <div className="space-y-2">
@@ -378,11 +390,10 @@ export default function YabanDataManage() {
                   );
                 })}
               </div>
-            </div>
 
-            {/* 选择文件格式 */}
-            <div className="bg-white rounded-2xl shadow-sm p-4">
-              <span className="text-sm font-bold text-gray-800 block mb-3">选择文件格式</span>
+              {/* 文件格式（归属于步骤一内） */}
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <span className="text-xs font-medium text-gray-500 block mb-2">文件格式</span>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => toggleFormat("excel")}
@@ -416,38 +427,70 @@ export default function YabanDataManage() {
               <p className="text-xs text-gray-400 mt-2 leading-relaxed">
                 Excel 便于查看打印；JSON 存档可用于「数据导入存档」还原。
               </p>
+              </div>
+            </div>
 
-              {/* 直接下载 */}
+            {/* 步骤二：选择导出方式 */}
+            <div className="bg-white rounded-2xl shadow-sm p-4">
+              <span className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-3">
+                <span className="w-5 h-5 rounded-full bg-[#1E88D6] text-white text-[11px] flex items-center justify-center shrink-0">2</span>
+                选择导出方式
+              </span>
+
+              {/* 方式一：下载到本机 */}
               <button
                 onClick={onDownload}
                 disabled={exportData.isPending}
-                className="mt-3 w-full flex items-center justify-center gap-2 bg-[#1E88D6] text-white rounded-xl py-3 text-sm font-medium active:opacity-80 disabled:opacity-60"
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl border border-gray-100 bg-gray-50 active:bg-[#EAF4FE] transition-colors disabled:opacity-60"
               >
-                {exportData.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                导出并下载到本机
+                <span className="w-8 h-8 rounded-lg bg-[#EAF4FE] flex items-center justify-center shrink-0">
+                  {exportData.isPending ? <Loader2 className="w-4 h-4 animate-spin text-[#1E88D6]" /> : <Download className="w-4 h-4 text-[#1E88D6]" />}
+                </span>
+                <span className="flex-1 text-left">
+                  <span className="block text-sm font-medium text-gray-800">下载到本机</span>
+                  <span className="block text-xs text-gray-400 mt-0.5">立即生成文件并保存到本设备</span>
+                </span>
               </button>
-            </div>
 
-            {/* 发送到邮箱 */}
-            <div className="bg-white rounded-2xl shadow-sm p-4">
-              <span className="text-sm font-bold text-gray-800 block mb-3 flex items-center gap-1.5">
-                <Mail className="w-4 h-4 text-[#1E88D6]" /> 发送备份到邮箱
-              </span>
-              <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                inputMode="email"
-                placeholder="请输入接收备份的邮箱"
-                className="w-full text-sm bg-gray-50 border border-gray-100 rounded-xl px-3 py-2.5 outline-none focus:border-[#1E88D6]"
-              />
-              <button
-                onClick={onSendEmail}
-                disabled={sendBackupNow.isPending}
-                className="mt-3 w-full flex items-center justify-center gap-2 bg-[#EAF4FE] text-[#1E88D6] rounded-xl py-3 text-sm font-medium active:opacity-80 disabled:opacity-60"
-              >
-                {sendBackupNow.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
-                立即发送到邮箱
-              </button>
+              {/* 方式二：发送到邮箱 */}
+              <div className="mt-3 px-3 py-3 rounded-xl border border-gray-100 bg-gray-50">
+                <div className="flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-lg bg-[#EAF4FE] flex items-center justify-center shrink-0">
+                    <Mail className="w-4 h-4 text-[#1E88D6]" />
+                  </span>
+                  <span className="flex-1">
+                    <span className="block text-sm font-medium text-gray-800">发送到邮箱</span>
+                    {hasBoundEmail ? (
+                      <span className="block text-xs text-gray-400 mt-0.5 truncate">将发送至：{boundEmail}</span>
+                    ) : (
+                      <span className="block text-xs text-amber-500 mt-0.5">尚未绑定邮箱</span>
+                    )}
+                  </span>
+                  {hasBoundEmail ? (
+                    <button
+                      onClick={() => { sessionStorage.setItem("yaban_back", "/yaban/settings/data"); navigate("/profile/edit"); }}
+                      className="text-xs text-[#1E88D6] active:opacity-70 shrink-0"
+                    >
+                      修改
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => { sessionStorage.setItem("yaban_back", "/yaban/settings/data"); navigate("/profile/edit"); }}
+                      className="text-xs px-2.5 py-1.5 rounded-lg bg-[#1E88D6] text-white active:opacity-80 shrink-0"
+                    >
+                      绑定邮箱
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={onSendEmail}
+                  disabled={sendBackupNow.isPending || !hasBoundEmail}
+                  className="mt-3 w-full flex items-center justify-center gap-2 bg-[#EAF4FE] text-[#1E88D6] rounded-xl py-2.5 text-sm font-medium active:opacity-80 disabled:opacity-50"
+                >
+                  {sendBackupNow.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                  立即发送到邮箱
+                </button>
+              </div>
 
               {/* 定时备份 */}
               <div className="mt-4 pt-4 border-t border-gray-100">
@@ -484,9 +527,12 @@ export default function YabanDataManage() {
                       ))}
                     </div>
                     <p className="text-xs text-gray-400 mt-2">
-                      将按所选周期，于北京时间凌晨自动把备份发送到上方邮箱。
+                      将按所选周期，于北京时间凌晨自动把备份发送到个人中心绑定的邮箱{hasBoundEmail ? `（${boundEmail}）` : ""}。
                     </p>
                   </>
+                )}
+                {!hasBoundEmail && autoEnabled && (
+                  <p className="text-xs text-amber-500 mt-2">尚未绑定邮箱，请先在个人中心绑定后再保存。</p>
                 )}
                 {backupSettings?.lastBackupAt && (
                   <p className="text-xs text-gray-400 mt-2">
