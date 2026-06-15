@@ -20,7 +20,7 @@ const ICON_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.c
 const HOME_FEATURES = [
   { name: "预约日程", icon: `${ICON_BASE}/richeng.webp`, route: "/yaban/schedule" },
   { name: "诊所排班", icon: `${ICON_BASE}/zhensuo_paiban.webp`, route: "" },
-  { name: "顾客", icon: `${ICON_BASE}/huanzhe.webp`, route: "/yaban/patients" },
+  { name: "顾客档案", icon: `${ICON_BASE}/huanzhe.webp`, route: "/yaban/patients" },
   { name: "随访", icon: `${ICON_BASE}/suifang.webp`, route: "/yaban/followup" },
   { name: "运营报表", icon: `${ICON_BASE}/yunying_baobiao.webp`, route: "" },
   { name: "库存", icon: `${ICON_BASE}/kucun.webp`, route: "" },
