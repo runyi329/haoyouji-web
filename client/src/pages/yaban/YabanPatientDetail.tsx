@@ -201,9 +201,9 @@ export default function YabanPatientDetail() {
 function InfoItem({ label, value, span = 1 }: { label: string; value: string; span?: number }) {
   const spanCls = span >= 4 ? 'col-span-4' : span === 3 ? 'col-span-3' : span === 2 ? 'col-span-2' : 'col-span-1';
   return (
-    <div className={`${spanCls} min-w-0 border-r border-b border-gray-200 px-2 py-1.5 flex flex-col items-center justify-center text-center`}>
+    <div className={`${spanCls} min-w-0 border-r border-b border-gray-200 px-2.5 py-1.5 flex flex-col justify-center`}>
       <div className="text-[10px] text-gray-400 leading-tight">{label}</div>
-      <div className="text-[12.5px] text-gray-700 leading-tight break-words w-full">{value}</div>
+      <div className="text-[12.5px] text-gray-700 leading-tight break-words">{value}</div>
     </div>
   );
 }
