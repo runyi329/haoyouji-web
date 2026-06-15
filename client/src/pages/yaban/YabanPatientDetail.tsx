@@ -73,9 +73,6 @@ export default function YabanPatientDetail() {
     return names.replace(/\|/g, '、').trim();
   })();
 
-  // 性别标签颜色
-  const genderColor = patient.gender === 'male' ? 'bg-sky-500' : 'bg-pink-400';
-
   if (detailQuery.isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -119,36 +116,26 @@ export default function YabanPatientDetail() {
         </div>
       </div>
 
-      {/* 顾客信息卡片（电子档案表风格） */}
+      {/* 顾客信息卡片（统一电子档案表：照片为表内跨行单元格，所有字段均在表中） */}
       <div className="bg-white px-4 py-4">
-        {/* 表头：左侧关键信息 + 右上角证件照头像 */}
-        <div className="flex items-start justify-between">
-          <div className="flex-1 pr-3">
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-bold text-gray-900">{patient.name}</span>
-              {patient.age > 0 && <span className="text-gray-500 text-sm">{patient.age}岁</span>}
-              <span className={`w-5 h-5 rounded-full ${genderColor} flex items-center justify-center`}>
-                <span className="text-white text-[10px]">{patient.gender === 'male' ? 'M' : 'F'}</span>
-              </span>
-              {patient.tags.map((tag, idx) => (
-                <span key={idx} className="px-1.5 py-0.5 rounded text-[10px] font-bold text-white bg-sky-500">{tag}</span>
-              ))}
-            </div>
-            <div className="mt-2 text-[13px] text-gray-500">
-              顾客编号：<span className="text-gray-700 font-medium">{patient.medicalNo}</span>
-            </div>
-            <div className="mt-1 text-[13px] text-gray-500">
-              手机：<span className="text-gray-700">{patient.mobile}</span>
-            </div>
+        <div className="flex border-t border-l border-gray-200 rounded-md overflow-hidden">
+          {/* 左侧：字段格子自适应横排 */}
+          <div className="flex-1 min-w-0 flex flex-wrap content-start">
+            <InfoItem label="姓名" value={patient.name || '—'} />
+            <InfoItem label="性别" value={patient.gender === 'male' ? '男' : '女'} />
+            <InfoItem label="年龄" value={patient.age > 0 ? `${patient.age}岁` : '—'} />
+            <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} />
+            <InfoItem label="顾客编号" value={patient.medicalNo || '—'} wide />
+            <InfoItem label="手机" value={patient.mobile} wide />
           </div>
-          {/* 右上角头像方框（一寸照样式） */}
-          <div className="w-[72px] h-[88px] rounded-md border border-gray-200 bg-[#F0F7FA] overflow-hidden flex-shrink-0">
+          {/* 右上角：照片单元格（跨多行，铺满） */}
+          <div className="w-[78px] self-stretch border-r border-b border-gray-200 bg-[#F0F7FA] overflow-hidden flex-shrink-0">
             <img src={avatarSrc(patient.avatarKey)} alt={patient.name} className="w-full h-full object-cover" />
           </div>
         </div>
 
-        {/* 资料档案表：线框网格，字段自适应横排（能放几个放几个） */}
-        <div className="mt-3 flex flex-wrap border-t border-l border-gray-200 rounded-md overflow-hidden">
+        {/* 资料档案表（续）：线框网格，字段自适应横排 */}
+        <div className="flex flex-wrap border-l border-gray-200 overflow-hidden">
           <InfoItem label="昵称" value={patient.nickname} />
           <InfoItem label="生日" value={patient.birthday} />
           <InfoItem label="星座" value={patient.zodiac} />
