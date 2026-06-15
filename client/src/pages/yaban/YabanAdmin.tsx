@@ -57,6 +57,7 @@ export default function YabanAdmin() {
   const [keyword, setKeyword] = useState("");
   const [detailId, setDetailId] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [founderTeamOpen, setFounderTeamOpen] = useState(false);
 
   const overview = trpc.yabanClinic.adminOverview.useQuery();
   const list = trpc.yabanClinic.adminListClinics.useQuery({ keyword });
@@ -186,8 +187,19 @@ export default function YabanAdmin() {
           <button onClick={() => navigate("/yaban/profile")} className="flex items-center gap-1 text-sm text-white/90 mb-3">
             <ChevronLeft className="w-5 h-5" /> 返回
           </button>
-          <div className="text-lg font-bold">后台管理 · 大数据看板</div>
-          <p className="text-xs text-white/85 mt-1">全平台医院经营数据总览，数据来自各院实际运营</p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-lg font-bold">后台管理 · 大数据看板</div>
+              <p className="text-xs text-white/85 mt-1">全平台医院经营数据总览，数据来自各院实际运营</p>
+            </div>
+            <button
+              onClick={() => setFounderTeamOpen(true)}
+              className="shrink-0 flex items-center gap-1.5 rounded-xl bg-white/15 hover:bg-white/25 active:bg-white/30 px-3 py-2 text-left leading-tight transition-colors"
+            >
+              <Crown className="w-4 h-4 text-[#FFD876] shrink-0" />
+              <span className="text-[12px] font-semibold">牙伴平台<br/>创始团队</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -232,10 +244,8 @@ export default function YabanAdmin() {
         </div>
       )}
 
-      {/* 平台创始团队 */}
-      <div className="max-w-lg mx-auto px-4 mt-4">
-        <FounderTeamPanel />
-      </div>
+      {/* 平台创始团队（右上角入口弹出） */}
+      <FounderTeamPanel open={founderTeamOpen} onClose={() => setFounderTeamOpen(false)} />
 
       {/* 医院列表 */}
       <div className="max-w-lg mx-auto px-4 mt-4">
@@ -597,24 +607,29 @@ function DetailRow({ label, value }: { label: string; value?: string }) {
   );
 }
 
-/* ============ 平台创始团队：创始人 / 创始股东 管理 ============ */
-function FounderTeamPanel() {
+/* ============ 牙伴平台创始团队：创始人 / 创始股东 管理（弹窗） ============ */
+function FounderTeamPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const utils = trpc.useUtils();
-  const [open, setOpen] = useState(false);
   const [kw, setKw] = useState("");
-  const founders = trpc.yabanRole.listFounders.useQuery();
+  const founders = trpc.yabanRole.listFounders.useQuery(undefined, { enabled: open });
 
-  // 输入防抖，实时模糊搜索全局用户
+  // 输入防抖，复用账本同款全局用户搜索 sharing.searchUsers（稳定可用）
   const [debouncedKw, setDebouncedKw] = useState("");
   useEffect(() => {
     const t = setTimeout(() => setDebouncedKw(kw.trim()), 300);
     return () => clearTimeout(t);
   }, [kw]);
-  const searchRes = trpc.yabanRole.searchGlobalUser.useQuery(
-    { keyword: debouncedKw },
-    { enabled: debouncedKw.length > 0 }
+  const searchRes = trpc.sharing.searchUsers.useQuery(
+    { query: debouncedKw },
+    { enabled: open && debouncedKw.length > 0 }
   );
-  const candidates = (searchRes.data || []) as any[];
+  // 标记哪些用户已是创始团队成员
+  const founderRoleMap = new Map<number, string>();
+  (founders.data || []).forEach((f: any) => founderRoleMap.set(Number(f.user_id), f.role_key));
+  const candidates = ((searchRes.data || []) as any[]).map((u: any) => ({
+    ...u,
+    founderRole: founderRoleMap.get(Number(u.id)) || null,
+  }));
 
   const grant = trpc.yabanRole.grantFounder.useMutation({
     onSuccess: (r: any) => {
@@ -636,17 +651,22 @@ function FounderTeamPanel() {
   const list = founders.data || [];
   const titleLabel = (k: string) => (k === "founder" ? "创始人" : "创始股东");
 
-  return (
-    <div className="bg-white rounded-2xl shadow-sm p-4">
-      <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center justify-between">
-        <span className="text-sm font-bold text-gray-700 flex items-center gap-1">
-          <Crown className="w-4 h-4 text-[#D97706]" /> 平台创始团队（{list.length}）
-        </span>
-        <ChevronRight className={`w-4 h-4 text-gray-300 transition-transform ${open ? "rotate-90" : ""}`} />
-      </button>
+  if (!open) return null;
 
-      {open && (
-        <div className="mt-3 space-y-3">
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[85vh] overflow-y-auto p-4">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-base font-bold text-gray-800 flex items-center gap-1.5">
+            <Crown className="w-5 h-5 text-[#D97706]" /> 牙伴平台创始团队（{list.length}）
+          </span>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 active:bg-gray-200">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+
+        <div className="space-y-3">
           {/* 列表 */}
           {founders.isLoading ? (
             <div className="py-4 flex justify-center"><Loader2 className="w-5 h-5 text-[#2196C8] animate-spin" /></div>
@@ -742,7 +762,7 @@ function FounderTeamPanel() {
             )}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
