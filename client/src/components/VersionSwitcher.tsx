@@ -71,7 +71,7 @@ export default function VersionSwitcher({
 }: {
   variant?: Variant;
 }) {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const [open, setOpen] = useState(false);
 
   const { data: user } = trpc.auth.me.useQuery(undefined, {
@@ -94,9 +94,18 @@ export default function VersionSwitcher({
   // 无切换权限：不渲染任何东西
   if (!version || !version.switchEnabled) return null;
 
-  const allowedKeys = version.switchableVersionKeys || [];
+  // 「当前所在版本」：按实际路径实时判定（/yaban/* 为牙伴，其余为脉动），
+  // 而非归属版本 versionKey，以免在牙伴页面却把当前判成脉动、图标与可切项相反。
+  const currentKey = location.startsWith("/yaban") ? "yaban" : "maidong";
+
+  // 可切换范围：为空 = 全部已启用版本（与后台“不勾选任何项”语义一致）；再并入归属版本与当前所在版本
+  const scopeKeys = version.switchableVersionKeys || [];
+  const allEnabledKeys = (versions || []).filter((v: any) => v.enabled !== false).map((v: any) => v.versionKey);
+  const allowedSet = new Set<string>(scopeKeys.length > 0 ? scopeKeys : allEnabledKeys);
+  if (version.versionKey) allowedSet.add(version.versionKey);
+  if (currentKey) allowedSet.add(currentKey);
   const options = (versions || [])
-    .filter((v: any) => allowedKeys.includes(v.versionKey))
+    .filter((v: any) => allowedSet.has(v.versionKey))
     .map((v: any) => ({
       versionKey: v.versionKey as string,
       name: v.name as string,
@@ -105,8 +114,6 @@ export default function VersionSwitcher({
 
   // 少于2个可切换版本时无需展示切换器
   if (options.length < 2) return null;
-
-  const currentKey = version.versionKey || "";
 
   const handleSwitch = (target: { versionKey: string; landingPath: string }) => {
     setOpen(false);
