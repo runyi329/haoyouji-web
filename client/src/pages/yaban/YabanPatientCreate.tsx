@@ -60,6 +60,7 @@ const TAB_FIELDS: Record<Tab, FieldDef[]> = {
     { key: "birthday", label: "生日", placeholder: "请选择", kind: "input", inputType: "date", width: "date" },
     { key: "age", label: "年龄", placeholder: "", kind: "input", inputType: "number", width: "tiny" },
     { key: "zodiac", label: "星座", placeholder: "", kind: "input", readOnly: true, width: "zodiac" },
+    { key: "chineseZodiac", label: "生肖", placeholder: "", kind: "input", readOnly: true, width: "zodiac" },
     { key: "mobile", label: "手机", placeholder: "请输入手机号", kind: "input", inputType: "tel", width: "half" },
     { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true, width: "half" },
     { key: "emergencyContact", label: "紧急联系人", placeholder: "姓名", kind: "input", width: "half" },
@@ -95,6 +96,17 @@ const WIDTH_BASIS: Record<FieldWidth, string> = {
   tiny: "0",
   zodiac: "0",
 };
+
+// 根据生日年份计算生肖
+function calcChineseZodiac(birthday: string): string {
+  if (!birthday) return "";
+  const d = new Date(birthday);
+  if (isNaN(d.getTime())) return "";
+  const animals = ["鼠", "牛", "虎", "兔", "龙", "蛇", "马", "羊", "猴", "鸡", "狗", "猪"];
+  // 1900 为鼠年，以此为基准取模
+  const idx = ((d.getFullYear() - 1900) % 12 + 12) % 12;
+  return animals[idx];
+}
 
 // 根据生日(YYYY-MM-DD)计算周岁年龄
 function calcAge(birthday: string): string {
@@ -152,6 +164,7 @@ export default function YabanPatientCreate() {
       if (key === "birthday") {
         next.age = calcAge(value);
         next.zodiac = calcZodiac(value);
+        next.chineseZodiac = calcChineseZodiac(value);
       }
       return next;
     });
@@ -209,6 +222,7 @@ export default function YabanPatientCreate() {
       birthday: form.birthday,
       age: form.age,
       zodiac: form.zodiac,
+      chineseZodiac: form.chineseZodiac,
       patientType: form.patientType,
       // 顾客编号为只读预览值，保存时不传入，由后端按实际流水生成（避免并发同号）
       medicalNo: undefined,

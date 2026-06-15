@@ -190,7 +190,8 @@ export default function YabanPatientProfile() {
             <Field label="性别" value={val(r.gender)} span="sm" />
             <Field label="年龄" value={r.age != null && r.age !== "" ? `${r.age}岁` : "—"} span="sm" />
             <Field label="生日" value={val(r.birthday)} span="md" />
-            <Field label="星座/生肖" value={val(r.zodiac)} span="sm" />
+            <Field label="星座" value={val(r.zodiac)} span="sm" />
+            <Field label="生肖" value={val(r.chinese_zodiac)} span="sm" />
             <Field label="顾客类型" value={val(r.patient_type)} span="sm" />
             <Field label="顾客编号" value={val(r.medical_no)} span="md" />
             <Field label="外部编号" value={val(r.external_no)} span="md" />

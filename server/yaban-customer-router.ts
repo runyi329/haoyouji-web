@@ -99,6 +99,7 @@ async function ensureCustomerTable(conn: any) {
       birthday VARCHAR(20) DEFAULT NULL,
       age INT DEFAULT NULL,
       zodiac VARCHAR(16) DEFAULT NULL,
+      chinese_zodiac VARCHAR(16) DEFAULT NULL,
       patient_type VARCHAR(16) DEFAULT '电子',
       medical_no VARCHAR(40) DEFAULT NULL,
       external_no VARCHAR(64) DEFAULT NULL,
@@ -463,6 +464,7 @@ const createInput = z.object({
   birthday: z.string().max(20).optional(),
   age: z.union([z.number(), z.string()]).optional(),
   zodiac: z.string().max(16).optional(),
+  chineseZodiac: z.string().max(16).optional(),
   patientType: z.string().max(16).optional(),
   medicalNo: z.string().max(40).optional(),
   externalNo: z.string().max(64).optional(),
@@ -753,6 +755,12 @@ export const yabanCustomerRouter = router({
       } catch (e) {
         // 列已存在则忽略
       }
+      // 兼容旧表：补充 chinese_zodiac（生肖）列
+      try {
+        await (conn as any).execute(`ALTER TABLE yaban_customer ADD COLUMN chinese_zodiac VARCHAR(16) DEFAULT NULL AFTER zodiac`);
+      } catch (e) {
+        // 列已存在则忽略
+      }
       // 兼容旧表：补充 external_no（导入时保留原始编号）
       try {
         await (conn as any).execute(`ALTER TABLE yaban_customer ADD COLUMN external_no VARCHAR(64) DEFAULT NULL AFTER medical_no`);
@@ -790,14 +798,14 @@ export const yabanCustomerRouter = router({
       const doInsert = async (code: string) =>
         (await (conn as any).execute(
           `INSERT INTO yaban_customer
-           (tenant_id, name, gender, birthday, age, zodiac, patient_type, medical_no, external_no, nickname,
+           (tenant_id, name, gender, birthday, age, zodiac, chinese_zodiac, patient_type, medical_no, external_no, nickname,
             email, mobile, phone, region, address, avatar,
             emergency_contact, emergency_relation, emergency_phone,
             source, net_consultant, consultant, history, remark,
             chief_complaint, health_status, drug_allergy, food_allergy,
             heart, hypertension, diabetes, kidney, infectious, bleeding, pregnant, medication,
             created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?, ?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
+           VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?, ?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
           [
             DEFAULT_TENANT_ID,
             input.name.trim(),
@@ -805,6 +813,7 @@ export const yabanCustomerRouter = router({
             s(input.birthday),
             ageNum,
             s(input.zodiac),
+            s(input.chineseZodiac),
             s(input.patientType) || "电子",
             code,
             s(input.externalNo),
