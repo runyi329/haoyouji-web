@@ -3,7 +3,7 @@
  * 路由：/yaban/settings/data
  * 风格：牙伴蓝白风（强调色 #1E88D6）
  * 功能：
- *   Tab1 数据导出备份：多步骤——①选医院 ②选分类 ③选格式 ④选方式 ⑤定时备份（并入邮箱）
+ *   Tab1 数据导出备份：多步骤——①选医院 ②选分类 ③选格式 ④选方式 ⑤AI 智能备份（并入邮箱）
  *   Tab2 数据导入存档：上传 JSON 备份文件，导入还原（重复跳过）
  * 严禁 Emoji。
  */
@@ -31,6 +31,7 @@ import {
   Building2,
   ChevronDown,
   AlertCircle,
+  Layers,
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
@@ -121,11 +122,12 @@ export default function YabanDataManage() {
 
   // ===== 步骤二：分类选择 =====
   const [categories, setCategories] = useState<string[]>([...AVAILABLE_CATEGORY_KEYS]);
+  const [catOpen, setCatOpen] = useState(false); // 分类下拉是否展开
 
   // ===== 步骤三：格式 =====
   const [formats, setFormats] = useState<Fmt[]>(["excel"]);
 
-  // ===== 步骤五：定时备份 =====
+  // ===== 步骤五：AI 智能备份 =====
   const [autoEnabled, setAutoEnabled] = useState(false);
   const [autoFreq, setAutoFreq] = useState<"daily" | "weekly" | "monthly" | "quarterly">("monthly");
 
@@ -182,7 +184,7 @@ export default function YabanDataManage() {
 
   const saveSettings = trpc.yabanCustomer.saveBackupSettings.useMutation({
     onSuccess: () => {
-      toast.success("定时备份设置已保存");
+      toast.success("智能备份设置已保存");
       utils.yabanCustomer.getBackupSettings.invalidate();
     },
     onError: (e) => toast.error(e.message || "保存失败"),
@@ -231,7 +233,7 @@ export default function YabanDataManage() {
       return;
     }
     if (autoEnabled && !hasBoundEmail) {
-      toast.error("开启定时备份需先在个人中心绑定邮箱");
+      toast.error("开启智能备份需先在个人中心绑定邮箱");
       return;
     }
     if (formats.length === 0) {
@@ -437,12 +439,43 @@ export default function YabanDataManage() {
               )}
             </div>
 
-            {/* 步骤二：选择资料分类 */}
+            {/* 步骤二：选择资料分类（折叠下拉） */}
             <div className="bg-white rounded-2xl shadow-sm p-4">
-              <StepHead
-                n={2}
-                title="选择资料分类"
-                extra={
+              <StepHead n={2} title="选择资料分类" />
+
+              {/* 收起时的摘要行：点击展开/收起 */}
+              {(() => {
+                const allSelected = categories.length === AVAILABLE_CATEGORY_KEYS.length;
+                const summary = allSelected
+                  ? "全部信息"
+                  : categories.length === 0
+                  ? "未选择"
+                  : `已选 ${categories.length} 项`;
+                return (
+                  <button
+                    onClick={() => setCatOpen((v) => !v)}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${
+                      catOpen ? "border-[#1E88D6] bg-[#F0F7FD]" : "border-gray-100 bg-gray-50"
+                    } active:bg-[#EAF4FE]`}
+                  >
+                    <span className="w-8 h-8 rounded-lg bg-[#EAF4FE] flex items-center justify-center shrink-0">
+                      <Layers className="w-4 h-4 text-[#1E88D6]" />
+                    </span>
+                    <span className="flex-1 text-left">
+                      <span className="block text-sm font-medium text-gray-800">{summary}</span>
+                      <span className="block text-xs text-gray-400 mt-0.5">
+                        {catOpen ? "点击收起" : "点击展开可逐项选择"}
+                      </span>
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-[#1E88D6] transition-transform ${catOpen ? "rotate-180" : ""}`} />
+                  </button>
+                );
+              })()}
+
+              {/* 展开后：全选按钮 + 各分类项 */}
+              {catOpen && (
+              <div className="space-y-2 mt-2">
+                <div className="flex justify-end">
                   <button
                     className="text-xs text-[#1E88D6] active:opacity-70 font-normal"
                     onClick={() =>
@@ -451,9 +484,7 @@ export default function YabanDataManage() {
                   >
                     {categories.length === AVAILABLE_CATEGORY_KEYS.length ? "取消全选" : "全选"}
                   </button>
-                }
-              />
-              <div className="space-y-2">
+                </div>
                 {CATEGORIES.map((c) => {
                   const Icon = c.icon;
                   const checked = categories.includes(c.key);
@@ -499,44 +530,48 @@ export default function YabanDataManage() {
                   );
                 })}
               </div>
+              )}
             </div>
 
             {/* 步骤三：选择文件格式 */}
             <div className="bg-white rounded-2xl shadow-sm p-4">
               <StepHead n={3} title="选择文件格式" />
               <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => toggleFormat("excel")}
-                  className={`flex items-center gap-2 px-3 py-3 rounded-xl border transition-colors ${
-                    formats.includes("excel") ? "border-[#1E88D6] bg-[#F0F7FD]" : "border-gray-100 bg-gray-50"
-                  }`}
-                >
-                  {formats.includes("excel") ? (
-                    <CheckSquare className="w-5 h-5 text-[#1E88D6] shrink-0" />
-                  ) : (
-                    <Square className="w-5 h-5 text-gray-300 shrink-0" />
-                  )}
-                  <FileSpreadsheet className="w-4 h-4 text-[#1E88D6]" />
-                  <span className="text-sm font-medium text-gray-800">Excel 表格</span>
-                </button>
-                <button
-                  onClick={() => toggleFormat("json")}
-                  className={`flex items-center gap-2 px-3 py-3 rounded-xl border transition-colors ${
-                    formats.includes("json") ? "border-[#1E88D6] bg-[#F0F7FD]" : "border-gray-100 bg-gray-50"
-                  }`}
-                >
-                  {formats.includes("json") ? (
-                    <CheckSquare className="w-5 h-5 text-[#1E88D6] shrink-0" />
-                  ) : (
-                    <Square className="w-5 h-5 text-gray-300 shrink-0" />
-                  )}
-                  <FileJson className="w-4 h-4 text-[#1E88D6]" />
-                  <span className="text-sm font-medium text-gray-800">JSON 存档</span>
-                </button>
+                <div className="space-y-1">
+                  <button
+                    onClick={() => toggleFormat("excel")}
+                    className={`w-full flex items-center gap-2 px-3 py-3 rounded-xl border transition-colors ${
+                      formats.includes("excel") ? "border-[#1E88D6] bg-[#F0F7FD]" : "border-gray-100 bg-gray-50"
+                    }`}
+                  >
+                    {formats.includes("excel") ? (
+                      <CheckSquare className="w-5 h-5 text-[#1E88D6] shrink-0" />
+                    ) : (
+                      <Square className="w-5 h-5 text-gray-300 shrink-0" />
+                    )}
+                    <FileSpreadsheet className="w-4 h-4 text-[#1E88D6]" />
+                    <span className="text-sm font-medium text-gray-800">Excel 表格</span>
+                  </button>
+                  <p className="text-xs text-gray-400 px-1 leading-relaxed">便于查看打印</p>
+                </div>
+                <div className="space-y-1">
+                  <button
+                    onClick={() => toggleFormat("json")}
+                    className={`w-full flex items-center gap-2 px-3 py-3 rounded-xl border transition-colors ${
+                      formats.includes("json") ? "border-[#1E88D6] bg-[#F0F7FD]" : "border-gray-100 bg-gray-50"
+                    }`}
+                  >
+                    {formats.includes("json") ? (
+                      <CheckSquare className="w-5 h-5 text-[#1E88D6] shrink-0" />
+                    ) : (
+                      <Square className="w-5 h-5 text-gray-300 shrink-0" />
+                    )}
+                    <FileJson className="w-4 h-4 text-[#1E88D6]" />
+                    <span className="text-sm font-medium text-gray-800">JSON 存档</span>
+                  </button>
+                  <p className="text-xs text-gray-400 px-1 leading-relaxed">可用于「数据导入存档」还原</p>
+                </div>
               </div>
-              <p className="text-xs text-gray-400 mt-2 leading-relaxed">
-                Excel 便于查看打印；JSON 存档可用于「数据导入存档」还原。
-              </p>
             </div>
 
             {/* 步骤四：选择导出方式 */}
@@ -589,11 +624,11 @@ export default function YabanDataManage() {
               </div>
             </div>
 
-            {/* 步骤五：定时自动备份 */}
+            {/* 步骤五：AI 智能备份 */}
             <div className="bg-white rounded-2xl shadow-sm p-4">
               <StepHead
                 n={5}
-                title="定时自动备份"
+                title="AI 智能备份"
                 extra={
                   <button
                     onClick={() => setAutoEnabled((v) => !v)}
@@ -640,7 +675,7 @@ export default function YabanDataManage() {
                     className="mt-3 w-full flex items-center justify-center gap-2 border border-[#1E88D6] text-[#1E88D6] rounded-xl py-2.5 text-sm font-medium active:bg-[#F0F7FD] disabled:opacity-60"
                   >
                     {saveSettings.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                    保存定时备份设置
+                    保存智能备份设置
                   </button>
                 </>
               )}
