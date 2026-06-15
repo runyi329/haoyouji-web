@@ -13,11 +13,27 @@ interface BottomNavProps {
   onCreateLedger?: () => void;
 }
 
+// versionKey → 版本图标。未知版本回退到通用切换图标。
+const VERSION_ICONS: Record<string, string> = {
+  maidong: "/maidong-switch-icon.webp",
+  yaban:
+    "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/yaban/yaban_logo_bottomnav.webp",
+};
+
+// 奢贝设备网站入口图标（liulifan 专属，非正式版本体系）
+const SHEBEI_ICON = "/shebei-icon.webp";
+
 export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavProps) {
   const [location, setLocation] = useLocation();
   const [showLedgerMenu, setShowLedgerMenu] = useState(false);
+  const [showSwitchMenu, setShowSwitchMenu] = useState(false);
   const { data: user } = trpc.auth.me.useQuery();
+  const { data: versions } = trpc.version.listVersions.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
   const isCx8618 = user?.username === 'cx8618';
+  const isLiulifan = user?.username === 'liulifan';
   const isJiang = user?.username === 'jiang';
   const isYJH = user?.username === 'YJH';
   const isStevenHuang = user?.username === 'STEVEN_HUANG';
@@ -32,8 +48,69 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
   const isJiangPage = location.startsWith('/jiang');
   const isHomePage = location === '/' || location === '';
 
+  // ── 版本/入口切换：构建该用户「可进入的版本/入口」列表 ──────────────────
+  // 数据来源：
+  //  1) 正式版本体系：auth.me.version.switchEnabled + switchableVersionKeys（脉动/牙伴等）
+  //  2) 奢贝设备网站：liulifan 专属入口（非正式版本体系，硬编码）
+  const version = (user as any)?.version as
+    | {
+        versionKey?: string;
+        switchEnabled?: boolean;
+        switchableVersionKeys?: string[];
+      }
+    | undefined;
+
+  type SwitchItem = {
+    key: string;          // 唯一标识（versionKey 或 'beauty'）
+    name: string;         // 显示名称
+    icon?: string;        // 图标 URL（无则用通用箭头）
+    path: string;         // 跳转地址
+    viewingKey?: string;  // 写入 _viewing_version 的值（仅正式版本需要）
+    active: boolean;      // 是否当前所在
+  };
+
+  const switchItems: SwitchItem[] = [];
+
+  // 1) 正式版本切换项
+  if (version?.switchEnabled) {
+    const allowedKeys = version.switchableVersionKeys || [];
+    const currentKey = version.versionKey || "";
+    (versions || [])
+      .filter((v: any) => allowedKeys.includes(v.versionKey))
+      .forEach((v: any) => {
+        switchItems.push({
+          key: v.versionKey,
+          name: v.name,
+          icon: VERSION_ICONS[v.versionKey],
+          path: v.landingPath || "/",
+          viewingKey: v.versionKey,
+          active: v.versionKey === currentKey && isHomePage,
+        });
+      });
+  }
+
+  // 2) 奢贝设备网站入口（liulifan 专属）
+  if (isLiulifan) {
+    switchItems.push({
+      key: "beauty",
+      name: "奢贝设备",
+      icon: SHEBEI_ICON,
+      path: "/beauty",
+      active: isBeautyPage,
+    });
+  }
+
+  // 是否把中间按钮渲染为「切换键」：有 2 个及以上可进入项才有切换意义
+  const showSwitcher = switchItems.length >= 2;
+  // 中间按钮显示的图标：优先显示「当前所在版本/入口」的图标
+  const currentSwitchItem =
+    switchItems.find((it) => it.active) ||
+    switchItems.find((it) => it.viewingKey === (version?.versionKey || "")) ||
+    switchItems[0];
+
   const handleNavigation = (path: string) => {
     setShowLedgerMenu(false);
+    setShowSwitchMenu(false);
     // 未登录用户点击人脉/錢脉时提示登录
     if (!user && (path === '/' || path.startsWith('/ledger') || path.startsWith('/parent'))) {
       import('sonner').then(({ toast }) => {
@@ -48,8 +125,27 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
     setLocation(path);
   };
 
+  // 切换项点击：跳转到目标版本/入口
+  const handleSwitchItemClick = (item: SwitchItem) => {
+    setShowSwitchMenu(false);
+    if (item.active) return;
+    // 正式版本：记录用户手动选择的「查看版本」，让 HomeEntry / VersionGuard 尊重此选择
+    if (item.viewingKey) {
+      try {
+        sessionStorage.setItem("_viewing_version", item.viewingKey);
+      } catch {}
+    }
+    setLocation(item.path);
+  };
+
   // 加号/奢贝/红酒/润仪按鈕点击逻辑
   const handlePlusClick = () => {
+    // 有切换需求的用户：中间按钮作为「切换键」，弹出选择框
+    if (showSwitcher) {
+      setShowLedgerMenu(false);
+      setShowSwitchMenu((o) => !o);
+      return;
+    }
     if (isCx8618) {
       // cx8618：跳转到红酒商会首页
       setShowLedgerMenu(false);
@@ -101,12 +197,59 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
     ? 'bg-[#D32F2F] border-4 border-[#D32F2F]/30 ring-2 ring-[#D32F2F]/20'
     : isYaban
     ? 'bg-[#E3F2FD] border-4 border-[#90CAF9] ring-2 ring-[#90CAF9]/30'
+    : showSwitcher
+    ? 'bg-white border-4 border-white'
     : showLedgerMenu
     ? 'bg-gray-600 rotate-45 border-4 border-white'
     : 'bg-[#D32F2F] hover:bg-[#B71C1C] border-4 border-white';
 
   return (
     <>
+      {/* 版本/入口切换弹出菜单 - 遮罩层 */}
+      {showSwitchMenu && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setShowSwitchMenu(false)}
+        />
+      )}
+
+      {/* 版本/入口切换弹出菜单 */}
+      {showSwitchMenu && (
+        <div className="fixed left-0 right-0 z-50 flex justify-center" style={{ bottom: '80px' }}>
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden" style={{ width: 'auto', minWidth: '240px', maxWidth: '320px' }}>
+            <div className="px-5 py-2.5 text-xs text-gray-400 border-b border-gray-50">
+              切换版本 / 入口
+            </div>
+            {switchItems.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                className={`w-full flex items-center gap-3 px-5 py-3.5 hover:bg-[#FFF3F3] transition-colors border-b border-gray-50 last:border-b-0 ${
+                  item.active ? 'text-[#D32F2F] font-semibold' : 'text-gray-800'
+                }`}
+                onClick={() => handleSwitchItemClick(item)}
+              >
+                <span className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0 bg-gray-50">
+                  {item.icon ? (
+                    <img src={item.icon} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                    </svg>
+                  )}
+                </span>
+                <span className="text-left flex-1 text-sm">{item.name}</span>
+                {item.active && (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 6L9 17l-5-5" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 钱脉加号弹出菜单 - 遮罩层 */}
       {showLedgerMenu && (
         <div 
@@ -193,13 +336,22 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
               </span>
             </button>
 
-            {/* 加号/奢贝/红酒中间按钮 */}
+            {/* 加号/切换中间按钮 */}
             <button
               onClick={handlePlusClick}
               className="relative -mt-6"
             >
               <div className={`w-14 h-14 rounded-full flex flex-col items-center justify-center shadow-lg transition-all duration-200 overflow-hidden ${centerBtnBg}`}>
-                {isCx8618 ? (
+                {showSwitcher ? (
+                  // 切换键：显示当前所在版本/入口的图标
+                  currentSwitchItem?.icon ? (
+                    <img src={currentSwitchItem.icon} className="w-full h-full object-cover" alt={currentSwitchItem.name} />
+                  ) : (
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#D32F2F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />
+                    </svg>
+                  )
+                ) : isCx8618 ? (
                   <Wine className="w-7 h-7 text-[#C9A84C]" />
                 ) : isJiang ? (
                   <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/avatars/bottomnav-r1.jpg" className="w-10 h-10 object-cover rounded-full" alt="R1" />
