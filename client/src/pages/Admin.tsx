@@ -55,7 +55,8 @@ import AntonymManager from "./admin/AntonymManager";
 import CharacterManager from "./admin/CharacterManager";
 import GameRewardManager from "./admin/GameRewardManager";
 import { InvitationManager } from "./admin/InvitationManager";
-import { CreditCard } from "lucide-react";
+import { VersionManager } from "./admin/VersionManager";
+import { CreditCard, Layers } from "lucide-react";
 import VocabularyMasterManager from "./admin/VocabularyMasterManager";
 import AccountRelationshipManager from "./admin/AccountRelationshipManager";
 import MasterLibraryManager from "./admin/MasterLibraryManager";
@@ -405,6 +406,10 @@ export default function Admin() {
             <TabsTrigger value="invitations" className="text-xs sm:text-sm">
               <Plus className="w-4 h-4 mr-1 hidden sm:inline" />
               邀请
+            </TabsTrigger>
+            <TabsTrigger value="versions" className="text-xs sm:text-sm">
+              <Layers className="w-4 h-4 mr-1 hidden sm:inline" />
+              版本管理
             </TabsTrigger>
             <TabsTrigger value="knowledge" className="text-xs sm:text-sm">
               <BookOpen className="w-4 h-4 mr-1 hidden sm:inline" />
@@ -1005,6 +1010,13 @@ export default function Admin() {
           <TabsContent value="invitations">
             <Card className="p-4">
               <InvitationManager />
+            </Card>
+          </TabsContent>
+
+          {/* 版本管理 */}
+          <TabsContent value="versions">
+            <Card className="p-4">
+              <VersionManager />
             </Card>
           </TabsContent>
 

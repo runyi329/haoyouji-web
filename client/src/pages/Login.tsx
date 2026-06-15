@@ -7,12 +7,80 @@ import { toast } from "sonner";
 import { saveToken, saveCredentials, getSavedCredentials, clearCredentials } from "@/lib/tokenStorage";
 import { PageTag } from "@/components/PageTag";
 
+/**
+ * 多版本登录页：账号密码登录/注册逻辑完全通用，仅登录页 UI 外观按版本切换。
+ * 版本来源：URL 参数 ?ui=yaban（或 ?v=yaban），默认 maidong（脉动版红色）。
+ * 预留扩展：未来新增行业版本只需在 THEMES 中追加一项。
+ */
+type LoginUi = "maidong" | "yaban";
+
+interface LoginTheme {
+  // 页面背景
+  pageStyle: React.CSSProperties;
+  pageClassName: string;
+  // 顶部品牌区（可选）
+  renderHero?: () => React.ReactNode;
+  // 主按钮（登录/注册）激活态颜色类
+  primaryActiveClass: string;
+  // tab 选中下划线/文字色
+  tabActiveText: string;
+  tabUnderline: string;
+  // 勾选圆点选中色
+  checkAgreeClass: string;
+  checkRememberClass: string;
+  // 卡片样式
+  cardClassName: string;
+}
+
+const THEMES: Record<LoginUi, LoginTheme> = {
+  // 脉动版：保持原有红底白卡
+  maidong: {
+    pageStyle: { backgroundColor: "#A80000" },
+    pageClassName: "fixed inset-0 flex flex-col",
+    primaryActiveClass: "bg-[#D32F2F] text-white hover:opacity-90",
+    tabActiveText: "text-gray-800",
+    tabUnderline: "bg-gray-800",
+    checkAgreeClass: "bg-[#4CAF50] border-[#4CAF50]",
+    checkRememberClass: "bg-[#D32F2F] border-[#D32F2F]",
+    cardClassName: "bg-white rounded-3xl p-6 shadow-2xl",
+  },
+  // 牙伴版：手机竖屏蓝白医疗清爽风
+  yaban: {
+    pageStyle: {
+      background: "linear-gradient(180deg, #2E8BE6 0%, #5BA8F0 38%, #E8F4FD 100%)",
+    },
+    pageClassName: "fixed inset-0 flex flex-col",
+    primaryActiveClass: "bg-[#1E7FE0] text-white hover:opacity-90",
+    tabActiveText: "text-[#1565C0]",
+    tabUnderline: "bg-[#1E7FE0]",
+    checkAgreeClass: "bg-[#1E7FE0] border-[#1E7FE0]",
+    checkRememberClass: "bg-[#1E7FE0] border-[#1E7FE0]",
+    cardClassName: "bg-white rounded-3xl p-6 shadow-2xl",
+    renderHero: () => (
+      <div className="w-full flex flex-col items-center pt-2 pb-5">
+        <div className="w-44 h-44 rounded-full bg-white/25 backdrop-blur-sm flex items-center justify-center shadow-lg">
+          <img
+            src="/yaban-login-hero.png"
+            alt="牙伴"
+            className="w-40 h-40 object-contain rounded-full"
+          />
+        </div>
+        <h1 className="mt-4 text-2xl font-bold text-white tracking-wide">牙伴</h1>
+        <p className="mt-1 text-sm text-white/90">口腔诊所智慧管理</p>
+      </div>
+    ),
+  },
+};
+
 export default function Login() {
   const [, setLocation] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+
+  // 当前登录页 UI 版本（仅影响外观，登录逻辑通用）
+  const [ui, setUi] = useState<LoginUi>("maidong");
 
   // 登录表单
   const [loginUsername, setLoginUsername] = useState("");
@@ -25,20 +93,22 @@ export default function Login() {
   const [regName, setRegName] = useState("");
   const [regInviteCode, setRegInviteCode] = useState("");
 
-  // 从 URL 参数读取邀请码
+  // 从 URL 参数读取邀请码与 UI 版本
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const inviteCode = params.get('invite');
+    const inviteCode = params.get("invite");
     if (inviteCode) {
       setRegInviteCode(inviteCode);
       setActiveTab("register");
     }
+    const uiParam = (params.get("ui") || params.get("v") || "").toLowerCase();
+    if (uiParam === "yaban") setUi("yaban");
+    else if (uiParam === "maidong") setUi("maidong");
   }, []);
 
   // 长按计时器
   const [pressTimer, setPressTimer] = useState<NodeJS.Timeout | null>(null);
 
-  const utils = trpc.useUtils();
   const queryClient = useQueryClient();
 
   // 切换用户时清空所有缓存，防止旧用户数据残留
@@ -54,9 +124,9 @@ export default function Login() {
 
   // 过滤错误消息，避免将 SQL 原始错误暴露给用户
   const safeErrorMsg = (msg: string): string => {
-    const sqlKeywords = ['Failed query', 'select ', 'SELECT ', 'from `', 'FROM `', 'where ', 'WHERE ', 'ER_', 'ECONNREFUSED', 'ETIMEDOUT', 'Access denied'];
-    if (sqlKeywords.some(k => msg.includes(k))) {
-      return '服务器异常，请稍后重试';
+    const sqlKeywords = ["Failed query", "select ", "SELECT ", "from `", "FROM `", "where ", "WHERE ", "ER_", "ECONNREFUSED", "ETIMEDOUT", "Access denied"];
+    if (sqlKeywords.some((k) => msg.includes(k))) {
+      return "服务器异常，请稍后重试";
     }
     return msg;
   };
@@ -88,7 +158,6 @@ export default function Login() {
         setLoginPassword(creds.password);
         setRememberMe(true);
         setAgreedToTerms(true);
-        // 不自动调用 loginMutation，让用户手动点击登录按鈕
       }
     });
   }, []);
@@ -177,60 +246,64 @@ export default function Login() {
       return;
     }
     registerSubmittingRef.current = true;
-    registerMutation.mutate({
-      username: regUsername,
-      password: regPassword,
-      name: regName || undefined,
-      inviteCode: regInviteCode || undefined,
-    }, {
-      onSettled: () => {
-        setTimeout(() => {
-          registerSubmittingRef.current = false;
-        }, 3000);
+    registerMutation.mutate(
+      {
+        username: regUsername,
+        password: regPassword,
+        name: regName || undefined,
+        inviteCode: regInviteCode || undefined,
       },
-    });
+      {
+        onSettled: () => {
+          setTimeout(() => {
+            registerSubmittingRef.current = false;
+          }, 3000);
+        },
+      }
+    );
   };
 
   const preventEnterSubmit = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
     }
   };
 
+  const theme = THEMES[ui];
+
   return (
-    <div className="fixed inset-0 flex flex-col" style={{ backgroundColor: '#A80000' }}>
+    <div className={theme.pageClassName} style={theme.pageStyle}>
       <PageTag code="P133" />
       {/* 主内容区域 */}
       <main className="flex-1 flex flex-col items-center px-6 pt-8 overflow-y-auto touch-pan-y">
         <div className="w-full max-w-md">
+          {/* 顶部品牌区（牙伴版等含 hero 的版本显示） */}
+          {theme.renderHero && theme.renderHero()}
+
           {/* 登录/注册卡片 */}
-          <div className="bg-white rounded-3xl p-6 shadow-2xl">
+          <div className={theme.cardClassName}>
             {/* Tab切换 */}
             <div className="flex mb-6">
               <button
                 type="button"
                 onClick={() => setActiveTab("login")}
                 className={`flex-1 pb-3 text-base font-medium transition-colors relative ${
-                  activeTab === "login" ? "text-gray-800" : "text-gray-400"
+                  activeTab === "login" ? theme.tabActiveText : "text-gray-400"
                 }`}
               >
                 登录
-                {activeTab === "login" && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-800"></div>
-                )}
+                {activeTab === "login" && <div className={`absolute bottom-0 left-0 right-0 h-0.5 ${theme.tabUnderline}`}></div>}
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("register")}
                 className={`flex-1 pb-3 text-base font-medium transition-colors relative ${
-                  activeTab === "register" ? "text-gray-800" : "text-gray-400"
+                  activeTab === "register" ? theme.tabActiveText : "text-gray-400"
                 }`}
               >
                 注册
-                {activeTab === "register" && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-800"></div>
-                )}
+                {activeTab === "register" && <div className={`absolute bottom-0 left-0 right-0 h-0.5 ${theme.tabUnderline}`}></div>}
               </button>
             </div>
 
@@ -276,15 +349,18 @@ export default function Login() {
                   </button>
                 </div>
 
-                {/* 登录按钮 */}
+                {/* 登录按钮（长按2秒游客登录） */}
                 <button
                   type="button"
                   onClick={handleLogin}
+                  onMouseDown={handlePressStart}
+                  onMouseUp={handlePressEnd}
+                  onMouseLeave={handlePressEnd}
+                  onTouchStart={handlePressStart}
+                  onTouchEnd={handlePressEnd}
                   disabled={loginMutation.isPending}
                   className={`w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${
-                    loginUsername && loginPassword && agreedToTerms
-                      ? 'bg-[#D32F2F] text-white hover:bg-[#D32F2F]-dark'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    loginUsername && loginPassword && agreedToTerms ? theme.primaryActiveClass : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                   }`}
                 >
                   {loginMutation.isPending ? "登录中..." : "登录"}
@@ -296,7 +372,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setAgreedToTerms(!agreedToTerms)}
                     className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                      agreedToTerms ? "bg-[#4CAF50] border-[#4CAF50]" : "border-gray-300"
+                      agreedToTerms ? theme.checkAgreeClass : "border-gray-300"
                     }`}
                   >
                     {agreedToTerms && (
@@ -323,7 +399,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setRememberMe(!rememberMe)}
                     className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                      rememberMe ? "bg-[#D32F2F] border-[#D32F2F]" : "border-gray-300"
+                      rememberMe ? theme.checkRememberClass : "border-gray-300"
                     }`}
                   >
                     {rememberMe && (
@@ -428,9 +504,7 @@ export default function Login() {
                   onClick={handleRegister}
                   disabled={registerMutation.isPending}
                   className={`w-full py-3 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 ${
-                    regUsername && regPassword && regConfirmPassword && regName && agreedToTerms
-                      ? 'bg-[#D32F2F] text-white hover:bg-[#D32F2F]-dark'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    regUsername && regPassword && regConfirmPassword && regName && agreedToTerms ? theme.primaryActiveClass : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                   }`}
                 >
                   {registerMutation.isPending ? "注册中..." : "注册"}
@@ -442,7 +516,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setAgreedToTerms(!agreedToTerms)}
                     className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
-                      agreedToTerms ? "bg-[#4CAF50] border-[#4CAF50]" : "border-gray-300"
+                      agreedToTerms ? theme.checkAgreeClass : "border-gray-300"
                     }`}
                   >
                     {agreedToTerms && (

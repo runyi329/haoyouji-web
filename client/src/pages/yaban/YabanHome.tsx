@@ -10,6 +10,7 @@ import { Search, Plus, ChevronDown, ChevronUp, Settings, RefreshCw, ScanLine, Us
 import YabanCalendar from "./YabanCalendar";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
+import VersionSwitcher from "@/components/VersionSwitcher";
 import { toast } from "sonner";
 
 // COS 图标 URL 基础路径
@@ -134,6 +135,7 @@ export default function YabanHome() {
   return (
     <div className="min-h-screen bg-gray-50">
       <PageTag code="P300" />
+      <VersionSwitcher />
 
       {/* 顶部蓝色渐变 Header */}
       <div

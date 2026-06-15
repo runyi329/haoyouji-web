@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Search, Copy, Link2, Users, CheckCircle, XCircle, Share, RefreshCw, Edit, UserPlus, X } from "lucide-react";
+import { Search, Copy, Link2, Users, CheckCircle, XCircle, Share, RefreshCw, Edit, UserPlus, X, Layers } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { PageTag } from "@/components/PageTag";
 import {
@@ -16,18 +16,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 export function InvitationManager() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
-  
+
   // 编辑推荐人对话框
   const [editReferrerDialog, setEditReferrerDialog] = useState<{
     open: boolean;
@@ -40,12 +33,34 @@ export function InvitationManager() {
     userName: "",
     currentReferrerId: null,
   });
-  
+
   const [referrerSearchQuery, setReferrerSearchQuery] = useState("");
   const [selectedReferrerId, setSelectedReferrerId] = useState<number | null>(null);
 
+  // 版本设置对话框
+  const [versionDialog, setVersionDialog] = useState<{
+    open: boolean;
+    userId: number | null;
+    userName: string;
+    versionKey: string;
+    switchEnabled: boolean;
+    switchScope: string[];
+    applyToDescendants: boolean;
+  }>({
+    open: false,
+    userId: null,
+    userName: "",
+    versionKey: "",
+    switchEnabled: false,
+    switchScope: [],
+    applyToDescendants: false,
+  });
+
   // 获取所有用户的邀请权限状态
   const { data: allUsers, refetch, isLoading } = trpc.invitePermission.getAllUsersInvitePermission.useQuery();
+
+  // 获取版本列表（含禁用，管理员后台用）
+  const { data: versions } = trpc.version.listVersions.useQuery({ includeDisabled: true });
 
   // 切换邀请权限
   const togglePermissionMutation = trpc.invitePermission.setUserInvitePermission.useMutation({
@@ -72,6 +87,24 @@ export function InvitationManager() {
     },
   });
 
+  // 设置用户版本
+  const setUserVersionMutation = trpc.version.setUserVersion.useMutation({
+    onSuccess: (data) => {
+      toast.success(`版本设置已保存（影响 ${data.affected} 个用户）`);
+      setVersionDialog((prev) => ({ ...prev, open: false }));
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  // 版本key -> 名称映射
+  const versionNameMap: Record<string, string> = {};
+  (versions || []).forEach((v) => {
+    versionNameMap[v.versionKey] = v.name;
+  });
+
   // 搜索过滤
   const filteredUsers = allUsers?.filter(user => {
     if (!searchQuery) return true;
@@ -85,7 +118,7 @@ export function InvitationManager() {
 
   // 推荐人候选列表(排除自己)
   const referrerCandidates = allUsers?.filter(user => {
-    if (user.id === editReferrerDialog.userId) return false; // 不能选择自己
+    if (user.id === editReferrerDialog.userId) return false;
     if (!referrerSearchQuery) return true;
     const query = referrerSearchQuery.toLowerCase();
     return (
@@ -126,9 +159,6 @@ export function InvitationManager() {
 
   // 打开编辑推荐人对话框
   const handleOpenEditReferrer = (user: any) => {
-    // 查找当前推荐人
-    const currentReferrer = allUsers?.find(u => u.id === user.invitedByUserId);
-    
     setEditReferrerDialog({
       open: true,
       userId: user.id,
@@ -142,16 +172,86 @@ export function InvitationManager() {
   // 保存推荐人
   const handleSaveReferrer = () => {
     if (!editReferrerDialog.userId) return;
-    
     updateReferrerMutation.mutate({
       userId: editReferrerDialog.userId,
       referrerId: selectedReferrerId,
     });
   };
 
+  // 打开版本设置对话框
+  const handleOpenVersionDialog = (user: any) => {
+    setVersionDialog({
+      open: true,
+      userId: user.id,
+      userName: user.name || user.username,
+      versionKey: user.versionKey || "",
+      switchEnabled: Boolean(user.versionSwitchEnabled),
+      switchScope: Array.isArray(user.versionSwitchScope) ? user.versionSwitchScope : [],
+      applyToDescendants: false,
+    });
+  };
+
+  // 保存版本设置
+  const handleSaveVersion = () => {
+    if (!versionDialog.userId) return;
+    setUserVersionMutation.mutate({
+      userId: versionDialog.userId,
+      versionKey: versionDialog.versionKey,
+      switchEnabled: versionDialog.switchEnabled,
+      switchScope: versionDialog.switchScope,
+      applyToDescendants: versionDialog.applyToDescendants,
+    });
+  };
+
+  // 切换可切换范围中的某个版本
+  const toggleScopeVersion = (versionKey: string) => {
+    setVersionDialog((prev) => {
+      const exists = prev.switchScope.includes(versionKey);
+      return {
+        ...prev,
+        switchScope: exists
+          ? prev.switchScope.filter((k) => k !== versionKey)
+          : [...prev.switchScope, versionKey],
+      };
+    });
+  };
+
   // 获取用户的推荐人信息
   const getUserReferrer = (userId: number) => {
     return allUsers?.find(u => u.id === userId);
+  };
+
+  // 计算某用户的「生效版本 + 来源」（前端按最高优先追溯，与后端一致）
+  const resolveUserVersionLabel = (user: any): { key: string; name: string; sourceText: string } | null => {
+    if (!allUsers || allUsers.length === 0) return null;
+    const byId = new Map<number, any>();
+    allUsers.forEach((u) => byId.set(u.id, u));
+
+    // 沿推荐链向上，记录最顶层设置过 versionKey 的祖先
+    let cur: any = user;
+    let depth = 0;
+    let topSetter: any = null;
+    const visited = new Set<number>();
+    while (cur && depth < 50) {
+      if (visited.has(cur.id)) break;
+      visited.add(cur.id);
+      if (cur.versionKey && String(cur.versionKey).trim()) {
+        topSetter = cur;
+      }
+      const parentId = cur.invitedByUserId;
+      cur = parentId ? byId.get(parentId) : null;
+      depth++;
+    }
+
+    if (!topSetter) {
+      return { key: "maidong", name: versionNameMap["maidong"] || "脉动版", sourceText: "默认" };
+    }
+    const key = String(topSetter.versionKey).trim();
+    const name = versionNameMap[key] || key;
+    if (topSetter.id === user.id) {
+      return { key, name, sourceText: "本人设定" };
+    }
+    return { key, name, sourceText: `继承自 ${topSetter.name || topSetter.username}` };
   };
 
   // 统计信息
@@ -169,7 +269,7 @@ export function InvitationManager() {
       <div>
         <h3 className="text-lg font-semibold">用户邀请权限管理</h3>
         <p className="text-sm text-muted-foreground">
-          管理用户的邀请功能权限,控制哪些用户可以邀请新用户注册,并可手动修改推荐关系
+          管理用户的邀请功能权限,控制哪些用户可以邀请新用户注册,可手动修改推荐关系,并为用户设置进入的版本与切换权限
         </p>
       </div>
 
@@ -186,7 +286,7 @@ export function InvitationManager() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -198,7 +298,7 @@ export function InvitationManager() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -210,7 +310,7 @@ export function InvitationManager() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -270,9 +370,10 @@ export function InvitationManager() {
 
         {!isLoading && filteredUsers?.map((user) => {
           const referrer = getUserReferrer(user.invitedByUserId || 0);
-          
+          const versionLabel = resolveUserVersionLabel(user);
+
           return (
-            <Card 
+            <Card
               key={user.id}
               className={`transition-all ${selectedUserId === user.id ? 'ring-2 ring-primary' : ''}`}
               onClick={() => setSelectedUserId(user.id)}
@@ -299,6 +400,18 @@ export function InvitationManager() {
                           已关闭
                         </Badge>
                       )}
+                      {/* 生效版本徽标 */}
+                      {versionLabel && (
+                        <Badge variant="outline" className="text-xs border-[#1976D2] text-[#1976D2]">
+                          <Layers className="w-3 h-3 mr-1" />
+                          {versionLabel.name}
+                        </Badge>
+                      )}
+                      {user.versionSwitchEnabled && (
+                        <Badge variant="outline" className="text-xs border-[#4CAF50] text-[#4CAF50]">
+                          可切换
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
                       <span>@{user.username}</span>
@@ -311,11 +424,29 @@ export function InvitationManager() {
                           推荐人: {referrer.name || referrer.username}
                         </span>
                       )}
+                      {versionLabel && (
+                        <span className="text-[#1976D2]">
+                          版本来源: {versionLabel.sourceText}
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {/* 操作按钮 */}
                   <div className="flex items-center gap-2 flex-wrap">
+                    {/* 设置版本 */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenVersionDialog(user);
+                      }}
+                      title="设置版本"
+                    >
+                      <Layers className="w-4 h-4" />
+                    </Button>
+
                     {/* 编辑推荐人 */}
                     <Button
                       size="sm"
@@ -375,6 +506,33 @@ export function InvitationManager() {
                 {/* 展开详情 */}
                 {selectedUserId === user.id && (
                   <div className="mt-4 pt-4 border-t space-y-3">
+                    {/* 版本信息 */}
+                    {versionLabel && (
+                      <div className="p-3 bg-[#E3F2FD] rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">进入版本</p>
+                            <p className="font-medium text-[#1976D2]">{versionLabel.name}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              来源: {versionLabel.sourceText}
+                              {user.versionSwitchEnabled ? " · 允许右上角切换" : " · 锁定该版本"}
+                            </p>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenVersionDialog(user);
+                            }}
+                          >
+                            <Layers className="w-4 h-4 mr-1" />
+                            设置版本
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* 推荐人信息 */}
                     {referrer && (
                       <div className="p-3 bg-[#FFEBEE] rounded-lg">
@@ -403,7 +561,7 @@ export function InvitationManager() {
                         </div>
                       </div>
                     )}
-                    
+
                     {!referrer && (
                       <div className="p-3 bg-gray-50 rounded-lg">
                         <div className="flex items-center justify-between">
@@ -445,7 +603,7 @@ export function InvitationManager() {
                             </Button>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Label className="text-xs text-muted-foreground">邀请链接</Label>
                           <div className="flex items-center gap-2">
@@ -485,6 +643,134 @@ export function InvitationManager() {
         </p>
       )}
 
+      {/* 版本设置对话框 */}
+      <Dialog open={versionDialog.open} onOpenChange={(open) => {
+        if (!open) setVersionDialog((prev) => ({ ...prev, open: false }));
+      }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>设置版本 - {versionDialog.userName}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            {/* 默认版本 */}
+            <div className="space-y-2">
+              <Label className="text-sm">该用户的版本</Label>
+              <p className="text-xs text-muted-foreground">
+                选「继承上线」表示不单独设置,沿推荐链向上由最顶层设置者决定;选定某版本则该用户及其下线默认跟随。
+              </p>
+              <div className="grid grid-cols-1 gap-2 mt-1">
+                {/* 继承上线选项 */}
+                <Card
+                  className={`cursor-pointer transition-all ${
+                    !versionDialog.versionKey ? 'ring-2 ring-primary bg-primary/5' : 'hover:bg-gray-50'
+                  }`}
+                  onClick={() => setVersionDialog((prev) => ({ ...prev, versionKey: "" }))}
+                >
+                  <CardContent className="p-3 flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-sm">继承上线（不单独设置）</p>
+                      <p className="text-xs text-muted-foreground">沿推荐链向上由最顶层设置者决定</p>
+                    </div>
+                    {!versionDialog.versionKey && <CheckCircle className="w-5 h-5 text-primary" />}
+                  </CardContent>
+                </Card>
+
+                {(versions || []).map((v) => (
+                  <Card
+                    key={v.versionKey}
+                    className={`cursor-pointer transition-all ${
+                      versionDialog.versionKey === v.versionKey ? 'ring-2 ring-primary bg-primary/5' : 'hover:bg-gray-50'
+                    }`}
+                    onClick={() => setVersionDialog((prev) => ({ ...prev, versionKey: v.versionKey }))}
+                  >
+                    <CardContent className="p-3 flex items-center justify-between">
+                      <div>
+                        <p className="font-medium text-sm">
+                          {v.name}
+                          {!v.enabled && <span className="ml-2 text-xs text-gray-400">(已停用)</span>}
+                        </p>
+                        <p className="text-xs text-muted-foreground font-mono">{v.versionKey} · 落地 {v.landingPath}</p>
+                      </div>
+                      {versionDialog.versionKey === v.versionKey && <CheckCircle className="w-5 h-5 text-primary" />}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+            {/* 允许切换 */}
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div>
+                <p className="text-sm font-medium">允许右上角切换版本</p>
+                <p className="text-xs text-muted-foreground">开启后用户登录页面右上角出现切换按钮</p>
+              </div>
+              <Switch
+                checked={versionDialog.switchEnabled}
+                onCheckedChange={(checked) =>
+                  setVersionDialog((prev) => ({ ...prev, switchEnabled: checked }))
+                }
+              />
+            </div>
+
+            {/* 可切换范围（仅在允许切换时显示） */}
+            {versionDialog.switchEnabled && (
+              <div className="space-y-2">
+                <Label className="text-sm">可切换到的版本</Label>
+                <p className="text-xs text-muted-foreground">不勾选任何项表示允许切换到全部已启用版本</p>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  {(versions || []).filter((v) => v.enabled).map((v) => {
+                    const checked = versionDialog.switchScope.includes(v.versionKey);
+                    return (
+                      <button
+                        key={v.versionKey}
+                        type="button"
+                        onClick={() => toggleScopeVersion(v.versionKey)}
+                        className={`flex items-center gap-2 p-2 rounded-lg border text-sm transition-all ${
+                          checked ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 text-gray-600'
+                        }`}
+                      >
+                        {checked ? <CheckCircle className="w-4 h-4" /> : <span className="w-4 h-4 rounded-full border border-gray-300" />}
+                        {v.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 是否下发下线 */}
+            <div className="flex items-center justify-between p-3 bg-[#FFF3E0] rounded-lg">
+              <div>
+                <p className="text-sm font-medium">同时应用到该用户名下所有下线</p>
+                <p className="text-xs text-muted-foreground">将相同设置一并写入其推荐链下的所有用户</p>
+              </div>
+              <Switch
+                checked={versionDialog.applyToDescendants}
+                onCheckedChange={(checked) =>
+                  setVersionDialog((prev) => ({ ...prev, applyToDescendants: checked }))
+                }
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setVersionDialog((prev) => ({ ...prev, open: false }))}
+            >
+              取消
+            </Button>
+            <Button
+              onClick={handleSaveVersion}
+              disabled={setUserVersionMutation.isPending}
+            >
+              {setUserVersionMutation.isPending ? "保存中..." : "保存"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* 编辑推荐人对话框 */}
       <Dialog open={editReferrerDialog.open} onOpenChange={(open) => {
         if (!open) {
@@ -497,7 +783,7 @@ export function InvitationManager() {
           <DialogHeader>
             <DialogTitle>编辑推荐人 - {editReferrerDialog.userName}</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             {/* 当前推荐人 */}
             {editReferrerDialog.currentReferrerId && (
@@ -506,7 +792,7 @@ export function InvitationManager() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium">
-                      {getUserReferrer(editReferrerDialog.currentReferrerId)?.name || 
+                      {getUserReferrer(editReferrerDialog.currentReferrerId)?.name ||
                        getUserReferrer(editReferrerDialog.currentReferrerId)?.username}
                     </p>
                     <p className="text-xs text-muted-foreground">
@@ -573,7 +859,7 @@ export function InvitationManager() {
                   </CardContent>
                 </Card>
               ))}
-              
+
               {referrerCandidates?.length === 0 && (
                 <div className="py-8 text-center text-muted-foreground">
                   <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />

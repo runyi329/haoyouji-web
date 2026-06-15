@@ -142,6 +142,9 @@ export const invitePermissionRouter = router({
           invitedByUserId: users.invitedByUserId,
           invitedAt: users.invitedAt,
           createdAt: users.createdAt,
+          versionKey: users.versionKey,
+          versionSwitchEnabled: users.versionSwitchEnabled,
+          versionSwitchScope: users.versionSwitchScope,
         })
         .from(users)
         .orderBy(users.createdAt);
@@ -157,6 +160,11 @@ export const invitePermissionRouter = router({
         invitedByUserId: user.invitedByUserId,
         invitedAt: user.invitedAt,
         createdAt: user.createdAt,
+        versionKey: user.versionKey || "",
+        versionSwitchEnabled: Boolean(user.versionSwitchEnabled),
+        versionSwitchScope: user.versionSwitchScope
+          ? String(user.versionSwitchScope).split(",").map((s: string) => s.trim()).filter(Boolean)
+          : [],
       }));
     }),
 

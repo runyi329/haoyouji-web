@@ -65,6 +65,7 @@ import { yabanShopAdminRouter } from "./yaban-shop-admin-router";
 import { yabanShopOpsRouter } from "./yaban-shop-ops-router";
 import { yabanRoleRouter } from "./yaban-role-router";
 import { yabanCustomerRouter } from "./yaban-customer-router";
+import { versionRouter } from "./version-router";
 
 // // 在应用启动时初始化数据库
 // initDatabase().catch(err => {
@@ -198,6 +199,7 @@ export const appRouter = router({
   yabanShopOps: yabanShopOpsRouter,
   yabanRole: yabanRoleRouter,
   yabanCustomer: yabanCustomerRouter,
+  version: versionRouter,
   prediction: predictionRouter,
   okxTrader: okxTraderRouter,
 
@@ -1728,9 +1730,18 @@ ${klinesSummary}
 
   
   auth: router({
-    me: publicProcedure.query(opts => {
+    me: publicProcedure.query(async opts => {
       console.log('[auth.me] 返回用户信息:', opts.ctx.user ? `用户ID: ${opts.ctx.user.id}, 用户名: ${opts.ctx.user.username}` : 'null');
-      return opts.ctx.user;
+      if (!opts.ctx.user) return opts.ctx.user;
+      // 附带用户生效版本（皮肤）信息，供前端登录后分发与切换器使用
+      try {
+        const { resolveUserVersion } = await import('./version-resolver');
+        const version = await resolveUserVersion(opts.ctx.user.id);
+        return { ...opts.ctx.user, version };
+      } catch (e) {
+        console.warn('[auth.me] resolveUserVersion failed:', e instanceof Error ? e.message : e);
+        return opts.ctx.user;
+      }
     }),
     // viewAs 身份代入状态查询：返回当前是否处于身份代入模式，以及真实用户在指定账本中的角色
     viewAsStatus: publicProcedure

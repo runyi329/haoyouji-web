@@ -958,6 +958,9 @@ export const users = mysqlTable("users", {
 	phone: varchar('phone', { length: 20 }),
 	company: varchar('company', { length: 100 }),
 	business: varchar('business', { length: 200 }),
+	versionKey: varchar('version_key', { length: 50 }),
+	versionSwitchEnabled: tinyint('version_switch_enabled').default(0).notNull(),
+	versionSwitchScope: varchar('version_switch_scope', { length: 255 }),
 },
 (table) => [
 	index("users_openId_unique").on(table.openId),

@@ -245,6 +245,53 @@ export async function initDatabase() {
       console.log('[DB Init] ✅ users invite columns checked');
     }
 
+    // 确保 users 表有多版本（皮肤）相关字段（兼容旧部署）
+    const dbConnVer = await getDbConnection();
+    if (dbConnVer) {
+      const userVersionCols = [
+        { name: 'version_key', def: 'VARCHAR(50) DEFAULT NULL COMMENT \'管理员为该用户单独指定的版本key（为空表示沿推荐链继承）\'' },
+        { name: 'version_switch_enabled', def: 'TINYINT NOT NULL DEFAULT 0 COMMENT \'是否允许该用户在右上角自由切换版本\'' },
+        { name: 'version_switch_scope', def: 'VARCHAR(255) DEFAULT NULL COMMENT \'允许切换到的版本key列表，逗号分隔；为空表示全部已启用版本\'' },
+      ];
+      for (const col of userVersionCols) {
+        await safeAddColumn(dbConnVer, 'users', col.name, col.def);
+      }
+
+      // 站点版本（皮肤）表：可扩展的多版本登录UI与登录后落地地址
+      await dbConnVer.execute(`
+        CREATE TABLE IF NOT EXISTS \`site_versions\` (
+          \`id\` INT NOT NULL AUTO_INCREMENT,
+          \`version_key\` VARCHAR(50) NOT NULL COMMENT '版本唯一标识，如 maidong / yaban',
+          \`name\` VARCHAR(100) NOT NULL COMMENT '版本名称，如 脉动版 / 牙伴版',
+          \`login_ui\` VARCHAR(50) NOT NULL DEFAULT 'maidong' COMMENT '登录页UI风格标识',
+          \`landing_path\` VARCHAR(255) NOT NULL DEFAULT '/' COMMENT '登录成功后落地地址',
+          \`is_default\` TINYINT NOT NULL DEFAULT 0 COMMENT '是否为系统默认版本（追溯到顶仍无设置时使用）',
+          \`enabled\` TINYINT NOT NULL DEFAULT 1 COMMENT '是否启用',
+          \`sort_order\` INT NOT NULL DEFAULT 0 COMMENT '排序',
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`uk_version_key\` (\`version_key\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='站点多版本（皮肤）配置'
+      `);
+
+      // 种子：脉动版（系统默认）、牙伴版
+      const [verRows]: any = await dbConnVer.execute('SELECT COUNT(*) as cnt FROM site_versions');
+      if (Number(verRows?.[0]?.cnt ?? 0) === 0) {
+        await dbConnVer.execute(
+          `INSERT INTO site_versions (version_key, name, login_ui, landing_path, is_default, enabled, sort_order) VALUES
+            ('maidong', '脉动版', 'maidong', '/', 1, 1, 0),
+            ('yaban', '牙伴版', 'yaban', '/yaban/intro', 0, 1, 1)`
+        );
+        console.log('[DB Init] ✅ site_versions seeded (maidong, yaban)');
+      }
+      // 兼容：将旧的牙伴版落地地址 /yaban 纠正为开机画面入口 /yaban/intro
+      await dbConnVer.execute(
+        `UPDATE site_versions SET landing_path = '/yaban/intro' WHERE version_key = 'yaban' AND landing_path = '/yaban'`
+      );
+      console.log('[DB Init] ✅ users version columns & site_versions checked');
+    }
+
     // 确保 AG 数据源相关表存在（ag_sync_sources / ag_sync_logs）
     const dbConnAg = await getDbConnection();
     if (dbConnAg) {
