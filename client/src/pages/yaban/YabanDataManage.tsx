@@ -3,7 +3,7 @@
  * 路由：/yaban/settings/data
  * 风格：牙伴蓝白风（强调色 #1E88D6）
  * 功能：
- *   Tab1 数据导出备份：选择导出内容（可勾选，默认全部）+ 选择格式(JSON/Excel) + 直接下载 / 发送到邮箱 / 定时邮箱备份
+ *   Tab1 数据导出备份：多步骤——①选医院 ②选分类 ③选格式 ④选方式 ⑤定时备份（并入邮箱）
  *   Tab2 数据导入存档：上传 JSON 备份文件，导入还原（重复跳过）
  * 严禁 Emoji。
  */
@@ -23,6 +23,14 @@ import {
   FileJson,
   FileSpreadsheet,
   Users,
+  HeartPulse,
+  Wallet,
+  Tags,
+  Ticket,
+  ShoppingBag,
+  Building2,
+  ChevronDown,
+  AlertCircle,
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
@@ -72,10 +80,17 @@ const TEMPLATE_HEADERS = [
   "备注",
 ];
 
-// 可导出内容模块（可扩展：后续预约/随访/收费等接入后往这里加）
-const CONTENT_MODULES = [
-  { key: "customer", title: "顾客资料", desc: "全部顾客档案与联系方式", icon: Users, available: true },
-];
+// 可导出的资料分类。available=true 为真实可选；false 为占位（淡色禁用，一眼可辨）。
+const CATEGORIES = [
+  { key: "customer_basic", title: "顾客基本信息", desc: "姓名、联系方式、来源、咨询师等", icon: Users, available: true },
+  { key: "customer_health", title: "顾客健康档案", desc: "主诉、过敏史、既往史等", icon: HeartPulse, available: true },
+  { key: "charge_records", title: "收费 / 消费记录", desc: "即将开放", icon: Wallet, available: false },
+  { key: "charge_products", title: "收费项目库", desc: "即将开放", icon: Tags, available: false },
+  { key: "verify_records", title: "核销记录", desc: "即将开放", icon: Ticket, available: false },
+  { key: "mall_orders", title: "商城订单", desc: "即将开放", icon: ShoppingBag, available: false },
+] as const;
+
+const AVAILABLE_CATEGORY_KEYS = CATEGORIES.filter((c) => c.available).map((c) => c.key);
 
 function base64ToBlob(base64: string, mime: string): Blob {
   const bytes = atob(base64);
@@ -88,16 +103,36 @@ export default function YabanDataManage() {
   const [, navigate] = useLocation();
   const [tab, setTab] = useState<"export" | "import">("export");
 
-  // ===== 导出相关状态 =====
-  const [contents, setContents] = useState<string[]>(["customer"]);
-  const [formats, setFormats] = useState<Fmt[]>(["excel"]);
-  const [email, setEmail] = useState("");
+  // ===== 步骤一：医院选择 =====
+  const { data: clinicsResp, isLoading: clinicsLoading } = trpc.yabanCustomer.listExportableClinics.useQuery();
+  const clinics = clinicsResp?.clinics;
+  const [tenantId, setTenantId] = useState<number>(0);
+  const [clinicPickerOpen, setClinicPickerOpen] = useState(false);
 
-  // 定时备份设置
+  // 默认选中第一家
+  useEffect(() => {
+    if (clinics && clinics.length > 0 && !tenantId) {
+      setTenantId(clinics[0].tenantId);
+    }
+  }, [clinics, tenantId]);
+
+  const currentClinic = clinics?.find((c) => c.tenantId === tenantId);
+  const hasNoClinic = !clinicsLoading && (!clinics || clinics.length === 0);
+
+  // ===== 步骤二：分类选择 =====
+  const [categories, setCategories] = useState<string[]>([...AVAILABLE_CATEGORY_KEYS]);
+
+  // ===== 步骤三：格式 =====
+  const [formats, setFormats] = useState<Fmt[]>(["excel"]);
+
+  // ===== 步骤五：定时备份 =====
   const [autoEnabled, setAutoEnabled] = useState(false);
   const [autoFreq, setAutoFreq] = useState<"daily" | "weekly" | "monthly" | "quarterly">("monthly");
 
-  const { data: backupSettings } = trpc.yabanCustomer.getBackupSettings.useQuery();
+  const { data: backupSettings } = trpc.yabanCustomer.getBackupSettings.useQuery(
+    { tenantId },
+    { enabled: !!tenantId }
+  );
   const { data: me } = trpc.auth.me.useQuery();
   const utils = trpc.useUtils();
 
@@ -113,18 +148,10 @@ export default function YabanDataManage() {
     }
   }, [backupSettings]);
 
-  // 邮箱始终以个人中心绑定的为准，不再手动输入
-  useEffect(() => {
-    if (hasBoundEmail) setEmail(boundEmail);
-  }, [hasBoundEmail, boundEmail]);
-
-  const toggleContent = (key: string) => {
-    const mod = CONTENT_MODULES.find((m) => m.key === key);
-    if (!mod?.available) {
-      toast.info("该模块即将开放");
-      return;
-    }
-    setContents((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  const toggleCategory = (key: string) => {
+    const cat = CATEGORIES.find((c) => c.key === key);
+    if (!cat?.available) return; // 占位项不可点
+    setCategories((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   };
   const toggleFormat = (f: Fmt) => {
     setFormats((prev) => (prev.includes(f) ? prev.filter((x) => x !== f) : [...prev, f]));
@@ -169,8 +196,12 @@ export default function YabanDataManage() {
   });
 
   const guardBeforeExport = (): boolean => {
-    if (contents.length === 0) {
-      toast.error("请至少选择一项导出内容");
+    if (!tenantId) {
+      toast.error("请先选择医院");
+      return false;
+    }
+    if (categories.length === 0) {
+      toast.error("请至少选择一项资料分类");
       return false;
     }
     if (formats.length === 0) {
@@ -182,7 +213,7 @@ export default function YabanDataManage() {
 
   const onDownload = () => {
     if (!guardBeforeExport()) return;
-    exportData.mutate({ formats });
+    exportData.mutate({ tenantId, categories, formats });
   };
 
   const onSendEmail = () => {
@@ -191,10 +222,14 @@ export default function YabanDataManage() {
       toast.error("请先在个人中心绑定邮箱");
       return;
     }
-    sendBackupNow.mutate({ email: boundEmail, formats });
+    sendBackupNow.mutate({ tenantId, email: boundEmail, categories, formats });
   };
 
   const onSaveAuto = () => {
+    if (!tenantId) {
+      toast.error("请先选择医院");
+      return;
+    }
     if (autoEnabled && !hasBoundEmail) {
       toast.error("开启定时备份需先在个人中心绑定邮箱");
       return;
@@ -203,7 +238,7 @@ export default function YabanDataManage() {
       toast.error("请至少选择一种文件格式");
       return;
     }
-    saveSettings.mutate({ enabled: autoEnabled, email: boundEmail, formats, frequency: autoFreq });
+    saveSettings.mutate({ tenantId, enabled: autoEnabled, email: boundEmail, categories, formats, frequency: autoFreq });
   };
 
   // ===== 导入相关 =====
@@ -217,7 +252,6 @@ export default function YabanDataManage() {
     const reader = new FileReader();
 
     if (isExcel) {
-      // 解析 Excel：按中文表头映射成顾客对象
       reader.onload = () => {
         try {
           const wb = XLSX.read(reader.result, { type: "array" });
@@ -245,7 +279,6 @@ export default function YabanDataManage() {
       };
       reader.readAsArrayBuffer(file);
     } else {
-      // 解析 JSON 存档
       reader.onload = () => {
         try {
           const data = JSON.parse(String(reader.result || "{}"));
@@ -265,23 +298,9 @@ export default function YabanDataManage() {
     e.target.value = "";
   };
 
-  // 下载 Excel 导入模板（含表头与一行示例）
   const onDownloadTemplate = () => {
     const example = [
-      "张三",
-      "男",
-      "1990-01-01",
-      "",
-      "电子",
-      "",
-      "",
-      "",
-      "13800000000",
-      "",
-      "",
-      "",
-      "老顾客推荐",
-      "示例数据，可删除",
+      "张三", "男", "1990-01-01", "", "电子", "", "", "", "13800000000", "", "", "", "老顾客推荐", "示例数据，可删除",
     ];
     const aoa = [TEMPLATE_HEADERS, example];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -293,11 +312,15 @@ export default function YabanDataManage() {
   };
 
   const onImport = () => {
+    if (!tenantId) {
+      toast.error("请先选择医院");
+      return;
+    }
     if (!importPreview || importPreview.customers.length === 0) {
       toast.error("请先选择要导入的文件");
       return;
     }
-    importData.mutate({ customers: importPreview.customers, mode: "skip" });
+    importData.mutate({ tenantId, customers: importPreview.customers, mode: "skip" });
   };
 
   const FREQS: { key: typeof autoFreq; label: string }[] = [
@@ -306,6 +329,22 @@ export default function YabanDataManage() {
     { key: "monthly", label: "每月" },
     { key: "quarterly", label: "每季度" },
   ];
+
+  const goBindEmail = () => {
+    sessionStorage.setItem("yaban_back", "/yaban/settings/data");
+    navigate("/yaban/bind-email");
+  };
+
+  // 步骤标题小组件
+  const StepHead = ({ n, title, extra }: { n: number; title: string; extra?: React.ReactNode }) => (
+    <div className="flex items-center justify-between mb-3">
+      <span className="text-sm font-bold text-gray-800 flex items-center gap-2">
+        <span className="w-5 h-5 rounded-full bg-[#1E88D6] text-white text-[11px] flex items-center justify-center shrink-0">{n}</span>
+        {title}
+      </span>
+      {extra}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-12">
@@ -319,7 +358,6 @@ export default function YabanDataManage() {
           </button>
           <span className="text-base font-bold">数据管理</span>
         </div>
-        {/* Tab 切换 */}
         <div className="flex px-4">
           <button
             onClick={() => setTab("export")}
@@ -339,39 +377,111 @@ export default function YabanDataManage() {
       </div>
 
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
-        {tab === "export" ? (
+        {/* 无医院身份：得体提示，隐藏所有导出操作 */}
+        {hasNoClinic ? (
+          <div className="bg-white rounded-2xl shadow-sm p-6 text-center">
+            <div className="w-14 h-14 rounded-full bg-[#EAF4FE] flex items-center justify-center mx-auto mb-4">
+              <Building2 className="w-7 h-7 text-[#1E88D6]" />
+            </div>
+            <p className="text-base font-bold text-gray-800 mb-2">暂无可导出资料的医院</p>
+            <p className="text-sm text-gray-500 leading-relaxed">
+              数据导出属于医院经营资料管理，需要您具备某家医院的院长或股东身份。
+              <br />
+              您当前尚未归属任何医院，因此暂时没有可导出的资料。如需演示或管理某家医院的数据，可请平台将您加入对应医院后再来此导出。
+            </p>
+          </div>
+        ) : clinicsLoading ? (
+          <div className="bg-white rounded-2xl shadow-sm p-6 flex items-center justify-center">
+            <Loader2 className="w-5 h-5 animate-spin text-[#1E88D6]" />
+          </div>
+        ) : tab === "export" ? (
           <>
-            {/* 步骤一：选择导出内容 */}
+            {/* 步骤一：选择医院 */}
             <div className="bg-white rounded-2xl shadow-sm p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-bold text-gray-800 flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-full bg-[#1E88D6] text-white text-[11px] flex items-center justify-center shrink-0">1</span>
-                  选择要导出的内容
+              <StepHead n={1} title="选择医院" />
+              <button
+                onClick={() => clinics && clinics.length > 1 && setClinicPickerOpen((v) => !v)}
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border border-[#1E88D6] bg-[#F0F7FD] ${
+                  clinics && clinics.length > 1 ? "active:opacity-80" : ""
+                }`}
+              >
+                <span className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shrink-0">
+                  <Building2 className="w-4 h-4 text-[#1E88D6]" />
                 </span>
-                <button
-                  className="text-xs text-[#1E88D6] active:opacity-70"
-                  onClick={() =>
-                    setContents(
-                      contents.length === CONTENT_MODULES.filter((m) => m.available).length
-                        ? []
-                        : CONTENT_MODULES.filter((m) => m.available).map((m) => m.key)
-                    )
-                  }
-                >
-                  <span className="font-normal">{contents.length === CONTENT_MODULES.filter((m) => m.available).length ? "取消全选" : "全选"}</span>
-                </button>
-              </div>
+                <span className="flex-1 text-left">
+                  <span className="block text-sm font-medium text-gray-800">{currentClinic?.name || "请选择医院"}</span>
+                  <span className="block text-xs text-gray-400 mt-0.5">
+                    {clinics && clinics.length > 1 ? `共 ${clinics.length} 家可导出医院，点击切换` : "您名下的医院"}
+                  </span>
+                </span>
+                {clinics && clinics.length > 1 && (
+                  <ChevronDown className={`w-4 h-4 text-[#1E88D6] transition-transform ${clinicPickerOpen ? "rotate-180" : ""}`} />
+                )}
+              </button>
+              {clinicPickerOpen && clinics && clinics.length > 1 && (
+                <div className="mt-2 space-y-1.5">
+                  {clinics.map((c) => (
+                    <button
+                      key={c.tenantId}
+                      onClick={() => { setTenantId(c.tenantId); setClinicPickerOpen(false); }}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm border transition-colors ${
+                        c.tenantId === tenantId
+                          ? "border-[#1E88D6] bg-[#F0F7FD] text-[#1E88D6] font-medium"
+                          : "border-gray-100 bg-gray-50 text-gray-700"
+                      }`}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 步骤二：选择资料分类 */}
+            <div className="bg-white rounded-2xl shadow-sm p-4">
+              <StepHead
+                n={2}
+                title="选择资料分类"
+                extra={
+                  <button
+                    className="text-xs text-[#1E88D6] active:opacity-70 font-normal"
+                    onClick={() =>
+                      setCategories(categories.length === AVAILABLE_CATEGORY_KEYS.length ? [] : [...AVAILABLE_CATEGORY_KEYS])
+                    }
+                  >
+                    {categories.length === AVAILABLE_CATEGORY_KEYS.length ? "取消全选" : "全选"}
+                  </button>
+                }
+              />
               <div className="space-y-2">
-                {CONTENT_MODULES.map((m) => {
-                  const Icon = m.icon;
-                  const checked = contents.includes(m.key);
+                {CATEGORIES.map((c) => {
+                  const Icon = c.icon;
+                  const checked = categories.includes(c.key);
+                  if (!c.available) {
+                    // 占位项：整体淡色、虚线、不可点，一眼可辨
+                    return (
+                      <div
+                        key={c.key}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-dashed border-gray-200 bg-gray-50/60 cursor-not-allowed select-none"
+                      >
+                        <Square className="w-5 h-5 text-gray-200 shrink-0" />
+                        <span className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                          <Icon className="w-4 h-4 text-gray-300" />
+                        </span>
+                        <span className="flex-1 text-left">
+                          <span className="block text-sm font-medium text-gray-400">{c.title}</span>
+                        </span>
+                        <span className="text-[11px] text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">即将开放</span>
+                      </div>
+                    );
+                  }
                   return (
                     <button
-                      key={m.key}
-                      onClick={() => toggleContent(m.key)}
-                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border transition-colors ${
+                      key={c.key}
+                      onClick={() => toggleCategory(c.key)}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${
                         checked ? "border-[#1E88D6] bg-[#F0F7FD]" : "border-gray-100 bg-gray-50"
-                      } ${!m.available ? "opacity-50" : "active:bg-[#EAF4FE]"}`}
+                      } active:bg-[#EAF4FE]`}
                     >
                       {checked ? (
                         <CheckSquare className="w-5 h-5 text-[#1E88D6] shrink-0" />
@@ -382,18 +492,18 @@ export default function YabanDataManage() {
                         <Icon className="w-4 h-4 text-[#1E88D6]" />
                       </span>
                       <span className="flex-1 text-left">
-                        <span className="block text-sm font-medium text-gray-800">{m.title}</span>
-                        <span className="block text-xs text-gray-400 mt-0.5">{m.desc}</span>
+                        <span className="block text-sm font-medium text-gray-800">{c.title}</span>
+                        <span className="block text-xs text-gray-400 mt-0.5">{c.desc}</span>
                       </span>
-                      {!m.available && <span className="text-xs text-gray-400">即将开放</span>}
                     </button>
                   );
                 })}
               </div>
+            </div>
 
-              {/* 文件格式（归属于步骤一内） */}
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <span className="text-xs font-medium text-gray-500 block mb-2">文件格式</span>
+            {/* 步骤三：选择文件格式 */}
+            <div className="bg-white rounded-2xl shadow-sm p-4">
+              <StepHead n={3} title="选择文件格式" />
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => toggleFormat("excel")}
@@ -427,15 +537,11 @@ export default function YabanDataManage() {
               <p className="text-xs text-gray-400 mt-2 leading-relaxed">
                 Excel 便于查看打印；JSON 存档可用于「数据导入存档」还原。
               </p>
-              </div>
             </div>
 
-            {/* 步骤二：选择导出方式 */}
+            {/* 步骤四：选择导出方式 */}
             <div className="bg-white rounded-2xl shadow-sm p-4">
-              <span className="text-sm font-bold text-gray-800 flex items-center gap-2 mb-3">
-                <span className="w-5 h-5 rounded-full bg-[#1E88D6] text-white text-[11px] flex items-center justify-center shrink-0">2</span>
-                选择导出方式
-              </span>
+              <StepHead n={4} title="选择导出方式" />
 
               {/* 方式一：下载到本机 */}
               <button
@@ -467,19 +573,9 @@ export default function YabanDataManage() {
                     )}
                   </span>
                   {hasBoundEmail ? (
-                    <button
-                      onClick={() => { sessionStorage.setItem("yaban_back", "/yaban/settings/data"); navigate("/profile/edit"); }}
-                      className="text-xs text-[#1E88D6] active:opacity-70 shrink-0"
-                    >
-                      修改
-                    </button>
+                    <button onClick={goBindEmail} className="text-xs text-[#1E88D6] active:opacity-70 shrink-0">修改</button>
                   ) : (
-                    <button
-                      onClick={() => { sessionStorage.setItem("yaban_back", "/yaban/settings/data"); navigate("/profile/edit"); }}
-                      className="text-xs px-2.5 py-1.5 rounded-lg bg-[#1E88D6] text-white active:opacity-80 shrink-0"
-                    >
-                      绑定邮箱
-                    </button>
+                    <button onClick={goBindEmail} className="text-xs px-2.5 py-1.5 rounded-lg bg-[#1E88D6] text-white active:opacity-80 shrink-0">绑定邮箱</button>
                   )}
                 </div>
                 <button
@@ -491,63 +587,63 @@ export default function YabanDataManage() {
                   立即发送到邮箱
                 </button>
               </div>
+            </div>
 
-              {/* 定时备份 */}
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-800 flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-[#1E88D6]" /> 定时自动备份
-                  </span>
+            {/* 步骤五：定时自动备份 */}
+            <div className="bg-white rounded-2xl shadow-sm p-4">
+              <StepHead
+                n={5}
+                title="定时自动备份"
+                extra={
                   <button
                     onClick={() => setAutoEnabled((v) => !v)}
                     className={`relative w-11 h-6 rounded-full transition-colors ${autoEnabled ? "bg-[#1E88D6]" : "bg-gray-300"}`}
                   >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
-                        autoEnabled ? "translate-x-5" : ""
-                      }`}
-                    />
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${autoEnabled ? "translate-x-5" : ""}`} />
                   </button>
-                </div>
-                {autoEnabled && (
-                  <>
-                    <div className="grid grid-cols-4 gap-2 mt-3">
-                      {FREQS.map((f) => (
-                        <button
-                          key={f.key}
-                          onClick={() => setAutoFreq(f.key)}
-                          className={`py-2 text-xs rounded-lg border transition-colors ${
-                            autoFreq === f.key
-                              ? "border-[#1E88D6] bg-[#F0F7FD] text-[#1E88D6] font-medium"
-                              : "border-gray-100 bg-gray-50 text-gray-600"
-                          }`}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-2">
-                      将按所选周期，于北京时间凌晨自动把备份发送到个人中心绑定的邮箱{hasBoundEmail ? `（${boundEmail}）` : ""}。
-                    </p>
-                  </>
-                )}
-                {!hasBoundEmail && autoEnabled && (
-                  <p className="text-xs text-amber-500 mt-2">尚未绑定邮箱，请先在个人中心绑定后再保存。</p>
-                )}
-                {backupSettings?.lastBackupAt && (
+                }
+              />
+              <p className="text-xs text-gray-400 -mt-1 mb-1 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5" /> 按所选周期自动把以上内容发送到绑定邮箱（辅助功能，可不开启）
+              </p>
+              {autoEnabled && (
+                <>
+                  <div className="grid grid-cols-4 gap-2 mt-3">
+                    {FREQS.map((f) => (
+                      <button
+                        key={f.key}
+                        onClick={() => setAutoFreq(f.key)}
+                        className={`py-2 text-xs rounded-lg border transition-colors ${
+                          autoFreq === f.key ? "border-[#1E88D6] bg-[#F0F7FD] text-[#1E88D6] font-medium" : "border-gray-100 bg-gray-50 text-gray-600"
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
                   <p className="text-xs text-gray-400 mt-2">
-                    上次备份：{String(backupSettings.lastBackupAt).replace("T", " ").slice(0, 16)}（累计 {backupSettings.backupCount} 次）
+                    将按所选周期，于北京时间凌晨自动把备份发送到个人中心绑定的邮箱{hasBoundEmail ? `（${boundEmail}）` : ""}。
                   </p>
-                )}
-                <button
-                  onClick={onSaveAuto}
-                  disabled={saveSettings.isPending}
-                  className="mt-3 w-full flex items-center justify-center gap-2 border border-[#1E88D6] text-[#1E88D6] rounded-xl py-2.5 text-sm font-medium active:bg-[#F0F7FD] disabled:opacity-60"
-                >
-                  {saveSettings.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-                  保存定时备份设置
-                </button>
-              </div>
+                  {!hasBoundEmail && (
+                    <p className="text-xs text-amber-500 mt-2 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" /> 尚未绑定邮箱，请先绑定后再保存。
+                    </p>
+                  )}
+                  {backupSettings?.lastBackupAt && (
+                    <p className="text-xs text-gray-400 mt-2">
+                      上次备份：{String(backupSettings.lastBackupAt).replace("T", " ").slice(0, 16)}（累计 {backupSettings.backupCount} 次）
+                    </p>
+                  )}
+                  <button
+                    onClick={onSaveAuto}
+                    disabled={saveSettings.isPending}
+                    className="mt-3 w-full flex items-center justify-center gap-2 border border-[#1E88D6] text-[#1E88D6] rounded-xl py-2.5 text-sm font-medium active:bg-[#F0F7FD] disabled:opacity-60"
+                  >
+                    {saveSettings.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                    保存定时备份设置
+                  </button>
+                </>
+              )}
             </div>
           </>
         ) : (
@@ -558,28 +654,23 @@ export default function YabanDataManage() {
               <p className="text-xs text-gray-400 leading-relaxed mb-3">
                 支持两种文件：本系统导出的 JSON 存档（精确还原），或按模板整理的 Excel 表格（从其他系统迁移顾客）。已存在的顾客（同手机号或同原编号）会自动跳过，导入的顾客将按本店规则重新分配顾客编号，原编号保留备查。
               </p>
-
-              {/* 下载模板 */}
               <button
                 onClick={onDownloadTemplate}
                 className="w-full flex items-center justify-center gap-2 border border-[#1E88D6] text-[#1E88D6] rounded-xl py-2.5 text-sm font-medium active:bg-[#F0F7FD] mb-3"
               >
                 <FileSpreadsheet className="w-4 h-4" /> 下载 Excel 导入模板
               </button>
-
               <label className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[#9CC8EC] rounded-2xl py-8 cursor-pointer active:bg-[#F0F7FD]">
                 <Upload className="w-7 h-7 text-[#1E88D6]" />
                 <span className="text-sm text-[#1E88D6] font-medium">点击选择 JSON 或 Excel 文件</span>
                 <span className="text-xs text-gray-400">支持 .json / .xlsx / .xls</span>
                 <input type="file" accept=".json,application/json,.xlsx,.xls" className="hidden" onChange={onPickFile} />
               </label>
-
               {importPreview && (
                 <div className="mt-3 px-3 py-3 rounded-xl bg-[#F0F7FD] text-sm text-gray-700">
                   已读取文件，包含 <span className="font-bold text-[#1E88D6]">{importPreview.count}</span> 条顾客记录，确认后点击下方导入。
                 </div>
               )}
-
               <button
                 onClick={onImport}
                 disabled={importData.isPending || !importPreview}
@@ -589,7 +680,6 @@ export default function YabanDataManage() {
                 开始导入
               </button>
             </div>
-
             <div className="bg-white rounded-2xl shadow-sm p-4">
               <p className="text-xs text-gray-400 leading-relaxed">
                 提示：Excel 导入请务必使用上方模板的表头（姓名、手机号为必填）。如数据量大或字段复杂，也可把原始表发我协助批量导入。

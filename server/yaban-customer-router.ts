@@ -43,6 +43,22 @@ function tierForCategory(category: string, fileName?: string): YabanMediaTier {
 
 const DEFAULT_TENANT_ID = 1;
 
+// 取医院名称（用于导出文件命名）；缺省回退到占位名
+async function getClinicName(tenantId: number): Promise<string> {
+  const conn = await getDbConnection();
+  if (!conn) return `医院#${tenantId}`;
+  try {
+    const [rows] = (await (conn as any).execute(
+      `SELECT name, short_name FROM yaban_clinic WHERE tenant_id = ? ORDER BY id DESC LIMIT 1`,
+      [tenantId]
+    )) as any;
+    const r = (rows as any[])[0];
+    return (r && (r.name || r.short_name)) || `医院#${tenantId}`;
+  } catch {
+    return `医院#${tenantId}`;
+  }
+}
+
 // 根据姓名计算 A-Z 首字母（用于拼音索引分组）。非中英文/无法识别归入 "#"
 function getInitial(name?: string | null): string {
   const n = (name || "").trim();
@@ -872,26 +888,66 @@ export const yabanCustomerRouter = router({
       return { success: true, id: result.insertId, medicalNo };
     }),
 
+  // ============ 我可导出的医院列表 ============
+  // 资格：在该医院 status=active，且对该医院拥有 data_export 权限（owner 默认有；其他角色需院长单独开启）
+  listExportableClinics: protectedProcedure.query(async ({ ctx }) => {
+    const conn = await getDbConnection();
+    if (!conn) return { clinics: [] as { tenantId: number; name: string; roleKey: string }[] };
+    // 取我所有在职成员关系
+    const [rows] = (await (conn as any).execute(
+      `SELECT m.tenant_id, m.role_key, c.name, c.short_name, c.status AS clinic_status
+         FROM yaban_clinic_member m
+         LEFT JOIN yaban_clinic c ON c.tenant_id = m.tenant_id
+        WHERE m.user_id = ? AND m.status = 'active'
+        ORDER BY m.tenant_id ASC`,
+      [ctx.user.id]
+    )) as any;
+    const seen = new Set<number>();
+    const clinics: { tenantId: number; name: string; roleKey: string }[] = [];
+    for (const r of rows as any[]) {
+      const tid = Number(r.tenant_id);
+      if (seen.has(tid)) continue;
+      // 校验该医院的导出权限
+      const can = await checkYabanPerm(ctx, "data_export", tid);
+      if (!can) continue;
+      seen.add(tid);
+      clinics.push({
+        tenantId: tid,
+        name: r.name || r.short_name || `医院 #${tid}`,
+        roleKey: r.role_key || "",
+      });
+    }
+    return { clinics };
+  }),
+
+  // 校验并返回医院名称（内部复用）
   // ============ 导出顾客数据（JSON / Excel，返回 base64 供前端下载）============
   exportData: protectedProcedure
-    .input(z.object({ formats: z.array(z.enum(["json", "excel"])).min(1) }))
-    .mutation(async ({ input }) => {
-      const customers = await fetchAllCustomers(DEFAULT_TENANT_ID);
+    .input(z.object({
+      tenantId: z.number().int().positive(),
+      formats: z.array(z.enum(["json", "excel"])).min(1),
+      categories: z.array(z.string()).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const can = await checkYabanPerm(ctx, "data_export", input.tenantId);
+      if (!can) throw new TRPCError({ code: "FORBIDDEN", message: "您没有该医院的数据导出权限" });
+      const storeName = await getClinicName(input.tenantId);
+      const customers = await fetchAllCustomers(input.tenantId);
       const now = new Date();
       const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       const files: { name: string; mime: string; base64: string }[] = [];
       if (input.formats.includes("excel")) {
         const buf = await buildBackupExcel(customers);
         files.push({
-          name: `恒愿齿科普陀店_顾客数据备份_${dateStr}.xlsx`,
+          name: `${storeName}_顾客数据备份_${dateStr}.xlsx`,
           mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           base64: buf.toString("base64"),
         });
       }
       if (input.formats.includes("json")) {
-        const json = buildBackupJson(customers, DEFAULT_TENANT_ID);
+        const json = buildBackupJson(customers, input.tenantId);
         files.push({
-          name: `恒愿齿科普陀店_顾客数据存档_${dateStr}.json`,
+          name: `${storeName}_顾客数据存档_${dateStr}.json`,
           mime: "application/json",
           base64: Buffer.from(JSON.stringify(json, null, 2), "utf-8").toString("base64"),
         });
@@ -901,27 +957,37 @@ export const yabanCustomerRouter = router({
 
   // ============ 立即发送备份到邮箱 ============
   sendBackupNow: protectedProcedure
-    .input(z.object({ email: z.string().email("邮箱格式不正确"), formats: z.array(z.enum(["json", "excel"])).min(1) }))
-    .mutation(async ({ input }) => {
-      const customers = await fetchAllCustomers(DEFAULT_TENANT_ID);
+    .input(z.object({
+      tenantId: z.number().int().positive(),
+      email: z.string().email("邮箱格式不正确"),
+      formats: z.array(z.enum(["json", "excel"])).min(1),
+      categories: z.array(z.string()).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const can = await checkYabanPerm(ctx, "data_export", input.tenantId);
+      if (!can) throw new TRPCError({ code: "FORBIDDEN", message: "您没有该医院的数据导出权限" });
+      const storeName = await getClinicName(input.tenantId);
+      const customers = await fetchAllCustomers(input.tenantId);
       await sendCustomerBackupEmail({
         to: input.email,
-        storeName: "恒愿齿科普陀店",
+        storeName,
         customers,
         formats: input.formats,
-        tenantId: DEFAULT_TENANT_ID,
+        tenantId: input.tenantId,
       });
       return { success: true, count: customers.length };
     }),
 
-  // ============ 读取定时备份设置 ============
-  getBackupSettings: protectedProcedure.query(async () => {
+  // ============ 读取定时备份设置（按医院） ============
+  getBackupSettings: protectedProcedure
+    .input(z.object({ tenantId: z.number().int().positive() }))
+    .query(async ({ input }) => {
     const conn = await getDbConnection();
     if (!conn) return null;
     await ensureBackupSettingsTable(conn);
     const [rows] = (await (conn as any).execute(
       `SELECT * FROM yaban_backup_settings WHERE tenant_id = ? LIMIT 1`,
-      [DEFAULT_TENANT_ID]
+      [input.tenantId]
     )) as any;
     const r = (rows as any[])[0];
     if (!r) return { enabled: false, email: "", formats: ["excel"], frequency: "monthly", lastBackupAt: null, nextBackupAt: null, backupCount: 0 };
@@ -936,17 +1002,21 @@ export const yabanCustomerRouter = router({
     };
   }),
 
-  // ============ 保存定时备份设置 ============
+  // ============ 保存定时备份设置（按医院） ============
   saveBackupSettings: protectedProcedure
     .input(
       z.object({
+        tenantId: z.number().int().positive(),
         enabled: z.boolean(),
         email: z.string().optional(),
         formats: z.array(z.enum(["json", "excel"])).min(1),
         frequency: z.enum(["daily", "weekly", "monthly", "quarterly"]),
+        categories: z.array(z.string()).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      const can = await checkYabanPerm(ctx, "data_export", input.tenantId);
+      if (!can) throw new TRPCError({ code: "FORBIDDEN", message: "您没有该医院的数据导出权限" });
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureBackupSettingsTable(conn);
@@ -961,7 +1031,7 @@ export const yabanCustomerRouter = router({
         `INSERT INTO yaban_backup_settings (tenant_id, enabled, email, formats, frequency, next_backup_at)
          VALUES (?,?,?,?,?,?)
          ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), email = VALUES(email), formats = VALUES(formats), frequency = VALUES(frequency), next_backup_at = VALUES(next_backup_at)`,
-        [DEFAULT_TENANT_ID, input.enabled ? 1 : 0, input.email || null, formatsStr, input.frequency, nextAt]
+        [input.tenantId, input.enabled ? 1 : 0, input.email || null, formatsStr, input.frequency, nextAt]
       );
       return { success: true };
     }),
@@ -970,11 +1040,15 @@ export const yabanCustomerRouter = router({
   importData: protectedProcedure
     .input(
       z.object({
+        tenantId: z.number().int().positive().optional(),
         customers: z.array(z.record(z.any())),
         mode: z.enum(["skip", "insert"]).default("skip"),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const tid = input.tenantId || DEFAULT_TENANT_ID;
+      const can = await checkYabanPerm(ctx, "data_export", tid);
+      if (!can) throw new TRPCError({ code: "FORBIDDEN", message: "您没有该医院的数据导入权限" });
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureCustomerTable(conn);
@@ -993,7 +1067,7 @@ export const yabanCustomerRouter = router({
           const externalNo = s(c.medical_no) || s(c.external_no);
           const [dup] = (await (conn as any).execute(
             `SELECT id FROM yaban_customer WHERE tenant_id = ? AND (mobile = ? OR (external_no IS NOT NULL AND external_no = ?)) LIMIT 1`,
-            [DEFAULT_TENANT_ID, mobile, externalNo]
+            [tid, mobile, externalNo]
           )) as any;
           if ((dup as any[]).length > 0) {
             skipped++;
@@ -1001,7 +1075,7 @@ export const yabanCustomerRouter = router({
           }
         }
         // 统一重新分配我方编号，原编号存入 external_no
-        const code = await nextCustomerCode(conn, DEFAULT_TENANT_ID);
+        const code = await nextCustomerCode(conn, tid);
         const externalNo = s(c.external_no) || s(c.medical_no);
         const ageNum = c.age === undefined || c.age === null || c.age === "" ? null : parseInt(String(c.age), 10) || null;
         try {
@@ -1014,7 +1088,7 @@ export const yabanCustomerRouter = router({
               last_doctor, last_visit, created_by)
              VALUES (?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?,?,?)`,
             [
-              DEFAULT_TENANT_ID, name, s(c.gender) || "未知", s(c.birthday), ageNum, s(c.zodiac),
+              tid, name, s(c.gender) || "未知", s(c.birthday), ageNum, s(c.zodiac),
               s(c.patient_type) || "电子", code, externalNo, s(c.nickname),
               s(c.email), mobile, s(c.phone), s(c.region), s(c.address), s(c.source),
               s(c.net_consultant), s(c.consultant), s(c.history), s(c.remark),
