@@ -245,8 +245,7 @@ export default function YabanProfile() {
 
       {/* 顶部蓝色头部 + 用户信息 */}
       <div className="bg-gradient-to-b from-[#2196C8] to-[#3BA9E0] text-white">
-        <div className="max-w-lg mx-auto px-4 pt-4 pb-6">
-          <div className="text-sm font-bold mb-4">我的</div>
+        <div className="max-w-lg mx-auto px-4 pt-5 pb-6">
           <div className="flex items-center gap-3">
             <button
               type="button"
