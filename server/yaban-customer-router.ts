@@ -9,7 +9,7 @@
  */
 import { z } from "zod";
 import { pinyin } from "pinyin-pro";
-import { router, protectedProcedure } from "./_core/trpc";
+import { router, protectedProcedure, adminProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
 import {
@@ -20,6 +20,25 @@ import {
   ensureBackupSettingsTable,
   calcNextBackupAt,
 } from "./yaban-backup-service";
+import { uploadYabanMedia, deleteYabanMedia, type YabanMediaTier } from "./cos-upload";
+
+// ========= 影像记录：分类 → 高清份处理档位映射 =========
+// 诊断级（无损原图直传）
+const LOSSLESS_CATEGORIES = ["X光片", "小牙片", "根尖片", "全景片", "CBCT", "内窥镜"];
+// 专业格式原文件直传（非位图）
+const RAWFILE_CATEGORIES = ["CBCT原始", "口扫模型", "DICOM"];
+// 文档类
+const DOCUMENT_CATEGORIES = ["文档图片", "知情同意书", "文档记录"];
+function tierForCategory(category: string, fileName?: string): YabanMediaTier {
+  const fn = (fileName || "").toLowerCase();
+  // 专业格式按扩展名优先判定
+  if (/\.(stl|ply|obj|dcm|dicom|zip|rar)$/.test(fn)) return "rawFile";
+  if (RAWFILE_CATEGORIES.includes(category)) return "rawFile";
+  if (LOSSLESS_CATEGORIES.includes(category)) return "lossless";
+  if (DOCUMENT_CATEGORIES.includes(category)) return "documentCompress";
+  // 默认照片类轻压缩（面像照/口内照/对比照等）
+  return "lightCompress";
+}
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -194,6 +213,35 @@ async function ensureTagTables(conn: any) {
   } catch {
     // 预置失败不阻断
   }
+}
+
+// 影像记录建表：缩略图 + 高清/无损双轨
+let mediaTableReady = false;
+async function ensureMediaTable(conn: any) {
+  if (mediaTableReady) return;
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_media (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      tenant_id INT NOT NULL DEFAULT 1,
+      customer_id BIGINT UNSIGNED NOT NULL,
+      category VARCHAR(32) NOT NULL DEFAULT '其他',
+      full_url TEXT NOT NULL,
+      thumb_url TEXT,
+      mime VARCHAR(64),
+      file_size INT UNSIGNED,
+      is_lossless TINYINT(1) NOT NULL DEFAULT 0,
+      file_name VARCHAR(255),
+      remark VARCHAR(500),
+      uploader_id BIGINT,
+      uploader_role VARCHAR(32),
+      taken_at DATE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_customer (customer_id),
+      KEY idx_tenant_customer (tenant_id, customer_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  mediaTableReady = true;
 }
 
 // 创建顾客输入校验
@@ -860,6 +908,161 @@ export const yabanCustomerRouter = router({
       await (conn as any).execute(
         `DELETE FROM yaban_customer_tag WHERE tag_id = ? AND customer_id IN (${placeholders})`,
         [input.tagId, ...input.customerIds]
+      );
+      return { success: true };
+    }),
+
+  // ===================== 影像记录 =====================
+  // 查看某顾客的影像列表（登录即可查看）
+  listMedia: protectedProcedure
+    .input(z.object({ customerId: z.union([z.number(), z.string()]) }))
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
+      await ensureMediaTable(conn);
+      const cid = Number(input.customerId);
+      const [rows] = (await (conn as any).execute(
+        `SELECT id, customer_id, category, full_url, thumb_url, mime, file_size, is_lossless,
+                file_name, remark, uploader_id, uploader_role,
+                DATE_FORMAT(taken_at, '%Y-%m-%d') AS taken_at,
+                created_at
+           FROM yaban_media
+          WHERE tenant_id = ? AND customer_id = ?
+          ORDER BY COALESCE(taken_at, DATE(created_at)) DESC, id DESC`,
+        [DEFAULT_TENANT_ID, cid]
+      )) as any;
+      const list = (rows as any[]).map((r) => ({
+        id: Number(r.id),
+        customerId: Number(r.customer_id),
+        category: r.category as string,
+        fullUrl: r.full_url as string,
+        thumbUrl: (r.thumb_url || r.full_url) as string,
+        mime: r.mime as string | null,
+        fileSize: r.file_size != null ? Number(r.file_size) : null,
+        isLossless: Number(r.is_lossless) === 1,
+        fileName: r.file_name as string | null,
+        remark: r.remark as string | null,
+        uploaderId: r.uploader_id != null ? Number(r.uploader_id) : null,
+        uploaderRole: r.uploader_role as string | null,
+        takenAt: r.taken_at as string | null,
+        createdAt: r.created_at,
+      }));
+      return { list };
+    }),
+
+  // 各分类影像数量统计（登录即可查看）
+  mediaStats: protectedProcedure
+    .input(z.object({ customerId: z.union([z.number(), z.string()]) }))
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
+      await ensureMediaTable(conn);
+      const cid = Number(input.customerId);
+      const [rows] = (await (conn as any).execute(
+        `SELECT category, COUNT(*) AS cnt FROM yaban_media
+          WHERE tenant_id = ? AND customer_id = ?
+          GROUP BY category`,
+        [DEFAULT_TENANT_ID, cid]
+      )) as any;
+      const byCategory: Record<string, number> = {};
+      let total = 0;
+      for (const r of rows as any[]) {
+        const c = Number(r.cnt);
+        byCategory[r.category as string] = c;
+        total += c;
+      }
+      return { total, byCategory };
+    }),
+
+  // 上传影像（仅 super_admin）
+  uploadMedia: adminProcedure
+    .input(z.object({
+      customerId: z.union([z.number(), z.string()]),
+      category: z.string().min(1).max(32),
+      dataUrl: z.string().min(8),
+      fileName: z.string().max(255).optional(),
+      remark: z.string().max(500).optional(),
+      takenAt: z.string().max(20).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
+      await ensureMediaTable(conn);
+      const cid = Number(input.customerId);
+      const tier = tierForCategory(input.category, input.fileName);
+      let uploaded;
+      try {
+        uploaded = await uploadYabanMedia(input.dataUrl, tier, input.fileName);
+      } catch (err: any) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u5f71\u50cf\u4e0a\u4f20\u5931\u8d25\uff1a" + (err?.message || "unknown") });
+      }
+      const takenAt = input.takenAt && /^\d{4}-\d{2}-\d{2}$/.test(input.takenAt) ? input.takenAt : null;
+      const [res] = (await (conn as any).execute(
+        `INSERT INTO yaban_media
+           (tenant_id, customer_id, category, full_url, thumb_url, mime, file_size, is_lossless,
+            file_name, remark, uploader_id, uploader_role, taken_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        [
+          DEFAULT_TENANT_ID, cid, input.category,
+          uploaded.fullUrl, uploaded.thumbUrl, uploaded.mime, uploaded.fileSize,
+          uploaded.isLossless ? 1 : 0,
+          s(input.fileName), s(input.remark),
+          ctx.user.id ?? null, ctx.user.role ?? null, takenAt,
+        ]
+      )) as any;
+      return { id: Number((res as any).insertId), fullUrl: uploaded.fullUrl, thumbUrl: uploaded.thumbUrl };
+    }),
+
+  // 更新影像备注/分类/拍摄日期（仅 super_admin）
+  updateMedia: adminProcedure
+    .input(z.object({
+      id: z.union([z.number(), z.string()]),
+      remark: z.string().max(500).optional(),
+      category: z.string().max(32).optional(),
+      takenAt: z.string().max(20).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
+      await ensureMediaTable(conn);
+      const sets: string[] = [];
+      const vals: any[] = [];
+      if (input.remark !== undefined) { sets.push("remark = ?"); vals.push(s(input.remark)); }
+      if (input.category !== undefined && input.category) { sets.push("category = ?"); vals.push(input.category); }
+      if (input.takenAt !== undefined) {
+        const t = input.takenAt && /^\d{4}-\d{2}-\d{2}$/.test(input.takenAt) ? input.takenAt : null;
+        sets.push("taken_at = ?"); vals.push(t);
+      }
+      if (sets.length === 0) return { success: true };
+      vals.push(DEFAULT_TENANT_ID, Number(input.id));
+      await (conn as any).execute(
+        `UPDATE yaban_media SET ${sets.join(", ")} WHERE tenant_id = ? AND id = ?`,
+        vals
+      );
+      return { success: true };
+    }),
+
+  // 删除影像（仅 super_admin）：先删 COS 再删数据库
+  deleteMedia: adminProcedure
+    .input(z.object({ id: z.union([z.number(), z.string()]) }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "\u6570\u636e\u5e93\u8fde\u63a5\u5931\u8d25" });
+      await ensureMediaTable(conn);
+      const [rows] = (await (conn as any).execute(
+        `SELECT full_url, thumb_url FROM yaban_media WHERE tenant_id = ? AND id = ? LIMIT 1`,
+        [DEFAULT_TENANT_ID, Number(input.id)]
+      )) as any;
+      const row = (rows as any[])[0];
+      if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "\u5f71\u50cf\u4e0d\u5b58\u5728" });
+      try {
+        await deleteYabanMedia([row.full_url, row.thumb_url]);
+      } catch {
+        // COS \u5220\u9664\u5931\u8d25\u4e0d\u963b\u65ad\u6570\u636e\u5e93\u6e05\u7406
+      }
+      await (conn as any).execute(
+        `DELETE FROM yaban_media WHERE tenant_id = ? AND id = ?`,
+        [DEFAULT_TENANT_ID, Number(input.id)]
       );
       return { success: true };
     }),

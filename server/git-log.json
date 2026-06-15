@@ -1,5 +1,14 @@
 [
   {
+    "hash": "e85108654c3e260573636ef80280364f253b6189",
+    "author": "manus",
+    "date": "2026-06-14T16:38:14+00:00",
+    "message": "fix(yaban): 修复新建顾客页头像区被sticky Tab栏覆盖导致部分不可点击",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "修复新建顾客页头像区被sticky Tab栏覆盖导致部分不可点击"
+  },
+  {
     "hash": "7f0fb00b6ef5bc9296a760f34af8f3533bf204af",
     "author": "manus",
     "date": "2026-06-14T16:26:31+00:00",

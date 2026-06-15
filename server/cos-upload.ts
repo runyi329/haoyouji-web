@@ -195,3 +195,150 @@ export async function batchUploadImagesToCOS(
   );
   return results;
 }
+
+
+// ============================================================
+// 牙伴医学影像分层存储（缩略图 + 高清/无损 双轨）
+// ============================================================
+
+/**
+ * 影像高清份的处理档位
+ * - lossless: 完全无损，原字节原格式直传（X光/根尖片/全景片/CBCT截图/内窥镜等诊断级）
+ * - lightCompress: 轻压缩，最长边2400px、WebP质量92（口内照/面像照/对比照等照片类）
+ * - documentCompress: 文档档，最长边2000px、质量90（知情同意书等）
+ * - rawFile: 原文件直传，不做任何图像处理（CBCT原始数据/口扫stl/DICOM等专业格式）
+ */
+export type YabanMediaTier = 'lossless' | 'lightCompress' | 'documentCompress' | 'rawFile';
+
+const THUMB_MAX = 400;       // 缩略图最长边
+const THUMB_QUALITY = 70;    // 缩略图WebP质量
+
+function parseToBuffer(data: string | Buffer): { buffer: Buffer; mime: string } {
+  if (typeof data !== 'string') {
+    return { buffer: data, mime: 'application/octet-stream' };
+  }
+  const matches = data.match(/^data:([^;]+);base64,(.+)$/);
+  if (matches) {
+    return { buffer: Buffer.from(matches[2], 'base64'), mime: matches[1] };
+  }
+  // 纯base64
+  return { buffer: Buffer.from(data, 'base64'), mime: 'application/octet-stream' };
+}
+
+function extFromMime(mime: string): string {
+  if (mime.includes('webp')) return 'webp';
+  if (mime.includes('png')) return 'png';
+  if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg';
+  if (mime.includes('dicom')) return 'dcm';
+  const tail = mime.split('/')[1];
+  return tail ? tail.replace(/[^a-z0-9]/gi, '') || 'bin' : 'bin';
+}
+
+async function putBuffer(key: string, buffer: Buffer, contentType: string): Promise<string> {
+  await cos.putObject({ Bucket: BUCKET, Region: REGION, Key: key, Body: buffer, ContentType: contentType });
+  return `https://${BUCKET}.cos.${REGION}.myqcloud.com/${key}`;
+}
+
+/**
+ * 生成缩略图（WebP 400px）。对非位图（如stl/dicom）返回 null，由前端用占位图。
+ */
+async function makeThumb(buffer: Buffer): Promise<Buffer | null> {
+  try {
+    return await sharp(buffer)
+      .resize(THUMB_MAX, THUMB_MAX, { fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: THUMB_QUALITY })
+      .toBuffer();
+  } catch {
+    return null; // 非图像格式，无法生成缩略图
+  }
+}
+
+export interface UploadMediaResult {
+  fullUrl: string;
+  thumbUrl: string | null;
+  mime: string;
+  fileSize: number;   // 高清份字节数
+  isLossless: boolean;
+}
+
+/**
+ * 上传一份牙伴影像到COS，按档位处理高清份，并生成缩略图。
+ * @param data base64(dataURL或纯base64) 或 Buffer
+ * @param tier 高清份处理档位
+ * @param fileName 原始文件名（用于扩展名/直传文件命名）
+ * @param folder COS子目录，默认 yaban-media
+ */
+export async function uploadYabanMedia(
+  data: string | Buffer,
+  tier: YabanMediaTier,
+  fileName?: string,
+  folder = 'yaban-media',
+): Promise<UploadMediaResult> {
+  const { buffer: rawBuffer, mime: rawMime } = parseToBuffer(data);
+  const ts = Date.now();
+  const hash = crypto.createHash('md5').update(rawBuffer).digest('hex').slice(0, 12);
+
+  let fullBuffer = rawBuffer;
+  let fullMime = rawMime;
+  let isLossless = false;
+
+  if (tier === 'lossless' || tier === 'rawFile') {
+    // 诊断级 / 专业格式：原字节原格式直传，绝不压缩
+    fullBuffer = rawBuffer;
+    fullMime = rawMime && rawMime !== 'application/octet-stream' ? rawMime : 'application/octet-stream';
+    isLossless = true;
+  } else if (tier === 'lightCompress') {
+    // 照片类：最长边2400、WebP质量92（接近视觉无损）
+    try {
+      fullBuffer = await sharp(rawBuffer)
+        .resize(2400, 2400, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 92 })
+        .toBuffer();
+      fullMime = 'image/webp';
+    } catch {
+      fullBuffer = rawBuffer; fullMime = rawMime; isLossless = true; // 压缩失败兜底原图
+    }
+  } else {
+    // documentCompress：最长边2000、质量90
+    try {
+      fullBuffer = await sharp(rawBuffer)
+        .resize(2000, 2000, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 90 })
+        .toBuffer();
+      fullMime = 'image/webp';
+    } catch {
+      fullBuffer = rawBuffer; fullMime = rawMime; isLossless = true;
+    }
+  }
+
+  // 高清份的key：rawFile保留原扩展名，其余按mime
+  const safeName = (fileName || 'file').replace(/[^\w.\-]/g, '_');
+  const fullExt = tier === 'rawFile' ? (safeName.split('.').pop() || extFromMime(fullMime)) : extFromMime(fullMime);
+  const fullKey = `${folder}/${ts}-${hash}-full.${fullExt}`;
+  const fullUrl = await putBuffer(fullKey, fullBuffer, fullMime);
+
+  // 缩略图（专业格式可能为null）
+  const thumbBuffer = await makeThumb(rawBuffer);
+  let thumbUrl: string | null = null;
+  if (thumbBuffer) {
+    const thumbKey = `${folder}/${ts}-${hash}-thumb.webp`;
+    thumbUrl = await putBuffer(thumbKey, thumbBuffer, 'image/webp');
+  }
+
+  return { fullUrl, thumbUrl, mime: fullMime, fileSize: fullBuffer.length, isLossless };
+}
+
+/**
+ * 删除一条影像在COS上的高清份与缩略图
+ */
+export async function deleteYabanMedia(urls: Array<string | null | undefined>): Promise<void> {
+  for (const url of urls) {
+    if (!url) continue;
+    try {
+      const key = new URL(url).pathname.substring(1);
+      await cos.deleteObject({ Bucket: BUCKET, Region: REGION, Key: key });
+    } catch (e) {
+      console.warn('[COS] 删除影像文件失败（忽略）:', url, e);
+    }
+  }
+}
