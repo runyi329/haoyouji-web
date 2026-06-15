@@ -16,36 +16,15 @@ import { trpc } from "@/lib/trpc";
 // COS 图标 URL 基础路径
 const ICON_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/yaban";
 
-// 我常用的
-const FREQUENT_FEATURES = [
+// 首页上半部分展示的功能（指定顺序）：日程、顾客、随访、运营报表、诊所排班、库存；末位留给「更多」
+const HOME_FEATURES = [
   { name: "日程", icon: `${ICON_BASE}/richeng.webp`, route: "/yaban/schedule" },
   { name: "顾客", icon: `${ICON_BASE}/huanzhe.webp`, route: "/yaban/patients" },
-  { name: "考勤打卡", icon: `${ICON_BASE}/kaoqin_daka.webp`, route: "" },
-];
-
-// 更多功能（4列网格）
-const MORE_FEATURES = [
   { name: "随访", icon: `${ICON_BASE}/suifang.webp`, route: "/yaban/followup" },
   { name: "运营报表", icon: `${ICON_BASE}/yunying_baobiao.webp`, route: "" },
-  { name: "有数", icon: `${ICON_BASE}/youshu.webp`, route: "" },
-  { name: "库存", icon: `${ICON_BASE}/kucun.webp`, route: "" },
-  { name: "采购", icon: `${ICON_BASE}/caigou.webp`, route: "" },
-  { name: "物品", icon: `${ICON_BASE}/wupin.webp`, route: "" },
-  { name: "微信咨询", icon: `${ICON_BASE}/weixin_zixun.webp`, route: "" },
-  { name: "网络预约", icon: `${ICON_BASE}/wangluo_yuyue.webp`, route: "" },
-  { name: "审批", icon: `${ICON_BASE}/shenpi.webp`, route: "" },
-  { name: "工作提醒", icon: `${ICON_BASE}/gongzuo_tixing.webp`, route: "" },
-  { name: "医患视频", icon: `${ICON_BASE}/yihuan_shipin.webp`, route: "" },
-  { name: "运营报表", icon: `${ICON_BASE}/yunying_baobiao_new.webp`, route: "", badge: "新版" },
-  { name: "增值服务", icon: `${ICON_BASE}/zengzhi_fuwu.webp`, route: "" },
-  { name: "领用", icon: `${ICON_BASE}/lingyong.webp`, route: "" },
-  { name: "回访管理", icon: `${ICON_BASE}/huifang_guanli.webp`, route: "" },
-  { name: "技加工", icon: `${ICON_BASE}/ji_jiagong.webp`, route: "" },
   { name: "诊所排班", icon: `${ICON_BASE}/zhensuo_paiban.webp`, route: "" },
+  { name: "库存", icon: `${ICON_BASE}/kucun.webp`, route: "" },
 ];
-
-// 首页上半部分展示的功能（取常用 + 部分更多），共 7 个，末位留给「更多」
-const HOME_FEATURES = [...FREQUENT_FEATURES, ...MORE_FEATURES].slice(0, 7);
 
 
 // 右上角「+」新增菜单项
