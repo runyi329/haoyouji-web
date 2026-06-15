@@ -15,7 +15,7 @@ const ICON_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.c
 
 // 功能入口配置 - 使用COS图片
 const FEATURE_ENTRIES = [
-  { icon: `${ICON_BASE}/xiangxi_ziliao.webp`, label: '详细资料', route: '' },
+  { icon: `${ICON_BASE}/xiangxi_ziliao.webp`, label: '详细资料', route: 'profile' },
   { icon: `${ICON_BASE}/huiyuan_xinxi.webp`, label: '会员信息', route: '' },
   { icon: `${ICON_BASE}/yuyue_jilu.webp`, label: '预约记录', route: '' },
   { icon: `${ICON_BASE}/suifang_jilu.webp`, label: '随访记录', route: '' },
@@ -183,7 +183,9 @@ export default function YabanPatientDetail() {
             <button
               key={idx}
               onClick={() => {
-                if (feat.route === 'media') {
+                if (feat.route === 'profile') {
+                  navigate(`/yaban/patient/${id}/profile`);
+                } else if (feat.route === 'media') {
                   navigate(`/yaban/patient/${id}/media`);
                 } else if (feat.route === 'charge') {
                   navigate(`/yaban/patient/${id}/charge`);
