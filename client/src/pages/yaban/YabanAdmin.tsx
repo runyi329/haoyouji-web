@@ -62,6 +62,14 @@ export default function YabanAdmin() {
   const overview = trpc.yabanClinic.adminOverview.useQuery();
   const list = trpc.yabanClinic.adminListClinics.useQuery({ keyword });
 
+  // 平台层权限：创始人全开；创始股东按表；关闭的权限在其视角内隐身
+  const meQuery = trpc.yabanRole.myMembership.useQuery();
+  const me = meQuery.data as any;
+  const isPureFounder: boolean = !!me?.isPureFounder;
+  const pp: Record<string, boolean> = me?.platformPerms || {};
+  const canApproveClinic = isPureFounder || !!pp.approve_clinic;
+  const canManagePermMatrix = isPureFounder || !!pp.manage_perm_matrix;
+
   const approve = trpc.yabanClinic.adminApprove.useMutation({
     onSuccess: () => {
       toast.success("已确认开通");
@@ -149,7 +157,7 @@ export default function YabanAdmin() {
         <div className="mt-2 text-[11px] text-[#DC2626] bg-[#FDECEC] rounded-lg px-2 py-1">驳回原因：{c.rejectReason}</div>
       )}
 
-      {showActions && c.status === "pending" && (
+      {showActions && c.status === "pending" && canApproveClinic && (
         <div className="mt-3 flex gap-2">
           <button
             onClick={() => onApprove(c)}
@@ -192,13 +200,16 @@ export default function YabanAdmin() {
               <div className="text-lg font-bold">牙伴平台大数据管理</div>
               <p className="text-xs text-white/85 mt-1">全平台医院经营数据总览，数据来自各院实际运营</p>
             </div>
-            <button
-              onClick={() => setFounderTeamOpen(true)}
-              className="shrink-0 flex items-center gap-1.5 rounded-xl bg-white/15 hover:bg-white/25 active:bg-white/30 px-3 py-2 text-left leading-tight transition-colors"
-            >
-              <Crown className="w-4 h-4 text-[#FFD876] shrink-0" />
-              <span className="text-[12px] font-semibold">牙伴平台<br/>创始团队</span>
-            </button>
+            {/* 创始团队入口：仅纯创始人可见（创始股东隐身） */}
+            {isPureFounder && (
+              <button
+                onClick={() => setFounderTeamOpen(true)}
+                className="shrink-0 flex items-center gap-1.5 rounded-xl bg-white/15 hover:bg-white/25 active:bg-white/30 px-3 py-2 text-left leading-tight transition-colors"
+              >
+                <Crown className="w-4 h-4 text-[#FFD876] shrink-0" />
+                <span className="text-[12px] font-semibold">牙伴平台<br/>创始团队</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -232,8 +243,8 @@ export default function YabanAdmin() {
         </div>
       </div>
 
-      {/* 待审批 */}
-      {pendingClinics.length > 0 && (
+      {/* 待审批（仅有审批权限者可见） */}
+      {pendingClinics.length > 0 && canApproveClinic && (
         <div className="max-w-lg mx-auto px-4 mt-4">
           <div className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1">
             <Clock className="w-4 h-4 text-[#D97706]" /> 待审批医院（{pendingClinics.length}）
@@ -253,12 +264,14 @@ export default function YabanAdmin() {
           <div className="text-sm font-bold text-gray-700 flex items-center gap-1">
             <Building2 className="w-4 h-4 text-[#1E88D6]" /> 医院列表（{activeClinics.length}）
           </div>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#2196C8] text-white text-xs font-medium active:bg-[#1B7FB0]"
-          >
-            <Plus className="w-3.5 h-3.5" /> 新建医院
-          </button>
+          {canApproveClinic && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#2196C8] text-white text-xs font-medium active:bg-[#1B7FB0]"
+            >
+              <Plus className="w-3.5 h-3.5" /> 新建医院
+            </button>
+          )}
         </div>
         {list.isLoading ? (
           <div className="bg-white rounded-2xl shadow-sm p-8 flex justify-center"><Loader2 className="w-6 h-6 text-[#2196C8] animate-spin" /></div>
@@ -347,6 +360,12 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
   const utils = trpc.useUtils();
   const [, navigate] = useLocation();
   const detail = trpc.yabanClinic.adminClinicDetail.useQuery({ clinicId });
+  // 平台层权限：控制权限管理下钻 / 医院编辑 / 任命院长等入口的隐身
+  const detailMe = trpc.yabanRole.myMembership.useQuery().data as any;
+  const detailPure: boolean = !!detailMe?.isPureFounder;
+  const detailPP: Record<string, boolean> = detailMe?.platformPerms || {};
+  const canManagePermMatrix = detailPure || !!detailPP.manage_perm_matrix;
+  const canManageClinic = detailPure || !!detailPP.approve_clinic;
   const [userKw, setUserKw] = useState("");
   const [searching, setSearching] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -434,10 +453,10 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
               </div>
             </div>
 
-            {/* 权限管理入口（创始人下钻到该院成员×权限矩阵） */}
-            {d?.clinic?.tenantId ? (
+            {/* 权限管理入口（创始人下钻到该院成员×权限矩阵；按平台权限隐身） */}
+            {d?.clinic?.tenantId && canManagePermMatrix ? (
               <button
-                onClick={() => navigate(`/yaban/settings/roles?tenant=${d.clinic.tenantId}`)}
+                onClick={() => navigate(`/yaban/settings/roles?tenant=${d?.clinic?.tenantId}`)}
                 className="w-full bg-white rounded-2xl p-4 flex items-center justify-between active:bg-gray-50"
               >
                 <span className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
@@ -454,15 +473,17 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
                   <Building2 className="w-4 h-4 text-[#1E88D6]" /> 医院详细信息
                 </div>
                 {!editing ? (
-                  <button
-                    onClick={() => {
-                      setForm(fromClinic(d?.clinic));
-                      setEditing(true);
-                    }}
-                    className="inline-flex items-center gap-1 text-xs text-[#1E88D6] active:opacity-60"
-                  >
-                    <Pencil className="w-3.5 h-3.5" /> {d?.clinic?.name ? "编辑" : "命名/补全"}
-                  </button>
+                  canManageClinic ? (
+                    <button
+                      onClick={() => {
+                        setForm(fromClinic(d?.clinic));
+                        setEditing(true);
+                      }}
+                      className="inline-flex items-center gap-1 text-xs text-[#1E88D6] active:opacity-60"
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> {d?.clinic?.name ? "编辑" : "命名/补全"}
+                    </button>
+                  ) : null
                 ) : (
                   <button onClick={() => setEditing(false)} className="text-xs text-gray-400 active:opacity-60">取消</button>
                 )}
@@ -504,7 +525,8 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
               )}
             </div>
 
-            {/* 任命院长/股东 */}
+            {/* 任命院长/股东（仅医院管理权限者可见） */}
+            {canManageClinic && (
             <div className="bg-white rounded-2xl p-4">
               <div className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1">
                 <UserPlus className="w-4 h-4 text-[#1E88D6]" /> 任命院长/股东
@@ -552,6 +574,7 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
                 </div>
               )}
             </div>
+            )}
 
             {/* 成员名册 */}
             <div className="bg-white rounded-2xl p-4">
@@ -651,6 +674,9 @@ function FounderTeamPanel({ open, onClose }: { open: boolean; onClose: () => voi
   const list = founders.data || [];
   const titleLabel = (k: string) => (k === "founder" ? "创始人" : "创始股东");
 
+  // 某创始股东的平台权限设置弹窗
+  const [permTarget, setPermTarget] = useState<{ userId: number; name: string } | null>(null);
+
   if (!open) return null;
 
   return (
@@ -687,15 +713,23 @@ function FounderTeamPanel({ open, onClose }: { open: boolean; onClose: () => voi
                     {titleLabel(f.role_key)}
                   </span>
                   {f.role_key === "co_founder" && (
-                    <button
-                      onClick={() => {
-                        if (window.confirm(`撤销「${f.name || f.username}」的创始股东身份？`)) revoke.mutate({ userId: f.user_id });
-                      }}
-                      disabled={revoke.isPending}
-                      className="text-[11px] text-[#DC2626] active:opacity-60 disabled:opacity-40"
-                    >
-                      撤销
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setPermTarget({ userId: f.user_id, name: f.name || f.username })}
+                        className="text-[11px] px-2 py-0.5 rounded-full bg-[#EAF4FE] text-[#1E88D6] active:opacity-60 inline-flex items-center gap-0.5"
+                      >
+                        <UserCog className="w-3 h-3" /> 权限设置
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`撤销「${f.name || f.username}」的创始股东身份？`)) revoke.mutate({ userId: f.user_id });
+                        }}
+                        disabled={revoke.isPending}
+                        className="text-[11px] text-[#DC2626] active:opacity-60 disabled:opacity-40"
+                      >
+                        撤销
+                      </button>
+                    </>
                   )}
                 </div>
               ))}
@@ -762,6 +796,83 @@ function FounderTeamPanel({ open, onClose }: { open: boolean; onClose: () => voi
             )}
           </div>
         </div>
+
+        {/* 创始股东平台权限设置弹窗 */}
+        {permTarget && (
+          <PlatformPermSheet
+            userId={permTarget.userId}
+            name={permTarget.name}
+            onClose={() => setPermTarget(null)}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ============ 创始股东平台权限设置（按 group 分组的开关面板） ============ */
+function PlatformPermSheet({ userId, name, onClose }: { userId: number; name: string; onClose: () => void }) {
+  const utils = trpc.useUtils();
+  const perms = trpc.yabanRole.getMemberPlatformPerms.useQuery({ userId });
+  const setPerm = trpc.yabanRole.setPlatformPerm.useMutation({
+    onSuccess: () => {
+      utils.yabanRole.getMemberPlatformPerms.invalidate({ userId });
+    },
+    onError: (e) => toast.error(e.message || "保存失败"),
+  });
+
+  const items = (perms.data || []) as any[];
+  // 按 group 分组（保持后端顺序）
+  const groups: { name: string; items: any[] }[] = [];
+  for (const it of items) {
+    let g = groups.find((x) => x.name === it.group);
+    if (!g) { g = { name: it.group, items: [] }; groups.push(g); }
+    g.items.push(it);
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[85vh] overflow-y-auto p-4">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-base font-bold text-gray-800 flex items-center gap-1.5">
+            <UserCog className="w-5 h-5 text-[#1E88D6]" /> 平台权限设置
+          </span>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 active:bg-gray-200">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+        <div className="text-xs text-gray-400 mb-3">为「{name}」逐项开启平台权限；关闭的权限在其视角内隐身。创始股东默认仅可查看平台大数据汇总。</div>
+
+        {perms.isLoading ? (
+          <div className="py-6 flex justify-center"><Loader2 className="w-5 h-5 text-[#2196C8] animate-spin" /></div>
+        ) : (
+          <div className="space-y-4">
+            {groups.map((g) => (
+              <div key={g.name}>
+                <div className="text-xs font-bold text-gray-500 mb-1.5">{g.name}</div>
+                <div className="space-y-2">
+                  {g.items.map((it) => (
+                    <div key={it.key} className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm text-gray-800">{it.name}</div>
+                        {it.desc && <div className="text-[11px] text-gray-400 mt-0.5">{it.desc}</div>}
+                      </div>
+                      <button
+                        onClick={() => setPerm.mutate({ userId, permKey: it.key, enabled: !it.enabled })}
+                        disabled={setPerm.isPending}
+                        className={`relative w-11 h-6 rounded-full transition-colors shrink-0 disabled:opacity-60 ${it.enabled ? "bg-[#2196C8]" : "bg-gray-200"}`}
+                        aria-label={it.name}
+                      >
+                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${it.enabled ? "translate-x-5" : ""}`} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

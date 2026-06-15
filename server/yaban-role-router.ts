@@ -72,6 +72,35 @@ export const CUSTOMER_PERM_DEFS: PermDef[] = [
   { key: "c_shop_order", name: "商城下单", group: "互动", type: "toggle", subject: "customer", desc: "能否在商城下单" },
 ];
 
+// ============ 平台层权限定义（独立于医院，专用于创始股东 co_founder）============
+// 创始人(founder) 永远全开、不受此表限制；创始股东(co_founder) 默认仅看汇总、其余全关。
+// type 全部为 toggle：开=允许，关=在其视角内隐身。
+export interface PlatformPermDef {
+  key: string;
+  name: string;
+  group: string;
+  desc: string;
+  defaultOn: boolean; // 新创始股东的默认值
+}
+export const PLATFORM_PERM_DEFS: PlatformPermDef[] = [
+  { key: "view_dashboard", name: "查看平台大数据汇总", group: "数据查看", desc: "查看全平台经营汇总数据（默认开放）", defaultOn: true },
+  { key: "view_clinic_detail", name: "查看各医院经营明细", group: "数据查看", desc: "下钻查看单家医院的经营明细", defaultOn: false },
+  { key: "view_customer", name: "查看顾客名单与明细", group: "数据查看", desc: "查看各院顾客名单与档案明细", defaultOn: false },
+  { key: "view_finance", name: "查看财务/分红明细", group: "数据查看", desc: "查看平台财务与分红明细", defaultOn: false },
+  { key: "unmask_sensitive", name: "查看敏感信息(不脱敏)", group: "数据查看", desc: "关闭时手机号/证件/精确金额等脱敏显示", defaultOn: false },
+  { key: "export_data", name: "导出/下载平台数据", group: "数据导出", desc: "导出或下载平台级数据", defaultOn: false },
+  { key: "backup_data", name: "备份平台数据", group: "数据导出", desc: "备份平台级数据", defaultOn: false },
+  { key: "manage_team", name: "管理创始团队", group: "管理", desc: "任命/撤销创始团队成员", defaultOn: false },
+  { key: "approve_clinic", name: "审批/管理医院", group: "管理", desc: "审批开通、命名编辑、新建医院", defaultOn: false },
+  { key: "manage_perm_matrix", name: "管理医院权限矩阵", group: "管理", desc: "跨院修改员工/顾客权限矩阵", defaultOn: false },
+];
+export const PLATFORM_PERM_MAP: Record<string, PlatformPermDef> = Object.fromEntries(
+  PLATFORM_PERM_DEFS.map((p) => [p.key, p])
+);
+export const PLATFORM_DEFAULT: Record<string, boolean> = Object.fromEntries(
+  PLATFORM_PERM_DEFS.map((p) => [p.key, p.defaultOn])
+);
+
 // 全部权限定义（合集，供建表与校验）
 export const PERM_DEFS = STAFF_PERM_DEFS; // 兼容旧引用：默认指员工权限
 export const ALL_STAFF_PERM_KEYS = STAFF_PERM_DEFS.map((p) => p.key);
@@ -247,6 +276,19 @@ export async function ensureRoleTables(conn: any) {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='牙伴顾客个人权限'
   `);
 
+  // 平台层权限（创始股东的逼项开关，独立于医院）
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_platform_perm (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      perm_key VARCHAR(40) NOT NULL,
+      enabled TINYINT NOT NULL DEFAULT 0,
+      updated_by INT DEFAULT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_user_pperm (user_id, perm_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='牙伴平台层权限(创始股东)'
+  `);
+
   // 兼容升级：为旧表补 scope 列（若不存在）
   await ensureScopeColumn(conn, "yaban_role_perm_switch");
   await ensureScopeColumn(conn, "yaban_member_perm_switch");
@@ -310,6 +352,64 @@ async function getFounderTitle(conn: any, ctx: any): Promise<string | null> {
     [ctx.user.id]
   )) as any;
   return (rows as any[])[0]?.role_key || null;
+}
+
+// 纯创始人（founder 或 super_admin）：拥有平台最高权限，不受平台权限表限制
+async function isPureFounder(conn: any, ctx: any): Promise<boolean> {
+  if (isSuperAdmin(ctx)) return true;
+  const [rows] = (await conn.execute(
+    `SELECT id FROM yaban_platform_role WHERE user_id=? AND role_key='founder' AND status='active' LIMIT 1`,
+    [ctx.user.id]
+  )) as any;
+  return !!(rows as any[])[0];
+}
+
+// 是否仅为创始股东（co_founder 且非 founder）
+async function isCoFounderOnly(conn: any, ctx: any): Promise<boolean> {
+  if (await isPureFounder(conn, ctx)) return false;
+  const [rows] = (await conn.execute(
+    `SELECT id FROM yaban_platform_role WHERE user_id=? AND role_key='co_founder' AND status='active' LIMIT 1`,
+    [ctx.user.id]
+  )) as any;
+  return !!(rows as any[])[0];
+}
+
+// 读取某用户的平台权限（返回 perm_key->bool，未设置的取默认值）
+async function getPlatformPerms(conn: any, userId: number): Promise<Record<string, boolean>> {
+  const result: Record<string, boolean> = { ...PLATFORM_DEFAULT };
+  const [rows] = (await conn.execute(
+    `SELECT perm_key, enabled FROM yaban_platform_perm WHERE user_id=?`,
+    [userId]
+  )) as any;
+  for (const r of rows as any[]) {
+    if (r.perm_key in result) result[r.perm_key] = !!r.enabled;
+  }
+  return result;
+}
+
+// 计算当前登录者的平台权限：创始人全开；创始股东按表；其他全关
+async function getMyPlatformPerms(conn: any, ctx: any): Promise<{ perms: Record<string, boolean>; isPureFounder: boolean; isCoFounder: boolean }> {
+  const pure = await isPureFounder(conn, ctx);
+  if (pure) {
+    const all = Object.fromEntries(PLATFORM_PERM_DEFS.map((p) => [p.key, true]));
+    return { perms: all, isPureFounder: true, isCoFounder: false };
+  }
+  const co = await isCoFounderOnly(conn, ctx);
+  if (co) {
+    return { perms: await getPlatformPerms(conn, ctx.user.id), isPureFounder: false, isCoFounder: true };
+  }
+  const none = Object.fromEntries(PLATFORM_PERM_DEFS.map((p) => [p.key, false]));
+  return { perms: none, isPureFounder: false, isCoFounder: false };
+}
+
+// 断言仅创始人可用（创始股东需额外拥有对应平台权限才能通过）
+async function assertPlatformPerm(conn: any, ctx: any, permKey: string) {
+  if (await isPureFounder(conn, ctx)) return;
+  if (await isCoFounderOnly(conn, ctx)) {
+    const perms = await getPlatformPerms(conn, ctx.user.id);
+    if (perms[permKey]) return;
+  }
+  throw new TRPCError({ code: "FORBIDDEN", message: "无此操作权限" });
 }
 
 async function getMember(conn: any, userId: number, tenantId = DEFAULT_TENANT_ID) {
@@ -454,6 +554,7 @@ export const yabanRoleRouter = router({
     const { scopes, isFounder: founder, isSuperAdmin: sa, member } = await getUserPermScopes(conn, ctx);
     const canManage = founder || sa || (member && CLINIC_MANAGE_ROLES.includes(member.role_key));
     const founderTitle = founder ? await getFounderTitle(conn, ctx) : null;
+    const platform = await getMyPlatformPerms(conn, ctx);
 
     // 兼容旧字段 permissions：scope != none 的权限 key 列表
     const permissions = Object.keys(scopes).filter((k) => scopes[k] !== "none");
@@ -481,6 +582,10 @@ export const yabanRoleRouter = router({
       isSuperAdmin: sa,
       founderTitle,
       roleBadges: badgeKeys,
+      // 平台层权限：创始人全开，创始股东按表，其他全关
+      platformPerms: platform.perms,
+      isPureFounder: platform.isPureFounder,
+      isCoFounder: platform.isCoFounder,
     };
   }),
 
@@ -967,7 +1072,8 @@ export const yabanRoleRouter = router({
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureRoleTables(conn);
-      if (!(await isFounder(conn, ctx))) {
+      // 任命只允许纯创始人（创始股东为虚衔，不得任命/撤销）
+      if (!(await isPureFounder(conn, ctx))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "仅牙伴创始人可操作" });
       }
       let targetUser: any = null;
@@ -1006,7 +1112,8 @@ export const yabanRoleRouter = router({
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureRoleTables(conn);
-      if (!(await isFounder(conn, ctx))) {
+      // 撤销只允许纯创始人
+      if (!(await isPureFounder(conn, ctx))) {
         throw new TRPCError({ code: "FORBIDDEN", message: "仅牙伴创始人可操作" });
       }
       if (input.userId === 870413) {
@@ -1015,6 +1122,70 @@ export const yabanRoleRouter = router({
       await conn.execute(
         `DELETE FROM yaban_platform_role WHERE user_id=? AND role_key IN ('founder','co_founder')`,
         [input.userId]
+      );
+      // 同时清理该用户的平台层权限记录
+      await conn.execute(`DELETE FROM yaban_platform_perm WHERE user_id=?`, [input.userId]);
+      return { success: true };
+    }),
+
+  // ============ 平台层权限：权限项定义列表（数据驱动） ============
+  listPlatformPermDefs: protectedProcedure.query(async () => {
+    return PLATFORM_PERM_DEFS.map((d) => ({
+      key: d.key,
+      name: d.name,
+      group: d.group,
+      desc: d.desc,
+      defaultOn: d.defaultOn,
+    }));
+  }),
+
+  // ============ 创始人专属：读取某创始股东的平台权限 ============
+  getMemberPlatformPerms: protectedProcedure
+    .input(z.object({ userId: z.number().int() }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureRoleTables(conn);
+      if (!(await isFounder(conn, ctx))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅牙伴创始人可查看" });
+      }
+      const perms = await getPlatformPerms(conn, input.userId);
+      return PLATFORM_PERM_DEFS.map((d) => ({
+        key: d.key,
+        name: d.name,
+        group: d.group,
+        desc: d.desc,
+        enabled: !!perms[d.key],
+      }));
+    }),
+
+  // ============ 创始人专属：设置某创始股东的某项平台权限（仅纯创始人可写） ============
+  setPlatformPerm: protectedProcedure
+    .input(z.object({ userId: z.number().int(), permKey: z.string().min(1), enabled: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureRoleTables(conn);
+      if (!(await isPureFounder(conn, ctx))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "仅牙伴创始人可设置" });
+      }
+      if (!PLATFORM_PERM_MAP[input.permKey]) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "未知的权限项" });
+      }
+      // 目标用户必须是创始股东
+      const [rows] = (await conn.execute(
+        `SELECT role_key FROM yaban_platform_role WHERE user_id=? AND role_key IN ('founder','co_founder') AND status='active' LIMIT 1`,
+        [input.userId]
+      )) as any;
+      const targetRole = (rows as any[])[0]?.role_key;
+      if (targetRole !== "co_founder") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "仅可为创始股东设置平台权限" });
+      }
+      await conn.execute(
+        `INSERT INTO yaban_platform_perm (user_id, perm_key, enabled, updated_by)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE enabled=VALUES(enabled), updated_by=VALUES(updated_by)`,
+        [input.userId, input.permKey, input.enabled ? 1 : 0, ctx.user.id]
       );
       return { success: true };
     }),
