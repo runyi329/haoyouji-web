@@ -196,23 +196,26 @@ export default function YabanProfile() {
               type="button"
               onClick={() => avatarInputRef.current?.click()}
               disabled={uploadAvatar.isPending}
-              className="relative w-16 h-16 rounded-full bg-white/20 ring-2 ring-white/40 overflow-hidden flex items-center justify-center shrink-0 active:scale-95 transition"
+              className="relative w-16 h-16 shrink-0 active:scale-95 transition"
               aria-label="更换头像"
             >
-              {avatar ? (
-                <img src={avatar} alt="头像" className="w-full h-full object-cover" />
-              ) : (
-                <User className="w-8 h-8 text-white" />
-              )}
-              {/* 上传中遮罩 */}
-              {uploadAvatar.isPending && (
-                <span className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                  <Loader2 className="w-5 h-5 text-white animate-spin" />
-                </span>
-              )}
-              {/* 右下角相机角标（小号、完全收进圆圈内部） */}
-              <span className="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-white flex items-center justify-center shadow-sm">
-                <Camera className="w-2.5 h-2.5 text-[#2196C8]" />
+              {/* 内层圆形裁剪层：只负责裁切头像图片 */}
+              <span className="absolute inset-0 rounded-full bg-white/20 ring-2 ring-white/40 overflow-hidden flex items-center justify-center">
+                {avatar ? (
+                  <img src={avatar} alt="头像" className="w-full h-full object-cover" />
+                ) : (
+                  <User className="w-8 h-8 text-white" />
+                )}
+                {/* 上传中遮罩 */}
+                {uploadAvatar.isPending && (
+                  <span className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 text-white animate-spin" />
+                  </span>
+                )}
+              </span>
+              {/* 右下角相机角标：一半在圈内、一半探出圈外，置于最上层不被裁切 */}
+              <span className="absolute -bottom-0.5 -right-0.5 z-10 w-5 h-5 rounded-full bg-white flex items-center justify-center ring-2 ring-white shadow-md">
+                <Camera className="w-3 h-3 text-[#2196C8]" />
               </span>
             </button>
             <input
