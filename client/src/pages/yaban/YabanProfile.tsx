@@ -3,6 +3,7 @@
  * 路由：/yaban/profile
  * 风格：蓝色系，沿用牙伴整体清爽蓝白风
  */
+import { useRef } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
@@ -18,11 +19,14 @@ import {
   ChevronRight,
   Phone,
   LogOut,
+  Camera,
+  Loader2,
 } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { compressAvatar } from "@/utils/imageUtils";
 
 type RowItem = {
   key: string;
@@ -34,8 +38,41 @@ type RowItem = {
 
 export default function YabanProfile() {
   const [, navigate] = useLocation();
+  const utils = trpc.useUtils();
   const { data: user } = trpc.auth.me.useQuery();
   const { logout } = useAuth();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  // 头像上传：复用 auth.uploadAvatar（与脉动版同一接口），先压缩再上传
+  const uploadAvatar = trpc.auth.uploadAvatar.useMutation({
+    onSuccess: () => {
+      toast.success("头像已更新");
+      utils.auth.me.invalidate();
+    },
+    onError: (e) => toast.error(e.message || "头像上传失败"),
+  });
+
+  const onPickAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("请选择图片文件");
+      e.target.value = "";
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("图片大小不能超过 5MB");
+      e.target.value = "";
+      return;
+    }
+    try {
+      const compressed = await compressAvatar(file, 256, 0.8);
+      uploadAvatar.mutate({ imageData: compressed });
+    } catch {
+      toast.error("图片处理失败，请重试");
+    }
+    e.target.value = "";
+  };
 
   const handleLogout = async () => {
     if (!window.confirm("确认退出当前账号？")) return;
@@ -155,13 +192,36 @@ export default function YabanProfile() {
         <div className="max-w-lg mx-auto px-4 pt-4 pb-6">
           <div className="text-sm font-bold mb-4">我的</div>
           <div className="flex items-center gap-3">
-            <div className="w-16 h-16 rounded-full bg-white/20 ring-2 ring-white/40 overflow-hidden flex items-center justify-center shrink-0">
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadAvatar.isPending}
+              className="relative w-16 h-16 rounded-full bg-white/20 ring-2 ring-white/40 overflow-hidden flex items-center justify-center shrink-0 active:scale-95 transition"
+              aria-label="更换头像"
+            >
               {avatar ? (
                 <img src={avatar} alt="头像" className="w-full h-full object-cover" />
               ) : (
                 <User className="w-8 h-8 text-white" />
               )}
-            </div>
+              {/* 上传中遮罩 */}
+              {uploadAvatar.isPending && (
+                <span className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 text-white animate-spin" />
+                </span>
+              )}
+              {/* 右下角相机角标 */}
+              <span className="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-white flex items-center justify-center ring-1 ring-[#2196C8]/30 shadow-sm">
+                <Camera className="w-3 h-3 text-[#2196C8]" />
+              </span>
+            </button>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={onPickAvatar}
+            />
             <div className="min-w-0 flex-1">
               <div className="text-lg font-bold truncate">{displayName}</div>
               <div className="flex items-center gap-1 text-xs text-white/85 mt-1">
