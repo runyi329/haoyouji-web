@@ -2,7 +2,7 @@
  * 牙伴齿科管理 - 设置子页
  * 路由：/yaban/settings
  * 风格：蓝色系，沿用牙伴整体清爽蓝白风
- * 功能：账号资料编辑（昵称/手机号/头像）、门诊员工与角色权限入口、关于、退出登录
+ * 功能：账号资料编辑（昵称/手机号/头像）、权限管理入口、关于、退出登录
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -192,8 +192,8 @@ export default function YabanSettings() {
               <ShieldCheck className="w-5 h-5 text-[#1E88D6]" />
             </span>
             <span className="flex-1 text-left">
-              <span className="block text-sm font-medium text-gray-800">门诊员工与角色权限</span>
-              <span className="block text-xs text-gray-400 mt-0.5">为门诊员工分配角色与权限</span>
+              <span className="block text-sm font-medium text-gray-800">权限管理</span>
+              <span className="block text-xs text-gray-400 mt-0.5">为员工与顾客逐项设置权限</span>
             </span>
             <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
           </button>

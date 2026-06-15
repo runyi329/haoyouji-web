@@ -14,7 +14,6 @@ import {
   Wallet,
   ShoppingBag,
   Ticket,
-  Headset,
   Settings,
   ChevronRight,
   Phone,
@@ -184,12 +183,6 @@ export default function YabanProfile() {
       icon: <Ticket className="w-5 h-5 text-[#1E88D6]" />,
       label: "核销记录",
       onClick: () => navigate("/yaban/profile/verify-records"),
-    },
-    {
-      key: "advisor",
-      icon: <Headset className="w-5 h-5 text-[#1E88D6]" />,
-      label: "我的专属服务顾问",
-      onClick: () => wip("专属服务顾问"),
     },
   ];
 
