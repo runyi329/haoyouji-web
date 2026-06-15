@@ -1851,14 +1851,23 @@ ${klinesSummary}
         
         // 设置cookie
         const cookieOptions = getSessionCookieOptions(ctx.req);
-        ctx.res.cookie(COOKIE_NAME, sessionToken, {
+                ctx.res.cookie(COOKIE_NAME, sessionToken, {
           ...cookieOptions,
           maxAge: ONE_YEAR_MS,
         });
-        
+        // 解析该用户的生效版本，用于前端记住登录页皮肤（失败不影响登录）
+        let loginUi = "maidong";
+        try {
+          const { resolveUserVersion } = await import('./version-resolver');
+          const version = await resolveUserVersion(user.id);
+          loginUi = version.loginUi || "maidong";
+        } catch (e) {
+          console.warn('[loginWithPassword] resolveUserVersion failed:', e instanceof Error ? e.message : e);
+        }
         return {
           success: true,
           token: sessionToken,  // 返回token供前端存储到localStorage
+          loginUi,  // 该用户生效版本对应的登录页皮肤（maidong/yaban），供前端记住
           user: {
             id: user.id,
             username: user.username,
@@ -1867,7 +1876,6 @@ ${klinesSummary}
           },
         };
       }),
-    
     // 用户名密码注册
     registerWithPassword: publicProcedure
       .input(z.object({

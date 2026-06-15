@@ -101,9 +101,22 @@ export default function Login() {
       setRegInviteCode(inviteCode);
       setActiveTab("register");
     }
+    // 皮肤优先级：URL 参数 > localStorage 记忆（上次登录的版本）> 默认脉动
     const uiParam = (params.get("ui") || params.get("v") || "").toLowerCase();
-    if (uiParam === "yaban") setUi("yaban");
-    else if (uiParam === "maidong") setUi("maidong");
+    if (uiParam === "yaban") {
+      setUi("yaban");
+    } else if (uiParam === "maidong") {
+      setUi("maidong");
+    } else {
+      // 无 URL 参数时（如微信搜索进入），读取上次登录记住的版本
+      try {
+        const remembered = (localStorage.getItem("_login_ui") || "").toLowerCase();
+        if (remembered === "yaban") setUi("yaban");
+        else if (remembered === "maidong") setUi("maidong");
+      } catch (e) {
+        // localStorage 不可用时忽略，保持默认脉动
+      }
+    }
   }, []);
 
   // 长按计时器
@@ -138,6 +151,12 @@ export default function Login() {
       } else {
         await clearCredentials();
       }
+      // 记住该账号生效版本的登录页皮肤，供下次（即使从微信搜索进入、网址不带参数）自动还原
+      try {
+        if (data.loginUi === "yaban" || data.loginUi === "maidong") {
+          localStorage.setItem("_login_ui", data.loginUi);
+        }
+      } catch (e) {}
       toast.success("登录成功！");
       clearAllCacheAndNavigate(data.token);
     },
