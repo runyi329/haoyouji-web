@@ -130,13 +130,13 @@ export default function YabanPatientDetail() {
           </div>
           {/* 右上角：照片单元格（方格渐变底 + 居中圆形头像） */}
           <div
-            className="w-[96px] aspect-square self-start border-r border-b border-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center"
+            className="h-[68px] w-[68px] self-start border-r border-b border-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center"
             style={{ background: `linear-gradient(135deg, ${avatarBg(patient.avatarKey)} 0%, ${avatarBg(patient.avatarKey)}99 100%)` }}
           >
             <img
               src={avatarSrc(patient.avatarKey)}
               alt={patient.name}
-              className="w-[78px] h-[78px] rounded-full object-cover bg-white/30"
+              className="w-[56px] h-[56px] rounded-full object-cover bg-white/30"
             />
           </div>
         </div>
@@ -195,9 +195,9 @@ export default function YabanPatientDetail() {
 function InfoItem({ label, value, full, wide }: { label: string; value: string; full?: boolean; wide?: boolean }) {
   const basis = full ? 'w-full' : wide ? 'basis-[48%] grow' : 'grow basis-[30%]';
   return (
-    <div className={`${basis} min-w-0 border-r border-b border-gray-200 px-2.5 py-1.5`}>
-      <div className="text-[11px] text-gray-400 leading-tight">{label}</div>
-      <div className="text-[13px] text-gray-700 leading-snug break-words">{value}</div>
+    <div className={`${basis} min-w-0 border-r border-b border-gray-200 px-2.5 py-1`}>
+      <div className="text-[10px] text-gray-400 leading-tight">{label}</div>
+      <div className="text-[12.5px] text-gray-700 leading-tight break-words">{value}</div>
     </div>
   );
 }
