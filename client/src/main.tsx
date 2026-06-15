@@ -71,6 +71,14 @@ const trpcFetch: typeof globalThis.fetch = (input, init) => {
   if (viewAsUserId) {
     headers.set('x-view-as-user-id', viewAsUserId);
   }
+  // 牙伴多门店：注入当前选中门店 tenant_id（首页切店时写入 localStorage）
+  // 后端据此隔离顾客等业务数据；未设置时后端回退到用户的默认门店
+  try {
+    const curTenant = localStorage.getItem('yaban_current_tenant');
+    if (curTenant && /^\d+$/.test(curTenant)) {
+      headers.set('x-yaban-tenant', curTenant);
+    }
+  } catch (e) {}
   return globalThis.fetch(input, {
     ...(init ?? {}),
     headers,

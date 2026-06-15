@@ -91,10 +91,18 @@ export default function YabanHome() {
     clinics.find((c) => c.tenantId === currentTenantId)?.name ||
     (clinics.length > 0 ? clinics[0].name : "暂无门店");
 
+  const utils = trpc.useUtils();
   const selectClinic = (tid: number) => {
+    if (tid === currentTenantId) {
+      setShowClinicPicker(false);
+      return;
+    }
     setCurrentTenantId(tid);
     try { localStorage.setItem("yaban_current_tenant", String(tid)); } catch {}
     setShowClinicPicker(false);
+    // 多门店：切店后失效所有查询缓存，使顾客/统计等数据按新门店重新拉取
+    try { utils.invalidate(); } catch {}
+    toast.success(`已切换门店`);
   };
 
   const handleFeatureClick = (name: string, route?: string) => {

@@ -43,6 +43,57 @@ function tierForCategory(category: string, fileName?: string): YabanMediaTier {
 
 const DEFAULT_TENANT_ID = 1;
 
+// ===================== 多门店：解析当前请求的门店 tenant_id =====================
+// 来源：前端统一 fetch 注入的请求头 x-yaban-tenant（首页切店时写入 localStorage）
+// 安全：必须校验该用户确实是这家门店的在职成员（平台创始人放行），否则回退到用户默认门店
+// 回退顺序：合法的 header 门店 -> 用户第一家在职门店 -> DEFAULT_TENANT_ID(1)
+async function resolveTenantId(ctx: any): Promise<number> {
+  try {
+    const conn = await getDbConnection();
+    if (!conn || !ctx?.user?.id) return DEFAULT_TENANT_ID;
+    const userId = Number(ctx.user.id);
+
+    // 读取请求头中的目标门店
+    const raw = ctx?.req?.headers?.["x-yaban-tenant"];
+    const headerVal = Array.isArray(raw) ? raw[0] : raw;
+    const wanted = headerVal ? parseInt(String(headerVal), 10) : NaN;
+
+    // 平台创始人/超管：可访问任意门店（与角色路由口径一致）
+    let isFounderLike = false;
+    try {
+      isFounderLike = await isYabanPureFounder(ctx);
+    } catch {
+      isFounderLike = false;
+    }
+
+    // 若 header 指定了有效门店
+    if (!isNaN(wanted) && wanted > 0) {
+      if (isFounderLike) return wanted;
+      // 校验成员资格
+      const [m] = (await (conn as any).execute(
+        `SELECT 1 FROM yaban_clinic_member WHERE user_id = ? AND tenant_id = ? AND status = 'active' LIMIT 1`,
+        [userId, wanted]
+      )) as any;
+      if ((m as any[]).length > 0) return wanted;
+      // 越权或非成员：忽略 header，走回退
+    }
+
+    // 回退：取用户第一家在职门店
+    const [rows] = (await (conn as any).execute(
+      `SELECT tenant_id FROM yaban_clinic_member
+       WHERE user_id = ? AND status = 'active'
+       ORDER BY FIELD(role_key,'owner','doctor','assistant','receptionist','finance'), tenant_id ASC
+       LIMIT 1`,
+      [userId]
+    )) as any;
+    const first = (rows as any[])[0]?.tenant_id;
+    if (first != null) return Number(first);
+  } catch {
+    // 任意异常都安全回退
+  }
+  return DEFAULT_TENANT_ID;
+}
+
 // 取医院名称（用于导出文件命名）；缺省回退到占位名
 async function getClinicName(tenantId: number): Promise<string> {
   const conn = await getDbConnection();
@@ -543,10 +594,11 @@ export const yabanCustomerRouter = router({
         })
         .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) return { items: [], total: 0, page: 1, pageSize: 30, hasMore: false };
       await ensureCustomerTable(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
 
       const keyword = input?.keyword?.trim();
       const quickFilter = input?.quickFilter || "all";
@@ -556,7 +608,7 @@ export const yabanCustomerRouter = router({
       const offset = (page - 1) * pageSize;
 
       const where: string[] = [`tenant_id = ?`];
-      const params: any[] = [DEFAULT_TENANT_ID];
+      const params: any[] = [TENANT_ID];
 
       if (keyword) {
         where.push(`(name LIKE ? OR mobile LIKE ? OR medical_no LIKE ? OR nickname LIKE ?)`);
@@ -681,14 +733,15 @@ export const yabanCustomerRouter = router({
     }),
 
   // ============ 高级筛选可选项（动态从全表去重生成） ============
-  filterOptions: protectedProcedure.query(async () => {
+  filterOptions: protectedProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     const empty = { sources: [] as string[], consultants: [] as string[], doctors: [] as string[] };
     if (!conn) return empty;
     await ensureCustomerTable(conn);
+    const TENANT_ID = await resolveTenantId(ctx);
     const distinct = async (sql: string): Promise<string[]> => {
       try {
-        const [rows] = (await (conn as any).execute(sql, [DEFAULT_TENANT_ID])) as any;
+        const [rows] = (await (conn as any).execute(sql, [TENANT_ID])) as any;
         return (rows as any[])
           .map((r) => (r.v == null ? "" : String(r.v).trim()))
           .filter((v) => v !== "");
@@ -714,17 +767,18 @@ export const yabanCustomerRouter = router({
   }),
 
   // ============ 顾客统计（总数 / 今日新增 / 本月新增） ============
-  stats: protectedProcedure.query(async () => {
+  stats: protectedProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) return { total: 0, today: 0, month: 0 };
     await ensureCustomerTable(conn);
+    const TENANT_ID = await resolveTenantId(ctx);
     const [rows] = (await (conn as any).execute(
       `SELECT
          COUNT(*) AS total,
          SUM(DATE(created_at) = CURDATE()) AS today,
          SUM(YEAR(created_at) = YEAR(CURDATE()) AND MONTH(created_at) = MONTH(CURDATE())) AS month
        FROM yaban_customer WHERE tenant_id = ?`,
-      [DEFAULT_TENANT_ID]
+      [TENANT_ID]
     )) as any;
     const r = (rows as any[])[0] || {};
     return {
@@ -735,24 +789,26 @@ export const yabanCustomerRouter = router({
   }),
 
   // ============ 预览下一个顾客编号（仅供新建页展示，实际以保存时生成为准） ============
-  previewCode: protectedProcedure.query(async () => {
+  previewCode: protectedProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) return { code: "" };
     await ensureCustomerTable(conn);
-    const code = await nextCustomerCode(conn, DEFAULT_TENANT_ID);
+    const TENANT_ID = await resolveTenantId(ctx);
+    const code = await nextCustomerCode(conn, TENANT_ID);
     return { code };
   }),
 
   // ============ 顾客详情 ============
   detail: protectedProcedure
     .input(z.object({ id: z.number().int() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) return null;
       await ensureCustomerTable(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
       const [rows] = (await (conn as any).execute(
         `SELECT * FROM yaban_customer WHERE id = ? AND tenant_id = ? LIMIT 1`,
-        [input.id, DEFAULT_TENANT_ID]
+        [input.id, TENANT_ID]
       )) as any;
       return (rows as any[])[0] || null;
     }),
@@ -764,6 +820,7 @@ export const yabanCustomerRouter = router({
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureCustomerTable(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
 
       // 兼容旧表：补充 zodiac 列
       try {
@@ -794,12 +851,12 @@ export const yabanCustomerRouter = router({
       let medicalNo = s(input.medicalNo);
       const autoGen = !medicalNo;
       if (autoGen) {
-        medicalNo = await nextCustomerCode(conn, DEFAULT_TENANT_ID);
+        medicalNo = await nextCustomerCode(conn, TENANT_ID);
       } else {
         // 传入编号需查重，避免与现有顾客重复
         const [dupRows] = (await (conn as any).execute(
           `SELECT id FROM yaban_customer WHERE tenant_id = ? AND medical_no = ? LIMIT 1`,
-          [DEFAULT_TENANT_ID, medicalNo]
+          [TENANT_ID, medicalNo]
         )) as any;
         if ((dupRows as any[]).length > 0) {
           throw new TRPCError({ code: "CONFLICT", message: `顾客编号 ${medicalNo} 已存在，请更换` });
@@ -823,7 +880,7 @@ export const yabanCustomerRouter = router({
             created_by)
            VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?, ?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
           [
-            DEFAULT_TENANT_ID,
+            TENANT_ID,
             input.name.trim(),
             s(input.gender) || "无",
             s(input.birthday),
@@ -875,7 +932,7 @@ export const yabanCustomerRouter = router({
           const dup = e?.code === "ER_DUP_ENTRY" || /Duplicate entry/i.test(e?.message || "");
           if (dup && autoGen && attempt < 5) {
             attempt++;
-            medicalNo = await nextCustomerCode(conn, DEFAULT_TENANT_ID);
+            medicalNo = await nextCustomerCode(conn, TENANT_ID);
             continue;
           }
           if (dup) {
@@ -891,15 +948,16 @@ export const yabanCustomerRouter = router({
   // ============ 更新顾客 ============
   update: protectedProcedure
     .input(createInput.extend({ id: z.number().int().positive() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       await ensureCustomerTable(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
 
       // 校验顾客存在
       const [exist] = (await (conn as any).execute(
         `SELECT id FROM yaban_customer WHERE id = ? AND tenant_id = ? LIMIT 1`,
-        [input.id, DEFAULT_TENANT_ID]
+        [input.id, TENANT_ID]
       )) as any;
       if ((exist as any[]).length === 0) {
         throw new TRPCError({ code: "NOT_FOUND", message: "顾客不存在或无权修改" });
@@ -968,7 +1026,7 @@ export const yabanCustomerRouter = router({
           s(input.pregnant),
           s(input.medication),
           input.id,
-          DEFAULT_TENANT_ID,
+          TENANT_ID,
         ]
       );
 
@@ -1206,15 +1264,16 @@ export const yabanCustomerRouter = router({
     }),
 
   // ============ 标签：列表（含每个标签下顾客数量） ============
-  listTags: protectedProcedure.query(async () => {
+  listTags: protectedProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) return [] as any[];
     await ensureTagTables(conn);
+    const TENANT_ID = await resolveTenantId(ctx);
     const [rows] = (await (conn as any).execute(
       `SELECT t.id, t.name, t.color, t.sort,
               (SELECT COUNT(*) FROM yaban_customer_tag ct WHERE ct.tag_id = t.id) AS count
        FROM yaban_tag t WHERE t.tenant_id = ? ORDER BY t.sort ASC, t.id ASC`,
-      [DEFAULT_TENANT_ID]
+      [TENANT_ID]
     )) as any;
     return (rows as any[]).map((r) => ({
       id: Number(r.id),
