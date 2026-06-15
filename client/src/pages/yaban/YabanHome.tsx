@@ -157,17 +157,29 @@ export default function YabanHome() {
               <ChevronDown className="w-4 h-4" />
             )}
           </button>
-          {/* 右侧：刷新 + 版本切换 + 搜索 + 新增 */}
-          <div className="flex items-center gap-3">
-            <button onClick={() => { window.location.reload(); }}>
-              <RefreshCw className="w-5 h-5" />
-            </button>
+          {/* 右侧：版本切换 + 刷新 + 搜索 + 新增（统一3D圆形图标，切换在最左）*/}
+          <div className="flex items-center gap-2">
             <VersionSwitcher variant="inline" />
-            <button onClick={() => toast.info("搜索功能开发中")}>
-              <Search className="w-5 h-5" />
+            <button
+              onClick={() => { window.location.reload(); }}
+              className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center overflow-hidden active:scale-95 transition"
+              aria-label="刷新"
+            >
+              <img src="/icon-refresh.webp" alt="" className="w-8 h-8 object-cover rounded-full" />
             </button>
-            <button onClick={() => setShowCreateMenu(!showCreateMenu)}>
-              <Plus className="w-5 h-5" />
+            <button
+              onClick={() => toast.info("搜索功能开发中")}
+              className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center overflow-hidden active:scale-95 transition"
+              aria-label="搜索"
+            >
+              <img src="/icon-search.webp" alt="" className="w-8 h-8 object-cover rounded-full" />
+            </button>
+            <button
+              onClick={() => setShowCreateMenu(!showCreateMenu)}
+              className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center overflow-hidden active:scale-95 transition"
+              aria-label="新增"
+            >
+              <img src="/icon-add.webp" alt="" className="w-8 h-8 object-cover rounded-full" />
             </button>
           </div>
         </div>
