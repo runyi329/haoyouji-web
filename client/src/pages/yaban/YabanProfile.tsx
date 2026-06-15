@@ -214,8 +214,8 @@ export default function YabanProfile() {
                 )}
               </span>
               {/* 右下角相机角标：实心蓝底白相机，一半圈内一半圈外，置顶不被裁切 */}
-              <span className="absolute -bottom-0.5 -right-0.5 z-10 w-[22px] h-[22px] rounded-full bg-[#2196C8] flex items-center justify-center ring-2 ring-white shadow-md">
-                <Camera className="w-3 h-3 text-white" />
+              <span className="absolute bottom-0 right-0 z-10 w-[11px] h-[11px] rounded-full bg-[#2196C8] flex items-center justify-center ring-1 ring-white shadow-sm">
+                <Camera className="w-2 h-2 text-white" />
               </span>
             </button>
             <input
