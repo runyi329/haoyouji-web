@@ -71,12 +71,24 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
 
   const switchItems: SwitchItem[] = [];
 
+  // 「当前所在版本」：以实际位置/手动选择为准，而非归属版本
+  // 优先级：sessionStorage 手动选择 _viewing_version > 按当前路径推断（/yaban/* 为牙伴，其余为脉动）
+  let activeVersionKey = "";
+  try {
+    activeVersionKey = sessionStorage.getItem("_viewing_version") || "";
+  } catch {}
+  if (!activeVersionKey) {
+    activeVersionKey = location.startsWith("/yaban") ? "yaban" : "maidong";
+  }
+
   // 1) 正式版本切换项
   if (version?.switchEnabled) {
-    const allowedKeys = version.switchableVersionKeys || [];
-    const currentKey = version.versionKey || "";
+    // 可去的正式版本：可切换范围 + 归属版本（归属版本始终可回去，即使未列入 scope）+ 当前所在版本
+    const allowedKeys = new Set<string>(version.switchableVersionKeys || []);
+    if (version.versionKey) allowedKeys.add(version.versionKey);
+    if (activeVersionKey) allowedKeys.add(activeVersionKey);
     (versions || [])
-      .filter((v: any) => allowedKeys.includes(v.versionKey))
+      .filter((v: any) => allowedKeys.has(v.versionKey))
       .forEach((v: any) => {
         switchItems.push({
           key: v.versionKey,
@@ -84,7 +96,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
           icon: VERSION_ICONS[v.versionKey],
           path: v.landingPath || "/",
           viewingKey: v.versionKey,
-          active: v.versionKey === currentKey && isHomePage,
+          active: v.versionKey === activeVersionKey,
         });
       });
   }
@@ -100,12 +112,14 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
     });
   }
 
+  // 弹框里只展示「除当前所在版本之外」的可去目的地
+  const menuItems = switchItems.filter((it) => !it.active);
   // 是否把中间按钮渲染为「切换键」：有 2 个及以上可进入项才有切换意义
   const showSwitcher = switchItems.length >= 2;
   // 中间按钮显示的图标：优先显示「当前所在版本/入口」的图标
   const currentSwitchItem =
     switchItems.find((it) => it.active) ||
-    switchItems.find((it) => it.viewingKey === (version?.versionKey || "")) ||
+    switchItems.find((it) => it.viewingKey === activeVersionKey) ||
     switchItems[0];
 
   const handleNavigation = (path: string) => {
@@ -220,13 +234,11 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
             <div className="px-5 py-2.5 text-xs text-gray-400 border-b border-gray-50">
               切换版本 / 入口
             </div>
-            {switchItems.map((item) => (
+            {menuItems.map((item) => (
               <button
                 key={item.key}
                 type="button"
-                className={`w-full flex items-center gap-3 px-5 py-3.5 hover:bg-[#FFF3F3] transition-colors border-b border-gray-50 last:border-b-0 ${
-                  item.active ? 'text-[#D32F2F] font-semibold' : 'text-gray-800'
-                }`}
+                className={`w-full flex items-center gap-3 px-5 py-3.5 hover:bg-[#FFF3F3] transition-colors border-b border-gray-50 last:border-b-0 text-gray-800`}
                 onClick={() => handleSwitchItemClick(item)}
               >
                 <span className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center flex-shrink-0 bg-gray-50">
