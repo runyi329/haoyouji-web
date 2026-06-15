@@ -118,32 +118,32 @@ export default function YabanPatientDetail() {
 
       {/* 顾客信息卡片（统一电子档案表：照片为表内跨行单元格，所有字段均在表中） */}
       <div className="bg-white px-4 py-4">
-        <div className="flex border-t border-l border-gray-200 rounded-md overflow-hidden">
-          {/* 左侧：字段格子自适应横排 */}
-          <div className="flex-1 min-w-0 flex flex-wrap content-start">
-            <InfoItem label="姓名" value={patient.name || '—'} />
-            <InfoItem label="性别" value={patient.gender === 'male' ? '男' : '女'} />
-            <InfoItem label="年龄" value={patient.age > 0 ? `${patient.age}岁` : '—'} />
-            <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} />
-            <InfoItem label="顾客编号" value={patient.medicalNo || '—'} wide />
+        <div className="border-t border-l border-gray-200 rounded-md overflow-hidden">
+          {/* 第一区：左侧前两行字段 + 右侧跨两行照片单元格 */}
+          <div className="flex">
+            <div className="flex-1 min-w-0 flex flex-wrap content-start">
+              <InfoItem label="姓名" value={patient.name || '—'} />
+              <InfoItem label="性别" value={patient.gender === 'male' ? '男' : '女'} />
+              <InfoItem label="年龄" value={patient.age > 0 ? `${patient.age}岁` : '—'} />
+              <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} />
+              <InfoItem label="顾客编号" value={patient.medicalNo || '—'} wide />
+            </div>
+            {/* 照片：作为表内单元格，跨这两行高度，四边有线 */}
+            <div
+              className="w-[72px] self-stretch border-r border-b border-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center"
+              style={{ background: `linear-gradient(135deg, ${avatarBg(patient.avatarKey)} 0%, ${avatarBg(patient.avatarKey)}99 100%)` }}
+            >
+              <img
+                src={avatarSrc(patient.avatarKey)}
+                alt={patient.name}
+                className="w-[52px] h-[52px] rounded-full object-cover bg-white/30"
+              />
+            </div>
+          </div>
+          {/* 第二区：其余字段整行铺排 */}
+          <div className="flex flex-wrap">
             <InfoItem label="手机" value={patient.mobile} wide />
-          </div>
-          {/* 右上角：照片单元格（方格渐变底 + 居中圆形头像） */}
-          <div
-            className="h-[68px] w-[68px] self-start border-r border-b border-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center"
-            style={{ background: `linear-gradient(135deg, ${avatarBg(patient.avatarKey)} 0%, ${avatarBg(patient.avatarKey)}99 100%)` }}
-          >
-            <img
-              src={avatarSrc(patient.avatarKey)}
-              alt={patient.name}
-              className="w-[56px] h-[56px] rounded-full object-cover bg-white/30"
-            />
-          </div>
-        </div>
-
-        {/* 资料档案表（续）：线框网格，字段自适应横排 */}
-        <div className="flex flex-wrap border-l border-gray-200 overflow-hidden">
-          <InfoItem label="昵称" value={patient.nickname} />
+            <InfoItem label="昵称" value={patient.nickname} />
           <InfoItem label="生日" value={patient.birthday} />
           <InfoItem label="星座" value={patient.zodiac} />
           <InfoItem label="生肖" value={patient.chineseZodiac} />
@@ -156,8 +156,9 @@ export default function YabanPatientDetail() {
           <InfoItem label="上次就诊医生" value={patient.lastDoctor} />
           <InfoItem label="上次就诊" value={patient.lastVisit || '—'} />
           <InfoItem label="门店" value={patient.clinic} full />
-          {healthTags && <InfoItem label="健康标签" value={healthTags} full />}
-          <InfoItem label="备注" value={patient.remark} full />
+          {healthTags &&           <InfoItem label="健康标签" value={healthTags} full />}
+            <InfoItem label="备注" value={patient.remark} full />
+          </div>
         </div>
       </div>
 
