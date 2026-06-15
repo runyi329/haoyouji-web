@@ -165,7 +165,7 @@ export default function YabanProfile() {
     {
       key: "data",
       icon: <Database className="w-5 h-5 text-[#1E88D6]" />,
-      label: "数据管理",
+      label: "数据安全管理",
       hint: "数据导出备份与导入存档",
       onClick: () => navigate("/yaban/settings/data"),
     },

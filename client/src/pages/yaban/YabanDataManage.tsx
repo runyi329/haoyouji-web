@@ -1,5 +1,5 @@
 /**
- * 牙伴齿科管理 - 数据管理子页
+ * 牙伴齿科管理 - 数据安全管理子页
  * 路由：/yaban/settings/data
  * 风格：牙伴蓝白风（强调色 #1E88D6）
  * 功能：
@@ -358,7 +358,7 @@ export default function YabanDataManage() {
           <button onClick={() => navigate("/yaban/profile")} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold">数据管理</span>
+          <span className="text-base font-bold">数据安全管理</span>
         </div>
         <div className="flex px-4">
           <button
