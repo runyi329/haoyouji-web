@@ -118,7 +118,14 @@ export default function YabanPatientDetail() {
 
       {/* 顾客信息卡片（统一电子档案表：照片为表内跨行单元格，所有字段均在表中） */}
       <div className="bg-white px-4 py-4">
-        <div className="border-t border-l border-gray-200 rounded-md overflow-hidden">
+        <div className="border-t border-l border-r border-gray-200 rounded-md overflow-hidden">
+          {/* 横眉：门店 + 顾客档案 / 档案编号 */}
+          <div className="flex items-center justify-between bg-blue-50 border-b border-gray-200 px-3 py-2">
+            <div className="text-[13.5px] font-semibold text-gray-800 truncate">
+              {(patient.clinic && patient.clinic !== '—' ? patient.clinic : '') + '顾客档案'}
+            </div>
+            <div className="text-[11.5px] text-gray-500 flex-shrink-0 ml-2">档案编号：{patient.medicalNo || '—'}</div>
+          </div>
           {/* 第一区：左侧前两行字段 + 右侧跨两行照片单元格 */}
           <div className="flex">
             <div className="flex-1 min-w-0 flex flex-wrap content-start">
@@ -126,8 +133,7 @@ export default function YabanPatientDetail() {
               <InfoItem label="昵称" value={patient.nickname} quarter />
               <InfoItem label="性别" value={patient.gender === 'male' ? '男' : '女'} quarter />
               <InfoItem label="年龄" value={patient.age > 0 ? `${patient.age}岁` : '—'} quarter />
-              <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} />
-              <InfoItem label="顾客编号" value={patient.medicalNo || '—'} wide />
+              <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} full />
             </div>
             {/* 照片：作为表内单元格，跨这两行高度，四边有线 */}
             <div
@@ -155,7 +161,6 @@ export default function YabanPatientDetail() {
           {patient.consultant && <InfoItem label="咨询师" value={patient.consultant} />}
           <InfoItem label="上次就诊医生" value={patient.lastDoctor} />
           <InfoItem label="上次就诊" value={patient.lastVisit || '—'} />
-          <InfoItem label="门店" value={patient.clinic} full />
           {healthTags &&           <InfoItem label="健康标签" value={healthTags} full />}
             <InfoItem label="备注" value={patient.remark} full />
           </div>
