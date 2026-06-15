@@ -5,8 +5,7 @@
  */
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { Search, Plus, ChevronDown, ChevronUp, Settings, RefreshCw, ScanLine, UserPlus, CalendarPlus, PhoneCall, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
+import { ChevronDown, ChevronUp, ScanLine, UserPlus, CalendarPlus, PhoneCall, ArrowDownToLine, ArrowUpFromLine, Grip } from "lucide-react";
 import YabanCalendar from "./YabanCalendar";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
@@ -45,6 +44,9 @@ const MORE_FEATURES = [
   { name: "诊所排班", icon: `${ICON_BASE}/zhensuo_paiban.webp`, route: "" },
 ];
 
+// 首页上半部分展示的功能（取常用 + 部分更多），共 7 个，末位留给「更多」
+const HOME_FEATURES = [...FREQUENT_FEATURES, ...MORE_FEATURES].slice(0, 7);
+
 
 // 右上角「+」新增菜单项
 const CREATE_MENU = [
@@ -77,7 +79,6 @@ export default function YabanHome() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const { user } = useAuth();
   const [showClinicPicker, setShowClinicPicker] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
 
@@ -268,45 +269,10 @@ export default function YabanHome() {
 
       {/* 主内容区 */}
       <div className="max-w-lg mx-auto pb-20">
-        {/* 我常用的 */}
+        {/* 上半部分：功能网格（2行×4列，末位为「更多」） */}
         <div className="bg-white mx-3 mt-3 rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-bold text-gray-800">我常用的</span>
-            <button onClick={() => toast.info("设置功能开发中")}>
-              <Settings className="w-4 h-4 text-gray-400" />
-            </button>
-          </div>
-          <div className="flex gap-6">
-            {FREQUENT_FEATURES.map((feat) => (
-              <button
-                key={feat.name}
-                className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform"
-                onClick={() => handleFeatureClick(feat.name, feat.route)}
-              >
-                <div className="w-14 h-14 flex items-center justify-center overflow-hidden">
-                  <img src={feat.icon} alt={feat.name} className="w-14 h-14 object-contain" />
-                </div>
-                <span className="text-[11px] text-gray-600">{feat.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 功能推荐横幅 - 也改为蓝色系 */}
-        <div className="mx-3 mt-2 bg-gradient-to-r from-[#E8F4FD] to-[#D6EEFB] rounded-lg px-3 py-2 flex items-center">
-          <span className="text-[11px] text-[#1976D2] font-bold mr-1">功能推荐</span>
-          <span className="text-[9px] bg-[#2196C8] text-white px-1 py-0.5 rounded mr-2">NEW</span>
-
-        </div>
-
-        {/* 工作统计 - 3D立体月历 */}
-        <YabanCalendar />
-
-        {/* 更多功能 */}
-        <div className="bg-white mx-3 mt-2 rounded-xl p-4">
-          <div className="text-sm font-bold text-gray-800 mb-4">更多功能</div>
           <div className="grid grid-cols-4 gap-x-2 gap-y-4">
-            {MORE_FEATURES.map((feat, idx) => (
+            {HOME_FEATURES.map((feat, idx) => (
               <button
                 key={`${feat.name}-${idx}`}
                 className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform relative"
@@ -323,8 +289,21 @@ export default function YabanHome() {
                 <span className="text-[11px] text-gray-600 text-center leading-tight">{feat.name}</span>
               </button>
             ))}
+            {/* 末位：更多入口 */}
+            <button
+              className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform"
+              onClick={() => setLocation("/yaban/features")}
+            >
+              <div className="w-14 h-14 flex items-center justify-center rounded-2xl bg-gray-50">
+                <Grip className="w-7 h-7 text-[#2196C8]" strokeWidth={1.8} />
+              </div>
+              <span className="text-[11px] text-gray-600 text-center leading-tight">更多</span>
+            </button>
           </div>
         </div>
+
+        {/* 下半部分：数据报表 / 3D立体月历 */}
+        <YabanCalendar />
       </div>
 
       {/* 底部 Tab 栏 */}
