@@ -37,41 +37,51 @@ function fmtTime(v: any): string {
   if (!s) return "—";
   const d = new Date(s.replace(" ", "T"));
   if (isNaN(d.getTime())) {
-    // 解析失败时退化为截取前 16 位（YYYY-MM-DD HH:mm）
     return s.slice(0, 16);
   }
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-// 单个字段单元：上标签下内容，half=半宽（两列并排），full=整行
-function Cell({
+// 列宽档位：sm≈四五列、md≈三列、lg≈两列、full≈整行
+type Span = "sm" | "md" | "lg" | "full";
+const SPAN_BASIS: Record<Span, string> = {
+  sm: "120px", // 短字段：一行可排 4~5 个（自动适配剩余空间）
+  md: "180px", // 中等字段：一行约 3 个
+  lg: "260px", // 较长字段：一行约 2 个
+  full: "100%", // 长内容独占整行
+};
+
+// 单个档案字段：标签在上、内容在下，flex-wrap 流式自适应排布
+function Field({
   label,
   value,
-  half = true,
+  span = "sm",
   highlight,
 }: {
   label: string;
   value: string;
-  half?: boolean;
+  span?: Span;
   highlight?: boolean;
 }) {
   return (
-    <div className={half ? "w-1/2 px-2 py-2" : "w-full px-2 py-2"}>
-      <div className="text-[11px] text-gray-400 mb-0.5">{label}</div>
-      <div className={`text-[13px] break-all ${highlight ? "text-orange-500 font-medium" : "text-gray-800"}`}>
+    <div
+      className="grow border-b border-r border-dashed border-gray-200 px-3 py-2"
+      style={{ flexBasis: SPAN_BASIS[span] }}
+    >
+      <div className="text-[11px] text-gray-400 mb-0.5 whitespace-nowrap">{label}</div>
+      <div className={`text-[13px] break-words ${highlight ? "text-orange-500 font-medium" : "text-gray-800"}`}>
         {value}
       </div>
     </div>
   );
 }
 
-// 卡片容器（内部以 flex-wrap 实现多列信息表布局）
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+// 组内小标题（用于在同一容器内区隔分组）
+function GroupTitle({ text }: { text: string }) {
   return (
-    <div className="bg-white rounded-2xl px-2 pt-3 pb-2 mb-3">
-      <div className="text-[13px] font-bold text-gray-800 px-2 pb-1">{title}</div>
-      <div className="flex flex-wrap divide-gray-50">{children}</div>
+    <div className="w-full px-3 pt-3 pb-1">
+      <span className="text-[13px] font-bold text-gray-800">{text}</span>
     </div>
   );
 }
@@ -125,8 +135,6 @@ export default function YabanPatientProfile() {
 
   const genderColor = r.gender === "女" ? "bg-pink-400" : "bg-sky-500";
   const genderText = r.gender === "女" ? "F" : "M";
-
-  // 既往病史标记汇总
   const positiveHistory = HISTORY_FIELDS.filter((h) => isPositive(r[h.key]));
 
   return (
@@ -171,88 +179,82 @@ export default function YabanPatientProfile() {
         </div>
       </div>
 
+      {/* 单一档案容器：所有分组都在这一个卡片内，字段以细虚线分隔、流式自适应排布 */}
       <div className="px-3 pt-3">
-        {/* 个人信息 */}
-        <Card title="个人信息">
-          <Cell label="姓名" value={val(r.name)} />
-          <Cell label="昵称" value={val(r.nickname)} />
-          <Cell label="性别" value={val(r.gender)} />
-          <Cell label="生日" value={val(r.birthday)} />
-          <Cell label="年龄" value={r.age != null && r.age !== "" ? `${r.age}岁` : "—"} />
-          <Cell label="星座/生肖" value={val(r.zodiac)} />
-          <Cell label="顾客类型" value={val(r.patient_type)} />
-          <Cell label="顾客编号" value={val(r.medical_no)} />
-          <Cell label="外部编号" value={val(r.external_no)} />
-        </Card>
+        <div className="bg-white rounded-2xl overflow-hidden">
+          {/* 借助底部/右侧虚线 + 容器裁切，形成档案表格栏效果 */}
+          <div className="flex flex-wrap">
+            <GroupTitle text="个人信息" />
+            <Field label="姓名" value={val(r.name)} span="sm" />
+            <Field label="昵称" value={val(r.nickname)} span="sm" />
+            <Field label="性别" value={val(r.gender)} span="sm" />
+            <Field label="年龄" value={r.age != null && r.age !== "" ? `${r.age}岁` : "—"} span="sm" />
+            <Field label="生日" value={val(r.birthday)} span="md" />
+            <Field label="星座/生肖" value={val(r.zodiac)} span="sm" />
+            <Field label="顾客类型" value={val(r.patient_type)} span="sm" />
+            <Field label="顾客编号" value={val(r.medical_no)} span="md" />
+            <Field label="外部编号" value={val(r.external_no)} span="md" />
 
-        {/* 联系方式 */}
-        <Card title="联系方式">
-          <Cell label="手机" value={val(r.mobile)} />
-          <Cell label="固定电话" value={val(r.phone)} />
-          <Cell label="邮箱" value={val(r.email)} full />
-          <Cell label="所在地区" value={val(r.region)} />
-          <Cell label="地址" value={val(r.address)} full />
-        </Card>
+            <GroupTitle text="联系方式" />
+            <Field label="手机" value={val(r.mobile)} span="md" />
+            <Field label="固定电话" value={val(r.phone)} span="md" />
+            <Field label="邮箱" value={val(r.email)} span="lg" />
+            <Field label="所在地区" value={val(r.region)} span="md" />
+            <Field label="地址" value={val(r.address)} span="full" />
 
-        {/* 紧急联系人 */}
-        <Card title="紧急联系人">
-          <Cell label="联系人" value={val(r.emergency_contact)} />
-          <Cell label="关系" value={val(r.emergency_relation)} />
-          <Cell label="联系人电话" value={val(r.emergency_phone)} full />
-        </Card>
+            <GroupTitle text="紧急联系人" />
+            <Field label="联系人" value={val(r.emergency_contact)} span="sm" />
+            <Field label="关系" value={val(r.emergency_relation)} span="sm" />
+            <Field label="联系人电话" value={val(r.emergency_phone)} span="md" />
 
-        {/* 顾客信息 */}
-        <Card title="顾客信息">
-          <Cell label="顾客来源" value={val(r.source)} />
-          <Cell label="网电咨询师" value={val(r.net_consultant)} />
-          <Cell label="咨询师" value={val(r.consultant)} />
-          <Cell label="AI健康标签" value={val(r.history)} full />
-        </Card>
+            <GroupTitle text="顾客信息" />
+            <Field label="顾客来源" value={val(r.source)} span="sm" />
+            <Field label="网电咨询师" value={val(r.net_consultant)} span="md" />
+            <Field label="咨询师" value={val(r.consultant)} span="md" />
+            <Field label="AI健康标签" value={val(r.history)} span="full" />
 
-        {/* 健康与既往病史 */}
-        <Card title="健康与既往病史">
-          <Cell label="就诊主诉" value={val(r.chief_complaint)} />
-          <Cell label="健康状况" value={val(r.health_status)} />
-          <Cell label="药物过敏" value={val(r.drug_allergy)} highlight={isPositive(r.drug_allergy)} />
-          <Cell label="食物过敏" value={val(r.food_allergy)} highlight={isPositive(r.food_allergy)} />
-          <Cell label="正在用药" value={val(r.medication)} full highlight={isPositive(r.medication)} />
-          {/* 七项病史标记：有异常的高亮汇总 */}
-          <div className="w-full px-2 py-2">
-            <div className="text-[11px] text-gray-400 mb-1.5">既往病史</div>
-            <div className="flex flex-wrap gap-1.5">
-              {HISTORY_FIELDS.map((h) => {
-                const pos = isPositive(r[h.key]);
-                return (
-                  <span
-                    key={h.key}
-                    className={`px-2 py-1 rounded-md text-[12px] ${
-                      pos ? "bg-orange-50 text-orange-500 font-medium" : "bg-gray-50 text-gray-300"
-                    }`}
-                  >
-                    {h.label}
-                    {pos ? `：${val(r[h.key])}` : ""}
-                  </span>
-                );
-              })}
+            <GroupTitle text="健康与既往病史" />
+            <Field label="就诊主诉" value={val(r.chief_complaint)} span="md" />
+            <Field label="健康状况" value={val(r.health_status)} span="md" />
+            <Field label="药物过敏" value={val(r.drug_allergy)} span="md" highlight={isPositive(r.drug_allergy)} />
+            <Field label="食物过敏" value={val(r.food_allergy)} span="md" highlight={isPositive(r.food_allergy)} />
+            <Field label="正在用药" value={val(r.medication)} span="lg" highlight={isPositive(r.medication)} />
+            {/* 七项病史标记：有异常的高亮汇总 */}
+            <div className="w-full border-b border-dashed border-gray-200 px-3 py-2">
+              <div className="text-[11px] text-gray-400 mb-1.5">既往病史</div>
+              <div className="flex flex-wrap gap-1.5">
+                {HISTORY_FIELDS.map((h) => {
+                  const pos = isPositive(r[h.key]);
+                  return (
+                    <span
+                      key={h.key}
+                      className={`px-2 py-1 rounded-md text-[12px] ${
+                        pos ? "bg-orange-50 text-orange-500 font-medium" : "bg-gray-50 text-gray-300"
+                      }`}
+                    >
+                      {h.label}
+                      {pos ? `：${val(r[h.key])}` : ""}
+                    </span>
+                  );
+                })}
+              </div>
+              {positiveHistory.length === 0 && (
+                <div className="text-[12px] text-gray-300 mt-1.5">暂无特殊既往病史</div>
+              )}
             </div>
-            {positiveHistory.length === 0 && (
-              <div className="text-[12px] text-gray-300 mt-1.5">暂无特殊既往病史</div>
-            )}
-          </div>
-        </Card>
 
-        {/* 备注与建档 */}
-        <Card title="备注与建档">
-          <Cell label="顾客备注" value={val(r.remark)} full />
-          <Cell label="上次就诊医生" value={val(r.last_doctor)} />
-          <Cell label="上次就诊" value={val(r.last_visit)} />
-          <Cell label="建档时间" value={fmtTime(r.created_at)} full />
-        </Card>
+            <GroupTitle text="备注与建档" />
+            <Field label="顾客备注" value={val(r.remark)} span="full" />
+            <Field label="上次就诊医生" value={val(r.last_doctor)} span="md" />
+            <Field label="上次就诊" value={val(r.last_visit)} span="md" />
+            <Field label="建档时间" value={fmtTime(r.created_at)} span="lg" />
+          </div>
+        </div>
 
         {/* 编辑入口 */}
         <button
           onClick={() => navigate(`/yaban/patient/${id}`)}
-          className="w-full flex items-center justify-center gap-1.5 bg-sky-500 text-white rounded-full py-3 font-medium mt-1"
+          className="w-full flex items-center justify-center gap-1.5 bg-sky-500 text-white rounded-full py-3 font-medium mt-3"
         >
           <Edit className="w-5 h-5" /> 编辑资料
         </button>
