@@ -135,7 +135,6 @@ export default function YabanHome() {
   return (
     <div className="min-h-screen bg-gray-50">
       <PageTag code="P300" />
-      <VersionSwitcher />
 
       {/* 顶部蓝色渐变 Header */}
       <div
@@ -158,11 +157,12 @@ export default function YabanHome() {
               <ChevronDown className="w-4 h-4" />
             )}
           </button>
-          {/* 右侧：刷新 + 搜索 + 新增 */}
+          {/* 右侧：刷新 + 版本切换 + 搜索 + 新增 */}
           <div className="flex items-center gap-3">
             <button onClick={() => { window.location.reload(); }}>
               <RefreshCw className="w-5 h-5" />
             </button>
+            <VersionSwitcher variant="inline" />
             <button onClick={() => toast.info("搜索功能开发中")}>
               <Search className="w-5 h-5" />
             </button>
