@@ -170,6 +170,39 @@ export const yabanClinicRouter = router({
     return { isOwner: ownerTenantIds.length > 0, clinic: mapClinicRow(clinic) };
   }),
 
+  // 当前用户已加入的门店列表（下拉切换用）：参加几家返回几家
+  // 来源：yaban_clinic_member(status=active) 关联 yaban_clinic 主表取门店名
+  myClinics: protectedProcedure.query(async ({ ctx }) => {
+    const conn = await getDbConnection();
+    if (!conn) return { clinics: [] as any[] };
+    const [rows] = (await conn.execute(
+      `SELECT m.tenant_id AS tenantId, m.role_key AS roleKey,
+              c.id AS clinicId, c.name AS name, c.short_name AS shortName, c.status AS status
+       FROM yaban_clinic_member m
+       LEFT JOIN yaban_clinic c ON c.tenant_id = m.tenant_id
+       WHERE m.user_id = ? AND m.status = 'active'
+       ORDER BY FIELD(m.role_key,'owner','doctor','assistant','receptionist','finance'), m.tenant_id ASC`,
+      [ctx.user.id]
+    )) as any;
+    const seen = new Set<number>();
+    const clinics: any[] = [];
+    for (const r of rows as any[]) {
+      const tid = Number(r.tenantId);
+      if (seen.has(tid)) continue;
+      seen.add(tid);
+      const display = (r.name && String(r.name).trim()) || (r.shortName && String(r.shortName).trim()) || `门店 ${tid}`;
+      clinics.push({
+        tenantId: tid,
+        clinicId: r.clinicId ? Number(r.clinicId) : null,
+        name: display,
+        shortName: r.shortName || "",
+        roleKey: r.roleKey || "",
+        status: r.status || "",
+      });
+    }
+    return { clinics };
+  }),
+
   // 院长提交/补全企业信息（全字段）
   applyClinic: protectedProcedure
     .input(clinicDetailSchema.extend({ name: z.string().min(2).max(128) }))

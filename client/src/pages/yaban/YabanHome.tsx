@@ -12,6 +12,7 @@ import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
 import VersionSwitcher from "@/components/VersionSwitcher";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
 // COS 图标 URL 基础路径
 const ICON_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/yaban";
@@ -43,26 +44,6 @@ const MORE_FEATURES = [
   { name: "技加工", icon: `${ICON_BASE}/ji_jiagong.webp`, route: "" },
   { name: "诊所排班", icon: `${ICON_BASE}/zhensuo_paiban.webp`, route: "" },
 ];
-
-// 诊所/机构数据（模拟）
-const CLINICS = [
-  {
-    company: "上海德盟（内蒙古）口腔门诊有限公司",
-    branches: [
-      { name: "内蒙古德盟口腔", id: "nmg" },
-    ],
-  },
-  {
-    company: "恒愿齿科",
-    branches: [
-      { name: "总部", id: "hq", children: [
-        { name: "恒愿齿科普陀店", id: "putuo" },
-        { name: "恒愿齿科北外滩店", id: "beiwaitan" },
-      ]},
-    ],
-  },
-];
-
 
 
 // 右上角「+」新增菜单项
@@ -99,9 +80,42 @@ export default function YabanHome() {
   const { user } = useAuth();
   const [showClinicPicker, setShowClinicPicker] = useState(false);
   const [showCreateMenu, setShowCreateMenu] = useState(false);
-  const [currentClinic, setCurrentClinic] = useState("恒愿齿科北外滩店");
-  const [expandedCompanies, setExpandedCompanies] = useState<string[]>(["恒愿齿科"]);
-  const [expandedGroups, setExpandedGroups] = useState<string[]>(["总部"]);
+
+  // 门店列表：来自当前用户实际加入的门店（参加几家显示几家）
+  const { data: myClinicsResp } = trpc.yabanClinic.myClinics.useQuery();
+  const clinics = myClinicsResp?.clinics || [];
+
+  // 当前选中门店 tenantId，持久化到 localStorage 以便跨页面一致
+  const [currentTenantId, setCurrentTenantId] = useState<number>(() => {
+    try {
+      const v = localStorage.getItem("yaban_current_tenant");
+      return v ? Number(v) : 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  // 默认选中第一家（当未选或选中项不在列表中时）
+  useEffect(() => {
+    if (clinics.length === 0) return;
+    const exists = clinics.some((c) => c.tenantId === currentTenantId);
+    if (!currentTenantId || !exists) {
+      const tid = clinics[0].tenantId;
+      setCurrentTenantId(tid);
+      try { localStorage.setItem("yaban_current_tenant", String(tid)); } catch {}
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clinics]);
+
+  const currentClinic =
+    clinics.find((c) => c.tenantId === currentTenantId)?.name ||
+    (clinics.length > 0 ? clinics[0].name : "暂无门店");
+
+  const selectClinic = (tid: number) => {
+    setCurrentTenantId(tid);
+    try { localStorage.setItem("yaban_current_tenant", String(tid)); } catch {}
+    setShowClinicPicker(false);
+  };
 
   const handleFeatureClick = (name: string, route?: string) => {
     if (route) {
@@ -118,18 +132,6 @@ export default function YabanHome() {
     } else {
       toast.info(`"${name}" 功能开发中，敬请期待`);
     }
-  };
-
-  const toggleCompany = (company: string) => {
-    setExpandedCompanies((prev) =>
-      prev.includes(company) ? prev.filter((c) => c !== company) : [...prev, company]
-    );
-  };
-
-  const toggleGroup = (group: string) => {
-    setExpandedGroups((prev) =>
-      prev.includes(group) ? prev.filter((g) => g !== group) : [...prev, group]
-    );
   };
 
   return (
@@ -210,112 +212,56 @@ export default function YabanHome() {
         </div>
       )}
 
-      {/* 诊所选择下拉面板 - 蓝白清爽风格，与牙办首页一致 */}
+      {/* 门店选择下拉面板 - 平铺列表，来自用户实际加入的门店 */}
       {showClinicPicker && (
         <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setShowClinicPicker(false)}>
           <div
             className="absolute top-[56px] left-3 right-3 bg-white max-w-lg mx-auto rounded-xl shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {CLINICS.map((clinic, ci) => (
-              <div key={clinic.company} className={ci > 0 ? "border-t border-gray-100" : ""}>
-                {/* 公司名称 */}
-                <button
-                  className="w-full flex items-center justify-between px-4 py-3.5"
-                  style={{ background: "linear-gradient(135deg, #E8F4FD 0%, #D6EEFB 100%)" }}
-                  onClick={() => toggleCompany(clinic.company)}
+            {/* 标题条 */}
+            <div
+              className="px-4 py-3 border-b border-gray-100"
+              style={{ background: "linear-gradient(135deg, #E8F4FD 0%, #D6EEFB 100%)" }}
+            >
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-6 h-6 rounded flex items-center justify-center"
+                  style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
                 >
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-6 h-6 rounded flex items-center justify-center"
-                      style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
-                    >
-                      <span className="text-[9px] font-bold text-white">企</span>
-                    </div>
-                    <span className="text-[13px] font-bold text-[#1976D2]">{clinic.company}</span>
-                  </div>
-                  {expandedCompanies.includes(clinic.company) ? (
-                    <ChevronUp className="w-4 h-4 text-[#2196C8]" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-[#2196C8]" />
-                  )}
-                </button>
-                {/* 分支机构 */}
-                {expandedCompanies.includes(clinic.company) &&
-                  clinic.branches.map((branch) => (
-                    <div key={branch.id}>
-                      {branch.children ? (
-                        <>
-                          <button
-                            className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100"
-                            onClick={() => toggleGroup(branch.name)}
-                          >
-                            <span className="text-[13px] font-medium text-gray-700">{branch.name}</span>
-                            {expandedGroups.includes(branch.name) ? (
-                              <ChevronUp className="w-4 h-4 text-gray-400" />
-                            ) : (
-                              <ChevronDown className="w-4 h-4 text-gray-400" />
-                            )}
-                          </button>
-                          {expandedGroups.includes(branch.name) &&
-                            branch.children.map((child) => {
-                              const active = currentClinic === child.name;
-                              return (
-                                <button
-                                  key={child.id}
-                                  className="w-full flex items-center justify-between pl-8 pr-4 py-3 border-b border-gray-100"
-                                  style={active ? { background: "linear-gradient(135deg, #E8F4FD 0%, #D6EEFB 100%)" } : undefined}
-                                  onClick={() => {
-                                    setCurrentClinic(child.name);
-                                    setShowClinicPicker(false);
-                                  }}
-                                >
-                                  <span className={`text-[13px] ${active ? "font-bold text-[#1976D2]" : "text-gray-600"}`}>
-                                    {child.name}
-                                  </span>
-                                  {active && (
-                                    <span
-                                      className="text-[11px] text-white px-2.5 py-1 rounded-md font-medium"
-                                      style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
-                                    >
-                                      当前
-                                    </span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                        </>
-                      ) : (
-                        (() => {
-                          const active = currentClinic === branch.name;
-                          return (
-                            <button
-                              className="w-full flex items-center justify-between px-5 py-3 border-b border-gray-100"
-                              style={active ? { background: "linear-gradient(135deg, #E8F4FD 0%, #D6EEFB 100%)" } : undefined}
-                              onClick={() => {
-                                setCurrentClinic(branch.name);
-                                setShowClinicPicker(false);
-                              }}
-                            >
-                              <span className={`text-[13px] ${active ? "font-bold text-[#1976D2]" : "text-gray-600"}`}>
-                                {branch.name}
-                              </span>
-                              {active && (
-                                <span
-                                  className="text-[11px] text-white px-2.5 py-1 rounded-md font-medium"
-                                  style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
-                                >
-                                  当前
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })()
-                      )}
-                    </div>
-                  ))}
+                  <span className="text-[9px] font-bold text-white">企</span>
+                </div>
+                <span className="text-[13px] font-bold text-[#1976D2]">我的门店</span>
               </div>
-            ))}
+            </div>
+            {/* 门店列表 */}
+            {clinics.length === 0 ? (
+              <div className="px-5 py-6 text-center text-[13px] text-gray-400">暂未加入任何门店</div>
+            ) : (
+              clinics.map((clinic) => {
+                const active = clinic.tenantId === currentTenantId;
+                return (
+                  <button
+                    key={clinic.tenantId}
+                    className="w-full flex items-center justify-between px-5 py-3.5 border-b border-gray-100 last:border-b-0"
+                    style={active ? { background: "linear-gradient(135deg, #E8F4FD 0%, #D6EEFB 100%)" } : undefined}
+                    onClick={() => selectClinic(clinic.tenantId)}
+                  >
+                    <span className={`text-[13px] ${active ? "font-bold text-[#1976D2]" : "text-gray-700"}`}>
+                      {clinic.name}
+                    </span>
+                    {active && (
+                      <span
+                        className="text-[11px] text-white px-2.5 py-1 rounded-md font-medium"
+                        style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
+                      >
+                        当前
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
       )}
