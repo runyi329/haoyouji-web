@@ -164,8 +164,9 @@ export const versionRouter = router({
         switchEnabled: z.boolean().optional(),
         // 允许切换到的版本key列表；空数组表示全部启用版本
         switchScope: z.array(z.string()).optional(),
-        // 是否把版本设置同时下发到该用户名下所有下线
-        applyToDescendants: z.boolean().optional(),
+        // 影响范围：self=仅本人 / new=本人+今后新下线（依赖动态继承，不改老下线）
+        // old=本人+已注册老下线（强制改写） / both=本人+新老下线
+        applyScope: z.enum(["self", "new", "old", "both"]).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -205,9 +206,12 @@ export const versionRouter = router({
 
       if (sets.length === 0) return { success: true, affected: 0 };
 
-      // 目标用户集合
+      // 目标用户集合。
+      // 仅当范围包含「已注册老下线」（old / both）时，才把设置强制写入现有下线。
+      // self / new 均只写本人；「今后新下线」靠系统已有的动态继承机制自然跟随，无需写库。
+      const scope = input.applyScope ?? "self";
       const targetIds = [input.userId];
-      if (input.applyToDescendants) {
+      if (scope === "old" || scope === "both") {
         const descendants = await collectDescendantIds(input.userId);
         targetIds.push(...descendants);
       }

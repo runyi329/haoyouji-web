@@ -45,7 +45,8 @@ export function InvitationManager() {
     versionKey: string;
     switchEnabled: boolean;
     switchScope: string[];
-    applyToDescendants: boolean;
+    // 影响范围：self=仅本人 / new=本人+今后新下线 / old=本人+已注册老下线 / both=本人+新老下线
+    applyScope: "self" | "new" | "old" | "both";
   }>({
     open: false,
     userId: null,
@@ -53,7 +54,7 @@ export function InvitationManager() {
     versionKey: "",
     switchEnabled: false,
     switchScope: [],
-    applyToDescendants: false,
+    applyScope: "self",
   });
 
   // 获取所有用户的邀请权限状态
@@ -187,7 +188,7 @@ export function InvitationManager() {
       versionKey: user.versionKey || "",
       switchEnabled: Boolean(user.versionSwitchEnabled),
       switchScope: Array.isArray(user.versionSwitchScope) ? user.versionSwitchScope : [],
-      applyToDescendants: false,
+      applyScope: "self",
     });
   };
 
@@ -199,7 +200,7 @@ export function InvitationManager() {
       versionKey: versionDialog.versionKey,
       switchEnabled: versionDialog.switchEnabled,
       switchScope: versionDialog.switchScope,
-      applyToDescendants: versionDialog.applyToDescendants,
+      applyScope: versionDialog.applyScope,
     });
   };
 
@@ -658,121 +659,141 @@ export function InvitationManager() {
       <Dialog open={versionDialog.open} onOpenChange={(open) => {
         if (!open) setVersionDialog((prev) => ({ ...prev, open: false }));
       }}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-md max-h-[88vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>设置版本 - {versionDialog.userName}</DialogTitle>
+            <DialogTitle className="text-base">设置版本 - {versionDialog.userName}</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-5">
-            {/* 默认版本 */}
-            <div className="space-y-2">
-              <Label className="text-sm">该用户的版本</Label>
-              <p className="text-xs text-muted-foreground">
-                选「继承上线」表示不单独设置,沿推荐链向上由最顶层设置者决定;选定某版本则只影响该用户本人（不被上线覆盖，也不强制下线跟随）。
+          <div className="space-y-3">
+            {/* 该用户的版本 */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">该用户的版本</Label>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                选「继承上线」表示不单独设置，沿推荐链向上由最顶层设置者决定；选定某版本则只影响该用户本人。
               </p>
-              <div className="grid grid-cols-1 gap-2 mt-1">
+              <div className="grid grid-cols-1 gap-1.5">
                 {/* 继承上线选项 */}
-                <Card
-                  className={`cursor-pointer transition-all ${
-                    !versionDialog.versionKey ? 'ring-2 ring-primary bg-primary/5' : 'hover:bg-gray-50'
+                <button
+                  type="button"
+                  className={`w-full text-left rounded-lg border px-3 py-2 flex items-center justify-between transition-all ${
+                    !versionDialog.versionKey ? 'border-primary bg-primary/5' : 'border-gray-200 hover:bg-gray-50'
                   }`}
                   onClick={() => setVersionDialog((prev) => ({ ...prev, versionKey: "" }))}
                 >
-                  <CardContent className="p-3 flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-sm">继承上线（不单独设置）</p>
-                      <p className="text-xs text-muted-foreground">沿推荐链向上由最顶层设置者决定</p>
-                    </div>
-                    {!versionDialog.versionKey && <CheckCircle className="w-5 h-5 text-primary" />}
-                  </CardContent>
-                </Card>
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm">继承上线（不单独设置）</p>
+                    <p className="text-[11px] text-muted-foreground">沿推荐链向上由最顶层设置者决定</p>
+                  </div>
+                  {!versionDialog.versionKey && <CheckCircle className="w-4 h-4 text-primary shrink-0" />}
+                </button>
 
                 {(versions || []).map((v) => (
-                  <Card
+                  <button
                     key={v.versionKey}
-                    className={`cursor-pointer transition-all ${
-                      versionDialog.versionKey === v.versionKey ? 'ring-2 ring-primary bg-primary/5' : 'hover:bg-gray-50'
+                    type="button"
+                    className={`w-full text-left rounded-lg border px-3 py-2 flex items-center justify-between transition-all ${
+                      versionDialog.versionKey === v.versionKey ? 'border-primary bg-primary/5' : 'border-gray-200 hover:bg-gray-50'
                     }`}
                     onClick={() => setVersionDialog((prev) => ({ ...prev, versionKey: v.versionKey }))}
                   >
-                    <CardContent className="p-3 flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-sm">
-                          {v.name}
-                          {!v.enabled && <span className="ml-2 text-xs text-gray-400">(已停用)</span>}
-                        </p>
-                        <p className="text-xs text-muted-foreground font-mono">{v.versionKey} · 落地 {v.landingPath}</p>
-                      </div>
-                      {versionDialog.versionKey === v.versionKey && <CheckCircle className="w-5 h-5 text-primary" />}
-                    </CardContent>
-                  </Card>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm">
+                        {v.name}
+                        {!v.enabled && <span className="ml-1.5 text-[11px] text-gray-400">(已停用)</span>}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground font-mono truncate">{v.versionKey} · 落地 {v.landingPath}</p>
+                    </div>
+                    {versionDialog.versionKey === v.versionKey && <CheckCircle className="w-4 h-4 text-primary shrink-0" />}
+                  </button>
                 ))}
               </div>
             </div>
 
-            {/* 允许切换 */}
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div>
-                <p className="text-sm font-medium">允许右上角切换版本</p>
-                <p className="text-xs text-muted-foreground">开启后用户登录页面右上角出现切换按钮</p>
+            {/* 允许切换 + 可切换范围（合并：开启后下方直接展开勾选） */}
+            <div className="rounded-lg bg-gray-50 px-3 py-2">
+              <div className="flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">允许切换版本</p>
+                  <p className="text-[11px] text-muted-foreground">开启后用户可在自己版本内切换到下列勾选的版本</p>
+                </div>
+                <Switch
+                  checked={versionDialog.switchEnabled}
+                  onCheckedChange={(checked) =>
+                    setVersionDialog((prev) => ({ ...prev, switchEnabled: checked }))
+                  }
+                />
               </div>
-              <Switch
-                checked={versionDialog.switchEnabled}
-                onCheckedChange={(checked) =>
-                  setVersionDialog((prev) => ({ ...prev, switchEnabled: checked }))
-                }
-              />
+
+              {versionDialog.switchEnabled && (
+                <div className="mt-2 pt-2 border-t border-gray-200">
+                  <p className="text-[11px] text-muted-foreground mb-1.5">勾选允许切换到的版本；不勾选则表示允许切换到全部已启用版本。</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(versions || []).filter((v) => v.enabled).map((v) => {
+                      const checked = versionDialog.switchScope.includes(v.versionKey);
+                      return (
+                        <button
+                          key={v.versionKey}
+                          type="button"
+                          onClick={() => toggleScopeVersion(v.versionKey)}
+                          className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md border text-sm transition-all ${
+                            checked ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 bg-white text-gray-600'
+                          }`}
+                        >
+                          {checked ? <CheckCircle className="w-4 h-4 shrink-0" /> : <span className="w-4 h-4 rounded-full border border-gray-300 shrink-0" />}
+                          <span className="truncate">{v.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* 可切换范围（仅在允许切换时显示） */}
-            {versionDialog.switchEnabled && (
-              <div className="space-y-2">
-                <Label className="text-sm">可切换到的版本</Label>
-                <p className="text-xs text-muted-foreground">不勾选任何项表示允许切换到全部已启用版本</p>
-                <div className="grid grid-cols-2 gap-2 mt-1">
-                  {(versions || []).filter((v) => v.enabled).map((v) => {
-                    const checked = versionDialog.switchScope.includes(v.versionKey);
-                    return (
-                      <button
-                        key={v.versionKey}
-                        type="button"
-                        onClick={() => toggleScopeVersion(v.versionKey)}
-                        className={`flex items-center gap-2 p-2 rounded-lg border text-sm transition-all ${
-                          checked ? 'border-primary bg-primary/5 text-primary' : 'border-gray-200 text-gray-600'
-                        }`}
-                      >
-                        {checked ? <CheckCircle className="w-4 h-4" /> : <span className="w-4 h-4 rounded-full border border-gray-300" />}
-                        {v.name}
-                      </button>
-                    );
-                  })}
-                </div>
+            {/* 影响范围（四选一单选） */}
+            <div className="rounded-lg bg-[#FFF3E0] px-3 py-2">
+              <p className="text-sm font-medium">影响范围</p>
+              <p className="text-[11px] text-muted-foreground mb-1.5">该版本设置应用到哪些用户。下线指其推荐链下的人。</p>
+              <div className="grid grid-cols-1 gap-1.5">
+                {([
+                  { key: "self", title: "仅本人", desc: "只改该用户自己，不动任何下线" },
+                  { key: "new", title: "本人 + 今后新下线", desc: "老下线不动；今后新注册且选继承的下线自动跟随" },
+                  { key: "old", title: "本人 + 已注册老下线", desc: "把现有下线一次性强制改为该版本" },
+                  { key: "both", title: "本人 + 新老下线", desc: "既改写现有下线，新下线也继承跟随" },
+                ] as const).map((opt) => {
+                  const active = versionDialog.applyScope === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setVersionDialog((prev) => ({ ...prev, applyScope: opt.key }))}
+                      className={`w-full text-left rounded-md border px-2.5 py-1.5 flex items-center justify-between transition-all ${
+                        active ? 'border-[#E65100] bg-white' : 'border-transparent bg-white/50 hover:bg-white'
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-800">{opt.title}</p>
+                        <p className="text-[11px] text-muted-foreground leading-snug">{opt.desc}</p>
+                      </div>
+                      {active
+                        ? <CheckCircle className="w-4 h-4 text-[#E65100] shrink-0" />
+                        : <span className="w-4 h-4 rounded-full border border-gray-300 shrink-0" />}
+                    </button>
+                  );
+                })}
               </div>
-            )}
-
-            {/* 是否下发下线 */}
-            <div className="flex items-center justify-between p-3 bg-[#FFF3E0] rounded-lg">
-              <div>
-                <p className="text-sm font-medium">同时应用到该用户名下所有下线</p>
-                <p className="text-xs text-muted-foreground">将相同设置一并写入其推荐链下的所有用户</p>
-              </div>
-              <Switch
-                checked={versionDialog.applyToDescendants}
-                onCheckedChange={(checked) =>
-                  setVersionDialog((prev) => ({ ...prev, applyToDescendants: checked }))
-                }
-              />
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-2">
             <Button
               variant="outline"
+              size="sm"
               onClick={() => setVersionDialog((prev) => ({ ...prev, open: false }))}
             >
               取消
             </Button>
             <Button
+              size="sm"
               onClick={handleSaveVersion}
               disabled={setUserVersionMutation.isPending}
             >
