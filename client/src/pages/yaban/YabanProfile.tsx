@@ -142,6 +142,13 @@ export default function YabanProfile() {
   // ── 医院经营角度：单家医院日常经营管理用到的功能 ──
   const clinicRows: RowItem[] = [
     {
+      key: "account",
+      icon: <Settings className="w-5 h-5 text-[#1E88D6]" />,
+      label: "账号资料管理",
+      hint: "编辑昵称、手机号与头像",
+      onClick: () => navigate("/yaban/account"),
+    },
+    {
       key: "roles",
       icon: <ShieldCheck className="w-5 h-5 text-[#1E88D6]" />,
       label: "账号权限管理",
@@ -193,16 +200,8 @@ export default function YabanProfile() {
     },
   ];
 
-  // 账号组（仅个人资料，原“设置”聚合页已拆除）
-  const systemRows: RowItem[] = [
-    {
-      key: "account",
-      icon: <Settings className="w-5 h-5 text-[#1E88D6]" />,
-      label: "账号资料",
-      hint: "编辑昵称、手机号与头像",
-      onClick: () => navigate("/yaban/account"),
-    },
-  ];
+  // 账号资料管理已并入上方经营管理组，原独立账号组移除
+  const systemRows: RowItem[] = [];
 
   const renderGroup = (rows: RowItem[]) => (
     <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
@@ -235,39 +234,16 @@ export default function YabanProfile() {
       <div className="bg-gradient-to-b from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="max-w-lg mx-auto px-4 pt-5 pb-6">
           <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => avatarInputRef.current?.click()}
-              disabled={uploadAvatar.isPending}
-              className="relative w-16 h-16 shrink-0 active:scale-95 transition"
-              aria-label="更换头像"
-            >
-              {/* 内层圆形裁剪层：只负责裁切头像图片 */}
+            {/* 头像仅展示；更换头像统一在「账号资料管理」中操作,故移除相机角标与点击上传 */}
+            <div className="relative w-16 h-16 shrink-0">
               <span className="absolute inset-0 rounded-full bg-white/20 ring-2 ring-white/40 overflow-hidden flex items-center justify-center">
                 {avatar ? (
                   <img src={avatar} alt="头像" className="w-full h-full object-cover" />
                 ) : (
                   <User className="w-8 h-8 text-white" />
                 )}
-                {/* 上传中遮罩 */}
-                {uploadAvatar.isPending && (
-                  <span className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                    <Loader2 className="w-5 h-5 text-white animate-spin" />
-                  </span>
-                )}
               </span>
-              {/* 右下角相机角标：实心蓝底白相机，白色描边，置顶不被裁切 */}
-              <span className="absolute -bottom-0.5 -right-0.5 z-10 w-6 h-6 rounded-full bg-[#2196C8] flex items-center justify-center ring-2 ring-white shadow-md">
-                <Camera className="w-3.5 h-3.5 text-white" strokeWidth={2.2} />
-              </span>
-            </button>
-            <input
-              ref={avatarInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={onPickAvatar}
-            />
+            </div>
             <div className="min-w-0 flex-1">
               <div className="text-lg font-bold truncate">{displayName}</div>
               {/* 角色徽标：一人可多角色，并排显示（仅身份标识） */}
@@ -338,11 +314,13 @@ export default function YabanProfile() {
           </div>
         )}
 
-        {/* 账号 */}
-        <div className="space-y-2">
-          <div className="px-1 text-xs font-semibold text-gray-400">账号</div>
-          {renderGroup(systemRows)}
-        </div>
+        {/* 账号组：账号资料管理已并入医院经营组,此处仅在仍有项时渲染 */}
+        {systemRows.length > 0 && (
+          <div className="space-y-2">
+            <div className="px-1 text-xs font-semibold text-gray-400">账号</div>
+            {renderGroup(systemRows)}
+          </div>
+        )}
       </div>
 
       <YabanTabBar />
