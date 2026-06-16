@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-16
+// 生成时间：2026-06-17
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7439,5 +7439,16 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-16T05:41:49Z", type: "feat", cleanMessage: "移除我的页面头像区退出账号按钮" },
     { date: "2026-06-16T09:28:43Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-06-16T14:31:24Z", type: "feat", cleanMessage: "预约排班接入真实API + 新建诊所排班页" },
+    { date: "2026-06-16T14:50:09Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-16T15:11:01Z", type: "feat", cleanMessage: "完整重写YabanClinicShift，1:1还原原型UI细节，无emoji" },
+    { date: "2026-06-16T15:11:23Z", type: "fix", cleanMessage: "YabanSchedule去除emoji占位图" },
+    { date: "2026-06-16T15:33:00Z", type: "fix", cleanMessage: "修复Set迭代兼容性问题，[...Set]改为Array.from(Set)" },
+    { date: "2026-06-16T15:58:19Z", type: "ci", cleanMessage: "部署改为后台异步执行+轮询结果，避免SSH长连接被服务器超时踢断" },
+  ],
+  "2026-06-17": [
+    { date: "2026-06-16T16:01:07Z", type: "revert", cleanMessage: "还原deploy.yml，实际生效部署为bg-deploy.yml" },
+    { date: "2026-06-16T16:04:20Z", type: "ci", cleanMessage: "关闭deploy.yml自动push触发，统一由bg-deploy.yml单条流程自动部署，避免并发SSH冲突" },
+    { date: "2026-06-16T16:33:51Z", type: "test", cleanMessage: "部署链路探测（仅加注释）" },
+    { date: "2026-06-16T17:24:24Z", type: "feat", cleanMessage: "AI智能估值页面1:1还原(P403/ai-valuation)" },
   ],
 };
