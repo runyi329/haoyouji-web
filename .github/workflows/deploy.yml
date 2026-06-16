@@ -34,90 +34,119 @@ jobs:
           echo "  ServerAliveCountMax 20" >> ~/.ssh/config
           chmod 600 ~/.ssh/config
 
-      - name: 🚀 执行部署脚本
+      - name: 📝 上传部署脚本到服务器
         run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
-            set -e
-            export PATH="/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+          cat > /tmp/remote-deploy.sh << 'DEPLOYSCRIPT'
+          #!/bin/bash
+          set -e
+          export PATH="/root/.local/share/pnpm:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+          export NODE_OPTIONS="--max-old-space-size=4096"
 
-            echo "📂 进入项目目录..."
-            cd /root/haoyouji-web
+          echo "===== 部署开始 $(date) ====="
 
-            echo "📥 拉取最新代码..."
-            OLD_LOCK_HASH=$(md5sum pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || echo "none")
-            git fetch origin && git reset --hard origin/main && git clean -fd
-            NEW_LOCK_HASH=$(md5sum pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || echo "none")
-            echo "✅ 当前 git HEAD: $(git log --oneline -1)"
+          echo "📂 进入项目目录..."
+          cd /root/haoyouji-web
 
-            # 只在lockfile变化时重新安装依赖
-            if [ "$OLD_LOCK_HASH" != "$NEW_LOCK_HASH" ]; then
-              echo "📦 lockfile已变化，重新安装依赖..."
-              pnpm install --frozen-lockfile
-            else
-              echo "📦 依赖无变化，跳过安装"
+          echo "📥 拉取最新代码..."
+          OLD_LOCK_HASH=$(md5sum pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || echo "none")
+          git fetch origin && git reset --hard origin/main && git clean -fd
+          NEW_LOCK_HASH=$(md5sum pnpm-lock.yaml 2>/dev/null | cut -d' ' -f1 || echo "none")
+          echo "✅ 当前 git HEAD: $(git log --oneline -1)"
+
+          if [ "$OLD_LOCK_HASH" != "$NEW_LOCK_HASH" ]; then
+            echo "📦 lockfile已变化，重新安装依赖..."
+            pnpm install --frozen-lockfile
+          else
+            echo "📦 依赖无变化，跳过安装"
+          fi
+
+          echo "🧹 清理旧的构建产物..."
+          rm -rf /root/haoyouji-web/dist 2>/dev/null || true
+          find /root/haoyouji-web/dist -mindepth 0 -delete 2>/dev/null || true
+
+          echo "🔨 开始构建项目..."
+          set -o pipefail
+          pnpm run build 2>&1 | tee /tmp/build_output.log || { echo "❌ 构建失败！"; tail -50 /tmp/build_output.log; exit 1; }
+          echo "✅ 构建完成"
+
+          echo "📊 执行数据库迁移..."
+          bash scripts/post-deploy-migration.sh || true
+          bash scripts/db-migrations.sh || true
+
+          echo "🔄 同步构建产物到服务目录..."
+          rm -rf /home/ubuntu/haoyouji-web/dist
+          cp -rf /root/haoyouji-web/dist /home/ubuntu/haoyouji-web/dist
+          mkdir -p /home/ubuntu/haoyouji-web/server
+          cp /root/haoyouji-web/server/git-log.json /home/ubuntu/haoyouji-web/server/git-log.json 2>/dev/null || true
+          chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/dist
+          chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/server/git-log.json 2>/dev/null || true
+          cp /root/haoyouji-web/package.json /home/ubuntu/haoyouji-web/package.json
+          cp /root/haoyouji-web/pnpm-lock.yaml /home/ubuntu/haoyouji-web/pnpm-lock.yaml
+
+          if [ "$OLD_LOCK_HASH" != "$NEW_LOCK_HASH" ]; then
+            echo "🔄 依赖已变化，同步 node_modules..."
+            rsync -a --delete /root/haoyouji-web/node_modules/ /home/ubuntu/haoyouji-web/node_modules/
+            chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules
+          else
+            echo "🔄 依赖无变化，跳过 node_modules 同步"
+          fi
+
+          echo "🔄 同步环境配置..."
+          cp /root/haoyouji-web/.env /home/ubuntu/haoyouji-web/.env 2>/dev/null || true
+          chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/.env 2>/dev/null || true
+          sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' /root/haoyouji-web/ecosystem.config.cjs > /home/ubuntu/haoyouji-web/ecosystem.config.cjs
+          chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/ecosystem.config.cjs
+
+          echo "🔄 重启服务..."
+          pm2 delete haoyouji-web 2>/dev/null || true
+          pm2 save 2>/dev/null || true
+          if sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 describe haoyouji-web > /dev/null 2>&1'; then
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart /home/ubuntu/haoyouji-web/ecosystem.config.cjs --update-env' 2>&1
+          else
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' 2>&1
+          fi
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' 2>&1
+          sleep 3
+
+          echo "🔒 同步 Nginx 配置..."
+          cp /root/haoyouji-web/nginx.conf /etc/nginx/sites-available/haoyouji
+          nginx -t && (systemctl reload nginx 2>/dev/null || true)
+
+          echo "📊 服务状态检查..."
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
+
+          echo "===== ✅ 部署完成 $(date) ====="
+          DEPLOYSCRIPT
+
+          # 上传脚本到服务器
+          scp -i ~/.ssh/deploy_key -P ${{ secrets.DEPLOY_PORT }} /tmp/remote-deploy.sh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/remote-deploy.sh
+
+      - name: 🚀 后台异步触发部署
+        run: |
+          # 以 nohup 后台方式执行部署脚本，SSH 立即返回，避免长连接被服务器超时踢断
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "chmod +x /tmp/remote-deploy.sh && rm -f /tmp/deploy.done /tmp/deploy.log && nohup bash -c 'bash /tmp/remote-deploy.sh > /tmp/deploy.log 2>&1; echo \$? > /tmp/deploy.done' >/dev/null 2>&1 & echo '✅ 部署任务已在服务器后台启动'"
+
+      - name: ⏳ 轮询部署结果
+        run: |
+          # 每 15 秒短连接查询一次，最多等待 12 分钟。短连接不会被长连接超时影响。
+          for i in $(seq 1 48); do
+            sleep 15
+            STATUS=$(ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} -o ConnectTimeout=20 ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+              "if [ -f /tmp/deploy.done ]; then cat /tmp/deploy.done; else echo 'running'; fi" 2>/dev/null || echo "ssh_err")
+
+            echo "[$i/48] 部署状态: $STATUS"
+
+            if [ "$STATUS" = "0" ]; then
+              echo "✅ 部署成功，输出日志末尾："
+              ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} -o ConnectTimeout=20 ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "tail -30 /tmp/deploy.log" 2>/dev/null || true
+              exit 0
+            elif [ "$STATUS" != "running" ] && [ "$STATUS" != "ssh_err" ] && [ -n "$STATUS" ]; then
+              echo "❌ 部署失败 (exit code: $STATUS)，错误日志："
+              ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} -o ConnectTimeout=20 ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "tail -60 /tmp/deploy.log" 2>/dev/null || true
+              exit 1
             fi
+          done
 
-            echo "🧹 清理旧的构建产物（避免 vite prepare-out-dir ENOTEMPTY）..."
-            rm -rf /root/haoyouji-web/dist 2>/dev/null || true
-            find /root/haoyouji-web/dist -mindepth 0 -delete 2>/dev/null || true
-
-            echo "🔨 开始构建项目..."
-            export NODE_OPTIONS="--max-old-space-size=4096"
-            set -o pipefail
-            # 后台心跳：每10秒输出一个点，防止SSH因无输出被断开
-            ( while true; do sleep 10; printf "."; done ) &
-            HEARTBEAT_PID=$!
-            pnpm run build 2>&1 | tee /tmp/build_output.log || { kill $HEARTBEAT_PID 2>/dev/null; echo ""; echo "❌ 构建失败！"; cat /tmp/build_output.log | tail -50; exit 1; }
-            kill $HEARTBEAT_PID 2>/dev/null
-            echo ""
-            echo "✅ 构建完成"
-
-            echo "📊 执行数据库迁移..."
-            bash scripts/post-deploy-migration.sh || true
-            bash scripts/db-migrations.sh || true
-
-            echo "🔄 同步构建产物到服务目录..."
-            rm -rf /home/ubuntu/haoyouji-web/dist
-            cp -rf /root/haoyouji-web/dist /home/ubuntu/haoyouji-web/dist
-            mkdir -p /home/ubuntu/haoyouji-web/server
-            cp /root/haoyouji-web/server/git-log.json /home/ubuntu/haoyouji-web/server/git-log.json 2>/dev/null || true
-            chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/dist
-            chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/server/git-log.json 2>/dev/null || true
-            cp /root/haoyouji-web/package.json /home/ubuntu/haoyouji-web/package.json
-            cp /root/haoyouji-web/pnpm-lock.yaml /home/ubuntu/haoyouji-web/pnpm-lock.yaml
-
-            # 只在lockfile变化时同步node_modules（最耗时的步骤）
-            if [ "$OLD_LOCK_HASH" != "$NEW_LOCK_HASH" ]; then
-              echo "🔄 依赖已变化，同步 node_modules..."
-              rsync -a --delete /root/haoyouji-web/node_modules/ /home/ubuntu/haoyouji-web/node_modules/
-              chown -R ubuntu:ubuntu /home/ubuntu/haoyouji-web/node_modules
-            else
-              echo "🔄 依赖无变化，跳过 node_modules 同步"
-            fi
-
-            echo "🔄 同步环境配置..."
-            cp /root/haoyouji-web/.env /home/ubuntu/haoyouji-web/.env 2>/dev/null || true
-            chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/.env 2>/dev/null || true
-            sed 's|/root/haoyouji-web|/home/ubuntu/haoyouji-web|g' /root/haoyouji-web/ecosystem.config.cjs > /home/ubuntu/haoyouji-web/ecosystem.config.cjs
-            chown ubuntu:ubuntu /home/ubuntu/haoyouji-web/ecosystem.config.cjs
-
-            echo "🔄 重启服务..."
-            pm2 delete haoyouji-web 2>/dev/null || true
-            pm2 save 2>/dev/null || true
-            if sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 describe haoyouji-web > /dev/null 2>&1'; then
-              sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart /home/ubuntu/haoyouji-web/ecosystem.config.cjs --update-env' 2>&1
-            else
-              sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' 2>&1
-            fi
-            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' 2>&1
-            sleep 3
-
-            echo "🔒 同步 Nginx 配置..."
-            cp /root/haoyouji-web/nginx.conf /etc/nginx/sites-available/haoyouji
-            nginx -t && (systemctl reload nginx 2>/dev/null || true)
-
-            echo "📊 服务状态检查..."
-            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
-
-            echo "✅ 部署完成！"
-          ENDSSH
+          echo "⚠️ 等待超时（12分钟），请手动检查服务器部署日志 /tmp/deploy.log"
+          exit 1
