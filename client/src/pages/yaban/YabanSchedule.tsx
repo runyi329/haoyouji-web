@@ -1,6 +1,7 @@
 /**
  * 牙伴齿科管理 - 预约日程页
  * 路由：/yaban/schedule
+ * 部署链路测试 deploy-probe-1
  * UI：1:1 还原 yaban-schedule-proto/index.html 原型（顾客预约 Tab）
  * 数据：真实 API（yabanAppointment.listByDate / monthStats / listMembers）
  * 无模拟数据，无 emoji
