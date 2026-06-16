@@ -728,6 +728,7 @@ function Router() {
         {/* 牙伴齿科管理 */}
         <Route path="/yaban/intro" component={lazy(() => import("./pages/yaban/YabanIntro"))} />
         <Route path="/yaban" component={YabanHome} />
+        <Route path="/yaban/features/customize" component={lazy(() => import("./pages/yaban/YabanFeaturesCustomize"))} />
         <Route path="/yaban/features" component={lazy(() => import("./pages/yaban/YabanFeatures"))} />
         <Route path="/yaban/messages" component={YabanMessages} />
         <Route path="/yaban/shop" component={YabanShop} />
