@@ -48,18 +48,34 @@ import { trpc } from "@/lib/trpc";
 
 type Scope = "all" | "self" | "none";
 
-// 角色标签配色（蓝色系深浅区分）
-const ROLE_BADGE: Record<string, string> = {
-  founder: "bg-gradient-to-r from-[#C77700] to-[#E0A030] text-white",
-  co_founder: "bg-gradient-to-r from-[#C77700] to-[#E0A030] text-white",
-  owner: "bg-[#0E5A9E] text-white",
-  shareholder: "bg-[#FFF3E0] text-[#C77700]",
-  doctor: "bg-[#1E88D6] text-white",
-  nurse: "bg-[#EAF4FE] text-[#1E88D6]",
-  assistant: "bg-[#EAF4FE] text-[#1E88D6]",
-  receptionist: "bg-[#EAF4FE] text-[#1E88D6]",
-  finance: "bg-[#FFF3E0] text-[#C77700]",
+// 角色胶囊柔光铭牌：key -> 渐变两色 + 光点色
+const ROLE_TONE: Record<string, { c1: string; c2: string; dot: string }> = {
+  founder: { c1: "#F6C56B", c2: "#D98E1F", dot: "#FFF0CC" },
+  co_founder: { c1: "#F3CE8A", c2: "#D89A2E", dot: "#FFF4D6" },
+  owner: { c1: "#3D9AE0", c2: "#1366A8", dot: "#E8D6A8" },
+  shareholder: { c1: "#62ACE6", c2: "#2C7BBE", dot: "#EAD9AE" },
+  doctor: { c1: "#48ABEA", c2: "#1E88D6", dot: "#DCEEFB" },
+  nurse: { c1: "#3FC2BF", c2: "#118C8C", dot: "#D9F2F0" },
+  assistant: { c1: "#54CFCB", c2: "#159E9E", dot: "#D9F2F0" },
+  receptionist: { c1: "#8A82E0", c2: "#5B53C7", dot: "#E8E5FB" },
+  finance: { c1: "#4FB678", c2: "#2E8B57", dot: "#DCF2E5" },
 };
+// 自定义角色统一灰蓝款
+const CUSTOM_TONE = { c1: "#8AA2BC", c2: "#56708C", dot: "#E4ECF4" };
+// 返回胶囊铭牌的内联样式（内置角色按配色，未知/自定义角色用灰蓝款）
+function roleBadgeStyle(roleKey: string): React.CSSProperties {
+  const t = ROLE_TONE[roleKey] || CUSTOM_TONE;
+  return {
+    background: `linear-gradient(165deg, ${t.c1}, ${t.c2})`,
+    color: "#fff",
+    boxShadow:
+      "inset 0 1px 1.5px rgba(255,255,255,.55), inset 0 -2px 4px rgba(0,0,0,.16), 0 2px 4px rgba(20,60,100,.18)",
+    textShadow: "0 1px 1px rgba(0,0,0,.18)",
+  };
+}
+function roleDotColor(roleKey: string): string {
+  return (ROLE_TONE[roleKey] || CUSTOM_TONE).dot;
+}
 
 const OWNER_LOCKED = ["member_manage", "clinic_setting"];
 
@@ -244,17 +260,22 @@ function MyRoleCard({ my }: { my: any }) {
         <ShieldCheck className="w-4 h-4 text-[#1E88D6]" />
         <span className="text-sm font-bold text-gray-800">我的角色</span>
       </div>
-      {my?.roleBadges?.length ? (
+      {(my?.roleBadgeItems?.length || my?.roleBadges?.length) ? (
         <div className="flex flex-wrap items-center gap-2">
-          {my.roleBadges.map((k: string) => (
+          {(my.roleBadgeItems
+            ? my.roleBadgeItems
+            : my.roleBadges.map((k: string) => ({ key: k, label: ROLE_NAME[k] || k, builtin: !!ROLE_TONE[k] }))
+          ).map((it: { key: string; label: string; builtin: boolean }) => (
             <span
-              key={k}
-              className={`text-xs font-medium rounded-full px-2.5 py-1 inline-flex items-center gap-1 ${
-                ROLE_BADGE[k] || "bg-gray-100 text-gray-500"
-              }`}
+              key={it.key}
+              className="relative inline-flex items-center justify-center gap-1.5 h-[24px] px-3 rounded-full text-xs font-bold"
+              style={roleBadgeStyle(it.builtin ? it.key : "__custom__")}
             >
-              {(k === "founder" || k === "co_founder") && <Crown className="w-3 h-3" />}
-              {ROLE_NAME[k] || k}
+              <span
+                className="w-[5px] h-[5px] rounded-full shrink-0"
+                style={{ background: roleDotColor(it.builtin ? it.key : "__custom__"), boxShadow: "0 0 2px rgba(255,255,255,.8)" }}
+              />
+              {it.label}
             </span>
           ))}
         </div>
@@ -421,9 +442,8 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
                             {m.name || m.username}
                           </div>
                           <span
-                            className={`text-[10px] rounded px-1 py-0.5 ${
-                              ROLE_BADGE[m.roleKey] || "bg-[#EAF4FE] text-[#1E88D6]"
-                            }`}
+                            className="inline-flex items-center justify-center text-[10px] font-bold rounded-full px-2 py-0.5"
+                            style={roleBadgeStyle(ROLE_TONE[m.roleKey] ? m.roleKey : "__custom__")}
                           >
                             {roles?.find((r: any) => r.role_key === m.roleKey)?.name || m.roleKey}
                           </span>
@@ -761,9 +781,8 @@ function RoleTemplateSheet({ tenantId, onClose }: { tenantId: number; onClose: (
               <div key={r.role_key} className="border border-gray-100 rounded-xl overflow-hidden">
                 <div className="px-3 py-2 bg-[#F6FAFE] flex items-center gap-2">
                   <span
-                    className={`text-[11px] font-medium rounded-full px-2 py-0.5 ${
-                      ROLE_BADGE[r.role_key] || "bg-[#EAF4FE] text-[#1E88D6]"
-                    }`}
+                    className="inline-flex items-center justify-center text-[11px] font-bold rounded-full px-2.5 py-0.5"
+                    style={roleBadgeStyle(ROLE_TONE[r.role_key] ? r.role_key : "__custom__")}
                   >
                     {r.name}
                   </span>
@@ -846,12 +865,10 @@ function MemberPermSheet({
           <span className="text-base font-bold text-gray-800 flex items-center gap-2">
             {member.name || member.username} 的权限
             <span
-              className={`text-[10px] rounded px-1.5 py-0.5 ${
-                ROLE_BADGE[member.roleKey] || "bg-gray-100 text-gray-500"
-              }`}
+              className="inline-flex items-center justify-center text-[10px] font-bold rounded-full px-2 py-0.5"
+              style={roleBadgeStyle(ROLE_TONE[member.roleKey] ? member.roleKey : "__custom__")}
             >
-              {data?.roleKey === member.roleKey ? "" : ""}
-              {member.roleKey}
+              {member.roleName || member.roleKey}
             </span>
           </span>
           <button onClick={onClose} aria-label="关闭">

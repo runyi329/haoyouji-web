@@ -664,6 +664,35 @@ export const yabanRoleRouter = router({
       if (!badgeKeys.includes(k)) badgeKeys.push(k);
     }
 
+    // 徽标带中文名：内置角色用固定名，自定义角色取角色表里的中文名
+    const builtinBadgeNames: Record<string, string> = {
+      founder: "创始人",
+      co_founder: "创始股东",
+      owner: "院长",
+      shareholder: "股东",
+      doctor: "医生",
+      nurse: "护士",
+      assistant: "助理",
+      receptionist: "前台",
+      finance: "财务",
+    };
+    // 取该用户持有的自定义角色中文名（跨门店）
+    let customRoleNameMap: Record<string, string> = {};
+    const customKeys = clinicRoleKeys.filter((k) => !builtinBadgeNames[k]);
+    if (customKeys.length > 0) {
+      const placeholders = customKeys.map(() => "?").join(",");
+      const [nameRows] = (await conn.execute(
+        `SELECT DISTINCT role_key, name FROM yaban_clinic_role WHERE role_key IN (${placeholders})`,
+        customKeys
+      )) as any;
+      for (const r of nameRows as any[]) customRoleNameMap[r.role_key] = r.name;
+    }
+    const roleBadgeItems = badgeKeys.map((k) => ({
+      key: k,
+      label: builtinBadgeNames[k] || customRoleNameMap[k] || k,
+      builtin: !!builtinBadgeNames[k],
+    }));
+
     return {
       member,
       permissions,
@@ -673,6 +702,7 @@ export const yabanRoleRouter = router({
       isSuperAdmin: sa,
       founderTitle,
       roleBadges: badgeKeys,
+      roleBadgeItems,
       // 平台层权限：创始人全开，创始股东按表，其他全关
       platformPerms: platform.perms,
       isPureFounder: platform.isPureFounder,
@@ -884,6 +914,8 @@ export const yabanRoleRouter = router({
       await ensureRoleTables(conn);
       await assertCanManage(conn, ctx, tenantId);
       const roleList = await listTenantRoles(conn, tenantId);
+      const roleNameMap: Record<string, string> = {};
+      for (const r of roleList) roleNameMap[r.role_key] = r.name;
       const [memberRows] = (await conn.execute(
         `SELECT m.id, m.user_id, m.role_key, m.status, u.username, u.name, u.phone, u.avatar
          FROM yaban_clinic_member m JOIN users u ON u.id = m.user_id
@@ -904,7 +936,7 @@ export const yabanRoleRouter = router({
           scopes[p] = await getStaffEffectiveScope(conn, m.user_id, p, tenantId);
         }
         members.push({
-          memberId: m.id, userId: m.user_id, roleKey: m.role_key,
+          memberId: m.id, userId: m.user_id, roleKey: m.role_key, roleName: roleNameMap[m.role_key] || m.role_key,
           username: m.username, name: m.name, phone: m.phone, avatar: m.avatar,
           scopes, customized: Array.from(customized),
         });

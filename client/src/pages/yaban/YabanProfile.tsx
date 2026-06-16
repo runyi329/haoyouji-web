@@ -18,18 +18,11 @@ import {
   ReceiptText,
   Database,
   ChevronRight,
-  Phone,
   LogOut,
   Camera,
   Loader2,
   LayoutDashboard,
-  Crown,
   ShieldCheck,
-  Stethoscope,
-  HeartPulse,
-  ConciergeBell,
-  Wallet as WalletBadge,
-  UserRound,
 } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
@@ -55,21 +48,30 @@ export default function YabanProfile() {
   const isOwner = (membership as any)?.member?.role_key === "owner";
   const isFounder = !!(membership as any)?.isFounder || !!(membership as any)?.isSuperAdmin;
   const founderTitle = (membership as any)?.founderTitle as string | undefined;
-  const roleBadgeKeys = ((membership as any)?.roleBadges as string[] | undefined) || [];
+  // 后端返回带中文名的徽标项：{ key, label, builtin }
+  const roleBadgeItems =
+    ((membership as any)?.roleBadgeItems as { key: string; label: string; builtin: boolean }[] | undefined) || [];
 
-  // 徽标元数据：角色 key -> 显示样式（角色仅作身份标识，与权限解耦）
-  const BADGE_META: Record<string, { label: string; Icon: any; text: string; bg: string; border: string }> = {
-    founder: { label: "创始人", Icon: Crown, text: "#7A4E00", bg: "#FFF1CC", border: "#E6B800" },
-    co_founder: { label: "创始股东", Icon: Crown, text: "#9A6A00", bg: "#FFF6DD", border: "#EBC85A" },
-    owner: { label: "院长/股东", Icon: ShieldCheck, text: "#0E5A9E", bg: "#DCEBFB", border: "#9CC8EC" },
-    doctor: { label: "医生", Icon: Stethoscope, text: "#1E88D6", bg: "#E3F1FC", border: "#A9D3F2" },
-    assistant: { label: "护士/助理", Icon: HeartPulse, text: "#0E8C8C", bg: "#DDF3F2", border: "#A2DEDB" },
-    receptionist: { label: "前台", Icon: ConciergeBell, text: "#5B53C7", bg: "#E6E4FA", border: "#BBB6EE" },
-    finance: { label: "财务", Icon: WalletBadge, text: "#2E8B57", bg: "#DEF3E6", border: "#A7DCBC" },
-    user: { label: "用户", Icon: UserRound, text: "#64748B", bg: "#EEF2F6", border: "#D5DEE8" },
+  // 角色配色映射：key -> 胶囊渐变两色 + 光点色（角色仅作身份标识，与权限解耦）
+  const ROLE_TONE: Record<string, { c1: string; c2: string; dot: string }> = {
+    founder: { c1: "#F6C56B", c2: "#D98E1F", dot: "#FFF0CC" },
+    co_founder: { c1: "#F3CE8A", c2: "#D89A2E", dot: "#FFF4D6" },
+    owner: { c1: "#3D9AE0", c2: "#1366A8", dot: "#E8D6A8" },
+    shareholder: { c1: "#62ACE6", c2: "#2C7BBE", dot: "#EAD9AE" },
+    doctor: { c1: "#48ABEA", c2: "#1E88D6", dot: "#DCEEFB" },
+    nurse: { c1: "#3FC2BF", c2: "#118C8C", dot: "#D9F2F0" },
+    assistant: { c1: "#54CFCB", c2: "#159E9E", dot: "#D9F2F0" },
+    receptionist: { c1: "#8A82E0", c2: "#5B53C7", dot: "#E8E5FB" },
+    finance: { c1: "#4FB678", c2: "#2E8B57", dot: "#DCF2E5" },
+    user: { c1: "#9AA8B8", c2: "#64748B", dot: "#E4ECF4" },
   };
-  // 一人可多角色：取后端返回的 roleBadges；为空时退回“用户”
-  const badges = (roleBadgeKeys.length > 0 ? roleBadgeKeys : ["user"]).map((k) => BADGE_META[k] || BADGE_META.user);
+  // 自定义角色统一灰蓝款
+  const CUSTOM_TONE = { c1: "#8AA2BC", c2: "#56708C", dot: "#E4ECF4" };
+  // 一人可多角色；为空时退回“用户”
+  const badges =
+    roleBadgeItems.length > 0
+      ? roleBadgeItems.map((it) => ({ label: it.label, tone: it.builtin ? ROLE_TONE[it.key] || CUSTOM_TONE : CUSTOM_TONE }))
+      : [{ label: "用户", tone: ROLE_TONE.user }];
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   // 头像上传：复用 auth.uploadAvatar（与脉动版同一接口），先压缩再上传
@@ -246,22 +248,26 @@ export default function YabanProfile() {
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-lg font-bold truncate">{displayName}</div>
-              {/* 角色徽标：一人可多角色，并排显示（仅身份标识） */}
-              <div className="flex items-center gap-1 flex-wrap mt-1">
+              {/* 角色徽标：胶囊柔光立体铭牌，一人可多角色并排（仅身份标识） */}
+              <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
                 {badges.map((b, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold leading-none"
-                    style={{ color: b.text, backgroundColor: b.bg, border: `1px solid ${b.border}` }}
+                    className="relative inline-flex items-center justify-center gap-1.5 h-[22px] px-3 rounded-full text-[12px] font-bold leading-none text-white"
+                    style={{
+                      background: `linear-gradient(165deg, ${b.tone.c1}, ${b.tone.c2})`,
+                      boxShadow:
+                        "inset 0 1px 1.5px rgba(255,255,255,.55), inset 0 -2px 4px rgba(0,0,0,.16), 0 2px 5px rgba(20,60,100,.18)",
+                      textShadow: "0 1px 1px rgba(0,0,0,.18)",
+                    }}
                   >
-                    <b.Icon className="w-3 h-3" strokeWidth={2.4} />
+                    <span
+                      className="w-[5px] h-[5px] rounded-full shrink-0"
+                      style={{ background: b.tone.dot, boxShadow: "0 0 2px rgba(255,255,255,.8)" }}
+                    />
                     {b.label}
                   </span>
                 ))}
-              </div>
-              <div className="flex items-center gap-1 text-xs text-white/85 mt-1">
-                <Phone className="w-3.5 h-3.5" />
-                <span>{phone || "未绑定手机号"}</span>
               </div>
             </div>
             {/* 退出账号按钮 */}
