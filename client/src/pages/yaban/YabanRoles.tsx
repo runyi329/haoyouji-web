@@ -455,8 +455,13 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
           setIdentifier={setIdentifier}
           loading={addMember.isPending}
           onClose={() => setShowAdd(false)}
-          onConfirm={(picked?: string) => {
-            const idv = (picked || identifier).trim();
+          onConfirm={(pickedUser?: any) => {
+            if (pickedUser && pickedUser.userId != null) {
+              // 联想选中：按 userId 精确添加
+              addMember.mutate({ tenantId, userId: Number(pickedUser.userId), roleKey });
+              return;
+            }
+            const idv = (identifier || "").trim();
             if (!idv) return toast.error("请选择或输入手机号/用户名");
             addMember.mutate({ tenantId, identifier: idv, roleKey });
           }}
@@ -514,7 +519,7 @@ function RoleSelectModal({
   setIdentifier?: (v: string) => void;
   loading: boolean;
   onClose: () => void;
-  onConfirm: (picked?: string) => void;
+  onConfirm: (pickedUser?: any) => void;
 }) {
   // 联想搜索（仅添加员工时启用）
   const [picked, setPicked] = useState<any | null>(null);
@@ -630,7 +635,7 @@ function RoleSelectModal({
           ))}
         </div>
         <button
-          onClick={() => onConfirm(picked ? (picked.phone || picked.username || "") : undefined)}
+          onClick={() => onConfirm(picked || undefined)}
           disabled={loading}
           className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-xl py-3 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
         >

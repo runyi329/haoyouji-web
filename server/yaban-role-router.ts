@@ -1030,7 +1030,8 @@ export const yabanRoleRouter = router({
     .input(
       z.object({
         tenantId: z.number().int().optional(),
-        identifier: z.string().min(1).max(50),
+        userId: z.number().int().optional(), // 从联想列表选中时传入，优先精确定位，避免文本反查歧义
+        identifier: z.string().max(50).optional(),
         roleKey: z.string().min(1).max(32),
       })
     )
@@ -1043,12 +1044,22 @@ export const yabanRoleRouter = router({
       if (!ROLE_DEFS.some((r) => r.role_key === input.roleKey)) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "角色不存在" });
       }
-      const id = input.identifier.trim();
-      const [userRows] = (await conn.execute(
-        `SELECT id FROM users WHERE phone = ? OR username = ? LIMIT 1`,
-        [id, id]
-      )) as any;
-      const targetUser = (userRows as any[])[0];
+      let targetUser: any = null;
+      if (input.userId != null) {
+        // 优先：按 userId 精确定位（联想选中场景）
+        const [r] = (await conn.execute(`SELECT id FROM users WHERE id = ? LIMIT 1`, [input.userId])) as any;
+        targetUser = (r as any[])[0] || null;
+      }
+      if (!targetUser) {
+        // 回退：按手机号/用户名文本精确匹配
+        const id = (input.identifier || "").trim();
+        if (!id) throw new TRPCError({ code: "BAD_REQUEST", message: "请选择或输入手机号/用户名" });
+        const [userRows] = (await conn.execute(
+          `SELECT id FROM users WHERE phone = ? OR username = ? LIMIT 1`,
+          [id, id]
+        )) as any;
+        targetUser = (userRows as any[])[0] || null;
+      }
       if (!targetUser) {
         throw new TRPCError({ code: "NOT_FOUND", message: "未找到该用户，请确认手机号或用户名" });
       }
