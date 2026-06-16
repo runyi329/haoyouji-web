@@ -7437,5 +7437,7 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-16T04:55:49Z", type: "feat", cleanMessage: "文案调整 门诊成员→成员列表 我的门诊角色→我的角色" },
     { date: "2026-06-16T05:27:00Z", type: "feat", cleanMessage: "移除我的页面手机号展示；角色徽标改为统一胶囊柔光立体铭牌(含自定义角色)" },
     { date: "2026-06-16T05:41:49Z", type: "feat", cleanMessage: "移除我的页面头像区退出账号按钮" },
+    { date: "2026-06-16T09:28:43Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-16T14:31:24Z", type: "feat", cleanMessage: "预约排班接入真实API + 新建诊所排班页" },
   ],
 };
