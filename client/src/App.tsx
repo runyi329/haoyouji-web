@@ -770,6 +770,13 @@ function Router() {
         <Route path="/yaban/patient/:id/edit" component={YabanPatientCreate} />
         <Route path="/yaban/patient/:id" component={YabanPatientDetail} />
         <Route path="/yaban/followup/detail/:id" component={lazy(() => import("./pages/yaban/YabanFollowUpDetail"))} />
+        {/* 库存模块 */}
+        <Route path="/yaban/inventory" component={lazy(() => import("./pages/yaban/YabanInventory"))} />
+        <Route path="/yaban/inventory/list" component={lazy(() => import("./pages/yaban/YabanInventoryList"))} />
+        <Route path="/yaban/inventory/inbound" component={lazy(() => import("./pages/yaban/YabanInventoryInbound"))} />
+        <Route path="/yaban/inventory/outbound" component={lazy(() => import("./pages/yaban/YabanInventoryOutbound"))} />
+        <Route path="/yaban/inventory/material/:id" component={lazy(() => import("./pages/yaban/YabanInventoryMaterial"))} />
+        <Route path="/yaban/inventory/logs" component={lazy(() => import("./pages/yaban/YabanInventoryLogs"))} />
         {/* 404 */}
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />

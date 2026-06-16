@@ -23,7 +23,7 @@ const HOME_FEATURES = [
   { name: "顾客档案", icon: `${ICON_BASE}/huanzhe.webp`, route: "/yaban/patients" },
   { name: "随访", icon: `${ICON_BASE}/suifang.webp`, route: "/yaban/followup" },
   { name: "运营报表", icon: `${ICON_BASE}/yunying_baobiao.webp`, route: "" },
-  { name: "库存", icon: `${ICON_BASE}/kucun.webp`, route: "" },
+  { name: "库存", icon: `${ICON_BASE}/kucun.webp`, route: "/yaban/inventory" },
 ];
 
 
@@ -33,8 +33,8 @@ const CREATE_MENU = [
   { name: "新建顾客", icon: UserPlus, route: "/yaban/patient/create" },
   { name: "新建预约", icon: CalendarPlus, route: "/yaban/schedule/create" },
   { name: "新建随访", icon: PhoneCall, route: "/yaban/followup/create" },
-  { name: "新建入库", icon: ArrowDownToLine, route: "" },
-  { name: "新建出库", icon: ArrowUpFromLine, route: "" },
+  { name: "新建入库", icon: ArrowDownToLine, route: "/yaban/inventory/inbound" },
+  { name: "新建出库", icon: ArrowUpFromLine, route: "/yaban/inventory/outbound" },
 ];
 
 export default function YabanHome() {

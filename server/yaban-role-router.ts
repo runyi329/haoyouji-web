@@ -58,6 +58,7 @@ export const STAFF_PERM_DEFS: PermDef[] = [
   { key: "shop_verify", name: "到店核销", group: "运营", type: "toggle", subject: "staff", desc: "能否核销到店订单" },
   { key: "finance", name: "财务营收", group: "运营", type: "scope", subject: "staff", desc: "财务数据可见范围" },
   { key: "data_export", name: "数据导出", group: "运营", type: "toggle", subject: "staff", desc: "能否导出数据" },
+  { key: "inventory", name: "库存管理", group: "运营", type: "toggle", subject: "staff", desc: "能否查看与操作库存出入库" },
   { key: "member_manage", name: "员工管理", group: "管理", type: "toggle", subject: "staff", desc: "能否管理员工与权限" },
   { key: "clinic_setting", name: "门诊设置", group: "管理", type: "toggle", subject: "staff", desc: "能否修改门诊设置" },
 ];
@@ -136,6 +137,7 @@ export const ROLE_DEFAULT_PERMS: Record<string, RolePermTemplate> = {
     patient: "all", patient_create: "all", patient_edit: "all", patient_delete: "self",
     followup: "all", media_view: "all", media_upload: "all", media_delete: "self",
     schedule: "all", shop_order: "none", shop_verify: "all", finance: "none",
+    inventory: "all",
     data_export: "none", member_manage: "none", clinic_setting: "none",
   },
   // 护士/助理：随访/影像 全部，顾客查看全部但修改仅自己，无删除
@@ -143,6 +145,7 @@ export const ROLE_DEFAULT_PERMS: Record<string, RolePermTemplate> = {
     patient: "all", patient_create: "none", patient_edit: "self", patient_delete: "none",
     followup: "all", media_view: "all", media_upload: "all", media_delete: "none",
     schedule: "all", shop_order: "none", shop_verify: "all", finance: "none",
+    inventory: "all",
     data_export: "none", member_manage: "none", clinic_setting: "none",
   },
   // 前台：建档可，顾客资料修改仅自己登记的，排班/商城/核销
@@ -150,6 +153,7 @@ export const ROLE_DEFAULT_PERMS: Record<string, RolePermTemplate> = {
     patient: "all", patient_create: "all", patient_edit: "self", patient_delete: "none",
     followup: "self", media_view: "none", media_upload: "none", media_delete: "none",
     schedule: "all", shop_order: "all", shop_verify: "all", finance: "none",
+    inventory: "all",
     data_export: "none", member_manage: "none", clinic_setting: "none",
   },
   // 财务：财务全部、商城订单、数据导出
@@ -157,6 +161,7 @@ export const ROLE_DEFAULT_PERMS: Record<string, RolePermTemplate> = {
     patient: "none", patient_create: "none", patient_edit: "none", patient_delete: "none",
     followup: "none", media_view: "none", media_upload: "none", media_delete: "none",
     schedule: "none", shop_order: "all", shop_verify: "none", finance: "all",
+    inventory: "all",
     data_export: "all", member_manage: "none", clinic_setting: "none",
   },
 };

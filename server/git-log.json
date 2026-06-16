@@ -1,5 +1,716 @@
 [
   {
+    "hash": "f12c28143d2f7057740ad3f37de0a49b891b3c54",
+    "author": "dev",
+    "date": "2026-06-15T23:40:17+00:00",
+    "message": "feat(yaban): 顾客模块全量多门店隔离-收费/影像/标签/成员按当前门店动态切换",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "顾客模块全量多门店隔离-收费/影像/标签/成员按当前门店动态切换"
+  },
+  {
+    "hash": "b68d7b47d653fef8051c0714ed6c5040dfe3fc06",
+    "author": "github-actions[bot]",
+    "date": "2026-06-15T19:48:24+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "bd4aa7b6484b01a6625ce0cb3c3cadf056def683",
+    "author": "manus",
+    "date": "2026-06-15T18:17:09+00:00",
+    "message": "feat(yaban): 多门店数据隔离-顾客模块按当前门店tenant动态切换",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "多门店数据隔离-顾客模块按当前门店tenant动态切换"
+  },
+  {
+    "hash": "64d4bcf146af0580f8ee0a94c77653b7edb40576",
+    "author": "runyi329",
+    "date": "2026-06-15T17:54:21+00:00",
+    "message": "牙伴我的页：去掉左上角我的标题，内容上移",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴我的页：去掉左上角我的标题，内容上移"
+  },
+  {
+    "hash": "500ce1fb558b275331c3cc07aa3fb350631c920b",
+    "author": "runyi329",
+    "date": "2026-06-15T17:42:16+00:00",
+    "message": "牙伴首页：顾客改名为顾客档案",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴首页：顾客改名为顾客档案"
+  },
+  {
+    "hash": "3cfa1ffd3817f9bbeec668f804766fe9341451f2",
+    "author": "runyi329",
+    "date": "2026-06-15T17:35:00+00:00",
+    "message": "牙伴全部功能页：排除首页已有功能、删除有数、不分组平铺显示",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴全部功能页：排除首页已有功能、删除有数、不分组平铺显示"
+  },
+  {
+    "hash": "43dc9c4dcd95e7dee9cbf440791ae7794f5031d9",
+    "author": "runyi329",
+    "date": "2026-06-15T17:32:08+00:00",
+    "message": "牙伴首页：第2诊所排班第3顾客，全部功能删除有数",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴首页：第2诊所排班第3顾客，全部功能删除有数"
+  },
+  {
+    "hash": "7bab525c54a23abd5f2ed429a9cbcece876eb454",
+    "author": "runyi329",
+    "date": "2026-06-15T17:26:44+00:00",
+    "message": "牙伴首页：上半部分功能固定为日程/顾客/随访/运营报表/诊所排班/库存+更多",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴首页：上半部分功能固定为日程/顾客/随访/运营报表/诊所排班/库存+更多"
+  },
+  {
+    "hash": "3c269f3ebd26570dd25c523af86af3403e9388a8",
+    "author": "yaban-dev",
+    "date": "2026-06-15T17:13:55+00:00",
+    "message": "牙伴首页：重排为上下两部分，功能网格2行末位更多，下方日历图，新增全部功能页",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴首页：重排为上下两部分，功能网格2行末位更多，下方日历图，新增全部功能页"
+  },
+  {
+    "hash": "818478937a0c8c4ccd0c1de12e8b50d31f16e9be",
+    "author": "yaban-dev",
+    "date": "2026-06-15T16:58:58+00:00",
+    "message": "牙伴首页：门店下拉框改为按当前用户实际加入门店动态联动（新增myClinics接口）",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴首页：门店下拉框改为按当前用户实际加入门店动态联动（新增myClinics接口）"
+  },
+  {
+    "hash": "ded2d7e945438ba98d28c4e408c0f80a78b22dfe",
+    "author": "yaban-dev",
+    "date": "2026-06-15T16:48:31+00:00",
+    "message": "牙伴顾客详情：档案格内容改回左对齐（报名表样式）",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：档案格内容改回左对齐（报名表样式）"
+  },
+  {
+    "hash": "a701ef35536e4e59ce8d8318b06a1ab1290ef4ca",
+    "author": "yaban-dev",
+    "date": "2026-06-15T16:43:57+00:00",
+    "message": "牙伴顾客详情：邮箱上移至手机后，顾客类型移到来源旁",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：邮箱上移至手机后，顾客类型移到来源旁"
+  },
+  {
+    "hash": "f59ae29bfef1d56292047c6bd794de2b69333bf8",
+    "author": "yaban-dev",
+    "date": "2026-06-15T16:37:07+00:00",
+    "message": "牙伴顾客详情：档案表改为4列Grid整齐铺满，内容居中",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：档案表改为4列Grid整齐铺满，内容居中"
+  },
+  {
+    "hash": "01d74234a259dcf43ecea439c96b19629d19a54d",
+    "author": "yaban-dev",
+    "date": "2026-06-15T16:30:34+00:00",
+    "message": "牙伴顾客详情：第二行改为生日/星座/生肖，顾客类型下移",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：第二行改为生日/星座/生肖，顾客类型下移"
+  },
+  {
+    "hash": "1f2838171f591c3a5bc0834b13ad58a206954cc6",
+    "author": "yaban-dev",
+    "date": "2026-06-15T16:24:35+00:00",
+    "message": "牙伴顾客详情：表格加横眉(门店+顾客档案/档案编号)，移除表内编号与门店",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：表格加横眉(门店+顾客档案/档案编号)，移除表内编号与门店"
+  },
+  {
+    "hash": "79d30c7162c6491ba763b9dbf5e988f571782b33",
+    "author": "yaban-dev",
+    "date": "2026-06-15T16:18:13+00:00",
+    "message": "牙伴顾客详情：昵称移到第一行，第一行放4个字段",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：昵称移到第一行，第一行放4个字段"
+  },
+  {
+    "hash": "3d64ce2ea8f7691737c676e02d7af627ccbc6669",
+    "author": "yaban-dev",
+    "date": "2026-06-15T16:12:37+00:00",
+    "message": "牙伴顾客详情：照片改为表内跨两行单元格，四边有线，整表闭合",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：照片改为表内跨两行单元格，四边有线，整表闭合"
+  },
+  {
+    "hash": "eeefa3f7061ef2b301f1a4e0d7500c21b8cb03ac",
+    "author": "yaban-dev",
+    "date": "2026-06-15T16:06:24+00:00",
+    "message": "牙伴顾客详情：照片高度限为两行，压缩档案格子内边距与字号",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：照片高度限为两行，压缩档案格子内边距与字号"
+  },
+  {
+    "hash": "5c7723df75648c880e1b8bc2a916ddda71d25a81",
+    "author": "yaban-dev",
+    "date": "2026-06-15T16:00:24+00:00",
+    "message": "牙伴顾客详情：照片格改为渐变方格内居中圆形头像",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：照片格改为渐变方格内居中圆形头像"
+  },
+  {
+    "hash": "a51802c73a04a4169ba4e4a575d2f7f6b264c390",
+    "author": "yaban-dev",
+    "date": "2026-06-15T15:52:28+00:00",
+    "message": "牙伴顾客详情：照片格改为方形放大上对齐裁切，按各头像背景色铺底消除圆环违和感",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：照片格改为方形放大上对齐裁切，按各头像背景色铺底消除圆环违和感"
+  },
+  {
+    "hash": "a33bfb0cee5e9d0acf2ca5527fe00239edad7be6",
+    "author": "yaban-dev",
+    "date": "2026-06-15T15:40:39+00:00",
+    "message": "牙伴顾客详情：上半部分统一为电子档案表，照片为表内跨行单元格铺满，姓名/性别/年龄/手机/编号等并入表格",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：上半部分统一为电子档案表，照片为表内跨行单元格铺满，姓名/性别/年龄/手机/编号等并入表格"
+  },
+  {
+    "hash": "ca4d1786cd27f3f229c5d2ce92c7d3b4b4acb11c",
+    "author": "github-actions[bot]",
+    "date": "2026-06-15T15:34:32+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "2f3e1e0bd3c2ae20e0c80db526a96351087f1547",
+    "author": "yaban-dev",
+    "date": "2026-06-15T15:33:30+00:00",
+    "message": "牙伴顾客详情：改为电子档案表版式(头像移右上角证件照、顶部编辑图标、资料线框网格自适应横排)",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：改为电子档案表版式(头像移右上角证件照、顶部编辑图标、资料线框网格自适应横排)"
+  },
+  {
+    "hash": "822bfda08b691176a771adfdef85fb438adb3e90",
+    "author": "yaban-dev",
+    "date": "2026-06-15T15:22:57+00:00",
+    "message": "牙伴：编辑页取消Tab改连续表单(个人信息+顾客信息,移除首诊)；详情页概览补充咨询师/健康标签",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴：编辑页取消Tab改连续表单(个人信息+顾客信息,移除首诊)；详情页概览补充咨询师/健康标签"
+  },
+  {
+    "hash": "2c58a2efdf03ea59c8eeb83ebaf199a684b4df41",
+    "author": "yaban-dev",
+    "date": "2026-06-15T15:12:12+00:00",
+    "message": "牙伴顾客详情：上半部分概览铺满个人信息(昵称/生日/星座/生肖/邮箱/紧急联系人等)",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：上半部分概览铺满个人信息(昵称/生日/星座/生肖/邮箱/紧急联系人等)"
+  },
+  {
+    "hash": "2163b70aedf7a0304ffcd54954e584dfdfbcd515",
+    "author": "yaban-dev",
+    "date": "2026-06-15T15:06:11+00:00",
+    "message": "牙伴顾客详情：重构为上下两段，上部铺开资料概览，下部精简为诊疗/影像/收费/售前售后4个大按钮",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：重构为上下两段，上部铺开资料概览，下部精简为诊疗/影像/收费/售前售后4个大按钮"
+  },
+  {
+    "hash": "540fdba40cbf1a93dff10ed779fdba72f23ab43a",
+    "author": "yaban-dev",
+    "date": "2026-06-15T14:50:31+00:00",
+    "message": "牙伴顾客详情：移除亲友关系与文档记录入口",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：移除亲友关系与文档记录入口"
+  },
+  {
+    "hash": "b0f3ae11cf6330e63a6fcf06356134b544e1df74",
+    "author": "yaban-dev",
+    "date": "2026-06-15T14:43:39+00:00",
+    "message": "修复牙伴顾客编辑保存报Unknown column：update前兼容补齐chinese_zodiac等列",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "修复牙伴顾客编辑保存报Unknown column：update前兼容补齐chinese_zodiac等列"
+  },
+  {
+    "hash": "a916cc980f411c3dda41e65f0fd4b5782818dcb8",
+    "author": "yaban-dev",
+    "date": "2026-06-15T14:36:30+00:00",
+    "message": "牙伴顾客：实现编辑资料功能(后端update接口+复用表单编辑模式+详情/资料页编辑按钮跳转)",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客：实现编辑资料功能(后端update接口+复用表单编辑模式+详情/资料页编辑按钮跳转)"
+  },
+  {
+    "hash": "4d43ea5fd866226f7efeea6d843f4867a61eeea7",
+    "author": "yaban-dev",
+    "date": "2026-06-15T14:25:44+00:00",
+    "message": "牙伴顾客详情：移除底部发微信/发短信/打电话按钮",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴顾客详情：移除底部发微信/发短信/打电话按钮"
+  },
+  {
+    "hash": "593755ccb9a16627535cd63d3843bb1d29efced3",
+    "author": "yaban-dev",
+    "date": "2026-06-15T14:18:11+00:00",
+    "message": "牙伴数据安全管理：Excel导入模板扩展健康档案字段(网电咨询师/咨询师/就诊主诉/健康标签)",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴数据安全管理：Excel导入模板扩展健康档案字段(网电咨询师/咨询师/就诊主诉/健康标签)"
+  },
+  {
+    "hash": "3d655503ca8bbfc4ef67efb85122290c14649206",
+    "author": "yaban-dev",
+    "date": "2026-06-15T14:06:09+00:00",
+    "message": "牙伴：数据管理改名为数据安全管理；AI智能备份删除冗余提示并统一为凌晨2:00发送(前后端一致)",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴：数据管理改名为数据安全管理；AI智能备份删除冗余提示并统一为凌晨2:00发送(前后端一致)"
+  },
+  {
+    "hash": "859c3bce1aca0a75f321c1bd61a1b87c5a853f4a",
+    "author": "yaban-dev",
+    "date": "2026-06-15T14:03:58+00:00",
+    "message": "牙伴：数据管理改名为数据安全管理（入口与页面标题）",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴：数据管理改名为数据安全管理（入口与页面标题）"
+  },
+  {
+    "hash": "9ae743c43fb9f972342da2947240e30663e67c14",
+    "author": "yaban-dev",
+    "date": "2026-06-15T13:53:52+00:00",
+    "message": "牙伴数据管理：分类改折叠下拉框、格式备注移至各选项下、定时备份改名AI智能备份",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴数据管理：分类改折叠下拉框、格式备注移至各选项下、定时备份改名AI智能备份"
+  },
+  {
+    "hash": "e214ec98d852339fbddbcd8433e24c4e9fc1810b",
+    "author": "yaban-dev",
+    "date": "2026-06-15T13:38:53+00:00",
+    "message": "牙伴数据导出：创始人(jia mg)为特例，可导出全部医院、无视医院身份限制；创始股东仍受医院身份与权限位约束",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴数据导出：创始人(jia mg)为特例，可导出全部医院、无视医院身份限制；创始股东仍受医院身份与权限位约束"
+  },
+  {
+    "hash": "1d471f7df79e85031f619aecab972991907eeeea",
+    "author": "yaban-dev",
+    "date": "2026-06-15T13:22:21+00:00",
+    "message": "牙伴数据管理重构为多步骤导出流程：选医院→选分类→选格式→选方式→定时备份；按医院身份权限控制；新增牙伴风格邮箱绑定页",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴数据管理重构为多步骤导出流程：选医院→选分类→选格式→选方式→定时备份；按医院身份权限控制；新增牙伴风格邮箱绑定页"
+  },
+  {
+    "hash": "f062a1253ae6f8caa34e9575f2361b33953acddf",
+    "author": "yaban-dev",
+    "date": "2026-06-15T13:03:37+00:00",
+    "message": "feat(yaban): 数据管理重排为两步骤,发送邮箱改用个人中心绑定邮箱并支持绑定跳转",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "数据管理重排为两步骤,发送邮箱改用个人中心绑定邮箱并支持绑定跳转"
+  },
+  {
+    "hash": "f5c36fef880390a9750027787463675eceb3a432",
+    "author": "yaban-dev",
+    "date": "2026-06-15T12:52:47+00:00",
+    "message": "refactor(yaban): 拆除设置聚合页,功能上移至我的页并按医院经营/平台管理分区,设置页改为账号资料页",
+    "type": "refactor",
+    "scope": "yaban",
+    "cleanMessage": "拆除设置聚合页,功能上移至我的页并按医院经营/平台管理分区,设置页改为账号资料页"
+  },
+  {
+    "hash": "12f6e202623484a9ac668262099af45bc2fec563",
+    "author": "yaban-dev",
+    "date": "2026-06-15T12:32:26+00:00",
+    "message": "fix(version-switcher): 牙伴顶栏切换器当前版本按实际路径判定+可切换范围空集兜底,修复牙伴页图标与切项相反",
+    "type": "fix",
+    "scope": "version-switcher",
+    "cleanMessage": "牙伴顶栏切换器当前版本按实际路径判定+可切换范围空集兜底,修复牙伴页图标与切项相反"
+  },
+  {
+    "hash": "85076fc1d34bbe82ead9a0fff17a3d787a4cffd7",
+    "author": "yaban-dev",
+    "date": "2026-06-15T12:25:22+00:00",
+    "message": "fix(bottomnav): 当前版本图标按实际路径实时判定,修复脉动/牙伴图标显示相反",
+    "type": "fix",
+    "scope": "bottomnav",
+    "cleanMessage": "当前版本图标按实际路径实时判定,修复脉动/牙伴图标显示相反"
+  },
+  {
+    "hash": "9d6c42f231ca03b66ecff2ffdec8deccaf68b0c6",
+    "author": "yaban-dev",
+    "date": "2026-06-15T12:18:42+00:00",
+    "message": "feat(bottomnav): 定制入口通用化-开启版本切换后自动并入切换菜单+可切换范围空集兜底",
+    "type": "feat",
+    "scope": "bottomnav",
+    "cleanMessage": "定制入口通用化-开启版本切换后自动并入切换菜单+可切换范围空集兜底"
+  },
+  {
+    "hash": "f5379e332c7655cd0b70352e70f66f950b2eef0a",
+    "author": "yaban-dev",
+    "date": "2026-06-15T11:54:17+00:00",
+    "message": "feat(version): 版本设置-影响范围改为四选一(本人/新/老/新老)+合并切换范围+面板紧凑化",
+    "type": "feat",
+    "scope": "version",
+    "cleanMessage": "版本设置-影响范围改为四选一(本人/新/老/新老)+合并切换范围+面板紧凑化"
+  },
+  {
+    "hash": "9b11cc7350f881691c186df57c925a890ddf602f",
+    "author": "yaban-dev",
+    "date": "2026-06-15T11:37:56+00:00",
+    "message": "feat(yaban): 平台层分层权限体系-区分创始人/创始股东(虚衔只读+逐项开关+视角隐身)",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "平台层分层权限体系-区分创始人/创始股东(虚衔只读+逐项开关+视角隐身)"
+  },
+  {
+    "hash": "a2afb25823e4f3c8ced7e91b1575367b6517a33e",
+    "author": "yaban-dev",
+    "date": "2026-06-15T11:18:51+00:00",
+    "message": "chore(yaban): P305标题改为牙伴平台大数据管理",
+    "type": "chore",
+    "scope": "yaban",
+    "cleanMessage": "P305标题改为牙伴平台大数据管理"
+  },
+  {
+    "hash": "ab2b6b6b5d023b84cee95318221d436d3eb528b6",
+    "author": "yaban-dev",
+    "date": "2026-06-15T11:15:33+00:00",
+    "message": "feat(yaban): 创始团队改名牙伴平台创始团队并移至右上角弹窗; 任命搜索改用账本同款sharing.searchUsers",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "创始团队改名牙伴平台创始团队并移至右上角弹窗; 任命搜索改用账本同款sharing.searchUsers"
+  },
+  {
+    "hash": "5a99814484b568a8aeb8564a34cf02e17e1e6045",
+    "author": "yaban-dev",
+    "date": "2026-06-15T11:09:15+00:00",
+    "message": "chore(yaban): 设置页入口改名为权限管理; 删除我的页专属服务顾问入口",
+    "type": "chore",
+    "scope": "yaban",
+    "cleanMessage": "设置页入口改名为权限管理; 删除我的页专属服务顾问入口"
+  },
+  {
+    "hash": "46e583b9400ecaf120000990f38493991c827e73",
+    "author": "yaban-dev",
+    "date": "2026-06-15T11:02:05+00:00",
+    "message": "feat(yaban): 任命创始股东支持全局用户实时模糊搜索(用户名/姓名/手机号)并点选任命",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "任命创始股东支持全局用户实时模糊搜索(用户名/姓名/手机号)并点选任命"
+  },
+  {
+    "hash": "6b416634db27252baf8f1dd1a3b137a793dbd4fe",
+    "author": "yaban-dev",
+    "date": "2026-06-15T10:54:29+00:00",
+    "message": "feat(yaban): 权限管理双Tab(员工/顾客)矩阵, 三档权限(全部/仅自己/不允许), 角色仅作徽标默认值, 按医院隔离, 创始人下钻入口, 多角色徽标与创始团队面板",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "权限管理双Tab(员工/顾客)矩阵, 三档权限(全部/仅自己/不允许), 角色仅作徽标默认值, 按医院隔离, 创始人下钻入口, 多角色徽标与创始团队面板"
+  },
+  {
+    "hash": "af268605f3ef4ee03e64790ce00c4db3e42a0aff",
+    "author": "github-actions[bot]",
+    "date": "2026-06-15T10:26:06+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "bbdce6381b0aaaef6019d4124723a2dc8fd9258a",
+    "author": "manus",
+    "date": "2026-06-15T09:57:28+00:00",
+    "message": "style: 统一头像相机角标-放大至24px加白描边并光学居中(P303/P316/P304)",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "统一头像相机角标-放大至24px加白描边并光学居中(P303/P316/P304)"
+  },
+  {
+    "hash": "5e5a4aa3be8eea20445a64105d058ff8c7d966f2",
+    "author": "manus",
+    "date": "2026-06-15T09:47:37+00:00",
+    "message": "feat: 医院详细信息双向管理-创始人可编辑命名+新建医院,院长补全全字段详情",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "医院详细信息双向管理-创始人可编辑命名+新建医院,院长补全全字段详情"
+  },
+  {
+    "hash": "6dd994360a6522dab96aa2c5716f3c7e7e96c3ed",
+    "author": "manus",
+    "date": "2026-06-15T09:25:25+00:00",
+    "message": "feat(yaban): 创始人后台大数据看板+院长企业信息申请闭环",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "创始人后台大数据看板+院长企业信息申请闭环"
+  },
+  {
+    "hash": "dffa8ad2a230e815e7b8d787e2f2d319e6d9aa8e",
+    "author": "manus",
+    "date": "2026-06-15T09:07:16+00:00",
+    "message": "style(yaban): 我的页相机角标缩小至约一半大小，保持半内半外",
+    "type": "style",
+    "scope": "yaban",
+    "cleanMessage": "我的页相机角标缩小至约一半大小，保持半内半外"
+  },
+  {
+    "hash": "8d5d650aa2d28eb2ac37ae4e157746526c0e6278",
+    "author": "manus",
+    "date": "2026-06-15T09:02:37+00:00",
+    "message": "style(yaban): 我的页相机角标改为实心蓝底白相机，更醒目",
+    "type": "style",
+    "scope": "yaban",
+    "cleanMessage": "我的页相机角标改为实心蓝底白相机，更醒目"
+  },
+  {
+    "hash": "aa450814d30fb4f17c1c72195b07eba3d397da8e",
+    "author": "manus",
+    "date": "2026-06-15T08:55:38+00:00",
+    "message": "fix(yaban): 我的页相机角标改为一半圈内一半圈外，分离裁剪层避免被overflow裁切",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "我的页相机角标改为一半圈内一半圈外，分离裁剪层避免被overflow裁切"
+  },
+  {
+    "hash": "0fcb97ee5ee3f3db3d481a780a956c52877074dc",
+    "author": "manus",
+    "date": "2026-06-15T08:49:59+00:00",
+    "message": "style(yaban): 我的页头像相机角标改小并完全收进圆圈内部",
+    "type": "style",
+    "scope": "yaban",
+    "cleanMessage": "我的页头像相机角标改小并完全收进圆圈内部"
+  },
+  {
+    "hash": "88530bf8df26c09b585ba16c2ce22fa206a7dcdb",
+    "author": "manus",
+    "date": "2026-06-15T08:45:11+00:00",
+    "message": "fix(yaban): 统一患者列表/详情/档案三页头像为卡通头像，详情页头像不再写死空白；病历号文案统一为顾客编号",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "统一患者列表/详情/档案三页头像为卡通头像，详情页头像不再写死空白；病历号文案统一为顾客编号"
+  },
+  {
+    "hash": "31af128ea443c4fcffca7ebfa1e519223c338751",
+    "author": "manus",
+    "date": "2026-06-15T08:37:48+00:00",
+    "message": "feat(yaban): 我的页头像加相机角标上传入口，复用auth.uploadAvatar，兼容只见牙伴版用户",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "我的页头像加相机角标上传入口，复用auth.uploadAvatar，兼容只见牙伴版用户"
+  },
+  {
+    "hash": "8f38e2039093de0731e725d14ee657f6d9bb0dc8",
+    "author": "manus",
+    "date": "2026-06-15T08:26:25+00:00",
+    "message": "fix(switch): 切换键当前版本按实际位置判断，弹框只列除当前外的目的地，归属版本始终可回去",
+    "type": "fix",
+    "scope": "switch",
+    "cleanMessage": "切换键当前版本按实际位置判断，弹框只列除当前外的目的地，归属版本始终可回去"
+  },
+  {
+    "hash": "0fe207159691d5756880afb042e250a9a41c4cd7",
+    "author": "manus",
+    "date": "2026-06-15T08:06:25+00:00",
+    "message": "feat(login): 登录页皮肤按账号版本记忆，URL>localStorage>默认，兼容微信搜索进入",
+    "type": "feat",
+    "scope": "login",
+    "cleanMessage": "登录页皮肤按账号版本记忆，URL>localStorage>默认，兼容微信搜索进入"
+  },
+  {
+    "hash": "2860fe8359eddf8342bda47f55432cd378031a9b",
+    "author": "manus",
+    "date": "2026-06-15T07:53:20+00:00",
+    "message": "fix(version): 自身设置版本优先于上线继承，只影响该用户本人",
+    "type": "fix",
+    "scope": "version",
+    "cleanMessage": "自身设置版本优先于上线继承，只影响该用户本人"
+  },
+  {
+    "hash": "78349d4dc101654bdc2756956c1413f5c3af86a4",
+    "author": "manus",
+    "date": "2026-06-15T07:25:33+00:00",
+    "message": "脉动版中间按钮改为版本/入口切换键(有切换需求者),弹出框含奢贝/牙伴版;去掉右上角悬浮切换圆圈;新增奢贝珍珠贝壳图标",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "脉动版中间按钮改为版本/入口切换键(有切换需求者),弹出框含奢贝/牙伴版;去掉右上角悬浮切换圆圈;新增奢贝珍珠贝壳图标"
+  },
+  {
+    "hash": "e04055407b96ca353ef3706580be59027402395f",
+    "author": "manus",
+    "date": "2026-06-15T07:05:41+00:00",
+    "message": "修复部署:构建前强制清理服务器旧dist,避免vite prepare-out-dir ENOTEMPTY导致部署失败",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "修复部署:构建前强制清理服务器旧dist,避免vite prepare-out-dir ENOTEMPTY导致部署失败"
+  },
+  {
+    "hash": "4b3c715517b996897d628b11c3ae88d41dfba4de",
+    "author": "manus",
+    "date": "2026-06-15T07:03:22+00:00",
+    "message": "版本分发统一规则:HomeEntry/VersionGuard优先尊重手动切换的查看版本(切换/刷新均保持);牙伴我的页头像右侧新增退出按钮",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "版本分发统一规则:HomeEntry/VersionGuard优先尊重手动切换的查看版本(切换/刷新均保持);牙伴我的页头像右侧新增退出按钮"
+  },
+  {
+    "hash": "92553ee54cfb406fce725de06f426fe380e6938c",
+    "author": "manus",
+    "date": "2026-06-15T06:54:35+00:00",
+    "message": "修复:版本守卫尊重用户手动切换的查看版本，避免切到脉动版被拽回牙伴开机页",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "修复:版本守卫尊重用户手动切换的查看版本，避免切到脉动版被拽回牙伴开机页"
+  },
+  {
+    "hash": "1a674188b909f01ef4f1ca4ff6ad9875cad75adc",
+    "author": "manus",
+    "date": "2026-06-15T06:51:33+00:00",
+    "message": "移除误提交的原始大尺寸png",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "移除误提交的原始大尺寸png"
+  },
+  {
+    "hash": "693eb2ec5bae4a407fe70af642b24f5763979ff1",
+    "author": "manus",
+    "date": "2026-06-15T06:51:25+00:00",
+    "message": "牙伴版顶栏统一为3D圆形图标(切换/刷新/搜索/新增)，切换按钮置最左",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "牙伴版顶栏统一为3D圆形图标(切换/刷新/搜索/新增)，切换按钮置最左"
+  },
+  {
+    "hash": "97e59568a6d99d95e85b6b8c572db2c77a255591",
+    "author": "manus",
+    "date": "2026-06-15T06:47:27+00:00",
+    "message": "版本切换器圆圈改为显示当前版本3D图标(脉动波形/牙伴牙齿)，下拉项带图标+名称",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "版本切换器圆圈改为显示当前版本3D图标(脉动波形/牙伴牙齿)，下拉项带图标+名称"
+  },
+  {
+    "hash": "b261a15f2152e9771d9e40ea2541db0050f6ddbd",
+    "author": "manus",
+    "date": "2026-06-15T06:37:51+00:00",
+    "message": "版本切换器改为小圆圈+点击弹出下拉：牙伴版内嵌顶栏刷新右侧，脉动版浮层右上角",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "版本切换器改为小圆圈+点击弹出下拉：牙伴版内嵌顶栏刷新右侧，脉动版浮层右上角"
+  },
+  {
+    "hash": "28d866a99975a8b6c4091174c107f5cc21159c67",
+    "author": "manus",
+    "date": "2026-06-15T06:32:42+00:00",
+    "message": "新增全局版本守卫VersionGuard：挂起/bfcache恢复时按生效版本纠正越界，关掉网页再打开也直达对应版本",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "新增全局版本守卫VersionGuard：挂起/bfcache恢复时按生效版本纠正越界，关掉网页再打开也直达对应版本"
+  },
+  {
+    "hash": "3c0ed2f5a7c71edd497f1c3fbe9a0aa824a9d8e0",
+    "author": "manus",
+    "date": "2026-06-15T06:27:24+00:00",
+    "message": "取消liulifan登录后默认落地奢贝页(/beauty)的特殊逻辑，统一进人脉首页",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "取消liulifan登录后默认落地奢贝页(/beauty)的特殊逻辑，统一进人脉首页"
+  },
+  {
+    "hash": "1e96b60ac1a1a24007162b94d0ecca77242542f7",
+    "author": "manus",
+    "date": "2026-06-15T06:18:08+00:00",
+    "message": "优化邀请管理页移动端布局：用户卡片改纵向结构、操作按钮补文字标签",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "优化邀请管理页移动端布局：用户卡片改纵向结构、操作按钮补文字标签"
+  },
+  {
+    "hash": "1eb90fbada4e9899034e96c141555d10308d60a6",
+    "author": "manus",
+    "date": "2026-06-15T06:07:56+00:00",
+    "message": "feat: 多版本(皮肤)体系——版本表/用户版本字段/最高优先追溯继承、登录后按版本分发落地、牙伴版蓝白竖屏登录页与开机画面、右上角多版本切换器(权限控制)、后台版本管理与邀请页版本设置及来源展示",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "多版本(皮肤)体系——版本表/用户版本字段/最高优先追溯继承、登录后按版本分发落地、牙伴版蓝白竖屏登录页与开机画面、右上角多版本切换器(权限控制)、后台版本管理与邀请页版本设置及来源展示"
+  },
+  {
+    "hash": "ac889f2eae7d6ae37b0a1abedfbb8ab06aa531ea",
+    "author": "manus",
+    "date": "2026-06-15T05:07:58+00:00",
+    "message": "feat(yaban): 新增顾客增加生肖字段(随生日自动推算)+详细资料拆分星座生肖",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "新增顾客增加生肖字段(随生日自动推算)+详细资料拆分星座生肖"
+  },
+  {
+    "hash": "14f689b6a01afec2537ec67376b3e962b009a904",
+    "author": "manus",
+    "date": "2026-06-15T04:58:37+00:00",
+    "message": "fix(yaban): 详细资料页改为单容器档案表式细线分隔自适应布局",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "详细资料页改为单容器档案表式细线分隔自适应布局"
+  },
+  {
+    "hash": "82f8aa5830bfaca25be698a8f37f4088c8ea340c",
+    "author": "manus",
+    "date": "2026-06-15T04:44:41+00:00",
+    "message": "fix(yaban): 详细资料页头像联动+建档时间简化+信息表式布局+顾客编号标签",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "详细资料页头像联动+建档时间简化+信息表式布局+顾客编号标签"
+  },
+  {
+    "hash": "e7b5703a076f1a3c697a3a1c4b2e5ef603ac674f",
+    "author": "manus",
+    "date": "2026-06-15T04:36:55+00:00",
+    "message": "feat(yaban): 顾客详情-开通详细资料页(只读卡片展示+编辑入口)",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "顾客详情-开通详细资料页(只读卡片展示+编辑入口)"
+  },
+  {
+    "hash": "64fb526bc1d6652022d1ddfa6f0926f78413eb51",
+    "author": "manus",
+    "date": "2026-06-15T04:23:07+00:00",
+    "message": "feat(yaban): P1第一批-收费项目库+图形牙位选择+多角色业绩分配",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "P1第一批-收费项目库+图形牙位选择+多角色业绩分配"
+  },
+  {
+    "hash": "4f8d586e682ab2456c21cf586f7a93b0787cd515",
+    "author": "manus",
+    "date": "2026-06-15T03:55:24+00:00",
+    "message": "feat(yaban): P321收费记录P0-收费概览+快速收费+收费单详情",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "P321收费记录P0-收费概览+快速收费+收费单详情"
+  },
+  {
     "hash": "e7adef4e88cef5211819fad2b0010ddf8b0683ad",
     "author": "manus",
     "date": "2026-06-15T01:33:25+00:00",

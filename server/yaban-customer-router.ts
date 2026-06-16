@@ -47,7 +47,7 @@ const DEFAULT_TENANT_ID = 1;
 // 来源：前端统一 fetch 注入的请求头 x-yaban-tenant（首页切店时写入 localStorage）
 // 安全：必须校验该用户确实是这家门店的在职成员（平台创始人放行），否则回退到用户默认门店
 // 回退顺序：合法的 header 门店 -> 用户第一家在职门店 -> DEFAULT_TENANT_ID(1)
-async function resolveTenantId(ctx: any): Promise<number> {
+export async function resolveTenantId(ctx: any): Promise<number> {
   try {
     const conn = await getDbConnection();
     if (!conn || !ctx?.user?.id) return DEFAULT_TENANT_ID;
