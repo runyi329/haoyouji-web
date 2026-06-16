@@ -53,7 +53,9 @@ const ROLE_BADGE: Record<string, string> = {
   founder: "bg-gradient-to-r from-[#C77700] to-[#E0A030] text-white",
   co_founder: "bg-gradient-to-r from-[#C77700] to-[#E0A030] text-white",
   owner: "bg-[#0E5A9E] text-white",
+  shareholder: "bg-[#FFF3E0] text-[#C77700]",
   doctor: "bg-[#1E88D6] text-white",
+  nurse: "bg-[#EAF4FE] text-[#1E88D6]",
   assistant: "bg-[#EAF4FE] text-[#1E88D6]",
   receptionist: "bg-[#EAF4FE] text-[#1E88D6]",
   finance: "bg-[#FFF3E0] text-[#C77700]",
@@ -233,8 +235,8 @@ export default function YabanRoles() {
 // ============ 我的角色卡片 ============
 function MyRoleCard({ my }: { my: any }) {
   const ROLE_NAME: Record<string, string> = {
-    founder: "创始人", co_founder: "创始股东", owner: "院长/股东",
-    doctor: "医生", assistant: "护士/助理", receptionist: "前台", finance: "财务",
+    founder: "创始人", co_founder: "创始股东", owner: "院长", shareholder: "股东",
+    doctor: "医生", nurse: "护士", assistant: "助理", receptionist: "前台", finance: "财务",
   };
   return (
     <div className="bg-white rounded-2xl shadow-sm p-4">
@@ -1085,18 +1087,25 @@ function RoleInfoSheet({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="flex flex-col items-center">
-          <div className="w-40 rounded-2xl bg-gradient-to-b from-[#1E88D6] to-[#0E5A9E] text-white shadow-sm px-4 py-3 flex flex-col items-center">
-            <Crown className="w-6 h-6 mb-1" />
-            <span className="text-base font-bold tracking-wide">院长 / 股东</span>
+          <div className="flex items-center gap-3">
+            <div className="w-32 rounded-2xl bg-gradient-to-b from-[#1E88D6] to-[#0E5A9E] text-white shadow-sm px-4 py-3 flex flex-col items-center">
+              <Crown className="w-6 h-6 mb-1" />
+              <span className="text-base font-bold tracking-wide">院长</span>
+            </div>
+            <div className="w-32 rounded-2xl bg-gradient-to-b from-[#E0A030] to-[#C77700] text-white shadow-sm px-4 py-3 flex flex-col items-center">
+              <Crown className="w-6 h-6 mb-1" />
+              <span className="text-base font-bold tracking-wide">股东</span>
+            </div>
           </div>
-          <p className="text-[11px] text-gray-400 mt-2">诊所最高身份 · 可管理员工与权限</p>
+          <p className="text-[11px] text-gray-400 mt-2">院长管运营 · 股东看数据</p>
           <div className="w-px h-5 bg-[#CFE3F5]" />
           <div className="w-[80%] h-px bg-[#CFE3F5]" />
         </div>
         <div className="grid grid-cols-2 gap-3 mt-3">
           {[
             { key: "doctor", name: "医生", Icon: Stethoscope },
-            { key: "assistant", name: "护士 / 助理", Icon: HeartPulse },
+            { key: "nurse", name: "护士", Icon: HeartPulse },
+            { key: "assistant", name: "助理", Icon: HeartPulse },
             { key: "receptionist", name: "前台", Icon: ConciergeBell },
             { key: "finance", name: "财务", Icon: Wallet },
           ].map(({ key, name, Icon }) => (

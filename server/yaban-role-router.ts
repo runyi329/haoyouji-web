@@ -119,19 +119,29 @@ function allowedScopes(def: PermDef): Scope[] {
 
 // ============ 角色定义 ============
 export const ROLE_DEFS: { role_key: string; name: string; description: string; sort: number }[] = [
-  { role_key: "owner", name: "院长/股东", description: "诊所最高权限，可管理员工与权限开关，可多人同级", sort: 1 },
-  { role_key: "doctor", name: "医生", description: "顾客管理、随访、排班、影像、核销", sort: 2 },
-  { role_key: "assistant", name: "护士/助理", description: "随访、排班、影像查看上传、核销", sort: 3 },
-  { role_key: "receptionist", name: "前台", description: "预约排班、商城订单核销、顾客建档", sort: 4 },
-  { role_key: "finance", name: "财务", description: "财务营收、商城订单、数据导出", sort: 5 },
+  { role_key: "owner", name: "院长", description: "诊所最高运营权限，可管理员工与权限开关，可多人同级", sort: 1 },
+  { role_key: "shareholder", name: "股东", description: "出资方/投资人，默认以查看营收汇总与数据为主，不参与日常运营管理", sort: 2 },
+  { role_key: "doctor", name: "医生", description: "顾客管理、随访、排班、影像、核销", sort: 3 },
+  { role_key: "nurse", name: "护士", description: "椅旁配合、随访、影像查看上传、核销", sort: 4 },
+  { role_key: "assistant", name: "助理", description: "行政辅助、随访、排班、影像查看上传、核销", sort: 5 },
+  { role_key: "receptionist", name: "前台", description: "预约排班、商城订单核销、顾客建档", sort: 6 },
+  { role_key: "finance", name: "财务", description: "财务营收、商城订单、数据导出", sort: 7 },
 ];
 
 // 各角色默认权限模板（scope 取值）。未列出的权限默认 none。
 // 范围型默认给 all 或 self；开关型给 all(=开) 或 none(=关)。
 type RolePermTemplate = Record<string, Scope>;
 export const ROLE_DEFAULT_PERMS: Record<string, RolePermTemplate> = {
-  // 院长/股东：全部 all
+  // 院长：全部 all
   owner: Object.fromEntries(ALL_STAFF_PERM_KEYS.map((k) => [k, "all"])) as RolePermTemplate,
+  // 股东：出资方/投资人，默认以查看为主（财务、数据导出），不管理日常运营与员工
+  shareholder: {
+    patient: "none", patient_create: "none", patient_edit: "none", patient_delete: "none",
+    followup: "none", media_view: "none", media_upload: "none", media_delete: "none",
+    schedule: "none", shop_order: "none", shop_verify: "none", finance: "all",
+    inventory: "none",
+    data_export: "all", member_manage: "none", clinic_setting: "none",
+  },
   // 医生：顾客/随访/影像 全部，建档可，删除仅自己，无财务/导出/员工管理/门诊设置
   doctor: {
     patient: "all", patient_create: "all", patient_edit: "all", patient_delete: "self",
@@ -140,7 +150,15 @@ export const ROLE_DEFAULT_PERMS: Record<string, RolePermTemplate> = {
     inventory: "all",
     data_export: "none", member_manage: "none", clinic_setting: "none",
   },
-  // 护士/助理：随访/影像 全部，顾客查看全部但修改仅自己，无删除
+  // 护士：随访/影像 全部，顾客查看全部但修改仅自己，无删除
+  nurse: {
+    patient: "all", patient_create: "none", patient_edit: "self", patient_delete: "none",
+    followup: "all", media_view: "all", media_upload: "all", media_delete: "none",
+    schedule: "all", shop_order: "none", shop_verify: "all", finance: "none",
+    inventory: "all",
+    data_export: "none", member_manage: "none", clinic_setting: "none",
+  },
+  // 助理：行政辅助，随访/影像 全部，顾客查看全部但修改仅自己，无删除
   assistant: {
     patient: "all", patient_create: "none", patient_edit: "self", patient_delete: "none",
     followup: "all", media_view: "all", media_upload: "all", media_delete: "none",
@@ -580,7 +598,7 @@ export const yabanRoleRouter = router({
       `SELECT DISTINCT role_key FROM yaban_clinic_member WHERE user_id=? AND status='active'`,
       [ctx.user.id]
     )) as any;
-    const order = ["owner", "doctor", "assistant", "receptionist", "finance"];
+    const order = ["owner", "shareholder", "doctor", "nurse", "assistant", "receptionist", "finance"];
     const clinicRoleKeys = (roleRows as any[]).map((r) => r.role_key);
     for (const k of order) {
       if (clinicRoleKeys.includes(k) && !badgeKeys.includes(k)) badgeKeys.push(k);
@@ -693,9 +711,9 @@ export const yabanRoleRouter = router({
         `SELECT m.id, m.user_id, m.role_key, m.status, u.username, u.name, u.phone, u.avatar
          FROM yaban_clinic_member m JOIN users u ON u.id = m.user_id
          WHERE m.tenant_id = ? AND m.status='active'
-         ORDER BY FIELD(m.role_key,'owner','doctor','assistant','receptionist','finance'), m.created_at ASC`,
-        [tenantId]
-      )) as any;
+                  ORDER BY FIELD(m.role_key,'owner','shareholder','doctor','nurse','assistant','receptionist','finance'), m.created_at ASC`,
+      [tenantId]
+    )) as any;
       const members: any[] = [];
       for (const m of memberRows as any[]) {
         // 个人定制记录
@@ -927,7 +945,7 @@ export const yabanRoleRouter = router({
          JOIN users u ON u.id = m.user_id
          LEFT JOIN yaban_clinic_role r ON r.role_key = m.role_key
          WHERE m.tenant_id = ?
-         ORDER BY FIELD(m.role_key,'owner','doctor','assistant','receptionist','finance'), m.created_at ASC`,
+         ORDER BY FIELD(m.role_key,'owner','shareholder','doctor','nurse','assistant','receptionist','finance'), m.created_at ASC`,
         [tenantId]
       )) as any;
       return rows as any[];
