@@ -18,7 +18,6 @@ import {
   ReceiptText,
   Database,
   ChevronRight,
-  LogOut,
   Camera,
   Loader2,
   LayoutDashboard,
@@ -27,7 +26,6 @@ import {
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
-import { useAuth } from "@/_core/hooks/useAuth";
 import { compressAvatar } from "@/utils/imageUtils";
 
 type RowItem = {
@@ -42,7 +40,6 @@ export default function YabanProfile() {
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const { data: user } = trpc.auth.me.useQuery();
-  const { logout } = useAuth();
   // 角色信息：判断是否院长/股东(owner) 或 创始人(founder)
   const { data: membership } = trpc.yabanRole.myMembership.useQuery();
   const isOwner = (membership as any)?.member?.role_key === "owner";
@@ -103,16 +100,6 @@ export default function YabanProfile() {
       toast.error("图片处理失败，请重试");
     }
     e.target.value = "";
-  };
-
-  const handleLogout = async () => {
-    if (!window.confirm("确认退出当前账号？")) return;
-    try {
-      // 退出前清掉会话级「查看版本」选择，避免下一个登录用户沿用
-      try { sessionStorage.removeItem("_viewing_version"); } catch {}
-      await logout();
-    } catch {}
-    navigate("/login");
   };
 
   const points = Number((user as any)?.points ?? 0);
@@ -270,15 +257,6 @@ export default function YabanProfile() {
                 ))}
               </div>
             </div>
-            {/* 退出账号按钮 */}
-            <button
-              onClick={handleLogout}
-              className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/20 active:bg-white/30 ring-1 ring-white/40 text-white text-sm transition-colors"
-              aria-label="退出登录"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>退出</span>
-            </button>
           </div>
         </div>
       </div>
