@@ -7,9 +7,10 @@ import { useState } from "react";
 import { PageTag } from "@/components/PageTag";
 import { useLocation } from "wouter";
 import { ChevronRight } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
-// 选项配置
-const DOCTORS = ["郑莹", "易家宝", "李华超", "鲁毅", "梅刚"];
+// 静态选项（医生从API动态获取）
+const DOCTORS_FALLBACK = ["郑莹", "易家宝", "李华超", "鲁毅", "梅刚"];
 const CONSULTANTS = ["洪紫钥", "杨文利", "侯睿"];
 const ASSISTANTS = ["张助理", "李助理"];
 const ROOMS = ["1号诊室", "2号诊室", "3号诊室", "VIP诊室"];
@@ -37,6 +38,17 @@ interface FormData {
 export default function YabanScheduleCreate() {
   const [, setLocation] = useLocation();
   const [showPicker, setShowPicker] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // 从API获取员工（医生）列表
+  const { data: membersData } = trpc.yabanAppointment.listMembers.useQuery();
+  const DOCTORS = membersData?.map((m: any) => m.name).filter(Boolean) as string[] || DOCTORS_FALLBACK;
+
+  // 创建预约 mutation
+  const createAppointment = trpc.yabanAppointment.create.useMutation({
+    onSuccess: () => { setSubmitting(false); setLocation("/yaban/schedule"); },
+    onError: (err) => { setSubmitting(false); alert(err.message || "创建失败，请重试"); },
+  });
   const [form, setForm] = useState<FormData>({
     patientName: "",
     patientId: "",
@@ -59,20 +71,21 @@ export default function YabanScheduleCreate() {
   };
 
   const handleSave = () => {
-    if (!form.patientName) {
-      alert("请选择顾客");
-      return;
-    }
-    if (!form.doctor) {
-      alert("请选择医生");
-      return;
-    }
-    if (!form.project) {
-      alert("请选择项目");
-      return;
-    }
-    alert("预约创建成功");
-    setLocation("/yaban/schedule");
+    if (!form.patientName) { alert("请选择顾客"); return; }
+    if (!form.doctor) { alert("请选择医生"); return; }
+    if (!form.project) { alert("请选择项目"); return; }
+    if (submitting) return;
+    setSubmitting(true);
+    createAppointment.mutate({
+      patientName: form.patientName,
+      appointDate: form.date,
+      appointTime: form.startTime,
+      endTime: form.endTime,
+      doctor: form.doctor,
+      project: form.project,
+      room: form.room || undefined,
+      remark: form.remark || undefined,
+    });
   };
 
   const handlePickerSelect = (field: string, value: string) => {
@@ -285,7 +298,7 @@ export default function YabanScheduleCreate() {
           onClick={handleSave}
           className="w-full py-3 text-center text-sm text-white font-medium bg-gradient-to-r from-sky-500 to-cyan-400 rounded-lg shadow-sm active:opacity-80"
         >
-          保存
+          {submitting ? "保存中..." : "保存"}
         </button>
       </div>
 

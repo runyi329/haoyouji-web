@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Plus,
 } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
 // 预约状态配置
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -30,42 +31,38 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   cancelled: { label: "已取消", color: "text-gray-500", bg: "bg-gray-100" },
 };
 
-// 模拟详情数据
-function getMockDetail(id: string) {
-  const seed = parseInt(id) || 1;
-  const names = ["王瑛", "赵玲", "胡星民", "殷伟民", "王平华", "徐进", "喻永丽", "王雯婷"];
-  const projects = ["复诊", "洁牙", "补牙", "拔牙", "种植", "正畸复诊", "根管治疗"];
-  const doctors = ["郑莹", "易家宝", "李华超", "鲁毅", "梅刚"];
-  const statuses = ["booked", "confirmed", "treating", "treated", "paid", "left"];
-
-  return {
-    id,
-    patientName: names[seed % names.length],
-    patientAge: 20 + (seed % 50),
-    gender: seed % 3 === 0 ? "female" : "male",
-    patientId: `0179${(60 + seed % 40).toString()}`,
-    clinic: "上海恒恩口腔门诊部",
-    date: "2026年06月10日 星期二",
-    time: `${(8 + seed % 10).toString().padStart(2, "0")}:${seed % 2 === 0 ? "00" : "30"}-${(9 + seed % 10).toString().padStart(2, "0")}:${seed % 2 === 0 ? "30" : "00"}`,
-    doctor: doctors[seed % doctors.length],
-    consultant: "未指定",
-    assistant: "未指定",
-    project: projects[seed % projects.length],
-    room: seed % 2 === 0 ? "1号诊室" : "VIP诊室",
-    department: "",
-    source: "未指定",
-    remark: seed % 3 === 0 ? "宁缺访邀约 IMP定检" : seed % 3 === 1 ? "半年洁牙定检" : "",
-    status: statuses[seed % statuses.length],
-    tags: seed % 2 === 0 ? ["电", "门"] : ["临"],
-  };
-}
-
 export default function YabanScheduleDetail() {
   const [, setLocation] = useLocation();
   const params = useParams<{ id: string }>();
-  const detail = getMockDetail(params.id || "1");
-  const statusInfo = STATUS_CONFIG[detail.status] || STATUS_CONFIG.booked;
   const [showActionSheet, setShowActionSheet] = useState(false);
+
+  const { data: detail, isLoading } = trpc.yabanAppointment.getById.useQuery(
+    { id: Number(params.id) },
+    { enabled: !!params.id }
+  );
+
+  const utils = trpc.useUtils();
+  const updateStatus = trpc.yabanAppointment.updateStatus.useMutation({
+    onSuccess: () => utils.yabanAppointment.getById.invalidate({ id: Number(params.id) }),
+  });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <span className="text-gray-400 text-sm">加载中...</span>
+      </div>
+    );
+  }
+  if (!detail) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
+        <span className="text-gray-400 text-sm">预约不存在</span>
+        <button className="mt-4 text-sky-500 text-sm" onClick={() => setLocation("/yaban/schedule")}>返回</button>
+      </div>
+    );
+  }
+
+  const statusInfo = STATUS_CONFIG[detail.status] || STATUS_CONFIG.booked;
 
   // 快捷操作
   const quickActions = [
@@ -76,16 +73,17 @@ export default function YabanScheduleDetail() {
   ];
 
   // 详情字段
+  const timeStr = detail.appointTime ? `${detail.appointTime}${detail.endTime ? `–${detail.endTime}` : ""}` : "";
   const detailFields = [
-    { label: "日期", value: `${detail.date} ${detail.time}` },
-    { label: "诊所", value: detail.clinic },
-    { label: "医生", value: detail.doctor },
-    { label: "咨询师", value: detail.consultant },
-    { label: "助理", value: detail.assistant },
-    { label: "项目", value: detail.project },
+    { label: "日期", value: `${detail.date} ${timeStr}` },
+    { label: "诊所", value: (detail as any).clinic || "" },
+    { label: "医生", value: detail.doctor || "未指定" },
+    { label: "咨询师", value: detail.consultant || "未指定" },
+    { label: "助理", value: detail.assistant || "未指定" },
+    { label: "项目", value: detail.project || "" },
     { label: "诊室", value: detail.room || "未指定" },
     { label: "科室", value: detail.department || "未指定" },
-    { label: "预约来源", value: detail.source },
+    { label: "预约来源", value: detail.source || "未指定" },
     { label: "备注", value: detail.remark || "无" },
   ];
 
@@ -124,18 +122,19 @@ export default function YabanScheduleDetail() {
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <span className="text-base font-medium text-gray-800">{detail.patientName}</span>
-              <span className="text-xs text-gray-500">{detail.patientAge}岁</span>
-              <span className="text-xs text-gray-500">{detail.gender === "female" ? "女" : "男"}</span>
+              {detail.patientAge && <span className="text-xs text-gray-500">{detail.patientAge}岁</span>}
+              {detail.patientGender && <span className="text-xs text-gray-500">{detail.patientGender}</span>}
             </div>
             <div className="flex items-center gap-1 mt-0.5">
-              {detail.tags.map((tag, i) => (
+  {/* tags */}
+            {((detail as any).tags || []).map((tag: string, i: number) => (
                 <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-600 border border-sky-200">
                   {tag}
                 </span>
               ))}
             </div>
             <div className="text-xs text-gray-400 mt-0.5">
-              {detail.patientId} - {detail.clinic}
+              {(detail as any).patientId || ""} {(detail as any).clinic ? `- ${(detail as any).clinic}` : ""}
             </div>
           </div>
           <ChevronRight size={16} className="text-gray-300" />

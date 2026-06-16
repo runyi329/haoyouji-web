@@ -1,5 +1,131 @@
 [
   {
+    "hash": "12d5929a65511efda746e648bb36d4b8f9bdd6ca",
+    "author": "dev",
+    "date": "2026-06-16T04:17:42+00:00",
+    "message": "feat(yaban): 经营管理组排序调整-账号资料管理移至收费项目之后",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "经营管理组排序调整-账号资料管理移至收费项目之后"
+  },
+  {
+    "hash": "92822387ef5f92eb908d909f91ab91a842035728",
+    "author": "dev",
+    "date": "2026-06-16T04:12:48+00:00",
+    "message": "feat(yaban): 账号资料管理并入经营管理组,头像旁相机角标移除(换头像统一走账号资料管理)",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "账号资料管理并入经营管理组,头像旁相机角标移除(换头像统一走账号资料管理)"
+  },
+  {
+    "hash": "df5a646ea141a4944c826f19cd6e48c38375da7d",
+    "author": "dev",
+    "date": "2026-06-16T04:06:15+00:00",
+    "message": "feat(yaban): 我的经营管理菜单调整-删团队账号开通,改名账号权限管理/收费项目管理/商城订单管理,核销记录并入商城",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "我的经营管理菜单调整-删团队账号开通,改名账号权限管理/收费项目管理/商城订单管理,核销记录并入商城"
+  },
+  {
+    "hash": "9ea33083da877e769554f697774b25d5539a29f9",
+    "author": "dev",
+    "date": "2026-06-16T03:42:27+00:00",
+    "message": "feat(yaban): 底部Tab文案'工作'改为'工作台'",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "底部Tab文案'工作'改为'工作台'"
+  },
+  {
+    "hash": "e5c0a37761b201985b1b99b3caeedcf6e2d6356d",
+    "author": "dev",
+    "date": "2026-06-16T03:37:37+00:00",
+    "message": "feat(yaban): 全部功能页支持自定义首页快捷功能(可增删/排序/最多7个),首页按门店读取配置",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "全部功能页支持自定义首页快捷功能(可增删/排序/最多7个),首页按门店读取配置"
+  },
+  {
+    "hash": "7a6fb2c2167b8e8bd67462a3d969dbebf40196b0",
+    "author": "dev",
+    "date": "2026-06-16T03:29:41+00:00",
+    "message": "feat(yaban): 底部Tab精简为工作/我的(去消息商城)，企业名超长时上下两行均衡换行",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "底部Tab精简为工作/我的(去消息商城)，企业名超长时上下两行均衡换行"
+  },
+  {
+    "hash": "bd5a8c233e825e329564df1a4c54ab1dfede0b37",
+    "author": "dev",
+    "date": "2026-06-16T03:21:58+00:00",
+    "message": "fix(yaban): 添加员工按选中userId精确定位，杜绝手机号/用户名反查错位添加错人",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "添加员工按选中userId精确定位，杜绝手机号/用户名反查错位添加错人"
+  },
+  {
+    "hash": "5b49f16a8e7d3514c8fcc673bd0d5ae91e971a4c",
+    "author": "dev",
+    "date": "2026-06-16T03:14:15+00:00",
+    "message": "fix(yaban): 创始人门店列表包含其已加入的门店，加入哪家即可在该店管理员工",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "创始人门店列表包含其已加入的门店，加入哪家即可在该店管理员工"
+  },
+  {
+    "hash": "7f1c4610498fa8e91044a0c20f67d9d193f5318d",
+    "author": "dev",
+    "date": "2026-06-16T03:11:17+00:00",
+    "message": "chore(yaban): 新增只读诊断接口debugMembership定位添加员工不显示问题",
+    "type": "chore",
+    "scope": "yaban",
+    "cleanMessage": "新增只读诊断接口debugMembership定位添加员工不显示问题"
+  },
+  {
+    "hash": "863117567ac6d8b6382d1bbfe11fc0ae7b9a19ba",
+    "author": "dev",
+    "date": "2026-06-16T03:02:32+00:00",
+    "message": "fix(yaban): 添加员工后强制刷新员工列表+回查写入诊断",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "添加员工后强制刷新员工列表+回查写入诊断"
+  },
+  {
+    "hash": "0090edc00b26bab417372406632737afa1b88b91",
+    "author": "dev",
+    "date": "2026-06-16T02:54:53+00:00",
+    "message": "feat(yaban): 角色拆分-院长与股东、护士与助理各自独立",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "角色拆分-院长与股东、护士与助理各自独立"
+  },
+  {
+    "hash": "444982c421f999f317afc8ebaa7e907989d8978f",
+    "author": "dev",
+    "date": "2026-06-16T02:47:45+00:00",
+    "message": "feat(yaban): 添加员工支持脉动网用户模糊搜索联想选择",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "添加员工支持脉动网用户模糊搜索联想选择"
+  },
+  {
+    "hash": "41451922d5e61bcfc061214b22a5a233226471cc",
+    "author": "dev",
+    "date": "2026-06-16T01:01:29+00:00",
+    "message": "feat(yaban): 更多页新增合伙人档案/员工档案/牙科商店/AI估值四个功能入口",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "更多页新增合伙人档案/员工档案/牙科商店/AI估值四个功能入口"
+  },
+  {
+    "hash": "0ab637566467faa4dc730ff6632e9b024df7b5d4",
+    "author": "dev",
+    "date": "2026-06-16T00:19:36+00:00",
+    "message": "feat(yaban): 新增库存模块-工作台/一览/入库/出库/批次效期预警(购物车式领用+FEFO+扫码入库)",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "新增库存模块-工作台/一览/入库/出库/批次效期预警(购物车式领用+FEFO+扫码入库)"
+  },
+  {
     "hash": "f12c28143d2f7057740ad3f37de0a49b891b3c54",
     "author": "dev",
     "date": "2026-06-15T23:40:17+00:00",

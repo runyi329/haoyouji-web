@@ -24,7 +24,7 @@ export type FeatureDef = {
 export const ALL_FEATURE_DICT: FeatureDef[] = [
   // —— 常用核心 ——
   { key: "schedule", name: "预约日程", icon: `${ICON_BASE}/richeng.webp`, route: "/yaban/schedule" },
-  { key: "clinic_shift", name: "诊所排班", icon: `${ICON_BASE}/zhensuo_paiban.webp`, route: "" },
+  { key: "clinic_shift", name: "诊所排班", icon: `${ICON_BASE}/zhensuo_paiban.webp`, route: "/yaban/clinic-shift" },
   { key: "patients", name: "顾客档案", icon: `${ICON_BASE}/huanzhe.webp`, route: "/yaban/patients" },
   { key: "followup", name: "随访", icon: `${ICON_BASE}/suifang.webp`, route: "/yaban/followup" },
   { key: "ops_report", name: "运营报表", icon: `${ICON_BASE}/yunying_baobiao.webp`, route: "" },

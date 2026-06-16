@@ -67,6 +67,7 @@ import { yabanRoleRouter } from "./yaban-role-router";
 import { yabanClinicRouter } from "./yaban-clinic-router";
 import { yabanCustomerRouter } from "./yaban-customer-router";
 import { yabanInventoryRouter } from "./yaban-inventory-router";
+import { yabanAppointmentRouter, yabanShiftRouter } from "./yaban-appointment-router";
 import { versionRouter } from "./version-router";
 
 // // 在应用启动时初始化数据库
@@ -203,6 +204,8 @@ export const appRouter = router({
   yabanClinic: yabanClinicRouter,
   yabanCustomer: yabanCustomerRouter,
   yabanInventory: yabanInventoryRouter,
+  yabanAppointment: yabanAppointmentRouter,
+  yabanShift: yabanShiftRouter,
   version: versionRouter,
   prediction: predictionRouter,
   okxTrader: okxTraderRouter,
