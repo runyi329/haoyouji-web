@@ -142,25 +142,11 @@ export default function YabanProfile() {
   // ── 医院经营角度：单家医院日常经营管理用到的功能 ──
   const clinicRows: RowItem[] = [
     {
-      key: "team",
-      icon: <Users className="w-5 h-5 text-[#1E88D6]" />,
-      label: "团队账号开通",
-      hint: "为门诊员工开通账号",
-      onClick: () => navigate("/yaban/settings/roles"),
-    },
-    {
       key: "roles",
       icon: <ShieldCheck className="w-5 h-5 text-[#1E88D6]" />,
-      label: "权限管理",
-      hint: "为员工与顾客逐项设置权限",
+      label: "账号权限管理",
+      hint: "开通员工账号并逐项设置权限",
       onClick: () => navigate("/yaban/settings/roles"),
-    },
-    {
-      key: "charge",
-      icon: <ReceiptText className="w-5 h-5 text-[#1E88D6]" />,
-      label: "收费项目库",
-      hint: "维护收费项目分类、单价与常用",
-      onClick: () => navigate("/yaban/settings/charge-products"),
     },
     {
       key: "data",
@@ -172,14 +158,16 @@ export default function YabanProfile() {
     {
       key: "orders",
       icon: <ShoppingBag className="w-5 h-5 text-[#1E88D6]" />,
-      label: "商城管理",
+      label: "商城订单管理",
+      hint: "管理商城订单与核销记录",
       onClick: () => navigate("/yaban/shop/admin"),
     },
     {
-      key: "verify",
-      icon: <Ticket className="w-5 h-5 text-[#1E88D6]" />,
-      label: "核销记录",
-      onClick: () => navigate("/yaban/profile/verify-records"),
+      key: "charge",
+      icon: <ReceiptText className="w-5 h-5 text-[#1E88D6]" />,
+      label: "收费项目管理",
+      hint: "维护收费项目分类、单价与常用",
+      onClick: () => navigate("/yaban/settings/charge-products"),
     },
     ...(isOwner
       ? [

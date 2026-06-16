@@ -47,6 +47,13 @@ const ENTRIES: AdminEntry[] = [
     path: "/yaban/shop/admin/orders",
   },
   {
+    key: "verify",
+    title: "核销记录",
+    desc: "查看商品/券的核销核验记录",
+    icon: Ticket,
+    path: "/yaban/profile/verify-records",
+  },
+  {
     key: "coupons",
     title: "优惠券管理",
     desc: "创建满减/折扣券，控制发放与上下架",
@@ -86,7 +93,7 @@ export default function YabanShopAdmin() {
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold ml-1">商城管理</span>
+          <span className="text-base font-bold ml-1">商城订单管理</span>
         </div>
       </div>
 
