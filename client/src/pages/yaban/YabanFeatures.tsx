@@ -29,6 +29,10 @@ const ALL_FEATURES: Feature[] = [
   { name: "领用", icon: `${ICON_BASE}/lingyong.webp`, route: "" },
   { name: "回访管理", icon: `${ICON_BASE}/huifang_guanli.webp`, route: "" },
   { name: "技加工", icon: `${ICON_BASE}/ji_jiagong.webp`, route: "" },
+  { name: "合伙人档案", icon: `${ICON_BASE}/hehuoren_dangan.webp`, route: "/yaban/partner-profile" },
+  { name: "员工档案", icon: `${ICON_BASE}/yuangong_dangan.webp`, route: "/yaban/staff-profile" },
+  { name: "牙科商店", icon: `${ICON_BASE}/yake_shangdian.webp`, route: "/yaban/shop" },
+  { name: "AI估值", icon: `${ICON_BASE}/ai_guzhi.webp`, route: "/yaban/ai-valuation" },
 ];
 
 export default function YabanFeatures() {

@@ -737,6 +737,9 @@ function Router() {
         <Route path="/yaban/shop/cashier" component={lazy(() => import("./pages/yaban/YabanShopCashier"))} />
         <Route path="/yaban/shop/pay-result" component={lazy(() => import("./pages/yaban/YabanShopPayResult"))} />
         <Route path="/yaban/shop/my-orders" component={lazy(() => import("./pages/yaban/YabanShopMyOrders"))} />
+        <Route path="/yaban/staff-profile" component={lazy(() => import("./pages/yaban/YabanStaffProfile"))} />
+        <Route path="/yaban/partner-profile" component={lazy(() => import("./pages/yaban/YabanPartnerProfile"))} />
+        <Route path="/yaban/ai-valuation" component={lazy(() => import("./pages/yaban/YabanAiValuation"))} />
         <Route path="/yaban/shop/admin" component={YabanShopAdmin} />
         <Route path="/yaban/shop/admin/orders" component={lazy(() => import("./pages/yaban/YabanShopAdminOrders"))} />
         <Route path="/yaban/shop/admin/products" component={lazy(() => import("./pages/yaban/YabanShopAdminProducts"))} />
