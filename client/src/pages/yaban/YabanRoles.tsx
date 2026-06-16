@@ -443,9 +443,10 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
           setIdentifier={setIdentifier}
           loading={addMember.isPending}
           onClose={() => setShowAdd(false)}
-          onConfirm={() => {
-            if (!identifier.trim()) return toast.error("请输入手机号或用户名");
-            addMember.mutate({ tenantId, identifier: identifier.trim(), roleKey });
+          onConfirm={(picked?: string) => {
+            const idv = (picked || identifier).trim();
+            if (!idv) return toast.error("请选择或输入手机号/用户名");
+            addMember.mutate({ tenantId, identifier: idv, roleKey });
           }}
         />
       )}
@@ -501,8 +502,21 @@ function RoleSelectModal({
   setIdentifier?: (v: string) => void;
   loading: boolean;
   onClose: () => void;
-  onConfirm: () => void;
+  onConfirm: (picked?: string) => void;
 }) {
+  // 联想搜索（仅添加员工时启用）
+  const [picked, setPicked] = useState<any | null>(null);
+  const [debounced, setDebounced] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced((identifier || "").trim()), 300);
+    return () => clearTimeout(t);
+  }, [identifier]);
+  const searchQuery = trpc.yabanRole.searchUsers.useQuery(
+    { keyword: debounced },
+    { enabled: !!showIdentifier && debounced.length >= 1 && !picked, staleTime: 10000 }
+  );
+  const results = (searchQuery.data as any[]) || [];
+
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
       <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5">
@@ -515,12 +529,76 @@ function RoleSelectModal({
         {showIdentifier && (
           <>
             <label className="block text-xs text-gray-500 mb-1">员工手机号或用户名</label>
-            <input
-              value={identifier}
-              onChange={(e) => setIdentifier?.(e.target.value)}
-              placeholder="请输入已注册的手机号或用户名"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#1E88D6] mb-4"
-            />
+            {picked ? (
+              <div className="flex items-center gap-3 border border-[#1E88D6] bg-[#EAF4FE] rounded-xl px-3 py-2.5 mb-4">
+                {picked.avatar ? (
+                  <img src={picked.avatar} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-[#1E88D6] text-white flex items-center justify-center flex-shrink-0">
+                    <UserCircle className="w-5 h-5" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-800 truncate">{picked.name}</div>
+                  <div className="text-xs text-gray-500 truncate">
+                    {picked.phone || picked.username || ""}
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setPicked(null); setIdentifier?.(""); }}
+                  className="text-xs text-[#1E88D6] flex-shrink-0"
+                >
+                  重选
+                </button>
+              </div>
+            ) : (
+              <div className="relative mb-4">
+                <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2.5 focus-within:border-[#1E88D6]">
+                  <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <input
+                    value={identifier}
+                    onChange={(e) => setIdentifier?.(e.target.value)}
+                    placeholder="输入手机号、用户名或姓名搜索"
+                    className="flex-1 text-sm outline-none bg-transparent"
+                  />
+                  {searchQuery.isFetching && <Loader2 className="w-4 h-4 text-gray-300 animate-spin flex-shrink-0" />}
+                </div>
+                {debounced.length >= 1 && (
+                  <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-lg max-h-60 overflow-y-auto z-10">
+                    {searchQuery.isFetching && results.length === 0 && (
+                      <div className="px-3 py-3 text-xs text-gray-400 text-center">搜索中…</div>
+                    )}
+                    {!searchQuery.isFetching && results.length === 0 && (
+                      <div className="px-3 py-3 text-xs text-gray-400 text-center">未找到匹配的脉动网用户</div>
+                    )}
+                    {results.map((u) => (
+                      <button
+                        key={u.userId}
+                        onClick={() => {
+                          setPicked(u);
+                          setIdentifier?.(u.phone || u.username || "");
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 text-left"
+                      >
+                        {u.avatar ? (
+                          <img src={u.avatar} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center flex-shrink-0">
+                            <UserCircle className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-gray-800 truncate">{u.name}</div>
+                          <div className="text-xs text-gray-400 truncate">
+                            {[u.phone, u.username].filter(Boolean).join(" · ") || "脉动网用户"}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
         <label className="block text-xs text-gray-500 mb-2">分配角色</label>
@@ -540,7 +618,7 @@ function RoleSelectModal({
           ))}
         </div>
         <button
-          onClick={onConfirm}
+          onClick={() => onConfirm(picked ? (picked.phone || picked.username || "") : undefined)}
           disabled={loading}
           className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-xl py-3 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
         >

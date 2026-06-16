@@ -933,6 +933,33 @@ export const yabanRoleRouter = router({
       return rows as any[];
     }),
 
+  // ============ 模糊搜索脉动网用户（添加员工联想） ============
+  searchUsers: protectedProcedure
+    .input(z.object({ keyword: z.string().max(50) }))
+    .query(async ({ ctx, input }) => {
+      const kw = input.keyword.trim();
+      if (kw.length < 1) return [] as any[];
+      const conn = await getDbConnection();
+      if (!conn) return [] as any[];
+      const like = `%${kw}%`;
+      // 手机号/用户名/昵称模糊匹配；手机号或用户名完全匹配的优先靠前
+      const [rows] = (await conn.execute(
+        `SELECT id, COALESCE(name, username, '未知') AS name, username, phone, avatar
+           FROM users
+          WHERE phone LIKE ? OR username LIKE ? OR name LIKE ?
+          ORDER BY (phone = ? OR username = ?) DESC, id DESC
+          LIMIT 20`,
+        [like, like, like, kw, kw]
+      )) as any;
+      return (rows as any[]).map((u) => ({
+        userId: Number(u.id),
+        name: (u.name || u.username || "未知") as string,
+        username: (u.username || "") as string,
+        phone: (u.phone || "") as string,
+        avatar: (u.avatar || "") as string,
+      }));
+    }),
+
   // ============ 添加门诊员工 ============
   addMember: protectedProcedure
     .input(
