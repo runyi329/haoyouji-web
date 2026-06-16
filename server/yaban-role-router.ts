@@ -1011,7 +1011,13 @@ export const yabanRoleRouter = router({
          ON DUPLICATE KEY UPDATE role_key = VALUES(role_key), status = 'active', updated_at = CURRENT_TIMESTAMP`,
         [tenantId, targetUser.id, input.roleKey, ctx.user.id]
       );
-      return { success: true, userId: targetUser.id };
+      // 回查写入结果，确认同一 tenant 下已为 active
+      const [chk] = (await conn.execute(
+        `SELECT tenant_id, status, role_key FROM yaban_clinic_member WHERE tenant_id=? AND user_id=? LIMIT 1`,
+        [tenantId, targetUser.id]
+      )) as any;
+      const saved = (chk as any[])[0] || null;
+      return { success: true, userId: targetUser.id, tenantId, saved };
     }),
 
   // ============ 修改成员角色 ============

@@ -283,28 +283,38 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
     [roles]
   );
 
+  // 刷新员工列表：同时失效带参/不带参的缓存并强制 refetch，避免添加后不刷新
+  const reloadMembers = async () => {
+    await Promise.all([
+      utils.yabanRole.getStaffMatrix.invalidate(),
+      utils.yabanRole.getStaffMatrix.refetch({ tenantId }),
+      utils.yabanRole.myMembership.invalidate(),
+    ]);
+  };
   const addMember = trpc.yabanRole.addMember.useMutation({
-    onSuccess: () => {
+    onSuccess: async (res: any) => {
+      // 诊断：打印写入 tenant 与列表查询 tenant，便于核对是否同源
+      try { console.log("[yaban addMember] saved=", res?.saved, "writeTenant=", res?.tenantId, "listTenant=", tenantId); } catch {}
       toast.success("已添加门诊员工");
       setShowAdd(false);
       setIdentifier("");
       setRoleKey("doctor");
-      utils.yabanRole.getStaffMatrix.invalidate();
+      await reloadMembers();
     },
     onError: (e) => toast.error(e.message || "添加失败"),
   });
   const updateRole = trpc.yabanRole.updateMemberRole.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("角色已更新");
       setEditingMember(null);
-      utils.yabanRole.getStaffMatrix.invalidate();
+      await reloadMembers();
     },
     onError: (e) => toast.error(e.message || "更新失败"),
   });
   const removeMember = trpc.yabanRole.removeMember.useMutation({
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("已移除");
-      utils.yabanRole.getStaffMatrix.invalidate();
+      await reloadMembers();
     },
     onError: (e) => toast.error(e.message || "移除失败"),
   });
