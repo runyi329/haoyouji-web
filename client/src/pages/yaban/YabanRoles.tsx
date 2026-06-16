@@ -242,7 +242,7 @@ function MyRoleCard({ my }: { my: any }) {
     <div className="bg-white rounded-2xl shadow-sm p-4">
       <div className="flex items-center gap-2 mb-2">
         <ShieldCheck className="w-4 h-4 text-[#1E88D6]" />
-        <span className="text-sm font-bold text-gray-800">我的门诊角色</span>
+        <span className="text-sm font-bold text-gray-800">我的角色</span>
       </div>
       {my?.roleBadges?.length ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -368,7 +368,7 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-[#1E88D6]" />
-            <span className="text-sm font-bold text-gray-800">门诊成员（{members.length}）</span>
+            <span className="text-sm font-bold text-gray-800">成员列表（{members.length}）</span>
           </div>
           <button
             onClick={() => setShowAdd(true)}
@@ -384,7 +384,7 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
             <Loader2 className="w-6 h-6 text-[#9CC8EC] animate-spin" />
           </div>
         ) : members.length === 0 ? (
-          <div className="py-10 text-center text-sm text-gray-400">暂无门诊成员</div>
+          <div className="py-10 text-center text-sm text-gray-400">暂无成员</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
