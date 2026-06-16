@@ -142,13 +142,6 @@ export default function YabanProfile() {
   // ── 医院经营角度：单家医院日常经营管理用到的功能 ──
   const clinicRows: RowItem[] = [
     {
-      key: "account",
-      icon: <Settings className="w-5 h-5 text-[#1E88D6]" />,
-      label: "账号资料管理",
-      hint: "编辑昵称、手机号与头像",
-      onClick: () => navigate("/yaban/account"),
-    },
-    {
       key: "roles",
       icon: <ShieldCheck className="w-5 h-5 text-[#1E88D6]" />,
       label: "账号权限管理",
@@ -175,6 +168,13 @@ export default function YabanProfile() {
       label: "收费项目管理",
       hint: "维护收费项目分类、单价与常用",
       onClick: () => navigate("/yaban/settings/charge-products"),
+    },
+    {
+      key: "account",
+      icon: <Settings className="w-5 h-5 text-[#1E88D6]" />,
+      label: "账号资料管理",
+      hint: "编辑昵称、手机号与头像",
+      onClick: () => navigate("/yaban/account"),
     },
     ...(isOwner
       ? [
