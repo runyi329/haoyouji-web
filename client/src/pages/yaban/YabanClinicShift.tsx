@@ -237,14 +237,14 @@ export default function YabanClinicShift() {
   function batchApplyRest() {
     if (!batchSel.size) { toast.error("请先勾选员工"); return; }
     const dateStr = toDateStr(selDate);
-    Promise.all([...batchSel].map(id =>
+    Promise.all(Array.from(batchSel).map(id =>
       saveOverrideMut.mutateAsync({ staffUserId: id, overrideDate: dateStr, shiftType: "rest" })
     )).then(() => { setBatchMode(false); setBatchSel(new Set()); });
   }
   function batchCopyTemplate() {
     if (!batchSel.size) { toast.error("请先勾选员工"); return; }
     const dateStr = toDateStr(selDate);
-    Promise.all([...batchSel].map(id => {
+    Promise.all(Array.from(batchSel).map(id => {
       const tpl = allTemplates.find((t: any) => t.staffUserId === id);
       if (!tpl) return Promise.resolve();
       return saveOverrideMut.mutateAsync({
