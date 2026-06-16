@@ -1,9 +1,7 @@
 name: 自动部署到生产服务器
 
 on:
-  push:
-    branches:
-      - main
+  # 自动 push 触发已关闭，统一由 bg-deploy.yml 负责自动部署，避免两个 workflow 并发 SSH 触发服务器连接限制
   workflow_dispatch:
     inputs:
       reason:
