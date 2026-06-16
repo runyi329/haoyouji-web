@@ -90,6 +90,13 @@ export default function YabanHome() {
   const currentClinic =
     clinics.find((c) => c.tenantId === currentTenantId)?.name ||
     (clinics.length > 0 ? clinics[0].name : "暂无门店");
+  // 门店名过长时按中点均衡折成上下两行（避免“司”字单独掉行），<=8 字不处理
+  const clinicNameLines = (() => {
+    const name = currentClinic || "";
+    if (name.length <= 8) return [name];
+    const mid = Math.ceil(name.length / 2);
+    return [name.slice(0, mid), name.slice(mid)];
+  })();
 
   const utils = trpc.useUtils();
   const selectClinic = (tid: number) => {
@@ -140,7 +147,11 @@ export default function YabanHome() {
             <div className="w-6 h-6 rounded bg-white/20 flex items-center justify-center">
               <span className="text-[10px] font-bold">企</span>
             </div>
-            <span className="text-sm font-bold">{currentClinic}</span>
+            <span className="text-sm font-bold text-left leading-tight">
+              {clinicNameLines.map((line, i) => (
+                <span key={i} className="block">{line}</span>
+              ))}
+            </span>
             {showClinicPicker ? (
               <ChevronUp className="w-4 h-4" />
             ) : (

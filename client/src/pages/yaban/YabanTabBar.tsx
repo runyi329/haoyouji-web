@@ -4,12 +4,11 @@
  * 主题色：蓝色系 #1E88D6（与商城风格统一）
  */
 import { Link, useLocation } from "wouter";
-import { Briefcase, MessageCircle, ShoppingBag, User } from "lucide-react";
+import { Briefcase, User } from "lucide-react";
 
+// 底部仅保留“工作”与“我的”；商城入口已移至“更多 → 牙科商店”
 const TABS = [
   { label: "工作", href: "/yaban", icon: <Briefcase className="w-5 h-5" /> },
-  { label: "消息", href: "/yaban/messages", icon: <MessageCircle className="w-5 h-5" /> },
-  { label: "商城", href: "/yaban/shop", icon: <ShoppingBag className="w-5 h-5" /> },
   { label: "我的", href: "/yaban/profile", icon: <User className="w-5 h-5" /> },
 ];
 
