@@ -6,9 +6,9 @@
 import { Link, useLocation } from "wouter";
 import { Briefcase, User } from "lucide-react";
 
-// 底部仅保留“工作”与“我的”；商城入口已移至“更多 → 牙科商店”
+// 底部仅保留“工作台”与“我的”；商城入口已移至“更多 → 牙科商店”
 const TABS = [
-  { label: "工作", href: "/yaban", icon: <Briefcase className="w-5 h-5" /> },
+  { label: "工作台", href: "/yaban", icon: <Briefcase className="w-5 h-5" /> },
   { label: "我的", href: "/yaban/profile", icon: <User className="w-5 h-5" /> },
 ];
 
