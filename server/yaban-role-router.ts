@@ -897,35 +897,49 @@ export const yabanRoleRouter = router({
     if (!conn) return [];
     await ensureRoleTables(conn);
     const founder = await isFounder(conn, ctx);
-    // 医院来源 yaban_clinic 表；容错
-    let clinicRows: any[] = [];
+    // 门店列表 = 我实际加入的所有门店（任意角色，active）∪ 创始人可见的全部已建档门店
+    // 用 Map 按 tenantId 去重，保证“把自己加进哪家店，那家店就一定出现在列表里”
+    const byTenant = new Map<number, { tenant_id: number; name: string | null; short_name: string | null }>();
+    // 1) 我作为成员加入的所有门店（关键：创始人被加进某店后，这里就会带出该店）
     try {
-      if (founder) {
+      const [rows] = (await conn.execute(
+        `SELECT m.tenant_id, c.name, c.short_name
+         FROM yaban_clinic_member m
+         LEFT JOIN yaban_clinic c ON c.tenant_id = m.tenant_id
+         WHERE m.user_id=? AND m.status='active'
+         ORDER BY m.tenant_id ASC`,
+        [ctx.user.id]
+      )) as any;
+      for (const r of rows as any[]) {
+        byTenant.set(r.tenant_id, { tenant_id: r.tenant_id, name: r.name ?? null, short_name: r.short_name ?? null });
+      }
+    } catch (e) { /* ignore */ }
+    // 2) 创始人额外可见所有已建档门店
+    if (founder) {
+      try {
         const [rows] = (await conn.execute(
           `SELECT tenant_id, name, short_name FROM yaban_clinic ORDER BY tenant_id ASC`
         )) as any;
-        clinicRows = rows as any[];
-      } else {
-        const [rows] = (await conn.execute(
-          `SELECT c.tenant_id, c.name, c.short_name FROM yaban_clinic c
-           JOIN yaban_clinic_member m ON m.tenant_id = c.tenant_id
-           WHERE m.user_id=? AND m.role_key='owner' AND m.status='active'
-           ORDER BY c.tenant_id ASC`,
-          [ctx.user.id]
-        )) as any;
-        clinicRows = rows as any[];
-      }
-    } catch (e) {
-      clinicRows = [];
+        for (const r of rows as any[]) {
+          if (!byTenant.has(r.tenant_id)) {
+            byTenant.set(r.tenant_id, { tenant_id: r.tenant_id, name: r.name ?? null, short_name: r.short_name ?? null });
+          }
+        }
+      } catch (e) { /* ignore */ }
     }
-    // 兜底：至少返回默认门诊
+    let clinicRows = Array.from(byTenant.values()).sort((a, b) => a.tenant_id - b.tenant_id);
+    // 兜底：创始人/owner 至少有一个默认门诊可进入
     if (clinicRows.length === 0) {
       const me = await getMember(conn, ctx.user.id, DEFAULT_TENANT_ID);
       if (founder || (me && me.role_key === "owner")) {
         clinicRows = [{ tenant_id: DEFAULT_TENANT_ID, name: "本门诊", short_name: null }];
       }
     }
-    return clinicRows.map((c) => ({ tenantId: c.tenant_id, name: c.name || "未命名医院", shortName: c.short_name || null }));
+    return clinicRows.map((c) => ({
+      tenantId: c.tenant_id,
+      name: c.name || `门诊 #${c.tenant_id}`,
+      shortName: c.short_name || null,
+    }));
   }),
 
   // ============ 门诊成员列表 ============
