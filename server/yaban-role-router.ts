@@ -951,6 +951,39 @@ export const yabanRoleRouter = router({
       return rows as any[];
     }),
 
+  // ============ 只读诊断：查看门店与成员的真实 tenant 分布 ============
+  debugMembership: protectedProcedure.query(async ({ ctx }) => {
+    const conn = await getDbConnection();
+    if (!conn) return { error: "no-db" } as any;
+    await ensureRoleTables(conn);
+    const founder = await isFounder(conn, ctx);
+    const superAdmin = isSuperAdmin(ctx);
+    // yaban_clinic 表门店
+    let clinics: any[] = [];
+    try {
+      const [r] = (await conn.execute(`SELECT tenant_id, name FROM yaban_clinic ORDER BY tenant_id ASC`)) as any;
+      clinics = r as any[];
+    } catch (e: any) { clinics = [{ err: String(e?.message || e) }]; }
+    // 各 tenant 下的成员数
+    let memberCounts: any[] = [];
+    try {
+      const [r] = (await conn.execute(
+        `SELECT tenant_id, status, COUNT(*) AS cnt FROM yaban_clinic_member GROUP BY tenant_id, status ORDER BY tenant_id ASC`
+      )) as any;
+      memberCounts = r as any[];
+    } catch (e: any) { memberCounts = [{ err: String(e?.message || e) }]; }
+    // 我自己的成员记录
+    let mine: any[] = [];
+    try {
+      const [r] = (await conn.execute(
+        `SELECT tenant_id, role_key, status FROM yaban_clinic_member WHERE user_id=? ORDER BY tenant_id ASC`,
+        [ctx.user.id]
+      )) as any;
+      mine = r as any[];
+    } catch (e: any) { mine = [{ err: String(e?.message || e) }]; }
+    return { meUserId: ctx.user.id, founder, superAdmin, clinics, memberCounts, mine, DEFAULT_TENANT_ID };
+  }),
+
   // ============ 模糊搜索脉动网用户（添加员工联想） ============
   searchUsers: protectedProcedure
     .input(z.object({ keyword: z.string().max(50) }))
