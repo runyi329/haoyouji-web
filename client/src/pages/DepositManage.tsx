@@ -1623,7 +1623,7 @@ export default function DepositManage() {
                                       </button>
                                     ))}
                                   </div>
-                                  {/* 金额输入（支持负数）+ 备注标签 + 删除 */}
+                                  {/* 第一行：金额 + 日期 + 删除 */}
                                   <div className="flex items-center gap-2">
                                     <input
                                       type="number"
@@ -1638,16 +1638,15 @@ export default function DepositManage() {
                                       style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF" }}
                                     />
                                     <input
-                                      type="text"
-                                      value={entry.label || ''}
+                                      type="date"
+                                      value={entry.date || new Date().toISOString().slice(0, 10)}
                                       onChange={(e) => {
                                         const next = [...rightMarginEdits];
-                                        next[idx] = { ...next[idx], label: e.target.value };
+                                        next[idx] = { ...next[idx], date: e.target.value };
                                         setRightMarginEdits(next);
                                       }}
-                                      placeholder="备注"
-                                      className="w-16 text-sm border rounded-lg px-2 py-1.5 outline-none"
-                                      style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF" }}
+                                      className="text-xs border rounded-lg px-2 py-1.5 outline-none"
+                                      style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF", width: '130px' }}
                                     />
                                     <button
                                       onClick={() => setRightMarginEdits(rightMarginEdits.filter((_, i) => i !== idx))}
@@ -1657,19 +1656,19 @@ export default function DepositManage() {
                                       <X className="w-3 h-3 text-red-400" />
                                     </button>
                                   </div>
-                                  {/* 日期行 */}
-                                  <div className="flex items-center gap-1 mt-1.5">
-                                    <span className="text-xs text-gray-400 shrink-0">日期</span>
-                                    <input
-                                      type="date"
-                                      value={entry.date || new Date().toISOString().slice(0, 10)}
+                                  {/* 第二行：备注（多行输入框） */}
+                                  <div className="mt-1.5">
+                                    <textarea
+                                      value={entry.label || ''}
                                       onChange={(e) => {
                                         const next = [...rightMarginEdits];
-                                        next[idx] = { ...next[idx], date: e.target.value };
+                                        next[idx] = { ...next[idx], label: e.target.value };
                                         setRightMarginEdits(next);
                                       }}
-                                      className="flex-1 text-xs border rounded-lg px-2 py-1 outline-none"
-                                      style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF" }}
+                                      placeholder="备注（可输入多行）"
+                                      rows={2}
+                                      className="w-full text-sm border rounded-lg px-2 py-1.5 outline-none resize-none"
+                                      style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF", lineHeight: '1.5' }}
                                     />
                                   </div>
                                 </div>
