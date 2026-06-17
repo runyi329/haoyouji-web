@@ -1,0 +1,47 @@
+name: zz 牙伴演示院数据核对
+on:
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 通过 SSH 查询演示院数据规模
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 124.223.54.69
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            echo "=== 9999 院基本信息 ==="
+            mysql -u root -p'Miao@20190603' crm_db -e "
+              SELECT tenant_id, name, short_name, status FROM yaban_clinic WHERE tenant_id=9999;
+            "
+            echo "=== 9999 成员(成员表)总数 ==="
+            mysql -u root -p'Miao@20190603' crm_db -e "
+              SELECT COUNT(*) AS member_cnt FROM yaban_clinic_member WHERE tenant_id=9999;
+            "
+            echo "=== 9999 医生表(若存在) ==="
+            mysql -u root -p'Miao@20190603' crm_db -e "
+              SHOW TABLES LIKE 'yaban_doctor';
+            "
+            mysql -u root -p'Miao@20190603' crm_db -e "
+              SELECT COUNT(*) AS doctor_cnt FROM yaban_doctor WHERE tenant_id=9999;
+            " 2>/dev/null || echo "yaban_doctor 不存在"
+            echo "=== 9999 预约表结构 ==="
+            mysql -u root -p'Miao@20190603' crm_db -e "
+              SHOW TABLES LIKE 'yaban_appointment%';
+            "
+            echo "=== 9999 预约总数 ==="
+            mysql -u root -p'Miao@20190603' crm_db -e "
+              SELECT COUNT(*) AS appt_total FROM yaban_appointment WHERE tenant_id=9999;
+            " 2>/dev/null || echo "yaban_appointment 查询失败"
+            echo "=== 9999 预约按日期分布(取前30天) ==="
+            mysql -u root -p'Miao@20190603' crm_db -e "
+              SELECT DATE(appointment_date) AS d, COUNT(*) AS cnt
+              FROM yaban_appointment WHERE tenant_id=9999
+              GROUP BY DATE(appointment_date) ORDER BY d DESC LIMIT 30;
+            " 2>/dev/null || echo "按日期分布查询失败(列名可能不同)"
+            echo "=== yaban_appointment 列结构 ==="
+            mysql -u root -p'Miao@20190603' crm_db -e "
+              SHOW COLUMNS FROM yaban_appointment;
+            " 2>/dev/null || echo "无法显示列"
