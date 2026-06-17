@@ -167,7 +167,8 @@ export default function YabanClinicShift() {
   const [bizClose, setBizClose] = useState("18:00");
 
   // 当前医院（多医院隔离）
-  const { currentTenantId } = useYabanClinic();
+  const { currentTenantId, current } = useYabanClinic();
+  const clinicName = current?.name || current?.shortName || "";
 
   // API（按当前医院 tenantId 隔离）
   const { data: schedData, refetch } = trpc.yabanShift.weekSchedule.useQuery(
@@ -476,6 +477,7 @@ export default function YabanClinicShift() {
         <SchDrawer
           staffUserId={schDrawer.staffUserId}
           staffName={schDrawer.staffName}
+          clinicName={clinicName}
           date={schDrawer.date}
           initSegs={schDrawer.segs}
           bizOpen={bizOpen}
@@ -537,8 +539,8 @@ export default function YabanClinicShift() {
 }
 
 // ── 排班抽屉（全屏页面式）──
-function SchDrawer({ staffUserId, staffName, date, initSegs, bizOpen, bizClose, templates, onClose, onSave }: {
-  staffUserId: number; staffName: string; date: string; initSegs: Seg[];
+function SchDrawer({ staffUserId, staffName, clinicName, date, initSegs, bizOpen, bizClose, templates, onClose, onSave }: {
+  staffUserId: number; staffName: string; clinicName: string; date: string; initSegs: Seg[];
   bizOpen: string; bizClose: string; templates: any[];
   onClose: () => void;
   onSave: (segs: Seg[], rep: string, wdays: number[], repEndDate: string) => void;
@@ -606,9 +608,17 @@ function SchDrawer({ staffUserId, staffName, date, initSegs, bizOpen, bizClose, 
       <style>{`@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style>
       <div onClick={(e) => e.stopPropagation()} style={{ background: BG, width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", animation: "slideUp .25s" }}>
         <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, color: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-          <span onClick={onClose} style={{ fontSize: 14, color: "#eaf6ff", cursor: "pointer" }}>取消</span>
-          <span style={{ fontSize: 16, fontWeight: 600 }}>医生排班</span>
-          <span style={{ width: 28 }} />
+          <span onClick={onClose} style={{ fontSize: 14, color: "#eaf6ff", cursor: "pointer", flex: 1 }}>取消</span>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.25 }}>
+            <span style={{ fontSize: 16, fontWeight: 600 }}>医生排班</span>
+            {clinicName && (
+              <span style={{ fontSize: 11, color: "#dcf0fb", display: "flex", alignItems: "center", gap: 3, marginTop: 1, whiteSpace: "nowrap" }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#dcf0fb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-3"/></svg>
+                {clinicName}
+              </span>
+            )}
+          </div>
+          <span style={{ flex: 1 }} />
         </div>
         <div style={{ overflowY: "auto", flex: 1, paddingBottom: 20 }}>
           {/* 医生信息 */}
