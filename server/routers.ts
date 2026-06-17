@@ -11632,6 +11632,35 @@ ${klinesSummary}
         return { success: true };
       }),
 
+    // 保证金管理专用：只更新 margin_pause_date（与利息管理的 pause_date 完全独立）
+    setTagMarginPauseDate: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        tagName: z.string(),
+        marginPauseDate: z.string().nullable(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbLedgerMod = await import('./db-ledger');
+        const myMembership = await dbLedgerMod.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅账本创建人或管理员可操作' });
+        }
+        const db = await getLedgerDb();
+        const existing = await db.execute(
+          sql`SELECT id FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName} LIMIT 1`
+        );
+        const existingList = (existing as any)[0] as any[];
+        if (existingList.length > 0) {
+          await db.execute(
+            sql`UPDATE ledger_tag_config SET margin_pause_date = ${input.marginPauseDate} WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}`
+          );
+        } else {
+          await db.execute(
+            sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, margin_pause_date, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.marginPauseDate}, ${ctx.user.id})`
+          );
+        }
+        return { success: true };
+      }),
     // 批量获取账本所有标签配置
     getAllTagsConfigByLedger: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
@@ -11893,7 +11922,7 @@ ${klinesSummary}
         const db = await getLedgerDb();
         // 查询所有标签的配置
         const configRows = await db.execute(
-          sql`SELECT tag_name, margin_by_coin, initial_amount, account_multiplier, margin_base, fund_flow, pause_date FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId}`
+          sql`SELECT tag_name, margin_by_coin, initial_amount, account_multiplier, margin_base, fund_flow, pause_date, margin_pause_date FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId}`
         );
         const configs = (configRows as any)[0] as any[];
         // 查询每个标签最新一条记录的余额（排除transfer类型和已删除记录）
@@ -11921,7 +11950,7 @@ ${klinesSummary}
           };
         }
         // 组装结果
-        const result: Record<string, { marginByCoin: any; initialAmount: string | null; accountMultiplier: string | null; marginBase: string | null; fundFlow: any; pauseDate: string | null; latestBalance: { balance: number; recordDate: string } | null }> = {};
+        const result: Record<string, { marginByCoin: any; initialAmount: string | null; accountMultiplier: string | null; marginBase: string | null; fundFlow: any; pauseDate: string | null; marginPauseDate: string | null; latestBalance: { balance: number; recordDate: string } | null }> = {};
         for (const cfg of configs) {
           result[cfg.tag_name] = {
             marginByCoin: cfg.margin_by_coin,
@@ -11930,13 +11959,14 @@ ${klinesSummary}
             marginBase: cfg.margin_base,
             fundFlow: cfg.fund_flow,
             pauseDate: cfg.pause_date ?? null,
+            marginPauseDate: cfg.margin_pause_date ?? null,
             latestBalance: latestMap[cfg.tag_name] ?? null,
           };
         }
         // 补充有余额但无配置的标签
         for (const [tagName, lb] of Object.entries(latestMap)) {
           if (!result[tagName]) {
-            result[tagName] = { marginByCoin: null, initialAmount: null, accountMultiplier: null, marginBase: null, fundFlow: null, pauseDate: null, latestBalance: lb };
+            result[tagName] = { marginByCoin: null, initialAmount: null, accountMultiplier: null, marginBase: null, fundFlow: null, pauseDate: null, marginPauseDate: null, latestBalance: lb };
           }
         }
         return result;

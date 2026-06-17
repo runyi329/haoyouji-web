@@ -464,7 +464,7 @@ export default function DepositManage() {
   );
   const addMarginLogMutation = (trpc.ledger as any).addMarginLog.useMutation();
   const deleteMarginLogMutation = (trpc.ledger as any).deleteMarginLog.useMutation();
-  const setTagPauseMutation = trpc.ledger.setTagPauseDate.useMutation();
+  const setTagMarginPauseMutation = trpc.ledger.setTagMarginPauseDate.useMutation();
 
   const { data: rightTagConfig, refetch: refetchRightTagConfig } = trpc.ledger.getTagConfig.useQuery(
     { ledgerId, tagName: selectedTagForRight ?? "" },
@@ -1045,8 +1045,8 @@ export default function DepositManage() {
               <div className="text-center text-gray-400 text-sm mt-8">暂无标签</div>
             ) : (
                             [...categories].sort((a: any, b: any) => {
-                const aPaused = !!(allTagsMarginSummary?.[a.name]?.pauseDate);
-                const bPaused = !!(allTagsMarginSummary?.[b.name]?.pauseDate);
+                const aPaused = !!(allTagsMarginSummary?.[a.name]?.marginPauseDate);
+                const bPaused = !!(allTagsMarginSummary?.[b.name]?.marginPauseDate);
                 if (aPaused && !bPaused) return 1;
                 if (!aPaused && bPaused) return -1;
                 return 0;
@@ -1055,7 +1055,7 @@ export default function DepositManage() {
                 // 计算该标签的保证金占基数比（用于折叠行显示）
                 // 仅在 cryptoPrices 已加载（有 USDT 汇率）时才计算，避免汇率未就绪导致计算错误
                 const tagSummaryData = allTagsMarginSummary?.[cat.name];
-                const isPaused = !!(tagSummaryData?.pauseDate);
+                const isPaused = !!(tagSummaryData?.marginPauseDate);
                 let collapseRatio: number | null = null;
                 const hasPrices = Object.keys(cryptoPrices).length > 0;
                 if (tagSummaryData && hasPrices) {
@@ -1554,7 +1554,7 @@ export default function DepositManage() {
 
                         {/* ── 暂停/恢复按鈕（查看模式）── */}
                         {!rightEditMode && selectedTagForRight && (() => {
-                          const isPaused = !!(rightTagConfig as any)?.pause_date;
+                          const isPaused = !!(rightTagConfig as any)?.margin_pause_date;
                           return (
                             <div className="mt-3 flex justify-end">
                               <button
@@ -1562,11 +1562,11 @@ export default function DepositManage() {
                                 onClick={async () => {
                                   setPauseSaving(true);
                                   try {
-                                    const newPauseDate = isPaused ? null : new Date().toISOString().slice(0, 10);
-                                    await setTagPauseMutation.mutateAsync({
+                                    const newMarginPauseDate = isPaused ? null : new Date().toISOString().slice(0, 10);
+                                    await                                     setTagMarginPauseMutation.mutateAsync({
                                       ledgerId,
                                       tagName: selectedTagForRight,
-                                      pauseDate: newPauseDate,
+                                      marginPauseDate: newMarginPauseDate,
                                     });
                                     // 写入日志
                                     await addMarginLogMutation.mutateAsync({
