@@ -370,15 +370,49 @@ export async function ensureModelClinic(conn: any) {
     [YABAN_MODEL_TENANT_ID]
   );
 
-  // 2) 全部现有用户成为模拟院 owner（仅插入缺失的，幂等）
+  // 2) 演示院医生队伍：仅维护 5 名固定演示医生（王/李/张/刘/陈）。
+  //    早期版本曾把全部注册用户灌为 owner，导致医生列表被撞大。
+  //    这里改为：确保 5 名演示医生账号存在 -> 只挑这 5 人为成员。全部幂等，可安全重复执行。
+  const DEMO_DOCTORS: Array<{ openId: string; name: string; roleKey: string }> = [
+    { openId: "yaban_demo_doc_1", name: "王医生", roleKey: "owner" },
+    { openId: "yaban_demo_doc_2", name: "李医生", roleKey: "doctor" },
+    { openId: "yaban_demo_doc_3", name: "张医生", roleKey: "doctor" },
+    { openId: "yaban_demo_doc_4", name: "刘医生", roleKey: "doctor" },
+    { openId: "yaban_demo_doc_5", name: "陈医生", roleKey: "doctor" },
+  ];
+  // 2.1) 确保 5 名演示医生账号存在（openId 唯一，不会与真实用户冲突）
+  for (const d of DEMO_DOCTORS) {
+    await conn.execute(
+      `INSERT INTO users (openId, username, name, role, loginMethod, points)
+       SELECT ?, ?, ?, 'parent', 'demo', 0 FROM DUAL
+       WHERE NOT EXISTS (SELECT 1 FROM users WHERE openId = ?)`,
+      [d.openId, d.openId, d.name, d.openId]
+    );
+    await conn.execute(`UPDATE users SET name = ? WHERE openId = ?`, [d.name, d.openId]);
+  }
+  // 2.2) 清理院内现有成员，只保留这 5 名演示医生
   await conn.execute(
-    `INSERT INTO yaban_clinic_member (tenant_id, user_id, role_key, status, invited_by)
-     SELECT ?, u.id, 'owner', 'active', u.id FROM users u
-     WHERE NOT EXISTS (
-       SELECT 1 FROM yaban_clinic_member m WHERE m.tenant_id = ? AND m.user_id = u.id
-     )`,
-    [YABAN_MODEL_TENANT_ID, YABAN_MODEL_TENANT_ID]
+    `DELETE FROM yaban_clinic_member
+     WHERE tenant_id = ?
+       AND user_id NOT IN (SELECT id FROM users WHERE openId IN (?,?,?,?,?))`,
+    [
+      YABAN_MODEL_TENANT_ID,
+      DEMO_DOCTORS[0].openId, DEMO_DOCTORS[1].openId, DEMO_DOCTORS[2].openId,
+      DEMO_DOCTORS[3].openId, DEMO_DOCTORS[4].openId,
+    ]
   );
+  // 2.3) 把 5 名演示医生挑为成员（幂等）
+  for (const d of DEMO_DOCTORS) {
+    await conn.execute(
+      `INSERT INTO yaban_clinic_member (tenant_id, user_id, role_key, status, invited_by)
+       SELECT ?, u.id, ?, 'active', u.id FROM users u
+       WHERE u.openId = ?
+         AND NOT EXISTS (
+           SELECT 1 FROM yaban_clinic_member m WHERE m.tenant_id = ? AND m.user_id = u.id
+         )`,
+      [YABAN_MODEL_TENANT_ID, d.roleKey, d.openId, YABAN_MODEL_TENANT_ID]
+    );
+  }
 
   // 3) 估值表
   await conn.execute(`
