@@ -11704,9 +11704,38 @@ ${klinesSummary}
         );
         const existingList = (existing as any)[0] as any[];
         if (existingList.length > 0) {
-          await db.execute(
-            sql`UPDATE ledger_tag_config SET settlement_amount = ${input.settlementAmount ?? null}, interest_mode = ${input.interestMode ?? 'fixed'}, interest_rate = ${input.interestRate ?? null}, interest_base_amount = ${input.interestBaseAmount ?? null}, interest_start_date = ${input.interestStartDate ?? null}, pause_date = ${input.pauseDate ?? null}, end_date = ${input.endDate ?? null}, note = ${input.note ?? null}, margin_by_coin = ${input.marginByCoin ?? null}, pnl_manual = ${input.pnlManual ?? null}, pnl_note = ${input.pnlNote ?? null}, original_amount = ${input.originalAmount ?? null}, account_balance = ${input.accountBalance ?? null}, balance_date = ${input.balanceDate ?? null}, initial_amount = ${input.initialAmount ?? null}, account_multiplier = ${input.accountMultiplier ?? null}, margin_base = ${input.marginBase ?? null}, fund_flow = ${input.fundFlow ?? null} WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName}`
-          );
+          // ── 字段级 PATCH：只更新调用方明确传入（非 undefined）的字段，避免覆盖其他字段 ──
+          const setParts: string[] = [];
+          const setValues: any[] = [];
+          if (input.settlementAmount !== undefined) { setParts.push('settlement_amount = ?'); setValues.push(input.settlementAmount); }
+          if (input.interestMode !== undefined) { setParts.push('interest_mode = ?'); setValues.push(input.interestMode); }
+          if (input.interestRate !== undefined) { setParts.push('interest_rate = ?'); setValues.push(input.interestRate); }
+          if (input.interestBaseAmount !== undefined) { setParts.push('interest_base_amount = ?'); setValues.push(input.interestBaseAmount); }
+          if (input.interestStartDate !== undefined) { setParts.push('interest_start_date = ?'); setValues.push(input.interestStartDate); }
+          if (input.pauseDate !== undefined) { setParts.push('pause_date = ?'); setValues.push(input.pauseDate); }
+          if (input.endDate !== undefined) { setParts.push('end_date = ?'); setValues.push(input.endDate); }
+          if (input.note !== undefined) { setParts.push('note = ?'); setValues.push(input.note); }
+          if (input.marginByCoin !== undefined) { setParts.push('margin_by_coin = ?'); setValues.push(input.marginByCoin); }
+          if (input.pnlManual !== undefined) { setParts.push('pnl_manual = ?'); setValues.push(input.pnlManual); }
+          if (input.pnlNote !== undefined) { setParts.push('pnl_note = ?'); setValues.push(input.pnlNote); }
+          if (input.originalAmount !== undefined) { setParts.push('original_amount = ?'); setValues.push(input.originalAmount); }
+          if (input.accountBalance !== undefined) { setParts.push('account_balance = ?'); setValues.push(input.accountBalance); }
+          if (input.balanceDate !== undefined) { setParts.push('balance_date = ?'); setValues.push(input.balanceDate); }
+          if (input.initialAmount !== undefined) { setParts.push('initial_amount = ?'); setValues.push(input.initialAmount); }
+          if (input.accountMultiplier !== undefined) { setParts.push('account_multiplier = ?'); setValues.push(input.accountMultiplier); }
+          if (input.marginBase !== undefined) { setParts.push('margin_base = ?'); setValues.push(input.marginBase); }
+          if (input.fundFlow !== undefined) { setParts.push('fund_flow = ?'); setValues.push(input.fundFlow); }
+          if (setParts.length > 0) {
+            // 使用原始 mysql2 连接池执行参数化 SQL，避免 drizzle sql.raw 注入风险
+            const { getDbConnection } = await import('./db');
+            const conn = await getDbConnection();
+            if (conn) {
+              await (conn as any).execute(
+                `UPDATE ledger_tag_config SET ${setParts.join(', ')} WHERE ledger_id = ? AND tag_name = ?`,
+                [...setValues, input.ledgerId, input.tagName]
+              );
+            }
+          }
         } else {
           await db.execute(
             sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, settlement_amount, interest_mode, interest_rate, interest_base_amount, interest_start_date, pause_date, end_date, note, margin_by_coin, pnl_manual, pnl_note, original_amount, account_balance, balance_date, initial_amount, account_multiplier, margin_base, fund_flow, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.settlementAmount ?? null}, ${input.interestMode ?? 'fixed'}, ${input.interestRate ?? null}, ${input.interestBaseAmount ?? null}, ${input.interestStartDate ?? null}, ${input.pauseDate ?? null}, ${input.endDate ?? null}, ${input.note ?? null}, ${input.marginByCoin ?? null}, ${input.pnlManual ?? null}, ${input.pnlNote ?? null}, ${input.originalAmount ?? null}, ${input.accountBalance ?? null}, ${input.balanceDate ?? null}, ${input.initialAmount ?? null}, ${input.accountMultiplier ?? null}, ${input.marginBase ?? null}, ${input.fundFlow ?? null}, ${ctx.user.id})`
