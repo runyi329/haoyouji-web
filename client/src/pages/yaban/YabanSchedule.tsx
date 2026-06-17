@@ -285,9 +285,6 @@ export default function YabanSchedule() {
         )}
       </div>
 
-      {/* FAB */}
-      <div onClick={() => setNewModal({ open: true })} style={{ position: "fixed", right: "max(16px, calc(50% - 210px + 16px))", bottom: 104, width: 54, height: 54, borderRadius: "50%", background: SKY_D, color: "#fff", fontSize: 30, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px rgba(30,136,214,.28)", cursor: "pointer", zIndex: 30, transition: ".16s cubic-bezier(0.23,1,0.32,1)" }}>+</div>
-
       {/* 预约详情弹窗 */}
       {detailModal.open && detailAppt && (
         <BottomSheet onClose={() => setDetailModal({ open: false })}>
