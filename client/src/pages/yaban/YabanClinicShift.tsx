@@ -424,7 +424,11 @@ export default function YabanClinicShift() {
                     <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#bcc6d0" }}>今日休息 · 双击排班</span>
                   </div>
                 ) : (
-                  <div style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "#E2E8EF" }}>
+                  <div
+                    onDoubleClick={e => { if (!batchMode) { e.stopPropagation(); openSch(tpl.staffUserId, tpl.staffName, selDate); } }}
+                    title="双击编辑排班"
+                    style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "#E2E8EF", cursor: batchMode ? "inherit" : "pointer" }}
+                  >
                     {segs.map((s: Seg, si: number) => {
                       const L = pctM(toMin(s.start)), W = pctM(toMin(s.end)) - L;
                       return (
@@ -437,11 +441,6 @@ export default function YabanClinicShift() {
                         </div>
                       );
                     })}
-                  </div>
-                )}
-                {!batchMode && (
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-                    <span onClick={e => { e.stopPropagation(); openSch(tpl.staffUserId, tpl.staffName, selDate); }} style={{ fontSize: 12, color: SKY, fontWeight: 600, cursor: "pointer" }}>编辑</span>
                   </div>
                 )}
               </div>
