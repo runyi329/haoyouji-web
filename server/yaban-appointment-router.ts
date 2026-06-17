@@ -327,7 +327,7 @@ export const yabanShiftRouter = router({
                 u.name AS user_name, u.avatar
          FROM yaban_shift_template t
          LEFT JOIN users u ON u.id = t.staff_user_id
-         WHERE t.tenant_id = ? AND t.is_active = 1
+         WHERE t.tenant_id = ? AND t.is_active = 1 AND t.staff_user_id <> 0 AND t.role_key <> '__biz__'
          ORDER BY FIELD(t.role_key,'owner','doctor','nurse','assistant','receptionist','finance'), t.id ASC`,
         [tenantId]
       )) as any;
@@ -366,7 +366,7 @@ export const yabanShiftRouter = router({
                 u.name AS user_name, u.avatar
          FROM yaban_shift_template t
          LEFT JOIN users u ON u.id = t.staff_user_id
-         WHERE t.tenant_id = ? AND t.is_active = 1
+         WHERE t.tenant_id = ? AND t.is_active = 1 AND t.staff_user_id <> 0 AND t.role_key <> '__biz__'
          ORDER BY FIELD(t.role_key,'owner','doctor','nurse','assistant','receptionist','finance'), t.id ASC`,
         [tenantId]
       )) as any;
@@ -492,6 +492,56 @@ export const yabanShiftRouter = router({
         ]
       )) as any;
       return { success: true, id: Number(res.insertId) };
+    }),
+
+  // 获取门店营业时间（零表结构变更：存为 staff_user_id=0 / role_key='__biz__' 的特殊记录）
+  getBusinessHours: protectedProcedure
+    .input(z.object({ tenantId: z.number().int().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return { open: "09:00", close: "18:00" };
+      const tenantId = input?.tenantId ?? (await resolveTenantId(ctx));
+      const [rows] = (await conn.execute(
+        `SELECT work_start, work_end FROM yaban_shift_template
+         WHERE tenant_id = ? AND staff_user_id = 0 AND role_key = '__biz__' LIMIT 1`,
+        [tenantId]
+      )) as any;
+      const row = (rows as any[])[0];
+      return { open: row?.work_start || "09:00", close: row?.work_end || "18:00" };
+    }),
+
+  // 保存门店营业时间
+  saveBusinessHours: protectedProcedure
+    .input(z.object({
+      tenantId: z.number().int().optional(),
+      open: z.string().max(8),
+      close: z.string().max(8),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
+      const [exist] = (await conn.execute(
+        `SELECT id FROM yaban_shift_template
+         WHERE tenant_id = ? AND staff_user_id = 0 AND role_key = '__biz__' LIMIT 1`,
+        [tenantId]
+      )) as any;
+      const existRow = (exist as any[])[0];
+      if (existRow) {
+        await conn.execute(
+          `UPDATE yaban_shift_template SET work_start=?, work_end=?, is_active=1 WHERE id=?`,
+          [input.open, input.close, existRow.id]
+        );
+      } else {
+        await conn.execute(
+          `INSERT INTO yaban_shift_template
+             (tenant_id, staff_user_id, staff_name, role_key,
+              work_start, work_end, break_start, break_end, work_days, color, is_active)
+           VALUES (?, 0, '营业时间', '__biz__', ?, ?, '12:00', '13:00', '1,2,3,4,5', '#1E88D6', 1)`,
+          [tenantId, input.open, input.close]
+        );
+      }
+      return { success: true };
     }),
 
   // 单日覆盖（调班/请假）

@@ -188,6 +188,19 @@ export default function YabanClinicShift() {
     onError: (e) => toast.error(e.message),
   });
 
+  // 门店营业时间（后端持久化，按医院隔离）
+  const { data: bizHours, refetch: refetchBiz } = trpc.yabanShift.getBusinessHours.useQuery(
+    { tenantId: currentTenantId ?? undefined },
+    { enabled: currentTenantId != null }
+  );
+  useEffect(() => {
+    if (bizHours) { setBizOpen(bizHours.open); setBizClose(bizHours.close); }
+  }, [bizHours]);
+  const saveBizMut = trpc.yabanShift.saveBusinessHours.useMutation({
+    onSuccess: () => { refetchBiz(); toast.success("营业时间已保存"); },
+    onError: (e) => toast.error(e.message),
+  });
+
   const templates = schedData?.templates ?? [];
   const overrides = schedData?.overrides ?? [];
 
@@ -482,6 +495,7 @@ export default function YabanClinicShift() {
           initSegs={schDrawer.segs}
           bizOpen={bizOpen}
           bizClose={bizClose}
+          onSaveBiz={(open, close) => saveBizMut.mutate({ open, close, tenantId: currentTenantId ?? undefined })}
           templates={allTemplates}
           onClose={() => setSchDrawer(null)}
           onSave={(segs, rep, wdays, repEndDate) => {
@@ -527,7 +541,7 @@ export default function YabanClinicShift() {
           bizClose={bizClose}
           templates={allTemplates}
           onClose={() => setTplModal(false)}
-          onSave={(open, close) => { setBizOpen(open); setBizClose(close); setTplModal(false); }}
+          onSave={(open, close) => { saveBizMut.mutate({ open, close, tenantId: currentTenantId ?? undefined }); setTplModal(false); }}
           saveTemplateMut={saveTemplateMut}
           tenantId={currentTenantId ?? undefined}
         />
@@ -539,9 +553,9 @@ export default function YabanClinicShift() {
 }
 
 // ── 排班抽屉（全屏页面式）──
-function SchDrawer({ staffUserId, staffName, clinicName, date, initSegs, bizOpen, bizClose, templates, onClose, onSave }: {
+function SchDrawer({ staffUserId, staffName, clinicName, date, initSegs, bizOpen, bizClose, onSaveBiz, templates, onClose, onSave }: {
   staffUserId: number; staffName: string; clinicName: string; date: string; initSegs: Seg[];
-  bizOpen: string; bizClose: string; templates: any[];
+  bizOpen: string; bizClose: string; onSaveBiz: (open: string, close: string) => void; templates: any[];
   onClose: () => void;
   onSave: (segs: Seg[], rep: string, wdays: number[], repEndDate: string) => void;
 }) {
@@ -549,6 +563,8 @@ function SchDrawer({ staffUserId, staffName, clinicName, date, initSegs, bizOpen
   const [rep, setRep] = useState("none");
   const [wdays, setWdays] = useState<number[]>([new Date(date).getDay()]);
   const [repEndDate, setRepEndDate] = useState("2026-12-31");
+  // 门店营业时间（内置可编辑，改后即存）
+  const [bizEditOpen, setBizEditOpen] = useState(false);
 
   const flags = validateSegs(segs, bizOpen, bizClose);
   const hasErr = flags.some(f => f.bad || f.overlap);
@@ -628,6 +644,38 @@ function SchDrawer({ staffUserId, staffName, clinicName, date, initSegs, bizOpen
               <div style={{ fontSize: 15, fontWeight: 600, color: "#374151" }}>{staffName}</div>
               <div style={{ fontSize: 12, color: GRAY, marginTop: 2 }}>{dateLabel}</div>
             </div>
+          </div>
+
+          {/* 门店营业时间（内置可编辑，作为时间轴/快捷班次基准） */}
+          <div style={{ background: "#fff", marginTop: 10, padding: "13px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>门店营业时间</span>
+                <span style={{ fontSize: 11, color: GRAY, marginTop: 2 }}>时间轴与全天/上下午班的基准 · 当前 {bizOpen}–{bizClose}</span>
+              </div>
+              {!bizEditOpen && (
+                <span onClick={() => setBizEditOpen(true)} style={{ fontSize: 13, color: SKY, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>调整</span>
+              )}
+            </div>
+            {bizEditOpen && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 11, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 13, color: "#51606e" }}>开门</span>
+                <input type="time" defaultValue={bizOpen} step={300} id="biz-open-input" style={{ width: 92, fontSize: 14, fontWeight: 600, color: "#2a3340", border: `1px solid ${LINE}`, borderRadius: 8, padding: "6px 8px", background: "#fafbfc", fontFamily: "inherit", textAlign: "center" }} />
+                <span style={{ color: "#c4ccd4" }}>–</span>
+                <span style={{ fontSize: 13, color: "#51606e" }}>闭店</span>
+                <input type="time" defaultValue={bizClose} step={300} id="biz-close-input" style={{ width: 92, fontSize: 14, fontWeight: 600, color: "#2a3340", border: `1px solid ${LINE}`, borderRadius: 8, padding: "6px 8px", background: "#fafbfc", fontFamily: "inherit", textAlign: "center" }} />
+                <span
+                  onClick={() => {
+                    const o = (document.getElementById("biz-open-input") as HTMLInputElement)?.value || bizOpen;
+                    const c = (document.getElementById("biz-close-input") as HTMLInputElement)?.value || bizClose;
+                    if (toMin(c) <= toMin(o)) { toast.error("闭店时间须晚于开门时间"); return; }
+                    onSaveBiz(o, c);
+                    setBizEditOpen(false);
+                  }}
+                  style={{ fontSize: 13, color: "#fff", fontWeight: 600, cursor: "pointer", background: SKY, borderRadius: 8, padding: "6px 14px", marginLeft: "auto" }}
+                >保存</span>
+              </div>
+            )}
           </div>
 
           {/* 快捷班次 */}
