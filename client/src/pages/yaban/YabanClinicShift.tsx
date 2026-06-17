@@ -10,7 +10,7 @@
  *   --warn:#E8973A  --warn-l:#FDF4E6  --warn-line:#F2D9AE
  *   --bg:#F0F4F8  --line:#eef1f5
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -131,6 +131,19 @@ export default function YabanClinicShift() {
   }, [initDate]);
   const [weekOffset, setWeekOffset] = useState(initWeekOffset);
   const [selDate, setSelDate] = useState(initDate);
+  // 顶栏固定吸顶：实测高度给主体留等高占位
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerH, setHeaderH] = useState(96);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const update = () => setHeaderH(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("resize", update);
+    return () => { ro.disconnect(); window.removeEventListener("resize", update); };
+  }, []);
   const weekStart = useMemo(() => getWeekStart(weekOffset), [weekOffset]);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
   const weekStartStr = toDateStr(weekStart);
@@ -284,8 +297,8 @@ export default function YabanClinicShift() {
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: "-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif", color: INK, paddingBottom: batchMode ? 120 : 40 }}>
 
-      {/* 顶栏 */}
-      <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, color: "#fff", padding: "14px 16px 12px", position: "sticky", top: 0, zIndex: 100 }}>
+      {/* 顶栏（固定吸顶） */}
+      <div ref={headerRef} style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, color: "#fff", padding: "14px 16px 12px", position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, maxWidth: 480, marginLeft: "auto", marginRight: "auto" }}>
         <div style={{ display: "flex", alignItems: "center" }}>
           <div style={{ flex: 1, display: "flex", justifyContent: "flex-start" }}>
             <div style={{ fontSize: 22, width: 28, cursor: "pointer" }} onClick={() => setLocation("/yaban/schedule")}>‹</div>
@@ -310,6 +323,8 @@ export default function YabanClinicShift() {
           }
         />
       </div>
+      {/* 等高占位，避免被固定顶栏遮挡 */}
+      <div style={{ height: headerH }} aria-hidden />
 
       {/* 周导航 */}
       <div style={{ background: "#fff", padding: "10px 16px 8px", borderBottom: `1px solid ${LINE}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
