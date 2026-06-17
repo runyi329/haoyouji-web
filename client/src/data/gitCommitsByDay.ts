@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-17
+// 生成时间：2026-06-18
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7496,5 +7496,18 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-17T13:01:12Z", type: "fix", cleanMessage: "排班进度条改为单击直接编辑(与顾客预约页一致，移动端可靠)" },
     { date: "2026-06-17T13:10:47Z", type: "feat", cleanMessage: "医生排班编辑抽屉顶栏显示所属医院(连锁场景防误操作)" },
     { date: "2026-06-17T13:24:20Z", type: "feat", cleanMessage: "营业时间后端持久化+联动，并内置到排班编辑抽屉" },
+    { date: "2026-06-17T13:34:34Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-17T13:41:45Z", type: "feat", cleanMessage: "排班页扩展为全员排班(医生/护士/助理/前台/财务)，按角色分组+筛选" },
+    { date: "2026-06-17T13:54:37Z", type: "feat", cleanMessage: "排班进度条按工种配色区分，头像下方显示姓名+职位" },
+    { date: "2026-06-17T14:02:57Z", type: "style", cleanMessage: "工种进度条改用统一明度饱和的协调色板" },
+    { date: "2026-06-17T14:14:45Z", type: "style", cleanMessage: "去掉工种分组标题，行内改为头像+(名字职位/进度条工时)两行布局" },
+    { date: "2026-06-17T14:23:51Z", type: "style", cleanMessage: "行内三列布局(头像|名字职称|进度条)，色块内显时长，工时左对齐" },
+    { date: "2026-06-17T14:38:13Z", type: "style", cleanMessage: "工时时间文字按段定位与色块对齐" },
+    { date: "2026-06-17T14:53:45Z", type: "style", cleanMessage: "移除底部营业时间·班次模板入口(设置内已有)" },
+    { date: "2026-06-17T14:58:31Z", type: "feat", cleanMessage: "排班页院长/股东角色拆分，补创始人/创始股东" },
+    { date: "2026-06-17T15:11:02Z", type: "fix", cleanMessage: "顾客预约页医生可约时段与员工排班联动（override优先/回退模板/休息不可约）" },
+    { date: "2026-06-17T15:30:06Z", type: "fix", cleanMessage: "排班两段时段含午休空档，预约页/排班页正确拆分显示与判约" },
+    { date: "2026-06-17T15:37:39Z", type: "feat", cleanMessage: "单医生放大视图改为点击进度条在岗时段新增预约，底部仅陈列预约详情" },
+    { date: "2026-06-17T15:58:11Z", type: "fix", cleanMessage: "预约硬拦截休息/重叠时段；移除加减延长按钮，快捷时长止步于边界" },
   ],
 };
