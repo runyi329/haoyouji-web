@@ -1,0 +1,113 @@
+name: zz 牙伴演示院预约排班收敛
+on:
+  workflow_dispatch:
+jobs:
+  reseed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+      - name: 上传 SQL 到服务器
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 124.223.54.69
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "scripts/yaban_model_reseed.sql"
+          target: "/tmp/yaban_reseed/"
+      - name: 执行收敛（建账号/清旧数据/排班 + Python 生成合理预约）
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 124.223.54.69
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 10m
+          script: |
+            set -e
+            DB="mysql -u root -p'Miao@20190603' crm_db"
+            echo "=== STEP1 执行基础 SQL（账号/成员/排班/清旧） ==="
+            mysql -u root -p'Miao@20190603' crm_db < /tmp/yaban_reseed/scripts/yaban_model_reseed.sql
+            echo "=== STEP2 用 Python 生成最近30天合理预约并写库 ==="
+            cat > /tmp/yaban_reseed/gen_appt.py <<'PYEOF'
+            import subprocess, random, datetime
+            random.seed(20260617)
+            DBARGS = ["mysql","-u","root","-pMiao@20190603","crm_db","-N","-e"]
+            def q(sql):
+                r = subprocess.run(DBARGS+[sql], capture_output=True, text=True)
+                if r.returncode != 0:
+                    raise SystemExit("SQL ERR: "+r.stderr)
+                return r.stdout.strip()
+            TID = 9999
+            # 取5医生
+            docs = []
+            for i in range(1,6):
+                row = q("SELECT id, name FROM users WHERE openId='yaban_demo_doc_%d'" % i)
+                uid, name = row.split("\t")
+                docs.append((int(uid), name))
+            # 取5顾客
+            pats = []
+            for i in range(1,6):
+                row = q("SELECT id, name FROM users WHERE openId='yaban_demo_pat_%d'" % i)
+                uid, name = row.split("\t")
+                pats.append((int(uid), name))
+            mobiles = {pats[0][1]:"138****2048", pats[1][1]:"139****8830",
+                       pats[2][1]:"137****6611", pats[3][1]:"159****0093", pats[4][1]:"186****4417"}
+            genders = {pats[0][1]:"女", pats[1][1]:"男", pats[2][1]:"女", pats[3][1]:"男", pats[4][1]:"女"}
+            ages    = {pats[0][1]:32, pats[1][1]:45, pats[2][1]:28, pats[3][1]:50, pats[4][1]:36}
+            projects = ["洁牙","补牙","根管治疗","牙齿矫正复诊","种植牙复查","拔牙","烤瓷冠","儿童涂氟","牙周治疗","美白"]
+            rooms = ["1诊室","2诊室","3诊室","4诊室"]
+            slots = ["09:00","09:30","10:00","10:30","11:00","11:30",
+                     "13:30","14:00","14:30","15:00","15:30","16:00","16:30","17:00","17:30"]
+            statuses = ["booked","booked","booked","arrived","done","done","canceled"]
+            today = datetime.date.today()
+            rows = []
+            for off in range(-20, 11):  # 最近20天 + 未来10天，共31天
+                d = today + datetime.timedelta(days=off)
+                wd = d.isoweekday()
+                if wd == 7:  # 周日休
+                    continue
+                n = random.randint(12, 20)  # 每天 12~20 条，封顶20
+                day_slots = slots[:]
+                random.shuffle(day_slots)
+                used = set()
+                for k in range(n):
+                    doc = random.choice(docs)
+                    pat = random.choice(pats)
+                    t = day_slots[k % len(day_slots)]
+                    key = (doc[0], t)
+                    if key in used:  # 同医生同时段避免撞
+                        t = random.choice(slots)
+                        key = (doc[0], t)
+                    used.add(key)
+                    # 未来日期一律 booked，过去日期可能 done/arrived/canceled
+                    st = "booked" if off >= 0 else random.choice(statuses)
+                    proj = random.choice(projects)
+                    room = random.choice(rooms)
+                    pname = pat[1].replace("'","")
+                    rows.append((TID, pat[0], pname, mobiles[pat[1]], genders[pat[1]], ages[pat[1]],
+                                 doc[1], room, proj, d.isoformat(), t, 30, st, doc[0]))
+            # 批量插入
+            def esc(v):
+                if v is None: return "NULL"
+                if isinstance(v,int): return str(v)
+                return "'"+str(v).replace("\\","\\\\").replace("'","''")+"'"
+            BATCH=200
+            total=0
+            for i in range(0,len(rows),BATCH):
+                chunk=rows[i:i+BATCH]
+                vals=",".join("("+",".join(esc(x) for x in r)+")" for r in chunk)
+                sql=("INSERT INTO yaban_appointment "
+                     "(tenant_id, patient_id, patient_name, patient_mobile, patient_gender, patient_age, "
+                     "doctor, room, project, appoint_date, appoint_time, duration, status, created_by) VALUES "+vals)
+                q(sql)
+                total+=len(chunk)
+            print("INSERTED", total, "appointments across", len(set(r[9] for r in rows)), "days")
+            PYEOF
+            python3 /tmp/yaban_reseed/gen_appt.py
+            echo "=== STEP3 校验结果 ==="
+            mysql -u root -p'Miao@20190603' crm_db -e "SELECT COUNT(*) AS members FROM yaban_clinic_member WHERE tenant_id=9999;"
+            mysql -u root -p'Miao@20190603' crm_db -e "SELECT COUNT(*) AS templates FROM yaban_shift_template WHERE tenant_id=9999;"
+            mysql -u root -p'Miao@20190603' crm_db -e "SELECT COUNT(*) AS appt_total FROM yaban_appointment WHERE tenant_id=9999;"
+            mysql -u root -p'Miao@20190603' crm_db -e "SELECT appoint_date, COUNT(*) c FROM yaban_appointment WHERE tenant_id=9999 GROUP BY appoint_date ORDER BY appoint_date LIMIT 35;"
+            echo "=== 清理临时文件 ==="
+            rm -rf /tmp/yaban_reseed
