@@ -473,7 +473,7 @@ export default function YabanClinicShift() {
       {/* 时间标尺 */}
       {filteredRoster.length > 0 && (
         <div style={{ background: "#fff", padding: "12px 14px 6px", borderBottom: `1px solid ${LINE}` }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: GRAY, paddingLeft: 49 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: GRAY, paddingLeft: 116 }}>
             {rulerMarks.map((m, i) => <span key={i}>{m}</span>)}
           </div>
         </div>
@@ -506,37 +506,40 @@ export default function YabanClinicShift() {
             <div
               key={r.staffUserId}
               onClick={() => { if (batchMode) { toggleBatchSel(r.staffUserId); } else { openSch(r.staffUserId, r.staffName, selDate); } }}
-              style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 11, borderBottom: `1px solid ${LINE}`, cursor: batchMode ? "pointer" : "default", userSelect: "none" }}
+              style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 9, borderBottom: `1px solid ${LINE}`, cursor: batchMode ? "pointer" : "default", userSelect: "none" }}
             >
               {batchMode && (
                 <div style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${isBatchSel ? SKY_D : "#c7d0d8"}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isBatchSel ? SKY_D : "transparent", transition: ".16s" }}>
                   {isBatchSel && <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="1.5,5 4,8 8.5,2" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                 </div>
               )}
-              {/* 头像：占两行高度 */}
+              {/* 列一：头像 */}
               <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: "50%", background: hasShift ? rc.bg : "#e8ecf0", color: hasShift ? rc.fg : "#9aa6b2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600, filter: hasShift ? "none" : "grayscale(1)", opacity: hasShift ? 1 : 0.7 }}>{r.staffName.charAt(0)}</div>
-              {/* 右侧：上(名字+职位) 下(进度条+工作时间) */}
+              {/* 列二：名字(上) 职称(下) */}
+              <div style={{ width: 60, flexShrink: 0, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.staffName}</div>
+                <div style={{ display: "inline-block", fontSize: 10, fontWeight: 600, lineHeight: 1.5, padding: "0 5px", borderRadius: 6, marginTop: 2, color: rc.fg, background: rc.bg }}>{roleLabel(r.roleKey)}</div>
+              </div>
+              {/* 列三：进度条(色块内显示时长) + 工时文字与色块左对齐 */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#374151", whiteSpace: "nowrap" }}>{r.staffName}</span>
-                  <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.5, padding: "0 6px", borderRadius: 7, color: rc.fg, background: rc.bg }}>{roleLabel(r.roleKey)}</span>
-                </div>
                 {!hasShift ? (
-                  <div style={{ position: "relative", height: 22, borderRadius: 7, overflow: "hidden", background: "repeating-linear-gradient(45deg,#e7ebef,#e7ebef 4px,#f1f4f7 4px,#f1f4f7 8px)", cursor: batchMode ? "inherit" : "pointer" }}>
+                  <div style={{ position: "relative", height: 24, borderRadius: 7, overflow: "hidden", background: "repeating-linear-gradient(45deg,#e7ebef,#e7ebef 4px,#f1f4f7 4px,#f1f4f7 8px)", cursor: batchMode ? "inherit" : "pointer" }}>
                     <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#bcc6d0" }}>{r.hasTemplate ? "今日休息 · 点击排班" : "未排班 · 点击排班"}</span>
                   </div>
                 ) : (
                   <>
-                    <div title="点击编辑排班" style={{ position: "relative", height: 22, borderRadius: 7, overflow: "hidden", background: "#E2E8EF", cursor: batchMode ? "inherit" : "pointer" }}>
+                    <div title="点击编辑排班" style={{ position: "relative", height: 24, borderRadius: 7, overflow: "hidden", background: "#E2E8EF", cursor: batchMode ? "inherit" : "pointer" }}>
                       {segs.map((s: Seg, si: number) => {
                         const L = pctM(toMin(s.start)), W = pctM(toMin(s.end)) - L;
+                        const durH = (toMin(s.end) - toMin(s.start)) / 60;
+                        const durTxt = Number.isInteger(durH) ? `${durH}h` : `${durH.toFixed(1)}h`;
                         return (
                           <div key={si} style={{
                             position: "absolute", left: `${L}%`, width: `${Math.max(W, 1)}%`, top: 0, height: "100%",
                             background: s.isOT ? WARN : rc.bar,
-                            display: "flex", alignItems: "center", padding: "0 4px", overflow: "hidden",
+                            display: "flex", alignItems: "center", justifyContent: "center", padding: "0 2px", overflow: "hidden",
                           }}>
-                            {s.isOT && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>加班</span>}
+                            <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", textShadow: "0 1px 1px rgba(0,0,0,.15)" }}>{s.isOT ? `加班${durTxt}` : durTxt}</span>
                           </div>
                         );
                       })}
