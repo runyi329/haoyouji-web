@@ -82,11 +82,12 @@ const NoteEditIcon = () => (
   </svg>
 );
 
-function DepositNoteRow({ ledgerId, tagName, initialNote, onSaved }: {
+function DepositNoteRow({ ledgerId, tagName, initialNote, onSaved, onLogSaved }: {
   ledgerId: number;
   tagName: string;
   initialNote: string;
   onSaved: (note: string) => void;
+  onLogSaved?: (action: string, detail: string) => void;
 }) {
   const [notes, setNotes] = React.useState<DepositNoteItem[]>(() => parseDepositNotes(initialNote));
   const [expanded, setExpanded] = React.useState(false);
@@ -95,13 +96,14 @@ function DepositNoteRow({ ledgerId, tagName, initialNote, onSaved }: {
   const [saving, setSaving] = React.useState(false);
   const saveTagConfig = trpc.ledger.saveTagConfig.useMutation();
 
-  const saveNotes = async (newNotes: DepositNoteItem[]) => {
+  const saveNotes = async (newNotes: DepositNoteItem[], logDetail?: string) => {
     setSaving(true);
     try {
       const raw = JSON.stringify(newNotes);
       await saveTagConfig.mutateAsync({ ledgerId, tagName, note: raw });
       setNotes(newNotes);
       onSaved(raw);
+      if (onLogSaved && logDetail) onLogSaved('修改备注', logDetail);
     } finally {
       setSaving(false);
     }
@@ -112,7 +114,7 @@ function DepositNoteRow({ ledgerId, tagName, initialNote, onSaved }: {
     const newNotes = notes.map((n, i) =>
       i === idx ? { text: editValue.trim(), time: new Date().toISOString() } : n
     );
-    await saveNotes(newNotes);
+    await saveNotes(newNotes, `编辑备注: ${editValue.trim()}`);
     setEditingIdx(null);
   };
 
@@ -133,7 +135,7 @@ function DepositNoteRow({ ledgerId, tagName, initialNote, onSaved }: {
     const newNotes = notes.map((n, i) =>
       i === idx ? { text: editValue.trim(), time: new Date().toISOString() } : n
     );
-    await saveNotes(newNotes);
+    await saveNotes(newNotes, `新增备注: ${editValue.trim()}`);
     setEditingIdx(null);
   };
 
@@ -631,13 +633,22 @@ export default function DepositManage() {
     showConfirm(
       "确认清空保证金",
       `确定要清空 [${selectedTagForRight}] 的右侧保证金吗？`,
-      () => {
+      async () => {
         setRightSaving(true);
-        saveTagConfigMutation.mutate({
-          ledgerId,
-          tagName: selectedTagForRight,
-          marginByCoin: undefined,
-        });
+        try {
+          await saveTagConfigMutation.mutateAsync({
+            ledgerId,
+            tagName: selectedTagForRight,
+            marginByCoin: undefined,
+          });
+          await addMarginLogMutation.mutateAsync({
+            ledgerId,
+            tagName: selectedTagForRight,
+            action: '清空保证金',
+            detail: '手动清空全部保证金记录',
+          });
+          refetchMarginLogs();
+        } catch (_) {}
       }
     );
   };
@@ -702,7 +713,7 @@ export default function DepositManage() {
     setFundFlowEditMode(true);
   };
 
-  const handleSaveFundFlow = () => {
+  const handleSaveFundFlow = async () => {
     if (!selectedTagForRight) return;
     setFundFlowSaving(true);
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -710,15 +721,27 @@ export default function DepositManage() {
     const fundFlowJson = validEntries.length > 0
       ? JSON.stringify(validEntries.map(e => ({ coin: e.coin || '元', amount: parseFloat(e.amount), label: e.label || '', date: e.date || todayStr })))
       : undefined;
-    saveTagConfigMutation.mutate({
-      ledgerId,
-      tagName: selectedTagForRight,
-      marginByCoin: rightTagConfig?.margin_by_coin as string | undefined,
-      initialAmount: rightTagConfig?.initial_amount as string | undefined,
-      accountMultiplier: rightTagConfig?.account_multiplier as string | undefined,
-      marginBase: (rightTagConfig as any)?.margin_base as string | undefined,
-      fundFlow: fundFlowJson,
-    });
+    try {
+      await saveTagConfigMutation.mutateAsync({
+        ledgerId,
+        tagName: selectedTagForRight,
+        marginByCoin: rightTagConfig?.margin_by_coin as string | undefined,
+        initialAmount: rightTagConfig?.initial_amount as string | undefined,
+        accountMultiplier: rightTagConfig?.account_multiplier as string | undefined,
+        marginBase: (rightTagConfig as any)?.margin_base as string | undefined,
+        fundFlow: fundFlowJson,
+      });
+      const detail = validEntries.length > 0
+        ? validEntries.map(e => `${e.coin} ${e.amount}${e.label ? ' (' + e.label + ')' : ''}`).join('、')
+        : '清空提现/入金';
+      await addMarginLogMutation.mutateAsync({
+        ledgerId,
+        tagName: selectedTagForRight,
+        action: '修改提现/入金',
+        detail,
+      });
+      refetchMarginLogs();
+    } catch (_) {}
   };
 
   const handleClearFundFlow = () => {
@@ -726,17 +749,26 @@ export default function DepositManage() {
     showConfirm(
       "确认清空提现/入金",
       `确定要清空 [${selectedTagForRight}] 的提现/入金记录吗？`,
-      () => {
+      async () => {
         setFundFlowSaving(true);
-        saveTagConfigMutation.mutate({
-          ledgerId,
-          tagName: selectedTagForRight,
-          marginByCoin: rightTagConfig?.margin_by_coin as string | undefined,
-          initialAmount: rightTagConfig?.initial_amount as string | undefined,
-          accountMultiplier: rightTagConfig?.account_multiplier as string | undefined,
-          marginBase: (rightTagConfig as any)?.margin_base as string | undefined,
-          fundFlow: undefined,
-        });
+        try {
+          await saveTagConfigMutation.mutateAsync({
+            ledgerId,
+            tagName: selectedTagForRight,
+            marginByCoin: rightTagConfig?.margin_by_coin as string | undefined,
+            initialAmount: rightTagConfig?.initial_amount as string | undefined,
+            accountMultiplier: rightTagConfig?.account_multiplier as string | undefined,
+            marginBase: (rightTagConfig as any)?.margin_base as string | undefined,
+            fundFlow: undefined,
+          });
+          await addMarginLogMutation.mutateAsync({
+            ledgerId,
+            tagName: selectedTagForRight,
+            action: '清空提现/入金',
+            detail: '手动清空全部提现/入金记录',
+          });
+          refetchMarginLogs();
+        } catch (_) {}
       }
     );
   };
@@ -1519,6 +1551,12 @@ export default function DepositManage() {
                             tagName={selectedTagForRight}
                             initialNote={(rightTagConfig as any)?.note || ''}
                             onSaved={() => refetchRightTagConfig()}
+                            onLogSaved={async (action, detail) => {
+                              try {
+                                await addMarginLogMutation.mutateAsync({ ledgerId, tagName: selectedTagForRight, action, detail });
+                                refetchMarginLogs();
+                              } catch (_) {}
+                            }}
                           />
                         )}
 
