@@ -9,6 +9,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { ChevronLeft, QrCode, RotateCcw, Loader2, CheckCircle2 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
+import { useYabanClinic } from "./useYabanClinic";
 
 type Tab = "verify" | "refund";
 
@@ -26,6 +27,8 @@ const REFUND_STATUS: Record<string, { text: string; color: string; bg: string }>
 
 export default function YabanShopAdminFulfill() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [tab, setTab] = useState<Tab>("verify");
 
   return (
@@ -36,7 +39,10 @@ export default function YabanShopAdminFulfill() {
           <button onClick={() => navigate("/yaban/shop/admin/orders")} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold">核销与售后</span>
+          <div className="flex flex-col items-center">
+            <span className="text-base font-bold leading-tight">核销与售后</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <span className="w-6" />
         </div>
         <div className="max-w-lg mx-auto px-3 flex gap-2 pb-3">

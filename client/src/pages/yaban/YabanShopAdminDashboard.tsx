@@ -6,6 +6,7 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Loader2, TrendingUp, ShoppingBag, Wallet, CheckCircle2 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
+import { useYabanClinic } from "./useYabanClinic";
 
 const STATUS_LABEL: Record<string, string> = {
   pending: "待付款",
@@ -19,6 +20,8 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function YabanShopAdminDashboard() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const { data, isLoading } = trpc.yabanShopAdmin.dashboard.useQuery();
 
   const maxAmt = Math.max(1, ...((data?.recentDays ?? []).map((d) => d.amount)));
@@ -31,7 +34,10 @@ export default function YabanShopAdminDashboard() {
           <button onClick={() => navigate("/yaban/shop")} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold">经营数据</span>
+          <div className="flex flex-col">
+            <span className="text-base font-bold leading-tight">经营数据</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
         </div>
       </div>
 

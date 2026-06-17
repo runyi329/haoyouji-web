@@ -7,6 +7,8 @@ import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
+import YabanClinicTag from "./YabanClinicTag";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -37,6 +39,8 @@ function useQueryParam(name: string) {
 
 export default function YabanInventoryList() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const initFilter = useQueryParam("filter") || "all";
 
   const [keyword, setKeyword] = useState("");
@@ -60,7 +64,10 @@ export default function YabanInventoryList() {
           <button onClick={() => navigate("/yaban/inventory")} className="p-1">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-lg font-bold">库存一览</span>
+          <div className="flex flex-col items-center">
+            <span className="text-lg font-bold leading-tight">库存一览</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <div className="w-8" />
         </div>
         {/* 搜索框 */}
@@ -215,7 +222,10 @@ function MaterialEditor({
     <div className="fixed inset-0 z-40 flex flex-col justify-end bg-black/40" onClick={onClose}>
       <div className="bg-white rounded-t-3xl max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 bg-white px-5 py-4 flex items-center justify-between border-b border-gray-100">
-          <span className="text-base font-bold text-gray-800">新增物品</span>
+          <div className="flex flex-col">
+            <span className="text-base font-bold text-gray-800 leading-tight">新增物品</span>
+            <YabanClinicTag style={{ marginTop: 2 }} />
+          </div>
           <X className="w-5 h-5 text-gray-400" onClick={onClose} />
         </div>
         <div className="px-5 py-4 space-y-4">

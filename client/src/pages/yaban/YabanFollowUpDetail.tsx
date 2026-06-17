@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { PageTag } from "@/components/PageTag";
+import { useYabanClinic } from "./useYabanClinic";
 import {
   ChevronLeft,
   MoreVertical,
@@ -55,6 +56,8 @@ const MOCK_DETAIL = {
 
 export default function YabanFollowUpDetail() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const params = useParams<{ id: string }>();
   const [showMenu, setShowMenu] = useState(false);
 
@@ -83,7 +86,10 @@ export default function YabanFollowUpDetail() {
           <button onClick={handleBack} className="p-1">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-lg font-bold">随访详情</span>
+          <div className="flex flex-col items-center">
+            <span className="text-lg font-bold leading-tight">随访详情</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <div className="relative">
             <button onClick={() => setShowMenu(!showMenu)} className="p-1">
               <MoreVertical className="w-6 h-6" />

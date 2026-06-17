@@ -10,6 +10,7 @@ import {
   X, ImagePlus, Trash2, Plus,
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
+import { useYabanClinic } from "./useYabanClinic";
 
 type Tab = "reviews" | "banners";
 
@@ -25,6 +26,8 @@ function Stars({ rating }: { rating: number }) {
 
 export default function YabanShopAdminOps() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [tab, setTab] = useState<Tab>("reviews");
 
   return (
@@ -35,7 +38,10 @@ export default function YabanShopAdminOps() {
           <button onClick={() => navigate("/yaban/shop")} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold">运营管理</span>
+          <div className="flex flex-col">
+            <span className="text-base font-bold leading-tight">运营管理</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
         </div>
         <div className="flex px-3 pb-0">
           {[

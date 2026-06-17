@@ -36,7 +36,8 @@ export default function YabanScheduleDetail() {
   const [, setLocation] = useLocation();
   const params = useParams<{ id: string }>();
   const [showActionSheet, setShowActionSheet] = useState(false);
-  const { currentTenantId } = useYabanClinic();
+  const { currentTenantId, current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
 
   const { data: detail, isLoading } = trpc.yabanAppointment.getById.useQuery(
     { id: Number(params.id), tenantId: currentTenantId ?? undefined },
@@ -97,7 +98,10 @@ export default function YabanScheduleDetail() {
           <button onClick={() => setLocation("/yaban/schedule")} className="p-1">
             <ChevronLeft size={22} />
           </button>
-          <span className="text-base font-medium">预约详情</span>
+          <div className="flex flex-col items-center">
+            <span className="text-base font-medium leading-tight">预约详情</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <button onClick={() => setShowActionSheet(true)} className="p-1">
             <Plus size={20} />
           </button>

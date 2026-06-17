@@ -14,9 +14,12 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { ChevronLeft, Loader2, ShieldCheck, Save } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
+import { useYabanClinic } from "./useYabanClinic";
 
 export default function YabanShopAdminMerchantConfig() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const cfgQuery = trpc.yabanPayment.adminGetMerchantConfig.useQuery(undefined, {
     refetchOnWindowFocus: false,
   });
@@ -99,7 +102,10 @@ export default function YabanShopAdminMerchantConfig() {
           <button onClick={() => navigate("/yaban/shop")} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold">支付设置</span>
+          <div className="flex flex-col items-center">
+            <span className="text-base font-bold leading-tight">支付设置</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <span className="w-6" />
         </div>
       </div>

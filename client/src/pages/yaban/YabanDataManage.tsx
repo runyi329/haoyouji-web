@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
 
 type Fmt = "json" | "excel";
 
@@ -107,6 +108,8 @@ function base64ToBlob(base64: string, mime: string): Blob {
 
 export default function YabanDataManage() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [tab, setTab] = useState<"export" | "import">("export");
 
   // ===== 步骤一：医院选择 =====
@@ -363,7 +366,10 @@ export default function YabanDataManage() {
           <button onClick={() => navigate("/yaban/profile")} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold">数据安全管理</span>
+          <div className="flex flex-col">
+            <span className="text-base font-bold leading-tight">数据安全管理</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
         </div>
         <div className="flex px-4">
           <button

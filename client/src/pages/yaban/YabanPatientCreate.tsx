@@ -11,6 +11,7 @@ import { ChevronDown, XCircle, Check, UserRound, Camera } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
 import MedicalHistoryPicker, { serializeHistory, parseHistory } from "./MedicalHistoryPicker";
 import AddressPicker from "./AddressPicker";
 import AvatarPicker from "./AvatarPicker";
@@ -133,6 +134,8 @@ function calcZodiac(birthday: string): string {
 
 export default function YabanPatientCreate() {
   const [, setLocation] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   // 编辑模式：路由形如 /yaban/patient/:id/edit
   const [isEditRoute, editParams] = useRoute("/yaban/patient/:id/edit");
   const editId = isEditRoute && editParams?.id ? Number(editParams.id) : 0;
@@ -307,7 +310,10 @@ export default function YabanPatientCreate() {
           <button onClick={handleBack} className="text-base font-medium" style={{ color: ACCENT }}>
             取消
           </button>
-          <h1 className="text-base font-semibold text-gray-900">{isEdit ? "编辑顾客" : "新建顾客"}</h1>
+          <div className="flex flex-col items-center">
+            <h1 className="text-base font-semibold text-gray-900 leading-tight">{isEdit ? "编辑顾客" : "新建顾客"}</h1>
+            {clinicName && <span className="text-[11px] font-normal text-gray-400 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <button onClick={handleSave} className="text-base font-medium" style={{ color: ACCENT }}>
             {createMutation.isPending || updateMutation.isPending ? "保存中" : "保存"}
           </button>

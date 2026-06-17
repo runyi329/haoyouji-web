@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { avatarSrc, avatarBg, ageToBucket, type AvatarKey } from '@/lib/yaban-avatar';
+import { useYabanClinic } from './useYabanClinic';
 
 const ICON_BASE = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/icons/yaban/patient";
 
@@ -21,6 +22,8 @@ export default function YabanPatientDetail() {
   const [, navigate] = useLocation();
   const [, params] = useRoute('/yaban/patient/:id');
   const id = params?.id ? Number(params.id) : 0;
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || '';
 
   const detailQuery = trpc.yabanCustomer.detail.useQuery(
     { id },
@@ -38,7 +41,7 @@ export default function YabanPatientDetail() {
     source: row?.source || '—',
     netConsultant: row?.net_consultant || '',
     consultant: row?.consultant || '',
-    clinic: '上海恒愿口腔门诊部',
+    clinic: clinicName,
     lastDoctor: row?.last_doctor || '—',
     lastVisit: row?.last_visit || '',
     remark: row?.remark || '—',
@@ -105,7 +108,10 @@ export default function YabanPatientDetail() {
           <button onClick={() => navigate('/yaban')} className="p-1">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-lg font-bold">顾客详情</span>
+          <div className="flex flex-col items-center">
+            <span className="text-lg font-bold leading-tight">顾客详情</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <button
             onClick={() => navigate(`/yaban/patient/${id}/edit`)}
             className="p-1 text-white"

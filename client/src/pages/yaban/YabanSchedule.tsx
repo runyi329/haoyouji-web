@@ -88,7 +88,7 @@ export default function YabanSchedule() {
 
   const dateStr = toDateStr(selDate);
 
-  const { currentTenantId } = useYabanClinic();
+  const { currentTenantId, current } = useYabanClinic();
 
   const { data: appointments = [], refetch: refetchAppts } = trpc.yabanAppointment.listByDate.useQuery({ date: dateStr, tenantId: currentTenantId ?? undefined });
   const { data: monthStats = {} } = trpc.yabanAppointment.monthStats.useQuery({
@@ -321,7 +321,7 @@ export default function YabanSchedule() {
       {detailModal.open && detailAppt && (
         <BottomSheet onClose={() => setDetailModal({ open: false })}>
           <h3 style={{ fontSize: 17, marginBottom: 4 }}>{detailAppt.patientName}</h3>
-          <div style={{ fontSize: 12, color: GRAY, marginBottom: 6 }}>门店预约</div>
+          <div style={{ fontSize: 12, color: GRAY, marginBottom: 6 }}>所属：{current?.name?.trim() || current?.shortName?.trim() || "门店预约"}</div>
           {[
             { k: "就诊医生", v: detailAppt.doctor },
             { k: "时间", v: fmtApptRange(detailAppt) },

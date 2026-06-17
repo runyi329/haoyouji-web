@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -30,6 +31,8 @@ const BIZ_TYPES = [
 
 export default function YabanInventoryOutbound() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [keyword, setKeyword] = useState("");
   const [categoryId, setCategoryId] = useState<number | undefined>(undefined);
   const [cart, setCart] = useState<Record<number, number>>({});
@@ -90,7 +93,10 @@ export default function YabanInventoryOutbound() {
       <div className="text-white sticky top-0 z-20" style={{ background: BLUE_GRAD }}>
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => navigate("/yaban/inventory")} className="p-1"><ChevronLeft className="w-6 h-6" /></button>
-          <span className="text-lg font-bold">领用出库</span>
+          <div className="flex flex-col items-center">
+            <span className="text-lg font-bold leading-tight">领用出库</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <div className="w-8" />
         </div>
         <div className="px-4 pb-3">

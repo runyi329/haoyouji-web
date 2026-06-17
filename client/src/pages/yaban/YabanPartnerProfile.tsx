@@ -10,9 +10,12 @@ import { ChevronLeft, User, Briefcase } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
 
 export default function YabanPartnerProfile() {
   const [, setLocation] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const membersQuery = trpc.yabanCustomer.listClinicMembers.useQuery();
   const partners = (membersQuery.data || []).filter((m) => m.roleKey === "owner");
 
@@ -27,7 +30,10 @@ export default function YabanPartnerProfile() {
           <button onClick={() => setLocation("/yaban/features")} className="p-1" aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold">合伙人档案</span>
+          <div className="flex flex-col items-center">
+            <span className="text-base font-bold leading-tight">合伙人档案</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <span className="w-6" />
         </div>
       </div>

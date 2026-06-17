@@ -7,6 +7,7 @@ import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -42,6 +43,8 @@ function useQueryParam(name: string) {
 
 export default function YabanInventoryInbound() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const wantScan = useQueryParam("scan") === "1";
 
   const [keyword, setKeyword] = useState("");
@@ -113,7 +116,10 @@ export default function YabanInventoryInbound() {
       <div className="text-white sticky top-0 z-20" style={{ background: BLUE_GRAD }}>
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => navigate("/yaban/inventory")} className="p-1"><ChevronLeft className="w-6 h-6" /></button>
-          <span className="text-lg font-bold">入库</span>
+          <div className="flex flex-col items-center">
+            <span className="text-lg font-bold leading-tight">入库</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <button onClick={() => setShowScan(true)} className="p-1"><ScanLine className="w-5 h-5" /></button>
         </div>
       </div>

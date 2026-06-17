@@ -10,6 +10,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, Search, ChevronDown, SlidersHorizontal, User } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
+import { useYabanClinic } from "./useYabanClinic";
 
 // 患者标签配置
 const TAG_COLORS: Record<string, { bg: string; text: string }> = {
@@ -108,6 +109,8 @@ const TAG_LABELS: Record<string, string> = {
 
 export default function YabanPatientSelect() {
   const [, setLocation] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [searchText, setSearchText] = useState("");
   const [activeGroup, setActiveGroup] = useState("all");
   const [showGroupTabs, setShowGroupTabs] = useState(false);
@@ -140,7 +143,10 @@ export default function YabanPatientSelect() {
           <button onClick={handleBack} className="p-1">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-lg font-semibold">选择顾客</h1>
+          <div className="flex flex-col items-center">
+            <h1 className="text-lg font-semibold leading-tight">选择顾客</h1>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <div className="w-6" />
         </div>
       </div>

@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ChevronRight, User } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
+import { useYabanClinic } from "./useYabanClinic";
 
 // 选项配置
 const FOLLOW_UP_TYPES = ["术后回访", "定期复查", "治疗提醒", "满意度调查", "其他"];
@@ -47,6 +48,8 @@ interface FormData {
 
 export default function YabanFollowUpCreate() {
   const [, setLocation] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const search = useSearch();
   const params = new URLSearchParams(search);
   const isRecord = params.get("type") !== "plan";
@@ -114,7 +117,10 @@ export default function YabanFollowUpCreate() {
           <button onClick={handleBack} className="text-sky-500 text-base font-medium">
             取消
           </button>
-          <h1 className="text-base font-semibold text-gray-900">{title}</h1>
+          <div className="flex flex-col items-center">
+            <h1 className="text-base font-semibold text-gray-900 leading-tight">{title}</h1>
+            {clinicName && <span className="text-[11px] font-normal text-gray-400 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <div className="w-10" />
         </div>
       </div>

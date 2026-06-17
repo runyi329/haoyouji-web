@@ -8,6 +8,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { ChevronLeft, Loader2, Plus, X } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
+import { useYabanClinic } from "./useYabanClinic";
 
 type CouponType = "full_reduce" | "discount";
 
@@ -30,6 +31,8 @@ const emptyForm: FormState = {
 
 export default function YabanShopAdminCoupons() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.yabanCoupon.adminListCoupons.useQuery();
   const list = (data ?? []) as any[];
@@ -69,7 +72,10 @@ export default function YabanShopAdminCoupons() {
           <button onClick={() => navigate("/yaban/shop/admin/orders")} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold">优惠券管理</span>
+          <div className="flex flex-col">
+            <span className="text-base font-bold leading-tight">优惠券管理</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <button onClick={() => { setForm(emptyForm); setShowForm(true); }} className="flex items-center gap-1 text-xs bg-white/20 px-2.5 py-1 rounded-full">
             <Plus className="w-3.5 h-3.5" /> 新建
           </button>

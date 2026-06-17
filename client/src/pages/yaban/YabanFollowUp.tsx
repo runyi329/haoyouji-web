@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, Plus, FileText, Pencil } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
+import { useYabanClinic } from "./useYabanClinic";
 
 // 状态Tab配置
 const STATUS_TABS = [
@@ -67,6 +68,8 @@ function getWeekdayName(dateStr: string): string {
 
 export default function YabanFollowUp() {
   const [, setLocation] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [activeTab, setActiveTab] = useState("all");
   const [showActionSheet, setShowActionSheet] = useState(false);
 
@@ -98,7 +101,10 @@ export default function YabanFollowUp() {
           <button onClick={handleBack} className="p-1">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <h1 className="text-lg font-semibold">随访管理</h1>
+          <div className="flex flex-col items-center">
+            <h1 className="text-lg font-semibold leading-tight">随访管理</h1>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <button onClick={() => setShowActionSheet(true)} className="p-1">
             <Plus className="w-6 h-6" />
           </button>

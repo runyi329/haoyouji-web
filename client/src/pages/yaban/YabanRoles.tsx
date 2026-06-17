@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
 
 type Scope = "all" | "self" | "none";
 
@@ -99,6 +100,8 @@ function nextScope(cur: Scope, type: "toggle" | "scope"): Scope {
 
 export default function YabanRoles() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
 
   const { data: my } = trpc.yabanRole.myMembership.useQuery();
   const canManage = !!my?.canManage;
@@ -142,7 +145,10 @@ export default function YabanRoles() {
           <button onClick={() => navigate("/yaban/profile")} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold flex-1">权限管理</span>
+          <div className="flex flex-col flex-1">
+            <span className="text-base font-bold leading-tight">权限管理</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <button
             onClick={() => setShowRoleInfo(true)}
             className="text-xs bg-white/20 rounded-full px-3 py-1 active:opacity-80"

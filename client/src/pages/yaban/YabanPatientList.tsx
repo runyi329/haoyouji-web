@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { avatarSrc, ageToBucket, type AvatarKey } from "@/lib/yaban-avatar";
 import { PageTag } from "@/components/PageTag";
+import { useYabanClinic } from "./useYabanClinic";
 
 // 性别标签配色（性别用文字，非符号）
 type GenderTag = "female" | "male" | "phone";
@@ -391,6 +392,8 @@ function CustomerRow({
 export default function YabanPatientList() {
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
 
   // 搜索输入与防抖后的关键词
   const [searchInput, setSearchInput] = useState("");
@@ -813,7 +816,10 @@ export default function YabanPatientList() {
               <button onClick={handleBack} className="p-1 -ml-1">
                 <ChevronLeft className="w-6 h-6 text-gray-700" />
               </button>
-              <h1 className="text-[17px] font-bold text-gray-900">{"\u987E\u5BA2"}</h1>
+              <div className="flex flex-col items-center">
+                <h1 className="text-[17px] font-bold text-gray-900 leading-tight">{"\u987E\u5BA2"}</h1>
+                {clinicName && <span className="text-[11px] font-normal text-gray-400 leading-tight mt-0.5">{"\u6240\u5C5E\uFF1A"}{clinicName}</span>}
+              </div>
               <div className="flex items-center gap-1">
                 <button onClick={toggleDensity} className="p-1" title={detailed ? "\u7D27\u51D1" : "\u8BE6\u7EC6"}>
                   {detailed ? (

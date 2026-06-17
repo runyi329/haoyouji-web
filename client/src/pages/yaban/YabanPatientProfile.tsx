@@ -2,6 +2,7 @@ import { useLocation, useRoute } from "wouter";
 import { PageTag } from "@/components/PageTag";
 import { ChevronLeft, Edit, Copy } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
 import { toast } from "sonner";
 import { avatarSrc, ageToBucket, type AvatarKey } from "@/lib/yaban-avatar";
 
@@ -91,6 +92,8 @@ export default function YabanPatientProfile() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/yaban/patient/:id/profile");
   const id = params?.id ? Number(params.id) : 0;
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
 
   const detailQuery = trpc.yabanCustomer.detail.useQuery(
     { id },
@@ -146,7 +149,10 @@ export default function YabanPatientProfile() {
           <button onClick={() => navigate(`/yaban/patient/${id}`)} className="p-1">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-lg font-bold">详细资料</span>
+          <div className="flex flex-col items-center">
+            <span className="text-lg font-bold leading-tight">详细资料</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <button
             onClick={() => navigate(`/yaban/patient/${id}/edit`)}
             className="flex items-center text-white/90 text-sm"

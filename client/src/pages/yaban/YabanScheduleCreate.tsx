@@ -40,7 +40,8 @@ export default function YabanScheduleCreate() {
   const [, setLocation] = useLocation();
   const [showPicker, setShowPicker] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const { currentTenantId } = useYabanClinic();
+  const { currentTenantId, current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
 
   // 从API获取员工（医生）列表
   const { data: membersData } = trpc.yabanAppointment.listMembers.useQuery({ tenantId: currentTenantId ?? undefined });
@@ -57,7 +58,7 @@ export default function YabanScheduleCreate() {
     date: new Date().toISOString().split("T")[0],
     startTime: "09:00",
     endTime: "09:30",
-    clinic: "上海恒恩口腔门诊部",
+    clinic: "",
     doctor: "",
     consultant: "",
     assistant: "",
@@ -173,7 +174,10 @@ export default function YabanScheduleCreate() {
           <button onClick={() => setLocation("/yaban/schedule")} className="text-sm">
             取消
           </button>
-          <span className="text-base font-medium">新建预约</span>
+          <div className="flex flex-col items-center">
+            <span className="text-base font-medium leading-tight">新建预约</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <div className="w-8" />
         </div>
       </div>
@@ -234,8 +238,8 @@ export default function YabanScheduleCreate() {
       <div className="bg-white mt-3">
         <FormRow
           label="诊所"
-          value={form.clinic}
-          placeholder="请选择诊所"
+          value={form.clinic || clinicName}
+          placeholder="当前所属医院"
           isInput
           field="clinic"
         />

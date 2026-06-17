@@ -7,6 +7,7 @@ import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -30,6 +31,8 @@ const EXP_TAG: Record<string, { label: string; cls: string } | null> = {
 
 export default function YabanInventoryMaterial() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [, params] = useRoute("/yaban/inventory/material/:id");
   const id = Number(params?.id);
 
@@ -51,7 +54,10 @@ export default function YabanInventoryMaterial() {
       <div className="text-white sticky top-0 z-20" style={{ background: BLUE_GRAD }}>
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => navigate("/yaban/inventory/list")} className="p-1"><ChevronLeft className="w-6 h-6" /></button>
-          <span className="text-lg font-bold">物品详情</span>
+          <div className="flex flex-col items-center">
+            <span className="text-lg font-bold leading-tight">物品详情</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <button onClick={() => setShowEdit(true)} className="p-1"><Pencil className="w-5 h-5" /></button>
         </div>
       </div>

@@ -9,6 +9,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { ChevronLeft, Loader2, X, Phone, ClipboardList, Truck, QrCode, Download } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
+import { useYabanClinic } from "./useYabanClinic";
 
 type StatusKey = "all" | "pending" | "confirmed" | "shipped" | "completed" | "refunding" | "cancelled";
 
@@ -47,6 +48,8 @@ function fmtTime(val: any): string {
 
 export default function YabanShopAdminOrders() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [filter, setFilter] = useState<StatusKey>("all");
   const [keyword, setKeyword] = useState("");
   const [detailId, setDetailId] = useState<number | null>(null);
@@ -117,7 +120,10 @@ export default function YabanShopAdminOrders() {
           <button onClick={() => navigate("/yaban")} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold">订单管理</span>
+          <div className="flex flex-col">
+            <span className="text-base font-bold leading-tight">订单管理</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <div className="flex items-center gap-2">
             <button onClick={handleExport} disabled={exportMut.isFetching} className="flex items-center gap-1 text-xs bg-white/20 px-2.5 py-1 rounded-full disabled:opacity-60">
               {exportMut.isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} 导出

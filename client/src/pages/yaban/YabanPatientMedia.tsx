@@ -3,6 +3,7 @@ import { useLocation, useRoute } from "wouter";
 import { PageTag } from "@/components/PageTag";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -73,6 +74,8 @@ function groupDateOf(m: MediaItem): string {
 
 export default function YabanPatientMedia() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [, params] = useRoute("/yaban/patient/:id/media");
   const customerId = params?.id ? Number(params.id) : 0;
 
@@ -235,7 +238,10 @@ export default function YabanPatientMedia() {
           <button onClick={() => navigate(`/yaban/patient/${customerId}`)} className="p-1">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-lg font-bold">影像记录</span>
+          <div className="flex flex-col items-center">
+            <span className="text-lg font-bold leading-tight">影像记录</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           {canUpload ? (
             <button onClick={() => setShowUploadMenu(true)} className="p-1">
               <Plus className="w-6 h-6" />

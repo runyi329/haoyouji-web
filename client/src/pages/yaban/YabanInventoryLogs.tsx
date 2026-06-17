@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
 import { ChevronLeft, Loader2, ArrowDownToLine, ArrowUpFromLine, ScrollText } from "lucide-react";
 
 const BLUE_GRAD = "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)";
@@ -23,6 +24,8 @@ const BIZ_LABEL: Record<string, string> = {
 
 export default function YabanInventoryLogs() {
   const [, navigate] = useLocation();
+  const { current } = useYabanClinic();
+  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [dir, setDir] = useState<string>("");
 
   const logsQuery = trpc.yabanInventory.logs.useQuery({
@@ -37,7 +40,10 @@ export default function YabanInventoryLogs() {
       <div className="text-white sticky top-0 z-20" style={{ background: BLUE_GRAD }}>
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => navigate("/yaban/inventory")} className="p-1"><ChevronLeft className="w-6 h-6" /></button>
-          <span className="text-lg font-bold">出入库流水</span>
+          <div className="flex flex-col items-center">
+            <span className="text-lg font-bold leading-tight">出入库流水</span>
+            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
+          </div>
           <div className="w-8" />
         </div>
         <div className="px-4 pb-3 flex gap-2">
