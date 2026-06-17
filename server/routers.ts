@@ -11744,6 +11744,94 @@ ${klinesSummary}
         return { success: true };
       }),
 
+    // ── 保证金操作日志 ──
+    // 获取保证金操作日志
+    getMarginLogs: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        tagName: z.string().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+        }
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) return [];
+        let rows: any;
+        if (input.tagName) {
+          [rows] = await (conn as any).execute(
+            `SELECT l.id, l.ledger_id, l.tag_name, l.action, l.detail, l.remark, l.created_by, l.created_at,
+             u.username, u.nickname as user_nickname
+             FROM ledger_margin_logs l
+             LEFT JOIN users u ON u.id = l.created_by
+             WHERE l.ledger_id = ? AND l.tag_name = ?
+             ORDER BY l.created_at DESC LIMIT 200`,
+            [input.ledgerId, input.tagName]
+          );
+        } else {
+          [rows] = await (conn as any).execute(
+            `SELECT l.id, l.ledger_id, l.tag_name, l.action, l.detail, l.remark, l.created_by, l.created_at,
+             u.username, u.nickname as user_nickname
+             FROM ledger_margin_logs l
+             LEFT JOIN users u ON u.id = l.created_by
+             WHERE l.ledger_id = ?
+             ORDER BY l.created_at DESC LIMIT 200`,
+            [input.ledgerId]
+          );
+        }
+        return rows as any[];
+      }),
+
+    // 新增保证金操作日志
+    addMarginLog: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        tagName: z.string(),
+        action: z.string(),
+        detail: z.string().optional(),
+        remark: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        await (conn as any).execute(
+          `INSERT INTO ledger_margin_logs (ledger_id, tag_name, action, detail, remark, created_by) VALUES (?, ?, ?, ?, ?, ?)`,
+          [input.ledgerId, input.tagName, input.action, input.detail ?? null, input.remark ?? null, ctx.user.id]
+        );
+        return { success: true };
+      }),
+
+    // 删除保证金操作日志
+    deleteMarginLog: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        logId: z.number(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const dbLedger = await import('./db-ledger');
+        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
+        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        }
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        await (conn as any).execute(
+          `DELETE FROM ledger_margin_logs WHERE id = ? AND ledger_id = ?`,
+          [input.logId, input.ledgerId]
+        );
+        return { success: true };
+      }),
+
     // 获取标签保证金汇总和最新市值
     getTagSummary: protectedProcedure
       .input(z.object({
@@ -11805,7 +11893,7 @@ ${klinesSummary}
         const db = await getLedgerDb();
         // 查询所有标签的配置
         const configRows = await db.execute(
-          sql`SELECT tag_name, margin_by_coin, initial_amount, account_multiplier, margin_base, fund_flow FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId}`
+          sql`SELECT tag_name, margin_by_coin, initial_amount, account_multiplier, margin_base, fund_flow, pause_date FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId}`
         );
         const configs = (configRows as any)[0] as any[];
         // 查询每个标签最新一条记录的余额（排除transfer类型和已删除记录）
@@ -11833,7 +11921,7 @@ ${klinesSummary}
           };
         }
         // 组装结果
-        const result: Record<string, { marginByCoin: any; initialAmount: string | null; accountMultiplier: string | null; marginBase: string | null; fundFlow: any; latestBalance: { balance: number; recordDate: string } | null }> = {};
+        const result: Record<string, { marginByCoin: any; initialAmount: string | null; accountMultiplier: string | null; marginBase: string | null; fundFlow: any; pauseDate: string | null; latestBalance: { balance: number; recordDate: string } | null }> = {};
         for (const cfg of configs) {
           result[cfg.tag_name] = {
             marginByCoin: cfg.margin_by_coin,
@@ -11841,13 +11929,14 @@ ${klinesSummary}
             accountMultiplier: cfg.account_multiplier,
             marginBase: cfg.margin_base,
             fundFlow: cfg.fund_flow,
+            pauseDate: cfg.pause_date ?? null,
             latestBalance: latestMap[cfg.tag_name] ?? null,
           };
         }
         // 补充有余额但无配置的标签
         for (const [tagName, lb] of Object.entries(latestMap)) {
           if (!result[tagName]) {
-            result[tagName] = { marginByCoin: null, initialAmount: null, accountMultiplier: null, marginBase: null, fundFlow: null, latestBalance: lb };
+            result[tagName] = { marginByCoin: null, initialAmount: null, accountMultiplier: null, marginBase: null, fundFlow: null, pauseDate: null, latestBalance: lb };
           }
         }
         return result;

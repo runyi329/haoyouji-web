@@ -22,6 +22,9 @@ import {
   Eye,
   EyeOff,
   Plus,
+  PauseCircle,
+  PlayCircle,
+  ScrollText,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -452,6 +455,16 @@ export default function DepositManage() {
   const [rightMultiplierEdit, setRightMultiplierEdit] = useState("1");
   const [rightMarginBaseEdit, setRightMarginBaseEdit] = useState("");
   const [rightBalanceEditMode, setRightBalanceEditMode] = useState(false);
+  // ── 日志 & 暂停状态 ──
+  const [marginLogExpanded, setMarginLogExpanded] = useState(false);
+  const [pauseSaving, setPauseSaving] = useState(false);
+  const { data: marginLogs, refetch: refetchMarginLogs } = (trpc.ledger as any).getMarginLogs.useQuery(
+    { ledgerId, tagName: selectedTagForRight ?? "" },
+    { enabled: !!ledgerId && !!selectedTagForRight }
+  );
+  const addMarginLogMutation = (trpc.ledger as any).addMarginLog.useMutation();
+  const deleteMarginLogMutation = (trpc.ledger as any).deleteMarginLog.useMutation();
+  const setTagPauseMutation = trpc.ledger.setTagPauseDate.useMutation();
 
   const { data: rightTagConfig, refetch: refetchRightTagConfig } = trpc.ledger.getTagConfig.useQuery(
     { ledgerId, tagName: selectedTagForRight ?? "" },
@@ -1031,12 +1044,18 @@ export default function DepositManage() {
             {categories.length === 0 ? (
               <div className="text-center text-gray-400 text-sm mt-8">暂无标签</div>
             ) : (
-              categories.map((cat: any) => {
+                            [...categories].sort((a: any, b: any) => {
+                const aPaused = !!(allTagsMarginSummary?.[a.name]?.pauseDate);
+                const bPaused = !!(allTagsMarginSummary?.[b.name]?.pauseDate);
+                if (aPaused && !bPaused) return 1;
+                if (!aPaused && bPaused) return -1;
+                return 0;
+              }).map((cat: any) => {
                 const isSelected = selectedTagForRight === cat.name;
-
                 // 计算该标签的保证金占基数比（用于折叠行显示）
                 // 仅在 cryptoPrices 已加载（有 USDT 汇率）时才计算，避免汇率未就绪导致计算错误
                 const tagSummaryData = allTagsMarginSummary?.[cat.name];
+                const isPaused = !!(tagSummaryData?.pauseDate);
                 let collapseRatio: number | null = null;
                 const hasPrices = Object.keys(cryptoPrices).length > 0;
                 if (tagSummaryData && hasPrices) {
@@ -1070,8 +1089,9 @@ export default function DepositManage() {
                     key={cat.id}
                     className="rounded-2xl overflow-hidden shadow-sm"
                     style={{
-                      backgroundColor: "#FFFFFF",
-                      border: isWarning ? "1.5px solid #F97316" : "1.5px solid transparent",
+                      backgroundColor: isPaused ? "#F3F4F6" : "#FFFFFF",
+                      border: isPaused ? "1.5px solid #D1D5DB" : isWarning ? "1.5px solid #F97316" : "1.5px solid transparent",
+                      opacity: isPaused ? 0.7 : 1,
                     }}
                   >
                     {/* 标签头部 */}
@@ -1080,6 +1100,7 @@ export default function DepositManage() {
                       style={{
                         background: isSelected
                           ? "linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)"
+                          : isPaused ? "#F3F4F6"
                           : isWarning ? "#FFF7ED" : "#FFFFFF",
                         borderBottom: isSelected ? "1px solid #BFDBFE" : "none",
                       }}
@@ -1097,9 +1118,14 @@ export default function DepositManage() {
                             />
                           </div>
                           <div>
-                            <div className="text-sm font-bold text-gray-800">{cat.name}</div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-bold" style={{ color: isPaused ? '#9CA3AF' : '#1F2937' }}>{cat.name}</span>
+                              {isPaused && (
+                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#E5E7EB', color: '#6B7280' }}>已暂停</span>
+                              )}
+                            </div>
                             {!isSelected && (
-                              <div className="text-xs text-blue-500">点击查看/编辑保证金</div>
+                              <div className="text-xs" style={{ color: isPaused ? '#9CA3AF' : '#3B82F6' }}>{isPaused ? '已暂停查询' : '点击查看/编辑保证金'}</div>
                             )}
                           </div>
                         </div>
@@ -1468,6 +1494,108 @@ export default function DepositManage() {
                             onSaved={() => refetchRightTagConfig()}
                           />
                         )}
+
+                        {/* ── 日志区块（查看模式）── */}
+                        {!rightEditMode && selectedTagForRight && (
+                          <div className="mt-2 rounded-xl text-xs" style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0' }} onClick={e => e.stopPropagation()}>
+                            {/* 标题行 */}
+                            <div
+                              className="flex items-center justify-between px-3 py-2 cursor-pointer select-none"
+                              onClick={() => setMarginLogExpanded(v => !v)}
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <ScrollText className="w-3 h-3" style={{ color: '#16A34A' }} />
+                                <span className="font-bold" style={{ color: '#15803D' }}>操作日志</span>
+                                {marginLogs && marginLogs.length > 0 && (
+                                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#DCFCE7', color: '#16A34A' }}>{marginLogs.length}</span>
+                                )}
+                              </div>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                                style={{ transform: marginLogExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}>
+                                <polyline points="6 9 12 15 18 9" />
+                              </svg>
+                            </div>
+                            {/* 展开内容 */}
+                            {marginLogExpanded && (
+                              <div className="px-3 pb-2">
+                                {(!marginLogs || marginLogs.length === 0) ? (
+                                  <div style={{ color: '#C0C8D8' }} className="py-1">暂无操作日志</div>
+                                ) : (
+                                  <div className="space-y-1">
+                                    {(marginLogs as any[]).map((log: any) => (
+                                      <div key={log.id} className="flex items-start justify-between py-1" style={{ borderBottom: '1px solid #DCFCE7' }}>
+                                        <div className="flex-1 min-w-0">
+                                          <span className="font-medium" style={{ color: '#15803D' }}>{log.action}</span>
+                                          {log.detail && <span className="ml-1" style={{ color: '#4B5563' }}>{log.detail}</span>}
+                                          {log.remark && <span className="ml-1 text-[10px]" style={{ color: '#9CA3AF' }}>({log.remark})</span>}
+                                          <div className="text-[10px] mt-0.5" style={{ color: '#9CA3AF' }}>
+                                            {log.user_nickname || log.username || '未知'} · {log.created_at ? new Date(log.created_at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
+                                          </div>
+                                        </div>
+                                        <button
+                                          onClick={async () => {
+                                            await deleteMarginLogMutation.mutateAsync({ ledgerId, logId: log.id });
+                                            refetchMarginLogs();
+                                          }}
+                                          className="ml-2 flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full"
+                                          style={{ backgroundColor: '#FFF5F5' }}
+                                          title="删除日志"
+                                        >
+                                          <X className="w-2.5 h-2.5 text-red-400" />
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* ── 暂停/恢复按鈕（查看模式）── */}
+                        {!rightEditMode && selectedTagForRight && (() => {
+                          const isPaused = !!(rightTagConfig as any)?.pause_date;
+                          return (
+                            <div className="mt-3 flex justify-end">
+                              <button
+                                disabled={pauseSaving}
+                                onClick={async () => {
+                                  setPauseSaving(true);
+                                  try {
+                                    const newPauseDate = isPaused ? null : new Date().toISOString().slice(0, 10);
+                                    await setTagPauseMutation.mutateAsync({
+                                      ledgerId,
+                                      tagName: selectedTagForRight,
+                                      pauseDate: newPauseDate,
+                                    });
+                                    // 写入日志
+                                    await addMarginLogMutation.mutateAsync({
+                                      ledgerId,
+                                      tagName: selectedTagForRight,
+                                      action: isPaused ? '恢复查询' : '暂停查询',
+                                      detail: isPaused ? '恢复账户余额查询' : `暂停账户余额查询（${new Date().toISOString().slice(0, 10)}）`,
+                                    });
+                                    refetchRightTagConfig();
+                                    refetchAllTagsMarginSummary();
+                                    refetchMarginLogs();
+                                    toast.success(isPaused ? '已恢复查询' : '已暂停查询');
+                                  } finally {
+                                    setPauseSaving(false);
+                                  }
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium"
+                                style={{
+                                  backgroundColor: isPaused ? '#DCFCE7' : '#FFF7ED',
+                                  color: isPaused ? '#15803D' : '#EA580C',
+                                  border: isPaused ? '1px solid #BBF7D0' : '1px solid #FED7AA',
+                                }}
+                              >
+                                {isPaused ? <PlayCircle className="w-3.5 h-3.5" /> : <PauseCircle className="w-3.5 h-3.5" />}
+                                {pauseSaving ? '...' : (isPaused ? '恢复查询' : '暂停查询')}
+                              </button>
+                            </div>
+                          );
+                        })()}
 
                         {/* 编辑模式 */}
                         {rightEditMode && (
