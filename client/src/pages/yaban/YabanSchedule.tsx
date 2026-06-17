@@ -390,7 +390,7 @@ export default function YabanSchedule() {
         {apptView === "doc" ? (
           selectedDocIdx !== null && docList[selectedDocIdx]
             ? <SoloView doc={docList[selectedDocIdx]} onBack={() => setSelectedDocIdx(null)} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => setNewModal({ open: true, prefillDocName: docName, prefillStart: start, prefillEnd: end })} trkStart={trkStart} trkEnd={trkEnd} pctM={pctM} OPEN_START={OPEN_START} OPEN_END={OPEN_END} />
-            : <DocRows docList={docList} onDocClick={idx => setSelectedDocIdx(idx)} onApptClick={id => setDetailModal({ open: true, apptId: id })} trkStart={trkStart} trkEnd={trkEnd} pctM={pctM} />
+            : <DocRows docList={docList} onDocClick={idx => setSelectedDocIdx(idx)} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => setNewModal({ open: true, prefillDocName: docName, prefillStart: start, prefillEnd: end })} trkStart={trkStart} trkEnd={trkEnd} pctM={pctM} />
         ) : (
           <TimeView docList={selectedDocIdx !== null && docList[selectedDocIdx] ? [docList[selectedDocIdx]] : docList} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => setNewModal({ open: true, prefillDocName: docName, prefillStart: start, prefillEnd: end })} trkStart={trkStart} trkEnd={trkEnd} />
         )}
@@ -459,10 +459,11 @@ function BottomSheet({ children, onClose, fullscreen }: { children: React.ReactN
 
 // ── 按医生进度条视图 ──
 type EffShift = { workStart: number; workEnd: number; segments: [number, number][] } | null;
-function DocRows({ docList, onDocClick, onApptClick, trkStart, trkEnd, pctM }: {
+function DocRows({ docList, onDocClick, onApptClick, onNewAppt, trkStart, trkEnd, pctM }: {
   docList: { name: string; appts: any[]; shift?: EffShift }[];
   onDocClick: (idx: number) => void;
   onApptClick: (id: number) => void;
+  onNewAppt: (docName: string, start: number, end: number) => void;
   trkStart: () => number; trkEnd: () => number; pctM: (m: number) => number;
 }) {
   const a = trkStart(), b = trkEnd(), span = Math.max(1, b - a);
@@ -475,14 +476,29 @@ function DocRows({ docList, onDocClick, onApptClick, trkStart, trkEnd, pctM }: {
         </div>
       </div>
       {docList.map((doc, idx) => (
-        <div key={doc.name} style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${LINE}`, cursor: "pointer" }} onClick={() => onDocClick(idx)}>
-          <div style={{ width: 54, flexShrink: 0, textAlign: "center" }}>
+        <div key={doc.name} style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${LINE}` }}>
+          {/* 左侧头像/姓名：点击进入该医生放大日程 */}
+          <div onClick={() => onDocClick(idx)} style={{ width: 54, flexShrink: 0, textAlign: "center", cursor: "pointer" }}>
             <div style={{ width: 30, height: 30, borderRadius: "50%", background: SKY_L, color: SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, margin: "0 auto 3px" }}>{doc.name.charAt(0)}</div>
             <div style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{doc.name}</div>
             <div style={{ fontSize: 9, color: GRAY, marginTop: 1 }}>{doc.appts.length > 0 ? `${doc.appts.length}个预约` : "暂无"}</div>
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "#E2E8EF" }}>
+            {/* 点击在岗进度条空白处 → 直接新建预约（按位置换算时间，避开午休/已约） */}
+            <div
+              onClick={doc.shift ? (ev) => {
+                const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+                const ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+                let mins = trkStart() + ratio * (trkEnd() - trkStart());
+                mins = Math.round(mins / 30) * 30;
+                const segs2 = doc.shift!.segments;
+                const inSeg = segs2.find(([s0, e0]) => mins >= s0 && mins < e0);
+                const start = inSeg ? mins : (segs2[0] ? segs2[0][0] : trkStart());
+                const segEnd = (inSeg || segs2[0] || [trkStart(), trkEnd()])[1];
+                onNewAppt(doc.name, start, Math.min(start + 60, segEnd));
+              } : undefined}
+              style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "#E2E8EF", cursor: doc.shift ? "pointer" : "default" }}
+            >
               {/* 在岗区间：按该医生当天实际班次分段着色（午休空档自然留灰）；休息则标「今日休息」 */}
               {doc.shift
                 ? doc.shift.segments.map(([s0, e0], si) => (
