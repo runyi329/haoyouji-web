@@ -26,19 +26,22 @@ const FREE_COLOR = "#A8CCE8";
 
 // ── 角色字典（标签 / 配色 / 分组排序），与 YabanRoles 保持一致 ──
 const ROLE_LABEL: Record<string, string> = {
-  owner: "院长/股东", doctor: "医生", nurse: "护士", assistant: "助理", receptionist: "前台", finance: "财务",
+  founder: "创始人", co_founder: "创始股东", owner: "院长", shareholder: "股东", doctor: "医生", nurse: "护士", assistant: "助理", receptionist: "前台", finance: "财务",
 };
 // 一套协调色板：色相均匀分布，明度/饱和度统一控制，整排成套和谐
 // fg 主色文字 S50%/L43% · bg 浅底 S55%/L94% · bar 进度条 S58%/L60%
 const ROLE_COLOR: Record<string, { fg: string; bg: string; bar: string }> = {
+  founder: { fg: "#37449A", bg: "#E6E8F6", bar: "#5566C8" },      // 深靖蓝
+  co_founder: { fg: "#3A4FB0", bg: "#E7EAF8", bar: "#6072D8" },   // 靖蓝2
   owner: { fg: "#3749A4", bg: "#E7EAF8", bar: "#5E72D4" },        // 靖蓝
+  shareholder: { fg: "#5147A4", bg: "#ECE7F8", bar: "#7A5ED4" },  // 蓝紫
   doctor: { fg: "#3777A4", bg: "#E7F1F8", bar: "#5EA3D4" },       // 蓝
   nurse: { fg: "#379BA4", bg: "#E7F7F8", bar: "#5ECAD4" },        // 青
   assistant: { fg: "#37A477", bg: "#E7F8F1", bar: "#5ED4A3" },    // 薄荷绿
   receptionist: { fg: "#6537A4", bg: "#EEE7F8", bar: "#8F5ED4" }, // 薰衣草紫
   finance: { fg: "#A47737", bg: "#F8F1E7", bar: "#D4A35E" },      // 暖琅珀
 };
-const ROLE_ORDER = ["owner", "doctor", "nurse", "assistant", "receptionist", "finance"];
+const ROLE_ORDER = ["founder", "co_founder", "owner", "shareholder", "doctor", "nurse", "assistant", "receptionist", "finance"];
 function roleLabel(k: string) { return ROLE_LABEL[k] || "员工"; }
 function roleColor(k: string) { return ROLE_COLOR[k] || { fg: "#5b6b7a", bg: "#eef1f5", bar: "#A8CCE8" }; }
 function roleRank(k: string) { const i = ROLE_ORDER.indexOf(k); return i < 0 ? 99 : i; }
