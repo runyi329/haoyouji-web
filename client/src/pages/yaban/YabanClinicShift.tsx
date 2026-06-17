@@ -28,17 +28,18 @@ const FREE_COLOR = "#A8CCE8";
 const ROLE_LABEL: Record<string, string> = {
   owner: "院长/股东", doctor: "医生", nurse: "护士", assistant: "助理", receptionist: "前台", finance: "财务",
 };
-const ROLE_COLOR: Record<string, { fg: string; bg: string }> = {
-  owner: { fg: "#1366A8", bg: "#E7F1FB" },
-  doctor: { fg: "#1E88D6", bg: "#EAF4FE" },
-  nurse: { fg: "#118C8C", bg: "#E0F4F2" },
-  assistant: { fg: "#159E9E", bg: "#E0F4F2" },
-  receptionist: { fg: "#5B53C7", bg: "#ECEAFB" },
-  finance: { fg: "#2E8B57", bg: "#E2F2E9" },
+// fg=主色(文字/标签) bg=浅底(头像底) bar=进度条填充色(保证白字可读)
+const ROLE_COLOR: Record<string, { fg: string; bg: string; bar: string }> = {
+  owner: { fg: "#1366A8", bg: "#E7F1FB", bar: "#5B9BD5" },
+  doctor: { fg: "#1E88D6", bg: "#EAF4FE", bar: "#5BB0EA" },
+  nurse: { fg: "#118C8C", bg: "#E0F4F2", bar: "#3FBFBC" },
+  assistant: { fg: "#159E9E", bg: "#E0F4F2", bar: "#52CBC7" },
+  receptionist: { fg: "#5B53C7", bg: "#ECEAFB", bar: "#8E87E0" },
+  finance: { fg: "#2E8B57", bg: "#E2F2E9", bar: "#5CB57F" },
 };
 const ROLE_ORDER = ["owner", "doctor", "nurse", "assistant", "receptionist", "finance"];
 function roleLabel(k: string) { return ROLE_LABEL[k] || "员工"; }
-function roleColor(k: string) { return ROLE_COLOR[k] || { fg: "#5b6b7a", bg: "#eef1f5" }; }
+function roleColor(k: string) { return ROLE_COLOR[k] || { fg: "#5b6b7a", bg: "#eef1f5", bar: "#A8CCE8" }; }
 function roleRank(k: string) { const i = ROLE_ORDER.indexOf(k); return i < 0 ? 99 : i; }
 
 // ── 工具函数 ──
@@ -522,8 +523,9 @@ export default function YabanClinicShift() {
                 )}
                 <div style={{ width: 54, flexShrink: 0, textAlign: "center" }}>
                   <div style={{ width: 30, height: 30, borderRadius: "50%", background: hasShift ? rc.bg : "#e8ecf0", color: hasShift ? rc.fg : "#9aa6b2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, margin: "0 auto 3px", filter: hasShift ? "none" : "grayscale(1)", opacity: hasShift ? 1 : 0.65 }}>{r.staffName.charAt(0)}</div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{r.staffName}</div>
-                  <div style={{ fontSize: 9, color: hasShift ? GRAY : "#c2ccd6", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 54 }}>{subText}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 54 }}>{r.staffName}</div>
+                  <div style={{ display: "inline-block", fontSize: 9, fontWeight: 600, lineHeight: 1.4, padding: "0 5px", borderRadius: 7, marginTop: 2, color: rc.fg, background: rc.bg }}>{roleLabel(r.roleKey)}</div>
+                  <div style={{ fontSize: 9, color: hasShift ? GRAY : "#c2ccd6", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 54 }}>{subText}</div>
                 </div>
                 <div style={{ flex: 1 }}>
                   {!hasShift ? (
@@ -540,8 +542,8 @@ export default function YabanClinicShift() {
                         return (
                           <div key={si} style={{
                             position: "absolute", left: `${L}%`, width: `${Math.max(W, 1)}%`, top: 0, height: "100%",
-                            background: s.isOT ? WARN : FREE_COLOR,
-                            display: "flex", alignItems: "center", padding: "0 4px", overflow: "hidden",
+                          background: s.isOT ? WARN : rc.bar,
+                          display: "flex", alignItems: "center", padding: "0 4px", overflow: "hidden",
                           }}>
                             {s.isOT && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>加班</span>}
                           </div>
