@@ -200,6 +200,29 @@ export const yabanClinicRouter = router({
         status: r.status || "",
       });
     }
+    // 公共演示院(tenant=9999)：所有登录用户均可见，承载演示数据。
+    // 演示院成员已收敛为 5 名演示医生，不再依赖成员关系判可见性，故此处无条件追加。
+    const MODEL_TID = 9999;
+    if (!seen.has(MODEL_TID)) {
+      try {
+        const [mrows] = (await conn.execute(
+          `SELECT id AS clinicId, name, short_name AS shortName, status FROM yaban_clinic WHERE tenant_id = ? LIMIT 1`,
+          [MODEL_TID]
+        )) as any;
+        const m = (mrows as any[])[0];
+        if (m) {
+          const mdisplay = (m.name && String(m.name).trim()) || (m.shortName && String(m.shortName).trim()) || "牙伴齿科";
+          clinics.push({
+            tenantId: MODEL_TID,
+            clinicId: m.clinicId ? Number(m.clinicId) : null,
+            name: mdisplay,
+            shortName: m.shortName || "",
+            roleKey: "",
+            status: m.status || "active",
+          });
+        }
+      } catch (e) { /* ignore */ }
+    }
     return { clinics };
   }),
 
