@@ -24,6 +24,23 @@ const WARN = "#E8973A", WARN_L = "#FDF4E6", WARN_LINE = "#F2D9AE";
 const BG = "#F0F4F8", LINE = "#eef1f5", GRAY = "#6b7785", INK = "#1f2937";
 const FREE_COLOR = "#A8CCE8";
 
+// ── 角色字典（标签 / 配色 / 分组排序），与 YabanRoles 保持一致 ──
+const ROLE_LABEL: Record<string, string> = {
+  owner: "院长/股东", doctor: "医生", nurse: "护士", assistant: "助理", receptionist: "前台", finance: "财务",
+};
+const ROLE_COLOR: Record<string, { fg: string; bg: string }> = {
+  owner: { fg: "#1366A8", bg: "#E7F1FB" },
+  doctor: { fg: "#1E88D6", bg: "#EAF4FE" },
+  nurse: { fg: "#118C8C", bg: "#E0F4F2" },
+  assistant: { fg: "#159E9E", bg: "#E0F4F2" },
+  receptionist: { fg: "#5B53C7", bg: "#ECEAFB" },
+  finance: { fg: "#2E8B57", bg: "#E2F2E9" },
+};
+const ROLE_ORDER = ["owner", "doctor", "nurse", "assistant", "receptionist", "finance"];
+function roleLabel(k: string) { return ROLE_LABEL[k] || "员工"; }
+function roleColor(k: string) { return ROLE_COLOR[k] || { fg: "#5b6b7a", bg: "#eef1f5" }; }
+function roleRank(k: string) { const i = ROLE_ORDER.indexOf(k); return i < 0 ? 99 : i; }
+
 // ── 工具函数 ──
 function toMin(t: string) {
   const [h, m] = t.split(":").map(Number);
@@ -157,6 +174,7 @@ export default function YabanClinicShift() {
     open: boolean;
     staffUserId: number;
     staffName: string;
+    roleKey: string;
     date: string;
     segs: Seg[];
   } | null>(null);
@@ -179,6 +197,13 @@ export default function YabanClinicShift() {
     { tenantId: currentTenantId ?? undefined },
     { enabled: currentTenantId != null }
   );
+  // 门店全体在职成员（含未建排班模板者）
+  const { data: allMembers = [] } = trpc.yabanAppointment.listMembers.useQuery(
+    { tenantId: currentTenantId ?? undefined },
+    { enabled: currentTenantId != null }
+  );
+  // 角色筛选（null=全部）
+  const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const saveOverrideMut = trpc.yabanShift.saveOverride.useMutation({
     onSuccess: () => { refetch(); toast.success("排班已保存"); },
     onError: (e) => toast.error(e.message),
@@ -203,6 +228,45 @@ export default function YabanClinicShift() {
 
   const templates = schedData?.templates ?? [];
   const overrides = schedData?.overrides ?? [];
+
+  // 全员排班清单：以门店全体在职成员为准，合并已有模板（未建模板者也可排班）
+  // 行结构 { staffUserId, staffName, roleKey, hasTemplate }
+  const roster = useMemo(() => {
+    const tplMap = new Map<number, any>();
+    (templates as any[]).forEach((t) => tplMap.set(t.staffUserId, t));
+    const list: { staffUserId: number; staffName: string; roleKey: string; hasTemplate: boolean }[] = [];
+    const seen = new Set<number>();
+    (allMembers as any[]).forEach((m) => {
+      seen.add(m.userId);
+      const tpl = tplMap.get(m.userId);
+      list.push({
+        staffUserId: m.userId,
+        staffName: m.name || tpl?.staffName || "",
+        roleKey: m.roleKey || tpl?.roleKey || "doctor",
+        hasTemplate: !!tpl,
+      });
+    });
+    // 兜底：有模板但名册查不到的人（历史数据），也纳入
+    (templates as any[]).forEach((t) => {
+      if (!seen.has(t.staffUserId)) {
+        list.push({ staffUserId: t.staffUserId, staffName: t.staffName, roleKey: t.roleKey || "doctor", hasTemplate: true });
+      }
+    });
+    list.sort((a, b) => roleRank(a.roleKey) - roleRank(b.roleKey) || a.staffUserId - b.staffUserId);
+    return list;
+  }, [templates, allMembers]);
+
+  // 经角色筛选后的清单
+  const filteredRoster = useMemo(
+    () => (roleFilter ? roster.filter((r) => r.roleKey === roleFilter) : roster),
+    [roster, roleFilter]
+  );
+
+  // 出现过的角色（用于筛选 chips，保持固定顺序）
+  const presentRoles = useMemo(() => {
+    const s = new Set(roster.map((r) => r.roleKey));
+    return ROLE_ORDER.filter((k) => s.has(k));
+  }, [roster]);
 
   // 计算某员工某日的实际排班 segs
   function getStaffDaySegs(staffUserId: number, date: Date): Seg[] {
@@ -253,24 +317,25 @@ export default function YabanClinicShift() {
     return Array.from({ length: 4 }, (_, i) => hm(Math.round(start + (end - start) * i / 3)));
   }, [trackRange]);
 
-  // 统计
+  // 统计（基于当前筛选后的成员）
   const stats = useMemo(() => {
     let onCnt = 0, totMin = 0, otMin = 0;
-    templates.forEach((t: any) => {
-      const segs = getStaffDaySegs(t.staffUserId, selDate);
+    filteredRoster.forEach((r) => {
+      const segs = getStaffDaySegs(r.staffUserId, selDate);
       if (segs.length > 0) {
         onCnt++;
         segs.forEach((s: Seg) => { const d = toMin(s.end) - toMin(s.start); totMin += d; if (s.isOT) otMin += d; });
       }
     });
     return { onCnt, totMin, otMin };
-  }, [templates, overrides, selDate]);
+  }, [filteredRoster, overrides, selDate]);
 
   // 打开排班抽屉
   function openSch(staffUserId: number, staffName: string, date: Date) {
     const segs = getStaffDaySegs(staffUserId, date);
     const initSegs = segs.length > 0 ? segs : templateToSegs({ workStart: bizOpen, workEnd: bizClose });
-    setSchDrawer({ open: true, staffUserId, staffName, date: toDateStr(date), segs: initSegs });
+    const roleKey = roster.find((r) => r.staffUserId === staffUserId)?.roleKey || "doctor";
+    setSchDrawer({ open: true, staffUserId, staffName, roleKey, date: toDateStr(date), segs: initSegs });
   }
 
   // 批量操作
@@ -282,8 +347,8 @@ export default function YabanClinicShift() {
     setBatchSel(next);
   }
   function batchSelectAll() {
-    if (batchSel.size === templates.length) setBatchSel(new Set());
-    else setBatchSel(new Set(templates.map((t: any) => t.staffUserId)));
+    if (batchSel.size === filteredRoster.length) setBatchSel(new Set());
+    else setBatchSel(new Set(filteredRoster.map((r) => r.staffUserId)));
   }
   function batchApplyRest() {
     if (!batchSel.size) { toast.error("请先勾选员工"); return; }
@@ -297,12 +362,12 @@ export default function YabanClinicShift() {
     const dateStr = toDateStr(selDate);
     Promise.all(Array.from(batchSel).map(id => {
       const tpl = allTemplates.find((t: any) => t.staffUserId === id);
-      if (!tpl) return Promise.resolve();
+      // 未建模板者回退使用门店营业时间作为默认班次
       return saveOverrideMut.mutateAsync({
         staffUserId: id, overrideDate: dateStr, shiftType: "custom",
-        workStart: tpl.workStart, workEnd: tpl.workEnd,
-        breakStart: tpl.breakStart ?? undefined, breakEnd: tpl.breakEnd ?? undefined,
-        overtimeStart: tpl.overtimeStart ?? undefined, overtimeEnd: tpl.overtimeEnd ?? undefined,
+        workStart: tpl?.workStart ?? bizOpen, workEnd: tpl?.workEnd ?? bizClose,
+        breakStart: tpl?.breakStart ?? undefined, breakEnd: tpl?.breakEnd ?? undefined,
+        overtimeStart: tpl?.overtimeStart ?? undefined, overtimeEnd: tpl?.overtimeEnd ?? undefined,
         tenantId: currentTenantId ?? undefined,
       });
     })).then(() => { setBatchMode(false); setBatchSel(new Set()); });
@@ -319,7 +384,7 @@ export default function YabanClinicShift() {
           </div>
           <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,.18)", borderRadius: 12, padding: 4, flexShrink: 0 }}>
             <div onClick={() => { try { sessionStorage.setItem("yaban_sched_date", toDateStr(selDate)); } catch {} setLocation("/yaban/schedule"); }} style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, color: "#eaf6ff", whiteSpace: "nowrap", cursor: "pointer" }}>顾客预约</div>
-            <div style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, background: "#fff", color: SKY_D, boxShadow: "0 1px 3px rgba(0,0,0,.1)", whiteSpace: "nowrap" }}>医生排班</div>
+            <div style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, background: "#fff", color: SKY_D, boxShadow: "0 1px 3px rgba(0,0,0,.1)", whiteSpace: "nowrap" }}>员工排班</div>
           </div>
           <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
             <button onClick={() => setLocation("/yaban/schedule/create")} aria-label="新建预约" style={{ width: 32, height: 32, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.12)", border: "none", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", cursor: "pointer" }}>
@@ -380,13 +445,31 @@ export default function YabanClinicShift() {
           border: `1px solid ${batchMode ? SKY_D : SKY}`,
         }}>{batchMode ? "退出批量" : "批量排班"}</div>
         <span style={{ fontSize: 11, color: GRAY }}>
-          在岗 {stats.onCnt}/{templates.length} 人 · 工时 {(stats.totMin / 60).toFixed(1)}h
+          在岗 {stats.onCnt}/{filteredRoster.length} 人 · 工时 {(stats.totMin / 60).toFixed(1)}h
           {stats.otMin > 0 ? ` · 加班 ${(stats.otMin / 60).toFixed(1)}h` : ""}
         </span>
       </div>
 
+      {/* 角色筛选 chips */}
+      {presentRoles.length > 1 && (
+        <div style={{ background: "#fff", padding: "8px 14px", display: "flex", gap: 7, overflowX: "auto", borderBottom: `1px solid ${LINE}`, WebkitOverflowScrolling: "touch" }}>
+          {[null, ...presentRoles].map((rk) => {
+            const active = roleFilter === rk;
+            const label = rk === null ? "全部" : roleLabel(rk);
+            const cnt = rk === null ? roster.length : roster.filter((r) => r.roleKey === rk).length;
+            return (
+              <div key={rk ?? "all"} onClick={() => setRoleFilter(rk)} style={{
+                flexShrink: 0, fontSize: 12.5, fontWeight: 600, padding: "5px 12px", borderRadius: 16, cursor: "pointer", transition: ".16s",
+                background: active ? SKY_D : "#f3f6f9", color: active ? "#fff" : "#5b6b7a",
+                border: `1px solid ${active ? SKY_D : "#e3e9ef"}`, whiteSpace: "nowrap",
+              }}>{label} {cnt}</div>
+            );
+          })}
+        </div>
+      )}
+
       {/* 时间标尺 */}
-      {templates.length > 0 && (
+      {filteredRoster.length > 0 && (
         <div style={{ background: "#fff", padding: "12px 14px 6px", borderBottom: `1px solid ${LINE}` }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: GRAY, paddingLeft: 62 }}>
             {rulerMarks.map((m, i) => <span key={i}>{m}</span>)}
@@ -394,20 +477,23 @@ export default function YabanClinicShift() {
         </div>
       )}
 
-      {/* 员工排班行 */}
-      {templates.length === 0 ? (
+      {/* 员工排班行（按角色分组） */}
+      {filteredRoster.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 0", color: GRAY }}>
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={GRAY} strokeWidth="1.5" style={{ margin: "0 auto 12px", display: "block" }}>
             <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
           </svg>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 4 }}>暂无员工排班数据</div>
-          <div style={{ fontSize: 12, color: GRAY }}>请先在员工档案中配置班次模板</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 4 }}>暂无可排班的员工</div>
+          <div style={{ fontSize: 12, color: GRAY }}>请先在员工管理中添加成员</div>
         </div>
       ) : (
-        templates.map((tpl: any) => {
-          const segs = getStaffDaySegs(tpl.staffUserId, selDate);
+        filteredRoster.map((r, idx) => {
+          // 分组小标题：仅在未筛选时、且角色变化处显示
+          const showGroupHeader = !roleFilter && (idx === 0 || filteredRoster[idx - 1].roleKey !== r.roleKey);
+          const segs = getStaffDaySegs(r.staffUserId, selDate);
           const hasShift = segs.length > 0;
-          const isBatchSel = batchSel.has(tpl.staffUserId);
+          const isBatchSel = batchSel.has(r.staffUserId);
+          const rc = roleColor(r.roleKey);
 
           let subText = "休息";
           if (hasShift) {
@@ -417,44 +503,53 @@ export default function YabanClinicShift() {
           }
 
           return (
-            <div key={tpl.staffUserId}
-              onClick={() => { if (batchMode) { toggleBatchSel(tpl.staffUserId); } else { openSch(tpl.staffUserId, tpl.staffName, selDate); } }}
-              style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${LINE}`, cursor: batchMode ? "pointer" : "default", userSelect: "none" }}
-            >
-              {batchMode && (
-                <div style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${isBatchSel ? SKY_D : "#c7d0d8"}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isBatchSel ? SKY_D : "transparent", transition: ".16s" }}>
-                  {isBatchSel && <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="1.5,5 4,8 8.5,2" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+            <div key={r.staffUserId}>
+              {showGroupHeader && (
+                <div style={{ background: BG, padding: "7px 14px 5px", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 3, height: 12, borderRadius: 2, background: rc.fg }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: rc.fg }}>{roleLabel(r.roleKey)}</span>
+                  <span style={{ fontSize: 11, color: GRAY }}>{roster.filter((x) => x.roleKey === r.roleKey).length} 人</span>
                 </div>
               )}
-              <div style={{ width: 54, flexShrink: 0, textAlign: "center" }}>
-                <div style={{ width: 30, height: 30, borderRadius: "50%", background: hasShift ? SKY_L : "#e8ecf0", color: hasShift ? SKY_D : "#9aa6b2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, margin: "0 auto 3px", filter: hasShift ? "none" : "grayscale(1)", opacity: hasShift ? 1 : 0.65 }}>{tpl.staffName.charAt(0)}</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{tpl.staffName}</div>
-                <div style={{ fontSize: 9, color: hasShift ? GRAY : "#c2ccd6", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 54 }}>{subText}</div>
-              </div>
-              <div style={{ flex: 1 }}>
-                {!hasShift ? (
-                  <div style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "repeating-linear-gradient(45deg,#e7ebef,#e7ebef 4px,#f1f4f7 4px,#f1f4f7 8px)" }}>
-                    <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#bcc6d0" }}>今日休息 · 点击排班</span>
-                  </div>
-                ) : (
-                  <div
-                    title="点击编辑排班"
-                    style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "#E2E8EF", cursor: batchMode ? "inherit" : "pointer" }}
-                  >
-                    {segs.map((s: Seg, si: number) => {
-                      const L = pctM(toMin(s.start)), W = pctM(toMin(s.end)) - L;
-                      return (
-                        <div key={si} style={{
-                          position: "absolute", left: `${L}%`, width: `${Math.max(W, 1)}%`, top: 0, height: "100%",
-                          background: s.isOT ? WARN : FREE_COLOR,
-                          display: "flex", alignItems: "center", padding: "0 4px", overflow: "hidden",
-                        }}>
-                          {s.isOT && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>加班</span>}
-                        </div>
-                      );
-                    })}
+              <div
+                onClick={() => { if (batchMode) { toggleBatchSel(r.staffUserId); } else { openSch(r.staffUserId, r.staffName, selDate); } }}
+                style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${LINE}`, cursor: batchMode ? "pointer" : "default", userSelect: "none" }}
+              >
+                {batchMode && (
+                  <div style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${isBatchSel ? SKY_D : "#c7d0d8"}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isBatchSel ? SKY_D : "transparent", transition: ".16s" }}>
+                    {isBatchSel && <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="1.5,5 4,8 8.5,2" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                   </div>
                 )}
+                <div style={{ width: 54, flexShrink: 0, textAlign: "center" }}>
+                  <div style={{ width: 30, height: 30, borderRadius: "50%", background: hasShift ? rc.bg : "#e8ecf0", color: hasShift ? rc.fg : "#9aa6b2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, margin: "0 auto 3px", filter: hasShift ? "none" : "grayscale(1)", opacity: hasShift ? 1 : 0.65 }}>{r.staffName.charAt(0)}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{r.staffName}</div>
+                  <div style={{ fontSize: 9, color: hasShift ? GRAY : "#c2ccd6", marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 54 }}>{subText}</div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  {!hasShift ? (
+                    <div style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "repeating-linear-gradient(45deg,#e7ebef,#e7ebef 4px,#f1f4f7 4px,#f1f4f7 8px)", cursor: batchMode ? "inherit" : "pointer" }}>
+                      <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#bcc6d0" }}>{r.hasTemplate ? "今日休息 · 点击排班" : "未排班 · 点击排班"}</span>
+                    </div>
+                  ) : (
+                    <div
+                      title="点击编辑排班"
+                      style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "#E2E8EF", cursor: batchMode ? "inherit" : "pointer" }}
+                    >
+                      {segs.map((s: Seg, si: number) => {
+                        const L = pctM(toMin(s.start)), W = pctM(toMin(s.end)) - L;
+                        return (
+                          <div key={si} style={{
+                            position: "absolute", left: `${L}%`, width: `${Math.max(W, 1)}%`, top: 0, height: "100%",
+                            background: s.isOT ? WARN : FREE_COLOR,
+                            display: "flex", alignItems: "center", padding: "0 4px", overflow: "hidden",
+                          }}>
+                            {s.isOT && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>加班</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -490,6 +585,7 @@ export default function YabanClinicShift() {
         <SchDrawer
           staffUserId={schDrawer.staffUserId}
           staffName={schDrawer.staffName}
+          roleKey={schDrawer.roleKey}
           clinicName={clinicName}
           date={schDrawer.date}
           initSegs={schDrawer.segs}
@@ -553,8 +649,8 @@ export default function YabanClinicShift() {
 }
 
 // ── 排班抽屉（全屏页面式）──
-function SchDrawer({ staffUserId, staffName, clinicName, date, initSegs, bizOpen, bizClose, onSaveBiz, templates, onClose, onSave }: {
-  staffUserId: number; staffName: string; clinicName: string; date: string; initSegs: Seg[];
+function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs, bizOpen, bizClose, onSaveBiz, templates, onClose, onSave }: {
+  staffUserId: number; staffName: string; roleKey: string; clinicName: string; date: string; initSegs: Seg[];
   bizOpen: string; bizClose: string; onSaveBiz: (open: string, close: string) => void; templates: any[];
   onClose: () => void;
   onSave: (segs: Seg[], rep: string, wdays: number[], repEndDate: string) => void;
@@ -626,7 +722,7 @@ function SchDrawer({ staffUserId, staffName, clinicName, date, initSegs, bizOpen
         <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, color: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <span onClick={onClose} style={{ fontSize: 14, color: "#eaf6ff", cursor: "pointer", flex: 1 }}>取消</span>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.25 }}>
-            <span style={{ fontSize: 16, fontWeight: 600 }}>医生排班</span>
+            <span style={{ fontSize: 16, fontWeight: 600 }}>员工排班</span>
             {clinicName && (
               <span style={{ fontSize: 11, color: "#dcf0fb", display: "flex", alignItems: "center", gap: 3, marginTop: 1, whiteSpace: "nowrap" }}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#dcf0fb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-3"/></svg>
@@ -637,11 +733,14 @@ function SchDrawer({ staffUserId, staffName, clinicName, date, initSegs, bizOpen
           <span style={{ flex: 1 }} />
         </div>
         <div style={{ overflowY: "auto", flex: 1, paddingBottom: 20 }}>
-          {/* 医生信息 */}
+          {/* 成员信息 */}
           <div style={{ background: "#fff", marginTop: 10, padding: "15px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 42, height: 42, borderRadius: "50%", background: SKY_L, color: SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600 }}>{staffName.charAt(0)}</div>
+            <div style={{ width: 42, height: 42, borderRadius: "50%", background: roleColor(roleKey).bg, color: roleColor(roleKey).fg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600 }}>{staffName.charAt(0)}</div>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 600, color: "#374151" }}>{staffName}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                <span style={{ fontSize: 15, fontWeight: 600, color: "#374151" }}>{staffName}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: "1px 7px", borderRadius: 10, background: roleColor(roleKey).bg, color: roleColor(roleKey).fg }}>{roleLabel(roleKey)}</span>
+              </div>
               <div style={{ fontSize: 12, color: GRAY, marginTop: 2 }}>{dateLabel}</div>
             </div>
           </div>
