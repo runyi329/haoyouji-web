@@ -182,7 +182,6 @@ export default function YabanClinicShift() {
   } | null>(null);
 
   // 班次模板弹窗
-  const [tplModal, setTplModal] = useState(false);
   const [bizOpen, setBizOpen] = useState("09:00");
   const [bizClose, setBizClose] = useState("18:00");
 
@@ -561,15 +560,7 @@ export default function YabanClinicShift() {
         })
       )}
 
-      {/* 班次模板入口 */}
-      <div onClick={() => setTplModal(true)} style={{ background: "#fff", marginTop: 8, padding: "14px", display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: `1px solid ${LINE}`, borderBottom: `1px solid ${LINE}`, cursor: "pointer" }}>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#374151" }}>营业时间 · 班次模板</div>
-          <div style={{ fontSize: 11, color: GRAY, marginTop: 3 }}>营业 {bizOpen}–{bizClose} · {allTemplates.length} 位员工，点击自定义</div>
-        </div>
-        <div style={{ color: SKY, fontSize: 20 }}>›</div>
-      </div>
-      <div style={{ textAlign: "center", fontSize: 11, color: "#aab4be", padding: 14 }}>排班后，对应时段将在「预约」视图变为可约</div>
+      <div style={{ textAlign: "center", fontSize: 11, color: "#aab4be", padding: "18px 14px" }}>排班后，对应时段将在「预约」视图变为可约</div>
 
       {/* 批量操作底栏 */}
       {batchMode && (
@@ -635,18 +626,6 @@ export default function YabanClinicShift() {
         />
       )}
 
-      {/* 班次模板弹窗 */}
-      {tplModal && (
-        <TplModal
-          bizOpen={bizOpen}
-          bizClose={bizClose}
-          templates={allTemplates}
-          onClose={() => setTplModal(false)}
-          onSave={(open, close) => { saveBizMut.mutate({ open, close, tenantId: currentTenantId ?? undefined }); setTplModal(false); }}
-          saveTemplateMut={saveTemplateMut}
-          tenantId={currentTenantId ?? undefined}
-        />
-      )}
 
       <PageTag code="P324" />
     </div>
