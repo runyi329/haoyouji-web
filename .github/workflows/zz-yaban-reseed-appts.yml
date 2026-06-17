@@ -1,0 +1,40 @@
+name: zz-yaban-reseed-appts
+on:
+  workflow_dispatch:
+jobs:
+  reseed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup ssh
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: generate reseed sql
+        run: |
+          python3 scripts/yaban_reseed_appts.py > /tmp/reseed.sql 2>/tmp/reseed.err
+          echo "=== gen stderr ==="; cat /tmp/reseed.err
+          echo "=== sql head ==="; head -c 600 /tmp/reseed.sql
+
+      - name: upload sql
+        run: |
+          scp -i ~/.ssh/id_rsa -P ${{ secrets.DEPLOY_PORT }} /tmp/reseed.sql ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/yaban_reseed.sql
+          echo "uploaded"
+
+      - name: run mysql
+        run: |
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'DBURL=$(grep -E "^DATABASE_URL=" /root/haoyouji-web/.env | sed "s/^DATABASE_URL=//;s/^\"//;s/\"$//"); \
+             USER=$(echo "$DBURL" | sed -E "s#mysql://([^:]+):.*#\1#"); \
+             PASS=$(echo "$DBURL" | sed -E "s#mysql://[^:]+:(.*)@[^@]+\$#\1#"); \
+             HOST=$(echo "$DBURL" | sed -E "s#.*@([^:/]+):.*#\1#"); \
+             PORT=$(echo "$DBURL" | sed -E "s#.*:([0-9]+)/.*#\1#"); \
+             DB=$(echo "$DBURL" | sed -E "s#.*/([^/?]+).*#\1#"); \
+             echo "host=$HOST port=$PORT db=$DB user=$USER"; \
+             mysql -h"$HOST" -P"$PORT" -u"$USER" -p"$PASS" "$DB" < /tmp/yaban_reseed.sql'
