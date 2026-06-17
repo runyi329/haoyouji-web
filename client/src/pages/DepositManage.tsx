@@ -1623,7 +1623,7 @@ export default function DepositManage() {
                                       </button>
                                     ))}
                                   </div>
-                                  {/* 第一行：金额 + 日期 + 删除 */}
+                                  {/* 第一行：金额 + 日期（各占一半） */}
                                   <div className="flex items-center gap-2">
                                     <input
                                       type="number"
@@ -1633,7 +1633,7 @@ export default function DepositManage() {
                                         next[idx] = { ...next[idx], amount: e.target.value };
                                         setRightMarginEdits(next);
                                       }}
-                                      placeholder="金额（负数=给出）"
+                                      placeholder="金额"
                                       className="flex-1 text-sm border rounded-lg px-2 py-1.5 outline-none"
                                       style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF" }}
                                     />
@@ -1645,19 +1645,12 @@ export default function DepositManage() {
                                         next[idx] = { ...next[idx], date: e.target.value };
                                         setRightMarginEdits(next);
                                       }}
-                                      className="text-xs border rounded-lg px-2 py-1.5 outline-none"
-                                      style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF", width: '130px' }}
+                                      className="flex-1 text-xs border rounded-lg px-2 py-1.5 outline-none"
+                                      style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF", WebkitAppearance: 'none' }}
                                     />
-                                    <button
-                                      onClick={() => setRightMarginEdits(rightMarginEdits.filter((_, i) => i !== idx))}
-                                      className="w-7 h-7 flex items-center justify-center rounded-full flex-shrink-0"
-                                      style={{ backgroundColor: "#FFF5F5" }}
-                                    >
-                                      <X className="w-3 h-3 text-red-400" />
-                                    </button>
                                   </div>
-                                  {/* 第二行：备注（多行输入框） */}
-                                  <div className="mt-1.5">
+                                  {/* 第二行：备注（多行）+ 删除按鈕 */}
+                                  <div className="flex items-start gap-2 mt-1.5">
                                     <textarea
                                       value={entry.label || ''}
                                       onChange={(e) => {
@@ -1667,9 +1660,16 @@ export default function DepositManage() {
                                       }}
                                       placeholder="备注（可输入多行）"
                                       rows={2}
-                                      className="w-full text-sm border rounded-lg px-2 py-1.5 outline-none resize-none"
+                                      className="flex-1 text-sm border rounded-lg px-2 py-1.5 outline-none resize-none"
                                       style={{ borderColor: "#BFDBFE", backgroundColor: "#FFFFFF", lineHeight: '1.5' }}
                                     />
+                                    <button
+                                      onClick={() => setRightMarginEdits(rightMarginEdits.filter((_, i) => i !== idx))}
+                                      className="w-7 h-7 flex items-center justify-center rounded-full flex-shrink-0 mt-0.5"
+                                      style={{ backgroundColor: "#FFF5F5" }}
+                                    >
+                                      <X className="w-3 h-3 text-red-400" />
+                                    </button>
                                   </div>
                                 </div>
                               ))}
