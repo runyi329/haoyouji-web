@@ -166,7 +166,11 @@ export default function YabanSchedule() {
     // 若在册数缺失则退回当天实际参与医生数，至少为 1。
     const docs = Math.max(memberCount || 0, stat.doctors || 0, 1);
     const capacity = docs * OPEN_MIN;
-    const r = capacity > 0 ? stat.minutes / capacity : 0;
+    const raw = capacity > 0 ? stat.minutes / capacity : 0;
+    // 颜色敏感度放大：用 gamma<1 的幂函数抬升中低占用率的视觉强度，
+    // 使 ~50% 占用率即呈现偏暖色；仍保持单调递增（越满越红）。
+    const GAMMA = 0.5;
+    const r = Math.pow(Math.max(0, Math.min(1, raw)), GAMMA);
     return Math.max(0, Math.min(1, r));
   }
 
