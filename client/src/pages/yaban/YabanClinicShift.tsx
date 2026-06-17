@@ -597,10 +597,18 @@ export default function YabanClinicShift() {
             const hasErr = validateSegs(segs, bizOpen, bizClose).some(f => f.bad || f.overlap);
             if (hasErr) { toast.error("时段有误，请调整后保存"); return; }
             const shiftType = segs.length === 0 ? "rest" : "custom";
-            const workSegs = segs.filter(s => !s.isOT);
+            const workSegs = segs.filter(s => !s.isOT).slice().sort((a, b) => toMin(a.start) - toMin(b.start));
             const otSegs = segs.filter(s => s.isOT);
             const workStart = workSegs[0]?.start ?? null;
             const workEnd = workSegs[workSegs.length - 1]?.end ?? null;
+            // 两段工作时段间的空档作为午休（break）存入，以便预约页/本页回读时恢复为两段。
+            // （当前表结构仅支持单个 break，多于两段时取第一个空档）
+            let breakStart: string | null = null, breakEnd: string | null = null;
+            for (let k = 0; k < workSegs.length - 1; k++) {
+              if (toMin(workSegs[k + 1].start) > toMin(workSegs[k].end)) {
+                breakStart = workSegs[k].end; breakEnd = workSegs[k + 1].start; break;
+              }
+            }
             const otStart = otSegs[0]?.start ?? null;
             const otEnd = otSegs[0]?.end ?? null;
             const dates: string[] = [];
@@ -621,6 +629,7 @@ export default function YabanClinicShift() {
               saveOverrideMut.mutateAsync({
                 staffUserId: schDrawer.staffUserId, overrideDate: d, shiftType,
                 workStart: workStart ?? undefined, workEnd: workEnd ?? undefined,
+                breakStart: breakStart ?? undefined, breakEnd: breakEnd ?? undefined,
                 overtimeStart: otStart ?? undefined, overtimeEnd: otEnd ?? undefined,
                 tenantId: currentTenantId ?? undefined,
               })

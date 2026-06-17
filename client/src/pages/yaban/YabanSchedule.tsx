@@ -139,18 +139,30 @@ export default function YabanSchedule() {
 
   // 计算某员工在指定日期的「有效班次」：override 优先，回退周期模板。
   // 返回 null 表示当天不可约（请假/休息，或模板未排该工作日，或全无排班）。
-  type EffShift = { workStart: number; workEnd: number } | null;
+  // 一个有效班次：整体范围 workStart~workEnd，叠加「在岗分段 segments」。
+  // 若含午休（break）且落在区间内，则拆为两段，午休时段不可约。
+  type EffShift = { workStart: number; workEnd: number; segments: [number, number][] } | null;
+  const buildShift = (ws: number, we: number, bs?: number | null, be?: number | null): EffShift => {
+    if (we <= ws) return null;
+    let segments: [number, number][] = [[ws, we]];
+    // 午休落在在岗区间内，才拆分（容错：仅当区间有效时）
+    if (bs != null && be != null && be > bs && bs > ws && be < we) {
+      segments = [[ws, bs], [be, we]];
+    }
+    return { workStart: ws, workEnd: we, segments };
+  };
   const getEffectiveShift = useMemo(() => {
+    const toMin = (t?: string | null) => (t ? timeToMin(t) : null);
     return (staffName: string, dStr: string): EffShift => {
       const tpl = shiftTemplates.find((t: any) => t.staffName === staffName);
       const staffId = tpl ? tpl.staffUserId : undefined;
-      // 1) 单日覆盖优先（按 staffUserId 命中，回退 staffName 无法匹配时跳过）
+      // 1) 单日覆盖优先（按 staffUserId 命中）
       const ov = staffId != null
         ? shiftOverrides.find((o: any) => o.staffUserId === staffId && o.overrideDate === dStr)
         : undefined;
       if (ov) {
         if (ov.shiftType === "rest") return null;       // 请假/休息：当天不可约
-        if (ov.workStart && ov.workEnd) return { workStart: timeToMin(ov.workStart), workEnd: timeToMin(ov.workEnd) };
+        if (ov.workStart && ov.workEnd) return buildShift(timeToMin(ov.workStart), timeToMin(ov.workEnd), toMin(ov.breakStart), toMin(ov.breakEnd));
         // override 无具体时段则继续回退模板
       }
       // 2) 回退周期模板（需当天星期在 workDays 内）
@@ -158,7 +170,7 @@ export default function YabanSchedule() {
         const dow = new Date(dStr).getDay();            // 0=周日 ... 6=周六
         const days: number[] = tpl.workDays || [];
         if (days.length > 0 && !days.includes(dow)) return null; // 模板当天不排班
-        if (tpl.workStart && tpl.workEnd) return { workStart: timeToMin(tpl.workStart), workEnd: timeToMin(tpl.workEnd) };
+        if (tpl.workStart && tpl.workEnd) return buildShift(timeToMin(tpl.workStart), timeToMin(tpl.workEnd), toMin(tpl.breakStart), toMin(tpl.breakEnd));
       }
       return null;
     };
@@ -446,7 +458,7 @@ function BottomSheet({ children, onClose, fullscreen }: { children: React.ReactN
 }
 
 // ── 按医生进度条视图 ──
-type EffShift = { workStart: number; workEnd: number } | null;
+type EffShift = { workStart: number; workEnd: number; segments: [number, number][] } | null;
 function DocRows({ docList, onDocClick, onApptClick, trkStart, trkEnd, pctM }: {
   docList: { name: string; appts: any[]; shift?: EffShift }[];
   onDocClick: (idx: number) => void;
@@ -471,9 +483,11 @@ function DocRows({ docList, onDocClick, onApptClick, trkStart, trkEnd, pctM }: {
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "#E2E8EF" }}>
-              {/* 在岗区间：按该医生当天实际班次着色；休息则保持灰底并标「今日休息」 */}
+              {/* 在岗区间：按该医生当天实际班次分段着色（午休空档自然留灰）；休息则标「今日休息」 */}
               {doc.shift
-                ? <div style={{ position: "absolute", top: 0, bottom: 0, left: `${pctM(doc.shift.workStart)}%`, width: `${Math.max(pctM(doc.shift.workEnd) - pctM(doc.shift.workStart), 0)}%`, background: "#A8CCE8" }} />
+                ? doc.shift.segments.map(([s0, e0], si) => (
+                    <div key={si} style={{ position: "absolute", top: 0, bottom: 0, left: `${pctM(s0)}%`, width: `${Math.max(pctM(e0) - pctM(s0), 0)}%`, background: "#A8CCE8" }} />
+                  ))
                 : <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#aab4be", background: "#EDF1F5" }}>今日休息</div>}
               {doc.shift && doc.appts.map((a2, i) => {
                 if (!a2.appointTime) return null;
@@ -536,7 +550,10 @@ function SoloView({ doc, onBack, onApptClick, onNewAppt, trkStart, trkEnd, pctM,
             <span>{hm(dS)}</span><span>{hm((dS + dE) / 2)}</span><span>{hm(dE)}</span>
           </div>
           <div style={{ position: "relative", height: 46, background: "#E6ECF2", borderRadius: 9, overflow: "hidden" }}>
-            <div style={{ position: "absolute", inset: 0, background: "#A8CCE8" }} />
+            {/* 在岗底色按分段渲染，午休空档保持灰底 */}
+            {(doc.shift ? doc.shift.segments : [[dS, dE]] as [number, number][]).map(([s0, e0], si) => (
+              <div key={si} style={{ position: "absolute", top: 0, bottom: 0, left: `${sp(s0)}%`, width: `${Math.max(sp(e0) - sp(s0), 0)}%`, background: "#A8CCE8" }} />
+            ))}
             {sorted.map((a, i) => {
               if (!a.appointTime) return null;
               const s = timeToMin(a.appointTime);
@@ -665,14 +682,12 @@ function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd,
 
   const PROJECTS = ["复诊检查","洁牙","补牙","根管治疗","拔牙","戴牙","备牙取模","种植","拆线","其他"];
 
-  // 医生当日在岗范围 [lo, hi]，单位分钟。
+  // 医生当日有效班次（含在岗分段 segments）。
   // 与员工排班联动：override（单日调班/请假）优先，回退周期模板；休息/未排班返回 null。
-  const docRange = (() => {
-    if (!doctor) return null;
-    const eff = getShift(doctor, date);
-    if (!eff) return null;
-    return [eff.workStart, eff.workEnd] as [number, number];
-  })();
+  const eff = doctor ? getShift(doctor, date) : null;
+  const docRange = eff ? ([eff.workStart, eff.workEnd] as [number, number]) : null;
+  const segs = eff?.segments ?? [];
+  const inShift = (lo: number, hi: number) => segs.some(([s0, e0]) => lo >= s0 && hi <= e0); // 区间完全落在某在岗段内
 
   // 该医生当天已占用时段 [start, end, name, proj]
   const busy: [number, number, string, string][] = dayAppts
@@ -720,15 +735,17 @@ function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd,
     if (docRange) {
       if (selStart < docRange[0]) warns.push(`早于医生排班开始（${hm(docRange[0])}），将记为提前接诊`);
       if (selEnd > docRange[1]) warns.push(`晚于医生排班结束（${hm(docRange[1])}），将记为加时`);
+      if (selStart !== null && selEnd !== null && docRange && selStart >= docRange[0] && selEnd <= docRange[1] && !inShift(selStart, selEnd))
+        warns.push("所选时段含医生午休/休息段，该段不接诊");
     }
   }
 
-  // 时段格子
+  // 时段格子：outside 表示不可约（含午休空档）——仅当格子落在在岗分段内才可约。
   const cells: { t: number; busy: boolean; outside: boolean }[] = [];
   if (docRange) {
     for (let t = GRID_LO; t + STEP <= GRID_HI; t += STEP) {
       const isBusy = busy.some(b => t < b[1] && t + STEP > b[0]);
-      cells.push({ t, busy: isBusy, outside: t < docRange[0] || t + STEP > docRange[1] });
+      cells.push({ t, busy: isBusy, outside: !inShift(t, t + STEP) });
     }
   }
 
