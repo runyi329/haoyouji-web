@@ -28,14 +28,15 @@ const FREE_COLOR = "#A8CCE8";
 const ROLE_LABEL: Record<string, string> = {
   owner: "院长/股东", doctor: "医生", nurse: "护士", assistant: "助理", receptionist: "前台", finance: "财务",
 };
-// fg=主色(文字/标签) bg=浅底(头像底) bar=进度条填充色(保证白字可读)
+// 一套协调色板：色相均匀分布，明度/饱和度统一控制，整排成套和谐
+// fg 主色文字 S50%/L43% · bg 浅底 S55%/L94% · bar 进度条 S58%/L60%
 const ROLE_COLOR: Record<string, { fg: string; bg: string; bar: string }> = {
-  owner: { fg: "#1366A8", bg: "#E7F1FB", bar: "#5B9BD5" },
-  doctor: { fg: "#1E88D6", bg: "#EAF4FE", bar: "#5BB0EA" },
-  nurse: { fg: "#118C8C", bg: "#E0F4F2", bar: "#3FBFBC" },
-  assistant: { fg: "#159E9E", bg: "#E0F4F2", bar: "#52CBC7" },
-  receptionist: { fg: "#5B53C7", bg: "#ECEAFB", bar: "#8E87E0" },
-  finance: { fg: "#2E8B57", bg: "#E2F2E9", bar: "#5CB57F" },
+  owner: { fg: "#3749A4", bg: "#E7EAF8", bar: "#5E72D4" },        // 靖蓝
+  doctor: { fg: "#3777A4", bg: "#E7F1F8", bar: "#5EA3D4" },       // 蓝
+  nurse: { fg: "#379BA4", bg: "#E7F7F8", bar: "#5ECAD4" },        // 青
+  assistant: { fg: "#37A477", bg: "#E7F8F1", bar: "#5ED4A3" },    // 薄荷绿
+  receptionist: { fg: "#6537A4", bg: "#EEE7F8", bar: "#8F5ED4" }, // 薰衣草紫
+  finance: { fg: "#A47737", bg: "#F8F1E7", bar: "#D4A35E" },      // 暖琅珀
 };
 const ROLE_ORDER = ["owner", "doctor", "nurse", "assistant", "receptionist", "finance"];
 function roleLabel(k: string) { return ROLE_LABEL[k] || "员工"; }
