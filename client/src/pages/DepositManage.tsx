@@ -562,7 +562,7 @@ export default function DepositManage() {
     setRightEditMode(true);
   };
 
-  const handleSaveRightMargin = () => {
+  const handleSaveRightMargin = async () => {
     if (!selectedTagForRight) return;
     setRightSaving(true);
     // 支持负数（给出保证金），过滤掉金额为空的行
@@ -572,31 +572,58 @@ export default function DepositManage() {
       ? JSON.stringify(validEntries.map(e => ({ coin: e.coin || '元', amount: parseFloat(e.amount), label: e.label || '', date: e.date || todayStr })))
       : undefined;
     // 保留其他配置字段，只更新 marginByCoin（余额改为自动读取，不保存 accountBalance/balanceDate）
-    saveTagConfigMutation.mutate({
-      ledgerId,
-      tagName: selectedTagForRight,
-      marginByCoin: marginByCoinJson,
-      initialAmount: rightTagConfig?.initial_amount as string | undefined,
-      accountMultiplier: rightTagConfig?.account_multiplier as string | undefined,
-      marginBase: (rightTagConfig as any)?.margin_base as string | undefined, // 保留保证金基数，不覆盖
-    });
+    try {
+      await saveTagConfigMutation.mutateAsync({
+        ledgerId,
+        tagName: selectedTagForRight,
+        marginByCoin: marginByCoinJson,
+        initialAmount: rightTagConfig?.initial_amount as string | undefined,
+        accountMultiplier: rightTagConfig?.account_multiplier as string | undefined,
+        marginBase: (rightTagConfig as any)?.margin_base as string | undefined,
+      });
+      // 写入操作日志
+      const detail = validEntries.length > 0
+        ? validEntries.map(e => `${e.coin} ${e.amount}${e.label ? ' (' + e.label + ')' : ''}`).join('、')
+        : '清空保证金';
+      await addMarginLogMutation.mutateAsync({
+        ledgerId,
+        tagName: selectedTagForRight,
+        action: '修改保证金',
+        detail,
+      });
+      refetchMarginLogs();
+    } catch (_) { /* 错误已由 saveTagConfigMutation.onError 处理 */ }
   };
 
   // 保存初始金额/倍数/保证金基数（余额改为自动读取，不再保存）
-  const handleSaveBalanceInfo = () => {
+  const handleSaveBalanceInfo = async () => {
     if (!selectedTagForRight) return;
     setRightSaving(true);
     // 保存时保持当前保证金数据不变
     const marginByCoinJson = rightTagConfig?.margin_by_coin as string | undefined;
-    saveTagConfigMutation.mutate({
-      ledgerId,
-      tagName: selectedTagForRight,
-      marginByCoin: marginByCoinJson,
-      initialAmount: rightInitialEdit || undefined,
-      accountMultiplier: rightMultiplierEdit || "1",
-      marginBase: rightMarginBaseEdit || undefined,
-    });
-    setRightBalanceEditMode(false);
+    try {
+      await saveTagConfigMutation.mutateAsync({
+        ledgerId,
+        tagName: selectedTagForRight,
+        marginByCoin: marginByCoinJson,
+        initialAmount: rightInitialEdit || undefined,
+        accountMultiplier: rightMultiplierEdit || "1",
+        marginBase: rightMarginBaseEdit || undefined,
+      });
+      setRightBalanceEditMode(false);
+      // 写入操作日志
+      const parts = [];
+      if (rightInitialEdit) parts.push(`初始金额: ${rightInitialEdit}`);
+      if (rightMultiplierEdit) parts.push(`倍数: ${rightMultiplierEdit}x`);
+      if (rightMarginBaseEdit) parts.push(`保证金基数: ${rightMarginBaseEdit}`);
+      await addMarginLogMutation.mutateAsync({
+        ledgerId,
+        tagName: selectedTagForRight,
+        action: '修改设置',
+        detail: parts.join('、') || '更新设置',
+      });
+      refetchMarginLogs();
+    } catch (_) { /* 错误已由 saveTagConfigMutation.onError 处理 */ }
   };
 
   const handleClearRightMargin = () => {
