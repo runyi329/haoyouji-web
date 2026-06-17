@@ -144,18 +144,6 @@ export default function YabanClinicShift() {
     window.addEventListener("resize", update);
     return () => { ro.disconnect(); window.removeEventListener("resize", update); };
   }, []);
-  // 手动双击检测（移动端触摸不触发原生 dblclick）：记录上次点击时间与目标
-  const lastTapRef = useRef<{ id: number; t: number }>({ id: -1, t: 0 });
-  function handleRowTap(staffUserId: number, staffName: string) {
-    const now = Date.now();
-    const last = lastTapRef.current;
-    if (last.id === staffUserId && now - last.t < 350) {
-      lastTapRef.current = { id: -1, t: 0 };
-      openSch(staffUserId, staffName, selDate);
-    } else {
-      lastTapRef.current = { id: staffUserId, t: now };
-    }
-  }
   const weekStart = useMemo(() => getWeekStart(weekOffset), [weekOffset]);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
   const weekStartStr = toDateStr(weekStart);
@@ -416,7 +404,7 @@ export default function YabanClinicShift() {
 
           return (
             <div key={tpl.staffUserId}
-              onClick={() => { if (batchMode) { toggleBatchSel(tpl.staffUserId); } else { handleRowTap(tpl.staffUserId, tpl.staffName); } }}
+              onClick={() => { if (batchMode) { toggleBatchSel(tpl.staffUserId); } else { openSch(tpl.staffUserId, tpl.staffName, selDate); } }}
               style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${LINE}`, cursor: batchMode ? "pointer" : "default", userSelect: "none" }}
             >
               {batchMode && (
@@ -432,11 +420,11 @@ export default function YabanClinicShift() {
               <div style={{ flex: 1 }}>
                 {!hasShift ? (
                   <div style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "repeating-linear-gradient(45deg,#e7ebef,#e7ebef 4px,#f1f4f7 4px,#f1f4f7 8px)" }}>
-                    <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#bcc6d0" }}>今日休息 · 双击排班</span>
+                    <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#bcc6d0" }}>今日休息 · 点击排班</span>
                   </div>
                 ) : (
                   <div
-                    title="双击编辑排班"
+                    title="点击编辑排班"
                     style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "#E2E8EF", cursor: batchMode ? "inherit" : "pointer" }}
                   >
                     {segs.map((s: Seg, si: number) => {
