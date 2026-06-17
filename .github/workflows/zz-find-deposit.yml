@@ -1,0 +1,40 @@
+name: zz-find-deposit
+on:
+  workflow_dispatch:
+
+jobs:
+  find:
+    runs-on: ubuntu-latest
+    steps:
+      - name: find deposit record
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            mysql -u root -pMiao@20190603 crm_db 2>/dev/null <<'SQL'
+
+            -- 1. 找所有含 deposit/保证金/pledge/security 的表名
+            SELECT TABLE_NAME FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA='crm_db'
+              AND (TABLE_NAME LIKE '%deposit%'
+                OR TABLE_NAME LIKE '%pledge%'
+                OR TABLE_NAME LIKE '%security%'
+                OR TABLE_NAME LIKE '%bond%'
+                OR TABLE_NAME LIKE '%guarantee%'
+                OR TABLE_NAME LIKE '%bzj%'
+                OR TABLE_NAME LIKE '%margin%'
+                OR TABLE_NAME LIKE '%setting%');
+
+            -- 2. 查 ledger_members 里账本37的成员（找三郎的 userId）
+            SELECT lm.id, lm.ledgerId, lm.userId, lm.role, u.name, u.username
+            FROM ledger_members lm
+            LEFT JOIN users u ON u.id = lm.userId
+            WHERE lm.ledgerId = 37;
+
+            -- 3. 查 ledgers 表账本37基本信息
+            SELECT id, name, type, status, created_at FROM ledgers WHERE id = 37;
+
+            SQL
