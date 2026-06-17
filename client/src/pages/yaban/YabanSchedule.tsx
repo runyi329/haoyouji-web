@@ -549,7 +549,22 @@ function SoloView({ doc, onBack, onApptClick, onNewAppt, trkStart, trkEnd, pctM,
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: GRAY, marginBottom: 3 }}>
             <span>{hm(dS)}</span><span>{hm((dS + dE) / 2)}</span><span>{hm(dE)}</span>
           </div>
-          <div style={{ position: "relative", height: 46, background: "#E6ECF2", borderRadius: 9, overflow: "hidden" }}>
+          <div
+            onClick={doc.shift ? (ev) => {
+              // 点击进度条在岗轨道：按点击位置换算起始时间（取整到 30 分），售出新建预约。
+              const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+              const ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+              let mins = dS + ratio * (dE - dS);
+              mins = Math.round(mins / 30) * 30;
+              // 落到最近的在岗分段内（避免落在午休空档）
+              const segs2 = doc.shift!.segments;
+              const inSeg = segs2.find(([s0, e0]) => mins >= s0 && mins < e0);
+              const start = inSeg ? mins : (segs2[0] ? segs2[0][0] : dS);
+              const segEnd = (inSeg || segs2[0] || [dS, dE])[1];
+              onNewAppt(doc.name, start, Math.min(start + 60, segEnd));
+            } : undefined}
+            style={{ position: "relative", height: 46, background: "#E6ECF2", borderRadius: 9, overflow: "hidden", cursor: doc.shift ? "pointer" : "default" }}
+          >
             {/* 在岗底色按分段渲染，午休空档保持灰底 */}
             {(doc.shift ? doc.shift.segments : [[dS, dE]] as [number, number][]).map(([s0, e0], si) => (
               <div key={si} style={{ position: "absolute", top: 0, bottom: 0, left: `${sp(s0)}%`, width: `${Math.max(sp(e0) - sp(s0), 0)}%`, background: "#A8CCE8" }} />
@@ -567,6 +582,12 @@ function SoloView({ doc, onBack, onApptClick, onNewAppt, trkStart, trkEnd, pctM,
               );
             })}
           </div>
+          {doc.shift && (
+            <div style={{ marginTop: 8, fontSize: 12, color: SKY_D, display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 16, height: 16, borderRadius: "50%", background: SKY_L, color: SKY_D, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>+</span>
+              点击上方在岗时段可新增预约
+            </div>
+          )}
         </div>
       </div>
       <div style={{ borderTop: `8px solid ${BG}` }}>
@@ -587,11 +608,6 @@ function SoloView({ doc, onBack, onApptClick, onNewAppt, trkStart, trkEnd, pctM,
             </div>
           );
         })}
-        <div onClick={() => onNewAppt(doc.name, OPEN_END, OPEN_END + 60)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 14px", borderBottom: `1px solid ${LINE}`, cursor: "pointer" }}>
-          <div style={{ width: 78, flexShrink: 0, fontSize: 12, color: "#bcc6d0", fontWeight: 600, lineHeight: 1.5 }}>{hm(OPEN_END)}</div>
-          <div style={{ width: 4, alignSelf: "stretch", borderRadius: 2, flexShrink: 0, background: "#e3e8ed" }} />
-          <div style={{ flex: 1 }}><div style={{ fontSize: 13, color: "#bcc6d0", fontWeight: 500 }}>空档 · 可约 · 点击新增</div></div>
-        </div>
       </div>
     </div>
   );
