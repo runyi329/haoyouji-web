@@ -97,6 +97,8 @@ export default function YabanSchedule() {
     tenantId: currentTenantId ?? undefined,
   });
   const { data: members = [] } = trpc.yabanAppointment.listMembers.useQuery({ tenantId: currentTenantId ?? undefined });
+  // 历史负荷基准（分位数）：用于热力图自适应着色，以历史中位数为中心向两边铺色
+  const { data: baseline } = trpc.yabanAppointment.loadBaseline.useQuery({ tenantId: currentTenantId ?? undefined });
 
   // 按医生分组
   const docMap = new Map<string, { name: string; appts: typeof appointments }>();
@@ -154,9 +156,24 @@ export default function YabanSchedule() {
   }
   const weekDates = getWeekDates();
 
+  // 热力图负荷：以历史分位数为基准（P10 最闲、P50 中间、P90 最满），而非写死的 /8
   function cellLoad(d: Date): number {
     const cnt = ((monthStats as Record<string, number>)[toDateStr(d)]) || 0;
-    return Math.min(1, cnt / 8);
+    if (cnt <= 0) return 0;
+    const p10 = baseline?.p10 ?? 1;
+    const p50 = baseline?.p50 ?? 4;
+    const p90 = baseline?.p90 ?? 12;
+    let r: number;
+    if (cnt <= p10) {
+      r = 0.05 + 0.2 * (cnt / Math.max(1, p10));
+    } else if (cnt <= p50) {
+      r = 0.25 + 0.25 * ((cnt - p10) / Math.max(1, p50 - p10));
+    } else if (cnt <= p90) {
+      r = 0.5 + 0.4 * ((cnt - p50) / Math.max(1, p90 - p50));
+    } else {
+      r = 0.9 + 0.1 * Math.min(1, (cnt - p90) / Math.max(1, p90));
+    }
+    return Math.max(0.05, Math.min(1, r));
   }
 
   // 详情预约

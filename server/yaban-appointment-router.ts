@@ -109,6 +109,46 @@ export const yabanAppointmentRouter = router({
       return result;
     }),
 
+  // 历史预约负荷基准（用于日历热力图自适应着色）
+  // 取该院全部历史「营业日」每日预约数，计算分位数 P10/P50/P90 作为颜色锚点
+  loadBaseline: protectedProcedure
+    .input(z.object({
+      tenantId: z.number().int().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      const fallback = { p10: 1, p50: 4, p90: 12, sampleDays: 0 };
+      if (!conn) return fallback;
+      const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
+      // 每个营业日（有预约的日子）的预约数；排除已取消/爽约
+      const [rows] = (await conn.execute(
+        `SELECT appoint_date, COUNT(*) AS cnt
+         FROM yaban_appointment
+         WHERE tenant_id = ?
+           AND status NOT IN ('cancelled','missed')
+         GROUP BY appoint_date
+         HAVING cnt > 0`,
+        [tenantId]
+      )) as any;
+      const counts = (rows as any[]).map((r) => Number(r.cnt || 0)).filter((n) => n > 0).sort((a, b) => a - b);
+      if (counts.length === 0) return fallback;
+      const q = (p: number) => {
+        const idx = (counts.length - 1) * p;
+        const lo = Math.floor(idx);
+        const hi = Math.ceil(idx);
+        if (lo === hi) return counts[lo];
+        return counts[lo] + (counts[hi] - counts[lo]) * (idx - lo);
+      };
+      let p10 = q(0.10);
+      let p50 = q(0.50);
+      let p90 = q(0.90);
+      // 防御：保证 p10 < p50 < p90，避免样本极端时区间塌缩
+      if (p90 <= p10) { p90 = p10 + 1; }
+      if (p50 <= p10) { p50 = (p10 + p90) / 2; }
+      if (p50 >= p90) { p50 = (p10 + p90) / 2; }
+      return { p10, p50, p90, sampleDays: counts.length };
+    }),
+
   // 新建预约
   create: protectedProcedure
     .input(z.object({
