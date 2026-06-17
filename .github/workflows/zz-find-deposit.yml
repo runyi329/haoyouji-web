@@ -16,25 +16,22 @@ jobs:
           script: |
             mysql -u root -pMiao@20190603 crm_db 2>/dev/null <<'SQL'
 
-            -- 1. 找所有含 deposit/保证金/pledge/security 的表名
+            -- 1. 列出所有与 ledger/account/钱脉 相关的表
             SELECT TABLE_NAME FROM information_schema.TABLES
             WHERE TABLE_SCHEMA='crm_db'
-              AND (TABLE_NAME LIKE '%deposit%'
-                OR TABLE_NAME LIKE '%pledge%'
-                OR TABLE_NAME LIKE '%security%'
-                OR TABLE_NAME LIKE '%bond%'
-                OR TABLE_NAME LIKE '%guarantee%'
-                OR TABLE_NAME LIKE '%bzj%'
-                OR TABLE_NAME LIKE '%margin%'
-                OR TABLE_NAME LIKE '%setting%');
+              AND (TABLE_NAME LIKE '%ledger%'
+                OR TABLE_NAME LIKE '%account%'
+                OR TABLE_NAME LIKE '%wallet%'
+                OR TABLE_NAME LIKE '%fund%');
 
-            -- 2. 查 ledger_members 里账本37的成员（找三郎的 userId）
-            SELECT lm.id, lm.ledgerId, lm.userId, lm.role, u.name, u.username
-            FROM ledger_members lm
-            LEFT JOIN users u ON u.id = lm.userId
-            WHERE lm.ledgerId = 37;
+            -- 2. 全库搜索含"三郎"的记录（所有表的 name/remark/note/alias 列）
+            SELECT '三郎搜索-users' AS src, id, name, username FROM users WHERE name LIKE '%三郎%' OR username LIKE '%三郎%';
+            SELECT '三郎搜索-ledger_members' AS src, id, ledgerId, userId, role FROM ledger_members WHERE role LIKE '%三郎%';
 
-            -- 3. 查 ledgers 表账本37基本信息
-            SELECT id, name, type, status, created_at FROM ledgers WHERE id = 37;
+            -- 3. 查 ledger_backup_settings 表结构（可能存保证金设置）
+            DESCRIBE ledger_backup_settings;
+
+            -- 4. 查账本37相关的 ledger_backup_settings 数据
+            SELECT * FROM ledger_backup_settings WHERE ledgerId = 37 OR ledger_id = 37 LIMIT 20;
 
             SQL
