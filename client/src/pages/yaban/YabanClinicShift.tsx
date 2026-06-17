@@ -115,9 +115,22 @@ function templateToSegs(tpl: {
 
 export default function YabanClinicShift() {
   const [, setLocation] = useLocation();
-  const today = new Date();
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [selDate, setSelDate] = useState(today);
+  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  // 从顾客预约页带过来的选中日期（sessionStorage），否则默认今天
+  const initDate = useMemo(() => {
+    try {
+      const s = sessionStorage.getItem("yaban_shift_date");
+      if (s) { const [y, m, dd] = s.split("-").map(Number); if (y && m && dd) { const d = new Date(y, m - 1, dd); d.setHours(0, 0, 0, 0); return d; } }
+    } catch {}
+    return today;
+  }, [today]);
+  // 计算初始周偏移，使带过来的日期落在可见周内
+  const initWeekOffset = useMemo(() => {
+    const ms = initDate.getTime() - getWeekStart(0).getTime();
+    return Math.floor(ms / (7 * 24 * 3600 * 1000));
+  }, [initDate]);
+  const [weekOffset, setWeekOffset] = useState(initWeekOffset);
+  const [selDate, setSelDate] = useState(initDate);
   const weekStart = useMemo(() => getWeekStart(weekOffset), [weekOffset]);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
   const weekStartStr = toDateStr(weekStart);
@@ -278,7 +291,7 @@ export default function YabanClinicShift() {
             <div style={{ fontSize: 22, width: 28, cursor: "pointer" }} onClick={() => setLocation("/yaban/schedule")}>‹</div>
           </div>
           <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,.18)", borderRadius: 12, padding: 4, flexShrink: 0 }}>
-            <div onClick={() => setLocation("/yaban/schedule")} style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, color: "#eaf6ff", whiteSpace: "nowrap", cursor: "pointer" }}>顾客预约</div>
+            <div onClick={() => { try { sessionStorage.setItem("yaban_sched_date", toDateStr(selDate)); } catch {} setLocation("/yaban/schedule"); }} style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, color: "#eaf6ff", whiteSpace: "nowrap", cursor: "pointer" }}>顾客预约</div>
             <div style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, background: "#fff", color: SKY_D, boxShadow: "0 1px 3px rgba(0,0,0,.1)", whiteSpace: "nowrap" }}>医生排班</div>
           </div>
           <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
@@ -577,9 +590,9 @@ function SchDrawer({ staffUserId, staffName, date, initSegs, bizOpen, bizClose, 
   const dateLabel = `${dateObj.getFullYear()}年${dateObj.getMonth() + 1}月${dateObj.getDate()}日 周${WK_FULL[dateObj.getDay()]}`;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "stretch", justifyContent: "center", zIndex: 50 }}>
+    <div onClick={(e) => { e.stopPropagation(); onClose(); }} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "stretch", justifyContent: "center", zIndex: 200 }}>
       <style>{`@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style>
-      <div style={{ background: BG, width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", animation: "slideUp .25s" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: BG, width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", animation: "slideUp .25s" }}>
         <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, color: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <span onClick={onClose} style={{ fontSize: 14, color: "#eaf6ff", cursor: "pointer" }}>取消</span>
           <span style={{ fontSize: 16, fontWeight: 600 }}>医生排班</span>

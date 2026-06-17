@@ -6,7 +6,7 @@
  * 数据：真实 API（yabanAppointment.listByDate / monthStats / listMembers）
  * 无模拟数据，无 emoji
  */
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -77,8 +77,16 @@ function fmtApptRange(a: any): string {
 
 export default function YabanSchedule() {
   const [, setLocation] = useLocation();
-  const today = new Date();
-  const [selDate, setSelDate] = useState(today);
+  const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  // 优先读排班页回传的选中日期（两页日期保持一致）
+  const initSelDate = useMemo(() => {
+    try {
+      const s = sessionStorage.getItem("yaban_sched_date");
+      if (s) { const [y, m, dd] = s.split("-").map(Number); if (y && m && dd) { const d = new Date(y, m - 1, dd); d.setHours(0, 0, 0, 0); return d; } }
+    } catch {}
+    return today;
+  }, [today]);
+  const [selDate, setSelDate] = useState(initSelDate);
   const [calMode, setCalMode] = useState<"week"|"month">("week");
   const [monthCursor, setMonthCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [apptView, setApptView] = useState<"doc"|"time">("doc");
@@ -210,7 +218,7 @@ export default function YabanSchedule() {
           </div>
           <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,.18)", borderRadius: 12, padding: 4, flexShrink: 0 }}>
             <div style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, background: "#fff", color: SKY_D, boxShadow: "0 1px 3px rgba(0,0,0,.1)", whiteSpace: "nowrap" }}>顾客预约</div>
-            <div onClick={() => setLocation("/yaban/clinic-shift")} style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, color: "#eaf6ff", whiteSpace: "nowrap", cursor: "pointer" }}>医生排班</div>
+            <div onClick={() => { try { sessionStorage.setItem("yaban_shift_date", toDateStr(selDate)); } catch {} setLocation("/yaban/clinic-shift"); }} style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, color: "#eaf6ff", whiteSpace: "nowrap", cursor: "pointer" }}>医生排班</div>
           </div>
           <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
             <button onClick={() => setNewModal({ open: true })} aria-label="新建预约" style={{ width: 32, height: 32, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.12)", border: "none", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", cursor: "pointer" }}>
