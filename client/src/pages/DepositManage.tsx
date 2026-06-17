@@ -1175,7 +1175,7 @@ export default function DepositManage() {
                                         style={{ borderBottom: '1px solid #E5E7EB' }}
                                       >
                                         {/* 左：「保证金」 + 日期 + 增加/减少标签同一行 + 备注在下一行 */}
-                                        <div className="flex flex-col">
+                                        <div className="flex flex-col min-w-0 flex-1 mr-2">
                                           <div className="flex items-center gap-1.5">
                                             <span className="text-xs font-medium text-gray-700">保证金</span>
                                             <span className="text-xs" style={{ color: '#2563EB' }}>
@@ -1191,7 +1191,7 @@ export default function DepositManage() {
                                               {amount < 0 ? '减少' : '增加'}
                                             </span>
                                           </div>
-                                          {label ? <span className="text-[10px] text-gray-400 mt-0.5">{label}</span> : null}
+                                          {label ? <span className="text-[10px] text-gray-400 mt-0.5 break-all" style={{ maxWidth: '160px' }}>{label}</span> : null}
                                         </div>
                                         {/* 右：上行原币金额，下行折合人民币（元）或折合 U（其他币种） */}
                                         <div className="flex flex-col items-end">
