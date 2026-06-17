@@ -279,8 +279,17 @@ export default function YabanClinicShift() {
             <div onClick={() => setLocation("/yaban/schedule")} style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, color: "#eaf6ff", whiteSpace: "nowrap", cursor: "pointer" }}>顾客预约</div>
             <div style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, background: "#fff", color: SKY_D, boxShadow: "0 1px 3px rgba(0,0,0,.1)", whiteSpace: "nowrap" }}>医生排班</div>
           </div>
-          <YabanClinicHeader compact />
+          <div style={{ width: 28 }} aria-hidden />
         </div>
+        <YabanClinicHeader
+          asBar
+          compact
+          rightSlot={
+            <span style={{ whiteSpace: "nowrap" }}>
+              {weekDates[0].getMonth() + 1}月{weekDates[0].getDate()}日 – {weekDates[6].getMonth() + 1}月{weekDates[6].getDate()}日 · 在岗 {stats.onCnt} 人
+            </span>
+          }
+        />
       </div>
 
       {/* 周导航 */}

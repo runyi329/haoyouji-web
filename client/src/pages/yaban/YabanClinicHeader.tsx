@@ -6,8 +6,13 @@
  *   - 有多家医院：可点击展开下拉切换；只有一家：仅展示不可切换。
  *   - 模拟医院附“模拟”标签，便于识别演示数据。
  *   - 切换通过 useYabanClinic 广播，跨页面/组件同步。
+ *
+ * 统一用法（推荐）：以「整行栏模式」asBar 放在顶栏第一行下方，
+ *   左侧固定为医院切换胶囊，右侧 rightSlot 放该页上下文信息（日期/统计等），
+ *   使整条栏左右撑满、视觉饱满，且所有页面位置一致。
  */
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { Building2, ChevronDown, Check } from "lucide-react";
 import { useYabanClinic, YABAN_MODEL_TENANT_ID } from "./useYabanClinic";
 
@@ -15,9 +20,18 @@ interface Props {
   /** 紧凑模式：用于嵌在已有标题栏内 */
   compact?: boolean;
   className?: string;
+  /** 整行栏模式：组件自身渲染为一条左右撑满的“医院上下文栏”，右侧可放 rightSlot */
+  asBar?: boolean;
+  /** 整行栏模式下，右侧的上下文信息（如日期 / 统计），可选 */
+  rightSlot?: ReactNode;
 }
 
-export default function YabanClinicHeader({ compact = false, className = "" }: Props) {
+export default function YabanClinicHeader({
+  compact = false,
+  className = "",
+  asBar = false,
+  rightSlot = null,
+}: Props) {
   const { clinics, current, hasMultiple, selectClinic } = useYabanClinic();
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -35,8 +49,9 @@ export default function YabanClinicHeader({ compact = false, className = "" }: P
   const display = current.shortName?.trim() || current.name?.trim() || `门店 ${current.tenantId}`;
   const isModel = current.tenantId === YABAN_MODEL_TENANT_ID;
 
-  return (
-    <div ref={boxRef} className={`relative ${className}`}>
+  // 医院切换胶囊（核心可点击元素）
+  const pill = (
+    <div ref={boxRef} className="relative">
       <button
         type="button"
         onClick={() => hasMultiple && setOpen((v) => !v)}
@@ -109,4 +124,21 @@ export default function YabanClinicHeader({ compact = false, className = "" }: P
       `}</style>
     </div>
   );
+
+  // 整行栏模式：左=切换胶囊，右=上下文信息，左右撑满
+  if (asBar) {
+    return (
+      <div className={`mt-2.5 flex items-center justify-between gap-3 ${className}`}>
+        {pill}
+        {rightSlot != null && (
+          <div className="flex min-w-0 items-center gap-2 text-[12px] font-medium text-white/85">
+            {rightSlot}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 兼容旧用法：仅返回胶囊
+  return <div className={className}>{pill}</div>;
 }

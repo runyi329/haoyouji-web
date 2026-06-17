@@ -168,9 +168,15 @@ export default function YabanSchedule() {
           </div>
           <div onClick={() => setNewModal({ open: true })} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 34, padding: "0 12px", borderRadius: 9, background: "rgba(255,255,255,.18)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>+ 新建</div>
         </div>
-        <div style={{ marginTop: 10 }}>
-          <YabanClinicHeader compact />
-        </div>
+        <YabanClinicHeader
+          asBar
+          compact
+          rightSlot={
+            <span style={{ whiteSpace: "nowrap" }}>
+              {selDate.getMonth() + 1}月{selDate.getDate()}日 · {appointments.length} 个预约
+            </span>
+          }
+        />
       </div>
 
       {/* 周历 / 月历 */}
