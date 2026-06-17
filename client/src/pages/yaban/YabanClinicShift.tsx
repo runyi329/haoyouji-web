@@ -473,7 +473,7 @@ export default function YabanClinicShift() {
       {/* 时间标尺 */}
       {filteredRoster.length > 0 && (
         <div style={{ background: "#fff", padding: "12px 14px 6px", borderBottom: `1px solid ${LINE}` }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: GRAY, paddingLeft: 62 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: GRAY, paddingLeft: 49 }}>
             {rulerMarks.map((m, i) => <span key={i}>{m}</span>)}
           </div>
         </div>
@@ -489,9 +489,7 @@ export default function YabanClinicShift() {
           <div style={{ fontSize: 12, color: GRAY }}>请先在员工管理中添加成员</div>
         </div>
       ) : (
-        filteredRoster.map((r, idx) => {
-          // 分组小标题：仅在未筛选时、且角色变化处显示
-          const showGroupHeader = !roleFilter && (idx === 0 || filteredRoster[idx - 1].roleKey !== r.roleKey);
+        filteredRoster.map((r) => {
           const segs = getStaffDaySegs(r.staffUserId, selDate);
           const hasShift = segs.length > 0;
           const isBatchSel = batchSel.has(r.staffUserId);
@@ -505,54 +503,47 @@ export default function YabanClinicShift() {
           }
 
           return (
-            <div key={r.staffUserId}>
-              {showGroupHeader && (
-                <div style={{ background: BG, padding: "7px 14px 5px", display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 3, height: 12, borderRadius: 2, background: rc.fg }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: rc.fg }}>{roleLabel(r.roleKey)}</span>
-                  <span style={{ fontSize: 11, color: GRAY }}>{roster.filter((x) => x.roleKey === r.roleKey).length} 人</span>
+            <div
+              key={r.staffUserId}
+              onClick={() => { if (batchMode) { toggleBatchSel(r.staffUserId); } else { openSch(r.staffUserId, r.staffName, selDate); } }}
+              style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 11, borderBottom: `1px solid ${LINE}`, cursor: batchMode ? "pointer" : "default", userSelect: "none" }}
+            >
+              {batchMode && (
+                <div style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${isBatchSel ? SKY_D : "#c7d0d8"}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isBatchSel ? SKY_D : "transparent", transition: ".16s" }}>
+                  {isBatchSel && <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="1.5,5 4,8 8.5,2" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                 </div>
               )}
-              <div
-                onClick={() => { if (batchMode) { toggleBatchSel(r.staffUserId); } else { openSch(r.staffUserId, r.staffName, selDate); } }}
-                style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${LINE}`, cursor: batchMode ? "pointer" : "default", userSelect: "none" }}
-              >
-                {batchMode && (
-                  <div style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${isBatchSel ? SKY_D : "#c7d0d8"}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isBatchSel ? SKY_D : "transparent", transition: ".16s" }}>
-                    {isBatchSel && <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="1.5,5 4,8 8.5,2" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                  </div>
-                )}
-                <div style={{ width: 54, flexShrink: 0, textAlign: "center" }}>
-                  <div style={{ width: 30, height: 30, borderRadius: "50%", background: hasShift ? rc.bg : "#e8ecf0", color: hasShift ? rc.fg : "#9aa6b2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, margin: "0 auto 3px", filter: hasShift ? "none" : "grayscale(1)", opacity: hasShift ? 1 : 0.65 }}>{r.staffName.charAt(0)}</div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 54 }}>{r.staffName}</div>
-                  <div style={{ display: "inline-block", fontSize: 9, fontWeight: 600, lineHeight: 1.4, padding: "0 5px", borderRadius: 7, marginTop: 2, color: rc.fg, background: rc.bg }}>{roleLabel(r.roleKey)}</div>
-                  <div style={{ fontSize: 9, color: hasShift ? GRAY : "#c2ccd6", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 54 }}>{subText}</div>
+              {/* 头像：占两行高度 */}
+              <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: "50%", background: hasShift ? rc.bg : "#e8ecf0", color: hasShift ? rc.fg : "#9aa6b2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600, filter: hasShift ? "none" : "grayscale(1)", opacity: hasShift ? 1 : 0.7 }}>{r.staffName.charAt(0)}</div>
+              {/* 右侧：上(名字+职位) 下(进度条+工作时间) */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#374151", whiteSpace: "nowrap" }}>{r.staffName}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.5, padding: "0 6px", borderRadius: 7, color: rc.fg, background: rc.bg }}>{roleLabel(r.roleKey)}</span>
                 </div>
-                <div style={{ flex: 1 }}>
-                  {!hasShift ? (
-                    <div style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "repeating-linear-gradient(45deg,#e7ebef,#e7ebef 4px,#f1f4f7 4px,#f1f4f7 8px)", cursor: batchMode ? "inherit" : "pointer" }}>
-                      <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#bcc6d0" }}>{r.hasTemplate ? "今日休息 · 点击排班" : "未排班 · 点击排班"}</span>
-                    </div>
-                  ) : (
-                    <div
-                      title="点击编辑排班"
-                      style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "#E2E8EF", cursor: batchMode ? "inherit" : "pointer" }}
-                    >
+                {!hasShift ? (
+                  <div style={{ position: "relative", height: 22, borderRadius: 7, overflow: "hidden", background: "repeating-linear-gradient(45deg,#e7ebef,#e7ebef 4px,#f1f4f7 4px,#f1f4f7 8px)", cursor: batchMode ? "inherit" : "pointer" }}>
+                    <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#bcc6d0" }}>{r.hasTemplate ? "今日休息 · 点击排班" : "未排班 · 点击排班"}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div title="点击编辑排班" style={{ position: "relative", height: 22, borderRadius: 7, overflow: "hidden", background: "#E2E8EF", cursor: batchMode ? "inherit" : "pointer" }}>
                       {segs.map((s: Seg, si: number) => {
                         const L = pctM(toMin(s.start)), W = pctM(toMin(s.end)) - L;
                         return (
                           <div key={si} style={{
                             position: "absolute", left: `${L}%`, width: `${Math.max(W, 1)}%`, top: 0, height: "100%",
-                          background: s.isOT ? WARN : rc.bar,
-                          display: "flex", alignItems: "center", padding: "0 4px", overflow: "hidden",
+                            background: s.isOT ? WARN : rc.bar,
+                            display: "flex", alignItems: "center", padding: "0 4px", overflow: "hidden",
                           }}>
                             {s.isOT && <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>加班</span>}
                           </div>
                         );
                       })}
                     </div>
-                  )}
-                </div>
+                    <div style={{ fontSize: 11, color: GRAY, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{subText}</div>
+                  </>
+                )}
               </div>
             </div>
           );
