@@ -464,7 +464,7 @@ export default function DepositManage() {
     { enabled: !!ledgerId && !!selectedTagForRight }
   );
 
-  // 查询当前选中标签的 transfer 记录（提现 + 本金变动），用于只读展示
+  // 查询当前选中标签的 transfer 记录（历史提现 + 增减本金），用于只读展示
   const selectedTagCategoryId = useMemo(() => {
     if (!selectedTagForRight || !categories.length) return null;
     const cat = (categories as any[]).find((c: any) => c.name === selectedTagForRight);
@@ -476,7 +476,7 @@ export default function DepositManage() {
     { enabled: !!ledgerId && !!selectedTagCategoryId }
   );
 
-  // 解析 transfer 记录：提现记录和本金变动记录
+  // 解析 transfer 记录：历史提现记录和增减本金记录
   const transferRecords = useMemo(() => {
     const withdraws: { date: string; amount: number; description: string }[] = [];
     const capitals: { date: string; amount: number; description: string }[] = [];
@@ -1212,18 +1212,18 @@ export default function DepositManage() {
                               )}
                             </div>
 
-                            {/* ── 提现/本金变动记录区块（只读，联动P004录入的transfer记录） ── */}
+                            {/* ── 历史提现 / 增减本金区块（只读，联动P004录入的transfer记录） ── */}
                             <div className="rounded-xl p-3 mb-3 space-y-2" style={{ backgroundColor: '#FFFBF0', border: '1px solid #FDE68A' }}>
-                              <div className="text-xs text-amber-700 font-medium">提现/本金变动记录</div>
+                              <div className="text-xs text-amber-700 font-medium">历史提现 / 增减本金</div>
                               {transferRecords.all.length === 0 ? (
-                                <div className="text-xs text-gray-400 py-2 text-center">暂无提现/本金变动记录</div>
+                                <div className="text-xs text-gray-400 py-2 text-center">暂无历史提现 / 增减本金记录</div>
                               ) : (
                                 <div className="space-y-2">
                                   {transferRecords.all.map((record, _i) => {
                                     const isCapital = record.description?.startsWith('capital_');
                                     const isAdd = record.description === 'capital_add';
                                     const label = isCapital
-                                      ? (isAdd ? '加本金' : '减本金')
+                                      ? (isAdd ? '增加本金' : '减少本金')
                                       : (record.amount < 0 ? '提现' : '入金');
                                     const tagColor = isCapital ? '#7C3AED' : (record.amount < 0 ? '#D97706' : '#16A34A');
                                     const tagBg = isCapital ? '#EDE9FE' : (record.amount < 0 ? '#FEF3C7' : '#DCFCE7');
@@ -1266,7 +1266,7 @@ export default function DepositManage() {
                                   )}
                                   {transferRecords.capitals.length > 0 && (
                                     <div className="flex items-end justify-between pt-1" style={{ borderTop: '1px solid #FDE68A' }}>
-                                      <span className="text-xs text-gray-500">累计本金变动</span>
+                                      <span className="text-xs text-gray-500">累计增减本金</span>
                                       <span className="text-sm font-bold" style={{ color: '#7C3AED' }}>
                                         {transferRecords.capitals.reduce((s, r) => s + r.amount, 0) >= 0 ? '+' : ''}¥{transferRecords.capitals.reduce((s, r) => s + r.amount, 0).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
                                       </span>
