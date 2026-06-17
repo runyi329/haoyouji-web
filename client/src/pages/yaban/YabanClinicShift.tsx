@@ -544,7 +544,15 @@ export default function YabanClinicShift() {
                         );
                       })}
                     </div>
-                    <div style={{ fontSize: 11, color: GRAY, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{subText}</div>
+                    {/* 工时文字：按段定位在色块正下方，与色块对齐 */}
+                    <div style={{ position: "relative", height: 14, marginTop: 3 }}>
+                      {segs.map((s: Seg, si: number) => {
+                        const L = pctM(toMin(s.start)), W = pctM(toMin(s.end)) - L;
+                        return (
+                          <div key={si} style={{ position: "absolute", left: `${L}%`, width: `${Math.max(W, 1)}%`, top: 0, textAlign: "center", fontSize: 10, color: GRAY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.start}–{s.end}</div>
+                        );
+                      })}
+                    </div>
                   </>
                 )}
               </div>
