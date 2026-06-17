@@ -120,13 +120,58 @@ export default function YabanSchedule() {
   });
   const { data: members = [] } = trpc.yabanAppointment.listMembers.useQuery({ tenantId: currentTenantId ?? undefined });
 
-  // 按医生分组
-  const docMap = new Map<string, { name: string; appts: typeof appointments }>();
-  members.forEach(m => { if (!docMap.has(m.name)) docMap.set(m.name, { name: m.name, appts: [] }); });
+  // 排班数据：拉取 selDate 所在周的「模板 + 单日覆盖」，用于联动顾客预约页的医生可约时段。
+  // 注意：override（单日调班/请假）优先于周期模板，shiftType=rest 当天不可约。
+  const weekStart = useMemo(() => {
+    const d = new Date(selDate);
+    const dow = d.getDay();           // 0=周日
+    const diff = dow === 0 ? -6 : 1 - dow; // 回退到本周周一
+    d.setDate(d.getDate() + diff);
+    d.setHours(0, 0, 0, 0);
+    return toDateStr(d);
+  }, [selDate]);
+  const { data: weekSched } = trpc.yabanShift.weekSchedule.useQuery(
+    { weekStart, tenantId: currentTenantId ?? undefined },
+    { enabled: !!weekStart }
+  );
+  const shiftTemplates = weekSched?.templates ?? [];
+  const shiftOverrides = weekSched?.overrides ?? [];
+
+  // 计算某员工在指定日期的「有效班次」：override 优先，回退周期模板。
+  // 返回 null 表示当天不可约（请假/休息，或模板未排该工作日，或全无排班）。
+  type EffShift = { workStart: number; workEnd: number } | null;
+  const getEffectiveShift = useMemo(() => {
+    return (staffName: string, dStr: string): EffShift => {
+      const tpl = shiftTemplates.find((t: any) => t.staffName === staffName);
+      const staffId = tpl ? tpl.staffUserId : undefined;
+      // 1) 单日覆盖优先（按 staffUserId 命中，回退 staffName 无法匹配时跳过）
+      const ov = staffId != null
+        ? shiftOverrides.find((o: any) => o.staffUserId === staffId && o.overrideDate === dStr)
+        : undefined;
+      if (ov) {
+        if (ov.shiftType === "rest") return null;       // 请假/休息：当天不可约
+        if (ov.workStart && ov.workEnd) return { workStart: timeToMin(ov.workStart), workEnd: timeToMin(ov.workEnd) };
+        // override 无具体时段则继续回退模板
+      }
+      // 2) 回退周期模板（需当天星期在 workDays 内）
+      if (tpl) {
+        const dow = new Date(dStr).getDay();            // 0=周日 ... 6=周六
+        const days: number[] = tpl.workDays || [];
+        if (days.length > 0 && !days.includes(dow)) return null; // 模板当天不排班
+        if (tpl.workStart && tpl.workEnd) return { workStart: timeToMin(tpl.workStart), workEnd: timeToMin(tpl.workEnd) };
+      }
+      return null;
+    };
+  }, [shiftTemplates, shiftOverrides]);
+
+  // 按医生分组（附带当天有效班次 shift）
+  const docMap = new Map<string, { name: string; appts: typeof appointments; shift: EffShift }>();
+  members.forEach(m => { if (!docMap.has(m.name)) docMap.set(m.name, { name: m.name, appts: [], shift: null }); });
   appointments.forEach(a => {
-    if (!docMap.has(a.doctor)) docMap.set(a.doctor, { name: a.doctor, appts: [] });
+    if (!docMap.has(a.doctor)) docMap.set(a.doctor, { name: a.doctor, appts: [], shift: null });
     docMap.get(a.doctor)!.appts.push(a);
   });
+  docMap.forEach((v, name) => { v.shift = getEffectiveShift(name, dateStr); });
   const docList = Array.from(docMap.values());
 
   // 时间范围（全院最早~最晚，默认 09:00~18:00）
@@ -378,6 +423,7 @@ export default function YabanSchedule() {
             prefillEnd={newModal.prefillEnd}
             members={members}
             dayAppts={appointments}
+            getShift={getEffectiveShift}
             onClose={() => setNewModal({ open: false })}
             onSaved={() => { setNewModal({ open: false }); refetchAppts(); }}
           />
@@ -400,8 +446,9 @@ function BottomSheet({ children, onClose, fullscreen }: { children: React.ReactN
 }
 
 // ── 按医生进度条视图 ──
+type EffShift = { workStart: number; workEnd: number } | null;
 function DocRows({ docList, onDocClick, onApptClick, trkStart, trkEnd, pctM }: {
-  docList: { name: string; appts: any[] }[];
+  docList: { name: string; appts: any[]; shift?: EffShift }[];
   onDocClick: (idx: number) => void;
   onApptClick: (id: number) => void;
   trkStart: () => number; trkEnd: () => number; pctM: (m: number) => number;
@@ -424,8 +471,11 @@ function DocRows({ docList, onDocClick, onApptClick, trkStart, trkEnd, pctM }: {
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "#E2E8EF" }}>
-              <div style={{ position: "absolute", inset: 0, background: "#A8CCE8" }} />
-              {doc.appts.map((a2, i) => {
+              {/* 在岗区间：按该医生当天实际班次着色；休息则保持灰底并标「今日休息」 */}
+              {doc.shift
+                ? <div style={{ position: "absolute", top: 0, bottom: 0, left: `${pctM(doc.shift.workStart)}%`, width: `${Math.max(pctM(doc.shift.workEnd) - pctM(doc.shift.workStart), 0)}%`, background: "#A8CCE8" }} />
+                : <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#aab4be", background: "#EDF1F5" }}>今日休息</div>}
+              {doc.shift && doc.appts.map((a2, i) => {
                 if (!a2.appointTime) return null;
                 const s = timeToMin(a2.appointTime);
                 const e2 = a2.endTime ? timeToMin(a2.endTime) : s + (a2.duration || 30);
@@ -453,7 +503,7 @@ function DocRows({ docList, onDocClick, onApptClick, trkStart, trkEnd, pctM }: {
 
 // ── 单医生放大日程 ──
 function SoloView({ doc, onBack, onApptClick, onNewAppt, trkStart, trkEnd, pctM, OPEN_START, OPEN_END }: {
-  doc: { name: string; appts: any[] };
+  doc: { name: string; appts: any[]; shift?: EffShift };
   onBack: () => void;
   onApptClick: (id: number) => void;
   onNewAppt: (docName: string, start: number, end: number) => void;
@@ -465,7 +515,8 @@ function SoloView({ doc, onBack, onApptClick, onNewAppt, trkStart, trkEnd, pctM,
     const bt = b.appointTime ? timeToMin(b.appointTime) : 0;
     return at - bt;
   });
-  const dS = OPEN_START, dE = OPEN_END;
+  // 放大轴范围：优先用该医生当天实际班次；休息时回退营业时间仅作占位。
+  const dS = doc.shift ? doc.shift.workStart : OPEN_START, dE = doc.shift ? doc.shift.workEnd : OPEN_END;
   const span = Math.max(1, dE - dS);
   const sp = (m: number) => Math.max(0, Math.min(100, ((m - dS) / span) * 100));
 
@@ -477,7 +528,7 @@ function SoloView({ doc, onBack, onApptClick, onNewAppt, trkStart, trkEnd, pctM,
           <div style={{ width: 42, height: 42, borderRadius: "50%", background: SKY_L, color: SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 600, flexShrink: 0 }}>{doc.name.charAt(0)}</div>
           <div>
             <div style={{ fontSize: 16, fontWeight: 600, color: "#374151" }}>{doc.name}</div>
-            <div style={{ fontSize: 12, color: GRAY, marginTop: 2 }}>在岗 {hm(dS)}–{hm(dE)} · 已约 {doc.appts.length} 个</div>
+            <div style={{ fontSize: 12, color: GRAY, marginTop: 2 }}>{doc.shift ? `在岗 ${hm(dS)}–${hm(dE)} · 已约 ${doc.appts.length} 个` : `今日休息 · 不可约`}</div>
           </div>
         </div>
         <div style={{ padding: "6px 14px 14px" }}>
@@ -592,10 +643,11 @@ const DAY_END = 24 * 60;
 const GRID_LO = 8 * 60;     // 时段格子起点 08:00
 const GRID_HI = 18 * 60;    // 时段格子终点 18:00
 
-function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd, members, dayAppts, onClose, onSaved }: {
+function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd, members, dayAppts, getShift, onClose, onSaved }: {
   date: string; tenantId?: number; prefillDocName?: string; prefillStart?: number; prefillEnd?: number;
   members: { userId: number; name: string; roleKey: string }[];
   dayAppts: any[];
+  getShift: (staffName: string, dStr: string) => EffShift;
   onClose: () => void; onSaved: () => void;
 }) {
   const [patientName, setPatientName] = useState("");
@@ -606,9 +658,6 @@ function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd,
   const [remark, setRemark] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // 排班模板（含工作/午休/加班时段），用于判定可约范围与营业外加班档
-  const { data: shiftTemplates = [] } = trpc.yabanShift.listTemplates.useQuery({ tenantId });
-
   const createMut = trpc.yabanAppointment.create.useMutation({
     onSuccess: onSaved,
     onError: (e) => { toast.error(e.message); setSaving(false); },
@@ -616,18 +665,13 @@ function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd,
 
   const PROJECTS = ["复诊检查","洁牙","补牙","根管治疗","拔牙","戴牙","备牙取模","种植","拆线","其他"];
 
-  // 当前选中医生的排班模板
-  const tpl = shiftTemplates.find((t: any) => t.staffName === doctor);
-  // 医生当日在岗范围（含加班）[lo, hi]，单位分钟
+  // 医生当日在岗范围 [lo, hi]，单位分钟。
+  // 与员工排班联动：override（单日调班/请假）优先，回退周期模板；休息/未排班返回 null。
   const docRange = (() => {
-    if (!tpl) return null;
-    let lo = timeToMin(tpl.workStart || "09:00");
-    let hi = timeToMin(tpl.workEnd || "18:00");
-    if (tpl.overtimeStart && tpl.overtimeEnd) {
-      lo = Math.min(lo, timeToMin(tpl.overtimeStart));
-      hi = Math.max(hi, timeToMin(tpl.overtimeEnd));
-    }
-    return [lo, hi] as [number, number];
+    if (!doctor) return null;
+    const eff = getShift(doctor, date);
+    if (!eff) return null;
+    return [eff.workStart, eff.workEnd] as [number, number];
   })();
 
   // 该医生当天已占用时段 [start, end, name, proj]
