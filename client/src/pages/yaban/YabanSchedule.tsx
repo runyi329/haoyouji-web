@@ -705,9 +705,9 @@ function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd,
   const segs = eff?.segments ?? [];
   const inShift = (lo: number, hi: number) => segs.some(([s0, e0]) => lo >= s0 && hi <= e0); // 区间完全落在某在岗段内
 
-  // 该医生当天已占用时段 [start, end, name, proj]
+  // 该医生当天已占用时段 [start, end, name, proj]（已取消不占用）
   const busy: [number, number, string, string][] = dayAppts
-    .filter(a => a.doctor === doctor)
+    .filter(a => a.doctor === doctor && a.status !== "cancelled" && a.status !== "canceled" && a.status !== "已取消")
     .map(a => {
       const s = timeToMin(a.appointTime || "00:00");
       const e = a.endTime ? timeToMin(a.endTime) : s + (Number(a.duration) > 0 ? Number(a.duration) : 30);
@@ -735,26 +735,31 @@ function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd,
   }
   function setDur(min: number) {
     const base = selStart !== null ? selStart : firstFreeStart();
-    setSelStart(base); setSelEnd(Math.min(base + min, DAY_END));
-  }
-  function adjDur(delta: number) {
-    if (selStart === null) { const b = firstFreeStart(); setSelStart(b); setSelEnd(b + STEP); return; }
-    setSelEnd(Math.max(selStart + STEP, Math.min((selEnd ?? selStart + STEP) + delta, DAY_END)));
+    // 终点不得越过：当前在岗段终点 、 下一个他人已约起点
+    const seg = segs.find(([s0, e0]) => base >= s0 && base < e0);
+    const segEnd = seg ? seg[1] : (docRange ? docRange[1] : DAY_END);
+    const nextBusy = busy.filter(b => b[0] >= base).map(b => b[0]).sort((a, b) => a - b)[0];
+    const cap = Math.min(base + min, segEnd, nextBusy ?? Infinity, DAY_END);
+    setSelStart(base); setSelEnd(Math.max(base + STEP, cap));
   }
 
-  // 区间时长与温和提示
+  // 区间时长 / 硬阻断（blockers，禁止保存）/ 软提示（warns，仅提醒）
   const durMin = selStart !== null && selEnd !== null ? selEnd - selStart : 0;
+  const blockers: string[] = [];
   const warns: string[] = [];
   if (selStart !== null && selEnd !== null) {
+    // 1) 与他人已约时段重叠 → 硬阻断
     const hit = busy.find(b => selStart < b[1] && selEnd > b[0]);
-    if (hit) warns.push(`与「${hit[2]}${hit[3] ? " · " + hit[3] : ""}」时段重叠`);
+    if (hit) blockers.push(`与「${hit[2]}${hit[3] ? " · " + hit[3] : ""} ${hm(hit[0])}–${hm(hit[1])}」已约时段冲突`);
     if (docRange) {
+      // 2) 触及医生午休/休息段（区间未完全落在在岗分段内）→ 硬阻断
+      if (!inShift(selStart, selEnd)) blockers.push("所选时段落在医生午休/休息时间，无法预约");
+      // 3) 早于/晚于排班 → 软提示（合理业务：提前接诊/加时）
       if (selStart < docRange[0]) warns.push(`早于医生排班开始（${hm(docRange[0])}），将记为提前接诊`);
       if (selEnd > docRange[1]) warns.push(`晚于医生排班结束（${hm(docRange[1])}），将记为加时`);
-      if (selStart !== null && selEnd !== null && docRange && selStart >= docRange[0] && selEnd <= docRange[1] && !inShift(selStart, selEnd))
-        warns.push("所选时段含医生午休/休息段，该段不接诊");
     }
   }
+  const blocked = blockers.length > 0;
 
   // 时段格子：outside 表示不可约（含午休空档）——仅当格子落在在岗分段内才可约。
   const cells: { t: number; busy: boolean; outside: boolean }[] = [];
@@ -768,7 +773,9 @@ function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd,
   function handleSave() {
     if (!patientName.trim()) { toast.error("请填写顾客姓名"); return; }
     if (!doctor) { toast.error("请选择就诊医生"); return; }
+    if (!docRange) { toast.error("该医生今日休息或未排班，无法预约"); return; }
     if (selStart === null || selEnd === null) { toast.error("请选择预约时段"); return; }
+    if (blockers.length > 0) { toast.error(blockers[0]); return; }
     setSaving(true);
     const startTime = hm(selStart), endTime = hm(selEnd);
     createMut.mutate({ patientName: patientName.trim(), doctor, appointDate: date, appointTime: startTime, endTime, duration: selEnd - selStart, project, remark, status: "booked", tenantId });
@@ -834,15 +841,15 @@ function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd,
             <span>{selEnd !== null ? `${hm(selStart)} – ${hm(selEnd)}` : hm(selStart)}</span>
             <b style={{ color: SKY_D, fontSize: 15 }}>{durMin >= 60 ? `${(durMin / 60).toFixed(durMin % 60 ? 1 : 0)} 小时（${durMin} 分钟）` : `${durMin} 分钟`}</b>
           </div>
-          {warns.length > 0 && (
+          {blockers.length > 0 && (
+            <div style={{ marginTop: 7, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FDECEA", border: "1px solid #F1B0A8", borderRadius: 7, padding: "6px 9px" }}>⛔ {blockers.join("；")}，无法保存。</div>
+          )}
+          {blockers.length === 0 && warns.length > 0 && (
             <div style={{ marginTop: 7, fontSize: 11.5, fontWeight: 600, color: "#C9750E", background: "#FDF4E6", border: "1px solid #F0C68A", borderRadius: 7, padding: "6px 9px" }}>提示：{warns.join("；")}，请与医生确认。</div>
           )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 10 }}>
             {([["30 分钟", () => setDur(30)], ["1 小时", () => setDur(60)], ["1.5 小时", () => setDur(90)]] as [string, () => void][]).map(([t, fn]) => (
               <span key={t} onClick={fn} style={{ fontSize: 11.5, fontWeight: 600, color: SKY_D, background: "#fff", border: `1px solid ${SKY}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer" }}>{t}</span>
-            ))}
-            {([["−15", () => adjDur(-15)], ["+15", () => adjDur(15)], ["+1h", () => adjDur(60)]] as [string, () => void][]).map(([t, fn]) => (
-              <span key={t} onClick={fn} style={{ fontSize: 11.5, fontWeight: 600, color: "#5b6772", background: "#fbfcfd", border: "1px solid #d2dae1", borderRadius: 7, padding: "5px 11px", cursor: "pointer" }}>{t}</span>
             ))}
           </div>
         </div>
@@ -863,7 +870,7 @@ function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd,
       </div>
       {/* 操作：全宽保存 */}
       <div style={{ display: "flex", gap: 10, marginTop: 12, position: "sticky", bottom: 0, background: "#fff", paddingTop: 12, paddingBottom: 2, boxShadow: "0 -8px 12px -6px rgba(15,23,42,.08)" }}>
-        <div onClick={handleSave} style={{ flex: 1, textAlign: "center", padding: 13, borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer", background: saving ? "#cdd5dd" : SKY_D, color: "#fff", pointerEvents: saving ? "none" : "auto" }}>{saving ? "保存中..." : "保存预约"}</div>
+        <div onClick={(saving || blocked) ? undefined : handleSave} style={{ flex: 1, textAlign: "center", padding: 13, borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: (saving || blocked) ? "not-allowed" : "pointer", background: (saving || blocked) ? "#cdd5dd" : SKY_D, color: "#fff", pointerEvents: saving ? "none" : "auto" }}>{saving ? "保存中..." : blocked ? "该时段不可预约" : "保存预约"}</div>
       </div>
     </div>
   );
