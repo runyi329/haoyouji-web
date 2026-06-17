@@ -59,6 +59,21 @@ function timeToMin(t: string) {
   const [h,m] = t.split(":").map(Number);
   return h * 60 + m;
 }
+// 预约时间格式化为区间：“日期 开始–结束（时长）”。
+// 结束时间优先用 endTime；缺失时由 appointTime + duration(默认30分钟) 推算。
+function fmtApptRange(a: any): string {
+  const date = a.appointDate || "";
+  const start = a.appointTime || "";
+  if (!start) return date;
+  const dur = Number(a.duration) > 0 ? Number(a.duration) : 30;
+  let end = a.endTime as string | undefined;
+  if (!end) {
+    try { end = hm(timeToMin(start) + dur); } catch { end = ""; }
+  }
+  const durMin = end ? (timeToMin(end) - timeToMin(start)) : dur;
+  const durTxt = durMin > 0 ? ` · ${durMin}分钟` : "";
+  return `${date} ${start}${end ? "–" + end : ""}${durTxt}`;
+}
 
 export default function YabanSchedule() {
   const [, setLocation] = useLocation();
@@ -292,7 +307,7 @@ export default function YabanSchedule() {
           <div style={{ fontSize: 12, color: GRAY, marginBottom: 6 }}>门店预约</div>
           {[
             { k: "就诊医生", v: detailAppt.doctor },
-            { k: "时间", v: `${detailAppt.appointDate} ${detailAppt.appointTime}${detailAppt.endTime ? "–" + detailAppt.endTime : ""}` },
+            { k: "时间", v: fmtApptRange(detailAppt) },
             { k: "诊疗项目", v: detailAppt.project },
             { k: "状态", v: null },
             { k: "备注", v: detailAppt.remark || "无" },
