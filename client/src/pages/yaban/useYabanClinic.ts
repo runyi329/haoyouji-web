@@ -33,6 +33,7 @@ function readStoredTenant(): number | null {
 }
 
 export function useYabanClinic() {
+  const utils = trpc.useUtils();
   const { data, isLoading } = trpc.yabanClinic.myClinics.useQuery();
   const clinics: YabanClinic[] = (data?.clinics as YabanClinic[]) || [];
 
@@ -64,7 +65,11 @@ export function useYabanClinic() {
     setCurrentTenantId(tid);
     try { localStorage.setItem(YABAN_TENANT_KEY, String(tid)); } catch {}
     window.dispatchEvent(new CustomEvent(TENANT_CHANGE_EVENT, { detail: tid }));
-  }, []);
+    // 切店后：所有牙伴业务查询的 tenant 头已变，但部分查询的 queryKey 未含 tenantId，
+    // 故全量失效，强制按新门店重新拉取，避免显示上一家门店的残留数据。
+    // 仅当前用户所属/可见的数据会被重拉，不影响脉动网其它模块的正确性。
+    try { utils.invalidate(); } catch {}
+  }, [utils]);
 
   const current = clinics.find((c) => c.tenantId === currentTenantId) || clinics[0] || null;
   const isModel = current?.tenantId === YABAN_MODEL_TENANT_ID;

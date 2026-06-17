@@ -7,6 +7,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Search, ShoppingCart, Receipt, Ticket } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
+import YabanClinicHeader from "./YabanClinicHeader";
 import { PageTag } from "@/components/PageTag";
 import { SHOP_BANNER, type ShopProduct } from "./shopData";
 import { useCart } from "./useCart";
@@ -84,7 +85,10 @@ export default function YabanShop() {
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-4 pt-3 pb-3">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-base font-bold">齿科商城</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-base font-bold shrink-0">齿科商城</span>
+              <YabanClinicHeader compact />
+            </div>
             <div className="flex items-center gap-1">
               {/* 我的订单：所有用户可见 */}
               <button

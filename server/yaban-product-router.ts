@@ -14,6 +14,7 @@ import { z } from "zod";
 import { router, publicProcedure, adminProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
+import { resolveTenantId } from "./yaban-customer-router";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -81,13 +82,14 @@ const adminProductInput = z.object({
 
 export const yabanProductRouter = router({
   // ============ 公开：分类列表（前台用，仅启用项） ============
-  listCategories: publicProcedure.query(async () => {
+  listCategories: publicProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) return [];
+    const tenantId = await resolveTenantId(ctx);
     const [rows] = (await (conn as any).execute(
       `SELECT code, name, icon, sort_order FROM shop_category
        WHERE tenant_id = ? AND status = 1 ORDER BY sort_order ASC, id ASC`,
-      [DEFAULT_TENANT_ID]
+      [tenantId]
     )) as any;
     return (rows as any[]).map((r) => ({
       id: r.code,
@@ -106,11 +108,12 @@ export const yabanProductRouter = router({
         })
         .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) return [];
+      const tenantId = await resolveTenantId(ctx);
       const where: string[] = [`tenant_id = ?`, `status = 1`];
-      const params: any[] = [DEFAULT_TENANT_ID];
+      const params: any[] = [tenantId];
       if (input?.categoryId && input.categoryId !== "all") {
         where.push(`category_code = ?`);
         params.push(input.categoryId);
@@ -131,9 +134,10 @@ export const yabanProductRouter = router({
   // ============ 公开：商品详情（按 legacy_code 或 dbId） ============
   getProduct: publicProcedure
     .input(z.object({ id: z.string().max(32) }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) return null;
+      const tenantId = await resolveTenantId(ctx);
       const idStr = input.id.trim();
       let rows: any[];
       // 兼容 dbXX 形式
@@ -141,12 +145,12 @@ export const yabanProductRouter = router({
       if (!Number.isNaN(dbId)) {
         [rows] = (await (conn as any).execute(
           `SELECT * FROM shop_product WHERE id = ? AND tenant_id = ? LIMIT 1`,
-          [dbId, DEFAULT_TENANT_ID]
+          [dbId, tenantId]
         )) as any;
       } else {
         [rows] = (await (conn as any).execute(
           `SELECT * FROM shop_product WHERE legacy_code = ? AND tenant_id = ? LIMIT 1`,
-          [idStr, DEFAULT_TENANT_ID]
+          [idStr, tenantId]
         )) as any;
       }
       const r = (rows as any[])[0];
@@ -165,11 +169,12 @@ export const yabanProductRouter = router({
         })
         .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) return { list: [], counts: { all: 0, on: 0, off: 0 } };
+      const tenantId = await resolveTenantId(ctx);
       const where: string[] = [`tenant_id = ?`];
-      const params: any[] = [DEFAULT_TENANT_ID];
+      const params: any[] = [tenantId];
       if (input?.categoryId && input.categoryId !== "all") {
         where.push(`category_code = ?`);
         params.push(input.categoryId);
@@ -190,7 +195,7 @@ export const yabanProductRouter = router({
 
       const [countRows] = (await (conn as any).execute(
         `SELECT status, COUNT(*) cnt FROM shop_product WHERE tenant_id = ? GROUP BY status`,
-        [DEFAULT_TENANT_ID]
+        [tenantId]
       )) as any;
       const counts = { all: 0, on: 0, off: 0 };
       for (const c of countRows as any[]) {
@@ -203,13 +208,14 @@ export const yabanProductRouter = router({
     }),
 
   // ============ 管理员：分类列表（含停用） ============
-  adminListCategories: publicProcedure.query(async () => {
+  adminListCategories: publicProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) return [];
+    const tenantId = await resolveTenantId(ctx);
     const [rows] = (await (conn as any).execute(
       `SELECT id, code, name, icon, sort_order, status FROM shop_category
        WHERE tenant_id = ? ORDER BY sort_order ASC, id ASC`,
-      [DEFAULT_TENANT_ID]
+      [tenantId]
     )) as any;
     return rows as any[];
   }),
@@ -222,10 +228,11 @@ export const yabanProductRouter = router({
         sort_order: z.number().int().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn)
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       // 生成唯一 code（c + 时间戳后8位）
       const code = `c${Date.now().toString().slice(-9)}`;
       // 默认排序：现有最大 sort_order + 1
@@ -233,13 +240,13 @@ export const yabanProductRouter = router({
       if (sort == null) {
         const [m] = (await (conn as any).execute(
           `SELECT COALESCE(MAX(sort_order),0) AS mx FROM shop_category WHERE tenant_id = ?`,
-          [DEFAULT_TENANT_ID]
+          [tenantId]
         )) as any;
         sort = Number(m?.[0]?.mx ?? 0) + 1;
       }
       await (conn as any).execute(
         `INSERT INTO shop_category (tenant_id, code, name, sort_order, status) VALUES (?, ?, ?, ?, 1)`,
-        [DEFAULT_TENANT_ID, code, input.name.trim(), sort]
+        [tenantId, code, input.name.trim(), sort]
       );
       return { ok: true, code };
     }),
@@ -254,17 +261,18 @@ export const yabanProductRouter = router({
         status: z.number().int().min(0).max(1).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn)
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       const sets: string[] = [];
       const vals: any[] = [];
       if (input.name != null) { sets.push("name = ?"); vals.push(input.name.trim()); }
       if (input.sort_order != null) { sets.push("sort_order = ?"); vals.push(input.sort_order); }
       if (input.status != null) { sets.push("status = ?"); vals.push(input.status); }
       if (sets.length === 0) return { ok: true };
-      vals.push(input.id, DEFAULT_TENANT_ID);
+      vals.push(input.id, tenantId);
       await (conn as any).execute(
         `UPDATE shop_category SET ${sets.join(", ")} WHERE id = ? AND tenant_id = ?`,
         vals
@@ -275,21 +283,22 @@ export const yabanProductRouter = router({
   // ============ 管理员：删除分类（该分类下有商品时禁止删除）============
   deleteCategory: publicProcedure
     .input(z.object({ id: z.number().int() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn)
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       // 查出该分类 code
       const [crows] = (await (conn as any).execute(
         `SELECT code FROM shop_category WHERE id = ? AND tenant_id = ?`,
-        [input.id, DEFAULT_TENANT_ID]
+        [input.id, tenantId]
       )) as any;
       const cat = (crows as any[])[0];
       if (!cat) throw new TRPCError({ code: "NOT_FOUND", message: "分类不存在" });
       // 校验是否还有商品
       const [prows] = (await (conn as any).execute(
         `SELECT COUNT(*) AS cnt FROM shop_product WHERE tenant_id = ? AND category_code = ?`,
-        [DEFAULT_TENANT_ID, cat.code]
+        [tenantId, cat.code]
       )) as any;
       const cnt = Number((prows as any[])[0]?.cnt ?? 0);
       if (cnt > 0)
@@ -299,7 +308,7 @@ export const yabanProductRouter = router({
         });
       await (conn as any).execute(
         `DELETE FROM shop_category WHERE id = ? AND tenant_id = ?`,
-        [input.id, DEFAULT_TENANT_ID]
+        [input.id, tenantId]
       );
       return { ok: true };
     }),
@@ -307,10 +316,11 @@ export const yabanProductRouter = router({
   // ============ 管理员：新增商品 ============
   createProduct: publicProcedure
     .input(adminProductInput)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn)
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       // 生成一个 legacy_code（自营商品：x + 时间戳后8位），保证唯一对外标识
       const legacyCode = `x${Date.now().toString().slice(-10)}`;
       const [res] = (await (conn as any).execute(
@@ -318,7 +328,7 @@ export const yabanProductRouter = router({
           (tenant_id, source, category_code, kind, name, subtitle, price, original_price, image, sales, tags, description, legacy_code, sort_order, status)
          VALUES (?, 'self', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          DEFAULT_TENANT_ID,
+          tenantId,
           input.category_code,
           input.kind,
           input.name,
@@ -340,10 +350,11 @@ export const yabanProductRouter = router({
   // ============ 管理员：编辑商品 ============
   updateProduct: publicProcedure
     .input(adminProductInput.extend({ id: z.number().int() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn)
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       await (conn as any).execute(
         `UPDATE shop_product SET
            category_code = ?, kind = ?, name = ?, subtitle = ?, price = ?, original_price = ?,
@@ -363,7 +374,7 @@ export const yabanProductRouter = router({
           input.sort_order || 0,
           input.status,
           input.id,
-          DEFAULT_TENANT_ID,
+          tenantId,
         ]
       );
       return { success: true };
@@ -372,13 +383,14 @@ export const yabanProductRouter = router({
   // ============ 管理员：上下架切换 ============
   toggleProductStatus: publicProcedure
     .input(z.object({ id: z.number().int(), status: z.union([z.literal(0), z.literal(1)]) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn)
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       await (conn as any).execute(
         `UPDATE shop_product SET status = ? WHERE id = ? AND tenant_id = ?`,
-        [input.status, input.id, DEFAULT_TENANT_ID]
+        [input.status, input.id, tenantId]
       );
       return { success: true };
     }),
@@ -386,13 +398,14 @@ export const yabanProductRouter = router({
   // ============ 管理员：删除商品 ============
   deleteProduct: publicProcedure
     .input(z.object({ id: z.number().int() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn)
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       await (conn as any).execute(
         `DELETE FROM shop_product WHERE id = ? AND tenant_id = ?`,
-        [input.id, DEFAULT_TENANT_ID]
+        [input.id, tenantId]
       );
       return { success: true };
     }),

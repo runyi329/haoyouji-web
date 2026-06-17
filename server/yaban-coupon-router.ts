@@ -14,6 +14,7 @@ import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
+import { resolveTenantId } from "./yaban-customer-router";
 
 const TENANT = 1;
 
@@ -37,6 +38,7 @@ export function calcDiscount(coupon: any, amount: number): number {
  */
 export async function computeCouponDiscount(
   conn: any,
+  tenantId: number,
   userCouponId: number | null | undefined,
   userId: number,
   amount: number
@@ -46,7 +48,7 @@ export async function computeCouponDiscount(
     `SELECT uc.id AS uc_id, uc.status, uc.user_id, uc.expire_at, c.*
      FROM shop_user_coupon uc JOIN shop_coupon c ON c.id = uc.coupon_id
      WHERE uc.id = ? AND uc.tenant_id = ? LIMIT 1`,
-    [userCouponId, TENANT]
+    [userCouponId, tenantId]
   )) as any;
   const r = (rows as any[])[0];
   if (!r || Number(r.user_id) !== Number(userId)) {
@@ -64,23 +66,24 @@ export async function computeCouponDiscount(
 }
 
 // 下单成功后标记券已用
-export async function redeemUserCoupon(conn: any, userCouponId: number | null, orderNo: string) {
+export async function redeemUserCoupon(conn: any, tenantId: number, userCouponId: number | null, orderNo: string) {
   if (!userCouponId) return;
   await conn.execute(
     `UPDATE shop_user_coupon SET status = 'used', order_no = ?, used_at = NOW()
      WHERE id = ? AND tenant_id = ? AND status = 'unused'`,
-    [orderNo, userCouponId, TENANT]
+    [orderNo, userCouponId, tenantId]
   );
 }
 
 export const yabanCouponRouter = router({
   // ============ 管理员：券模板列表 ============
-  adminListCoupons: publicProcedure.query(async () => {
+  adminListCoupons: publicProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) return [];
+    const tenantId = await resolveTenantId(ctx);
     const [rows] = (await (conn as any).execute(
       `SELECT * FROM shop_coupon WHERE tenant_id = ? ORDER BY id DESC`,
-      [TENANT]
+      [tenantId]
     )) as any;
     return rows as any[];
   }),
@@ -100,22 +103,23 @@ export const yabanCouponRouter = router({
         validDays: z.number().int().min(1).default(30),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       if (input.id) {
         await (conn as any).execute(
           `UPDATE shop_coupon SET name=?, type=?, threshold=?, amount=?, discount=?, total_qty=?, per_user_limit=?, valid_days=?
            WHERE id=? AND tenant_id=?`,
           [input.name, input.type, input.threshold, input.amount, input.discount ?? null,
-           input.totalQty, input.perUserLimit, input.validDays, input.id, TENANT]
+           input.totalQty, input.perUserLimit, input.validDays, input.id, tenantId]
         );
         return { ok: true, id: input.id };
       }
       const [res] = (await (conn as any).execute(
         `INSERT INTO shop_coupon (tenant_id, name, type, threshold, amount, discount, total_qty, per_user_limit, valid_days, status)
          VALUES (?,?,?,?,?,?,?,?,?,1)`,
-        [TENANT, input.name, input.type, input.threshold, input.amount, input.discount ?? null,
+        [tenantId, input.name, input.type, input.threshold, input.amount, input.discount ?? null,
          input.totalQty, input.perUserLimit, input.validDays]
       )) as any;
       return { ok: true, id: res?.insertId };
@@ -124,11 +128,12 @@ export const yabanCouponRouter = router({
   // ============ 管理员：上/下架券 ============
   adminToggleCoupon: publicProcedure
     .input(z.object({ id: z.number().int(), status: z.number().int().min(0).max(1) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       await (conn as any).execute(`UPDATE shop_coupon SET status=? WHERE id=? AND tenant_id=?`,
-        [input.status, input.id, TENANT]);
+        [input.status, input.id, tenantId]);
       return { ok: true };
     }),
 
@@ -136,6 +141,7 @@ export const yabanCouponRouter = router({
   listClaimable: protectedProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) return [];
+    const tenantId = await resolveTenantId(ctx);
     const [rows] = (await (conn as any).execute(
       `SELECT c.*,
         (SELECT COUNT(*) FROM shop_user_coupon uc WHERE uc.coupon_id = c.id AND uc.user_id = ?) AS my_claimed
@@ -143,7 +149,7 @@ export const yabanCouponRouter = router({
        WHERE c.tenant_id = ? AND c.status = 1
          AND (c.total_qty = 0 OR c.claimed_qty < c.total_qty)
        ORDER BY c.id DESC`,
-      [ctx.user.id, TENANT]
+      [ctx.user.id, tenantId]
     )) as any;
     return (rows as any[]).filter((r) => Number(r.my_claimed) < Number(r.per_user_limit));
   }),
@@ -154,9 +160,10 @@ export const yabanCouponRouter = router({
     .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       const [crows] = (await (conn as any).execute(
         `SELECT * FROM shop_coupon WHERE id=? AND tenant_id=? AND status=1 LIMIT 1`,
-        [input.couponId, TENANT]
+        [input.couponId, tenantId]
       )) as any;
       const c = (crows as any[])[0];
       if (!c) throw new TRPCError({ code: "NOT_FOUND", message: "优惠券不存在或已下架" });
@@ -175,7 +182,7 @@ export const yabanCouponRouter = router({
       await (conn as any).execute(
         `INSERT INTO shop_user_coupon (tenant_id, coupon_id, user_id, status, expire_at)
          VALUES (?,?,?,'unused',?)`,
-        [TENANT, input.couponId, ctx.user.id, expireStr]
+        [tenantId, input.couponId, ctx.user.id, expireStr]
       );
       await (conn as any).execute(
         `UPDATE shop_coupon SET claimed_qty = claimed_qty + 1 WHERE id=?`,
@@ -188,18 +195,19 @@ export const yabanCouponRouter = router({
   myCoupons: protectedProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) return [];
+    const tenantId = await resolveTenantId(ctx);
     // 顺手过期失效
     await (conn as any).execute(
       `UPDATE shop_user_coupon SET status='expired'
        WHERE user_id=? AND tenant_id=? AND status='unused' AND expire_at IS NOT NULL AND expire_at < NOW()`,
-      [ctx.user.id, TENANT]
+      [ctx.user.id, tenantId]
     );
     const [rows] = (await (conn as any).execute(
       `SELECT uc.id AS uc_id, uc.status, uc.expire_at, uc.used_at, c.*
        FROM shop_user_coupon uc JOIN shop_coupon c ON c.id = uc.coupon_id
        WHERE uc.user_id=? AND uc.tenant_id=?
        ORDER BY FIELD(uc.status,'unused','used','expired'), uc.id DESC`,
-      [ctx.user.id, TENANT]
+      [ctx.user.id, tenantId]
     )) as any;
     return rows as any[];
   }),
@@ -210,13 +218,14 @@ export const yabanCouponRouter = router({
     .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) return [];
+      const tenantId = await resolveTenantId(ctx);
       const [rows] = (await (conn as any).execute(
         `SELECT uc.id AS uc_id, uc.expire_at, c.*
          FROM shop_user_coupon uc JOIN shop_coupon c ON c.id = uc.coupon_id
          WHERE uc.user_id=? AND uc.tenant_id=? AND uc.status='unused'
            AND (uc.expire_at IS NULL OR uc.expire_at > NOW())
          ORDER BY uc.id DESC`,
-        [ctx.user.id, TENANT]
+        [ctx.user.id, tenantId]
       )) as any;
       return (rows as any[]).map((r) => {
         const eligible = input.amount >= Number(r.threshold || 0);

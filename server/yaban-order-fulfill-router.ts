@@ -15,6 +15,7 @@ import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
+import { resolveTenantId } from "./yaban-customer-router";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -43,7 +44,7 @@ function genRefundNo(): string {
 export async function onOrderPaid(conn: any, orderId: number, channel?: string) {
   try {
     const [orows]: any = await conn.query(
-      "SELECT id, order_no, order_status, has_service, verify_code FROM shop_order WHERE id = ? LIMIT 1",
+      "SELECT id, order_no, order_status, has_service, verify_code, tenant_id FROM shop_order WHERE id = ? LIMIT 1",
       [orderId]
     );
     const o = orows && orows[0];
@@ -62,7 +63,7 @@ export async function onOrderPaid(conn: any, orderId: number, channel?: string) 
        WHERE id = ?`,
       [channel || null, needVerify ? verifyCode : null, Number(o.has_service) === 1 ? 1 : 0, orderId]
     );
-    await writeLog(conn, o.order_no, "pay", from, "confirmed", "system", "支付成功");
+    await writeLog(conn, Number(o.tenant_id), o.order_no, "pay", from, "confirmed", "system", "支付成功");
   } catch {
     /* 付款后处理失败不阻断主流程，状态以支付单为准 */
   }
@@ -71,6 +72,7 @@ export async function onOrderPaid(conn: any, orderId: number, channel?: string) 
 // 写订单日志
 async function writeLog(
   conn: any,
+  tenantId: number,
   orderNo: string,
   action: string,
   fromStatus: string | null,
@@ -82,7 +84,7 @@ async function writeLog(
     await conn.execute(
       `INSERT INTO shop_order_log (tenant_id, order_no, action, from_status, to_status, operator, note)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [DEFAULT_TENANT_ID, orderNo, action, fromStatus, toStatus, operator, note || null]
+      [tenantId, orderNo, action, fromStatus, toStatus, operator, note || null]
     );
   } catch {
     /* 日志失败不影响主流程 */
@@ -96,17 +98,18 @@ export const yabanOrderFulfillRouter = router({
     .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) return [];
+      const tenantId = await resolveTenantId(ctx);
       // 校验归属
       const [orows] = (await (conn as any).execute(
         `SELECT user_id FROM shop_order WHERE order_no = ? AND tenant_id = ? LIMIT 1`,
-        [input.orderNo, DEFAULT_TENANT_ID]
+        [input.orderNo, tenantId]
       )) as any;
       const o = (orows as any[])[0];
       if (!o || Number(o.user_id) !== Number(ctx.user.id)) return [];
       const [rows] = (await (conn as any).execute(
         `SELECT action, from_status, to_status, operator, note, created_at
          FROM shop_order_log WHERE order_no = ? AND tenant_id = ? ORDER BY id ASC`,
-        [input.orderNo, DEFAULT_TENANT_ID]
+        [input.orderNo, tenantId]
       )) as any;
       return rows as any[];
     }),
@@ -124,9 +127,10 @@ export const yabanOrderFulfillRouter = router({
     .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       const [orows] = (await (conn as any).execute(
         `SELECT id, user_id, order_status FROM shop_order WHERE order_no = ? AND tenant_id = ? LIMIT 1`,
-        [input.orderNo, DEFAULT_TENANT_ID]
+        [input.orderNo, tenantId]
       )) as any;
       const o = (orows as any[])[0];
       if (!o || Number(o.user_id) !== Number(ctx.user.id))
@@ -136,7 +140,7 @@ export const yabanOrderFulfillRouter = router({
       await (conn as any).execute(
         `UPDATE shop_order SET receiver_name = ?, receiver_phone = ?, receiver_addr = ?
          WHERE order_no = ? AND tenant_id = ?`,
-        [input.name.trim(), input.phone.trim(), input.addr.trim(), input.orderNo, DEFAULT_TENANT_ID]
+        [input.name.trim(), input.phone.trim(), input.addr.trim(), input.orderNo, tenantId]
       );
       return { ok: true };
     }),
@@ -149,9 +153,10 @@ export const yabanOrderFulfillRouter = router({
     .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       const [orows] = (await (conn as any).execute(
         `SELECT id, user_id, order_status FROM shop_order WHERE order_no = ? AND tenant_id = ? LIMIT 1`,
-        [input.orderNo, DEFAULT_TENANT_ID]
+        [input.orderNo, tenantId]
       )) as any;
       const o = (orows as any[])[0];
       if (!o || Number(o.user_id) !== Number(ctx.user.id))
@@ -161,9 +166,9 @@ export const yabanOrderFulfillRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "当前状态不可确认收货" });
       await (conn as any).execute(
         `UPDATE shop_order SET order_status = 'completed' WHERE id = ? AND tenant_id = ?`,
-        [o.id, DEFAULT_TENANT_ID]
+        [o.id, tenantId]
       );
-      await writeLog(conn, input.orderNo, "complete", from, "completed", "user", "客人确认收货");
+      await writeLog(conn, tenantId, input.orderNo, "complete", from, "completed", "user", "客人确认收货");
       return { ok: true };
     }),
 
@@ -179,10 +184,11 @@ export const yabanOrderFulfillRouter = router({
     .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       const [orows] = (await (conn as any).execute(
         `SELECT id, user_id, order_no, total_amount, pay_status, order_status
          FROM shop_order WHERE order_no = ? AND tenant_id = ? LIMIT 1`,
-        [input.orderNo, DEFAULT_TENANT_ID]
+        [input.orderNo, tenantId]
       )) as any;
       const o = (orows as any[])[0];
       if (!o || Number(o.user_id) !== Number(ctx.user.id))
@@ -204,7 +210,7 @@ export const yabanOrderFulfillRouter = router({
         `INSERT INTO shop_refund (refund_no, tenant_id, order_no, order_id, user_id, amount, reason, images, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
         [
-          refundNo, DEFAULT_TENANT_ID, input.orderNo, o.id, ctx.user.id,
+          refundNo, tenantId, input.orderNo, o.id, ctx.user.id,
           Number(o.total_amount).toFixed(2), input.reason.trim(),
           JSON.stringify(input.images || []),
         ]
@@ -212,9 +218,9 @@ export const yabanOrderFulfillRouter = router({
       // 订单标记退款中
       await (conn as any).execute(
         `UPDATE shop_order SET order_status = 'refunding' WHERE id = ? AND tenant_id = ?`,
-        [o.id, DEFAULT_TENANT_ID]
+        [o.id, tenantId]
       );
-      await writeLog(conn, input.orderNo, "refund_apply", String(o.order_status), "refunding", "user", input.reason.trim());
+      await writeLog(conn, tenantId, input.orderNo, "refund_apply", String(o.order_status), "refunding", "user", input.reason.trim());
       return { ok: true, refundNo };
     }),
 
@@ -222,10 +228,11 @@ export const yabanOrderFulfillRouter = router({
   myRefunds: protectedProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) return [];
+    const tenantId = await resolveTenantId(ctx);
     const [rows] = (await (conn as any).execute(
       `SELECT refund_no, order_no, amount, reason, status, admin_note, created_at
        FROM shop_refund WHERE user_id = ? AND tenant_id = ? ORDER BY id DESC`,
-      [ctx.user.id, DEFAULT_TENANT_ID]
+      [ctx.user.id, tenantId]
     )) as any;
     return rows as any[];
   }),
@@ -239,12 +246,13 @@ export const yabanOrderFulfillRouter = router({
         shipNo: z.string().max(64).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       const [orows] = (await (conn as any).execute(
         `SELECT order_no, order_status, pay_status FROM shop_order WHERE id = ? AND tenant_id = ? LIMIT 1`,
-        [input.orderId, DEFAULT_TENANT_ID]
+        [input.orderId, tenantId]
       )) as any;
       const o = (orows as any[])[0];
       if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
@@ -253,9 +261,9 @@ export const yabanOrderFulfillRouter = router({
       await (conn as any).execute(
         `UPDATE shop_order SET order_status = 'shipped', ship_company = ?, ship_no = ?
          WHERE id = ? AND tenant_id = ?`,
-        [input.shipCompany || null, input.shipNo || null, input.orderId, DEFAULT_TENANT_ID]
+        [input.shipCompany || null, input.shipNo || null, input.orderId, tenantId]
       );
-      await writeLog(conn, o.order_no, "ship", String(o.order_status), "shipped", "admin",
+      await writeLog(conn, tenantId, o.order_no, "ship", String(o.order_status), "shipped", "admin",
         input.shipCompany ? `${input.shipCompany} ${input.shipNo || ""}`.trim() : "已发货");
       return { ok: true };
     }),
@@ -263,13 +271,14 @@ export const yabanOrderFulfillRouter = router({
   // ============ 管理员侧：到店核销（服务商品） ============
   adminVerify: publicProcedure
     .input(z.object({ verifyCode: z.string().min(4).max(32) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       const [orows] = (await (conn as any).execute(
         `SELECT id, order_no, order_status, pay_status, verify_status
          FROM shop_order WHERE verify_code = ? AND tenant_id = ? LIMIT 1`,
-        [input.verifyCode.trim(), DEFAULT_TENANT_ID]
+        [input.verifyCode.trim(), tenantId]
       )) as any;
       const o = (orows as any[])[0];
       if (!o) throw new TRPCError({ code: "NOT_FOUND", message: "核销码无效" });
@@ -280,9 +289,9 @@ export const yabanOrderFulfillRouter = router({
       await (conn as any).execute(
         `UPDATE shop_order SET verify_status = 'used', verified_at = NOW(), order_status = 'completed'
          WHERE id = ? AND tenant_id = ?`,
-        [o.id, DEFAULT_TENANT_ID]
+        [o.id, tenantId]
       );
-      await writeLog(conn, o.order_no, "verify", String(o.order_status), "completed", "admin", "到店核销完成");
+      await writeLog(conn, tenantId, o.order_no, "verify", String(o.order_status), "completed", "admin", "到店核销完成");
       return { ok: true, orderNo: o.order_no };
     }),
 
@@ -293,12 +302,13 @@ export const yabanOrderFulfillRouter = router({
         status: z.enum(["all", "pending", "approved", "rejected", "refunded"]).optional().default("all"),
       }).optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) return { list: [], counts: {} };
+      const tenantId = await resolveTenantId(ctx);
       const status = input?.status ?? "all";
       const where: string[] = [`r.tenant_id = ?`];
-      const params: any[] = [DEFAULT_TENANT_ID];
+      const params: any[] = [tenantId];
       if (status !== "all") { where.push(`r.status = ?`); params.push(status); }
       const [rows] = (await (conn as any).execute(
         `SELECT r.*, o.user_name, o.user_phone FROM shop_refund r
@@ -309,7 +319,7 @@ export const yabanOrderFulfillRouter = router({
       )) as any;
       const [countRows] = (await (conn as any).execute(
         `SELECT status, COUNT(*) cnt FROM shop_refund WHERE tenant_id = ? GROUP BY status`,
-        [DEFAULT_TENANT_ID]
+        [tenantId]
       )) as any;
       const counts: Record<string, number> = { all: 0 };
       for (const c of countRows as any[]) { counts[c.status] = Number(c.cnt); counts.all += Number(c.cnt); }
@@ -325,12 +335,13 @@ export const yabanOrderFulfillRouter = router({
         adminNote: z.string().max(255).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       const [rrows] = (await (conn as any).execute(
         `SELECT * FROM shop_refund WHERE refund_no = ? AND tenant_id = ? LIMIT 1`,
-        [input.refundNo, DEFAULT_TENANT_ID]
+        [input.refundNo, tenantId]
       )) as any;
       const r = (rrows as any[])[0];
       if (!r) throw new TRPCError({ code: "NOT_FOUND", message: "退款单不存在" });
@@ -345,9 +356,9 @@ export const yabanOrderFulfillRouter = router({
         );
         await (conn as any).execute(
           `UPDATE shop_order SET order_status = 'refunded', pay_status = 'refunded' WHERE id = ? AND tenant_id = ?`,
-          [r.order_id, DEFAULT_TENANT_ID]
+          [r.order_id, tenantId]
         );
-        await writeLog(conn, r.order_no, "refund_done", "refunding", "refunded", "admin", input.adminNote || "退款已处理");
+        await writeLog(conn, tenantId, r.order_no, "refund_done", "refunding", "refunded", "admin", input.adminNote || "退款已处理");
       } else {
         await (conn as any).execute(
           `UPDATE shop_refund SET status = 'rejected', admin_note = ? WHERE id = ?`,
@@ -356,9 +367,9 @@ export const yabanOrderFulfillRouter = router({
         // 驳回则订单回到原已完成/已付款状态（这里回到 confirmed 由门店再处理）
         await (conn as any).execute(
           `UPDATE shop_order SET order_status = 'confirmed' WHERE id = ? AND tenant_id = ?`,
-          [r.order_id, DEFAULT_TENANT_ID]
+          [r.order_id, tenantId]
         );
-        await writeLog(conn, r.order_no, "refund_reject", "refunding", "confirmed", "admin", input.adminNote || "退款驳回");
+        await writeLog(conn, tenantId, r.order_no, "refund_reject", "refunding", "confirmed", "admin", input.adminNote || "退款驳回");
       }
       return { ok: true };
     }),

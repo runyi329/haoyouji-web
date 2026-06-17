@@ -12,6 +12,7 @@ import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
+import { resolveTenantId } from "./yaban-customer-router";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -38,6 +39,7 @@ export const yabanShopOpsRouter = router({
   myReviewableOrders: protectedProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) return [];
+    const tenantId = await resolveTenantId(ctx);
     try {
       // 已完成订单 + 该订单内的商品，且该商品尚未被本人评价过
       const [rows]: any = await (conn as any).query(
@@ -52,7 +54,7 @@ export const yabanShopOpsRouter = router({
             )
           ORDER BY o.created_at DESC
           LIMIT 100`,
-        [ctx.user.id, DEFAULT_TENANT_ID]
+        [ctx.user.id, tenantId]
       );
       return (rows as any[]).map((r) => ({
         orderNo: r.order_no,
@@ -82,11 +84,12 @@ export const yabanShopOpsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       try {
         // 校验订单归属且已完成
         const [orows]: any = await (conn as any).query(
           "SELECT id, user_id, order_status FROM shop_order WHERE order_no = ? AND tenant_id = ? LIMIT 1",
-          [input.orderNo, DEFAULT_TENANT_ID]
+          [input.orderNo, tenantId]
         );
         const o = (orows as any[])[0];
         if (!o || Number(o.user_id) !== Number(ctx.user.id))
@@ -107,7 +110,7 @@ export const yabanShopOpsRouter = router({
              (tenant_id, order_no, product_id, product_code, user_id, user_name, rating, content, images, status)
            VALUES (?,?,?,?,?,?,?,?,?,1)`,
           [
-            DEFAULT_TENANT_ID,
+            tenantId,
             input.orderNo,
             input.productId ?? null,
             input.productCode ?? null,
@@ -133,13 +136,14 @@ export const yabanShopOpsRouter = router({
         limit: z.number().int().min(1).max(50).optional().default(20),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) return { list: [], avgRating: 0, total: 0 };
+      const tenantId = await resolveTenantId(ctx);
       try {
         if (!input.productId && !input.productCode) return { list: [], avgRating: 0, total: 0 };
         const cond: string[] = ["tenant_id = ?", "status = 1"];
-        const params: any[] = [DEFAULT_TENANT_ID];
+        const params: any[] = [tenantId];
         if (input.productId) { cond.push("product_id = ?"); params.push(input.productId); }
         else { cond.push("product_code = ?"); params.push(input.productCode); }
         const where = cond.join(" AND ");
@@ -177,15 +181,16 @@ export const yabanShopOpsRouter = router({
   // ============ 评价：后台列表 + 回复（暂 public，与现有后台口径一致） ============
   adminListReviews: publicProcedure
     .input(z.object({ limit: z.number().int().min(1).max(200).optional().default(100) }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) return [];
+      const tenantId = await resolveTenantId(ctx);
       try {
         const [rows]: any = await (conn as any).query(
           `SELECT id, order_no, product_code, user_name, rating, content, images, reply, status, created_at
              FROM shop_review WHERE tenant_id = ?
             ORDER BY id DESC LIMIT ?`,
-          [DEFAULT_TENANT_ID, input?.limit ?? 100]
+          [tenantId, input?.limit ?? 100]
         );
         return (rows as any[]).map((r) => ({
           id: r.id,
@@ -206,13 +211,14 @@ export const yabanShopOpsRouter = router({
 
   adminReplyReview: publicProcedure
     .input(z.object({ id: z.number().int().positive(), reply: z.string().max(500) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       try {
         await (conn as any).query(
           "UPDATE shop_review SET reply = ? WHERE id = ? AND tenant_id = ?",
-          [input.reply.trim() || null, input.id, DEFAULT_TENANT_ID]
+          [input.reply.trim() || null, input.id, tenantId]
         );
         return { success: true };
       } finally {
@@ -222,13 +228,14 @@ export const yabanShopOpsRouter = router({
 
   adminSetReviewStatus: publicProcedure
     .input(z.object({ id: z.number().int().positive(), status: z.number().int().min(0).max(1) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       try {
         await (conn as any).query(
           "UPDATE shop_review SET status = ? WHERE id = ? AND tenant_id = ?",
-          [input.status, input.id, DEFAULT_TENANT_ID]
+          [input.status, input.id, tenantId]
         );
         return { success: true };
       } finally {
@@ -237,15 +244,16 @@ export const yabanShopOpsRouter = router({
     }),
 
   // ============ Banner：前台查启用中（公开） ============
-  listBanners: publicProcedure.query(async () => {
+  listBanners: publicProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) return [];
+    const tenantId = await resolveTenantId(ctx);
     try {
       const [rows]: any = await (conn as any).query(
         `SELECT id, title, image, link_type, link_value
            FROM shop_banner WHERE tenant_id = ? AND status = 1
           ORDER BY sort_order ASC, id ASC`,
-        [DEFAULT_TENANT_ID]
+        [tenantId]
       );
       return (rows as any[]).map((r) => ({
         id: r.id,
@@ -260,15 +268,16 @@ export const yabanShopOpsRouter = router({
   }),
 
   // ============ Banner：后台列表（含停用） ============
-  adminListBanners: publicProcedure.query(async () => {
+  adminListBanners: publicProcedure.query(async ({ ctx }) => {
     const conn = await getDbConnection();
     if (!conn) return [];
+    const tenantId = await resolveTenantId(ctx);
     try {
       const [rows]: any = await (conn as any).query(
         `SELECT id, title, image, link_type, link_value, sort_order, status
            FROM shop_banner WHERE tenant_id = ?
           ORDER BY sort_order ASC, id ASC`,
-        [DEFAULT_TENANT_ID]
+        [tenantId]
       );
       return (rows as any[]).map((r) => ({
         id: r.id,
@@ -296,22 +305,23 @@ export const yabanShopOpsRouter = router({
         status: z.number().int().min(0).max(1).optional().default(1),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       try {
         if (input.id) {
           await (conn as any).query(
             `UPDATE shop_banner SET title=?, image=?, link_type=?, link_value=?, sort_order=?, status=?
                WHERE id=? AND tenant_id=?`,
             [input.title.trim(), input.image, input.linkType, input.linkValue.trim() || null,
-             input.sortOrder, input.status, input.id, DEFAULT_TENANT_ID]
+             input.sortOrder, input.status, input.id, tenantId]
           );
         } else {
           await (conn as any).query(
             `INSERT INTO shop_banner (tenant_id, title, image, link_type, link_value, sort_order, status)
              VALUES (?,?,?,?,?,?,?)`,
-            [DEFAULT_TENANT_ID, input.title.trim(), input.image, input.linkType,
+            [tenantId, input.title.trim(), input.image, input.linkType,
              input.linkValue.trim() || null, input.sortOrder, input.status]
           );
         }
@@ -323,13 +333,14 @@ export const yabanShopOpsRouter = router({
 
   adminDeleteBanner: publicProcedure
     .input(z.object({ id: z.number().int().positive() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = await resolveTenantId(ctx);
       try {
         await (conn as any).query(
           "DELETE FROM shop_banner WHERE id = ? AND tenant_id = ?",
-          [input.id, DEFAULT_TENANT_ID]
+          [input.id, tenantId]
         );
         return { success: true };
       } finally {

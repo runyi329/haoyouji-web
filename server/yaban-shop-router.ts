@@ -12,6 +12,7 @@ import { router, publicProcedure, protectedProcedure, adminProcedure } from "./_
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
 import { computeCouponDiscount, redeemUserCoupon } from "./yaban-coupon-router";
+import { resolveTenantId } from "./yaban-customer-router";
 
 // 默认租户ID（单店阶段固定为 1，多租户阶段再按医院切换）
 const DEFAULT_TENANT_ID = 1;
@@ -61,6 +62,7 @@ export const yabanShopRouter = router({
           code: "INTERNAL_SERVER_ERROR",
           message: "数据库连接失败",
         });
+      const tenantId = await resolveTenantId(ctx);
 
       // 服务端按数据库真实价格重算（彻底不信任前端价格）
       // 先按 product_code(=legacy_code) 批量查库内价格
@@ -71,7 +73,7 @@ export const yabanShopRouter = router({
         const [prows] = (await (conn as any).execute(
           `SELECT legacy_code, name, image, kind, price FROM shop_product
            WHERE tenant_id = ? AND legacy_code IN (${placeholders})`,
-          [DEFAULT_TENANT_ID, ...codes]
+          [tenantId, ...codes]
         )) as any;
         for (const r of prows as any[]) {
           priceMap.set(String(r.legacy_code), {
@@ -101,7 +103,7 @@ export const yabanShopRouter = router({
       const subtotalSum = items.reduce((s, it) => s + it.subtotal, 0);
       // 优惠券抵扣（服务端核验，金额以服务端为准）
       const { couponId, userCouponId, discount } = await computeCouponDiscount(
-        conn, input.userCouponId, ctx.user.id, subtotalSum
+        conn, tenantId, input.userCouponId, ctx.user.id, subtotalSum
       );
       const total = Math.max(0, Math.round((subtotalSum - discount) * 100) / 100);
       const hasService = items.some((it) => it.kind === "service") ? 1 : 0;
@@ -115,7 +117,7 @@ export const yabanShopRouter = router({
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'unpaid', 'pending', ?, ?)`,
         [
           orderNo,
-          DEFAULT_TENANT_ID,
+          tenantId,
           ctx.user.id,
           userName,
           input.userPhone || null,
@@ -130,7 +132,7 @@ export const yabanShopRouter = router({
       const orderId = res?.insertId;
 
       // 标记优惠券已用
-      if (userCouponId) await redeemUserCoupon(conn, userCouponId, orderNo);
+      if (userCouponId) await redeemUserCoupon(conn, tenantId, userCouponId, orderNo);
 
       // 2) 写订单明细
       for (const it of items) {
@@ -141,7 +143,7 @@ export const yabanShopRouter = router({
           [
             orderId,
             orderNo,
-            DEFAULT_TENANT_ID,
+            tenantId,
             it.code || null,
             it.productId || null,
             it.name,
@@ -163,6 +165,7 @@ export const yabanShopRouter = router({
     .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) return [];
+      const tenantId = await resolveTenantId(ctx);
       const limit = input?.limit ?? 50;
       const [rows] = (await (conn as any).execute(
         `SELECT id, order_no, total_amount, pay_method, pay_status, order_status, has_service, created_at
@@ -170,7 +173,7 @@ export const yabanShopRouter = router({
          WHERE user_id = ? AND tenant_id = ?
          ORDER BY created_at DESC
          LIMIT ${limit}`,
-        [ctx.user.id, DEFAULT_TENANT_ID]
+        [ctx.user.id, tenantId]
       )) as any;
       return rows as any[];
     }),
@@ -185,9 +188,10 @@ export const yabanShopRouter = router({
           code: "INTERNAL_SERVER_ERROR",
           message: "数据库连接失败",
         });
+      const tenantId = await resolveTenantId(ctx);
       const [orderRows] = (await (conn as any).execute(
         `SELECT * FROM shop_order WHERE id = ? AND user_id = ? AND tenant_id = ? LIMIT 1`,
-        [input.orderId, ctx.user.id, DEFAULT_TENANT_ID]
+        [input.orderId, ctx.user.id, tenantId]
       )) as any;
       const order = (orderRows as any[])[0];
       if (!order)
@@ -213,15 +217,16 @@ export const yabanShopRouter = router({
         })
         .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) return { list: [], counts: {} };
+      const tenantId = await resolveTenantId(ctx);
       const status = input?.status ?? "all";
       const keyword = (input?.keyword || "").trim();
       const limit = input?.limit ?? 100;
 
       const where: string[] = [`tenant_id = ?`];
-      const params: any[] = [DEFAULT_TENANT_ID];
+      const params: any[] = [tenantId];
       if (status !== "all") {
         where.push(`order_status = ?`);
         params.push(status);
@@ -244,7 +249,7 @@ export const yabanShopRouter = router({
       // 各状态数量统计（用于筛选胶囊角标）
       const [countRows] = (await (conn as any).execute(
         `SELECT order_status, COUNT(*) AS cnt FROM shop_order WHERE tenant_id = ? GROUP BY order_status`,
-        [DEFAULT_TENANT_ID]
+        [tenantId]
       )) as any;
       const counts: Record<string, number> = { all: 0 };
       for (const r of countRows as any[]) {
@@ -258,16 +263,17 @@ export const yabanShopRouter = router({
   // ============ 管理员侧：订单详情（含明细） ============
   adminOrderDetail: publicProcedure
     .input(z.object({ orderId: z.number().int() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn)
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "数据库连接失败",
         });
+      const tenantId = await resolveTenantId(ctx);
       const [orderRows] = (await (conn as any).execute(
         `SELECT * FROM shop_order WHERE id = ? AND tenant_id = ? LIMIT 1`,
-        [input.orderId, DEFAULT_TENANT_ID]
+        [input.orderId, tenantId]
       )) as any;
       const order = (orderRows as any[])[0];
       if (!order)
@@ -291,13 +297,14 @@ export const yabanShopRouter = router({
         adminRemark: z.string().max(500).optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn)
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "数据库连接失败",
         });
+      const tenantId = await resolveTenantId(ctx);
       const sets: string[] = [];
       const params: any[] = [];
       if (input.orderStatus) {
@@ -313,7 +320,7 @@ export const yabanShopRouter = router({
         params.push(input.adminRemark || null);
       }
       if (sets.length === 0) return { success: true };
-      params.push(input.orderId, DEFAULT_TENANT_ID);
+      params.push(input.orderId, tenantId);
       await (conn as any).execute(
         `UPDATE shop_order SET ${sets.join(", ")} WHERE id = ? AND tenant_id = ?`,
         params

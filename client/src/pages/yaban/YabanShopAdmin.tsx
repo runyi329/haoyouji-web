@@ -15,6 +15,7 @@ import {
   Megaphone,
 } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
+import YabanClinicHeader from "./YabanClinicHeader";
 
 interface AdminEntry {
   key: string;
@@ -94,6 +95,9 @@ export default function YabanShopAdmin() {
             <ChevronLeft className="w-6 h-6" />
           </button>
           <span className="text-base font-bold ml-1">商城订单管理</span>
+          <div className="ml-auto">
+            <YabanClinicHeader compact />
+          </div>
         </div>
       </div>
 

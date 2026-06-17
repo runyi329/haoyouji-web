@@ -17,6 +17,7 @@ import { getDbConnection } from "./db";
 import crypto from "crypto";
 import { clearMerchantCache } from "./yaban-payment-service";
 import { onOrderPaid } from "./yaban-order-fulfill-router";
+import { resolveTenantId } from "./yaban-customer-router";
 
 const DEFAULT_TENANT_ID = 1;
 
@@ -85,8 +86,10 @@ export const yabanPaymentRouter = router({
   // TODO：上线前需收紧为 adminProcedure（当前与商品/订单后台口径一致，临时公开；密钥仅脱敏返回）
   adminGetMerchantConfig: publicProcedure
     .input(z.object({ tenantId: z.number().int().optional() }).optional())
-    .query(async ({ input }) => {
-      const tenantId = input?.tenantId ?? DEFAULT_TENANT_ID;
+    .query(async ({ ctx, input }) => {
+      // 优先按当前登录用户所在/所选门店（请求头 x-yaban-tenant）隔离；
+      // 兼容历史显式入参；都无则安全回退默认租户
+      const tenantId = input?.tenantId ?? (await resolveTenantId(ctx));
       const conn = await getDbConnection();
       try {
         const cfg = await loadMerchantConfig(conn, tenantId);
@@ -147,8 +150,8 @@ export const yabanPaymentRouter = router({
         aliPublicKey: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
-      const tenantId = input.tenantId ?? DEFAULT_TENANT_ID;
+    .mutation(async ({ ctx, input }) => {
+      const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
       const conn = await getDbConnection();
       try {
         const existing = await loadMerchantConfig(conn, tenantId);
