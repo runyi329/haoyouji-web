@@ -13,11 +13,15 @@
  *   图表：趋势折线 + 环形饼图，均用 canvas 绘制（配色见原型规格）
  * 严禁 Emoji，仅用内联 SVG 图标。
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { toast } from "sonner";
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
+import { trpc } from "@/lib/trpc";
 import { CLINICS, YB, type ClinicValuation } from "./yabanValuationData";
+import { useYabanClinic } from "./useYabanClinic";
+import YabanClinicHeader from "./YabanClinicHeader";
 
 /* ============== 内联 SVG 图标（等效 lucide，stroke=2，严禁 Emoji） ============== */
 type IconProps = { className?: string; style?: React.CSSProperties };
@@ -251,15 +255,44 @@ function EditModal({
   open,
   type,
   onClose,
+  tenantId,
+  currentData,
+  onSaved,
 }: {
   open: boolean;
   type: "asset" | "cost";
   onClose: () => void;
+  tenantId: number | null;
+  currentData: ClinicValuation;
+  onSaved: () => void;
 }) {
   const [single, setSingle] = useState<Record<string, string>>({});
   const [multi, setMulti] = useState<Record<string, boolean>>({});
+  const saveMutation = trpc.yabanValuation.save.useMutation();
   if (!open) return null;
   const groups = type === "asset" ? ASSET_FORM : COST_FORM;
+
+  const handleSave = async () => {
+    if (tenantId == null) {
+      toast.error("未识别当前医院");
+      return;
+    }
+    try {
+      const selections = {
+        ...((currentData as any).editSelections || {}),
+        [type]: { single, multi, savedAt: new Date().toISOString() },
+      };
+      await saveMutation.mutateAsync({
+        tenantId,
+        data: { ...currentData, editSelections: selections } as any,
+      });
+      toast.success("已保存");
+      onSaved();
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.message || "保存失败");
+    }
+  };
   return (
     <div
       className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center"
@@ -317,11 +350,12 @@ function EditModal({
         </div>
         <div className="sticky bottom-0 bg-white border-t border-gray-100 p-4">
           <button
-            onClick={onClose}
-            className="w-full py-3 rounded-xl text-white text-sm font-bold active:scale-[0.98] transition-transform"
+            onClick={handleSave}
+            disabled={saveMutation.isPending}
+            className="w-full py-3 rounded-xl text-white text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-60"
             style={{ background: `linear-gradient(135deg, ${YB.blue} 0%, ${YB.blueLight} 100%)` }}
           >
-            保存修改
+            {saveMutation.isPending ? "保存中..." : "保存修改"}
           </button>
         </div>
       </div>
@@ -345,47 +379,28 @@ function ChangePill({ text, down }: { text: string; down?: boolean }) {
 /* ============== 主页面 ============== */
 export default function YabanAiValuation() {
   const [, setLocation] = useLocation();
-  const [idx, setIdx] = useState(0);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const { currentTenantId, current } = useYabanClinic();
   const [edit, setEdit] = useState<{ open: boolean; type: "asset" | "cost" }>({
     open: false,
     type: "asset",
   });
-  const switcherRef = useRef<HTMLDivElement>(null);
-  const c: ClinicValuation = CLINICS[idx];
 
-  // 与项目门店上下文兼容：读取 localStorage 当前门店索引（若越界则回退 0）
-  useEffect(() => {
-    try {
-      const v = localStorage.getItem("yaban_valuation_clinic");
-      if (v != null) {
-        const n = Number(v);
-        if (n >= 0 && n < CLINICS.length) setIdx(n);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
+  // 按当前医院 tenantId 读取真实估值数据
+  const valuationQuery = trpc.yabanValuation.get.useQuery(
+    currentTenantId != null ? { tenantId: currentTenantId } : undefined,
+    { enabled: currentTenantId != null }
+  );
 
-  useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      if (dropdownOpen && switcherRef.current && !switcherRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false);
-      }
-    };
-    document.addEventListener("click", onDoc);
-    return () => document.removeEventListener("click", onDoc);
-  }, [dropdownOpen]);
+  // 真实数据；接口无数据时回退到演示模板（避免空白），并补齐门店名
+  const c: ClinicValuation = useMemo(() => {
+    const remote = valuationQuery.data?.exists ? (valuationQuery.data.data as ClinicValuation) : null;
+    const base = remote || CLINICS[0];
+    const name = current?.name || base.name;
+    const shortName = current?.shortName || base.shortName;
+    return { ...base, name, shortName } as ClinicValuation;
+  }, [valuationQuery.data, current]);
 
-  const selectClinic = (i: number) => {
-    setIdx(i);
-    setDropdownOpen(false);
-    try {
-      localStorage.setItem("yaban_valuation_clinic", String(i));
-    } catch {
-      /* ignore */
-    }
-  };
+  const loading = currentTenantId != null && valuationQuery.isLoading;
 
   const headerGrad = "linear-gradient(135deg, #1B6FA8 0%, #2196C8 100%)";
   const cardGrad = "linear-gradient(135deg, #0E5A9E 0%, #2196C8 50%, #3BA9E0 100%)";
@@ -420,44 +435,7 @@ export default function YabanAiValuation() {
             <IcBack className="w-6 h-6" />
           </button>
           <span className="text-base font-bold">AI 智能估值</span>
-          <div className="relative" ref={switcherRef}>
-            <button
-              onClick={() => setDropdownOpen((o) => !o)}
-              className="flex items-center gap-1 bg-white/15 backdrop-blur rounded-lg px-2 py-1 text-xs"
-            >
-              <span className="max-w-[4em] truncate">{c.shortName}</span>
-              <IcChevDown
-                className="w-3 h-3 transition-transform flex-shrink-0"
-                {...(dropdownOpen ? { style: { transform: "rotate(180deg)" } } : {})}
-              />
-            </button>
-            {dropdownOpen && (
-              <div className="absolute top-full right-0 mt-2 w-56 bg-white rounded-xl shadow-lg overflow-hidden z-50 border border-gray-100">
-                <div className="py-1">
-                  {CLINICS.map((cl, i) => (
-                    <button
-                      key={cl.name}
-                      onClick={() => selectClinic(i)}
-                      className={`w-full text-left px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors ${
-                        i > 0 ? "border-t border-gray-50" : ""
-                      }`}
-                    >
-                      <div>
-                        <div className="text-sm font-medium text-gray-800">{cl.name}</div>
-                        <div className="text-[11px] text-gray-400">{cl.area}</div>
-                      </div>
-                      <span
-                        className="text-xs font-medium"
-                        style={{ color: i === idx ? YB.blue : "transparent" }}
-                      >
-                        当前
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <YabanClinicHeader compact />
         </div>
       </div>
 
@@ -921,7 +899,14 @@ export default function YabanAiValuation() {
         </div>
       </div>
 
-      <EditModal open={edit.open} type={edit.type} onClose={() => setEdit((e) => ({ ...e, open: false }))} />
+      <EditModal
+        open={edit.open}
+        type={edit.type}
+        tenantId={currentTenantId}
+        currentData={c}
+        onSaved={() => valuationQuery.refetch()}
+        onClose={() => setEdit((e) => ({ ...e, open: false }))}
+      />
 
       <YabanTabBar />
     </div>

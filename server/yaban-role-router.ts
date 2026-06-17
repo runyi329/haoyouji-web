@@ -23,6 +23,8 @@ import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
 
 const DEFAULT_TENANT_ID = 1;
+// 牙伴模拟医院：系统内置演示医院，所有用户均自动成为其院长(owner)，承载可读写的演示数据
+export const YABAN_MODEL_TENANT_ID = 9999;
 
 // 诊所内拥有员工/权限管理能力的角色（院长/股东）
 const CLINIC_MANAGE_ROLES = ["owner"];
@@ -339,8 +341,106 @@ export async function ensureRoleTables(conn: any) {
      ON DUPLICATE KEY UPDATE status='active'`
   );
 
+  // ============ 牙伴模拟医院：建院 + 估值表 + 全员入院（幂等） ============
+  await ensureModelClinic(conn);
+
   initialized = true;
 }
+
+/**
+ * 确保“牙伴诊所（模拟）”存在，并把所有现有用户灌为其院长(owner)。
+ * 同时确保估值表存在并写入一份演示数据。全部幂等，可安全重复执行。
+ */
+export async function ensureModelClinic(conn: any) {
+  // 1) 模拟医院主记录
+  await conn.execute(
+    `INSERT INTO yaban_clinic (tenant_id, name, short_name, clinic_type, status, intro, remark)
+     SELECT ?, '牙伴诊所（模拟）', '牙伴模拟', '综合门诊', 'active',
+            '系统演示用模拟医院，所有用户均可进入查看与操作演示数据', '系统内置模拟医院'
+     FROM DUAL
+     WHERE NOT EXISTS (SELECT 1 FROM yaban_clinic WHERE tenant_id = ?)`,
+    [YABAN_MODEL_TENANT_ID, YABAN_MODEL_TENANT_ID]
+  );
+
+  // 2) 全部现有用户成为模拟院 owner（仅插入缺失的，幂等）
+  await conn.execute(
+    `INSERT INTO yaban_clinic_member (tenant_id, user_id, role_key, status, invited_by)
+     SELECT ?, u.id, 'owner', 'active', u.id FROM users u
+     WHERE NOT EXISTS (
+       SELECT 1 FROM yaban_clinic_member m WHERE m.tenant_id = ? AND m.user_id = u.id
+     )`,
+    [YABAN_MODEL_TENANT_ID, YABAN_MODEL_TENANT_ID]
+  );
+
+  // 3) 估值表
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_valuation (
+      id INT NOT NULL AUTO_INCREMENT,
+      tenant_id INT NOT NULL,
+      valuation VARCHAR(32) DEFAULT '',
+      base_valuation VARCHAR(32) DEFAULT '',
+      dynamic_premium VARCHAR(32) DEFAULT '',
+      confidence VARCHAR(16) DEFAULT '',
+      change_pct VARCHAR(16) DEFAULT '',
+      risk_overall VARCHAR(32) DEFAULT '',
+      payload JSON NULL,
+      updated_by INT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uk_tenant (tenant_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='牙伴AI估值数据'
+  `);
+
+  // 4) 模拟院演示估值数据（仅当不存在时写入，避免覆盖用户后续编辑）
+  const [valRows] = (await conn.execute(
+    `SELECT id FROM yaban_valuation WHERE tenant_id = ? LIMIT 1`,
+    [YABAN_MODEL_TENANT_ID]
+  )) as any;
+  if (!(valRows as any[])[0]) {
+    await conn.execute(
+      `INSERT INTO yaban_valuation (tenant_id, valuation, base_valuation, dynamic_premium, confidence, change_pct, risk_overall, payload)
+       VALUES (?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON))`,
+      [
+        YABAN_MODEL_TENANT_ID,
+        MODEL_VALUATION_DEMO.valuation,
+        MODEL_VALUATION_DEMO.baseValuation,
+        MODEL_VALUATION_DEMO.dynamicPremium,
+        MODEL_VALUATION_DEMO.confidence,
+        MODEL_VALUATION_DEMO.change,
+        MODEL_VALUATION_DEMO.riskOverall,
+        JSON.stringify(MODEL_VALUATION_DEMO),
+      ]
+    );
+  }
+}
+
+// 模拟院演示估值数据（与前端 ClinicValuation 字段一致）
+const MODEL_VALUATION_DEMO: Record<string, any> = {
+  name: "牙伴诊所（模拟）", shortName: "牙伴模拟", area: "演示数据 · 仅供体验",
+  valuation: "3,680,000", change: "+4.5%", changeAmount: "较上月增长 16万", confidence: "87%",
+  scale: "7-10张牙椅 / 开业7年", baseValuation: "2,800,000", dynamicPremium: "880,000",
+  revenue: "42.6万", revenueChange: "+8.2%", patients: "1,286", patientsChange: "+156",
+  newPatients: "89", newPatientsChange: "+12%", returnRate: "68.5%", returnRateChange: "+3.2%",
+  chairRate: "76.3%", chairRateChange: "-1.8%", avgPrice: "3,312", avgPriceChange: "+5.6%",
+  aiSummary: "本数据为牙伴模拟诊所演示数据。该门店开业7年，经营稳定，月均营收42.6万元，高于同规模门诊均值18%。存量客户1,286人，近半年月均新增89人。复诊率68.5%，客户粘性良好。高毛利项目（种植+正畸）占比64%，客户LTV达8,640元，获客成本仅320元，LTV/CAC比值27:1。综合评估：成熟期优质资产，估值区间350-390万元。",
+  sharePrice: "36,800", dividendRate: "12.8%", totalShares: "100", soldShares: "23", remainShares: "77", soldPercent: "23%",
+  assetFixed: "约 68 万元", assetChair: "7 台（进口 A-dec）", assetImaging: "CBCT + 数字全景", assetSterilize: "全自动高压灭菌柜", assetDecor: "约 18 万元", assetSoft: "高价值",
+  assetDoctorSenior: "2", assetDoctorMid: "3", assetDoctorExp: "均 8 年", assetCert1: "口腔种植专科", assetCert2: "正畸专科", assetCert3: "儿牙专科",
+  assetLocation: "优质地段", assetCommercial: "A 级", assetPopulation: "8.2 万/km2", assetCompetition: "低竞争",
+  costTotal: "约 28.4 万元", costProfitRate: "33.3%", costRent: "9.8 万", costRentBar: "35%", costSalary: "14.2 万", costSalaryBar: "50%",
+  costOps: "2.6 万", costOpsBar: "20%", costMkt: "1.2 万", costMktBar: "15%", costUtil: "0.6 万", costUtilBar: "8%", costNetProfit: "约 14.2 万元",
+  pieImplant: "38%", pieOrtho: "26%", pieRestore: "18%", pieBasic: "12%", pieOther: "6%", highMarginPct: "64%", pieData: [38, 26, 18, 12, 6],
+  ltvValue: "8,640", cacValue: "320", ltvCacRatio: "27:1", referralRate: "32.5%", highValuePct: "28.6%",
+  riskLease: "低风险", riskLeaseDetail: "剩余租期 4.5 年，含优先续租权", riskDoctor: "中风险", riskDoctorDetail: "2名核心医生未持股，患者跟随医生比例约35%",
+  riskCompliance: "低风险", riskComplianceDetail: "无医疗纠纷记录，证照齐全，医责险已覆盖", riskCashflow: "优良", riskCashflowDetail: "应收账款周期 3 天，预收储值卡余额 42 万", riskOverall: "低风险（A级）",
+  trendData: [320, 328, 345, 352, 360, 368], trendLabels: ["1月", "2月", "3月", "4月", "5月", "6月"],
+  trendEvents: [
+    { color: "#16A34A", text: "3月 新增1名主任医师，估值上涨5.2%" },
+    { color: "#1E88D6", text: "5月 月营收突破40万，连续3月增长" },
+    { color: "#D97706", text: "6月 椅位利用率小幅回调，估值增速放缓" },
+  ],
+};
 
 async function ensureRoleTenantColumn(conn: any) {
   try {
