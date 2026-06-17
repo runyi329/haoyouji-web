@@ -79,7 +79,9 @@ export const yabanAppointmentRouter = router({
       }));
     }),
 
-  // 按月份统计每天预约数（用于日历热力图）
+  // 按月份统计每天预约负荷（用于日历热力图，与医生进度环口径统一：基于预约时长真实占用率）
+  // 返回：{ [date]: { cnt: 条数, minutes: 总时长(分钟), doctors: 参与医生数 } }
+  // 同时保留扁平的 cnt 映射以向后兼容旧调用方。
   monthStats: protectedProcedure
     .input(z.object({
       year: z.number().int(),
@@ -92,19 +94,26 @@ export const yabanAppointmentRouter = router({
       const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
       const monthStr = `${input.year}-${String(input.month).padStart(2, "0")}`;
       const [rows] = (await conn.execute(
-        `SELECT appoint_date, COUNT(*) AS cnt
+        `SELECT appoint_date,
+                COUNT(*) AS cnt,
+                COALESCE(SUM(CASE WHEN duration > 0 THEN duration ELSE 30 END), 0) AS minutes,
+                COUNT(DISTINCT NULLIF(doctor, '')) AS doctors
          FROM yaban_appointment
          WHERE tenant_id = ? AND DATE_FORMAT(appoint_date,'%Y-%m') = ?
            AND status NOT IN ('cancelled','missed')
          GROUP BY appoint_date`,
         [tenantId, monthStr]
       )) as any;
-      const result: Record<string, number> = {};
+      const result: Record<string, { cnt: number; minutes: number; doctors: number }> = {};
       for (const r of rows as any[]) {
         const d = r.appoint_date instanceof Date
           ? r.appoint_date.toISOString().slice(0, 10)
           : String(r.appoint_date || "");
-        result[d] = Number(r.cnt || 0);
+        result[d] = {
+          cnt: Number(r.cnt || 0),
+          minutes: Number(r.minutes || 0),
+          doctors: Number(r.doctors || 0),
+        };
       }
       return result;
     }),
