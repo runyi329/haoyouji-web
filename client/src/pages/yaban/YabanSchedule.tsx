@@ -338,6 +338,7 @@ export default function YabanSchedule() {
             prefillStart={newModal.prefillStart}
             prefillEnd={newModal.prefillEnd}
             members={members}
+            dayAppts={appointments}
             onClose={() => setNewModal({ open: false })}
             onSaved={() => { setNewModal({ open: false }); refetchAppts(); }}
           />
@@ -546,85 +547,246 @@ function TimeView({ docList, onApptClick, onNewAppt, trkStart, trkEnd }: {
   );
 }
 
-// ── 新建预约表单 ──
-function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd, members, onClose, onSaved }: {
+// ── 新建预约表单（1:1 还原原型：15分钟颗粒度时段网格 + 区间框选 + 时间轴 + 快捷时长）──
+const STEP = 15;            // 15 分钟一档
+const DAY_END = 24 * 60;
+const GRID_LO = 8 * 60;     // 时段格子起点 08:00
+const GRID_HI = 18 * 60;    // 时段格子终点 18:00
+
+function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd, members, dayAppts, onClose, onSaved }: {
   date: string; tenantId?: number; prefillDocName?: string; prefillStart?: number; prefillEnd?: number;
   members: { userId: number; name: string; roleKey: string }[];
+  dayAppts: any[];
   onClose: () => void; onSaved: () => void;
 }) {
   const [patientName, setPatientName] = useState("");
   const [doctor, setDoctor] = useState(prefillDocName || "");
-  const [startTime, setStartTime] = useState(prefillStart !== undefined ? hm(prefillStart) : "09:00");
-  const [endTime, setEndTime] = useState(prefillEnd !== undefined ? hm(prefillEnd) : "10:00");
+  const [selStart, setSelStart] = useState<number | null>(prefillStart ?? null);
+  const [selEnd, setSelEnd] = useState<number | null>(prefillEnd ?? (prefillStart !== undefined ? prefillStart + 60 : null));
   const [project, setProject] = useState("");
   const [remark, setRemark] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // 排班模板（含工作/午休/加班时段），用于判定可约范围与营业外加班档
+  const { data: shiftTemplates = [] } = trpc.yabanShift.listTemplates.useQuery({ tenantId });
 
   const createMut = trpc.yabanAppointment.create.useMutation({
     onSuccess: onSaved,
     onError: (e) => { toast.error(e.message); setSaving(false); },
   });
 
-  const PROJECTS = ["全口洁治","补牙","拔牙","戴牙","复诊","拆线","备牙取模","种植牙","正畸","漂白"];
+  const PROJECTS = ["复诊检查","洁牙","补牙","根管治疗","拔牙","戴牙","备牙取模","种植","拆线","其他"];
+
+  // 当前选中医生的排班模板
+  const tpl = shiftTemplates.find((t: any) => t.staffName === doctor);
+  // 医生当日在岗范围（含加班）[lo, hi]，单位分钟
+  const docRange = (() => {
+    if (!tpl) return null;
+    let lo = timeToMin(tpl.workStart || "09:00");
+    let hi = timeToMin(tpl.workEnd || "18:00");
+    if (tpl.overtimeStart && tpl.overtimeEnd) {
+      lo = Math.min(lo, timeToMin(tpl.overtimeStart));
+      hi = Math.max(hi, timeToMin(tpl.overtimeEnd));
+    }
+    return [lo, hi] as [number, number];
+  })();
+
+  // 该医生当天已占用时段 [start, end, name, proj]
+  const busy: [number, number, string, string][] = dayAppts
+    .filter(a => a.doctor === doctor)
+    .map(a => {
+      const s = timeToMin(a.appointTime || "00:00");
+      const e = a.endTime ? timeToMin(a.endTime) : s + (Number(a.duration) > 0 ? Number(a.duration) : 30);
+      return [s, e, a.patientName || "", a.project || ""] as [number, number, string, string];
+    });
+
+  const firstFreeStart = () => {
+    if (!docRange) return GRID_LO;
+    const [lo, hi] = docRange;
+    for (let t = lo; t + STEP <= hi; t += STEP) {
+      if (!busy.some(b => t < b[1] && t + STEP > b[0])) return t;
+    }
+    return lo;
+  };
+
+  function pickDoc(name: string) { setDoctor(name); setSelStart(null); setSelEnd(null); }
+
+  // 点击格子：第一下定起点，第二下定终点（自动排序），再点起点取消
+  function pickCell(t: number) {
+    if (selStart === null) { setSelStart(t); setSelEnd(t + STEP); return; }
+    if (selEnd !== null && selEnd - selStart === STEP && t === selStart) { setSelStart(null); setSelEnd(null); return; }
+    let a = selStart, b = t + STEP;
+    if (t < selStart) { a = t; b = selStart + STEP; }
+    setSelStart(a); setSelEnd(b);
+  }
+  function setDur(min: number) {
+    const base = selStart !== null ? selStart : firstFreeStart();
+    setSelStart(base); setSelEnd(Math.min(base + min, DAY_END));
+  }
+  function adjDur(delta: number) {
+    if (selStart === null) { const b = firstFreeStart(); setSelStart(b); setSelEnd(b + STEP); return; }
+    setSelEnd(Math.max(selStart + STEP, Math.min((selEnd ?? selStart + STEP) + delta, DAY_END)));
+  }
+
+  // 区间时长与温和提示
+  const durMin = selStart !== null && selEnd !== null ? selEnd - selStart : 0;
+  const warns: string[] = [];
+  if (selStart !== null && selEnd !== null) {
+    const hit = busy.find(b => selStart < b[1] && selEnd > b[0]);
+    if (hit) warns.push(`与「${hit[2]}${hit[3] ? " · " + hit[3] : ""}」时段重叠`);
+    if (docRange) {
+      if (selStart < docRange[0]) warns.push(`早于医生排班开始（${hm(docRange[0])}），将记为提前接诊`);
+      if (selEnd > docRange[1]) warns.push(`晚于医生排班结束（${hm(docRange[1])}），将记为加时`);
+    }
+  }
+
+  // 时段格子
+  const cells: { t: number; busy: boolean; outside: boolean }[] = [];
+  if (docRange) {
+    for (let t = GRID_LO; t + STEP <= GRID_HI; t += STEP) {
+      const isBusy = busy.some(b => t < b[1] && t + STEP > b[0]);
+      cells.push({ t, busy: isBusy, outside: t < docRange[0] || t + STEP > docRange[1] });
+    }
+  }
 
   function handleSave() {
-    if (!patientName.trim()) { toast.error("请填写患者姓名"); return; }
+    if (!patientName.trim()) { toast.error("请填写顾客姓名"); return; }
     if (!doctor) { toast.error("请选择就诊医生"); return; }
+    if (selStart === null || selEnd === null) { toast.error("请选择预约时段"); return; }
     setSaving(true);
-    const [sh, sm] = startTime.split(":").map(Number);
-    const [eh, em] = endTime.split(":").map(Number);
-    const dur = (eh * 60 + em) - (sh * 60 + sm);
-    createMut.mutate({ patientName: patientName.trim(), doctor, appointDate: date, appointTime: startTime, endTime, duration: dur > 0 ? dur : 30, project, remark, status: "booked", tenantId });
+    const startTime = hm(selStart), endTime = hm(selEnd);
+    createMut.mutate({ patientName: patientName.trim(), doctor, appointDate: date, appointTime: startTime, endTime, duration: selEnd - selStart, project, remark, status: "booked", tenantId });
   }
+
+  const slotHint = !doctor
+    ? "· 请先选医生"
+    : !docRange
+      ? "· 该医生今日无排班"
+      : "· 点击起点与终点框选时间（15 分钟一档）";
 
   return (
     <div>
       <h3 style={{ fontSize: 17, marginBottom: 4 }}>新建预约</h3>
       <div style={{ fontSize: 12, color: GRAY, marginBottom: 12 }}>填写预约信息</div>
-      {/* 患者姓名 */}
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "11px 0", borderBottom: `1px solid ${LINE}`, fontSize: 14 }}>
-        <span style={{ color: GRAY }}>患者姓名</span>
-        <input value={patientName} onChange={e => setPatientName(e.target.value)} placeholder="请输入姓名" style={{ border: "none", outline: "none", textAlign: "right", fontSize: 14, color: "#374151", background: "transparent", width: 160 }} />
+      {/* 顾客 */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 0", borderBottom: `1px solid ${LINE}`, fontSize: 14 }}>
+        <span style={{ color: GRAY }}>顾客</span>
+        <input value={patientName} onChange={e => setPatientName(e.target.value)} placeholder="请输入顾客姓名" style={{ border: "none", outline: "none", textAlign: "right", fontSize: 14, color: "#374151", background: "transparent", width: 180 }} />
       </div>
       {/* 就诊医生 */}
       <div style={{ padding: "11px 0 8px", borderBottom: `1px solid ${LINE}`, fontSize: 14 }}>
-        <div style={{ color: GRAY, marginBottom: 8 }}>就诊医生 <span style={{ fontSize: 11, color: "#aab4be", fontWeight: 400 }}>· 仅显示在岗</span></div>
+        <div style={{ color: GRAY, marginBottom: 8 }}>就诊医生 <span style={{ fontSize: 11, color: "#aab4be", fontWeight: 400 }}>· 仅显示今日在岗</span></div>
         <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "2px 0 4px" }}>
           {members.map(m => (
-            <div key={m.userId} onClick={() => setDoctor(m.name)} style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 4px", width: 58, borderRadius: 10, border: `1px solid ${doctor === m.name ? SKY_D : LINE}`, background: doctor === m.name ? SKY_L : "#fafbfc", cursor: "pointer" }}>
+            <div key={m.userId} onClick={() => pickDoc(m.name)} style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 4px", width: 58, borderRadius: 10, border: `1px solid ${doctor === m.name ? SKY_D : LINE}`, background: doctor === m.name ? SKY_L : "#fafbfc", cursor: "pointer", transition: ".16s" }}>
               <div style={{ width: 34, height: 34, borderRadius: "50%", background: doctor === m.name ? SKY_D : SKY_L, color: doctor === m.name ? "#fff" : SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14 }}>{m.name.charAt(0)}</div>
               <div style={{ fontSize: 11, color: "#51606e", fontWeight: 600 }}>{m.name}</div>
             </div>
           ))}
         </div>
       </div>
-      {/* 时间 */}
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "11px 0", borderBottom: `1px solid ${LINE}`, fontSize: 14, alignItems: "center" }}>
-        <span style={{ color: GRAY }}>预约时间</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} style={{ width: 84, fontSize: 14, fontWeight: 600, color: "#2a3340", border: `1px solid ${LINE}`, borderRadius: 8, padding: "6px 8px", background: "#fafbfc", fontFamily: "inherit", textAlign: "center" }} />
-          <span style={{ color: "#c4ccd4" }}>–</span>
-          <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} style={{ width: 84, fontSize: 14, fontWeight: 600, color: "#2a3340", border: `1px solid ${LINE}`, borderRadius: 8, padding: "6px 8px", background: "#fafbfc", fontFamily: "inherit", textAlign: "center" }} />
-        </div>
+      {/* 预约时间：时间轴 + 时段网格 */}
+      <div style={{ padding: "11px 0 4px", fontSize: 14 }}>
+        <div style={{ color: GRAY, marginBottom: 8 }}>预约时间 <span style={{ fontSize: 11, color: "#aab4be", fontWeight: 400 }}>{slotHint}</span></div>
+        {doctor && docRange && (
+          <ApptAxis lo={Math.max(0, docRange[0] - 60)} hi={Math.min(GRID_HI, docRange[1] + 60)} dlo={docRange[0]} dhi={docRange[1]} busy={busy} selStart={selStart} selEnd={selEnd} />
+        )}
+        {!doctor && <div style={{ fontSize: 12, color: "#aab4be", padding: "4px 2px" }}>请先选择医生</div>}
+        {doctor && !docRange && <div style={{ fontSize: 12, color: "#aab4be", padding: "4px 2px" }}>该医生今日无排班，无法预约</div>}
+        {doctor && docRange && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(8,1fr)", gap: 5, padding: "2px 0 4px" }}>
+            {cells.map(x => {
+              const lab = hm(x.t);
+              const inSel = selStart !== null && selEnd !== null && x.t >= selStart && x.t + STEP <= selEnd;
+              const isStart = selStart !== null && selEnd === null && x.t === selStart;
+              if (inSel) {
+                return <div key={x.t} onClick={() => pickCell(x.t)} style={{ fontSize: 11, padding: "6px 2px", borderRadius: 6, textAlign: "center", fontWeight: 600, cursor: "pointer", background: SKY_D, color: "#fff", border: `1px solid ${SKY_D}` }}>{lab}</div>;
+              }
+              if (x.busy) {
+                return <div key={x.t} style={{ fontSize: 11, padding: "6px 2px", borderRadius: 6, textAlign: "center", fontWeight: 600, background: "#f4f6f8", color: "#b3bcc5", border: "1px solid #e3e8ec", textDecoration: "line-through", cursor: "not-allowed" }}>{lab}</div>;
+              }
+              const early = x.outside;
+              return <div key={x.t} onClick={() => pickCell(x.t)} style={{ fontSize: 11, padding: "6px 2px", borderRadius: 6, textAlign: "center", fontWeight: 600, cursor: "pointer", background: isStart ? SKY_D : (early ? "#FDF4E6" : "#fff"), color: isStart ? "#fff" : (early ? "#C9750E" : SKY_D), border: `1px solid ${isStart ? SKY_D : (early ? "#F0C68A" : SKY)}`, borderStyle: early && !isStart ? "dashed" : "solid" }}>{lab}</div>;
+            })}
+          </div>
+        )}
       </div>
+      {/* 时长实时条 + 快捷时长 */}
+      {doctor && docRange && selStart !== null && (
+        <div style={{ background: "#f7fafc", border: `1px solid ${LINE}`, borderRadius: 11, padding: "11px 13px", margin: "8px 0 4px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 14, fontWeight: 700, color: "#2a3340" }}>
+            <span>{selEnd !== null ? `${hm(selStart)} – ${hm(selEnd)}` : hm(selStart)}</span>
+            <b style={{ color: SKY_D, fontSize: 15 }}>{durMin >= 60 ? `${(durMin / 60).toFixed(durMin % 60 ? 1 : 0)} 小时（${durMin} 分钟）` : `${durMin} 分钟`}</b>
+          </div>
+          {warns.length > 0 && (
+            <div style={{ marginTop: 7, fontSize: 11.5, fontWeight: 600, color: "#C9750E", background: "#FDF4E6", border: "1px solid #F0C68A", borderRadius: 7, padding: "6px 9px" }}>提示：{warns.join("；")}，请与医生确认。</div>
+          )}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 10 }}>
+            {([["30 分钟", () => setDur(30)], ["1 小时", () => setDur(60)], ["1.5 小时", () => setDur(90)]] as [string, () => void][]).map(([t, fn]) => (
+              <span key={t} onClick={fn} style={{ fontSize: 11.5, fontWeight: 600, color: SKY_D, background: "#fff", border: `1px solid ${SKY}`, borderRadius: 7, padding: "5px 11px", cursor: "pointer" }}>{t}</span>
+            ))}
+            {([["−15", () => adjDur(-15)], ["+15", () => adjDur(15)], ["+1h", () => adjDur(60)]] as [string, () => void][]).map(([t, fn]) => (
+              <span key={t} onClick={fn} style={{ fontSize: 11.5, fontWeight: 600, color: "#5b6772", background: "#fbfcfd", border: "1px solid #d2dae1", borderRadius: 7, padding: "5px 11px", cursor: "pointer" }}>{t}</span>
+            ))}
+          </div>
+        </div>
+      )}
       {/* 诊疗项目 */}
-      <div style={{ padding: "11px 0 8px", borderBottom: `1px solid ${LINE}`, fontSize: 14 }}>
-        <div style={{ color: GRAY, marginBottom: 8 }}>诊疗项目</div>
+      <div style={{ padding: "11px 0 8px", borderTop: `1px solid ${LINE}`, borderBottom: `1px solid ${LINE}`, fontSize: 14, marginTop: 8 }}>
+        <div style={{ color: GRAY, marginBottom: 8 }}>诊疗项目 <span style={{ fontSize: 11, color: "#aab4be", fontWeight: 400 }}>· 不限制时长</span></div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {PROJECTS.map(p => (
-            <div key={p} onClick={() => setProject(project === p ? "" : p)} style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 8, cursor: "pointer", color: project === p ? SKY_D : "#51606e", background: project === p ? SKY_L : "#fafbfc", border: `1px solid ${project === p ? SKY_D : LINE}` }}>{p}</div>
+            <div key={p} onClick={() => setProject(project === p ? "" : p)} style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 8, cursor: "pointer", color: project === p ? SKY_D : "#51606e", background: project === p ? SKY_L : "#fafbfc", border: `1px solid ${project === p ? SKY : LINE}` }}>{p}</div>
           ))}
         </div>
       </div>
       {/* 备注 */}
-      <div style={{ display: "flex", justifyContent: "space-between", padding: "11px 0", fontSize: 14, borderBottom: `1px solid ${LINE}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 0", fontSize: 14 }}>
         <span style={{ color: GRAY }}>备注</span>
-        <input value={remark} onChange={e => setRemark(e.target.value)} placeholder="可选" style={{ border: "none", outline: "none", textAlign: "right", fontSize: 14, color: "#374151", background: "transparent", width: 160 }} />
+        <input value={remark} onChange={e => setRemark(e.target.value)} placeholder="检查后可能加时" style={{ border: "none", outline: "none", textAlign: "right", fontSize: 14, color: "#374151", background: "transparent", width: 180 }} />
       </div>
-      {/* 操作 */}
-      <div style={{ display: "flex", gap: 10, marginTop: 16, position: "sticky", bottom: 0, background: "#fff", paddingTop: 12, paddingBottom: 2, boxShadow: "0 -8px 12px -6px rgba(15,23,42,.08)" }}>
-        <div onClick={onClose} style={{ flex: 1, textAlign: "center", padding: 13, borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer", background: "#f1f4f7", color: "#5b6675" }}>取消</div>
+      {/* 操作：全宽保存 */}
+      <div style={{ display: "flex", gap: 10, marginTop: 12, position: "sticky", bottom: 0, background: "#fff", paddingTop: 12, paddingBottom: 2, boxShadow: "0 -8px 12px -6px rgba(15,23,42,.08)" }}>
         <div onClick={handleSave} style={{ flex: 1, textAlign: "center", padding: 13, borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer", background: saving ? "#cdd5dd" : SKY_D, color: "#fff", pointerEvents: saving ? "none" : "auto" }}>{saving ? "保存中..." : "保存预约"}</div>
+      </div>
+    </div>
+  );
+}
+
+// 时间轴：可约/已占用/本次预约三色条（对齐原型 axis）
+function ApptAxis({ lo, hi, dlo, dhi, busy, selStart, selEnd }: {
+  lo: number; hi: number; dlo: number; dhi: number;
+  busy: [number, number, string, string][]; selStart: number | null; selEnd: number | null;
+}) {
+  const span = Math.max(1, hi - lo);
+  const pc = (t: number) => ((t - lo) / span) * 100;
+  const ticks: number[] = [];
+  for (let t = Math.ceil(lo / 60) * 60; t < hi; t += 60) ticks.push(t);
+  const mids = [Math.round((lo + span / 3) / 60) * 60, Math.round((lo + span * 2 / 3) / 60) * 60];
+  return (
+    <div style={{ padding: "2px 0 8px" }}>
+      <div style={{ position: "relative", height: 14, marginBottom: 3 }}>
+        <span style={{ position: "absolute", left: "0%", transform: "translateX(-50%)", fontSize: 9, color: "#aab4be" }}>{hm(lo)}</span>
+        {mids.map((m, i) => <span key={i} style={{ position: "absolute", left: `${pc(m)}%`, transform: "translateX(-50%)", fontSize: 9, color: "#aab4be" }}>{hm(m)}</span>)}
+        <span style={{ position: "absolute", left: "100%", transform: "translateX(-50%)", fontSize: 9, color: "#aab4be" }}>{hm(hi)}</span>
+      </div>
+      <div style={{ position: "relative", height: 34, borderRadius: 8, background: "#eef2f6", overflow: "hidden", boxShadow: `inset 0 0 0 1px ${LINE}` }}>
+        {dlo > lo && <div style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: `${pc(dlo)}%`, background: "repeating-linear-gradient(45deg,#e7ebef,#e7ebef 4px,#f1f4f7 4px,#f1f4f7 8px)" }} />}
+        {dhi < hi && <div style={{ position: "absolute", top: 0, bottom: 0, left: `${pc(dhi)}%`, width: `${100 - pc(dhi)}%`, background: "repeating-linear-gradient(45deg,#e7ebef,#e7ebef 4px,#f1f4f7 4px,#f1f4f7 8px)" }} />}
+        {ticks.map((t, i) => <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: `${pc(t)}%`, width: 1, background: "rgba(120,135,150,.14)" }} />)}
+        {busy.map((b, i) => {
+          const x0 = Math.max(b[0], lo), x1 = Math.min(b[1], hi);
+          if (x1 <= x0) return null;
+          return <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: `${pc(x0)}%`, width: `${pc(x1) - pc(x0)}%`, background: "#cfd9e2", boxShadow: "inset 0 0 0 1px #bcc8d3" }}><span style={{ fontSize: 8, color: "#5b6772", padding: "2px 3px", whiteSpace: "nowrap", overflow: "hidden", display: "block", lineHeight: 1.3 }}>{b[2]}</span></div>;
+        })}
+        {selStart !== null && selEnd !== null && (
+          <div style={{ position: "absolute", top: 0, bottom: 0, left: `${pc(selStart)}%`, width: `${pc(selEnd) - pc(selStart)}%`, background: `linear-gradient(90deg,${SKY_D},${SKY})`, boxShadow: `0 0 0 1px ${SKY_D}` }} />
+        )}
+      </div>
+      <div style={{ display: "flex", gap: 14, marginTop: 6, fontSize: 10, color: "#8593a0" }}>
+        <span><i style={{ display: "inline-block", width: 11, height: 11, borderRadius: 3, verticalAlign: -1, marginRight: 4, background: "#eef2f6", boxShadow: `inset 0 0 0 1px ${LINE}` }} />可约</span>
+        <span><i style={{ display: "inline-block", width: 11, height: 11, borderRadius: 3, verticalAlign: -1, marginRight: 4, background: "#cfd9e2" }} />已占用</span>
+        <span><i style={{ display: "inline-block", width: 11, height: 11, borderRadius: 3, verticalAlign: -1, marginRight: 4, background: `linear-gradient(90deg,${SKY_D},${SKY})` }} />本次预约</span>
       </div>
     </div>
   );
