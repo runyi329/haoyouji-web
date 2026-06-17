@@ -16,6 +16,7 @@ import {
   Plus,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
 
 // 预约状态配置
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
@@ -35,9 +36,10 @@ export default function YabanScheduleDetail() {
   const [, setLocation] = useLocation();
   const params = useParams<{ id: string }>();
   const [showActionSheet, setShowActionSheet] = useState(false);
+  const { currentTenantId } = useYabanClinic();
 
   const { data: detail, isLoading } = trpc.yabanAppointment.getById.useQuery(
-    { id: Number(params.id) },
+    { id: Number(params.id), tenantId: currentTenantId ?? undefined },
     { enabled: !!params.id }
   );
 

@@ -15,6 +15,8 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { PageTag } from "@/components/PageTag";
+import { useYabanClinic } from "./useYabanClinic";
+import YabanClinicHeader from "./YabanClinicHeader";
 
 // ── 颜色常量 ──
 const SKY = "#2196C8", SKY_D = "#1E88D6", SKY_L = "#EAF4FE";
@@ -138,9 +140,18 @@ export default function YabanClinicShift() {
   const [bizOpen, setBizOpen] = useState("09:00");
   const [bizClose, setBizClose] = useState("18:00");
 
-  // API
-  const { data: schedData, refetch } = trpc.yabanShift.weekSchedule.useQuery({ weekStart: weekStartStr });
-  const { data: allTemplates = [], refetch: refetchTpl } = trpc.yabanShift.listTemplates.useQuery(undefined);
+  // 当前医院（多医院隔离）
+  const { currentTenantId } = useYabanClinic();
+
+  // API（按当前医院 tenantId 隔离）
+  const { data: schedData, refetch } = trpc.yabanShift.weekSchedule.useQuery(
+    { weekStart: weekStartStr, tenantId: currentTenantId ?? undefined },
+    { enabled: currentTenantId != null }
+  );
+  const { data: allTemplates = [], refetch: refetchTpl } = trpc.yabanShift.listTemplates.useQuery(
+    { tenantId: currentTenantId ?? undefined },
+    { enabled: currentTenantId != null }
+  );
   const saveOverrideMut = trpc.yabanShift.saveOverride.useMutation({
     onSuccess: () => { refetch(); toast.success("排班已保存"); },
     onError: (e) => toast.error(e.message),
@@ -238,7 +249,7 @@ export default function YabanClinicShift() {
     if (!batchSel.size) { toast.error("请先勾选员工"); return; }
     const dateStr = toDateStr(selDate);
     Promise.all(Array.from(batchSel).map(id =>
-      saveOverrideMut.mutateAsync({ staffUserId: id, overrideDate: dateStr, shiftType: "rest" })
+      saveOverrideMut.mutateAsync({ staffUserId: id, overrideDate: dateStr, shiftType: "rest", tenantId: currentTenantId ?? undefined })
     )).then(() => { setBatchMode(false); setBatchSel(new Set()); });
   }
   function batchCopyTemplate() {
@@ -252,6 +263,7 @@ export default function YabanClinicShift() {
         workStart: tpl.workStart, workEnd: tpl.workEnd,
         breakStart: tpl.breakStart ?? undefined, breakEnd: tpl.breakEnd ?? undefined,
         overtimeStart: tpl.overtimeStart ?? undefined, overtimeEnd: tpl.overtimeEnd ?? undefined,
+        tenantId: currentTenantId ?? undefined,
       });
     })).then(() => { setBatchMode(false); setBatchSel(new Set()); });
   }
@@ -267,7 +279,7 @@ export default function YabanClinicShift() {
             <div onClick={() => setLocation("/yaban/schedule")} style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, color: "#eaf6ff", whiteSpace: "nowrap", cursor: "pointer" }}>顾客预约</div>
             <div style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, background: "#fff", color: SKY_D, boxShadow: "0 1px 3px rgba(0,0,0,.1)", whiteSpace: "nowrap" }}>医生排班</div>
           </div>
-          <div style={{ width: 28 }} />
+          <YabanClinicHeader compact />
         </div>
       </div>
 
@@ -459,6 +471,7 @@ export default function YabanClinicShift() {
                 staffUserId: schDrawer.staffUserId, overrideDate: d, shiftType,
                 workStart: workStart ?? undefined, workEnd: workEnd ?? undefined,
                 overtimeStart: otStart ?? undefined, overtimeEnd: otEnd ?? undefined,
+                tenantId: currentTenantId ?? undefined,
               })
             )).then(() => setSchDrawer(null));
           }}
@@ -474,6 +487,7 @@ export default function YabanClinicShift() {
           onClose={() => setTplModal(false)}
           onSave={(open, close) => { setBizOpen(open); setBizClose(close); setTplModal(false); }}
           saveTemplateMut={saveTemplateMut}
+          tenantId={currentTenantId ?? undefined}
         />
       )}
 
@@ -653,11 +667,12 @@ function SchDrawer({ staffUserId, staffName, date, initSegs, bizOpen, bizClose, 
 }
 
 // ── 班次模板弹窗 ──
-function TplModal({ bizOpen, bizClose, templates, onClose, onSave, saveTemplateMut }: {
+function TplModal({ bizOpen, bizClose, templates, onClose, onSave, saveTemplateMut, tenantId }: {
   bizOpen: string; bizClose: string; templates: any[];
   onClose: () => void;
   onSave: (open: string, close: string) => void;
   saveTemplateMut: any;
+  tenantId?: number;
 }) {
   const [open, setOpen] = useState(bizOpen);
   const [close, setClose] = useState(bizClose);
@@ -685,9 +700,9 @@ function TplModal({ bizOpen, bizClose, templates, onClose, onSave, saveTemplateM
                 <div style={{ width: 32, height: 32, borderRadius: "50%", background: SKY_L, color: SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600 }}>{tpl.staffName.charAt(0)}</div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#2a3340", flex: 1 }}>{tpl.staffName}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <input type="time" defaultValue={tpl.workStart} step={300} onBlur={e => saveTemplateMut.mutate({ id: tpl.id, staffUserId: tpl.staffUserId, workStart: e.target.value, workEnd: tpl.workEnd, workDays: tpl.workDays })} style={{ width: 78, fontSize: 13, fontWeight: 600, color: "#2a3340", border: `1px solid ${LINE}`, borderRadius: 7, padding: "6px 4px", background: "#fafbfc", fontFamily: "inherit", textAlign: "center" }} />
+                  <input type="time" defaultValue={tpl.workStart} step={300} onBlur={e => saveTemplateMut.mutate({ id: tpl.id, staffUserId: tpl.staffUserId, workStart: e.target.value, workEnd: tpl.workEnd, workDays: tpl.workDays, tenantId })} style={{ width: 78, fontSize: 13, fontWeight: 600, color: "#2a3340", border: `1px solid ${LINE}`, borderRadius: 7, padding: "6px 4px", background: "#fafbfc", fontFamily: "inherit", textAlign: "center" }} />
                   <span style={{ color: "#c4ccd4" }}>–</span>
-                  <input type="time" defaultValue={tpl.workEnd} step={300} onBlur={e => saveTemplateMut.mutate({ id: tpl.id, staffUserId: tpl.staffUserId, workStart: tpl.workStart, workEnd: e.target.value, workDays: tpl.workDays })} style={{ width: 78, fontSize: 13, fontWeight: 600, color: "#2a3340", border: `1px solid ${LINE}`, borderRadius: 7, padding: "6px 4px", background: "#fafbfc", fontFamily: "inherit", textAlign: "center" }} />
+                  <input type="time" defaultValue={tpl.workEnd} step={300} onBlur={e => saveTemplateMut.mutate({ id: tpl.id, staffUserId: tpl.staffUserId, workStart: tpl.workStart, workEnd: e.target.value, workDays: tpl.workDays, tenantId })} style={{ width: 78, fontSize: 13, fontWeight: 600, color: "#2a3340", border: `1px solid ${LINE}`, borderRadius: 7, padding: "6px 4px", background: "#fafbfc", fontFamily: "inherit", textAlign: "center" }} />
                 </div>
               </div>
               <div style={{ fontSize: 11, color: GRAY, paddingLeft: 2 }}>

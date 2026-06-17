@@ -160,41 +160,57 @@ export const yabanAppointmentRouter = router({
       return { success: true, id: Number(res.insertId) };
     }),
 
-  // 更新预约状态
+  // 更新预约状态（带 tenant 校验，禁止跨医院操作）
   updateStatus: protectedProcedure
     .input(z.object({
       id: z.number().int(),
       status: z.string().max(32),
+      tenantId: z.number().int().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await conn.execute(`UPDATE yaban_appointment SET status=? WHERE id=?`, [input.status, input.id]);
+      const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
+      const [res] = (await conn.execute(
+        `UPDATE yaban_appointment SET status=? WHERE id=? AND tenant_id=?`,
+        [input.status, input.id, tenantId]
+      )) as any;
+      if (!res || res.affectedRows === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "预约不存在或无权操作" });
+      }
       return { success: true };
     }),
 
-  // 删除预约
+  // 删除预约（带 tenant 校验，禁止跨医院操作）
   delete: protectedProcedure
-    .input(z.object({ id: z.number().int() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({ id: z.number().int(), tenantId: z.number().int().optional() }))
+    .mutation(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
-      await conn.execute(`DELETE FROM yaban_appointment WHERE id=?`, [input.id]);
+      const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
+      const [res] = (await conn.execute(
+        `DELETE FROM yaban_appointment WHERE id=? AND tenant_id=?`,
+        [input.id, tenantId]
+      )) as any;
+      if (!res || res.affectedRows === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "预约不存在或无权操作" });
+      }
       return { success: true };
     }),
 
-  // 按ID查询单个预约
+  // 按ID查询单个预约（带 tenant 校验，禁止跨医院读取）
   getById: protectedProcedure
-    .input(z.object({ id: z.number().int() }))
-    .query(async ({ input }) => {
+    .input(z.object({ id: z.number().int(), tenantId: z.number().int().optional() }))
+    .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) return null;
+      const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
       const [rows] = (await conn.execute(
         `SELECT id, patient_id, patient_name, patient_mobile, patient_gender, patient_age,
                 doctor, consultant, assistant, room, department, project, source,
                 appoint_date, appoint_time, end_time, duration, status, remark
-         FROM yaban_appointment WHERE id=? LIMIT 1`,
-        [input.id]
+         FROM yaban_appointment WHERE id=? AND tenant_id=? LIMIT 1`,
+        [input.id, tenantId]
       )) as any;
       const r = (rows as any[])[0];
       if (!r) return null;

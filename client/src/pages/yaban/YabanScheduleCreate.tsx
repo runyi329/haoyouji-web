@@ -8,6 +8,7 @@ import { PageTag } from "@/components/PageTag";
 import { useLocation } from "wouter";
 import { ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
 
 // 静态选项（医生从API动态获取）
 const DOCTORS_FALLBACK = ["郑莹", "易家宝", "李华超", "鲁毅", "梅刚"];
@@ -39,9 +40,10 @@ export default function YabanScheduleCreate() {
   const [, setLocation] = useLocation();
   const [showPicker, setShowPicker] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const { currentTenantId } = useYabanClinic();
 
   // 从API获取员工（医生）列表
-  const { data: membersData } = trpc.yabanAppointment.listMembers.useQuery();
+  const { data: membersData } = trpc.yabanAppointment.listMembers.useQuery({ tenantId: currentTenantId ?? undefined });
   const DOCTORS = membersData?.map((m: any) => m.name).filter(Boolean) as string[] || DOCTORS_FALLBACK;
 
   // 创建预约 mutation
@@ -77,6 +79,7 @@ export default function YabanScheduleCreate() {
     if (submitting) return;
     setSubmitting(true);
     createAppointment.mutate({
+      tenantId: currentTenantId ?? undefined,
       patientName: form.patientName,
       appointDate: form.date,
       appointTime: form.startTime,

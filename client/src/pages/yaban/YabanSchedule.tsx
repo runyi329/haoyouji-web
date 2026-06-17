@@ -10,6 +10,8 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { useYabanClinic } from "./useYabanClinic";
+import YabanClinicHeader from "./YabanClinicHeader";
 
 // 热力图 10 档色阶
 const HEAT = ["#3FA0D6","#74BAE2","#A6D2ED","#CFE6F4","#E8F1F6","#F6E3E0","#F2C2BB","#EC9A8F","#E47166","#DC4B3B"];
@@ -71,12 +73,15 @@ export default function YabanSchedule() {
 
   const dateStr = toDateStr(selDate);
 
-  const { data: appointments = [], refetch: refetchAppts } = trpc.yabanAppointment.listByDate.useQuery({ date: dateStr });
+  const { currentTenantId } = useYabanClinic();
+
+  const { data: appointments = [], refetch: refetchAppts } = trpc.yabanAppointment.listByDate.useQuery({ date: dateStr, tenantId: currentTenantId ?? undefined });
   const { data: monthStats = {} } = trpc.yabanAppointment.monthStats.useQuery({
     year: calMode === "month" ? monthCursor.getFullYear() : selDate.getFullYear(),
     month: calMode === "month" ? monthCursor.getMonth() + 1 : selDate.getMonth() + 1,
+    tenantId: currentTenantId ?? undefined,
   });
-  const { data: members = [] } = trpc.yabanAppointment.listMembers.useQuery(undefined);
+  const { data: members = [] } = trpc.yabanAppointment.listMembers.useQuery({ tenantId: currentTenantId ?? undefined });
 
   // 按医生分组
   const docMap = new Map<string, { name: string; appts: typeof appointments }>();
@@ -162,6 +167,9 @@ export default function YabanSchedule() {
             <div onClick={() => setLocation("/yaban/clinic-shift")} style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, color: "#eaf6ff", whiteSpace: "nowrap", cursor: "pointer" }}>医生排班</div>
           </div>
           <div onClick={() => setNewModal({ open: true })} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", height: 34, padding: "0 12px", borderRadius: 9, background: "rgba(255,255,255,.18)", border: "1px solid rgba(255,255,255,.3)", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>+ 新建</div>
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <YabanClinicHeader compact />
         </div>
       </div>
 
@@ -289,7 +297,7 @@ export default function YabanSchedule() {
             </div>
           ))}
           <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-            <div onClick={() => deleteApptMut.mutate({ id: detailAppt.id })} style={{ flex: "0 0 auto", padding: "13px 20px", borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer", background: "#FDECEC", color: "#D64545", textAlign: "center" }}>删除</div>
+            <div onClick={() => deleteApptMut.mutate({ id: detailAppt.id, tenantId: currentTenantId ?? undefined })} style={{ flex: "0 0 auto", padding: "13px 20px", borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer", background: "#FDECEC", color: "#D64545", textAlign: "center" }}>删除</div>
             <div onClick={() => setDetailModal({ open: false })} style={{ flex: 1, padding: 13, borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer", background: "#f1f4f7", color: "#5b6675", textAlign: "center" }}>关闭</div>
             <div onClick={() => { setDetailModal({ open: false }); setNewModal({ open: true }); }} style={{ flex: 1, padding: 13, borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer", background: SKY, color: "#fff", textAlign: "center" }}>编辑预约</div>
           </div>
@@ -301,6 +309,7 @@ export default function YabanSchedule() {
         <BottomSheet onClose={() => setNewModal({ open: false })} fullscreen>
           <NewApptForm
             date={dateStr}
+            tenantId={currentTenantId ?? undefined}
             prefillDocName={newModal.prefillDocName}
             prefillStart={newModal.prefillStart}
             prefillEnd={newModal.prefillEnd}
@@ -514,9 +523,9 @@ function TimeView({ docList, onApptClick, onNewAppt, trkStart, trkEnd }: {
 }
 
 // ── 新建预约表单 ──
-function NewApptForm({ date, prefillDocName, prefillStart, prefillEnd, members, onClose, onSaved }: {
-  date: string; prefillDocName?: string; prefillStart?: number; prefillEnd?: number;
-  members: { id: number; name: string; roleKey: string }[];
+function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd, members, onClose, onSaved }: {
+  date: string; tenantId?: number; prefillDocName?: string; prefillStart?: number; prefillEnd?: number;
+  members: { userId: number; name: string; roleKey: string }[];
   onClose: () => void; onSaved: () => void;
 }) {
   const [patientName, setPatientName] = useState("");
@@ -541,7 +550,7 @@ function NewApptForm({ date, prefillDocName, prefillStart, prefillEnd, members, 
     const [sh, sm] = startTime.split(":").map(Number);
     const [eh, em] = endTime.split(":").map(Number);
     const dur = (eh * 60 + em) - (sh * 60 + sm);
-    createMut.mutate({ patientName: patientName.trim(), doctor, appointDate: date, appointTime: startTime, endTime, duration: dur > 0 ? dur : 30, project, remark, status: "booked" });
+    createMut.mutate({ patientName: patientName.trim(), doctor, appointDate: date, appointTime: startTime, endTime, duration: dur > 0 ? dur : 30, project, remark, status: "booked", tenantId });
   }
 
   return (
@@ -558,7 +567,7 @@ function NewApptForm({ date, prefillDocName, prefillStart, prefillEnd, members, 
         <div style={{ color: GRAY, marginBottom: 8 }}>就诊医生 <span style={{ fontSize: 11, color: "#aab4be", fontWeight: 400 }}>· 仅显示在岗</span></div>
         <div style={{ display: "flex", gap: 8, overflowX: "auto", padding: "2px 0 4px" }}>
           {members.map(m => (
-            <div key={m.id} onClick={() => setDoctor(m.name)} style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 4px", width: 58, borderRadius: 10, border: `1px solid ${doctor === m.name ? SKY_D : LINE}`, background: doctor === m.name ? SKY_L : "#fafbfc", cursor: "pointer" }}>
+            <div key={m.userId} onClick={() => setDoctor(m.name)} style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "8px 4px", width: 58, borderRadius: 10, border: `1px solid ${doctor === m.name ? SKY_D : LINE}`, background: doctor === m.name ? SKY_L : "#fafbfc", cursor: "pointer" }}>
               <div style={{ width: 34, height: 34, borderRadius: "50%", background: doctor === m.name ? SKY_D : SKY_L, color: doctor === m.name ? "#fff" : SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 14 }}>{m.name.charAt(0)}</div>
               <div style={{ fontSize: 11, color: "#51606e", fontWeight: 600 }}>{m.name}</div>
             </div>
