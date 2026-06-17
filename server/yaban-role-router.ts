@@ -1278,6 +1278,24 @@ export const yabanRoleRouter = router({
         }
       } catch (e) { /* ignore */ }
     }
+    // 3) 公共演示院：无论是否为成员/创始人，所有登录用户都能在下拉里看到并进入。
+    //    （演示院成员已收敛为 5 名演示医生，不再依赖成员关系判可见性）
+    if (!byTenant.has(YABAN_MODEL_TENANT_ID)) {
+      try {
+        const [mrows] = (await conn.execute(
+          `SELECT tenant_id, name, short_name FROM yaban_clinic WHERE tenant_id = ? LIMIT 1`,
+          [YABAN_MODEL_TENANT_ID]
+        )) as any;
+        const m = (mrows as any[])[0];
+        if (m) {
+          byTenant.set(YABAN_MODEL_TENANT_ID, {
+            tenant_id: YABAN_MODEL_TENANT_ID,
+            name: m.name ?? "牙伴齿科",
+            short_name: m.short_name ?? "牙伴齿科",
+          });
+        }
+      } catch (e) { /* ignore */ }
+    }
     let clinicRows = Array.from(byTenant.values()).sort((a, b) => a.tenant_id - b.tenant_id);
     // 兜底：创始人/owner 至少有一个默认门诊可进入
     if (clinicRows.length === 0) {
