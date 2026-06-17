@@ -144,6 +144,18 @@ export default function YabanClinicShift() {
     window.addEventListener("resize", update);
     return () => { ro.disconnect(); window.removeEventListener("resize", update); };
   }, []);
+  // 手动双击检测（移动端触摸不触发原生 dblclick）：记录上次点击时间与目标
+  const lastTapRef = useRef<{ id: number; t: number }>({ id: -1, t: 0 });
+  function handleRowTap(staffUserId: number, staffName: string) {
+    const now = Date.now();
+    const last = lastTapRef.current;
+    if (last.id === staffUserId && now - last.t < 350) {
+      lastTapRef.current = { id: -1, t: 0 };
+      openSch(staffUserId, staffName, selDate);
+    } else {
+      lastTapRef.current = { id: staffUserId, t: now };
+    }
+  }
   const weekStart = useMemo(() => getWeekStart(weekOffset), [weekOffset]);
   const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
   const weekStartStr = toDateStr(weekStart);
@@ -404,8 +416,7 @@ export default function YabanClinicShift() {
 
           return (
             <div key={tpl.staffUserId}
-              onClick={() => { if (batchMode) toggleBatchSel(tpl.staffUserId); }}
-              onDoubleClick={() => { if (!batchMode) openSch(tpl.staffUserId, tpl.staffName, selDate); }}
+              onClick={() => { if (batchMode) { toggleBatchSel(tpl.staffUserId); } else { handleRowTap(tpl.staffUserId, tpl.staffName); } }}
               style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${LINE}`, cursor: batchMode ? "pointer" : "default", userSelect: "none" }}
             >
               {batchMode && (
@@ -425,7 +436,6 @@ export default function YabanClinicShift() {
                   </div>
                 ) : (
                   <div
-                    onDoubleClick={e => { if (!batchMode) { e.stopPropagation(); openSch(tpl.staffUserId, tpl.staffName, selDate); } }}
                     title="双击编辑排班"
                     style={{ position: "relative", height: 28, borderRadius: 8, overflow: "hidden", background: "#E2E8EF", cursor: batchMode ? "inherit" : "pointer" }}
                   >
