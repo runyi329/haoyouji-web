@@ -725,13 +725,26 @@ function NewApptForm({ date, tenantId, prefillDocName, prefillStart, prefillEnd,
 
   function pickDoc(name: string) { setDoctor(name); setSelStart(null); setSelEnd(null); }
 
-  // 点击格子：第一下定起点，第二下定终点（自动排序），再点起点取消
+  // 点击格子：
+  // - 未选或点在已选起点之前、或点到起点本身 → 以该格为起点，默认选中这一格（30分钟）
+  // - 点在起点之后 → 以该格为终点延展区间
+  // （取消「点同格取消」的隐藏行为，避免点两下看似无反应）
   function pickCell(t: number) {
-    if (selStart === null) { setSelStart(t); setSelEnd(t + STEP); return; }
-    if (selEnd !== null && selEnd - selStart === STEP && t === selStart) { setSelStart(null); setSelEnd(null); return; }
-    let a = selStart, b = t + STEP;
-    if (t < selStart) { a = t; b = selStart + STEP; }
-    setSelStart(a); setSelEnd(b);
+    // 起点所在在岗段终点 与 下一个他人已约起点，作为终点上限
+    const capFor = (base: number) => {
+      const seg = segs.find(([s0, e0]) => base >= s0 && base < e0);
+      const segEnd = seg ? seg[1] : (docRange ? docRange[1] : DAY_END);
+      const nextBusy = busy.filter(b => b[0] > base).map(b => b[0]).sort((a, b) => a - b)[0];
+      return Math.min(segEnd, nextBusy ?? Infinity, DAY_END);
+    };
+    if (selStart === null || t <= selStart) {
+      // 单击起点：默认 30 分钟，但不越过边界
+      const cap = capFor(t);
+      setSelStart(t); setSelEnd(Math.min(t + 30, cap) > t ? Math.min(t + 30, cap) : t + STEP);
+      return;
+    }
+    // 延展终点：不越过起点所在段边界
+    setSelEnd(Math.min(t + STEP, capFor(selStart)));
   }
   function setDur(min: number) {
     const base = selStart !== null ? selStart : firstFreeStart();
