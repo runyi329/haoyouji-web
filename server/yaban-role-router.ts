@@ -776,11 +776,16 @@ export async function isYabanPureFounder(ctx: any): Promise<boolean> {
 // ==================== 路由 ====================
 export const yabanRoleRouter = router({
   // ============ 当前用户的角色与生效权限 ============
-  myMembership: protectedProcedure.query(async ({ ctx }) => {
+  myMembership: protectedProcedure
+    .input(z.object({ tenantId: z.number().int().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+    // 当前选中医院：权限/角色严格按这家医院计算，实现“切换医院后功能随之切换”。
+    // 未传时回退默认医院，保持向后兼容。
+    const activeTenantId = input?.tenantId ?? DEFAULT_TENANT_ID;
     const conn = await getDbConnection();
     if (!conn) return { member: null, permissions: [] as string[], scopes: {}, canManage: false, isFounder: false, isSuperAdmin: false, roleBadges: [] as string[], founderTitle: null };
     await ensureRoleTables(conn);
-    const { scopes, isFounder: founder, isSuperAdmin: sa, member } = await getUserPermScopes(conn, ctx);
+    const { scopes, isFounder: founder, isSuperAdmin: sa, member } = await getUserPermScopes(conn, ctx, activeTenantId);
     const canManage = founder || sa || (member && CLINIC_MANAGE_ROLES.includes(member.role_key));
     const founderTitle = founder ? await getFounderTitle(conn, ctx) : null;
     const platform = await getMyPlatformPerms(conn, ctx);

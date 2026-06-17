@@ -26,6 +26,7 @@ import {
 import YabanTabBar from "./YabanTabBar";
 import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
 import { compressAvatar } from "@/utils/imageUtils";
 
 type RowItem = {
@@ -40,8 +41,9 @@ export default function YabanProfile() {
   const [, navigate] = useLocation();
   const utils = trpc.useUtils();
   const { data: user } = trpc.auth.me.useQuery();
+  const { currentTenantId } = useYabanClinic();
   // 角色信息：判断是否院长/股东(owner) 或 创始人(founder)
-  const { data: membership } = trpc.yabanRole.myMembership.useQuery();
+  const { data: membership } = trpc.yabanRole.myMembership.useQuery({ tenantId: currentTenantId ?? undefined });
   const isOwner = (membership as any)?.member?.role_key === "owner";
   const isFounder = !!(membership as any)?.isFounder || !!(membership as any)?.isSuperAdmin;
   const founderTitle = (membership as any)?.founderTitle as string | undefined;

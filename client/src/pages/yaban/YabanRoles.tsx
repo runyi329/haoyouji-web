@@ -100,10 +100,10 @@ function nextScope(cur: Scope, type: "toggle" | "scope"): Scope {
 
 export default function YabanRoles() {
   const [, navigate] = useLocation();
-  const { current } = useYabanClinic();
+  const { current, currentTenantId } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
 
-  const { data: my } = trpc.yabanRole.myMembership.useQuery();
+  const { data: my } = trpc.yabanRole.myMembership.useQuery({ tenantId: currentTenantId ?? undefined });
   const canManage = !!my?.canManage;
 
   // 可管理的医院列表

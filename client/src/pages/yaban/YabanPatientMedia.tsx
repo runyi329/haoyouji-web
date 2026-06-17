@@ -74,13 +74,13 @@ function groupDateOf(m: MediaItem): string {
 
 export default function YabanPatientMedia() {
   const [, navigate] = useLocation();
-  const { current } = useYabanClinic();
+  const { current, currentTenantId } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [, params] = useRoute("/yaban/patient/:id/media");
   const customerId = params?.id ? Number(params.id) : 0;
 
   const { user } = useAuth();
-  const { data: membership } = trpc.yabanRole.myMembership.useQuery();
+  const { data: membership } = trpc.yabanRole.myMembership.useQuery({ tenantId: currentTenantId ?? undefined });
   const perms: string[] = membership?.permissions || [];
   const isSuper = user?.role === "super_admin" || !!membership?.isFounder;
   // 上传/编辑：media_upload 权限；删除：media_delete 权限

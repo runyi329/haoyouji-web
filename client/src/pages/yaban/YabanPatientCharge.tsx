@@ -94,13 +94,13 @@ function calcSubtotal(it: ItemDraft): number {
 
 export default function YabanPatientCharge() {
   const [, navigate] = useLocation();
-  const { current } = useYabanClinic();
+  const { current, currentTenantId } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [, params] = useRoute("/yaban/patient/:id/charge");
   const customerId = params?.id ? Number(params.id) : 0;
 
   const { user } = useAuth();
-  const { data: membership } = trpc.yabanRole.myMembership.useQuery();
+  const { data: membership } = trpc.yabanRole.myMembership.useQuery({ tenantId: currentTenantId ?? undefined });
   const perms: string[] = membership?.permissions || [];
   const isSuper = user?.role === "super_admin" || !!membership?.isFounder;
   // 开单/补收/作废需 finance 权限

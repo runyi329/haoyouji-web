@@ -50,10 +50,10 @@ function money(n: number): string {
 
 export default function YabanChargeProducts() {
   const [, navigate] = useLocation();
-  const { current } = useYabanClinic();
+  const { current, currentTenantId } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const { user } = useAuth();
-  const { data: membership } = trpc.yabanRole.myMembership.useQuery();
+  const { data: membership } = trpc.yabanRole.myMembership.useQuery({ tenantId: currentTenantId ?? undefined });
   const perms: string[] = membership?.permissions || [];
   const isSuper = user?.role === "super_admin" || !!membership?.isFounder;
   const canManage = isSuper || perms.includes("finance");
