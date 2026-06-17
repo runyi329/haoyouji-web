@@ -64,7 +64,7 @@ export default function YabanClinicHeader({
         <span className="max-w-[8rem] truncate font-medium">{display}</span>
         {isModel && (
           <span className="rounded bg-amber-400/90 px-1 text-[10px] font-semibold leading-tight text-amber-950">
-            模拟
+            演示
           </span>
         )}
         {hasMultiple && (
@@ -104,7 +104,7 @@ export default function YabanClinicHeader({
                     <span className="truncate">{label}</span>
                     {cm && (
                       <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">
-                        模拟
+                        演示
                       </span>
                     )}
                   </span>

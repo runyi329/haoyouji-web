@@ -355,11 +355,19 @@ export async function ensureModelClinic(conn: any) {
   // 1) 模拟医院主记录
   await conn.execute(
     `INSERT INTO yaban_clinic (tenant_id, name, short_name, clinic_type, status, intro, remark)
-     SELECT ?, '牙伴诊所（模拟）', '牙伴模拟', '综合门诊', 'active',
+     SELECT ?, '牙伴齿科', '牙伴齿科', '综合门诊', 'active',
             '系统演示用模拟医院，所有用户均可进入查看与操作演示数据', '系统内置模拟医院'
      FROM DUAL
      WHERE NOT EXISTS (SELECT 1 FROM yaban_clinic WHERE tenant_id = ?)`,
     [YABAN_MODEL_TENANT_ID, YABAN_MODEL_TENANT_ID]
+  );
+
+  // 1.1) 兼容历史数据：把旧名称（如“牙伴诊所（模拟）”）统一刷新为“牙伴齿科”。
+  //      幂等，可安全重复执行；仅在名称不一致时才会真正更新。
+  await conn.execute(
+    `UPDATE yaban_clinic SET name = '牙伴齿科', short_name = '牙伴齿科'
+     WHERE tenant_id = ? AND (name <> '牙伴齿科' OR short_name <> '牙伴齿科')`,
+    [YABAN_MODEL_TENANT_ID]
   );
 
   // 2) 全部现有用户成为模拟院 owner（仅插入缺失的，幂等）
@@ -417,7 +425,7 @@ export async function ensureModelClinic(conn: any) {
 
 // 模拟院演示估值数据（与前端 ClinicValuation 字段一致）
 const MODEL_VALUATION_DEMO: Record<string, any> = {
-  name: "牙伴诊所（模拟）", shortName: "牙伴模拟", area: "演示数据 · 仅供体验",
+  name: "牙伴齿科", shortName: "牙伴齿科", area: "演示数据 · 仅供体验",
   valuation: "3,680,000", change: "+4.5%", changeAmount: "较上月增长 16万", confidence: "87%",
   scale: "7-10张牙椅 / 开业7年", baseValuation: "2,800,000", dynamicPremium: "880,000",
   revenue: "42.6万", revenueChange: "+8.2%", patients: "1,286", patientsChange: "+156",
