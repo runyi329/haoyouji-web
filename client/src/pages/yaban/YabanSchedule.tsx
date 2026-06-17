@@ -6,7 +6,7 @@
  * 数据：真实 API（yabanAppointment.listByDate / monthStats / listMembers）
  * 无模拟数据，无 emoji
  */
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -87,6 +87,20 @@ export default function YabanSchedule() {
   const [newModal, setNewModal] = useState<{ open: boolean; prefillDocName?: string; prefillStart?: number; prefillEnd?: number }>({ open: false });
 
   const dateStr = toDateStr(selDate);
+
+  // 顶栏高度测量：顶栏 fixed 冻结后，给下方主体留出等高留白避免遮挡（高度随 Tab 行/医院名变化）。
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerH, setHeaderH] = useState(96);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const update = () => setHeaderH(el.offsetHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("resize", update);
+    return () => { ro.disconnect(); window.removeEventListener("resize", update); };
+  }, []);
 
   const { currentTenantId, current } = useYabanClinic();
 
@@ -188,8 +202,8 @@ export default function YabanSchedule() {
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: "-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif", color: INK }}>
 
-      {/* 顶栏 */}
-      <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, color: "#fff", padding: "14px 16px 12px", position: "sticky", top: 0, zIndex: 100 }}>
+      {/* 顶栏（固定冻结在屏幕顶部，不随页面滚动） */}
+      <div ref={headerRef} style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, color: "#fff", padding: "14px 16px 12px", position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, maxWidth: 480, marginLeft: "auto", marginRight: "auto" }}>
         <div style={{ display: "flex", alignItems: "center" }}>
           <div style={{ flex: 1, display: "flex", justifyContent: "flex-start" }}>
             <div style={{ fontSize: 22, width: 28, cursor: "pointer" }} onClick={() => setLocation("/yaban")}>‹</div>
@@ -214,6 +228,8 @@ export default function YabanSchedule() {
           }
         />
       </div>
+      {/* 顶栏占位：与 fixed 顶栏等高，防止主体被遮挡 */}
+      <div style={{ height: headerH }} aria-hidden />
 
       {/* 周历 / 月历 */}
       <div style={{ background: "#fff", padding: "10px 16px 2px", borderBottom: `1px solid ${LINE}` }}>
