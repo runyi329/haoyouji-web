@@ -111,3 +111,6 @@ scripts/upload-kiskis.mjs
 
 # 子沙箱本地开发环境注入脚本（含数据库密码，严禁提交）
 dev.local.config.sh
+
+# 运行时价格缓存文件（价格扫描任务自动生成，不纳入版本控制）
+price-cache.json
