@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, TrendingUp, ChevronLeft
 import { toast } from "sonner";
 import { PageTag } from "@/components/PageTag";
 
-const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'] as const;
+const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
 // 整数型币种（单价较低，通常以整数计量）
@@ -149,6 +149,7 @@ const COIN_COLORS: Record<CoinType, string> = {
   AMD: '#ED1C24',
   CL: '#8B4513',
   NG: '#4A90D9',
+  CRCL: '#1E88D6',
 };
 
 // ===== FinanceOrderCard 子组件（左右两栏布局，与 LedgerDetail FunderOrderCard 一致）=====
@@ -522,10 +523,10 @@ function FinanceOrderCard({
                 </span>
               </div>
             )}
-            {orderDc.todayPrice !== false && order.coin !== 'CNY' && order.coin !== 'USDT' && liveP && (
+            {orderDc.todayPrice !== false && order.coin !== 'CNY' && order.coin !== 'USDT' && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">当前币价</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U' : '---'}</span>
               </div>
             )}
             {orderDc.buyDate !== false && order.buy_date && (
@@ -1211,7 +1212,7 @@ function DatePicker({ value, onChange }: { value: string; onChange: (v: string) 
 const emptyForm = {
   coin: 'BTC' as CoinType,
   amount: '',
-  amountCurrency: 'USDT' as 'USDT' | 'USD' | 'CNY',
+  amountCurrency: 'USDT' as CoinType,
   buyPrice: '',
   buyDate: '',
   buyQuantity: '',
@@ -1577,6 +1578,23 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     { enabled: !!ledgerId && showForm, staleTime: 10000, refetchInterval: 10000 }
   );
   const formLivePrices: Record<string, number> = (assetSummaryForm as any)?.livePrices ?? livePrices;
+  // 融资金额单位折算：以 USDT 为内部基准（买入价单位为 USDT/枚）
+  // 把某币种计价的金额折算成 USDT 基准值
+  const amtToUsdt = (val: number, cur: string): number => {
+    if (!isFinite(val)) return NaN;
+    if (cur === 'USDT' || cur === 'USD') return val;
+    if (cur === 'CNY') return val / cnyRate;
+    const p = formLivePrices[cur];
+    return p && p > 0 ? val * p : NaN; // 其它币种：金额×该币USDT价
+  };
+  // 把 USDT 基准值折算成某币种计价的显示金额
+  const usdtToAmt = (usdt: number, cur: string): number => {
+    if (!isFinite(usdt)) return NaN;
+    if (cur === 'USDT' || cur === 'USD') return usdt;
+    if (cur === 'CNY') return usdt * cnyRate;
+    const p = formLivePrices[cur];
+    return p && p > 0 ? usdt / p : NaN;
+  };
 
   // 表单中担保物的实时总价值
   const formComputedCollateralValue = useMemo(() => {
@@ -1685,7 +1703,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     setFormData({
       coin: order.coin || 'BTC',
       amount: order.amount || '',
-      amountCurrency: (order.amount_currency || 'USDT') as 'USDT' | 'USD' | 'CNY',
+      amountCurrency: (order.amount_currency || 'USDT') as CoinType,
       buyPrice: order.buy_price || '',
       buyDate: order.buy_date || '',
       buyQuantity: order.buy_quantity || '',
@@ -2247,28 +2265,33 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
               {/* 融资金额 / 买入价格 / 买入数量 三字段联动 */}
               <div className="rounded-2xl border border-gray-200" style={{ overflow: 'visible' }}>
                 <div className="px-4 pt-3 pb-1">
-                  <span className="text-xs text-gray-400">输入任意两个，第三个自动计算 · 融资金额 = 买入价格 × 币数</span>
+                  <span className="text-xs text-gray-400">输入任意两个，第三个自动计算 · 融资金额可选出资币种，系统按实时报价自动折算</span>
                 </div>
                 {/* 融资金额 */}
                 <div className="px-4 py-3 border-b border-gray-100">
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-medium text-gray-500">融资金额</label>
-                    <div className="inline-flex rounded-lg overflow-hidden border border-gray-200">
-                      {(['USDT', 'USD', 'CNY'] as const).map(cur => (
-                        <button
-                          key={cur}
-                          type="button"
-                          onClick={() => setFormData(d => ({ ...d, amountCurrency: cur }))}
-                          className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                            formData.amountCurrency === cur
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-white text-gray-500'
-                          }`}
-                        >
-                          {cur}
-                        </button>
+                    <select
+                      value={formData.amountCurrency}
+                      onChange={e => {
+                        const cur = e.target.value as CoinType;
+                        setFormData(d => {
+                          // 切换出资币种时，把已填的融资金额按新币种重新折算（先折回USDT基准，再换算到新币种）
+                          const amt = parseFloat(d.amount);
+                          if (isNaN(amt) || amt <= 0 || d.amountCurrency === cur) return { ...d, amountCurrency: cur };
+                          const base = amtToUsdt(amt, d.amountCurrency);
+                          const toNew = usdtToAmt(base, cur);
+                          if (!isFinite(toNew)) return { ...d, amountCurrency: cur };
+                          return { ...d, amountCurrency: cur, amount: parseFloat(toNew.toFixed(2)).toString() };
+                        });
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-semibold rounded-lg border border-gray-200 appearance-none focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.amountCurrency as keyof typeof COIN_COLORS] || '#1A2340' }}
+                    >
+                      {['USDT', 'CNY', ...COIN_OPTIONS.filter(c => c !== 'USDT' && c !== 'CNY')].map(c => (
+                        <option key={c} value={c}>{c}</option>
                       ))}
-                    </div>
+                    </select>
                   </div>
                   <input
                     type="number"
@@ -2282,14 +2305,17 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                         const qty = parseFloat(d.buyQuantity);
                         const amt = parseFloat(amount);
                         if (!amount || isNaN(amt) || amt <= 0) return d;
+                        // 先把融资金额按所选出资币种折回 USDT 基准（买入价单位为 USDT/枚）
+                        const amtUsdt = amtToUsdt(amt, d.amountCurrency);
+                        if (!isFinite(amtUsdt)) return d;
                         // 如果买入价已有，自动计算币数
                         if (!isNaN(price) && price > 0 && !d.buyQuantity) {
-                          const calcQty = amt / price;
+                          const calcQty = amtUsdt / price;
                           return { ...d, buyQuantity: INTEGER_COINS.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
                         }
-                        // 如果币数已有，自动计算买入价
+                        // 如果币数已有，自动计算买入价（USDT/枚）
                         if (!isNaN(qty) && qty > 0 && !d.buyPrice) {
-                          return { ...d, buyPrice: (amt / qty).toFixed(2) };
+                          return { ...d, buyPrice: (amtUsdt / qty).toFixed(2) };
                         }
                         return d;
                       });
@@ -2300,7 +2326,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                 </div>
                 {/* 买入价格 */}
                 <div className="px-4 py-3 border-b border-gray-100">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5">买入价格 (USD/枚)</label>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">买入价格 (USDT/枚)</label>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -2313,13 +2339,18 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                         const amt = parseFloat(d.amount);
                         const p = parseFloat(price);
                         if (!price || isNaN(p) || p <= 0) return d;
-                        // 如果币数已有，自动计算融资金额
+                        // 如果币数已有，自动计算融资金额（USDT基准 → 按所选单位折算）
                         if (!isNaN(qty) && qty > 0 && !d.amount) {
-                          return { ...d, amount: (p * qty).toFixed(2) };
+                          const amtUsdt = p * qty;
+                          const shown = usdtToAmt(amtUsdt, d.amountCurrency);
+                          if (!isFinite(shown)) return d;
+                          return { ...d, amount: shown.toFixed(2) };
                         }
-                        // 如果融资金额已有，自动计算币数
+                        // 如果融资金额已有，自动计算币数（先把金额按出资币种折回USDT）
                         if (!isNaN(amt) && amt > 0 && !d.buyQuantity) {
-                          const calcQty = amt / p;
+                          const amtUsdt = amtToUsdt(amt, d.amountCurrency);
+                          if (!isFinite(amtUsdt)) return d;
+                          const calcQty = amtUsdt / p;
                           return { ...d, buyQuantity: INTEGER_COINS.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
                         }
                         return d;
@@ -2346,13 +2377,18 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                         const amt = parseFloat(d.amount);
                         const q = parseFloat(qty);
                         if (!qty || isNaN(q) || q <= 0) return d;
-                        // 如果买入价已有，自动计算融资金额
+                        // 如果买入价已有，自动计算融资金额（USDT基准 → 按所选单位折算）
                         if (!isNaN(price) && price > 0 && !d.amount) {
-                          return { ...d, amount: (price * q).toFixed(2) };
+                          const amtUsdt = price * q;
+                          const shown = usdtToAmt(amtUsdt, d.amountCurrency);
+                          if (!isFinite(shown)) return d;
+                          return { ...d, amount: shown.toFixed(2) };
                         }
-                        // 如果融资金额已有，自动计算买入价（保留 6 位小数减少精度丢失）
+                        // 如果融资金额已有，自动计算买入价（先把金额按出资币种折回USDT，再除以币数）
                         if (!isNaN(amt) && amt > 0 && !d.buyPrice) {
-                          return { ...d, buyPrice: (amt / q).toFixed(6) };
+                          const amtUsdt = amtToUsdt(amt, d.amountCurrency);
+                          if (!isFinite(amtUsdt)) return d;
+                          return { ...d, buyPrice: (amtUsdt / q).toFixed(6) };
                         }
                         return d;
                       });
@@ -2758,7 +2794,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                           { key: 'buyValue', label: '买入价值' },
                           { key: 'interestBase', label: '计息基数' },
                           { key: 'buyDate', label: '开仓时间' },
-                          { key: 'todayPrice', label: '今日币价' },
+                          { key: 'todayPrice', label: '当前币价' },
                           { key: 'holdDuration', label: '持有时长' },
                           { key: 'orderNo', label: '订单编号' },
                           { key: 'interestPaymentType', label: '付息方式' },

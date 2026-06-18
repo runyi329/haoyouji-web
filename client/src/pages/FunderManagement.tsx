@@ -339,7 +339,7 @@ interface FunderOrderCardProps {
   showParticipantsPanel: number | null;
   getPaymentLabel: (val: string) => string;
   isInvited: boolean;
-  participantsList: { userId: number; displayName: string; role: string; sortOrder: number }[];
+  participantsList: { userId: number; displayName: string; role: string; sortOrder: number; rate: string }[];
   setParticipantsList: (fn: (list: any[]) => any[]) => void;
   ledgerMembers: { userId: number; displayName: string; memberRole?: string }[];
   participantsLoading: boolean;
@@ -389,6 +389,7 @@ function FunderOrderCard({
   const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "7.2") || 7.2;
   const [showInterestTip, setShowInterestTip] = useState(false);
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
+  const [showMarginInfo, setShowMarginInfo] = useState(false);
   const [showStatusSheet, setShowStatusSheet] = useState(false);
   const tipBtnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
@@ -626,7 +627,7 @@ function FunderOrderCard({
                 </span>
               </div>
             )}
-            {show('todayPrice') && order.coin !== 'CNY' && order.coin !== 'USDT' && liveP && (
+            {show('todayPrice') && order.coin !== 'CNY' && order.coin !== 'USDT' && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">当前币价</span>
                 {(() => {
@@ -641,7 +642,7 @@ function FunderOrderCard({
                     <span className="font-medium flex items-center gap-0.5" style={{ color: priceColor }}>
                       {dir === 'up' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#DC2626', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                       {dir === 'down' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#16A34A', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
-                      {liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
+                      {liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U' : '---'}
                     </span>
                   );
                 })()}
@@ -909,8 +910,124 @@ function FunderOrderCard({
                   {isSufficient ? '100%' : `-${(Math.abs(exposure)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
                 </span>
               </div>
+              {/* 保证金率：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100% */}
+              {show('marginRate') && collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0 && (() => {
+                const effectiveCollateral = floatPnl !== null
+                  ? collateralValue + floatPnl - accrued + totalPaid
+                  : collateralValue - accrued + totalPaid;
+                const marginRatio = effectiveCollateral / interestBaseNum;
+                const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
+                const alertThreshold = (dc && typeof (dc as any).marginAlertThreshold === 'number') ? (dc as any).marginAlertThreshold as number : null;
+                const isAlerting = alertThreshold !== null && (marginRatio * 100) < alertThreshold;
+                return (
+                  <>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-400">保证金率</span>
+                        {isAlerting && (
+                          <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-white text-[8px] font-bold flex-shrink-0 animate-pulse" style={{ background: '#EF4444', lineHeight: 1 }}>❗</span>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowMarginInfo(true); }}
+                          className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                          style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                        >?</button>
+                      </div>
+                      <span className="font-bold" style={{ color: isAlerting ? '#EF4444' : marginColor }}>{(marginRatio * 100).toFixed(1)}%{isAlerting ? ' ⚠' : ''}</span>
+                    </div>
+                    {showMarginInfo && (
+                      <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowMarginInfo(false)}>
+                        <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="text-sm font-bold" style={{ color: '#1A2340' }}>保证金率计算说明</span>
+                            <button onClick={() => setShowMarginInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
+                          </div>
+                          <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
+                            <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                              <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 公式</div>
+                              <div>保证金率 = (担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100%</div>
+                              <div className="mt-1 font-mono text-[10px]">
+                                <span style={{ color: '#3B82F6' }}>= ({collateralValue.toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ''} − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}) ÷ {interestBaseNum.toFixed(2)} × 100% = </span>
+                                <strong style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</strong>
+                              </div>
+                            </div>
+                            <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                              <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 担保物当前市值</div>
+                              {collateralAssets.map((a, idx) => {
+                                const itemVal = collateralItemValues[idx];
+                                return (
+                                  <div key={idx} className="mt-1 flex justify-between">
+                                    <span className="font-mono" style={{ color: '#6B7280' }}>{a.qty} {a.coin}</span>
+                                    {itemVal !== null
+                                      ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{(itemVal as number).toFixed(2)} U</span>
+                                      : <span className="font-mono" style={{ color: '#D1D5DB' }}>暂无实时价</span>
+                                    }
+                                  </div>
+                                );
+                              })}
+                              {collateralAssets.length > 1 && (
+                                <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
+                                  合计 {collateralValue.toFixed(2)} U
+                                </div>
+                              )}
+                            </div>
+                            <div className="p-2.5 rounded-lg" style={{ background: marginRatio >= 1 ? '#F0FDF4' : marginRatio >= 0.5 ? '#FFFBEB' : '#FFF1F1' }}>
+                              <div className="font-semibold mb-1" style={{ color: marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626' }}>③ 风险评估</div>
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-1.5"><span style={{ color: '#16A34A' }}>≥ 100%</span><span>担保充足，风险可控</span></div>
+                                <div className="flex items-center gap-1.5"><span style={{ color: '#D97706' }}>50% ~ 100%</span><span>担保偏低，建议补充</span></div>
+                                <div className="flex items-center gap-1.5"><span style={{ color: '#DC2626' }}>&lt; 50%</span><span>担保严重不足，高风险</span></div>
+                              </div>
+                              <div className="mt-2 font-semibold" style={{ color: marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626' }}>
+                                当前状态：{marginRatio >= 1 ? '担保充足' : marginRatio >= 0.5 ? '担保偏低，建议补充' : '担保严重不足，高风险'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
               </>
             )}
+            {/* 收益分成（受 display_config.profitShare 开关控制；解析 commission_share 文本拿类型与比例） */}
+            {show('profitShare') && order.show_profit_share && order.commission_share && (() => {
+              const cs = String(order.commission_share);
+              const isCoin = cs.includes('币种收益') || cs.includes('利润分成');
+              const typeLabel = isCoin ? '利润分成' : '利息分成';
+              const ratioMatch = cs.match(/(\d+(?:\.\d+)?)/);
+              const ratioNum = ratioMatch ? parseFloat(ratioMatch[1]) : 0;
+              const ratio = ratioNum / 100;
+              // 待分金额：利息分成 = 本金(计息基数)×比例；利润分成 = 浮动利润×比例
+              let shareAmt: number | null = null;
+              if (!isCoin) {
+                if (interestBaseNum > 0 && ratio > 0) shareAmt = interestBaseNum * ratio;
+              } else {
+                if (liveP != null && price > 0 && qty > 0 && ratio > 0) {
+                  shareAmt = Math.max(0, liveP - price) * qty * ratio;
+                }
+              }
+              return (
+                <div className="border-t mt-1 pt-1" style={{ borderColor: '#E8EFFF' }}>
+                  <div className="h-4 flex items-center" style={{ color: '#3B82F6' }}>
+                    <span className="text-xs font-medium">收益分成</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="text-gray-400 shrink-0">分成类型</span>
+                    <span className="font-medium" style={{ color: '#4B5563' }}>{typeLabel}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="text-gray-400 shrink-0">分成比例</span>
+                    <span className="font-medium" style={{ color: '#4B5563' }}>{ratioNum > 0 ? `${ratioNum}%` : '---'}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="text-gray-400 shrink-0">待分金额</span>
+                    <span className="font-medium" style={{ color: '#4B5563' }}>{shareAmt != null ? `≈ ${shareAmt.toLocaleString(undefined, { maximumFractionDigits: 2 })} U` : '---'}</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -953,37 +1070,70 @@ function FunderOrderCard({
             <div className="space-y-2">
               {participantsList.map((p, idx) => {
                 const roleOpt = roleOptions.find(r => r.value === p.role)!;
+                const rateNum = parseFloat(p.rate || '');
+                const isNeg = isFinite(rateNum) && rateNum < 0;
+                const absVal = isFinite(rateNum) ? Math.abs(rateNum) : '';
+                const setRate = (nextAbs: string, neg: boolean) => {
+                  const v = nextAbs.toString().trim();
+                  if (v === '') {
+                    setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, rate: '' } : item));
+                    return;
+                  }
+                  const num = Math.abs(parseFloat(v) || 0);
+                  const signed = neg ? -num : num;
+                  setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, rate: String(signed) } : item));
+                };
                 return (
-                  <div key={idx} className="bg-gray-50 rounded-xl p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: roleOpt?.color || '#6B7280' }}>
-                        {roleOpt?.label || p.role}
-                      </span>
-                      <button
-                        onClick={() => setParticipantsList(list => list.filter((_, i) => i !== idx))}
-                        className="p-0.5 text-gray-300 hover:text-red-400"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                  <div key={idx} className="bg-gray-50 rounded-xl px-2 py-1.5 flex items-center gap-1.5">
+                    {/* 角色小点 */}
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: roleOpt?.color || '#6B7280' }} title={roleOpt?.label || p.role} />
+                    {/* 成员选择 */}
+                    <select
+                      value={p.userId}
+                      onChange={e => {
+                        const uid = Number(e.target.value);
+                        const member = ledgerMembers.find(m => m.userId === uid);
+                        setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, userId: uid, displayName: member?.displayName || '' } : item));
+                      }}
+                      className="min-w-0 flex-1 px-1.5 py-1 text-xs border border-gray-200 rounded-md bg-white"
+                    >
+                      <option value={0}>选成员</option>
+                      {ledgerMembers.map(m => (
+                        <option key={m.userId} value={m.userId}>{m.displayName}</option>
+                      ))}
+                    </select>
+                    {/* 利率输入 */}
+                    <div className="flex items-center w-16 shrink-0 px-1.5 py-1 border border-gray-200 rounded-md bg-white">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={absVal}
+                        onChange={e => setRate(e.target.value, isNeg)}
+                        placeholder="利率"
+                        className="w-full min-w-0 text-xs outline-none bg-transparent"
+                      />
+                      <span className="text-[10px] text-gray-400 shrink-0">%</span>
                     </div>
-                    <div>
-                      <div className="text-xs text-gray-400 mb-0.5">选择账本成员 *</div>
-                      <select
-                        value={p.userId}
-                        onChange={e => {
-                          const uid = Number(e.target.value);
-                          const member = ledgerMembers.find(m => m.userId === uid);
-                          setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, userId: uid, displayName: member?.displayName || '' } : item));
-                        }}
-                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg bg-white"
-                      >
-                        <option value={0}>-- 请选择成员 --</option>
-                        {ledgerMembers.map(m => (
-                          <option key={m.userId} value={m.userId}>{m.displayName}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1">配置（佣金率、计佣基数等）请在该成员的订单编辑页设置</div>
+                    {/* 收/付息切换 */}
+                    <button
+                      type="button"
+                      onClick={() => setRate(String(absVal || ''), false)}
+                      className="px-1.5 py-1 rounded-md text-[11px] font-semibold border shrink-0"
+                      style={!isNeg ? { backgroundColor: '#FEF2F2', color: '#DC2626', borderColor: '#FCA5A5' } : { backgroundColor: '#fff', color: '#9CA3AF', borderColor: '#E5E7EB' }}
+                    >收</button>
+                    <button
+                      type="button"
+                      onClick={() => setRate(String(absVal || ''), true)}
+                      className="px-1.5 py-1 rounded-md text-[11px] font-semibold border shrink-0"
+                      style={isNeg ? { backgroundColor: '#ECFDF5', color: '#059669', borderColor: '#6EE7B7' } : { backgroundColor: '#fff', color: '#9CA3AF', borderColor: '#E5E7EB' }}
+                    >付</button>
+                    {/* 删除 */}
+                    <button
+                      onClick={() => setParticipantsList(list => list.filter((_, i) => i !== idx))}
+                      className="p-0.5 text-gray-300 hover:text-red-400 shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 );
               })}
@@ -1187,7 +1337,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   // 多视角订单参与方相关 state
   const [showParticipantsPanel, setShowParticipantsPanel] = useState<number | null>(null); // 当前展开参与方面板的订单id
   type ParticipantRole = 'funder' | 'borrower' | 'broker';
-  type ParticipantItem = { userId: number; displayName: string; role: ParticipantRole; sortOrder: number };
+  type ParticipantItem = { userId: number; displayName: string; role: ParticipantRole; sortOrder: number; rate: string };
   type LedgerMember = { userId: number; displayName: string; memberRole: string };
   const [participantsList, setParticipantsList] = useState<ParticipantItem[]>([]);
   const [ledgerMembers, setLedgerMembers] = useState<LedgerMember[]>([]);
@@ -1230,6 +1380,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     interestStartDate: getBeijingToday(),
     showProfitShare: true,
     commissionShare: '',
+    profitShareRatio: '', // 收益分成比例（百分数，如 20 表示 20%）
+    profitShareType: 'interest' as 'interest' | 'coin', // 分成类型：interest=利息分成，coin=币种收益分成
     originalAmount: '', // 编辑时保存原订单金额，买入价格或数量为空时回退使用
     // 受邀订单佣金配置
     commissionRate: '',
@@ -1271,6 +1423,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     interestDuration: true,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean>>(DEFAULT_DISPLAY_CONFIG);
+  const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY'];
 
   // 融资金额输入状态：编辑时用本地值，非编辑时显示计算值
@@ -1593,6 +1746,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         displayName: p.username || p.nickname || p.userName || `用户${p.user_id}`,
         role: p.role as ParticipantRole,
         sortOrder: p.sort_order || 0,
+        rate: (p.commission_rate != null && p.commission_rate !== '') ? String(p.commission_rate) : (p.rate != null ? String(p.rate) : ''),
       }));
       setParticipantsList(mapped);
       const mappedMembers = (result.members || []).map((m: any) => ({
@@ -1617,6 +1771,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         displayName: firstAvail?.displayName ?? '',
         role,
         sortOrder: list.length,
+        rate: '',
       }];
     });
   };
@@ -1629,6 +1784,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         userId: p.userId,
         role: p.role,
         sortOrder: i,
+        rate: (p.rate ?? '').toString().trim() || undefined,
       })),
     });
   };
@@ -1737,6 +1893,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       interestStartDate: order.interest_start_date ? String(order.interest_start_date).slice(0, 10) : '',
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
       commissionShare: order.commission_share || '',
+      profitShareRatio: (() => { const m = String(order.commission_share || '').match(/(\d+(?:\.\d+)?)/); return m ? m[1] : ''; })(),
+      profitShareType: (String(order.commission_share || '').includes('币种收益') ? 'coin' : 'interest') as 'interest' | 'coin',
       originalAmount: order.amount || '',
       commissionRate: order.participantInfo?.commissionRate ? String(order.participantInfo.commissionRate) : '',
       commissionBase: order.participantInfo?.commissionBase ? String(order.participantInfo.commissionBase) : '',
@@ -1768,10 +1926,17 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           if (typeof v === 'boolean') safeConfig[k] = v;
         }
         setDisplayConfig({ ...DEFAULT_DISPLAY_CONFIG, ...safeConfig });
+        // 回填保证金率预警阈值（数字字段，不在 safeConfig 中）
+        if ((parsed as any).marginAlertThreshold !== undefined && (parsed as any).marginAlertThreshold !== null) {
+          setMarginAlertThreshold(String((parsed as any).marginAlertThreshold));
+        } else {
+          setMarginAlertThreshold('');
+        }
       } else {
         setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
+        setMarginAlertThreshold('');
       }
-    } catch { setDisplayConfig(DEFAULT_DISPLAY_CONFIG); }
+    } catch { setDisplayConfig(DEFAULT_DISPLAY_CONFIG); setMarginAlertThreshold(''); }
     // 初始化融资金额输入值：amount 是 USDT 价值，若出资币种非 USDT 则折算到该币种显示
     (() => {
       const amtU = order.amount ? parseFloat(order.amount) : NaN;
@@ -1842,8 +2007,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       interestBaseCurrency: formData.interestBaseCurrency,
       interestRateCurrency: formData.interestRateCurrency,
       interestStartDate: formData.interestStartDate || undefined,
-      showProfitShare: formData.showProfitShare,
-      commissionShare: formData.commissionShare || undefined,
+      showProfitShare: displayConfig.profitShare,
+      commissionShare: (() => {
+        if (!displayConfig.profitShare) return undefined;
+        const typeLabel = formData.profitShareType === 'coin' ? '利润分成' : '利息分成';
+        const ratio = (formData.profitShareRatio ?? '').toString().trim();
+        return ratio ? `${typeLabel} ${ratio}%` : typeLabel;
+      })(),
       // 编辑模式：始终传 collateralAssets（空数组表示清空），新建模式：为空时传 undefined
       collateralAssets: editingOrder
         ? collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)))
@@ -1851,9 +2021,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           ? collateralAssets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)))
           : undefined,
       // 提交前确保 displayConfig 所有値都是 boolean
-      displayConfig: Object.fromEntries(
-        Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')
-      ) as Record<string, boolean>,
+      displayConfig: {
+        ...Object.fromEntries(
+          Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')
+        ),
+        ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
+      } as Record<string, boolean | number>,
       assetType: formData.assetType || undefined,
       ownerLabel: formData.ownerLabel || undefined,
       tags: formData.tags.length > 0 ? formData.tags : undefined,
@@ -2715,26 +2888,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               </div>
               )}
 
-              {/* 分隔线：佣金分成 - 受邀订单隐藏 */}
-              {!editingOrder?.participantInfo && <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-gray-100" />
-                <span className="text-xs text-gray-400 shrink-0">佣金分成</span>
-                <div className="flex-1 h-px bg-gray-100" />
-              </div>}
-
-              {/* 佣金分成输入 - 受邀订单隐藏 */}
-              {!editingOrder?.participantInfo && <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">佣金分成说明</label>
-                <input
-                  type="text"
-                  value={formData.commissionShare}
-                  onChange={e => setFormData(d => ({ ...d, commissionShare: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="例如：年化收益的 20%"
-                  style={{ display: 'block', boxSizing: 'border-box' }}
-                />
-              </div>}
-
               {/* 分隔线：备注 - 受邀订单隐藏 */}
               {!editingOrder?.participantInfo && <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-gray-100" />
@@ -2792,7 +2945,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       { key: 'buyValue', label: '买入价值' },
                       { key: 'interestBase', label: '计息基数' },
                       { key: 'buyDate', label: '开仓时间' },
-                      { key: 'todayPrice', label: '今日币价' },
+                      { key: 'todayPrice', label: '当前币价' },
                       // 当前价值已移至持有资产括号显示，不再单独作为开关
                       { key: 'holdDuration', label: '持有时长' },
                       { key: 'orderNo', label: '订单编号' },
@@ -2833,19 +2986,42 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       { key: 'collateral', label: '担保缺口' },
                       { key: 'marginRate', label: '保证金率' },
                     ].map(({ key, label }) => (
-                      <div key={key} className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">{label}</span>
-                        <button
-                          type="button"
-                          onClick={() => setDisplayConfig(c => ({ ...c, [key]: !c[key] }))}
-                          className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                            displayConfig[key] ? 'bg-blue-500' : 'bg-gray-200'
-                          }`}
-                        >
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                            displayConfig[key] ? 'translate-x-5' : 'translate-x-1'
-                          }`} />
-                        </button>
+                      <div key={key}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">{label}</span>
+                          <button
+                            type="button"
+                            onClick={() => setDisplayConfig(c => ({ ...c, [key]: !c[key] }))}
+                            className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                              displayConfig[key] ? 'bg-blue-500' : 'bg-gray-200'
+                            }`}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                              displayConfig[key] ? 'translate-x-5' : 'translate-x-1'
+                            }`} />
+                          </button>
+                        </div>
+                        {/* 保证金率预警阈值输入框（仅在保证金率开关打开时显示） */}
+                        {key === 'marginRate' && displayConfig.marginRate && (
+                          <div className="mt-1.5 flex items-center gap-2 pl-1">
+                            <span className="text-xs text-gray-400 shrink-0">低于</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="200"
+                              step="1"
+                              value={marginAlertThreshold}
+                              onChange={e => setMarginAlertThreshold(e.target.value)}
+                              placeholder="如：80"
+                              className="w-16 text-xs text-center border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:border-orange-400"
+                              style={{ color: '#D97706' }}
+                            />
+                            <span className="text-xs text-gray-400 shrink-0">% 时预警</span>
+                            {marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 && (
+                              <span className="text-xs text-orange-500 font-medium">已设置</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -2855,25 +3031,57 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 <div className="px-4 pb-3">
                   <div className="text-xs font-medium text-blue-500 mb-2">右栏下半：收益分成区</div>
                   <div className="space-y-2">
-                    {[
-                      { key: 'profitShare', label: '收益分成（开启后显示下半区）' },
-                      { key: 'commissionShare', label: '佣金分成' },
-                    ].map(({ key, label }) => (
-                      <div key={key} className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">{label}</span>
-                        <button
-                          type="button"
-                          onClick={() => setDisplayConfig(c => ({ ...c, [key]: !c[key] }))}
-                          className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                            displayConfig[key] ? 'bg-blue-500' : 'bg-gray-200'
-                          }`}
-                        >
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                            displayConfig[key] ? 'translate-x-5' : 'translate-x-1'
-                          }`} />
-                        </button>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">收益分成（开启后显示下半区）</span>
+                      <button
+                        type="button"
+                        onClick={() => setDisplayConfig(c => ({ ...c, profitShare: !c.profitShare }))}
+                        className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                          displayConfig.profitShare ? 'bg-blue-500' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                          displayConfig.profitShare ? 'translate-x-5' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                    {displayConfig.profitShare && (
+                      <div className="space-y-2 pt-1">
+                        {/* 分成类型选择：利息分成 / 利润分成 */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setFormData(d => ({ ...d, profitShareType: 'interest' }))}
+                            className={`px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                              formData.profitShareType === 'interest'
+                                ? 'border-blue-500 bg-blue-50 text-blue-600'
+                                : 'border-gray-200 text-gray-500'
+                            }`}
+                          >利息分成</button>
+                          <button
+                            type="button"
+                            onClick={() => setFormData(d => ({ ...d, profitShareType: 'coin' }))}
+                            className={`px-3 py-2 rounded-xl border text-sm font-medium transition-colors ${
+                              formData.profitShareType === 'coin'
+                                ? 'border-blue-500 bg-blue-50 text-blue-600'
+                                : 'border-gray-200 text-gray-500'
+                            }`}
+                          >利润分成</button>
+                        </div>
+                        {/* 分成比例输入 */}
+                        <div className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2">
+                          <span className="text-sm text-gray-500 shrink-0">分成比例</span>
+                          <input
+                            type="number"
+                            value={formData.profitShareRatio}
+                            onChange={e => setFormData(d => ({ ...d, profitShareRatio: e.target.value }))}
+                            className="flex-1 min-w-0 text-right text-sm focus:outline-none bg-transparent"
+                            placeholder="例如 20"
+                          />
+                          <span className="text-sm text-gray-500 shrink-0">%</span>
+                        </div>
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               </div>
@@ -2887,14 +3095,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   {/* 帽子区域：资产类型标签 + 所有者名字（受开关控制） */}
                   {(displayConfig.assetType || displayConfig.showOwnerName || (formData.tags && formData.tags.length > 0)) && (
                     <div className="flex items-center gap-1.5 px-4 py-1.5 flex-wrap" style={{ borderBottom: '1px solid #F3F4F6', backgroundColor: '#FAFBFF' }}>
-                      {displayConfig.assetType && formData.assetType && (
+                      {displayConfig.assetType && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: formData.assetType === 'stock' ? '#FEF3C7' : '#E0E7FF', color: formData.assetType === 'stock' ? '#92400E' : '#1D4ED8' }}>
-                          {formData.assetType === 'stock' ? '股票' : '数字币'}
+                          {formData.assetType === 'stock' ? '股票' : formData.assetType === 'crypto' ? '数字币' : '资产类型'}
                         </span>
                       )}
-                      {displayConfig.showOwnerName && editingOrder?.userName && (
+                      {displayConfig.showOwnerName && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#F0FDF4', color: '#16A34A' }}>
-                          {editingOrder.userName}
+                          {editingOrder?.userName || '订单所有者'}
                         </span>
                       )}
                       {formData.tags && formData.tags.length > 0 && formData.tags.map((tag: string, i: number) => (
@@ -2933,31 +3141,33 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         )}
                       </div>
                       <div className="space-y-0.5 text-xs mt-1">
-                        {formData.assetType !== 'stock' && displayConfig.buyPrice && formData.buyPrice && (
+                        {formData.assetType !== 'stock' && displayConfig.buyPrice && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">买入币价</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(formData.buyPrice).toLocaleString()} U</span>
+                            <span className="font-medium" style={{ color: '#4B5563' }}>{formData.buyPrice ? `${parseFloat(formData.buyPrice).toLocaleString()} U` : '---'}</span>
                           </div>
                         )}
-                        {displayConfig.buyValue && computedAmount && (
+                        {displayConfig.buyValue && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">买入价值</span>
                             <span className="font-medium" style={{ color: '#4B5563' }}>
-                              {parseFloat(computedAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })} {formData.coin === 'CNY' ? '元' : 'U'}
-                              {formData.coin === 'CNY' && <span className="text-gray-400 ml-1">≈{(parseFloat(computedAmount) / 7).toLocaleString(undefined, { maximumFractionDigits: 0 })} U</span>}
+                              {computedAmount ? <>{parseFloat(computedAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })} {formData.coin === 'CNY' ? '元' : 'U'}{formData.coin === 'CNY' && <span className="text-gray-400 ml-1">≈{(parseFloat(computedAmount) / 7).toLocaleString(undefined, { maximumFractionDigits: 0 })} U</span>}</> : '---'}
                             </span>
                           </div>
                         )}
-                        {displayConfig.interestBase && formData.interestBase && (
+                        {displayConfig.interestBase && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">计息基数</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(formData.interestBase).toLocaleString(undefined, { maximumFractionDigits: 2 })} {formData.interestBaseCurrency === 'CNY' ? '元' : 'U'}</span>
+                            <span className="font-medium" style={{ color: '#4B5563' }}>{formData.interestBase ? `${parseFloat(formData.interestBase).toLocaleString(undefined, { maximumFractionDigits: 2 })} ${formData.interestBaseCurrency === 'CNY' ? '元' : 'U'}` : '---'}</span>
                           </div>
                         )}
-                        {displayConfig.todayPrice && formData.coin !== 'CNY' && (
+                        {displayConfig.todayPrice && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">当前币价</span>
                             {(() => {
+                              if (formData.coin === 'CNY') {
+                                return <span className="font-medium" style={{ color: '#4B5563' }}>---</span>;
+                              }
                               const lp = formLivePrices[formData.coin];
                               const bp = formData.buyPrice ? parseFloat(formData.buyPrice) : null;
                               let priceColor = '#4B5563';
@@ -2970,42 +3180,42 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 <span className="font-medium flex items-center gap-0.5" style={{ color: priceColor }}>
                                   {dir === 'up' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#DC2626', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                                   {dir === 'down' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#16A34A', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
-                                  {lp ? lp.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U' : '获取中...'}
+                                  {lp ? lp.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U' : '---'}
                                 </span>
                               );
                             })()}
                           </div>
                         )}
-                        {displayConfig.buyDate && formData.buyDate && (
+                        {displayConfig.buyDate && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">开仓时间</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>{formData.buyDate}</span>
+                            <span className="font-medium" style={{ color: '#4B5563' }}>{formData.buyDate || '---'}</span>
                           </div>
                         )}
-                        {displayConfig.holdDuration && formData.buyDate && (
+                        {displayConfig.holdDuration && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">持有时长</span>
                             <span className="font-medium" style={{ color: '#4B5563' }}>
-                              {(() => {
+                              {formData.buyDate ? (() => {
                                 const elapsed = Date.now() - new Date(formData.buyDate + 'T00:00:00').getTime();
                                 if (elapsed < 0) return '---';
                                 const days = Math.floor(elapsed / (1000 * 60 * 60 * 24));
                                 const hours = Math.floor((elapsed % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                                 return days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
-                              })()}
+                              })() : '---'}
                             </span>
                           </div>
                         )}
-                        {displayConfig.orderNo && editingOrder?.order_no && (
+                        {displayConfig.orderNo && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">订单编号</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>{editingOrder.order_no}</span>
+                            <span className="font-medium" style={{ color: '#4B5563' }}>{editingOrder?.order_no || '创建后生成'}</span>
                           </div>
                         )}
-                        {displayConfig.interestPaymentType && formData.interestPaymentType && (
+                        {displayConfig.interestPaymentType && (
                           <div className="flex items-center justify-between">
                             <span className="text-gray-400 shrink-0">付息方式</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>{INTEREST_PAYMENT_OPTIONS.find(o => o.value === formData.interestPaymentType)?.label ?? formData.interestPaymentType}</span>
+                            <span className="font-medium" style={{ color: '#4B5563' }}>{formData.interestPaymentType ? (INTEREST_PAYMENT_OPTIONS.find(o => o.value === formData.interestPaymentType)?.label ?? formData.interestPaymentType) : '---'}</span>
                           </div>
                         )}
                       </div>
@@ -3017,7 +3227,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       {(() => {
                         const hasInterestData = !!(formData.interestRateAnnual && formData.interestBase && formData.interestStartDate);
                         const hasCollateralData = collateralAssets.filter(a => a.coin && a.qty !== '').length > 0;
-                        const hasAnyRightContent = (displayConfig.accruedInterest && hasInterestData) || (displayConfig.collateralCoin && hasCollateralData) || (displayConfig.collateralValue && hasCollateralData) || (displayConfig.profitShare && formData.showProfitShare) || (displayConfig.interestDuration && formData.interestStartDate) || (displayConfig.interestStartDate && formData.interestStartDate);
+                        const hasAnyRightContent = displayConfig.accruedInterest || displayConfig.paidInterest || displayConfig.interestStartDate || displayConfig.interestDuration || displayConfig.collateralCoin || displayConfig.collateralValue || displayConfig.collateral || (displayConfig.profitShare && formData.showProfitShare);
                         if (!hasAnyRightContent) {
                           return (
                             <div className="flex items-center justify-center h-full">
@@ -3052,11 +3262,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         const prevAltPaid = prevConvertAlt(prevDisplayPaid);
                         return (
                           <div>
-                            {displayConfig.accruedInterest && hasInterestData && (
+                            {displayConfig.accruedInterest && (
                               <>
                                 <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
                                   <span className="text-[10px]" style={{ color: '#3B82F6' }}>待结利息</span>
-                                  <span className="text-[10px] text-gray-400">(年化 {Math.abs(parseFloat(formData.interestRateAnnual)).toFixed(0)}%)</span>
+                                  {hasInterestData && <span className="text-[10px] text-gray-400">(年化 {Math.abs(parseFloat(formData.interestRateAnnual)).toFixed(0)}%)</span>}
                                 </div>
                                 <div className="min-h-7 flex flex-col justify-center mt-0.5">
                                   <div className="flex items-baseline gap-0.5">
@@ -3070,7 +3280,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               </>
                             )}
                             <div className="space-y-0.5 text-xs mt-1">
-                              {displayConfig.paidInterest && hasInterestData && (
+                              {displayConfig.paidInterest && (
                                 <>
                                   <div className="flex items-center justify-between">
                                     <span className="text-gray-400 whitespace-nowrap">已结利息</span>
@@ -3085,26 +3295,26 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                   )}
                                 </>
                               )}
-                              {displayConfig.interestStartDate && formData.interestStartDate && (
+                              {displayConfig.interestStartDate && (
                                 <div className="flex items-center justify-between">
                                   <span className="text-gray-400">计息日期</span>
                                   <span className="font-medium" style={{ color: '#4B5563' }}>
-                                    {formData.interestStartDate.slice(0, 10)}
+                                    {formData.interestStartDate ? formData.interestStartDate.slice(0, 10) : '---'}
                                   </span>
                                 </div>
                               )}
-                              {displayConfig.interestDuration && formData.interestStartDate && (
+                              {displayConfig.interestDuration && (
                                 <div className="flex items-center justify-between">
                                   <span className="text-gray-400">计息时长</span>
                                   <span className="font-medium" style={{ color: '#4B5563' }}>
-                                    {(() => {
+                                    {formData.interestStartDate ? (() => {
                                       const elapsed = Date.now() - new Date(formData.interestStartDate + 'T00:00:00').getTime();
                                       if (elapsed < 0) return '---';
                                       const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
                                       const days = Math.floor(totalHours / 24);
                                       const hours = totalHours % 24;
                                       return days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
-                                    })()}
+                                    })() : '---'}
                                   </span>
                                 </div>
                               )}
@@ -3154,19 +3364,75 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                   </div>
                                 );
                               })()}
+                              {/* 保证金率：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100% */}
+                              {displayConfig.marginRate && computedCollateralValue !== null && computedCollateralValue > 0 && formData.interestBase && parseFloat(formData.interestBase) > 0 && (() => {
+                                const base = parseFloat(formData.interestBase);
+                                const liveP = formLivePrices[formData.coin] ?? null;
+                                const coinQty = parseFloat(formData.buyQuantity || '0');
+                                const buyPrice = parseFloat(formData.buyPrice || '0');
+                                const marketValue = liveP !== null && coinQty > 0 ? liveP * coinQty : null;
+                                const buyValue = coinQty > 0 && buyPrice > 0 ? coinQty * buyPrice : (parseFloat(computedAmount) || 0);
+                                const floatPnl = formData.coin === 'USDT' ? 0 : (marketValue !== null ? marketValue - buyValue : null);
+                                const effective = floatPnl !== null
+                                  ? computedCollateralValue + floatPnl - rawAccrued + previewPaidInterest
+                                  : computedCollateralValue - rawAccrued + previewPaidInterest;
+                                const marginRatio = effective / base;
+                                const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
+                                const previewAlertThreshold = marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? parseFloat(marginAlertThreshold) : null;
+                                const previewIsAlerting = previewAlertThreshold !== null && (marginRatio * 100) < previewAlertThreshold;
+                                return (
+                                  <div className="flex items-center justify-between mt-0.5">
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-gray-400 shrink-0">保证金率</span>
+                                      {previewIsAlerting && (
+                                        <span className="inline-flex items-center justify-center w-3 h-3 rounded-full text-white text-[7px] font-bold flex-shrink-0" style={{ background: '#EF4444', lineHeight: 1 }}>❗</span>
+                                      )}
+                                    </div>
+                                    <span className="font-bold" style={{ color: previewIsAlerting ? '#EF4444' : marginColor }}>{(marginRatio * 100).toFixed(1)}%{previewIsAlerting ? ' ⚠' : ''}</span>
+                                  </div>
+                                );
+                              })()}
                               {/* 收益分成区（右栏下半） */}
                               {displayConfig.profitShare && formData.showProfitShare && (
                                 <>
                                   <div className="border-t mt-1 pt-1" style={{ borderColor: '#E8EFFF' }}>
-                                    <div className="h-4 flex items-center" style={{ color: '#3B82F6' }}>
-                                      <span className="text-xs font-medium">收益分成</span>
-                                    </div>
-                                    {displayConfig.commissionShare && formData.commissionShare && (
-                                      <div className="flex items-center justify-between mt-0.5">
-                                        <span className="text-gray-400 shrink-0">佣金分成</span>
-                                        <span className="font-medium" style={{ color: '#4B5563' }}>{formData.commissionShare}</span>
-                                      </div>
-                                    )}
+                                    {(() => {
+                                      const isCoin = formData.profitShareType === 'coin';
+                                      const typeLabel = isCoin ? '利润分成' : '利息分成';
+                                      const ratioNum = parseFloat(String(formData.profitShareRatio || '').trim());
+                                      const ratio = isFinite(ratioNum) && ratioNum > 0 ? ratioNum / 100 : 0;
+                                      const bp = parseFloat(formData.buyPrice || '0');
+                                      const qy = parseFloat(formData.buyQuantity || '0');
+                                      const lp = formLivePrices[formData.coin] ?? null;
+                                      // 本金口径：优先计息基数，其次买入价×币数
+                                      const interestBaseNum = parseFloat(formData.interestBase || '0');
+                                      const principalU = interestBaseNum > 0 ? interestBaseNum : (bp > 0 && qy > 0 ? bp * qy : 0);
+                                      let shareAmt: number | null = null;
+                                      if (!isCoin) {
+                                        if (principalU > 0 && ratio > 0) shareAmt = principalU * ratio;
+                                      } else {
+                                        if (lp != null && bp > 0 && qy > 0 && ratio > 0) shareAmt = Math.max(0, lp - bp) * qy * ratio;
+                                      }
+                                      return (
+                                        <>
+                                          <div className="h-4 flex items-center" style={{ color: '#3B82F6' }}>
+                                            <span className="text-xs font-medium">收益分成</span>
+                                          </div>
+                                          <div className="flex items-center justify-between mt-0.5">
+                                            <span className="text-gray-400 shrink-0">分成类型</span>
+                                            <span className="font-medium" style={{ color: '#4B5563' }}>{typeLabel}</span>
+                                          </div>
+                                          <div className="flex items-center justify-between mt-0.5">
+                                            <span className="text-gray-400 shrink-0">分成比例</span>
+                                            <span className="font-medium" style={{ color: '#4B5563' }}>{isFinite(ratioNum) && ratioNum > 0 ? `${ratioNum}%` : '---'}</span>
+                                          </div>
+                                          <div className="flex items-center justify-between mt-0.5">
+                                            <span className="text-gray-400 shrink-0">待分金额</span>
+                                            <span className="font-medium" style={{ color: '#4B5563' }}>{shareAmt != null ? `≈ ${shareAmt.toLocaleString(undefined, { maximumFractionDigits: 2 })} U` : '---'}</span>
+                                          </div>
+                                        </>
+                                      );
+                                    })()}
                                   </div>
                                 </>
                               )}

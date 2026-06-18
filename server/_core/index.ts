@@ -710,9 +710,9 @@ async function startServer() {
     // ─── 数字币（BTC/ETH）：每日 UTC 00:10 自动拉取最新日线数据 ─────────────────
     const CRYPTO_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
 
-    const scheduleCryptoSync = () => {
+    const scheduleCryptoSync = async () => {
       const now = new Date();
-      const { syncLatestFromBinance } = require('../db-crypto');
+      const { syncLatestFromBinance } = await import('../db-crypto');
 
       // 每天 UTC 00:10 触发（Binance 日线 UTC 00:00 收盘）
       const target = new Date(Date.UTC(
@@ -744,7 +744,7 @@ async function startServer() {
 
     // 启动时立即补齐所有缺失数据（数字币 + 美股）
     setTimeout(async () => {
-      const { syncLatestFromBinance, syncStocksFromTushare } = require('../db-crypto');
+      const { syncLatestFromBinance, syncStocksFromTushare } = await import('../db-crypto');
       console.log('[启动补齐] 开始补齐所有标的缺失数据...');
       // 数字币：从 Binance 拉取
       for (const sym of CRYPTO_SYMBOLS) {
@@ -772,7 +772,7 @@ async function startServer() {
     const US_STOCKS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'TSLA', 'META'];
 
     const runUSStockSync = async () => {
-      const { isUSDST, syncStocksFromTushare, isUSTradingDay } = require('../db-crypto');
+      const { isUSDST, syncStocksFromTushare, isUSTradingDay } = await import('../db-crypto');
       const now = new Date();
       const bjtNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
       const bjtHour = bjtNow.getUTCHours();
@@ -830,7 +830,7 @@ async function startServer() {
 
     // 小时K线同步函数（一次性补齐所有缺失数据，循环直到无更多数据）
     const syncHourlyKlines = async () => {
-      const { syncHourlyFromBinance } = require('../db-crypto');
+      const { syncHourlyFromBinance } = await import('../db-crypto');
       for (const sym of HOURLY_CRYPTO_SYMBOLS) {
         try {
           let hasMore = true;
@@ -852,7 +852,7 @@ async function startServer() {
 
     // 资金费率同步函数（每小时执行）
     const syncFunding = async () => {
-      const { syncFundingRatesFromBinance } = require('../db-crypto');
+      const { syncFundingRatesFromBinance } = await import('../db-crypto');
       for (const sym of HOURLY_CRYPTO_SYMBOLS) {
         try {
           let hasMore = true;
@@ -915,7 +915,7 @@ async function startServer() {
       console.log(`[Yahoo同步] 下次触发时间: ${nextStr}`);
       setTimeout(async () => {
         try {
-          const { syncYahooFinance } = require('../db-crypto');
+          const { syncYahooFinance } = await import('../db-crypto');
           for (const sym of YAHOO_SYMBOLS) {
             try {
               const r = await syncYahooFinance(sym);
@@ -932,7 +932,7 @@ async function startServer() {
     scheduleYahooSync();
     // 启动时立即补齐（延迟 20 秒）
     setTimeout(async () => {
-      const { syncYahooFinance } = require('../db-crypto');
+      const { syncYahooFinance } = await import('../db-crypto');
       console.log('[Yahoo启动补齐] 开始补齐 WTI/BRENT/CNY/CNH/DXY...');
       for (const sym of YAHOO_SYMBOLS) {
         try {
@@ -959,7 +959,7 @@ async function startServer() {
       console.log(`[黄金同步] 下次触发时间: ${nextStr}`);
       setTimeout(async () => {
         try {
-          const { syncGoldFromYahoo } = require('../db-crypto');
+          const { syncGoldFromYahoo } = await import('../db-crypto');
           const r = await syncGoldFromYahoo();
           console.log(`[黄金同步] 新增 ${r.added} 条，最新日期 ${r.latestDate}`);
         } catch (e: any) {
@@ -972,7 +972,7 @@ async function startServer() {
     scheduleGoldSync();
     // 启动时立即补齐（延迟 30 秒）
     setTimeout(async () => {
-      const { syncGoldFromYahoo } = require('../db-crypto');
+      const { syncGoldFromYahoo } = await import('../db-crypto');
       console.log('[黄金启动补齐] 开始补齐黄金日线...');
       try {
         const r = await syncGoldFromYahoo();

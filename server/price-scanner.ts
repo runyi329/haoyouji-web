@@ -58,6 +58,9 @@ export function getUsdtCnyRate(): number {
 const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM'];
 // 股票类合约（仅 OKX SWAP 有价格，Gate.io/火币无此品种）
 const STOCK_COINS = ['TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'];
+// 仅 Yahoo Finance 有价格的美股（加密交易所无对应合约，如 CRCL=Circle 纽交所股票）。
+// 取美元股价直接作为 USDT 计价（USD≈USDT），每 3 秒轮询，与其它币种一致。
+const YAHOO_STOCKS = ['CRCL'];
 
 // 从文件恢复缓存（服务启动时调用）
 function loadCacheFromFile() {
@@ -65,7 +68,7 @@ function loadCacheFromFile() {
     if (fs.existsSync(CACHE_FILE)) {
       const raw = fs.readFileSync(CACHE_FILE, 'utf-8');
       const cached = JSON.parse(raw);
-      for (const coin of [...COINS, ...STOCK_COINS]) {
+      for (const coin of [...COINS, ...STOCK_COINS, ...YAHOO_STOCKS]) {
         if (cached[coin]?.price && cached[coin]?.updatedAt) {
           latestPrices[coin] = { price: cached[coin].price, todayOpen: cached[coin].todayOpen ?? 0, changePercent: cached[coin].changePercent ?? 0, high24h: cached[coin].high24h ?? 0, low24h: cached[coin].low24h ?? 0, volume24h: cached[coin].volume24h ?? 0, quoteVolume24h: cached[coin].quoteVolume24h ?? 0, updatedAt: cached[coin].updatedAt };
         }
@@ -196,6 +199,27 @@ async function fetchPrice(coin: string): Promise<number | null> {
   return result ? result.price : null;
 }
 
+// Yahoo Finance 专用：获取美股实时价（美元，直接当 USDT 计价）。
+// query1 / query2 两个域名互为备用，保证至少一个能拉到。
+async function fetchYahooStockPrice(coin: string): Promise<number | null> {
+  const hosts = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];
+  for (const host of hosts) {
+    try {
+      const r = await fetch(
+        `https://${host}/v8/finance/chart/${coin}?interval=1d&range=1d`,
+        { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+      );
+      if (r.ok) {
+        const j: any = await r.json();
+        const meta = j?.chart?.result?.[0]?.meta;
+        const p = meta?.regularMarketPrice;
+        if (typeof p === 'number' && p > 0) return p;
+      }
+    } catch {}
+  }
+  return null;
+}
+
 // 股票类合约专用：通过 OKX SWAP 接口获取价格
 async function fetchStockPrice(coin: string): Promise<number | null> {
   try {
@@ -245,6 +269,20 @@ async function scanPrices() {
       const price = await fetchStockPrice(coin);
       if (price !== null && price > 0) {
         // 股票类合约保留已有的 todayOpen 和 changePercent，暂不计算
+        const prevChange = latestPrices[coin]?.changePercent ?? 0;
+        const prevOpen = latestPrices[coin]?.todayOpen ?? 0;
+        latestPrices[coin] = { price, todayOpen: prevOpen, changePercent: prevChange, high24h: latestPrices[coin]?.high24h ?? 0, low24h: latestPrices[coin]?.low24h ?? 0, volume24h: latestPrices[coin]?.volume24h ?? 0, quoteVolume24h: latestPrices[coin]?.quoteVolume24h ?? 0, updatedAt: new Date().toISOString() };
+        updated = true;
+      }
+    } catch (err) {
+      console.error(`[价格扫描] ${coin} 获取失败:`, err);
+    }
+  }
+  // 扫描 Yahoo 美股（如 CRCL，按美元股价当 USDT 计价）
+  for (const coin of YAHOO_STOCKS) {
+    try {
+      const price = await fetchYahooStockPrice(coin);
+      if (price !== null && price > 0) {
         const prevChange = latestPrices[coin]?.changePercent ?? 0;
         const prevOpen = latestPrices[coin]?.todayOpen ?? 0;
         latestPrices[coin] = { price, todayOpen: prevOpen, changePercent: prevChange, high24h: latestPrices[coin]?.high24h ?? 0, low24h: latestPrices[coin]?.low24h ?? 0, volume24h: latestPrices[coin]?.volume24h ?? 0, quoteVolume24h: latestPrices[coin]?.quoteVolume24h ?? 0, updatedAt: new Date().toISOString() };

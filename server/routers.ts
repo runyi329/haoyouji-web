@@ -16240,6 +16240,7 @@ ${klinesSummary}
           userId: z.number(),
           role: z.enum(['funder', 'borrower', 'broker']),
           sortOrder: z.number().optional(),
+          rate: z.string().optional(),
         })),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -16263,6 +16264,10 @@ ${klinesSummary}
           rate varchar(20) NULL,
           rate_label varchar(50) NULL,
           amount varchar(50) NULL,
+          commission_rate varchar(20) NULL,
+          commission_base varchar(50) NULL,
+          commission_start_date varchar(20) NULL,
+          paid_commission varchar(50) NULL,
           note text NULL,
           sort_order int DEFAULT 0,
           created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -16271,13 +16276,17 @@ ${klinesSummary}
           INDEX fop_ledger_idx (ledger_id),
           INDEX fop_user_idx (user_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+        // 兼容老表：补齐 commission_* 列（已存在则忽略报错）
+        for (const col of ['commission_rate varchar(20) NULL', 'commission_base varchar(50) NULL', 'commission_start_date varchar(20) NULL', 'paid_commission varchar(50) NULL']) {
+          try { await conn.execute(`ALTER TABLE ledger_order_participants ADD COLUMN ${col}`); } catch (e) { /* 列已存在，忽略 */ }
+        }
         // 先删除旧的参与方记录
         await conn.execute('DELETE FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ?', [input.orderId, input.ledgerId]);
         // 批量插入新的参与方（以 user_id 为核心）
         for (const p of input.participants) {
           await conn.execute(
-            'INSERT INTO ledger_order_participants (order_id, ledger_id, user_id, role, sort_order) VALUES (?, ?, ?, ?, ?)',
-            [input.orderId, input.ledgerId, p.userId, p.role, p.sortOrder ?? 0]
+            'INSERT INTO ledger_order_participants (order_id, ledger_id, user_id, role, rate, commission_rate, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [input.orderId, input.ledgerId, p.userId, p.role, p.rate ?? null, p.rate ?? null, p.sortOrder ?? 0]
           );
         }
         return { success: true };
