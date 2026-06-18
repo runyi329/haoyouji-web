@@ -396,7 +396,14 @@ export default function Admin() {
       </header>
 
       <main className="container py-6">
-        <Tabs defaultValue="users" className="w-full">
+        <Tabs
+          defaultValue={
+            (typeof window !== "undefined" &&
+              new URLSearchParams(window.location.search).get("tab")) ||
+            "users"
+          }
+          className="w-full"
+        >
           <TabsList className="flex flex-wrap w-full gap-2 mb-6 h-auto">
 
             <TabsTrigger value="users" className="text-xs sm:text-sm">
