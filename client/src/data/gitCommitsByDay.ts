@@ -7510,4 +7510,18 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-17T15:37:39Z", type: "feat", cleanMessage: "单医生放大视图改为点击进度条在岗时段新增预约，底部仅陈列预约详情" },
     { date: "2026-06-17T15:58:11Z", type: "fix", cleanMessage: "预约硬拦截休息/重叠时段；移除加减延长按钮，快捷时长止步于边界" },
   ],
+  "2026-06-18": [
+    { date: "2026-06-17T18:17:23Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-17T22:12:10Z", type: "fix", cleanMessage: "时段选择改为单击即选起点(默认30分钟)，去除点同格取消导致的无反应" },
+    { date: "2026-06-17T22:20:09Z", type: "feat", cleanMessage: "按医生进度条点击直接新建预约，去掉先进单医生放大视图的中间步" },
+    { date: "2026-06-18T01:18:47Z", type: "feat", cleanMessage: "接入运营报表页面(占位界面,mock数据,标注数据对接中),挂载/yaban/ops-report路由并点亮入口按钮" },
+    { date: "2026-06-18T01:53:25Z", type: "feat", cleanMessage: "接入人事管理三页(人事驾驶舱/员工档案详情/我的签约页),员工档案按钮指向新驾驶舱,标注数据对接中,挂载/yaban/staff路由" },
+    { date: "2026-06-18T02:24:27Z", type: "feat", cleanMessage: "运营报表后端接口 yabanOps（9个只读统计接口，对接真实生产库）" },
+    { date: "2026-06-18T03:13:12Z", type: "feat", cleanMessage: "客户预约页文案与排班时间段优化" },
+    { date: "2026-06-18T03:30:28Z", type: "fix", cleanMessage: "底部切换按钮去白边; 后台用户管理按钮放大并横向均分, 角色家长改会员" },
+    { date: "2026-06-18T05:54:39Z", type: "other", cleanMessage: "牙伴预约：P323新建预约整页改造（统一蓝色顶栏YabanTopBar、合并预约时段弹层、字体密度对齐、URL预填）；预约列表加号与进度条统一跳转整页并删除重复弹窗NewApptForm；后端补充医生在岗时段校验" },
+    { date: "2026-06-18T06:52:09Z", type: "feat", cleanMessage: "添加订单页融资金额支持独立融资币种选择与实时折算" },
+    { date: "2026-06-18T07:39:50Z", type: "feat", cleanMessage: "添加订单页UI重排与担保货币增强" },
+    { date: "2026-06-18T08:46:08Z", type: "feat", cleanMessage: "参与方面板支持为每个参与方单独设置年化利率(收息红/付息绿)，写入commission_rate按各自视角展示待结利息" },
+  ],
 };
