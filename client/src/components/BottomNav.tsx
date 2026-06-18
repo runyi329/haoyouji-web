@@ -260,7 +260,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
     : isYaban
     ? 'bg-[#E3F2FD] border-4 border-[#90CAF9] ring-2 ring-[#90CAF9]/30'
     : showSwitcher
-    ? 'bg-white border-4 border-white'
+    ? 'bg-white border-0'
     : showLedgerMenu
     ? 'bg-gray-600 rotate-45 border-4 border-white'
     : 'bg-[#D32F2F] hover:bg-[#B71C1C] border-4 border-white';
@@ -405,7 +405,8 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
                 {showSwitcher ? (
                   // 切换键：显示当前所在版本/入口的图标
                   currentSwitchItem?.icon ? (
-                    <img src={currentSwitchItem.icon} className="w-full h-full object-cover" alt={currentSwitchItem.name} />
+                    // 图标铺满圆形容器（由父层 rounded-full + overflow-hidden 裁切为圆）
+                    <img src={currentSwitchItem.icon} className="w-full h-full object-cover rounded-full" alt={currentSwitchItem.name} />
                   ) : (
                     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#D32F2F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M17 1l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" />

@@ -541,7 +541,7 @@ export default function Admin() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="super_admin">超级管理员</SelectItem>
-                            <SelectItem value="parent">家长</SelectItem>
+                            <SelectItem value="parent">会员</SelectItem>
                             <SelectItem value="baby">宝宝</SelectItem>
                           </SelectContent>
                         </Select>
@@ -586,7 +586,7 @@ export default function Admin() {
                         )}
                         {u.role === "parent" && (
                           <span className="px-2 py-0.5 text-xs rounded-full bg-[#F5F5F5] text-[#1976D2]">
-                            家长
+                            会员
                           </span>
                         )}
                         {u.role === "baby" && (
@@ -616,22 +616,22 @@ export default function Admin() {
                       )}
                     </div>
                     
-                    {/* 操作按钮区 - 移动端优化布局 */}
-                    <div className="flex items-center gap-1 flex-wrap">
+                    {/* 操作按钮区 - 横向平均分布、按钮放大两号 */}
+                    <div className="flex items-center justify-between gap-1">
                       {u.isLocked && (
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="w-8 h-8"
+                          className="w-11 h-11"
                           onClick={() => unlockUserMutation.mutate({ userId: u.id })}
                         >
-                          <Unlock className="w-4 h-4" />
+                          <Unlock className="w-5 h-5" />
                         </Button>
                       )}
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="w-8 h-8"
+                        className="w-11 h-11"
                         onClick={() => {
                           setRoleMutation.mutate({
                             userId: u.id,
@@ -640,9 +640,9 @@ export default function Admin() {
                         }}
                       >
                         {u.role === "super_admin" ? (
-                          <Shield className="w-4 h-4" />
+                          <Shield className="w-5 h-5" />
                         ) : (
-                          <ShieldCheck className="w-4 h-4" />
+                          <ShieldCheck className="w-5 h-5" />
                         )}
                       </Button>
                       
@@ -650,7 +650,7 @@ export default function Admin() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        className={`w-8 h-8 ${
+                        className={`w-11 h-11 ${
                           (u as any).inviteEnabled 
                             ? 'text-[#4CAF50] hover:text-green-700' 
                             : 'text-gray-400 hover:text-gray-500'
@@ -663,14 +663,14 @@ export default function Admin() {
                         }}
                         title={(u as any).inviteEnabled ? '关闭邀请功能' : '开启邀请功能'}
                       >
-                        <Share className="w-4 h-4" />
+                        <Share className="w-5 h-5" />
                       </Button>
                       
                       {/* 查看支付信息 */}
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="w-8 h-8"
+                        className="w-11 h-11"
                         onClick={async () => {
                           try {
                             const response = await fetch(`/api/admin/user-profile/${u.id}`);
@@ -683,7 +683,7 @@ export default function Admin() {
                         }}
                         title="查看支付信息"
                       >
-                        <CreditCard className="w-4 h-4" />
+                        <CreditCard className="w-5 h-5" />
                       </Button>
                       
                       {/* 编辑用户 */}
@@ -701,8 +701,8 @@ export default function Admin() {
                         }}
                       >
                         <DialogTrigger asChild>
-                          <Button size="icon" variant="ghost" className="w-8 h-8">
-                            <Edit className="w-4 h-4" />
+                          <Button size="icon" variant="ghost" className="w-11 h-11">
+                            <Edit className="w-5 h-5" />
                           </Button>
                         </DialogTrigger>
                         <DialogContent>
@@ -746,8 +746,8 @@ export default function Admin() {
                         }}
                       >
                         <DialogTrigger asChild>
-                          <Button size="icon" variant="ghost" className="w-8 h-8">
-                            <Lock className="w-4 h-4" />
+                          <Button size="icon" variant="ghost" className="w-11 h-11">
+                            <Lock className="w-5 h-5" />
                           </Button>
                         </DialogTrigger>
                         <DialogContent>
@@ -781,8 +781,8 @@ export default function Admin() {
                         onOpenChange={(open) => setShowDeleteUser(open ? u.id : null)}
                       >
                         <DialogTrigger asChild>
-                          <Button size="icon" variant="ghost" className="w-8 h-8 text-[#D32F2F] hover:text-[#D32F2F]">
-                            <Trash2 className="w-4 h-4" />
+                          <Button size="icon" variant="ghost" className="w-11 h-11 text-[#D32F2F] hover:text-[#D32F2F]">
+                            <Trash2 className="w-5 h-5" />
                           </Button>
                         </DialogTrigger>
                         <DialogContent>
