@@ -30,6 +30,51 @@ async function resolveTenantId(ctx: any): Promise<number> {
   }
 }
 
+// ============ 在岗时段校验工具 ============
+// 计算某医生某天的「在岗分段 segments」（与前端 getEffectiveShift 口径一致）：
+// override(单日调班/请假) 优先于周期模板；shiftType=rest 当天不可约。
+// 返回 null 表示当天不可约（休息/未排该工作日）。
+function _t2m(t: string): number { const [h, m] = t.split(":").map(Number); return h * 60 + m; }
+function _buildSegs(ws: number, we: number, bs: number | null, be: number | null): [number, number][] {
+  if (we <= ws) return [];
+  if (bs != null && be != null && be > bs && bs > ws && be < we) return [[ws, bs], [be, we]];
+  return [[ws, we]];
+}
+async function getDoctorSegments(conn: any, tenantId: number, doctor: string, dateStr: string): Promise<[number, number][] | null> {
+  if (!doctor) return null;
+  // 模板（按姓名匹配，与前端一致）
+  const [tplRows] = (await conn.execute(
+    `SELECT staff_user_id, work_start, work_end, break_start, break_end, work_days
+     FROM yaban_shift_template
+     WHERE tenant_id=? AND is_active=1 AND staff_user_id<>0 AND role_key<>'__biz__' AND staff_name=? LIMIT 1`,
+    [tenantId, doctor]
+  )) as any;
+  const tpl = (tplRows as any[])[0];
+  const staffId = tpl?.staff_user_id;
+  const toMin = (t?: string | null) => (t ? _t2m(t) : null);
+  // 单日覆盖优先
+  if (staffId != null) {
+    const [ovRows] = (await conn.execute(
+      `SELECT shift_type, work_start, work_end, break_start, break_end
+       FROM yaban_shift_override WHERE tenant_id=? AND staff_user_id=? AND override_date=? LIMIT 1`,
+      [tenantId, staffId, dateStr]
+    )) as any;
+    const ov = (ovRows as any[])[0];
+    if (ov) {
+      if (ov.shift_type === "rest") return null;
+      if (ov.work_start && ov.work_end) return _buildSegs(_t2m(ov.work_start), _t2m(ov.work_end), toMin(ov.break_start), toMin(ov.break_end));
+    }
+  }
+  // 回退周期模板
+  if (tpl) {
+    const dow = new Date(dateStr).getDay();
+    const days: number[] = (tpl.work_days || "1,2,3,4,5").split(",").map(Number);
+    if (days.length > 0 && !days.includes(dow)) return null;
+    if (tpl.work_start && tpl.work_end) return _buildSegs(_t2m(tpl.work_start), _t2m(tpl.work_end), toMin(tpl.break_start), toMin(tpl.break_end));
+  }
+  return null;
+}
+
 // ============ 预约路由 ============
 export const yabanAppointmentRouter = router({
   // 按日期查询预约列表
@@ -181,6 +226,25 @@ export const yabanAppointmentRouter = router({
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
+
+      // 硬校验：预约时段必须完整落在该医生当天某个在岗分段内，不得越入午休/上班前/下班后的不可约区。
+      if (input.doctor) {
+        const segs = await getDoctorSegments(conn, tenantId, input.doctor, input.appointDate);
+        if (!segs || segs.length === 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: `${input.doctor} 当日不在班（休息或未排班），不可预约` });
+        }
+        const s = _t2m(input.appointTime);
+        const e = input.endTime ? _t2m(input.endTime) : s + (input.duration ?? 30);
+        if (e <= s) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "预约结束时间必须晚于开始时间" });
+        }
+        const fit = segs.some(([s0, e0]) => s >= s0 && e <= e0);
+        if (!fit) {
+          const human = segs.map(([s0, e0]) => `${String(Math.floor(s0/60)).padStart(2,"0")}:${String(s0%60).padStart(2,"0")}-${String(Math.floor(e0/60)).padStart(2,"0")}:${String(e0%60).padStart(2,"0")}`).join("、");
+          throw new TRPCError({ code: "BAD_REQUEST", message: `预约时段超出 ${input.doctor} 当日在岗时间（含午休/下班后不可约）。可约时段：${human}` });
+        }
+      }
+
       const [res] = (await conn.execute(
         `INSERT INTO yaban_appointment
            (tenant_id, patient_id, patient_name, patient_mobile, patient_gender, patient_age,

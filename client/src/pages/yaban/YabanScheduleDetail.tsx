@@ -20,16 +20,17 @@ import { useYabanClinic } from "./useYabanClinic";
 
 // 预约状态配置
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  booked: { label: "已预约", color: "text-sky-700", bg: "bg-sky-100" },
-  confirmed: { label: "已确认", color: "text-blue-700", bg: "bg-blue-100" },
-  consulting: { label: "咨询中", color: "text-purple-700", bg: "bg-purple-100" },
-  registered: { label: "已挂号", color: "text-indigo-700", bg: "bg-indigo-100" },
-  treating: { label: "治疗中", color: "text-amber-700", bg: "bg-amber-100" },
-  treated: { label: "治疗完成", color: "text-emerald-700", bg: "bg-emerald-100" },
-  paid: { label: "已结账", color: "text-green-700", bg: "bg-green-100" },
-  left: { label: "已离开", color: "text-green-800", bg: "bg-green-100" },
-  missed: { label: "失约", color: "text-gray-600", bg: "bg-gray-200" },
-  cancelled: { label: "已取消", color: "text-gray-500", bg: "bg-gray-100" },
+  // 依牙伴标准色卡：蓝调为主，绿/金/红低饱和点缀（禁亮绿/紫），使用行内色值与主页一致
+  booked: { label: "已预约", color: "#3D9FD6", bg: "#EBF5FB" },
+  confirmed: { label: "已确认", color: "#1E88D6", bg: "#EBF5FB" },
+  consulting: { label: "咨询中", color: "#1B6FA8", bg: "#E9F1F8" },
+  registered: { label: "已挂号", color: "#1972B8", bg: "#E0EDF7" },
+  treating: { label: "治疗中", color: "#1567AE", bg: "#E0EDF7" },
+  treated: { label: "治疗完成", color: "#3D7A53", bg: "#EAF2EC" },
+  paid: { label: "已结账", color: "#3D7A53", bg: "#EAF2EC" },
+  left: { label: "已离开", color: "#647386", bg: "#EEF1F4" },
+  missed: { label: "失约", color: "#9A6E1F", bg: "#F5EEDD" },
+  cancelled: { label: "已取消", color: "#A8463C", bg: "#F7E9E7" },
 };
 
 export default function YabanScheduleDetail() {
@@ -110,7 +111,7 @@ export default function YabanScheduleDetail() {
 
       {/* 状态标签 */}
       <div className="bg-white px-4 py-3 border-b border-gray-100">
-        <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${statusInfo.bg} ${statusInfo.color}`}>
+        <span className="inline-block px-3 py-1 rounded-full text-xs font-medium" style={{ background: statusInfo.bg, color: statusInfo.color }}>
           {statusInfo.label}
         </span>
       </div>
@@ -120,7 +121,7 @@ export default function YabanScheduleDetail() {
         <div className="flex items-center gap-3">
           {/* 头像 */}
           <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" strokeWidth="1.5">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1E88D6" strokeWidth="1.5">
               <circle cx="12" cy="8" r="4" />
               <path d="M4 20c0-4 4-7 8-7s8 3 8 7" />
             </svg>

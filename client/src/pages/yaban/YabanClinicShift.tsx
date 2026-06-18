@@ -19,10 +19,11 @@ import { useYabanClinic } from "./useYabanClinic";
 import YabanClinicHeader from "./YabanClinicHeader";
 
 // ── 颜色常量 ──
-const SKY = "#2196C8", SKY_D = "#1E88D6", SKY_L = "#EAF4FE";
-const WARN = "#E8973A", WARN_L = "#FDF4E6", WARN_LINE = "#F2D9AE";
-const BG = "#F0F4F8", LINE = "#eef1f5", GRAY = "#6b7785", INK = "#1f2937";
-const FREE_COLOR = "#A8CCE8";
+// 牙伴标准色卡：主色#1E88D6 / 渐变亮端#3D9FD6 / 浅底#EBF5FB
+const SKY = "#3D9FD6", SKY_D = "#1E88D6", SKY_L = "#EBF5FB";
+const WARN = "#9A6E1F", WARN_L = "#F5EEDD", WARN_LINE = "#E6D5AE";
+const BG = "#F6F8FA", LINE = "#ECEFF3", GRAY = "#647386", INK = "#26303C";
+const FREE_COLOR = "#A6D2EE";
 
 // ── 角色字典（标签 / 配色 / 分组排序），与 YabanRoles 保持一致 ──
 const ROLE_LABEL: Record<string, string> = {
@@ -43,7 +44,7 @@ const ROLE_COLOR: Record<string, { fg: string; bg: string; bar: string }> = {
 };
 const ROLE_ORDER = ["founder", "co_founder", "owner", "shareholder", "doctor", "nurse", "assistant", "receptionist", "finance"];
 function roleLabel(k: string) { return ROLE_LABEL[k] || "员工"; }
-function roleColor(k: string) { return ROLE_COLOR[k] || { fg: "#5b6b7a", bg: "#eef1f5", bar: "#A8CCE8" }; }
+function roleColor(k: string) { return ROLE_COLOR[k] || { fg: "#647386", bg: "#ECEFF3", bar: "#A8CCE8" }; }
 function roleRank(k: string) { const i = ROLE_ORDER.indexOf(k); return i < 0 ? 99 : i; }
 
 // ── 工具函数 ──
@@ -381,13 +382,13 @@ export default function YabanClinicShift() {
     <div style={{ minHeight: "100vh", background: BG, fontFamily: "-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif", color: INK, paddingBottom: batchMode ? 120 : 40 }}>
 
       {/* 顶栏（固定吸顶） */}
-      <div ref={headerRef} style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, color: "#fff", padding: "14px 16px 12px", position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, maxWidth: 480, marginLeft: "auto", marginRight: "auto" }}>
+      <div ref={headerRef} style={{ background: `linear-gradient(90deg,${SKY},#3D9FD6)`, color: "#fff", padding: "14px 16px 12px", position: "fixed", top: 0, left: 0, right: 0, zIndex: 100, maxWidth: 480, marginLeft: "auto", marginRight: "auto" }}>
         <div style={{ display: "flex", alignItems: "center" }}>
           <div style={{ flex: 1, display: "flex", justifyContent: "flex-start" }}>
             <div style={{ fontSize: 22, width: 28, cursor: "pointer" }} onClick={() => setLocation("/yaban/schedule")}>‹</div>
           </div>
           <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,.18)", borderRadius: 12, padding: 4, flexShrink: 0 }}>
-            <div onClick={() => { try { sessionStorage.setItem("yaban_sched_date", toDateStr(selDate)); } catch {} setLocation("/yaban/schedule"); }} style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, color: "#eaf6ff", whiteSpace: "nowrap", cursor: "pointer" }}>顾客预约</div>
+            <div onClick={() => { try { sessionStorage.setItem("yaban_sched_date", toDateStr(selDate)); } catch {} setLocation("/yaban/schedule"); }} style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, color: "#EBF5FB", whiteSpace: "nowrap", cursor: "pointer" }}>顾客预约</div>
             <div style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, background: "#fff", color: SKY_D, boxShadow: "0 1px 3px rgba(0,0,0,.1)", whiteSpace: "nowrap" }}>员工排班</div>
           </div>
           <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
@@ -411,7 +412,7 @@ export default function YabanClinicShift() {
 
       {/* 周导航 */}
       <div style={{ background: "#fff", padding: "10px 16px 8px", borderBottom: `1px solid ${LINE}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div onClick={() => setWeekOffset(w => w - 1)} style={{ width: 30, height: 30, borderRadius: 9, background: "#f3f6f9", color: "#5b6b7a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, cursor: "pointer" }}>‹</div>
+        <div onClick={() => setWeekOffset(w => w - 1)} style={{ width: 30, height: 30, borderRadius: 9, background: "#F6F8FA", color: "#647386", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, cursor: "pointer" }}>‹</div>
         <div style={{ textAlign: "center" }}>
           <div style={{ fontSize: 15, fontWeight: 700, color: INK }}>
             {weekDates[0].getMonth() + 1}月{weekDates[0].getDate()}日 – {weekDates[6].getMonth() + 1}月{weekDates[6].getDate()}日
@@ -420,7 +421,7 @@ export default function YabanClinicShift() {
             {weekOffset === 0 ? "本周" : weekOffset < 0 ? `前${-weekOffset}周` : `后${weekOffset}周`}
           </div>
         </div>
-        <div onClick={() => setWeekOffset(w => w + 1)} style={{ width: 30, height: 30, borderRadius: 9, background: "#f3f6f9", color: "#5b6b7a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, cursor: "pointer" }}>›</div>
+        <div onClick={() => setWeekOffset(w => w + 1)} style={{ width: 30, height: 30, borderRadius: 9, background: "#F6F8FA", color: "#647386", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, cursor: "pointer" }}>›</div>
       </div>
 
       {/* 日期选择条 */}
@@ -433,7 +434,7 @@ export default function YabanClinicShift() {
               flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "6px 0", borderRadius: 9, cursor: "pointer",
               background: isSel ? SKY_D : "transparent", transition: "all .15s",
             }}>
-              <span style={{ fontSize: 10, color: isSel ? "rgba(255,255,255,.8)" : "#aab4be", fontWeight: 600, marginBottom: 2 }}>{WK_SHORT[i]}</span>
+              <span style={{ fontSize: 10, color: isSel ? "rgba(255,255,255,.8)" : "#9AA7B5", fontWeight: 600, marginBottom: 2 }}>{WK_SHORT[i]}</span>
               <span style={{ fontSize: 15, fontWeight: 700, color: isSel ? "#fff" : isToday ? SKY_D : INK }}>{d.getDate()}</span>
               {isToday && !isSel && <span style={{ width: 4, height: 4, borderRadius: "50%", background: SKY_D, marginTop: 2 }} />}
             </div>
@@ -464,7 +465,7 @@ export default function YabanClinicShift() {
             return (
               <div key={rk ?? "all"} onClick={() => setRoleFilter(rk)} style={{
                 flexShrink: 0, fontSize: 12.5, fontWeight: 600, padding: "5px 12px", borderRadius: 16, cursor: "pointer", transition: ".16s",
-                background: active ? SKY_D : "#f3f6f9", color: active ? "#fff" : "#5b6b7a",
+                background: active ? SKY_D : "#F6F8FA", color: active ? "#fff" : "#647386",
                 border: `1px solid ${active ? SKY_D : "#e3e9ef"}`, whiteSpace: "nowrap",
               }}>{label} {cnt}</div>
             );
@@ -487,7 +488,7 @@ export default function YabanClinicShift() {
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={GRAY} strokeWidth="1.5" style={{ margin: "0 auto 12px", display: "block" }}>
             <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
           </svg>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 4 }}>暂无可排班的员工</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#26303C", marginBottom: 4 }}>暂无可排班的员工</div>
           <div style={{ fontSize: 12, color: GRAY }}>请先在员工管理中添加成员</div>
         </div>
       ) : (
@@ -511,21 +512,21 @@ export default function YabanClinicShift() {
               style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 9, borderBottom: `1px solid ${LINE}`, cursor: batchMode ? "pointer" : "default", userSelect: "none" }}
             >
               {batchMode && (
-                <div style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${isBatchSel ? SKY_D : "#c7d0d8"}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isBatchSel ? SKY_D : "transparent", transition: ".16s" }}>
+                <div style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${isBatchSel ? SKY_D : "#DBE1E8"}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isBatchSel ? SKY_D : "transparent", transition: ".16s" }}>
                   {isBatchSel && <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="1.5,5 4,8 8.5,2" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                 </div>
               )}
               {/* 列一：头像 */}
-              <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: "50%", background: hasShift ? rc.bg : "#e8ecf0", color: hasShift ? rc.fg : "#9aa6b2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600, filter: hasShift ? "none" : "grayscale(1)", opacity: hasShift ? 1 : 0.7 }}>{r.staffName.charAt(0)}</div>
+              <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: "50%", background: hasShift ? rc.bg : "#e8ecf0", color: hasShift ? rc.fg : "#9AA7B5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600, filter: hasShift ? "none" : "grayscale(1)", opacity: hasShift ? 1 : 0.7 }}>{r.staffName.charAt(0)}</div>
               {/* 列二：名字(上) 职称(下) */}
               <div style={{ width: 60, flexShrink: 0, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.staffName}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#26303C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.staffName}</div>
                 <div style={{ display: "inline-block", fontSize: 10, fontWeight: 600, lineHeight: 1.5, padding: "0 5px", borderRadius: 6, marginTop: 2, color: rc.fg, background: rc.bg }}>{roleLabel(r.roleKey)}</div>
               </div>
               {/* 列三：进度条(色块内显示时长) + 工时文字与色块左对齐 */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 {!hasShift ? (
-                  <div style={{ position: "relative", height: 24, borderRadius: 7, overflow: "hidden", background: "repeating-linear-gradient(45deg,#e7ebef,#e7ebef 4px,#f1f4f7 4px,#f1f4f7 8px)", cursor: batchMode ? "inherit" : "pointer" }}>
+                  <div style={{ position: "relative", height: 24, borderRadius: 7, overflow: "hidden", background: "repeating-linear-gradient(45deg,#ECEFF3,#ECEFF3 4px,#F6F8FA 4px,#F6F8FA 8px)", cursor: batchMode ? "inherit" : "pointer" }}>
                     <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#bcc6d0" }}>{r.hasTemplate ? "今日休息 · 点击排班" : "未排班 · 点击排班"}</span>
                   </div>
                 ) : (
@@ -563,18 +564,18 @@ export default function YabanClinicShift() {
         })
       )}
 
-      <div style={{ textAlign: "center", fontSize: 11, color: "#aab4be", padding: "18px 14px" }}>排班后，对应时段将在「预约」视图变为可约</div>
+      <div style={{ textAlign: "center", fontSize: 11, color: "#9AA7B5", padding: "18px 14px" }}>排班后，对应时段将在「预约」视图变为可约</div>
 
       {/* 批量操作底栏 */}
       {batchMode && (
         <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, background: "#fff", borderTop: `1px solid ${LINE}`, padding: "12px 16px 20px", boxShadow: "0 -4px 16px rgba(20,40,60,.08)", zIndex: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#374151", fontWeight: 600, marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, color: "#26303C", fontWeight: 600, marginBottom: 10 }}>
             <span>已选 {batchSel.size} 人</span>
             <span onClick={batchSelectAll} style={{ color: SKY_D, fontWeight: 500, cursor: "pointer" }}>{batchSel.size === templates.length ? "取消全选" : "全选"}</span>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <div onClick={batchCopyTemplate} style={{ flex: 1, textAlign: "center", fontSize: 13, fontWeight: 600, padding: 10, borderRadius: 9, cursor: "pointer", background: SKY_L, color: SKY_D, border: `1px solid ${SKY}` }}>复制模板班次</div>
-            <div onClick={batchApplyRest} style={{ flex: 1, textAlign: "center", fontSize: 13, fontWeight: 600, padding: 10, borderRadius: 9, cursor: "pointer", background: "#f1f3f5", color: "#7a8794", border: "1px solid #dde3e8" }}>设为休息</div>
+            <div onClick={batchApplyRest} style={{ flex: 1, textAlign: "center", fontSize: 13, fontWeight: 600, padding: 10, borderRadius: 9, cursor: "pointer", background: "#f1f3f5", color: "#647386", border: "1px solid #dde3e8" }}>设为休息</div>
           </div>
         </div>
       )}
@@ -715,13 +716,13 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
     <div onClick={(e) => { e.stopPropagation(); onClose(); }} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "stretch", justifyContent: "center", zIndex: 200 }}>
       <style>{`@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style>
       <div onClick={(e) => e.stopPropagation()} style={{ background: BG, width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", animation: "slideUp .25s" }}>
-        <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, color: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-          <span onClick={onClose} style={{ fontSize: 14, color: "#eaf6ff", cursor: "pointer", flex: 1 }}>取消</span>
+        <div style={{ background: `linear-gradient(90deg,${SKY},#3D9FD6)`, color: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+          <span onClick={onClose} style={{ fontSize: 14, color: "#EBF5FB", cursor: "pointer", flex: 1 }}>取消</span>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.25 }}>
             <span style={{ fontSize: 16, fontWeight: 600 }}>员工排班</span>
             {clinicName && (
-              <span style={{ fontSize: 11, color: "#dcf0fb", display: "flex", alignItems: "center", gap: 3, marginTop: 1, whiteSpace: "nowrap" }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#dcf0fb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-3"/></svg>
+              <span style={{ fontSize: 11, color: "#EBF5FB", display: "flex", alignItems: "center", gap: 3, marginTop: 1, whiteSpace: "nowrap" }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#EBF5FB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-3"/></svg>
                 {clinicName}
               </span>
             )}
@@ -734,7 +735,7 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
             <div style={{ width: 42, height: 42, borderRadius: "50%", background: roleColor(roleKey).bg, color: roleColor(roleKey).fg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600 }}>{staffName.charAt(0)}</div>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <span style={{ fontSize: 15, fontWeight: 600, color: "#374151" }}>{staffName}</span>
+                <span style={{ fontSize: 15, fontWeight: 600, color: "#26303C" }}>{staffName}</span>
                 <span style={{ fontSize: 11, fontWeight: 600, padding: "1px 7px", borderRadius: 10, background: roleColor(roleKey).bg, color: roleColor(roleKey).fg }}>{roleLabel(roleKey)}</span>
               </div>
               <div style={{ fontSize: 12, color: GRAY, marginTop: 2 }}>{dateLabel}</div>
@@ -745,7 +746,7 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
           <div style={{ background: "#fff", marginTop: 10, padding: "13px 16px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>门店营业时间</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#26303C" }}>门店营业时间</span>
                 <span style={{ fontSize: 11, color: GRAY, marginTop: 2 }}>时间轴与全天/上下午班的基准 · 当前 {bizOpen}–{bizClose}</span>
               </div>
               {!bizEditOpen && (
@@ -754,11 +755,11 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
             </div>
             {bizEditOpen && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 11, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 13, color: "#51606e" }}>开门</span>
-                <input type="time" defaultValue={bizOpen} step={300} id="biz-open-input" style={{ width: 92, fontSize: 14, fontWeight: 600, color: "#2a3340", border: `1px solid ${LINE}`, borderRadius: 8, padding: "6px 8px", background: "#fafbfc", fontFamily: "inherit", textAlign: "center" }} />
-                <span style={{ color: "#c4ccd4" }}>–</span>
-                <span style={{ fontSize: 13, color: "#51606e" }}>闭店</span>
-                <input type="time" defaultValue={bizClose} step={300} id="biz-close-input" style={{ width: 92, fontSize: 14, fontWeight: 600, color: "#2a3340", border: `1px solid ${LINE}`, borderRadius: 8, padding: "6px 8px", background: "#fafbfc", fontFamily: "inherit", textAlign: "center" }} />
+                <span style={{ fontSize: 13, color: "#647386" }}>开门</span>
+                <input type="time" defaultValue={bizOpen} step={300} id="biz-open-input" style={{ width: 92, fontSize: 14, fontWeight: 600, color: "#26303C", border: `1px solid ${LINE}`, borderRadius: 8, padding: "6px 8px", background: "#F6F8FA", fontFamily: "inherit", textAlign: "center" }} />
+                <span style={{ color: "#DBE1E8" }}>–</span>
+                <span style={{ fontSize: 13, color: "#647386" }}>闭店</span>
+                <input type="time" defaultValue={bizClose} step={300} id="biz-close-input" style={{ width: 92, fontSize: 14, fontWeight: 600, color: "#26303C", border: `1px solid ${LINE}`, borderRadius: 8, padding: "6px 8px", background: "#F6F8FA", fontFamily: "inherit", textAlign: "center" }} />
                 <span
                   onClick={() => {
                     const o = (document.getElementById("biz-open-input") as HTMLInputElement)?.value || bizOpen;
@@ -775,67 +776,67 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
 
           {/* 快捷班次 */}
           <div style={{ background: "#fff", marginTop: 10 }}>
-            <div style={{ fontSize: 12, color: "#9aa6b2", padding: "13px 16px 3px" }}>快捷班次</div>
+            <div style={{ fontSize: 12, color: "#9AA7B5", padding: "13px 16px 3px" }}>快捷班次</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "10px 16px 15px" }}>
               {quickShifts.map((qs, i) => {
                 const on = JSON.stringify(segs) === JSON.stringify(qs.segs);
                 return (
-                  <div key={i} onClick={() => setSegs(qs.segs)} style={{ fontSize: 13, padding: "8px 15px", borderRadius: 8, fontWeight: on ? 600 : 500, cursor: "pointer", background: on ? SKY_L : "#f4f6f9", color: on ? SKY_D : "#51606e", border: `1px solid ${on ? SKY : "#eef1f5"}` }}>
+                  <div key={i} onClick={() => setSegs(qs.segs)} style={{ fontSize: 13, padding: "8px 15px", borderRadius: 8, fontWeight: on ? 600 : 500, cursor: "pointer", background: on ? SKY_L : "#F6F8FA", color: on ? SKY_D : "#647386", border: `1px solid ${on ? SKY : "#ECEFF3"}` }}>
                     {qs.label} <span style={{ fontSize: 11, opacity: .7 }}>{qs.segs[0]?.start}–{qs.segs[qs.segs.length - 1]?.end}</span>
                   </div>
                 );
               })}
-              <div onClick={() => setSegs([])} style={{ fontSize: 13, padding: "8px 15px", borderRadius: 8, fontWeight: !segs.length ? 600 : 500, cursor: "pointer", background: !segs.length ? "#eef1f4" : "#f4f6f9", color: !segs.length ? "#7a8794" : "#51606e", border: `1px solid ${!segs.length ? "#c7d0d8" : "#eef1f5"}` }}>休息</div>
+              <div onClick={() => setSegs([])} style={{ fontSize: 13, padding: "8px 15px", borderRadius: 8, fontWeight: !segs.length ? 600 : 500, cursor: "pointer", background: !segs.length ? "#eef1f4" : "#F6F8FA", color: !segs.length ? "#647386" : "#647386", border: `1px solid ${!segs.length ? "#DBE1E8" : "#ECEFF3"}` }}>休息</div>
             </div>
           </div>
 
           {/* 工作时段 */}
           <div style={{ background: "#fff", marginTop: 10 }}>
-            <div style={{ fontSize: 12, color: "#9aa6b2", padding: "13px 16px 3px" }}>工作时段 · 可精确到分钟，支持多段 / 加班</div>
-            {segs.length === 0 && <div style={{ fontSize: 13, color: "#9aa6b2", padding: "14px 16px" }}>今日休息，未排班</div>}
+            <div style={{ fontSize: 12, color: "#9AA7B5", padding: "13px 16px 3px" }}>工作时段 · 可精确到分钟，支持多段 / 加班</div>
+            {segs.length === 0 && <div style={{ fontSize: 13, color: "#9AA7B5", padding: "14px 16px" }}>今日休息，未排班</div>}
             {segs.map((s, i) => {
               const f = flags[i] || { bad: false, overlap: false, over: false, msg: "" };
               const isErr = f.bad || f.overlap;
               return (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 16px", borderBottom: `1px solid #f3f5f7`, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 14, color: "#374151", flexShrink: 0, display: "flex", alignItems: "center", gap: 7 }}>
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 16px", borderBottom: `1px solid #F6F8FA`, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 14, color: "#26303C", flexShrink: 0, display: "flex", alignItems: "center", gap: 7 }}>
                     {s.isOT ? "加班时段" : "工作时段"}
                     {s.isOT && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: WARN_L, color: WARN, fontWeight: 700 }}>加班</span>}
                     {!s.isOT && f.over && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: WARN_L, color: WARN, fontWeight: 700 }}>超时</span>}
                   </div>
                   <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                    <input type="time" value={s.start} step={300} onChange={e => setSeg(i, "start", e.target.value)} style={{ width: 84, fontSize: 14, fontWeight: 600, color: isErr ? "#c0392b" : "#2a3340", border: `1px solid ${isErr ? "#e9a39c" : LINE}`, borderRadius: 8, padding: "6px 8px", background: isErr ? "#fdf3f2" : "#fafbfc", fontFamily: "inherit", textAlign: "center" }} />
-                    <span style={{ color: "#c4ccd4" }}>–</span>
-                    <input type="time" value={s.end} step={300} onChange={e => setSeg(i, "end", e.target.value)} style={{ width: 84, fontSize: 14, fontWeight: 600, color: isErr ? "#c0392b" : "#2a3340", border: `1px solid ${isErr ? "#e9a39c" : LINE}`, borderRadius: 8, padding: "6px 8px", background: isErr ? "#fdf3f2" : "#fafbfc", fontFamily: "inherit", textAlign: "center" }} />
-                    <span onClick={() => delSeg(i)} style={{ color: "#c4ccd4", fontSize: 18, paddingLeft: 4, cursor: "pointer" }}>×</span>
+                    <input type="time" value={s.start} step={300} onChange={e => setSeg(i, "start", e.target.value)} style={{ width: 84, fontSize: 14, fontWeight: 600, color: isErr ? "#A8463C" : "#26303C", border: `1px solid ${isErr ? "#E6BDB4" : LINE}`, borderRadius: 8, padding: "6px 8px", background: isErr ? "#F7E9E7" : "#F6F8FA", fontFamily: "inherit", textAlign: "center" }} />
+                    <span style={{ color: "#DBE1E8" }}>–</span>
+                    <input type="time" value={s.end} step={300} onChange={e => setSeg(i, "end", e.target.value)} style={{ width: 84, fontSize: 14, fontWeight: 600, color: isErr ? "#A8463C" : "#26303C", border: `1px solid ${isErr ? "#E6BDB4" : LINE}`, borderRadius: 8, padding: "6px 8px", background: isErr ? "#F7E9E7" : "#F6F8FA", fontFamily: "inherit", textAlign: "center" }} />
+                    <span onClick={() => delSeg(i)} style={{ color: "#DBE1E8", fontSize: 18, paddingLeft: 4, cursor: "pointer" }}>×</span>
                   </div>
-                  {f.msg && <div style={{ width: "100%", fontSize: 11, color: "#D9534F", marginTop: 6 }}>{f.msg}</div>}
+                  {f.msg && <div style={{ width: "100%", fontSize: 11, color: "#A8463C", marginTop: 6 }}>{f.msg}</div>}
                 </div>
               );
             })}
             <div style={{ display: "flex", gap: 10, padding: "12px 16px" }}>
-              <div onClick={() => addSeg(false)} style={{ flex: 1, textAlign: "center", fontSize: 13, fontWeight: 500, padding: 10, borderRadius: 8, border: "1px dashed #cdd7e0", color: SKY_D, background: "#fafdff", cursor: "pointer" }}>添加时段</div>
+              <div onClick={() => addSeg(false)} style={{ flex: 1, textAlign: "center", fontSize: 13, fontWeight: 500, padding: 10, borderRadius: 8, border: "1px dashed #cdd7e0", color: SKY_D, background: "#F6F8FA", cursor: "pointer" }}>添加时段</div>
               <div onClick={() => addSeg(true)} style={{ flex: 1, textAlign: "center", fontSize: 13, fontWeight: 500, padding: 10, borderRadius: 8, border: `1px dashed ${WARN_LINE}`, color: WARN, background: WARN_L, cursor: "pointer" }}>添加加班</div>
             </div>
           </div>
 
           {/* 重复 */}
           <div style={{ background: "#fff", marginTop: 10 }}>
-            <div style={{ fontSize: 12, color: "#9aa6b2", padding: "13px 16px 3px" }}>重复</div>
+            <div style={{ fontSize: 12, color: "#9AA7B5", padding: "13px 16px 3px" }}>重复</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "10px 16px 14px" }}>
               {REPS.map(r => (
-                <div key={r.k} onClick={() => setRep(r.k)} style={{ fontSize: 13, padding: "8px 15px", borderRadius: 8, fontWeight: rep === r.k ? 600 : 500, cursor: "pointer", background: rep === r.k ? SKY_L : "#f4f6f9", color: rep === r.k ? SKY_D : "#51606e", border: `1px solid ${rep === r.k ? SKY : "#eef1f5"}` }}>{r.t}</div>
+                <div key={r.k} onClick={() => setRep(r.k)} style={{ fontSize: 13, padding: "8px 15px", borderRadius: 8, fontWeight: rep === r.k ? 600 : 500, cursor: "pointer", background: rep === r.k ? SKY_L : "#F6F8FA", color: rep === r.k ? SKY_D : "#647386", border: `1px solid ${rep === r.k ? SKY : "#ECEFF3"}` }}>{r.t}</div>
               ))}
             </div>
             {rep === "weekly" && (
               <div style={{ display: "flex", gap: 7, padding: "0 16px 14px" }}>
                 {[1, 2, 3, 4, 5, 6, 0].map(d => (
-                  <div key={d} onClick={() => { const next = wdays.includes(d) ? wdays.filter(x => x !== d) : [...wdays, d]; setWdays(next); }} style={{ flex: 1, textAlign: "center", fontSize: 13, fontWeight: 500, padding: "9px 0", borderRadius: 8, cursor: "pointer", background: wdays.includes(d) ? SKY : "#f4f6f9", color: wdays.includes(d) ? "#fff" : "#6b7686", border: `1px solid ${wdays.includes(d) ? SKY : "#eef1f5"}` }}>{WK_FULL[d]}</div>
+                  <div key={d} onClick={() => { const next = wdays.includes(d) ? wdays.filter(x => x !== d) : [...wdays, d]; setWdays(next); }} style={{ flex: 1, textAlign: "center", fontSize: 13, fontWeight: 500, padding: "9px 0", borderRadius: 8, cursor: "pointer", background: wdays.includes(d) ? SKY : "#F6F8FA", color: wdays.includes(d) ? "#fff" : "#6b7686", border: `1px solid ${wdays.includes(d) ? SKY : "#ECEFF3"}` }}>{WK_FULL[d]}</div>
                 ))}
               </div>
             )}
             {rep !== "none" && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderTop: `1px solid #f3f5f7`, fontSize: 14, color: "#374151" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderTop: `1px solid #F6F8FA`, fontSize: 14, color: "#26303C" }}>
                 <span>结束于</span>
                 <input type="date" value={repEndDate} onChange={e => setRepEndDate(e.target.value)} style={{ fontSize: 14, border: "none", background: "transparent", fontFamily: "inherit", color: SKY_D, fontWeight: 600, textAlign: "right" }} />
               </div>
@@ -845,7 +846,7 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
 
         {/* 底部保存 */}
         <div style={{ background: "#fff", padding: "12px 16px 20px", borderTop: `1px solid ${LINE}`, flexShrink: 0 }}>
-          <div style={{ fontSize: 12, color: saveState === "disabled" ? "#D9534F" : GRAY, textAlign: "center", marginBottom: 10, fontWeight: saveState === "disabled" ? 600 : 400 }}>{summaryText}</div>
+          <div style={{ fontSize: 12, color: saveState === "disabled" ? "#A8463C" : GRAY, textAlign: "center", marginBottom: 10, fontWeight: saveState === "disabled" ? 600 : 400 }}>{summaryText}</div>
           <div onClick={() => saveState !== "disabled" && onSave(segs, rep, wdays, repEndDate)} style={{
             width: "100%", background: saveState === "disabled" ? "#cdd5dd" : saveState === "rest" ? "#9aa7b4" : SKY_D,
             color: "#fff", padding: 13, borderRadius: 10, fontSize: 15, fontWeight: 600, textAlign: "center",
@@ -877,13 +878,13 @@ function TplModal({ bizOpen, bizClose, templates, onClose, onSave, saveTemplateM
         <h3 style={{ fontSize: 17, marginBottom: 4, fontWeight: 700, color: INK }}>班次模板</h3>
         <div style={{ fontSize: 12, color: GRAY, marginBottom: 12 }}>营业时间与班次均可自定义，排班时直接调用</div>
         <div style={{ background: "#f7f9fb", border: `1px solid ${LINE}`, borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
-          <div style={{ fontSize: 12, color: "#9aa6b2", marginBottom: 8 }}>门店营业时间（时间轴基准）</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "#374151", fontWeight: 600 }}>
+          <div style={{ fontSize: 12, color: "#9AA7B5", marginBottom: 8 }}>门店营业时间（时间轴基准）</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, color: "#26303C", fontWeight: 600 }}>
             <span>开门</span>
-            <input type="time" value={open} step={300} onChange={e => setOpen(e.target.value)} style={{ width: 90, fontSize: 14, fontWeight: 600, color: "#2a3340", border: `1px solid ${LINE}`, borderRadius: 8, padding: "6px 8px", background: "#fff", fontFamily: "inherit", textAlign: "center" }} />
-            <span style={{ color: "#c4ccd4" }}>–</span>
+            <input type="time" value={open} step={300} onChange={e => setOpen(e.target.value)} style={{ width: 90, fontSize: 14, fontWeight: 600, color: "#26303C", border: `1px solid ${LINE}`, borderRadius: 8, padding: "6px 8px", background: "#fff", fontFamily: "inherit", textAlign: "center" }} />
+            <span style={{ color: "#DBE1E8" }}>–</span>
             <span>闭店</span>
-            <input type="time" value={close} step={300} onChange={e => setClose(e.target.value)} style={{ width: 90, fontSize: 14, fontWeight: 600, color: "#2a3340", border: `1px solid ${LINE}`, borderRadius: 8, padding: "6px 8px", background: "#fff", fontFamily: "inherit", textAlign: "center" }} />
+            <input type="time" value={close} step={300} onChange={e => setClose(e.target.value)} style={{ width: 90, fontSize: 14, fontWeight: 600, color: "#26303C", border: `1px solid ${LINE}`, borderRadius: 8, padding: "6px 8px", background: "#fff", fontFamily: "inherit", textAlign: "center" }} />
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -891,11 +892,11 @@ function TplModal({ bizOpen, bizClose, templates, onClose, onSave, saveTemplateM
             <div key={tpl.id} style={{ display: "flex", flexDirection: "column", gap: 9, padding: "10px 12px", background: "#fff", border: `1px solid ${LINE}`, borderRadius: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ width: 32, height: 32, borderRadius: "50%", background: SKY_L, color: SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600 }}>{tpl.staffName.charAt(0)}</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#2a3340", flex: 1 }}>{tpl.staffName}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "#26303C", flex: 1 }}>{tpl.staffName}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <input type="time" defaultValue={tpl.workStart} step={300} onBlur={e => saveTemplateMut.mutate({ id: tpl.id, staffUserId: tpl.staffUserId, workStart: e.target.value, workEnd: tpl.workEnd, workDays: tpl.workDays, tenantId })} style={{ width: 78, fontSize: 13, fontWeight: 600, color: "#2a3340", border: `1px solid ${LINE}`, borderRadius: 7, padding: "6px 4px", background: "#fafbfc", fontFamily: "inherit", textAlign: "center" }} />
-                  <span style={{ color: "#c4ccd4" }}>–</span>
-                  <input type="time" defaultValue={tpl.workEnd} step={300} onBlur={e => saveTemplateMut.mutate({ id: tpl.id, staffUserId: tpl.staffUserId, workStart: tpl.workStart, workEnd: e.target.value, workDays: tpl.workDays, tenantId })} style={{ width: 78, fontSize: 13, fontWeight: 600, color: "#2a3340", border: `1px solid ${LINE}`, borderRadius: 7, padding: "6px 4px", background: "#fafbfc", fontFamily: "inherit", textAlign: "center" }} />
+                  <input type="time" defaultValue={tpl.workStart} step={300} onBlur={e => saveTemplateMut.mutate({ id: tpl.id, staffUserId: tpl.staffUserId, workStart: e.target.value, workEnd: tpl.workEnd, workDays: tpl.workDays, tenantId })} style={{ width: 78, fontSize: 13, fontWeight: 600, color: "#26303C", border: `1px solid ${LINE}`, borderRadius: 7, padding: "6px 4px", background: "#F6F8FA", fontFamily: "inherit", textAlign: "center" }} />
+                  <span style={{ color: "#DBE1E8" }}>–</span>
+                  <input type="time" defaultValue={tpl.workEnd} step={300} onBlur={e => saveTemplateMut.mutate({ id: tpl.id, staffUserId: tpl.staffUserId, workStart: tpl.workStart, workEnd: e.target.value, workDays: tpl.workDays, tenantId })} style={{ width: 78, fontSize: 13, fontWeight: 600, color: "#26303C", border: `1px solid ${LINE}`, borderRadius: 7, padding: "6px 4px", background: "#F6F8FA", fontFamily: "inherit", textAlign: "center" }} />
                 </div>
               </div>
               <div style={{ fontSize: 11, color: GRAY, paddingLeft: 2 }}>
@@ -904,7 +905,7 @@ function TplModal({ bizOpen, bizClose, templates, onClose, onSave, saveTemplateM
               </div>
             </div>
           ))}
-          {templates.length === 0 && <div style={{ fontSize: 13, color: "#9aa6b2", textAlign: "center", padding: "20px 0" }}>暂无员工班次模板</div>}
+          {templates.length === 0 && <div style={{ fontSize: 13, color: "#9AA7B5", textAlign: "center", padding: "20px 0" }}>暂无员工班次模板</div>}
         </div>
         <div onClick={() => onSave(open, close)} style={{ marginTop: 16, background: SKY, color: "#fff", textAlign: "center", padding: 13, borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer" }}>完成</div>
       </div>
