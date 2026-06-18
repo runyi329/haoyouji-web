@@ -278,51 +278,51 @@ export function InvitationManager() {
       </div>
 
       {/* 统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 gap-2">
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">总用户数</p>
-                <p className="text-2xl font-bold">{stats.total}</p>
+          <CardContent className="p-2.5">
+            <div className="flex items-center justify-between gap-1">
+              <div className="min-w-0">
+                <p className="text-[11px] leading-tight text-muted-foreground truncate">总用户数</p>
+                <p className="text-lg font-bold leading-tight">{stats.total}</p>
               </div>
-              <Users className="w-8 h-8 text-muted-foreground" />
+              <Users className="w-4 h-4 shrink-0 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">已开启</p>
-                <p className="text-2xl font-bold text-[#4CAF50]">{stats.enabled}</p>
+          <CardContent className="p-2.5">
+            <div className="flex items-center justify-between gap-1">
+              <div className="min-w-0">
+                <p className="text-[11px] leading-tight text-muted-foreground truncate">已开启</p>
+                <p className="text-lg font-bold leading-tight text-[#4CAF50]">{stats.enabled}</p>
               </div>
-              <CheckCircle className="w-8 h-8 text-[#4CAF50]" />
+              <CheckCircle className="w-4 h-4 shrink-0 text-[#4CAF50]" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">已关闭</p>
-                <p className="text-2xl font-bold text-gray-400">{stats.disabled}</p>
+          <CardContent className="p-2.5">
+            <div className="flex items-center justify-between gap-1">
+              <div className="min-w-0">
+                <p className="text-[11px] leading-tight text-muted-foreground truncate">已关闭</p>
+                <p className="text-lg font-bold leading-tight text-gray-400">{stats.disabled}</p>
               </div>
-              <XCircle className="w-8 h-8 text-gray-400" />
+              <XCircle className="w-4 h-4 shrink-0 text-gray-400" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">累计邀请</p>
-                <p className="text-2xl font-bold text-[#1976D2]">{stats.totalInvites}</p>
+          <CardContent className="p-2.5">
+            <div className="flex items-center justify-between gap-1">
+              <div className="min-w-0">
+                <p className="text-[11px] leading-tight text-muted-foreground truncate">累计邀请</p>
+                <p className="text-lg font-bold leading-tight text-[#1976D2]">{stats.totalInvites}</p>
               </div>
-              <Share className="w-8 h-8 text-[#1976D2]" />
+              <Share className="w-4 h-4 shrink-0 text-[#1976D2]" />
             </div>
           </CardContent>
         </Card>
