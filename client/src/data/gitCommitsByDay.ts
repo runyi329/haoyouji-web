@@ -7523,5 +7523,10 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-18T06:52:09Z", type: "feat", cleanMessage: "添加订单页融资金额支持独立融资币种选择与实时折算" },
     { date: "2026-06-18T07:39:50Z", type: "feat", cleanMessage: "添加订单页UI重排与担保货币增强" },
     { date: "2026-06-18T08:46:08Z", type: "feat", cleanMessage: "参与方面板支持为每个参与方单独设置年化利率(收息红/付息绿)，写入commission_rate按各自视角展示待结利息" },
+    { date: "2026-06-18T08:52:07Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-18T08:56:55Z", type: "feat", cleanMessage: "订单卡片页眉编辑按钮后增加删除订单入口(两次确认,移入回收站)" },
+    { date: "2026-06-18T09:29:51Z", type: "other", cleanMessage: "共享订单显示参与者各自年化利率；参与方面板改为已保存只读+点编辑才可改" },
+    { date: "2026-06-18T10:43:38Z", type: "fix", cleanMessage: "融资付息待结利息按利率符号显示收/付红绿；TT0201/YY0720硬编码红色收息；共享订单显示参与者专属年化利率+计算说明" },
+    { date: "2026-06-18T10:49:02Z", type: "chore", cleanMessage: "触发重新部署" },
   ],
 };
