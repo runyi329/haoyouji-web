@@ -315,7 +315,7 @@ async function ensureMediaTable(conn: any) {
 
 // ========= 收费记录建表 =========
 let chargeTablesReady = false;
-async function ensureChargeTables(conn: any) {
+export async function ensureChargeTables(conn: any) {
   if (chargeTablesReady) return;
   // 收费单主表
   await conn.execute(`
