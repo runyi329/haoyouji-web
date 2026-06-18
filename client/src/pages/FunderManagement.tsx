@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { PageTag } from "@/components/PageTag";
 
 // 币种选项
-const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'] as const;
+const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
 const STATUS_OPTIONS = [
@@ -46,6 +46,7 @@ const COIN_COLORS: Record<CoinType, string> = {
   AMD: '#ED1C24',
   CL: '#8B4513',
   NG: '#4A90D9',
+  CRCL: '#1E88D6',
 };
 
 // 简单日历选择器组件
@@ -1200,6 +1201,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [formData, setFormData] = useState({
     userId: 0,
     coin: 'BTC' as CoinType,
+    amountCurrency: 'USDT' as CoinType, // 融资金额出资币种（独立于标的币种）
     buyPrice: '',
     buyQuantity: '',
     buyDate: '',
@@ -1258,29 +1260,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean>>(DEFAULT_DISPLAY_CONFIG);
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY'];
 
-  // 自动折算总金额
-  const computedAmount = useMemo(() => {
-    const price = parseFloat(formData.buyPrice);
-    const qty = parseFloat(formData.buyQuantity);
-    if (!isNaN(price) && !isNaN(qty) && price > 0 && qty > 0) {
-      return (price * qty).toFixed(2);
-    }
-    return '';
-  }, [formData.buyPrice, formData.buyQuantity]);
-
   // 融资金额输入状态：编辑时用本地值，非编辑时显示计算值
   const [amountEditing, setAmountEditing] = useState(false);
   const [amountInputValue, setAmountInputValue] = useState('');
-  // 当 computedAmount 变化且用户未在编辑时，同步到输入框
-  // 股票类型时 buyPrice/buyQuantity 为空，computedAmount 始终为空，不应覆盖用户手动输入的融资金额
-  useEffect(() => {
-    if (!amountEditing && formData.assetType !== 'stock') {
-      // 仅当 computedAmount 有值时才覆盖（避免切换类型时清空已有金额）
-      if (computedAmount) {
-        setAmountInputValue(computedAmount);
-      }
-    }
-  }, [computedAmount, amountEditing, formData.assetType]);
+  // computedAmount 与同步 useEffect 已下移到 formLivePrices/cnyRate/折算函数定义之后（避免 TDZ）
 
   // 员工名字筛选
   const [employeeNameFilter, setEmployeeNameFilter] = useState('');
@@ -1306,6 +1289,49 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const formLivePrices: Record<string, number> = (assetOrdersData as any)?.livePrices ?? {};
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
   const cnyRate = parseFloat((cnyRateData as any)?.money ?? "7.2") || 7.2;
+  // 通用折算：任一币种数额 -> USDT 基准（CNY 用 cnyRate，USDT=1，其余按实时价 USDT/枚）
+  const toUsdtBase = (val: number, cur: string): number | null => {
+    if (isNaN(val)) return null;
+    if (cur === 'USDT') return val;
+    if (cur === 'CNY') return val / cnyRate;
+    const p = formLivePrices[cur];
+    if (!p || p <= 0) return null;
+    return val * p;
+  };
+  // 通用折算：USDT 基准数额 -> 任一币种数额
+  const fromUsdtBase = (usdtVal: number, cur: string): number | null => {
+    if (isNaN(usdtVal)) return null;
+    if (cur === 'USDT') return usdtVal;
+    if (cur === 'CNY') return usdtVal * cnyRate;
+    const p = formLivePrices[cur];
+    if (!p || p <= 0) return null;
+    return usdtVal / p;
+  };
+
+  // 自动折算总金额（买入价×币数 = USDT 价值）
+  const computedAmount = useMemo(() => {
+    const price = parseFloat(formData.buyPrice);
+    const qty = parseFloat(formData.buyQuantity);
+    if (!isNaN(price) && !isNaN(qty) && price > 0 && qty > 0) {
+      return (price * qty).toFixed(2);
+    }
+    return '';
+  }, [formData.buyPrice, formData.buyQuantity]);
+  // 当 computedAmount 变化且用户未在编辑时，同步到输入框
+  // computedAmount = 买入价×币数 = USDT 价值；融资金额输入框按出资币种(amountCurrency)折算显示
+  useEffect(() => {
+    if (!amountEditing && formData.assetType !== 'stock') {
+      if (computedAmount) {
+        const usdtVal = parseFloat(computedAmount);
+        const converted = fromUsdtBase(usdtVal, formData.amountCurrency);
+        if (converted !== null && !isNaN(converted)) {
+          setAmountInputValue(parseFloat(converted.toFixed(2)).toString());
+        }
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [computedAmount, amountEditing, formData.assetType, formData.amountCurrency, cnyRate, JSON.stringify(formLivePrices)]);
+
   // 涨跌方向计算：用 localStorage 存储上一次价格（与 LedgerDetail 一致）
   const PREV_PRICE_CACHE_KEY = `funder_prev_prices_p095_${ledgerId}`;
   const [priceDirection, setPriceDirection] = useState<Record<string, 'up' | 'down' | 'same'>>({});
@@ -1623,6 +1649,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setFormData({
       userId: 0,
       coin: 'BTC',
+      amountCurrency: 'USDT',
       buyPrice: '',
       buyQuantity: '',
       buyDate: '',
@@ -1657,9 +1684,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   };
 
   const handleOpenEdit = (order: any) => {
+    // amount_currency 为 NULL/空表示老订单，按 USDT 口径兼容（amount 本就是 USDT 价值）
+    const editAmountCurrency = (order.amount_currency && String(order.amount_currency).trim()) ? String(order.amount_currency) : 'USDT';
     setFormData({
       userId: order.user_id,
       coin: order.coin as CoinType,
+      amountCurrency: editAmountCurrency as CoinType,
       buyPrice: order.buy_price || '',
       buyQuantity: order.buy_quantity || '',
       buyDate: order.buy_date || '',
@@ -1710,8 +1740,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
       }
     } catch { setDisplayConfig(DEFAULT_DISPLAY_CONFIG); }
-    // 初始化融资金额输入值（编辑时恢复已保存的金额）
-    setAmountInputValue(order.amount ? String(order.amount) : '');
+    // 初始化融资金额输入值：amount 是 USDT 价值，若出资币种非 USDT 则折算到该币种显示
+    (() => {
+      const amtU = order.amount ? parseFloat(order.amount) : NaN;
+      if (isNaN(amtU)) { setAmountInputValue(''); return; }
+      if (editAmountCurrency === 'USDT') { setAmountInputValue(String(order.amount)); return; }
+      const conv = fromUsdtBase(amtU, editAmountCurrency);
+      setAmountInputValue(conv !== null && !isNaN(conv) ? parseFloat(conv.toFixed(2)).toString() : String(order.amount));
+    })();
     setAmountEditing(false);
     setEditingOrder(order);
     setShowDatePicker(false);
@@ -1742,10 +1778,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       toast.error('请选择用户');
       return;
     }
-    // 编辑模式下，如果买入价/数量为空，使用原订单金额；新建模式必须填
-    // 股票类型：直接使用用户手动输入的融资金额（amountInputValue），不依赖 computedAmount
+    // 底层 amount 统一存 USDT 价值（与老订单口径一致，下游计算零改动）；amountCurrency 另存出资币种供展示折算
+    // 股票类型：输入框是出资币种口径，需先折回 USDT 再存；非股票用 computedAmount（已是 USDT 价值）
+    const stockUsdt = (() => {
+      const v = parseFloat(amountInputValue);
+      if (isNaN(v)) return '';
+      const u = toUsdtBase(v, formData.amountCurrency);
+      return u !== null ? u.toFixed(2) : '';
+    })();
     const finalAmount = formData.assetType === 'stock'
-      ? amountInputValue
+      ? stockUsdt
       : (computedAmount || (editingOrder ? formData.originalAmount : ''));
     if (!finalAmount || parseFloat(finalAmount) <= 0) {
       toast.error(formData.assetType === 'stock' ? '请填写融资金额' : '请填写买入价格和买入数量以自动计算总金额');
@@ -1755,6 +1797,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       ledgerId,
       coin: formData.coin,
       amount: finalAmount,
+      amountCurrency: formData.amountCurrency || undefined,
       buyPrice: formData.buyPrice || undefined,
       buyDate: formData.buyDate || undefined,
       buyQuantity: formData.buyQuantity || undefined,
@@ -2194,35 +2237,33 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </div>
                 </div>
               )}
-              {/* 币种下拉 */}
-              <div style={{ opacity: (editingOrder || editingOrder?.participantInfo) ? 0.5 : 1, pointerEvents: (editingOrder || editingOrder?.participantInfo) ? 'none' : 'auto' }}>
-                <label className="block text-sm font-medium text-gray-600 mb-2">币种{editingOrder && !editingOrder.participantInfo && <span className="ml-1.5 text-xs text-orange-500 font-normal">(不可修改)</span>}</label>
-                <select
-                  value={formData.coin}
-                  onChange={e => {
-                    if (editingOrder && !editingOrder.participantInfo) return;
-                    setFormData(d => ({ ...d, coin: e.target.value as CoinType }));
-                  }}
-                  disabled={!!(editingOrder && !editingOrder.participantInfo)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
-                  style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.coin as keyof typeof COIN_COLORS] || '#1A2340' }}
-                >
-                  {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
+              {/* 购买币种已移至三联最后一行（与币数并排） */}
 
-              {/* 融资金额 / 买入价格 / 币数 三字段联动 */}
+              {/* 融资金额 / 买入价格 / 购买币种+币数 三字段联动 */}
               <div className="rounded-2xl border border-gray-200" style={{ overflow: 'visible', opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <div className="px-4 pt-3 pb-1">
                   <span className="text-xs text-gray-400">
                     {formData.assetType === 'stock' ? '股票类型：只需输入融资金额' : '输入任意两个，第三个自动计算 · 融资金额 = 买入价格 × 币数'}
                   </span>
                 </div>
-                {/* 融资金额 */}
+                {/* 融资金额（出资币种独立选择） */}
                 <div className="px-4 py-3 border-b border-gray-100">
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5">融资金额 ({formData.coin || 'USDT'})</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-xs font-medium text-gray-500">融资金额</label>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs text-gray-400">融资币种</span>
+                      <select
+                        value={formData.amountCurrency}
+                        onChange={e => setFormData(d => ({ ...d, amountCurrency: e.target.value as CoinType }))}
+                        className="text-xs font-semibold rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
+                        style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.amountCurrency as keyof typeof COIN_COLORS] || '#1A2340' }}
+                      >
+                        {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -2235,15 +2276,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       setAmountEditing(false);
                       const amt = parseFloat(e.target.value);
                       if (isNaN(amt) || amt <= 0) return;
+                      // 融资金额是出资币种口径，先折回 USDT 价值再反算买入价/币数
+                      const usdtVal = toUsdtBase(amt, formData.amountCurrency);
+                      if (usdtVal === null) return;
                       setFormData(d => {
                         const price = parseFloat(d.buyPrice);
                         const qty = parseFloat(d.buyQuantity);
                         if (!isNaN(price) && price > 0) {
-                          const calcQty = amt / price;
+                          const calcQty = usdtVal / price;
                           return { ...d, buyQuantity: INTEGER_COINS_FUNDER.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
                         }
                         if (!isNaN(qty) && qty > 0) {
-                          return { ...d, buyPrice: (amt / qty).toFixed(2) };
+                          return { ...d, buyPrice: (usdtVal / qty).toFixed(2) };
                         }
                         return d;
                       });
@@ -2251,9 +2295,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     className="w-full bg-transparent text-base focus:outline-none"
                     placeholder="如：100000"
                   />
-                  {formData.assetType === 'stock' && amountInputValue && parseFloat(amountInputValue) > 0 && (() => {
+                  {amountInputValue && parseFloat(amountInputValue) > 0 && formData.amountCurrency !== 'USDT' && (() => {
                     const amt = parseFloat(amountInputValue);
-                    const usdtEquiv = formData.coin === 'CNY' ? amt / 7 : amt;
+                    const usdtEquiv = toUsdtBase(amt, formData.amountCurrency);
+                    if (usdtEquiv === null) return null;
                     return (
                       <span className="text-xs text-gray-400 mt-1 block">
                         ≈ {usdtEquiv.toLocaleString(undefined, { maximumFractionDigits: 0 })} USDT
@@ -2285,28 +2330,47 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     step="any"
                   />
                 </div>
-                {/* 币数 */}
-                <div className="px-4 py-3" style={{ opacity: formData.assetType === 'stock' ? 0.4 : 1 }}>
-                  <label className="block text-xs font-medium text-gray-500 mb-1.5">币数 ({formData.coin})</label>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={formData.buyQuantity}
-                    onChange={e => setFormData(d => ({ ...d, buyQuantity: e.target.value }))}
-                    onBlur={e => {
-                      const qty = e.target.value;
-                      setFormData(d => {
-                        const price = parseFloat(d.buyPrice);
-                        const q = parseFloat(qty);
-                        if (!qty || isNaN(q) || q <= 0) return d;
-                        if (!isNaN(price) && price > 0) return d;
-                        return d;
-                      });
-                    }}
-                    disabled={formData.assetType === 'stock'}
-                    className="w-full bg-transparent text-base focus:outline-none disabled:text-gray-300"
-                    placeholder="如：1.05"
-                  />
+                {/* 购买币种 + 币数（同一行并排：什么币种、买多少个） */}
+                <div className="px-4 py-3 flex items-end gap-3" style={{ opacity: formData.assetType === 'stock' ? 0.4 : 1 }}>
+                  <div style={{ width: '40%' }}>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">购买币种{editingOrder && !editingOrder.participantInfo && <span className="ml-1 text-xs text-orange-500 font-normal">(不可改)</span>}</label>
+                    <select
+                      value={formData.coin}
+                      onChange={e => {
+                        if (editingOrder && !editingOrder.participantInfo) return;
+                        setFormData(d => ({ ...d, coin: e.target.value as CoinType }));
+                      }}
+                      disabled={!!(editingOrder && !editingOrder.participantInfo) || formData.assetType === 'stock'}
+                      className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none disabled:text-gray-300"
+                      style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.coin as keyof typeof COIN_COLORS] || '#1A2340' }}
+                    >
+                      {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">币数</label>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={formData.buyQuantity}
+                      onChange={e => setFormData(d => ({ ...d, buyQuantity: e.target.value }))}
+                      onBlur={e => {
+                        const qty = e.target.value;
+                        setFormData(d => {
+                          const price = parseFloat(d.buyPrice);
+                          const q = parseFloat(qty);
+                          if (!qty || isNaN(q) || q <= 0) return d;
+                          if (!isNaN(price) && price > 0) return d;
+                          return d;
+                        });
+                      }}
+                      disabled={formData.assetType === 'stock'}
+                      className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:text-gray-300"
+                      placeholder="如：1.05"
+                    />
+                  </div>
                 </div>
               </div>
 
