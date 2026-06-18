@@ -1,123 +1,123 @@
 {
   "BTC": {
-    "price": 64472.4,
+    "price": 64432.9,
     "todayOpen": 65821,
-    "changePercent": -2.0488901718296573,
+    "changePercent": -2.108901414442197,
     "high24h": 66440,
     "low24h": 63700,
-    "volume24h": 16467.57725,
-    "quoteVolume24h": 1067991782.9121253,
-    "updatedAt": "2026-06-18T08:46:06.264Z"
+    "volume24h": 16277.574307,
+    "quoteVolume24h": 1055627124.4310449,
+    "updatedAt": "2026-06-18T08:56:52.921Z"
   },
   "ETH": {
-    "price": 1749.36,
+    "price": 1748.8,
     "todayOpen": 1771.61,
-    "changePercent": -1.2559197566055735,
+    "changePercent": -1.2875294223898006,
     "high24h": 1796.03,
     "low24h": 1722.4,
-    "volume24h": 272730.4676,
-    "quoteVolume24h": 478653090.131081,
-    "updatedAt": "2026-06-18T08:46:04.658Z"
+    "volume24h": 270638.2027,
+    "quoteVolume24h": 474943963.508199,
+    "updatedAt": "2026-06-18T08:56:51.023Z"
   },
   "SOL": {
-    "price": 71.92,
+    "price": 71.93,
     "todayOpen": 73.6954,
-    "changePercent": -2.4091055886798967,
+    "changePercent": -2.395536220713911,
     "high24h": 74.68,
     "low24h": 70.65,
-    "volume24h": 1885050.864,
-    "quoteVolume24h": 136633372.84644,
-    "updatedAt": "2026-06-18T08:46:06.061Z"
+    "volume24h": 1871465.941,
+    "quoteVolume24h": 135648678.77397,
+    "updatedAt": "2026-06-18T08:56:52.449Z"
   },
   "AAVE": {
-    "price": 74.64,
+    "price": 74.56,
     "todayOpen": 76.5825,
-    "changePercent": -2.536480266379389,
+    "changePercent": -2.640942774132464,
     "high24h": 77.8,
     "low24h": 72.58,
-    "volume24h": 34044.302,
-    "quoteVolume24h": 2549013.88685,
-    "updatedAt": "2026-06-18T08:46:05.957Z"
+    "volume24h": 33718.726,
+    "quoteVolume24h": 2524132.6099,
+    "updatedAt": "2026-06-18T08:56:50.702Z"
   },
   "SUI": {
-    "price": 0.7556,
+    "price": 0.7535,
     "todayOpen": 0.8138,
-    "changePercent": -7.15163430818382,
+    "changePercent": -7.409682968788403,
     "high24h": 0.811,
     "low24h": 0.7387,
-    "volume24h": 19681637.06,
-    "quoteVolume24h": 15289281.900223,
-    "updatedAt": "2026-06-18T08:46:01.709Z"
+    "volume24h": 19547301.91,
+    "quoteVolume24h": 15180498.718478,
+    "updatedAt": "2026-06-18T08:56:52.103Z"
   },
   "ONDO": {
-    "price": 0.3676,
+    "price": 0.3666,
     "todayOpen": 0.381915,
-    "changePercent": -3.74821622612362,
+    "changePercent": -4.010054593299562,
     "high24h": 0.3844,
     "low24h": 0.3535,
-    "volume24h": 23592671.16,
-    "quoteVolume24h": 8692208.81135,
-    "updatedAt": "2026-06-18T08:46:03.344Z"
+    "volume24h": 23541659.9,
+    "quoteVolume24h": 8673589.799321,
+    "updatedAt": "2026-06-18T08:56:52.895Z"
   },
   "ASTER": {
-    "price": 0.6775,
+    "price": 0.6788,
     "todayOpen": 0.7566,
-    "changePercent": -10.454665609304792,
+    "changePercent": -10.282844303462872,
     "high24h": 0.803,
     "low24h": 0.6361,
-    "volume24h": 19465973,
-    "quoteVolume24h": 13958142.51178,
-    "updatedAt": "2026-06-18T08:46:04.781Z"
+    "volume24h": 19490170.2,
+    "quoteVolume24h": 13974972.01729,
+    "updatedAt": "2026-06-18T08:56:46.740Z"
   },
   "LDO": {
-    "price": 0.285,
+    "price": 0.2839,
     "todayOpen": 0.2931,
-    "changePercent": -2.76356192425795,
+    "changePercent": -3.138860457181863,
     "high24h": 0.2969,
     "low24h": 0.2717,
-    "volume24h": 1098004.64,
-    "quoteVolume24h": 311251.862281,
-    "updatedAt": "2026-06-18T08:46:02.484Z"
+    "volume24h": 1095805.08,
+    "quoteVolume24h": 310594.251175,
+    "updatedAt": "2026-06-18T08:56:48.608Z"
   },
   "ENA": {
-    "price": 0.09561,
+    "price": 0.0951,
     "todayOpen": 0.09373,
-    "changePercent": 2.005761229062207,
+    "changePercent": 1.4616451509655504,
     "high24h": 0.09829,
-    "low24h": 0.08609,
-    "volume24h": 109950387,
-    "quoteVolume24h": 10220337.99455,
-    "updatedAt": "2026-06-18T08:46:03.922Z"
+    "low24h": 0.08653,
+    "volume24h": 110586617,
+    "quoteVolume24h": 10286168.5905,
+    "updatedAt": "2026-06-18T08:56:49.864Z"
   },
   "ARKM": {
-    "price": 0.13223,
+    "price": 0.1316,
     "todayOpen": 0.1376,
-    "changePercent": -3.9026162790697776,
+    "changePercent": -4.360465116279073,
     "high24h": 0.13743,
     "low24h": 0.12523,
-    "volume24h": 1367926,
-    "quoteVolume24h": 180711.01389,
-    "updatedAt": "2026-06-18T08:46:05.512Z"
+    "volume24h": 1357841,
+    "quoteVolume24h": 179355.99532,
+    "updatedAt": "2026-06-18T08:56:51.481Z"
   },
   "TSLA": {
-    "price": 399.18,
+    "price": 398.87,
     "todayOpen": 0,
     "changePercent": 0,
     "high24h": 0,
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:06.468Z"
+    "updatedAt": "2026-06-18T08:56:52.242Z"
   },
   "NVDA": {
-    "price": 207.14,
+    "price": 207.07,
     "todayOpen": 0,
     "changePercent": 0,
     "high24h": 0,
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:04.529Z"
+    "updatedAt": "2026-06-18T08:56:53.280Z"
   },
   "AAPL": {
     "price": 297.94,
@@ -127,67 +127,67 @@
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:05.526Z"
+    "updatedAt": "2026-06-18T08:56:50.476Z"
   },
   "MSFT": {
-    "price": 382.2,
+    "price": 381.85,
     "todayOpen": 0,
     "changePercent": 0,
     "high24h": 0,
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:06.314Z"
+    "updatedAt": "2026-06-18T08:56:51.472Z"
   },
   "GOOGL": {
-    "price": 365.2,
+    "price": 364.98,
     "todayOpen": 0,
     "changePercent": 0,
     "high24h": 0,
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:04.179Z"
+    "updatedAt": "2026-06-18T08:56:52.496Z"
   },
   "META": {
-    "price": 576.38,
+    "price": 575.71,
     "todayOpen": 0,
     "changePercent": 0,
     "high24h": 0,
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:05.190Z"
+    "updatedAt": "2026-06-18T08:56:45.051Z"
   },
   "AMZN": {
-    "price": 240.27,
+    "price": 240.52,
     "todayOpen": 0,
     "changePercent": 0,
     "high24h": 0,
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:06.209Z"
+    "updatedAt": "2026-06-18T08:56:45.705Z"
   },
   "SPY": {
-    "price": 746.98,
+    "price": 746.6,
     "todayOpen": 0,
     "changePercent": 0,
     "high24h": 0,
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:00.444Z"
+    "updatedAt": "2026-06-18T08:56:46.733Z"
   },
   "QQQ": {
-    "price": 734.43,
+    "price": 733.74,
     "todayOpen": 0,
     "changePercent": 0,
     "high24h": 0,
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:01.203Z"
+    "updatedAt": "2026-06-18T08:56:47.473Z"
   },
   "NFLX": {
     "price": 77.4,
@@ -197,56 +197,56 @@
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:02.163Z"
+    "updatedAt": "2026-06-18T08:56:48.451Z"
   },
   "ORCL": {
-    "price": 185.96,
+    "price": 185.4,
     "todayOpen": 0,
     "changePercent": 0,
     "high24h": 0,
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:03.133Z"
+    "updatedAt": "2026-06-18T08:56:49.437Z"
   },
   "TSM": {
-    "price": 441.48,
+    "price": 440.96,
     "todayOpen": 0,
     "changePercent": 0,
     "high24h": 0,
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:03.865Z"
+    "updatedAt": "2026-06-18T08:56:50.432Z"
   },
   "AMD": {
-    "price": 528.08,
+    "price": 527.22,
     "todayOpen": 0,
     "changePercent": 0,
     "high24h": 0,
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:04.817Z"
+    "updatedAt": "2026-06-18T08:56:51.420Z"
   },
   "CL": {
-    "price": 74.06,
+    "price": 74.12,
     "todayOpen": 0,
     "changePercent": 0,
     "high24h": 0,
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:05.542Z"
+    "updatedAt": "2026-06-18T08:56:52.410Z"
   },
   "NG": {
-    "price": 3.197,
+    "price": 3.198,
     "todayOpen": 0,
     "changePercent": 0,
     "high24h": 0,
     "low24h": 0,
     "volume24h": 0,
     "quoteVolume24h": 0,
-    "updatedAt": "2026-06-18T08:46:06.511Z"
+    "updatedAt": "2026-06-18T08:56:53.397Z"
   }
 }

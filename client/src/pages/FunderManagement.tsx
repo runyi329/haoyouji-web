@@ -578,6 +578,19 @@ function FunderOrderCard({
               <Pencil className="w-3.5 h-3.5" />
             </button>
           )}
+          {!isInvited && isAdmin && (
+            <button
+              onClick={() => {
+                if (!window.confirm('确认删除这张订单？')) return;
+                if (!window.confirm('再次确认：订单将移入回收站，可随时恢复。确定删除？')) return;
+                handleDelete(order.id);
+              }}
+              className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+              title="删除订单（移入回收站）"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
