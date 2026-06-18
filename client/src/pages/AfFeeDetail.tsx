@@ -7,6 +7,12 @@ import { PageTag } from "@/components/PageTag";
 const now = new Date();
 const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
+// 权益折扣档位 → 用户实际仍拥有的资金比例
+const EQUITY_DISCOUNT_RATES: Record<number, number> = {
+  0: 1.0, 1: 0.6667, 2: 0.4444, 3: 0.3333, 4: 0.2667,
+  5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333,
+};
+
 function calcFeeItem(o: any) {
   const amount = parseFloat(o.amount || '0');
   const tradeValue = o.isGift ? amount : amount * 5.25;
@@ -25,12 +31,20 @@ function calcFeeItem(o: any) {
     feeType = 'ongoing';
   }
   const totalFee = dailyFee * holdDays;
+  // 按年化 12% 口径：日费率 = 订单价值 × 0.12 ÷ 365，累计 = × 持有天数
+  const dailyFee12 = tradeValue * 0.12 / 365;
+  const totalFee12 = dailyFee12 * holdDays;
+  // 名义年化费率 与 实际年化费率（按档位折扣率折算）
+  const nominalApr = tradeValue > 0 ? (dailyFee * 365 / tradeValue) : 0;
+  const equityTier = o.equityTier || 0;
+  const discountRate = EQUITY_DISCOUNT_RATES[equityTier] ?? 1.0;
+  const actualApr = discountRate > 0 ? (nominalApr / discountRate) : nominalApr;
   const orderDate = new Date(o.createdAt);
   const yy = String(orderDate.getFullYear()).slice(2);
   const mm = String(orderDate.getMonth() + 1).padStart(2, '0');
   const dd = String(orderDate.getDate()).padStart(2, '0');
   const orderNo = `AF${yy}${mm}${dd}${String(o.id).padStart(6, '0')}`;
-  return { ...o, orderNo, holdDays, dailyFee, totalFee, feeType, tradeValue };
+  return { ...o, orderNo, holdDays, dailyFee, totalFee, dailyFee12, totalFee12, feeType, tradeValue, nominalApr, actualApr, equityTier, discountRate };
 }
 
 export default function AfFeeDetail() {
@@ -40,10 +54,40 @@ export default function AfFeeDetail() {
 
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
   const [feeFilter, setFeeFilter] = useState<'all' | 'ongoing' | 'settled'>('all');
+  const [aprInfo, setAprInfo] = useState<any | null>(null);
+  const [detailOrder, setDetailOrder] = useState<any | null>(null);
+  // 表格排序：点表头切换字段与正/倒序
+  const [sortKey, setSortKey] = useState<'holdDays' | 'totalFee' | 'nominalApr' | 'actualApr' | null>(null);
+  const [sortAsc, setSortAsc] = useState(false);
+  const toggleSort = (key: 'holdDays' | 'totalFee' | 'nominalApr' | 'actualApr') => {
+    if (sortKey === key) {
+      setSortAsc(prev => !prev);
+    } else {
+      setSortKey(key);
+      setSortAsc(false);
+    }
+  };
+
+  // 顶部主 Tab：谷底增筹（当前 af_orders）/ 融资付息（ledger_orders, finance）
+  const [mainTab, setMainTab] = useState<'gujian' | 'finance'>('gujian');
 
   const { data: orders, isLoading } = trpc.ledger.afAdminGetOrders.useQuery(
     { ledgerId },
     { enabled: !!ledgerId }
+  );
+
+  // 融资付息订单（仅切到该 Tab 时加载）
+  const { data: financeOrdersData, isLoading: financeLoading } = trpc.ledger.financeGetOrders.useQuery(
+    { ledgerId },
+    { enabled: !!ledgerId && mainTab === 'finance' }
+  );
+  const financeOrdersRaw: any[] = Array.isArray((financeOrdersData as any)?.orders)
+    ? (financeOrdersData as any).orders
+    : (Array.isArray(financeOrdersData) ? (financeOrdersData as any) : []);
+  // 过滤：只保留融资付息主订单（order_role='finance'），
+  // 去掉共享者/参与方视角的跟随行（_isParticipant 或非 finance 角色）
+  const financeOrders: any[] = financeOrdersRaw.filter(
+    (o: any) => !o._isParticipant && (o.order_role == null || o.order_role === 'finance')
   );
 
   const feeItems = ((orders as any[]) ?? [])
@@ -112,6 +156,24 @@ export default function AfFeeDetail() {
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
           <span className="text-white font-semibold text-base">管理费明细</span>
+          {/* 右上角主 Tab：谷底增筹 / 融资付息 */}
+          <div className="ml-auto flex rounded-full p-0.5" style={{ background: 'rgba(255,255,255,0.14)' }}>
+            {([
+              { key: 'gujian' as const, label: '谷底增筹' },
+              { key: 'finance' as const, label: '融资付息' },
+            ]).map(t => (
+              <button
+                key={t.key}
+                onClick={() => setMainTab(t.key)}
+                className="px-3 py-1 rounded-full text-xs font-medium transition-all"
+                style={mainTab === t.key
+                  ? { background: '#fff', color: '#1e3a8a' }
+                  : { background: 'transparent', color: 'rgba(255,255,255,0.75)' }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* 三列卡片：管理费(进行中/已结清/累计) + 今日(管理费/订单数) */}
@@ -177,7 +239,8 @@ export default function AfFeeDetail() {
         })()}
       </div>
 
-      {/* ── 筛选 Tab ── */}
+      {/* ── 筛选 Tab（仅谷底增筹） ── */}
+      {mainTab === 'gujian' && (
       <div className="bg-white border-b border-gray-100 px-4 py-2.5 flex gap-2 sticky top-0 z-10">
         {([
           { key: 'all' as const, label: `全部 ${userGroups.length} 人` },
@@ -196,157 +259,355 @@ export default function AfFeeDetail() {
           </button>
         ))}
       </div>
+      )}
 
-      {/* ── 用户列表 ── */}
-      <div className="px-3 pt-3 space-y-2.5">
+      {/* ── 谷底增筹：用户列表（表格） ── */}
+      {mainTab === 'gujian' && (
+      <div className="px-3 pt-3">
         {isLoading ? (
           <div className="text-center py-16 text-gray-400 text-sm">加载中…</div>
         ) : filteredGroups.length === 0 ? (
           <div className="text-center py-16 text-gray-400 text-sm">暂无记录</div>
-        ) : filteredGroups.map(group => {
-          const isExpanded = expandedUsers.has(group.userId);
-          const dispOngoing = group.orders.filter(o => o.feeType === 'ongoing').reduce((s, o) => s + o.totalFee, 0);
-          const dispSettled = group.orders.filter(o => o.feeType === 'settled').reduce((s, o) => s + o.totalFee, 0);
-          const dispTotal = dispOngoing + dispSettled;
-          const avatarChar = (group.nickname || group.username || '?').charAt(0).toUpperCase();
-
+        ) : (() => {
+          // 平铺所有订单（保留用户分组排序：按用户总费高→低，组内按单笔费用高→低）
+          let allRows: any[] = [];
+          filteredGroups.forEach(group => {
+            const sorted = [...group.orders].sort((a, b) => b.totalFee - a.totalFee);
+            sorted.forEach((o, i) => allRows.push({ ...o, _nickname: group.nickname, _username: group.username, _isFirstOfUser: i === 0, _userOrderCount: sorted.length }));
+          });
+          // 点表头后：按选中字段对全部订单排序（打破用户分组）
+          if (sortKey) {
+            allRows = [...allRows].sort((a, b) => {
+              const av = a[sortKey] || 0;
+              const bv = b[sortKey] || 0;
+              return sortAsc ? av - bv : bv - av;
+            });
+          }
+          const ongoingRows = allRows.filter(r => r.feeType !== 'settled');
+          const settledRows = allRows.filter(r => r.feeType === 'settled');
+          const renderTable = (rows: any[], title: string) => {
+            if (rows.length === 0) return null;
+            return (
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+              <div className="px-3 py-2 text-xs font-semibold text-gray-600 border-b border-gray-100">{title}（{rows.length}）</div>
+              <div className="overflow-x-auto">
+                <table className="border-collapse text-xs" style={{ width: 'auto', tableLayout: 'auto' }}>
+                  <thead>
+                    <tr style={{ background: '#f8faff' }} className="text-gray-500">
+                      <th className="sticky left-0 z-10 px-1.5 py-2 text-left font-semibold border border-gray-200 whitespace-nowrap" style={{ background: '#f8faff', width: 32, minWidth: 32, maxWidth: 32 }}>用户</th>
+                      <th className="px-2 py-2 text-left font-semibold border border-gray-200 whitespace-nowrap" style={{ minWidth: 110 }}>订单</th>
+                      <th className="px-1 py-2 text-center font-semibold border border-gray-200 whitespace-nowrap" style={{ width: 28, minWidth: 28, maxWidth: 28 }}>币</th>
+                      <th onClick={() => toggleSort('holdDays')} className="px-1.5 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">天数</th>
+                      <th onClick={() => toggleSort('totalFee')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">费用(U)</th>
+                      <th className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap">12%</th>
+                      <th onClick={() => toggleSort('nominalApr')} className="px-1.5 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">名义</th>
+                      <th onClick={() => toggleSort('actualApr')} className="px-1.5 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">实际</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((item: any) => (
+                      <tr key={item.id} className={item.feeType === 'settled' ? 'bg-gray-100' : 'bg-white'}>
+                        <td className="sticky left-0 z-10 px-1 py-2 border border-gray-200" style={{ width: 32, minWidth: 32, maxWidth: 32, background: item.feeType === 'settled' ? '#f3f4f6' : '#fff' }}>
+                          <span className="text-gray-800 font-medium text-[11px] leading-tight block break-all" title={item._nickname}>{item._nickname}</span>
+                        </td>
+                        <td className="px-2 py-2 border border-gray-200">
+                          <button type="button" onClick={() => setDetailOrder(item)} className="font-mono text-blue-600 underline decoration-dotted underline-offset-2">AF…{item.orderNo.slice(-4)}</button>
+                          {item.isGift && <span className="ml-1 text-[10px]" style={{ color: '#f59e0b' }}>赠</span>}
+                          {item.feeType === 'settled' ? (
+                            <span title="已结清" className="ml-1.5 inline-block w-2 h-2 rounded-full align-middle" style={{ background: '#ef4444' }} />
+                          ) : item.sellStatus === 'selling' ? (
+                            <span title="委卖中" className="ml-1.5 inline-block w-2 h-2 rounded-full align-middle" style={{ background: '#f59e0b' }} />
+                          ) : (
+                            <span title="进行中" className="ml-1.5 inline-block w-2 h-2 rounded-full align-middle" style={{ background: '#22c55e' }} />
+                          )}
+                          <span className="block text-[10px] text-gray-400 mt-0.5">{Math.round(parseFloat(item.amount || '0'))} U · <span className="font-semibold" style={{ color: '#0d9488' }}>D{item.equityTier}</span></span>
+                        </td>
+                        <td className="px-1 py-2 text-center border border-gray-200 whitespace-nowrap" style={{ width: 28, minWidth: 28, maxWidth: 28 }}>
+                          {(() => {
+                            const C: Record<string, { s: string; c: string }> = {
+                              BTC: { s: 'B', c: '#f59e0b' },
+                              ETH: { s: 'E', c: '#3b82f6' },
+                              SOL: { s: 'S', c: '#a855f7' },
+                            };
+                            const cfg = C[item.coin];
+                            return cfg
+                              ? <span className="font-bold" style={{ color: cfg.c }}>{cfg.s}</span>
+                              : <span className="text-gray-700">{item.coin || '-'}</span>;
+                          })()}
+                        </td>
+                        <td className="px-1.5 py-2 text-right border border-gray-200 whitespace-nowrap text-gray-600">{item.holdDays}</td>
+                        <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap">
+                          <span className="block font-bold text-gray-900">{item.totalFee.toFixed(2)}</span>
+                          <span className="block text-[10px] text-gray-400">{item.dailyFee.toFixed(2)}/天</span>
+                        </td>
+                        <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap">
+                          {item.holdDays > 30 ? (
+                            <span className="text-gray-300">—</span>
+                          ) : (
+                            <>
+                              <span className="block font-bold text-gray-900">{item.totalFee12.toFixed(2)}</span>
+                              <span className="block text-[10px] text-gray-400">{item.dailyFee12.toFixed(2)}/天</span>
+                            </>
+                          )}
+                        </td>
+                        <td className="px-1.5 py-2 text-right border border-gray-200 whitespace-nowrap">
+                          {item.feeType === 'settled' ? (
+                            <span className="text-gray-300">—</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setAprInfo(item)}
+                              className="font-bold underline decoration-dotted underline-offset-2"
+                              style={{ color: '#2563eb' }}
+                            >
+                              {Math.round(item.nominalApr * 100)}%
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-1.5 py-2 text-right border border-gray-200 whitespace-nowrap">
+                          {item.feeType === 'settled' ? (
+                            <span className="text-gray-300">—</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setAprInfo(item)}
+                              className="font-bold underline decoration-dotted underline-offset-2"
+                              style={{ color: (() => {
+                                // 实际=名义 同色；实际越高于名义颜色越深（按倍率分档）
+                                const ratio = item.nominalApr > 0 ? item.actualApr / item.nominalApr : 1;
+                                if (ratio <= 1.05) return '#2563eb';      // 与名义相同
+                                if (ratio <= 1.5) return '#1e40af';       // 稍深
+                                if (ratio <= 2.2) return '#1e3a8a';       // 更深
+                                if (ratio <= 3.5) return '#172554';       // 很深
+                                return '#0f172a';                          // 最深
+                              })() }}
+                            >
+                              {Math.round(item.actualApr * 100)}%
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    {/* 汇总行 */}
+                    {(() => {
+                      const sumAmount = rows.reduce((s, r) => s + parseFloat(r.amount || '0'), 0);
+                      const sumDaily = rows.reduce((s, r) => s + (r.dailyFee || 0), 0);
+                      const sumFee = rows.reduce((s, r) => s + (r.totalFee || 0), 0);
+                      const sumDaily12 = rows.reduce((s, r) => s + (r.holdDays > 30 ? 0 : (r.dailyFee12 || 0)), 0);
+                      const sumFee12 = rows.reduce((s, r) => s + (r.holdDays > 30 ? 0 : (r.totalFee12 || 0)), 0);
+                      return (
+                        <tr style={{ background: '#f8faff' }} className="font-semibold text-gray-700">
+                          <td className="sticky left-0 z-10 px-1 py-2 border border-gray-200 text-[11px]" style={{ background: '#f8faff', width: 32, minWidth: 32, maxWidth: 32 }}>合计</td>
+                          <td className="px-2 py-2 border border-gray-200">
+                            <span className="block text-[10px] text-gray-600">{Math.round(sumAmount)} U</span>
+                          </td>
+                          <td className="px-1 py-2 border border-gray-200" />
+                          <td className="px-1.5 py-2 border border-gray-200" />
+                          <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap">
+                            <span className="block font-bold text-gray-900">{sumFee.toFixed(2)}</span>
+                            <span className="block text-[10px] text-gray-600">{sumDaily.toFixed(2)}/天</span>
+                          </td>
+                          <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap">
+                            <span className="block font-bold text-gray-900">{sumFee12.toFixed(2)}</span>
+                            <span className="block text-[10px] text-gray-600">{sumDaily12.toFixed(2)}/天</span>
+                          </td>
+                          <td className="px-1.5 py-2 border border-gray-200" />
+                          <td className="px-1.5 py-2 border border-gray-200" />
+                        </tr>
+                      );
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            );
+          };
           return (
-            <div key={group.userId} className="bg-white rounded-2xl overflow-hidden shadow-sm">
-
-              {/* ── 用户卡片主体（可点击展开） ── */}
-              <button className="w-full text-left" onClick={() => toggleUser(group.userId)}>
-
-                {/* 第一行：头像 + 姓名 + 箭头 */}
-                <div className="flex items-center px-4 pt-3.5 pb-2">
-                  <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0 mr-3"
-                    style={{ background: 'linear-gradient(135deg,#1e3a8a,#2563eb)' }}
-                  >
-                    {avatarChar}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-sm font-semibold text-gray-900 leading-tight">{group.nickname}</span>
-                      {group.username && group.username !== group.nickname && (
-                        <span className="text-xs text-gray-400">({group.username})</span>
-                      )}
-                    </div>
-                    <p className="text-[11px] text-gray-400 mt-0.5">
-                      共 {group.orders.length} 笔
-                      {group.ongoingCount > 0 && <span className="text-amber-500 ml-1">· 进行中 {group.ongoingCount}</span>}
-                      {group.settledCount > 0 && <span className="text-emerald-500 ml-1">· 已结清 {group.settledCount}</span>}
-                    </p>
-                    {memberBalances && memberBalances[parseInt(group.userId)] !== undefined && (
-                      <p className="text-[11px] mt-0.5">
-                        <span className="text-gray-400">钱包余额 </span>
-                        <span className="font-semibold" style={{ color: '#1A56DB' }}>
-                          {Number(memberBalances[parseInt(group.userId)]).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U
-                        </span>
-                      </p>
-                    )}
-                  </div>
-                  {isExpanded
-                    ? <ChevronDown className="w-4 h-4 text-gray-300 flex-shrink-0" />
-                    : <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />}
-                </div>
-
-                {/* 第二行： Excel 表格样式，三列带横竖线 */}
-                <div className="border-t border-gray-100 mx-4 mb-3 rounded-lg overflow-hidden" style={{ border: '1px solid #e5e7eb' }}>
-                  {/* 表头行 */}
-                  <div className="grid grid-cols-3" style={{ background: '#f8faff', borderBottom: '1px solid #e5e7eb' }}>
-                    <div className="py-1.5 text-center">
-                      <span className="text-[10px] text-gray-500 font-medium">总计</span>
-                    </div>
-                    <div className="py-1.5 text-center" style={{ borderLeft: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb' }}>
-                      <span className="text-[10px] text-amber-500 font-medium">进行中</span>
-                    </div>
-                    <div className="py-1.5 text-center">
-                      <span className="text-[10px] text-emerald-500 font-medium">已结清</span>
-                    </div>
-                  </div>
-                  {/* 金额行 */}
-                  <div className="grid grid-cols-3" style={{ borderBottom: '1px solid #e5e7eb' }}>
-                    <div className="py-2 text-center">
-                      <span className="text-xs font-bold text-gray-900 whitespace-nowrap">{dispTotal.toFixed(2)}</span>
-                      <span className="text-[10px] text-gray-400 ml-0.5">U</span>
-                    </div>
-                    <div className="py-2 text-center" style={{ borderLeft: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb' }}>
-                      <span className="text-xs font-bold text-amber-500 whitespace-nowrap">{dispOngoing > 0 ? dispOngoing.toFixed(2) : '—'}</span>
-                      {dispOngoing > 0 && <span className="text-[10px] text-amber-300 ml-0.5">U</span>}
-                    </div>
-                    <div className="py-2 text-center">
-                      <span className="text-xs font-bold text-emerald-500 whitespace-nowrap">{dispSettled > 0 ? dispSettled.toFixed(2) : '—'}</span>
-                      {dispSettled > 0 && <span className="text-[10px] text-emerald-300 ml-0.5">U</span>}
-                    </div>
-                  </div>
-                  {/* 笔数行 */}
-                  <div className="grid grid-cols-3" style={{ background: '#fafafa' }}>
-                    <div className="py-1.5 text-center">
-                      <span className="text-[10px] text-gray-400">{group.orders.length} 笔</span>
-                    </div>
-                    <div className="py-1.5 text-center" style={{ borderLeft: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb' }}>
-                      <span className="text-[10px] text-amber-400">{group.ongoingCount} 笔</span>
-                    </div>
-                    <div className="py-1.5 text-center">
-                      <span className="text-[10px] text-emerald-400">{group.settledCount} 笔</span>
-                    </div>
-                  </div>
-                </div>
-              </button>
-
-              {/* ── 展开的订单明细 ── */}
-              {isExpanded && (
-                <div className="border-t border-blue-50">
-                  {/* 表头 */}
-                  <div
-                    className="grid px-4 py-2 text-[11px] text-gray-400"
-                    style={{ gridTemplateColumns: '2.6fr 0.8fr 0.8fr 1.8fr', background: '#f8faff' }}
-                  >
-                    <span>订单号</span>
-                    <span className="text-center">币种</span>
-                    <span className="text-center">天数</span>
-                    <span className="text-right">管理费</span>
-                  </div>
-                  {group.orders.map((item, idx) => (
-                    <div
-                      key={item.id}
-                      className={`grid px-4 py-2.5 items-center ${idx < group.orders.length - 1 ? 'border-b border-gray-50' : ''}`}
-                      style={{ gridTemplateColumns: '2.6fr 0.8fr 0.8fr 1.8fr' }}
-                    >
-                      <div>
-                        <p className="text-[11px] font-mono text-gray-500 leading-tight">{item.orderNo}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">
-                          {item.amount} U{item.isGift && <span className="text-red-400 ml-1">赠</span>}
-                        </p>
-                      </div>
-                      <div className="text-center">
-                        <span className="text-xs font-medium text-gray-700">{item.coin}</span>
-                      </div>
-                      <div className="text-center">
-                        <span className="text-xs text-gray-600">{item.holdDays}天</span>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-gray-900">{item.totalFee.toFixed(4)}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">
-                          {item.dailyFee.toFixed(4)}/天 × {item.holdDays}天
-                        </p>
-                        <p className={`text-[10px] mt-0.5 ${item.feeType === 'settled' ? 'text-emerald-500' : 'text-amber-500'}`}>
-                          {item.feeType === 'settled' ? '已结清' : '进行中'}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                  {/* 小计 */}
-                  <div className="flex justify-between items-center px-4 py-2.5 border-t border-blue-100" style={{ background: '#eff6ff' }}>
-                    <span className="text-xs font-medium text-blue-500">小计</span>
-                    <span className="text-sm font-bold text-blue-700">{dispTotal.toFixed(4)} U</span>
-                  </div>
-                </div>
-              )}
+            <div className="space-y-4">
+              {renderTable(ongoingRows, '进行中 / 委卖中')}
+              {renderTable(settledRows, '已结清')}
             </div>
           );
-        })}
+        })()}
       </div>
+      )}
+
+      {/* ── 融资付息：临时基础表格 ── */}
+      {mainTab === 'finance' && (
+      <div className="px-3 pt-3">
+        {financeLoading ? (
+          <div className="text-center py-16 text-gray-400 text-sm">加载中…</div>
+        ) : financeOrders.length === 0 ? (
+          <div className="text-center py-16 text-gray-400 text-sm">暂无融资付息订单</div>
+        ) : (() => {
+          const statusMap: Record<string, string> = { active: '进行中', settled: '已结清', completed: '已结清', cancelled: '已取消' };
+          const isFinSettled = (o: any) => o.status === 'settled' || o.status === 'completed';
+          const finOngoing = financeOrders.filter(o => !isFinSettled(o));
+          const finSettled = financeOrders.filter(o => isFinSettled(o));
+          const renderFinTable = (rows: any[], title: string) => {
+            if (rows.length === 0) return null;
+            const baseSum = rows.reduce((s, o) => s + (o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0)), 0);
+            return (
+              <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                <div className="px-3 py-2 text-xs font-semibold text-gray-600 border-b border-gray-100">{title}（{rows.length}）</div>
+                <div className="overflow-x-auto">
+                  <table className="border-collapse text-xs" style={{ width: 'auto', tableLayout: 'auto' }}>
+                    <thead>
+                      <tr style={{ background: '#f8faff' }} className="text-gray-500">
+                        <th className="px-2 py-2 text-left font-semibold border border-gray-200 whitespace-nowrap">用户</th>
+                        <th className="px-2 py-2 text-left font-semibold border border-gray-200 whitespace-nowrap">起息日</th>
+                        <th className="px-2 py-2 text-left font-semibold border border-gray-200 whitespace-nowrap">订单</th>
+                        <th className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap">计息本金</th>
+                        <th className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap">年利率</th>
+                        <th className="px-2 py-2 text-center font-semibold border border-gray-200 whitespace-nowrap">状态</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((o: any, i: number) => {
+                        const base = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
+                        const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
+                        const start = o.interest_start_date || o.buy_date || '';
+                        const orderNoRaw = String(o.order_no || '');
+                        const orderNoShort = orderNoRaw ? 'AF…' + orderNoRaw.slice(-4) : '-';
+                        return (
+                          <tr key={o.id ?? i} className="text-gray-700">
+                            <td className="px-2 py-2 border border-gray-100 whitespace-nowrap">{o.username || o.userName || '-'}</td>
+                            <td className="px-2 py-2 border border-gray-100 whitespace-nowrap">{start || '-'}</td>
+                            <td className="px-2 py-2 border border-gray-100 whitespace-nowrap font-mono" style={{ color: '#2563eb' }}>{orderNoShort}</td>
+                            <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap">{base ? base.toFixed(2) : '-'}</td>
+                            <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap">{rate != null ? rate + '%' : '-'}</td>
+                            <td className="px-2 py-2 text-center border border-gray-100 whitespace-nowrap">{statusMap[o.status] || o.status || '-'}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr style={{ background: '#f8faff' }} className="font-semibold text-gray-700">
+                        <td className="px-2 py-2 border border-gray-200 whitespace-nowrap">合计</td>
+                        <td className="px-2 py-2 border border-gray-200"></td>
+                        <td className="px-2 py-2 border border-gray-200"></td>
+                        <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap">{baseSum.toFixed(2)}</td>
+                        <td className="px-2 py-2 border border-gray-200"></td>
+                        <td className="px-2 py-2 border border-gray-200"></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          };
+          return (
+            <div className="space-y-4">
+              {renderFinTable(finOngoing, '进行中')}
+              {renderFinTable(finSettled, '已结清')}
+            </div>
+          );
+        })()}
+      </div>
+      )}
+
+      {/* 年化说明弹窗 */}
+      {aprInfo && (() => {
+        const tradeValue = aprInfo.tradeValue || 0;
+        const dailyFee = aprInfo.dailyFee || 0;
+        const annualFee = dailyFee * 365;
+        const apr = tradeValue > 0 ? (annualFee / tradeValue * 100) : 0;
+        const amount = parseFloat(aprInfo.amount || '0');
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center px-6"
+            style={{ background: 'rgba(0,0,0,0.45)' }}
+            onClick={() => setAprInfo(null)}
+          >
+            <div
+              className="bg-white rounded-2xl w-full max-w-sm p-5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-bold text-gray-900">年化费率说明</h3>
+                <button onClick={() => setAprInfo(null)} className="text-gray-400 text-xl leading-none">×</button>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">
+                订单 <span className="font-mono">{aprInfo.orderNo}</span>（{aprInfo.coin}）的年化费率计算过程：
+              </p>
+              <div className="space-y-2 text-xs text-gray-700">
+                <div className="flex justify-between border-b border-gray-100 pb-1.5">
+                  <span className="text-gray-500">下单金额</span>
+                  <span className="font-medium">{amount.toFixed(2)} U</span>
+                </div>
+                <div className="flex justify-between border-b border-gray-100 pb-1.5">
+                  <span className="text-gray-500">订单价值{aprInfo.isGift ? '（赠单）' : '（×5.25）'}</span>
+                  <span className="font-medium">{tradeValue.toFixed(2)} U</span>
+                </div>
+                <div className="flex justify-between border-b border-gray-100 pb-1.5">
+                  <span className="text-gray-500">日费率 = 订单价值 ÷ 0.75 × 0.12 ÷ 365</span>
+                  <span className="font-medium">{dailyFee.toFixed(4)} U</span>
+                </div>
+                <div className="flex justify-between border-b border-gray-100 pb-1.5">
+                  <span className="text-gray-500">年化费用 = 日费率 × 365</span>
+                  <span className="font-medium">{annualFee.toFixed(2)} U</span>
+                </div>
+                <div className="flex justify-between border-b border-gray-100 pb-1.5">
+                  <span className="text-gray-500">名义年化费率 = 年化费用 ÷ 订单价值</span>
+                  <span className="font-bold text-blue-600">{apr.toFixed(2)}%</span>
+                </div>
+                <div className="flex justify-between border-b border-gray-100 pb-1.5">
+                  <span className="text-gray-500">权益档位（用户实际拥有资金比例）</span>
+                  <span className="font-medium">第{aprInfo.equityTier}档 · {(aprInfo.discountRate * 100).toFixed(2)}%</span>
+                </div>
+                <div className="flex justify-between pt-1">
+                  <span className="text-gray-700 font-semibold">实际年化费率 = 名义年化 ÷ 档位比例</span>
+                  <span className="font-bold" style={{ color: '#1e40af' }}>{(aprInfo.actualApr * 100).toFixed(2)}%</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setAprInfo(null)}
+                className="mt-4 w-full py-2 rounded-xl text-sm font-medium text-white"
+                style={{ background: '#2563eb' }}
+              >
+                知道了
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 只读订单详情弹窗 */}
+      {detailOrder && (() => {
+        const d = detailOrder;
+        const amount = parseFloat(d.amount || '0');
+        const statusText = d.feeType === 'settled' ? '已结清' : (d.sellStatus === 'selling' ? '委卖中' : '进行中');
+        const Row = ({ k, v, color }: { k: string; v: any; color?: string }) => (
+          <div className="flex justify-between border-b border-gray-100 py-2 text-xs">
+            <span className="text-gray-500">{k}</span>
+            <span className="font-medium" style={color ? { color } : undefined}>{v}</span>
+          </div>
+        );
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setDetailOrder(null)}>
+            <div className="bg-white rounded-2xl w-full max-w-sm p-5 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-bold text-gray-900">订单详情</h3>
+                <button onClick={() => setDetailOrder(null)} className="text-gray-400 text-xl leading-none">×</button>
+              </div>
+              <div className="space-y-0">
+                <Row k="订单编号" v={<span className="font-mono">{d.orderNo}</span>} />
+                <Row k="用户" v={d._nickname} />
+                <Row k="类型" v={d.isGift ? '赠单' : '正单'} />
+                <Row k="状态" v={statusText} />
+                <Row k="币种" v={d.coin || '-'} />
+                <Row k="下单金额" v={`${amount.toFixed(2)} U`} />
+                <Row k="订单价值" v={`${(d.tradeValue || 0).toFixed(2)} U`} />
+                <Row k="权益档位" v={`第${d.equityTier}档 · ${(d.discountRate * 100).toFixed(2)}%`} />
+                <Row k="持有天数" v={`${d.holdDays} 天`} />
+                <Row k="日费率" v={`${d.dailyFee.toFixed(4)} U`} />
+                <Row k="累计管理费" v={`${d.totalFee.toFixed(2)} U`} />
+                <Row k="名义年化" v={`${(d.nominalApr * 100).toFixed(2)}%`} color="#2563eb" />
+                <Row k="实际年化" v={`${(d.actualApr * 100).toFixed(2)}%`} color="#1e40af" />
+              </div>
+              <button onClick={() => setDetailOrder(null)} className="mt-4 w-full py-2 rounded-xl text-sm font-medium text-white" style={{ background: '#2563eb' }}>关闭</button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

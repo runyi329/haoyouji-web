@@ -1460,6 +1460,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [tagInput, setTagInput] = useState('');
   // 担保货币列表：[{ coin: 'BTC', qty: '' }, ...]
   const [collateralAssets, setCollateralAssets] = useState<{ coin: string; qty: string; note?: string }[]>([]);
+  // 担保货币编辑模式：编辑已有订单时默认只读，点「编辑」才可改；新建订单时恒为可编辑
+  const [collateralEditMode, setCollateralEditMode] = useState(false);
 
   // 字段展示配置（控制订单卡片各字段的显示/隐藏）
   const DEFAULT_DISPLAY_CONFIG: Record<string, boolean> = {
@@ -1488,10 +1490,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean>>(DEFAULT_DISPLAY_CONFIG);
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
+  const [showPreviewCollateralInfo, setShowPreviewCollateralInfo] = useState(false); // 预览卡片-担保缺口说明
+  const [showPreviewMarginInfo, setShowPreviewMarginInfo] = useState(false); // 预览卡片-保证金率说明
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY'];
 
   // 融资金额输入状态：编辑时用本地值，非编辑时显示计算值
   const [amountEditing, setAmountEditing] = useState(false);
+  // 计息基数是否被用户手动改过：手动后不再自动带入融资金额
+  const interestBaseTouchedRef = useRef(false);
   const [amountInputValue, setAmountInputValue] = useState('');
   // computedAmount 与同步 useEffect 已下移到 formLivePrices/cnyRate/折算函数定义之后（避免 TDZ）
 
@@ -1561,6 +1567,20 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [computedAmount, amountEditing, formData.assetType, formData.amountCurrency, cnyRate, JSON.stringify(formLivePrices)]);
+
+  // 便捷操作：当融资金额（出资币种为 U/USDT）算出后，默认把计息基数带入该值
+  // 仅在用户未手动改过计息基数时生效；用户手动修改后不再覆盖
+  useEffect(() => {
+    if (interestBaseTouchedRef.current) return;
+    if (formData.amountCurrency !== 'USDT') return;
+    const usdtVal = parseFloat(computedAmount || '0');
+    if (!usdtVal || usdtVal <= 0) return;
+    const next = parseFloat(usdtVal.toFixed(2)).toString();
+    setFormData(d => (d.interestBase === next && d.interestBaseCurrency === 'USDT')
+      ? d
+      : { ...d, interestBase: next, interestBaseCurrency: 'USDT' });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [computedAmount, formData.amountCurrency]);
 
   // 涨跌方向计算：用 localStorage 存储上一次价格（与 LedgerDetail 一致）
   const PREV_PRICE_CACHE_KEY = `funder_prev_prices_p095_${ledgerId}`;
@@ -1729,6 +1749,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const saveCollateralMutation = trpc.ledger.financeUpdateOrder.useMutation({
     onSuccess: () => {
       toast.success('担保货币已保存');
+      setCollateralEditMode(false); // 保存成功后切回只读态
       refetchOrders();
       trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
     },
@@ -1930,7 +1951,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       tags: [] as string[],
     });
     setTagInput('');
+    interestBaseTouchedRef.current = false; // 新建订单：允许融资金额(U)自动带入计息基数
     setCollateralAssets([]);
+    setCollateralEditMode(true); // 新建订单：担保货币恒为可编辑
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
     setEditingOrder(null);
     setShowDatePicker(false);
@@ -1982,6 +2005,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         setCollateralAssets([]);
       }
     } catch { setCollateralAssets([]); }
+    // 编辑已有订单：担保货币默认只读态，点「编辑」才可改
+    setCollateralEditMode(false);
     // 加载字段展示配置
     try {
       const dc = order.display_config;
@@ -2013,6 +2038,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       setAmountInputValue(conv !== null && !isNaN(conv) ? parseFloat(conv.toFixed(2)).toString() : String(order.amount));
     })();
     setAmountEditing(false);
+    // 编辑已有订单：若已有计息基数则视为手动值，不被融资金额自动覆盖
+    interestBaseTouchedRef.current = !!(order.interest_base && parseFloat(order.interest_base) > 0);
     setEditingOrder(order);
     setShowDatePicker(false);
     setShowInterestDatePicker(false);
@@ -2422,7 +2449,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               {!editingOrder?.participantInfo && (
                 <div className="flex-1 min-w-0">
                   <label className="block text-sm font-medium text-gray-600 mb-2">
-                    用户 <span className="text-red-400 ml-0.5">*</span>
+                    订单拥有者 <span className="text-red-400 ml-0.5">*</span>
                   </label>
                   <div className="relative">
                     {formData.userId > 0 ? (
@@ -2704,7 +2731,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     type="number"
                     inputMode="decimal"
                     value={formData.interestBase}
-                    onChange={e => setFormData(d => ({ ...d, interestBase: e.target.value }))}
+                    onChange={e => { interestBaseTouchedRef.current = true; setFormData(d => ({ ...d, interestBase: e.target.value })); }}
                     className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
                     placeholder={formData.interestBaseCurrency === 'CNY' ? '如：800000' : '如：120000'}
                     style={{ display: 'block', boxSizing: 'border-box', width: '0' }}
@@ -2876,6 +2903,30 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               {/* 担保货币列表 - 受邀订单隐藏 */}
               {!editingOrder?.participantInfo && (
               <div className="space-y-3">
+                {/* 只读态：编辑已有订单且未进入编辑模式时 */}
+                {editingOrder?.id && !collateralEditMode ? (
+                  <>
+                    {collateralAssets.filter(a => a.coin && a.qty !== '').length === 0 ? (
+                      <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-4 text-center text-sm text-gray-400">暂无担保货币</div>
+                    ) : (
+                      collateralAssets.filter(a => a.coin && a.qty !== '').map((item, idx) => (
+                        <div key={idx} className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-sm font-semibold shrink-0" style={{ color: COIN_COLORS[item.coin as keyof typeof COIN_COLORS] || '#1A2340' }}>{item.coin}</span>
+                            <span className="text-sm text-gray-700 tabular-nums">{item.qty}</span>
+                            {item.note ? <span className="text-xs text-gray-400 truncate">· {item.note}</span> : null}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setCollateralEditMode(true)}
+                      className="w-full py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 font-medium flex items-center justify-center gap-1 hover:bg-gray-50 transition-colors"
+                    >编辑担保货币</button>
+                  </>
+                ) : (
+                <>
                 {collateralAssets.map((item, idx) => (
                   <div key={idx} className="rounded-xl border border-gray-200 p-3 space-y-2">
                     <div className="flex gap-2 items-center">
@@ -2915,16 +2966,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                       placeholder="备注（选填）"
                     />
-                    {/* 编辑已有订单时，每笔可独立保存 */}
-                    {editingOrder?.id && (
-                      <button
-                        type="button"
-                        onClick={() => persistCollateral(collateralAssets)}
-                        disabled={saveCollateralMutation.isPending}
-                        className="w-full py-2 rounded-xl text-sm font-medium text-white transition-all disabled:opacity-60"
-                        style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
-                      >{saveCollateralMutation.isPending ? '保存中…' : '保存这笔担保'}</button>
-                    )}
                   </div>
                 ))}
                 <button
@@ -2934,6 +2975,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 >
                   <span className="text-base leading-none">+</span> 添加担保货币
                 </button>
+                {/* 编辑已有订单时，整组独立保存 */}
+                {editingOrder?.id && (
+                  <button
+                    type="button"
+                    onClick={() => persistCollateral(collateralAssets)}
+                    disabled={saveCollateralMutation.isPending}
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-60"
+                    style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+                  >{saveCollateralMutation.isPending ? '保存中…' : '保存担保货币'}</button>
+                )}
+                </>
+                )}
 
                 {/* 担保价值和担保缺口实时预览 */}
                 {computedCollateralValue !== null && (
@@ -3171,7 +3224,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       )}
                       {displayConfig.showOwnerName && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#F0FDF4', color: '#16A34A' }}>
-                          {editingOrder?.userName || '订单所有者'}
+                          {(() => {
+                            if (formData.userId > 0) {
+                              const allMembers = ((ledgerData as any)?.members || []) as any[];
+                              const m = allMembers.find((mm: any) => mm.userId === formData.userId);
+                              return m?.username || m?.nickname || m?.name || editingOrder?.userName || `用户${formData.userId}`;
+                            }
+                            return editingOrder?.userName || '订单所有者';
+                          })()}
                         </span>
                       )}
                       {formData.tags && formData.tags.length > 0 && formData.tags.map((tag: string, i: number) => (
@@ -3425,12 +3485,58 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                   : computedCollateralValue - rawAccrued + previewPaidInterest;
                                 const sufficient = exp >= 0;
                                 return (
+                                  <>
                                   <div className="flex items-center justify-between mt-0.5">
-                                    <span className="text-gray-400">担保缺口</span>
+                                    <div className="flex items-center gap-0.5">
+                                      <span className="text-gray-400">担保缺口</span>
+                                      <button
+                                        type="button"
+                                        onClick={e => { e.stopPropagation(); setShowPreviewCollateralInfo(true); }}
+                                        className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                                        style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                                      >?</button>
+                                    </div>
                                     <span className="font-medium" style={{ color: sufficient ? '#4B5563' : '#EF4444' }}>
                                       {sufficient ? '超过100%' : `${exp.toLocaleString(undefined, { maximumFractionDigits: 0 })} U`}
                                     </span>
                                   </div>
+                                  {showPreviewCollateralInfo && (
+                                    <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowPreviewCollateralInfo(false)}>
+                                      <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                                        <div className="flex items-center justify-between mb-3">
+                                          <span className="text-sm font-bold" style={{ color: '#1A2340' }}>担保缺口计算说明</span>
+                                          <button onClick={() => setShowPreviewCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
+                                        </div>
+                                        <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
+                                          <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                                            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动盈亏</div>
+                                            <div>= 当前市值 − 计息基数（正数为浮盈，负数为亏损）</div>
+                                            <div className="mt-1 font-mono">
+                                              {floatPnl !== null
+                                                ? <><span style={{ color: '#3B82F6' }}>= {currentVal!.toFixed(2)} − {interestBaseNum.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} U{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
+                                                : <span className="text-gray-400">当前市值暂无实时价格，暂无法计算浮动盈亏</span>
+                                              }
+                                            </div>
+                                          </div>
+                                          <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                                            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 担保价值</div>
+                                            <div className="font-mono mt-1" style={{ color: '#3B82F6' }}>{(computedCollateralValue ?? 0).toFixed(2)} U</div>
+                                          </div>
+                                          <div className="p-2.5 rounded-lg" style={{ background: sufficient ? '#F0FDF4' : '#FFF1F1' }}>
+                                            <div className="font-semibold mb-1" style={{ color: sufficient ? '#16A34A' : '#DC2626' }}>③ 风险敞口</div>
+                                            <div>担保物 + 浮动盈亏 − 待结利息 + 已结利息（正数充足，负数缺口）</div>
+                                            <div className="mt-1 font-mono">
+                                              <span style={{ color: '#3B82F6' }}>= {(computedCollateralValue ?? 0).toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ' + ---（暂无实时价）'} − {rawAccrued.toFixed(2)} + {previewPaidInterest.toFixed(2)} = <strong style={{ color: sufficient ? '#16A34A' : '#DC2626' }}>{exp >= 0 ? '+' : ''}{exp.toFixed(2)} U</strong></span>
+                                            </div>
+                                            <div className="mt-1.5" style={{ color: sufficient ? '#16A34A' : '#DC2626' }}>
+                                              {sufficient ? `担保物充足，还有 ${exp.toFixed(2)} U 的余量空间` : `担保物不足，还需补充 ${Math.abs(exp).toFixed(2)} U 才能覆盖风险`}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                  </>
                                 );
                               })()}
                               {/* 保证金率：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100% */}
@@ -3450,15 +3556,53 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                 const previewAlertThreshold = marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? parseFloat(marginAlertThreshold) : null;
                                 const previewIsAlerting = previewAlertThreshold !== null && (marginRatio * 100) < previewAlertThreshold;
                                 return (
+                                  <>
                                   <div className="flex items-center justify-between mt-0.5">
                                     <div className="flex items-center gap-1">
                                       <span className="text-gray-400 shrink-0">保证金率</span>
                                       {previewIsAlerting && (
                                         <span className="inline-flex items-center justify-center w-3 h-3 rounded-full text-white text-[7px] font-bold flex-shrink-0" style={{ background: '#EF4444', lineHeight: 1 }}>❗</span>
                                       )}
+                                      <button
+                                        type="button"
+                                        onClick={e => { e.stopPropagation(); setShowPreviewMarginInfo(true); }}
+                                        className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                                        style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                                      >?</button>
                                     </div>
                                     <span className="font-bold" style={{ color: previewIsAlerting ? '#EF4444' : marginColor }}>{(marginRatio * 100).toFixed(1)}%{previewIsAlerting ? ' ⚠' : ''}</span>
                                   </div>
+                                  {showPreviewMarginInfo && (
+                                    <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowPreviewMarginInfo(false)}>
+                                      <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                                        <div className="flex items-center justify-between mb-3">
+                                          <span className="text-sm font-bold" style={{ color: '#1A2340' }}>保证金率计算说明</span>
+                                          <button onClick={() => setShowPreviewMarginInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
+                                        </div>
+                                        <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
+                                          <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                                            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 公式</div>
+                                            <div>保证金率 = (担保物市值 + 浮动盈亏 − 应付利息 + 已付利息) ÷ 计息基数 × 100%</div>
+                                            <div className="mt-1 font-mono text-[10px]">
+                                              <span style={{ color: '#3B82F6' }}>= ({(computedCollateralValue ?? 0).toFixed(2)}{floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ''} − {rawAccrued.toFixed(2)} + {previewPaidInterest.toFixed(2)}) ÷ {base.toFixed(2)} × 100% = </span>
+                                              <strong style={{ color: marginColor }}>{(marginRatio * 100).toFixed(1)}%</strong>
+                                            </div>
+                                          </div>
+                                          <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                                            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 担保物当前市值</div>
+                                            <div className="font-mono mt-1" style={{ color: '#3B82F6' }}>{(computedCollateralValue ?? 0).toFixed(2)} U</div>
+                                          </div>
+                                          {previewAlertThreshold !== null && (
+                                            <div className="p-2.5 rounded-lg" style={{ background: previewIsAlerting ? '#FFF1F1' : '#F0FDF4' }}>
+                                              <div className="font-semibold mb-1" style={{ color: previewIsAlerting ? '#DC2626' : '#16A34A' }}>③ 预警阈值</div>
+                                              <div>当前设定预警阈值为 {previewAlertThreshold}%，{previewIsAlerting ? '保证金率已低于阈值，触发预警' : '保证金率高于阈值，暂无预警'}</div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                  </>
                                 );
                               })()}
                               {/* 收益分成区（右栏下半） */}

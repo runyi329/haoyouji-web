@@ -16136,7 +16136,13 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS settled_at DATETIME DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS lent_out_assets TEXT DEFAULT NULL`);
         } catch(e) {}
+        try {
                 await conn.execute(`UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
+        } catch (e: any) {
+          console.error('[FUO-DEBUG] UPDATE失败:', e?.message, '| SQL:', `UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, '| VALS:', JSON.stringify(updateVals));
+          await conn.end();
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '保存失败: ' + (e?.message || '未知错误') });
+        }
         // display_config 联动：同步到同账本所有订单（含跨角色订单）
         if (input.displayConfig !== undefined) {
           const dcJson = input.displayConfig ? JSON.stringify(input.displayConfig) : null;
@@ -18574,12 +18580,12 @@ ${klinesSummary}
           const placeholders = memberUserIds.map(() => '?').join(',');
           const [rows] = await (conn as any).execute(
             `SELECT ro.id, ro.amount, ro.currency,
-                    COALESCE(ro.completed_at, ro.updated_at, ro.created_at) as eventTime,
+                    COALESCE(ro.completed_at, ro.created_at) as eventTime,
                     u.name as userName, u.username
              FROM recharge_orders ro
              LEFT JOIN users u ON u.id = ro.user_id
              WHERE ro.user_id IN (${placeholders}) AND ro.status='completed'
-             ORDER BY COALESCE(ro.completed_at, ro.updated_at, ro.created_at) DESC LIMIT 3`,
+             ORDER BY COALESCE(ro.completed_at, ro.created_at) DESC LIMIT 3`,
             memberUserIds
           );
           rechargeRows = rows as any[];
@@ -25806,12 +25812,12 @@ export const adminFeatureRouter = router({
           const placeholders = memberUserIds.map(() => '?').join(',');
           const [rows] = await (conn as any).execute(
             `SELECT ro.id, ro.amount, ro.currency,
-                    COALESCE(ro.completed_at, ro.updated_at, ro.created_at) as eventTime,
+                    COALESCE(ro.completed_at, ro.created_at) as eventTime,
                     u.name as userName, u.username
              FROM recharge_orders ro
              LEFT JOIN users u ON u.id = ro.user_id
              WHERE ro.user_id IN (${placeholders}) AND ro.status='completed'
-             ORDER BY COALESCE(ro.completed_at, ro.updated_at, ro.created_at) DESC LIMIT 3`,
+             ORDER BY COALESCE(ro.completed_at, ro.created_at) DESC LIMIT 3`,
             memberUserIds
           );
           rechargeRows = rows as any[];

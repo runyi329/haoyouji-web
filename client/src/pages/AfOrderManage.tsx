@@ -565,7 +565,7 @@ export default function AfOrderManage() {
                 return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
               });
               if (coins.length === 0) return null;
-              const COIN_COLOR: Record<string, string> = { ETH: 'text-blue-300', BTC: 'text-orange-300', SOL: 'text-green-300' };
+              const COIN_COLOR: Record<string, string> = { ETH: 'text-blue-300', BTC: 'text-orange-300', SOL: 'text-purple-300' };
               // 持仓人员（去重，排除赠单）
               const holderSet = new Set<string>();
               holdingOrders.filter((o: any) => !o.isGift).forEach((o: any) => {
@@ -1110,7 +1110,7 @@ export default function AfOrderManage() {
             {(() => {
               const COIN_ORDER = ['ETH', 'BTC', 'SOL'];
               const COIN_DECIMALS: Record<string, number> = { SOL: 1, BTC: 4, ETH: 2 };
-              const COIN_COLORS: Record<string, string> = { ETH: '#3b82f6', BTC: '#f59e0b', SOL: '#10b981' };
+              const COIN_COLORS: Record<string, string> = { ETH: '#3b82f6', BTC: '#f59e0b', SOL: '#a855f7' };
               // 按币种分组
               const coinMap = new Map<string, any[]>();
               (searchedOrders || []).forEach((order: any) => {
@@ -1351,7 +1351,16 @@ export default function AfOrderManage() {
             })()}
           </div>
         ) : (
-          <div className="space-y-4 pb-6">
+          <div className="pb-6">
+            {/* 表头 */}
+            <div
+              className="grid items-center bg-gray-100 border border-gray-300 text-[11px] font-semibold text-gray-600"
+              style={{ gridTemplateColumns: '64px 1fr 56px' }}
+            >
+              <div className="px-1 py-1.5 text-center border-r border-gray-300">日期</div>
+              <div className="px-2 py-1.5 border-r border-gray-300">持仓明细</div>
+              <div className="px-1 py-1.5 text-center">展开</div>
+            </div>
             {(() => {
               // 分组逻辑：
               // - 持仓中（status=completed）：按登记时间 confirmedAt 分组
@@ -1419,19 +1428,22 @@ export default function AfOrderManage() {
                   <div key={dateKey}>
                     {/* 日期分组标题行 */}
                     {(() => {
-                      // 月-日简写
-                      const shortDate = dateKey.slice(5); // "05-28"
+                      // 日期格式：「6月X号」（月份中文，号码数字）
+                      const dateParts = dateKey.split('-'); // ["2026","05","28"]
+                      const shortDate = dateParts.length === 3
+                        ? `${parseInt(dateParts[1], 10)}月${parseInt(dateParts[2], 10)}号`
+                        : dateKey;
                       // 正单数量（非赠单，过滤掉已撤单）
                       const normalCount = activeOrders.filter((o: any) => !o.isGift).length;
                       // 赠单数量：独立显示的赠单行 + 嵌套在正单giftOrders里的赠单（过滤掉已撤单）
                       const directGiftCount = activeOrders.filter((o: any) => o.isGift === true || o.isGift === 1).length;
                       const nestedGiftCount = activeOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[] || []).length), 0);
                       const giftCount = directGiftCount + nestedGiftCount;
-                      // 各币种简写和颜色：ETH→E(蓝色) BTC→B(橙色) SOL→S(绿色)
+                      // 各币种简写和颜色：ETH→E(蓝色) BTC→B(橙色) SOL→S(紫色)
                       const COIN_CONFIG: Record<string, { short: string; color: string }> = {
-                        ETH: { short: 'E', color: 'text-blue-500' },
-                        BTC: { short: 'B', color: 'text-orange-400' },
-                        SOL: { short: 'S', color: 'text-green-500' },
+                        ETH: { short: 'E', color: '#3b82f6' },
+                        BTC: { short: 'B', color: '#f59e0b' },
+                        SOL: { short: 'S', color: '#a855f7' },
                       };
                       // 按 ETH→BTC→SOL 顺序排列
                       const COIN_ORDER = ['ETH', 'BTC', 'SOL'];
@@ -1445,7 +1457,7 @@ export default function AfOrderManage() {
                           return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
                         })
                         .map(([c, q]) => {
-                          const cfg = COIN_CONFIG[c] || { short: c, color: 'text-gray-500' };
+                          const cfg = COIN_CONFIG[c] || { short: c, color: '#6b7280' };
                           const qNum = q as number;
                           const qStr = fmtCoinQty(c, qNum);
                           const effNum = coinQtyEffective[c] ?? qNum;
@@ -1459,31 +1471,30 @@ export default function AfOrderManage() {
                       return (
                         <button
                           onClick={() => toggleDate(dateKey)}
-                          className={`w-full flex items-center justify-between px-3 py-2 mb-1.5 rounded-xl transition-colors ${
-                            allSold
-                              ? 'bg-gray-100 border border-gray-200 hover:bg-gray-150'
-                              : 'bg-blue-50 border border-blue-100 hover:bg-blue-100'
+                          className={`w-full grid items-stretch text-left transition-colors border-x border-b border-gray-300 hover:bg-gray-50 ${
+                            allSold ? 'bg-gray-50' : 'bg-white'
                           }`}
+                          style={{ gridTemplateColumns: '64px 1fr 56px' }}
                         >
-                          {/* 左侧：日期 */}
-                          <span className={`text-sm font-bold shrink-0 mr-2 ${allSold ? 'text-gray-400' : 'text-blue-700'}`}>{shortDate}</span>
-                          {/* 右侧：两行内容 */}
-                          <div className="flex flex-col gap-0.5 flex-1 min-w-0 overflow-hidden">
-                            {/* 第一行：几单 / 赠单 / 金额 */}
+                          {/* 列一：日期 */}
+                          <div className={`flex items-center justify-center px-1 py-2 border-r border-gray-300 text-sm font-bold ${allSold ? 'text-gray-400' : 'text-gray-900'}`}>
+                            {shortDate}
+                          </div>
+                          {/* 列二：持仓币种 + 金额/单数 两行 */}
+                          <div className="flex flex-col justify-center px-2 py-1.5 border-r border-gray-300 min-w-0 overflow-hidden">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-blue-400'}`}>{normalCount}单</span>
-                              {giftCount > 0 && <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-orange-400'}`}>{giftCount}赠</span>}
-                              <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-gray-600'}`}>{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
+                              <span className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : 'text-gray-700'}`}>{normalCount}单</span>
+                              {giftCount > 0 && <span className="text-[11px] shrink-0" style={{ color: allSold ? '#9ca3af' : '#f59e0b' }}>{giftCount}赠</span>}
+                              <span className={`text-[11px] shrink-0 font-medium ${allSold ? 'text-gray-400' : 'text-gray-900'}`}>{totalAmount >= 10000 ? (totalAmount/10000).toFixed(1)+'万' : totalAmount.toFixed(0)}U</span>
                             </div>
-                            {/* 第二行：币种数量 + 折后数量 */}
                             {sortedCoinParts.length > 0 && (
-                              <div className="flex items-center gap-1.5 flex-wrap">
+                              <div className="flex items-center gap-2 flex-wrap mt-0.5">
                                 {sortedCoinParts.map(({ short, color, qStr, effStr, pctStr }) => (
-                                  <span key={short} className={`text-[11px] shrink-0 ${allSold ? 'text-gray-400' : color}`}>
+                                  <span key={short} className="text-[11px] shrink-0" style={{ color: allSold ? '#9ca3af' : color }}>
                                     {short}:{qStr}
                                     {effStr && (
                                       <span>
-                                        ({effStr}<span className="text-gray-400 ml-0.5">{pctStr}</span>)
+                                        (<span className="font-bold" style={{ color: allSold ? '#9ca3af' : color }}>{effStr}</span><span className="text-gray-400 ml-0.5">{pctStr}</span>)
                                       </span>
                                     )}
                                   </span>
@@ -1491,7 +1502,10 @@ export default function AfOrderManage() {
                               </div>
                             )}
                           </div>
-                          <span className={`transition-transform duration-200 shrink-0 ml-1 ${allSold ? 'text-gray-400' : 'text-blue-400'} ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                          {/* 列三：展开箭头 */}
+                          <div className="flex items-center justify-center px-1 py-2">
+                            <span className={`transition-transform duration-200 text-gray-900 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+                          </div>
                         </button>
                       );
                     })()}
@@ -1517,7 +1531,7 @@ export default function AfOrderManage() {
               const orderNo = `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
 
               return (
-                <div key={order.id} className={`rounded-2xl p-4 shadow-sm mb-3 ${allSold ? 'bg-gray-50' : 'bg-white'}`}>
+                <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">
                   {/* 订单编号行 */}
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>

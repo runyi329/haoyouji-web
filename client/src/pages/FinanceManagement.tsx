@@ -474,6 +474,15 @@ function FinanceOrderCard({
               <Pencil className="w-3.5 h-3.5" />
             </button>
           )}
+          {isAdmin && !order._isParticipant && !order._fromFunder && (
+            <button
+              onClick={() => setConfirmDeleteId(order.id)}
+              className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+              title="删除订单"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
