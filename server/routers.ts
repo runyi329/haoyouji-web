@@ -15849,10 +15849,12 @@ ${klinesSummary}
             }
           } catch (_e) { /* 如果表不存在则忽略 */ }
         }
-        // 为参与方订单(_isParticipant)组装 participantInfo：取该用户在本订单的各自利率/计息基数/起息日
+        // 为参与方订单组装 participantInfo：取该用户(targetUserId)在本订单的各自利率/计息基数/起息日
         // 用于共享订单卡片按参与者各自利率显示「待结利息(年化X%)」
+        // 注意：不能只依赖 _isParticipant 标记——管理员/查看视角分支下 finance 订单不会被打标记，
+        // 因此这里对所有订单统一查 targetUserId 在该订单的参与方记录，查到即挂。
         try {
-          const participantOrderIds = allOrders.filter((o: any) => o._isParticipant).map((o: any) => Number(o.id));
+          const participantOrderIds = allOrders.map((o: any) => Number(o.id));
           if (participantOrderIds.length > 0) {
             const piPlaceholders = participantOrderIds.map(() => '?').join(',');
             const piConn = await getLedgerDb();

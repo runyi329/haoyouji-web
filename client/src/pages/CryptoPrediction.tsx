@@ -3106,7 +3106,9 @@ export default function CryptoPrediction() {
                   const renderMyCard = (order: any) => {
                   const paidInterest = (financeInterestSummary as any)?.[order.id] ?? 0;
                   const annualRate = parseFloat(order.interest_rate_annual || order.annualInterestRate || '0');
-                  const isNegativeRate = true; // 融资付息页面用户均为付息方，利息一律显示为负数
+                  // 利率符号约定：负数=付息(绿)，正数=收息(红)。
+                  // 硬编码：TT0201、YY0720 强制显示为红色正号（收息）。
+                  const isNegativeRate = ['TT0201', 'YY0720'].includes(order.order_no) ? false : annualRate < 0;
                   // 利息货币与约等于换算（用 interest_rate_currency 决定主显示单位，与后端P095一致）
                   const _rateCur = order.interest_rate_currency || 'USDT';
                   const _interestUnit = _rateCur === 'CNY' ? '元' : 'U';
@@ -3321,9 +3323,9 @@ export default function CryptoPrediction() {
                                   <div className="flex items-baseline gap-0.5">
                                     <span
                                       className="text-2xl font-bold tabular-nums leading-tight"
-                                      style={{ color: unpaidInterest === 0 ? '#1A2340' : '#059669', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
+                                      style={{ color: unpaidInterest === 0 ? '#1A2340' : (isNegativeRate ? '#059669' : '#DC2626'), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                                     >
-                                      {unpaidInterest === 0 ? '' : '-'}{unpaidInterest.toFixed(2)}
+                                      {unpaidInterest === 0 ? '' : (isNegativeRate ? '-' : '+')}{unpaidInterest.toFixed(2)}
                                     </span>
                                     <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{_interestUnit}</span>
                                   </div>
@@ -3673,15 +3675,26 @@ export default function CryptoPrediction() {
                           {(() => {
                           const renderSharedCard = (order: any) => {
                             const paidInterest = (financeInterestSummary as any)?.[order.id] ?? 0;
-                            const annualRate = parseFloat(order.interest_rate_annual || order.annualInterestRate || '0');
-                            const isNegativeRate = true;
+                            // 共享订单（参与者视角）优先使用管理员为该参与者单独设置的利率/计息基数/起息日
+                            const _pi = order.participantInfo || null;
+                            const annualRate = parseFloat(
+                              (_pi?.commissionRate ?? order.interest_rate_annual ?? order.annualInterestRate ?? '0')
+                            );
+                            // 利率符号约定：负数=付息(绿)，正数=收息(红)。
+                            // 参与者优先看自己的专属利率 commissionRate，回退到订单利率。
+                            const _signRateRaw = parseFloat(
+                              (_pi?.commissionRate ?? order.interest_rate_annual ?? order.annualInterestRate ?? '0')
+                            );
+                            // 硬编码：TT0201、YY0720 强制显示为红色正号（收息）。
+                            const isNegativeRate = ['TT0201', 'YY0720'].includes(order.order_no) ? false : _signRateRaw < 0;
                             const _rateCur = order.interest_rate_currency || 'USDT';
                             const _interestUnit = _rateCur === 'CNY' ? '元' : 'U';
                             const _altUnit = _rateCur === 'CNY' ? 'U' : '元';
                             const _convertAlt = (val: number): number => _rateCur === 'CNY' ? val / 7 : val * 7;
-                            const interestBaseRaw = parseFloat(order.interest_base || order.principal || '0');
+                            const interestBaseRaw = parseFloat((_pi?.commissionBase ?? order.interest_base ?? order.principal ?? '0'));
                             const interestBase = order.order_no === 'FG6127' ? interestBaseRaw * 2 : interestBaseRaw;
-                            const startDate = order.interest_start_date || order.startDate ? String(order.interest_start_date || order.startDate) : null;
+                            const _startRaw = _pi?.commissionStartDate ?? order.interest_start_date ?? order.startDate;
+                            const startDate = _startRaw ? String(_startRaw) : null;
                             const coinQty = parseFloat(order.buy_quantity || order.coinQuantity || '0');
                             const buyPrice = parseFloat(order.buy_price || '0');
                             const buyValue = parseFloat(order.amount || '0');
@@ -3778,9 +3791,64 @@ export default function CryptoPrediction() {
                                           <>
                                             <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
                                               <span className="text-[10px]" style={{ color: '#3B82F6' }}>待结利息</span>
+                                              {annualRate !== 0 && <span className="text-[10px] text-gray-400">(年化 {Math.abs(annualRate)}%)</span>}
+                                              {annualRate !== 0 && (
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const m = document.getElementById(`interest_modal_${order.id}`);
+                                                    if (m) m.style.display = 'flex';
+                                                  }}
+                                                  className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-white text-[9px] font-bold flex-shrink-0"
+                                                  style={{ background: '#9CA3AF', lineHeight: 1 }}
+                                                >?</button>
+                                              )}
                                             </div>
+                                            {annualRate !== 0 && (
+                                              <div
+                                                id={`interest_modal_${order.id}`}
+                                                style={{ display: 'none', position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.45)', alignItems: 'flex-end', justifyContent: 'center' }}
+                                                onClick={(e) => { if (e.target === e.currentTarget) (e.currentTarget as HTMLElement).style.display = 'none'; }}
+                                              >
+                                                <div style={{ width: '100%', background: '#fff', borderRadius: '16px 16px 0 0', padding: '20px 16px 32px' }}>
+                                                  <div className="flex items-center justify-between mb-4">
+                                                    <span className="font-semibold text-sm" style={{ color: '#1A2340' }}>待结利息计算过程</span>
+                                                    <button
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const m = document.getElementById(`interest_modal_${order.id}`);
+                                                        if (m) m.style.display = 'none';
+                                                      }}
+                                                      className="text-gray-400 text-lg font-light leading-none"
+                                                      style={{ lineHeight: 1 }}
+                                                    >×</button>
+                                                  </div>
+                                                  <div className="space-y-2 text-sm" style={{ color: '#6B7280' }}>
+                                                    <div className="p-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                                                      <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>计息基数</div>
+                                                      <div style={{ color: '#1F2937' }}><span style={{ color: '#D97706', fontWeight: 600 }}>{interestBase.toLocaleString(undefined, { maximumFractionDigits: 2 })} {_interestUnit}</span></div>
+                                                    </div>
+                                                    <div className="p-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                                                      <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>年化利率（您的专属利率）</div>
+                                                      <div style={{ color: '#1F2937' }}><span style={{ color: '#D97706', fontWeight: 600 }}>{Math.abs(annualRate)}%</span></div>
+                                                    </div>
+                                                    <div className="p-3 rounded-lg" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB' }}>
+                                                      <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>计息时长</div>
+                                                      <div style={{ color: '#1F2937' }}><span style={{ color: '#D97706', fontWeight: 600 }}>{(elapsedSeconds / (24 * 3600)).toFixed(2)} 天</span></div>
+                                                    </div>
+                                                    <div className="p-3 rounded-lg" style={{ background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                                                      <div className="text-xs mb-1" style={{ color: '#9CA3AF' }}>待结利息 = 计息基数 × 年化利率 ÷ 365 × 计息天数</div>
+                                                      <div style={{ color: '#059669', fontWeight: 700, fontSize: '15px' }}>{interestBase.toLocaleString(undefined, { maximumFractionDigits: 2 })} × {Math.abs(annualRate)}% ÷ 365 × {(elapsedSeconds / (24 * 3600)).toFixed(2)} = {unpaidInterest.toFixed(2)} {_interestUnit}</div>
+                                                    </div>
+                                                    {paidInterest > 0 && (
+                                                      <div className="text-xs" style={{ color: '#9CA3AF' }}>注：已结利息 {paidInterest.toFixed(2)} {_interestUnit}，当前待结为扣除后的余额。</div>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            )}
                                             <div className="flex items-baseline gap-0.5">
-                                              <span className="text-2xl font-bold tabular-nums leading-tight"                                       style={{ color: unpaidInterest === 0 ? '#1A2340' : '#059669', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{unpaidInterest === 0 ? '' : '-'}{unpaidInterest.toFixed(2)}</span>
+                                              <span className="text-2xl font-bold tabular-nums leading-tight"                                       style={{ color: unpaidInterest === 0 ? '#1A2340' : (isNegativeRate ? '#059669' : '#DC2626'), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{unpaidInterest === 0 ? '' : (isNegativeRate ? '-' : '+')}{unpaidInterest.toFixed(2)}</span>
                                               <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>{_interestUnit}</span>
                                             </div>
                                             <div className="text-xs font-medium leading-tight mb-1" style={{ color: '#4B5563' }}>≈{_convertAlt(unpaidInterest).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {_altUnit}</div>
