@@ -46,6 +46,8 @@ export const ALL_FEATURE_DICT: FeatureDef[] = [
   { key: "staff_profile", name: "员工档案", icon: `${ICON_BASE}/yuangong_dangan.webp`, route: "/yaban/staff" },
   { key: "dental_shop", name: "牙科商店", icon: `${ICON_BASE}/yake_shangdian.webp`, route: "/yaban/shop" },
   { key: "ai_valuation", name: "AI估值", icon: `${ICON_BASE}/ai_guzhi.webp`, route: "/yaban/ai-valuation" },
+  // 客户登记表（图标暂用 CDN 直链，后续迁移至 COS icons/yaban/kehu_dengji.webp）
+  { key: "customer_register", name: "客户登记表", icon: "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/MjkgZpDMsZ9UBDF2bQVNsp/customer_register_icon-MziUUywrhEip8GvtTwRUeG.webp", route: "/yaban/customer-register" },
 ];
 
 // 首页快捷位最大数量（末位固定「更多」入口，不计入此数）

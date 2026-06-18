@@ -464,7 +464,7 @@ export default function Profile() {
     ] : []),
     { id: "change-password", icon: Shield, label: "修改密码", color: "bg-indigo-50 text-indigo-600", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
     { id: "notifications", icon: Bell, label: "消息通知", color: "bg-[#FAF3ED] text-[#CBA471]", badge: null, onClick: () => toast("功能开发中") },
-    { id: "privacy", icon: Settings, label: "隐私设置", color: "bg-slate-100 text-slate-600", badge: null, onClick: () => toast("功能开发中") },
+    { id: "privacy", icon: Settings, label: "隐私设置", color: "bg-slate-100 text-slate-600", badge: null, onClick: () => { if (user.role === "super_admin") { navigate("/admin/projects"); } else { toast("功能开发中"); } } },
   ];
 
   // 帮助与支持功能

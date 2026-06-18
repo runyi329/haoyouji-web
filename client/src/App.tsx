@@ -431,6 +431,7 @@ function Router() {
         <Route path="/admin/product/new" component={ProductPublish} />
         <Route path="/admin/product/:id/edit" component={ProductPublish} />
         <Route path="/admin/ai-monitor" component={lazy(() => import("./pages/admin/AiTokenMonitor"))} />
+        <Route path="/admin/projects" component={lazy(() => import("./pages/admin/ProjectConsole"))} />
         <Route path="/payment/result" component={PaymentResult} />
 
         {/* 卡券相关页面 */}
@@ -732,6 +733,7 @@ function Router() {
         <Route path="/yaban/features" component={lazy(() => import("./pages/yaban/YabanFeatures"))} />
         <Route path="/yaban/messages" component={YabanMessages} />
         <Route path="/yaban/shop" component={YabanShop} />
+        <Route path="/yaban/customer-register" component={lazy(() => import("./pages/yaban/YabanCustomerRegister"))} />
         <Route path="/yaban/shop/product/:id" component={lazy(() => import("./pages/yaban/YabanShopProduct"))} />
         <Route path="/yaban/shop/cart" component={lazy(() => import("./pages/yaban/YabanShopCart"))} />
         <Route path="/yaban/shop/checkout" component={lazy(() => import("./pages/yaban/YabanShopCheckout"))} />
