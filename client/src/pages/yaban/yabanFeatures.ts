@@ -27,7 +27,7 @@ export const ALL_FEATURE_DICT: FeatureDef[] = [
   { key: "clinic_shift", name: "诊所排班", icon: `${ICON_BASE}/zhensuo_paiban.webp`, route: "/yaban/clinic-shift" },
   { key: "patients", name: "顾客档案", icon: `${ICON_BASE}/huanzhe.webp`, route: "/yaban/patients" },
   { key: "followup", name: "随访", icon: `${ICON_BASE}/suifang.webp`, route: "/yaban/followup" },
-  { key: "ops_report", name: "运营报表", icon: `${ICON_BASE}/yunying_baobiao.webp`, route: "" },
+  { key: "ops_report", name: "运营报表", icon: `${ICON_BASE}/yunying_baobiao.webp`, route: "/yaban/ops-report" },
   { key: "inventory", name: "库存", icon: `${ICON_BASE}/kucun.webp`, route: "/yaban/inventory" },
   // —— 全部功能 ——
   { key: "attendance", name: "考勤打卡", icon: `${ICON_BASE}/kaoqin_daka.webp`, route: "" },

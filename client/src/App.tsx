@@ -767,6 +767,7 @@ function Router() {
         <Route path="/yaban/schedule/detail/:id" component={lazy(() => import("./pages/yaban/YabanScheduleDetail"))} />
         <Route path="/yaban/schedule/create" component={lazy(() => import("./pages/yaban/YabanScheduleCreate"))} />
         <Route path="/yaban/clinic-shift" component={lazy(() => import("./pages/yaban/YabanClinicShift"))} />
+        <Route path="/yaban/ops-report" component={lazy(() => import("./pages/yaban/OpsReport"))} />
         <Route path="/yaban/patient/create" component={YabanPatientCreate} />
         <Route path="/yaban/patients" component={YabanPatientList} />
         <Route path="/yaban/patient/:id/profile" component={lazy(() => import("./pages/yaban/YabanPatientProfile"))} />
