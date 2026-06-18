@@ -347,6 +347,8 @@ interface FunderOrderCardProps {
   handleAddParticipant: (role: any) => void;
   handleSaveParticipants: (orderId: number) => void;
   saveParticipantsMutation: any;
+  participantsEditMode: boolean;
+  setParticipantsEditMode: (v: boolean) => void;
 }
 
 function FunderOrderCard({
@@ -384,6 +386,8 @@ function FunderOrderCard({
   handleAddParticipant,
   handleSaveParticipants,
   saveParticipantsMutation,
+  participantsEditMode,
+  setParticipantsEditMode,
 }: FunderOrderCardProps) {
   const { data: _cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
   const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "7.2") || 7.2;
@@ -1060,21 +1064,65 @@ function FunderOrderCard({
               <Users2 className="w-3.5 h-3.5" />
               多视角订单参与方
             </div>
-            <div className="flex gap-1">
-              {roleOptions.map(r => (
-                <button
-                  key={r.value}
-                  onClick={() => handleAddParticipant(r.value)}
-                  className="px-2 py-0.5 text-xs rounded-full font-medium border"
-                  style={{ borderColor: r.color, color: r.color, backgroundColor: `${r.color}10` }}
-                >
-                  +{r.label}
-                </button>
-              ))}
-            </div>
+            {participantsEditMode ? (
+              <div className="flex gap-1">
+                {roleOptions.map(r => (
+                  <button
+                    key={r.value}
+                    onClick={() => handleAddParticipant(r.value)}
+                    className="px-2 py-0.5 text-xs rounded-full font-medium border"
+                    style={{ borderColor: r.color, color: r.color, backgroundColor: `${r.color}10` }}
+                  >
+                    +{r.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <button
+                onClick={() => setParticipantsEditMode(true)}
+                className="px-2.5 py-0.5 text-xs rounded-full font-medium border flex items-center gap-1"
+                style={{ borderColor: '#059669', color: '#059669', backgroundColor: '#ECFDF5' }}
+              >
+                <Pencil className="w-3 h-3" />编辑
+              </button>
+            )}
           </div>
           {participantsLoading ? (
             <div className="text-center py-3 text-xs text-gray-400">加载中...</div>
+          ) : !participantsEditMode ? (
+            /* 只读态：展示已保存的参与方（成员、角色、利率%、收/付） */
+            participantsList.length === 0 ? (
+              <div className="text-center py-3 text-xs text-gray-400 bg-gray-50 rounded-xl">暂无参与方配置</div>
+            ) : (
+              <div className="space-y-2">
+                {participantsList.map((p, idx) => {
+                  const roleOpt = roleOptions.find(r => r.value === p.role);
+                  const rateNum = parseFloat(p.rate || '');
+                  const hasRate = isFinite(rateNum);
+                  const isNeg = hasRate && rateNum < 0;
+                  const absVal = hasRate ? Math.abs(rateNum) : null;
+                  return (
+                    <div key={idx} className="bg-white border border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: roleOpt?.color || '#6B7280' }} />
+                        <span className="text-xs font-medium text-gray-700 truncate">{p.displayName || `用户${p.userId}`}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: `${roleOpt?.color}18`, color: roleOpt?.color }}>{roleOpt?.label || p.role}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {hasRate ? (
+                          <>
+                            <span className="text-xs font-semibold tabular-nums" style={{ color: isNeg ? '#059669' : '#DC2626' }}>{absVal}%</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold" style={isNeg ? { backgroundColor: '#ECFDF5', color: '#059669' } : { backgroundColor: '#FEF2F2', color: '#DC2626' }}>{isNeg ? '付' : '收'}</span>
+                          </>
+                        ) : (
+                          <span className="text-[10px] text-gray-400">未设利率</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
           ) : participantsList.length === 0 ? (
             <div className="text-center py-3 text-xs text-gray-400 bg-gray-50 rounded-xl">
               暂无参与方配置，点击上方按钮添加
@@ -1152,14 +1200,16 @@ function FunderOrderCard({
               })}
             </div>
           )}
-          <button
-            onClick={() => handleSaveParticipants(order.id)}
-            disabled={saveParticipantsMutation.isPending}
-            className="mt-3 w-full py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-50"
-            style={{ background: 'linear-gradient(135deg, #059669, #10B981)' }}
-          >
-            {saveParticipantsMutation.isPending ? '保存中...' : '保存参与方配置'}
-          </button>
+          {participantsEditMode && (
+            <button
+              onClick={() => handleSaveParticipants(order.id)}
+              disabled={saveParticipantsMutation.isPending}
+              className="mt-3 w-full py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #059669, #10B981)' }}
+            >
+              {saveParticipantsMutation.isPending ? '保存中...' : '保存参与方配置'}
+            </button>
+          )}
         </div>
       )}
 
@@ -1349,6 +1399,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [showInterestDatePicker, setShowInterestDatePicker] = useState(false);
   // 多视角订单参与方相关 state
   const [showParticipantsPanel, setShowParticipantsPanel] = useState<number | null>(null); // 当前展开参与方面板的订单id
+  const [participantsEditMode, setParticipantsEditMode] = useState(false); // 参与方面板是否处于编辑态（已保存默认只读）
   type ParticipantRole = 'funder' | 'borrower' | 'broker';
   type ParticipantItem = { userId: number; displayName: string; role: ParticipantRole; sortOrder: number; rate: string };
   type LedgerMember = { userId: number; displayName: string; memberRole: string };
@@ -1762,6 +1813,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         rate: (p.commission_rate != null && p.commission_rate !== '') ? String(p.commission_rate) : (p.rate != null ? String(p.rate) : ''),
       }));
       setParticipantsList(mapped);
+      // 已有保存记录 → 默认只读态；从未配置过 → 直接进编辑态方便首次添加
+      setParticipantsEditMode(mapped.length === 0);
       const mappedMembers = (result.members || []).map((m: any) => ({
         userId: m.userId,
         displayName: m.username || m.nickname || m.userName || `用户${m.userId}`,
@@ -1771,6 +1824,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     } catch (e) {
       toast.error('加载参与方失败');
       setParticipantsList([]);
+      setParticipantsEditMode(true);
     } finally {
       setParticipantsLoading(false);
     }
@@ -2242,6 +2296,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     handleAddParticipant={handleAddParticipant}
                     handleSaveParticipants={handleSaveParticipants}
                     saveParticipantsMutation={saveParticipantsMutation}
+                    participantsEditMode={participantsEditMode}
+                    setParticipantsEditMode={setParticipantsEditMode}
                   />
                 );
               })}

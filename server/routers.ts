@@ -15849,6 +15849,37 @@ ${klinesSummary}
             }
           } catch (_e) { /* 如果表不存在则忽略 */ }
         }
+        // 为参与方订单(_isParticipant)组装 participantInfo：取该用户在本订单的各自利率/计息基数/起息日
+        // 用于共享订单卡片按参与者各自利率显示「待结利息(年化X%)」
+        try {
+          const participantOrderIds = allOrders.filter((o: any) => o._isParticipant).map((o: any) => Number(o.id));
+          if (participantOrderIds.length > 0) {
+            const piPlaceholders = participantOrderIds.map(() => '?').join(',');
+            const piConn = await getLedgerDb();
+            const piRows = await (piConn as any).execute(
+              `SELECT order_id, role, commission_rate, commission_base, commission_start_date, paid_commission, note FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND order_id IN (${piPlaceholders})`,
+              [input.ledgerId, targetUserId, ...participantOrderIds]
+            ) as any;
+            const piArr = ((piRows[0] || piRows) as any[]) || [];
+            const piMap: Record<number, any> = {};
+            for (const pi of piArr) { piMap[Number(pi.order_id)] = pi; }
+            for (const o of allOrders) {
+              const pi = piMap[Number(o.id)];
+              if (pi) {
+                (o as any).participantInfo = {
+                  userId: targetUserId,
+                  role: pi.role,
+                  commissionRate: pi.commission_rate || null,
+                  commissionBase: pi.commission_base || o.interest_base || null,
+                  commissionStartDate: pi.commission_start_date || o.interest_start_date || null,
+                  paidCommission: pi.paid_commission || '0',
+                  note: pi.note || null,
+                  interestBaseCurrency: (['CNY', 'RMB', 'cny', 'rmb', '人民币'].includes(o.interest_base_currency || '') ? 'CNY' : 'USDT'),
+                };
+              }
+            }
+          }
+        } catch (_e) { /* 表不存在或无参与方则忽略 */ }
         return { orders: allOrders };
       }),
 

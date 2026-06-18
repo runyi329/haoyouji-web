@@ -232,15 +232,20 @@ function FinanceOrderCard({
   const [showStatusSheet, setShowStatusSheet] = useState(false);
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const [showMarginInfo, setShowMarginInfo] = useState(false);
+  // 共享订单（参与者视角）用参与者各自的利率/计息基数/起息日；自己的订单用订单本身参数
+  const _isGreen = !!(order._fromFunder || order._isParticipant);
+  const _accBase = _isGreen ? (order.participantInfo?.commissionBase ?? order.interest_base) : order.interest_base;
+  const _accRate = _isGreen ? (order.participantInfo?.commissionRate ?? order.interest_rate_annual) : order.interest_rate_annual;
+  const _accStart = _isGreen ? (order.participantInfo?.commissionStartDate ?? order.interest_start_date) : order.interest_start_date;
   // 每张卡片独立调用 useAccruedInterest（Hook 必须在组件顶层）
   const accrued = useAccruedInterest(
-    (order.status === 'active' || order.settled_at) ? order.interest_base : null,
-    (order.status === 'active' || order.settled_at) ? order.interest_rate_annual : null,
-    (order.status === 'active' || order.settled_at) ? order.interest_start_date : null,
+    (order.status === 'active' || order.settled_at) ? _accBase : null,
+    (order.status === 'active' || order.settled_at) ? _accRate : null,
+    (order.status === 'active' || order.settled_at) ? _accStart : null,
     order.settled_at
   );
 
-  const rateStr = String(order.interest_rate_annual || '');
+  const rateStr = String((_isGreen ? (order.participantInfo?.commissionRate ?? order.interest_rate_annual) : order.interest_rate_annual) || '');
   const isNegRate = rateStr.startsWith('-');
   const rateAbs = isNegRate ? parseFloat(rateStr.slice(1)).toFixed(0) : (rateStr ? parseFloat(rateStr).toFixed(0) : '');
   const rateSign = isNegRate ? '-' : '+';
@@ -572,7 +577,7 @@ function FinanceOrderCard({
             <>
               <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
                 <span className="text-[10px]" style={{ color: '#3B82F6' }}>{isGreenOrder ? '待结利息' : '待付利息'}</span>
-                {rateAbs && <span className="text-[10px] text-gray-400">(年化 {isGreenOrder ? '' : (isNegRate ? '-' : '')}{rateAbs}%)</span>}
+                {rateAbs && <span className="text-[10px] text-gray-400">(年化 {isNegRate ? '-' : ''}{rateAbs}%)</span>}
               </div>
               {/* 待结利息大数字 */}
               <div className="min-h-9 flex flex-col justify-center">
