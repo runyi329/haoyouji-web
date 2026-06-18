@@ -49,11 +49,24 @@ const COIN_COLORS: Record<CoinType, string> = {
   CRCL: '#1E88D6',
 };
 
+// 获取北京时间（UTC+8）今天，返回 YYYY-MM-DD
+function getBeijingToday(): string {
+  const now = new Date();
+  // 当前 UTC 毫秒 + 8小时，取 UTC 各部件即为北京时间
+  const beijing = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  const y = beijing.getUTCFullYear();
+  const m = String(beijing.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(beijing.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 // 简单日历选择器组件
 function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const today = new Date();
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth()); // 0-indexed
+  // 初始视图月份：优先跟随已选值，否则定位北京时间当月
+  const initBase = value ? value : getBeijingToday();
+  const [initY, initM] = initBase.split('-').map(Number);
+  const [viewYear, setViewYear] = useState(initY);
+  const [viewMonth, setViewMonth] = useState((initM || 1) - 1); // 0-indexed
 
   const selected = value ? new Date(value + 'T00:00:00') : null;
 
@@ -447,7 +460,7 @@ function FunderOrderCard({
   const show = (key: string) => dc ? (dc[key] !== false) : true;
 
   // 担保物
-  let collateralAssets: { coin: string; qty: string }[] = [];
+  let collateralAssets: { coin: string; qty: string; note?: string }[] = [];
   try {
     const rawCA = order.collateral_assets;
     if (rawCA) {
@@ -1204,7 +1217,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     amountCurrency: 'USDT' as CoinType, // 融资金额出资币种（独立于标的币种）
     buyPrice: '',
     buyQuantity: '',
-    buyDate: '',
+    buyDate: getBeijingToday(),
     storageAccount: '',
     status: 'active',
     adminNote: '',
@@ -1214,7 +1227,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     interestBase: '',
     interestBaseCurrency: 'USDT' as 'USDT' | 'CNY',
     interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
-    interestStartDate: '',
+    interestStartDate: getBeijingToday(),
     showProfitShare: true,
     commissionShare: '',
     originalAmount: '', // 编辑时保存原订单金额，买入价格或数量为空时回退使用
@@ -1230,7 +1243,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   // 标签输入状态
   const [tagInput, setTagInput] = useState('');
   // 担保货币列表：[{ coin: 'BTC', qty: '' }, ...]
-  const [collateralAssets, setCollateralAssets] = useState<{ coin: string; qty: string }[]>([]);
+  const [collateralAssets, setCollateralAssets] = useState<{ coin: string; qty: string; note?: string }[]>([]);
 
   // 字段展示配置（控制订单卡片各字段的显示/隐藏）
   const DEFAULT_DISPLAY_CONFIG: Record<string, boolean> = {
@@ -1495,6 +1508,25 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     },
     onError: (err) => toast.error(err.message),
   });
+  // 担保货币独立保存（编辑已有订单时，仅写回 collateral_assets，不动其他字段，不关闭表单）
+  const saveCollateralMutation = trpc.ledger.financeUpdateOrder.useMutation({
+    onSuccess: () => {
+      toast.success('担保货币已保存');
+      refetchOrders();
+      trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  // 把当前整组担保货币写回正在编辑的订单（仅更新 collateral_assets 字段）
+  const persistCollateral = (assets: { coin: string; qty: string; note?: string }[]) => {
+    const oid = editingOrder?.id ? Number(editingOrder.id) : null;
+    if (!oid) return; // 新建态无订单 ID，跳过（随订单一起保存）
+    saveCollateralMutation.mutate({
+      id: oid,
+      ledgerId,
+      collateralAssets: assets.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty))),
+    });
+  };
   const deleteMutation = trpc.ledger.funderDeleteAssetOrder.useMutation({
     onSuccess: () => {
       toast.success('已移入回收站');
@@ -1652,7 +1684,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       amountCurrency: 'USDT',
       buyPrice: '',
       buyQuantity: '',
-      buyDate: '',
+      buyDate: getBeijingToday(),
       storageAccount: '',
       status: 'active',
       adminNote: '',
@@ -1662,7 +1694,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       interestBase: '',
       interestBaseCurrency: 'USDT' as 'USDT' | 'CNY',
       interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
-      interestStartDate: '',
+      interestStartDate: getBeijingToday(),
       showProfitShare: true,
       commissionShare: '',
       originalAmount: '',
@@ -2144,8 +2176,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 用户选择（从账本所有成员中选）：根据所选用户角色自动判断订单归属左侧(资方)或右侧(借方) */}
+              <div className="flex gap-3 items-start">
               {!editingOrder?.participantInfo && (
-                <div>
+                <div className="flex-1 min-w-0">
                   <label className="block text-sm font-medium text-gray-600 mb-2">
                     用户 <span className="text-red-400 ml-0.5">*</span>
                   </label>
@@ -2237,77 +2270,94 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </div>
                 </div>
               )}
+                {/* 开仓日期（与用户同行并排） */}
+                <div className="flex-1 min-w-0" style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">开仓日期</label>
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowDatePicker(v => !v)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base text-left focus:outline-none"
+                      style={{ backgroundColor: '#fff', color: formData.buyDate ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
+                    >
+                      {formData.buyDate || '点击选择日期'}
+                    </button>
+                    {showDatePicker && (
+                      <div className="absolute top-full left-0 right-0 z-30 mt-2">
+                        <DatePicker
+                          value={formData.buyDate}
+                          onChange={v => { setFormData(d => ({ ...d, buyDate: v })); setShowDatePicker(false); }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
               {/* 购买币种已移至三联最后一行（与币数并排） */}
 
-              {/* 融资金额 / 买入价格 / 购买币种+币数 三字段联动 */}
-              <div className="rounded-2xl border border-gray-200" style={{ overflow: 'visible', opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
-                <div className="px-4 pt-3 pb-1">
-                  <span className="text-xs text-gray-400">
-                    {formData.assetType === 'stock' ? '股票类型：只需输入融资金额' : '输入任意两个，第三个自动计算 · 融资金额 = 买入价格 × 币数'}
-                  </span>
-                </div>
-                {/* 融资金额（出资币种独立选择） */}
-                <div className="px-4 py-3 border-b border-gray-100">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs font-medium text-gray-500">融资金额</label>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs text-gray-400">融资币种</span>
-                      <select
-                        value={formData.amountCurrency}
-                        onChange={e => setFormData(d => ({ ...d, amountCurrency: e.target.value as CoinType }))}
-                        className="text-xs font-semibold rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
-                        style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.amountCurrency as keyof typeof COIN_COLORS] || '#1A2340' }}
-                      >
-                        {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                    </div>
+              {/* 融资金额 / 买入价格 / 购买币种+币数 三字段联动（统一圆角容器框） */}
+              <div className="space-y-3" style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
+                <span className="block text-xs text-gray-400">
+                  {formData.assetType === 'stock' ? '股票类型：只需输入融资金额' : '输入任意两个，第三个自动计算 · 融资金额 = 买入价格 × 币数'}
+                </span>
+                {/* 融资金额 + 融资币种（同行并排） */}
+                <div className="flex items-end gap-3">
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">融资金额</label>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={amountInputValue}
+                      onFocus={() => setAmountEditing(true)}
+                      onChange={e => { setAmountInputValue(e.target.value); }}
+                      onBlur={e => {
+                        setAmountEditing(false);
+                        const amt = parseFloat(e.target.value);
+                        if (isNaN(amt) || amt <= 0) return;
+                        const usdtVal = toUsdtBase(amt, formData.amountCurrency);
+                        if (usdtVal === null) return;
+                        setFormData(d => {
+                          const price = parseFloat(d.buyPrice);
+                          const qty = parseFloat(d.buyQuantity);
+                          if (!isNaN(price) && price > 0) {
+                            const calcQty = usdtVal / price;
+                            return { ...d, buyQuantity: INTEGER_COINS_FUNDER.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
+                          }
+                          if (!isNaN(qty) && qty > 0) {
+                            return { ...d, buyPrice: (usdtVal / qty).toFixed(2) };
+                          }
+                          return d;
+                        });
+                      }}
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="如：100000"
+                    />
                   </div>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={amountInputValue}
-                    onFocus={() => setAmountEditing(true)}
-                    onChange={e => {
-                      setAmountInputValue(e.target.value);
-                    }}
-                    onBlur={e => {
-                      setAmountEditing(false);
-                      const amt = parseFloat(e.target.value);
-                      if (isNaN(amt) || amt <= 0) return;
-                      // 融资金额是出资币种口径，先折回 USDT 价值再反算买入价/币数
-                      const usdtVal = toUsdtBase(amt, formData.amountCurrency);
-                      if (usdtVal === null) return;
-                      setFormData(d => {
-                        const price = parseFloat(d.buyPrice);
-                        const qty = parseFloat(d.buyQuantity);
-                        if (!isNaN(price) && price > 0) {
-                          const calcQty = usdtVal / price;
-                          return { ...d, buyQuantity: INTEGER_COINS_FUNDER.has(d.coin) ? String(Math.round(calcQty)) : parseFloat(calcQty.toFixed(6)).toString() };
-                        }
-                        if (!isNaN(qty) && qty > 0) {
-                          return { ...d, buyPrice: (usdtVal / qty).toFixed(2) };
-                        }
-                        return d;
-                      });
-                    }}
-                    className="w-full bg-transparent text-base focus:outline-none"
-                    placeholder="如：100000"
-                  />
-                  {amountInputValue && parseFloat(amountInputValue) > 0 && formData.amountCurrency !== 'USDT' && (() => {
-                    const amt = parseFloat(amountInputValue);
-                    const usdtEquiv = toUsdtBase(amt, formData.amountCurrency);
-                    if (usdtEquiv === null) return null;
-                    return (
-                      <span className="text-xs text-gray-400 mt-1 block">
-                        ≈ {usdtEquiv.toLocaleString(undefined, { maximumFractionDigits: 0 })} USDT
-                      </span>
-                    );
-                  })()}
+                  <div style={{ width: '34%' }}>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">融资币种</label>
+                    <select
+                      value={formData.amountCurrency}
+                      onChange={e => setFormData(d => ({ ...d, amountCurrency: e.target.value as CoinType }))}
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
+                      style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.amountCurrency as keyof typeof COIN_COLORS] || '#1A2340' }}
+                    >
+                      {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
+                {amountInputValue && parseFloat(amountInputValue) > 0 && formData.amountCurrency !== 'USDT' && (() => {
+                  const amt = parseFloat(amountInputValue);
+                  const usdtEquiv = toUsdtBase(amt, formData.amountCurrency);
+                  if (usdtEquiv === null) return null;
+                  return (
+                    <span className="text-xs text-gray-400 -mt-1 block">
+                      ≈ {usdtEquiv.toLocaleString(undefined, { maximumFractionDigits: 0 })} USDT
+                    </span>
+                  );
+                })()}
                 {/* 买入价格 */}
-                <div className="px-4 py-3 border-b border-gray-100" style={{ opacity: formData.assetType === 'stock' ? 0.4 : 1 }}>
+                <div style={{ opacity: formData.assetType === 'stock' ? 0.4 : 1 }}>
                   <label className="block text-xs font-medium text-gray-500 mb-1.5">买入价格</label>
                   <input
                     type="number"
@@ -2325,13 +2375,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       });
                     }}
                     disabled={formData.assetType === 'stock'}
-                    className="w-full bg-transparent text-base focus:outline-none disabled:text-gray-300"
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:text-gray-300"
                     placeholder="如：95000"
                     step="any"
                   />
                 </div>
-                {/* 购买币种 + 币数（同一行并排：什么币种、买多少个） */}
-                <div className="px-4 py-3 flex items-end gap-3" style={{ opacity: formData.assetType === 'stock' ? 0.4 : 1 }}>
+                {/* 购买币种 + 币数（同行并排） */}
+                <div className="flex items-end gap-3" style={{ opacity: formData.assetType === 'stock' ? 0.4 : 1 }}>
                   <div style={{ width: '40%' }}>
                     <label className="block text-xs font-medium text-gray-500 mb-1.5">购买币种{editingOrder && !editingOrder.participantInfo && <span className="ml-1 text-xs text-orange-500 font-normal">(不可改)</span>}</label>
                     <select
@@ -2341,7 +2391,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         setFormData(d => ({ ...d, coin: e.target.value as CoinType }));
                       }}
                       disabled={!!(editingOrder && !editingOrder.participantInfo) || formData.assetType === 'stock'}
-                      className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none disabled:text-gray-300"
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none disabled:text-gray-300"
                       style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.coin as keyof typeof COIN_COLORS] || '#1A2340' }}
                     >
                       {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
@@ -2349,7 +2399,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       ))}
                     </select>
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <label className="block text-xs font-medium text-gray-500 mb-1.5">币数</label>
                     <input
                       type="number"
@@ -2367,44 +2417,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         });
                       }}
                       disabled={formData.assetType === 'stock'}
-                      className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:text-gray-300"
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:text-gray-300"
                       placeholder="如：1.05"
                     />
                   </div>
                 </div>
-              </div>
-
-              {/* 开仓日期 */}
-              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
-                <label className="block text-sm font-medium text-gray-600 mb-2">开仓日期</label>
-                <button
-                  onClick={() => setShowDatePicker(v => !v)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base text-left focus:outline-none"
-                  style={{ backgroundColor: '#fff', color: formData.buyDate ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
-                >
-                  {formData.buyDate || '点击选择日期'}
-                </button>
-                {showDatePicker && (
-                  <div className="mt-2">
-                    <DatePicker
-                      value={formData.buyDate}
-                      onChange={v => { setFormData(d => ({ ...d, buyDate: v })); setShowDatePicker(false); }}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* 存放账号 */}
-              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
-                <label className="block text-sm font-medium text-gray-600 mb-2">存放账号</label>
-                <input
-                  type="text"
-                  value={formData.storageAccount}
-                  onChange={e => setFormData(d => ({ ...d, storageAccount: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="填写存放的交易所或钱包账号"
-                  style={{ display: 'block', boxSizing: 'border-box' }}
-                />
               </div>
 
               {/* 分隔线：利息约定 */}
@@ -2532,44 +2549,30 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               {/* 约定年化利息 */}
               <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">约定年化利息（%）</label>
-                {/* 收/付切换按钮 */}
-                <div className="flex gap-2 mb-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const raw = formData.interestRateAnnual;
-                      if (raw.startsWith('-')) {
-                        setFormData(d => ({ ...d, interestRateAnnual: raw.slice(1) }));
-                      }
-                    }}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium transition-all"
-                    style={
-                      !formData.interestRateAnnual.startsWith('-')
-                        ? { background: '#FEE2E2', color: '#DC2626', border: '2px solid #DC2626' }
-                        : { backgroundColor: '#F3F4F6', color: '#6B7280', border: '2px solid transparent' }
-                    }
-                  >
-                    + 收（红）
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const raw = formData.interestRateAnnual;
-                      if (!raw.startsWith('-')) {
-                        setFormData(d => ({ ...d, interestRateAnnual: raw ? '-' + raw : '-' }));
-                      }
-                    }}
-                    className="flex-1 py-2 rounded-xl text-sm font-medium transition-all"
-                    style={
-                      formData.interestRateAnnual.startsWith('-')
-                        ? { background: '#DEF7EC', color: '#059669', border: '2px solid #059669' }
-                        : { backgroundColor: '#F3F4F6', color: '#6B7280', border: '2px solid transparent' }
-                    }
-                  >
-                    - 付（绿）
-                  </button>
-                </div>
+                {/* 收（红圈+）/ 付（绿圈-） 与利率输入同行 */}
                 <div className="flex items-center gap-2">
+                  {(() => { const isNeg = formData.interestRateAnnual.startsWith('-'); return (
+                  <>
+                    <button
+                      type="button"
+                      title="收"
+                      onClick={() => { const raw = formData.interestRateAnnual; if (raw.startsWith('-')) setFormData(d => ({ ...d, interestRateAnnual: raw.slice(1) })); }}
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-lg font-bold shrink-0 transition-all"
+                      style={!isNeg
+                        ? { background: '#FEE2E2', color: '#DC2626', border: '2px solid #DC2626' }
+                        : { backgroundColor: '#F3F4F6', color: '#9CA3AF', border: '2px solid transparent' }}
+                    >+</button>
+                    <button
+                      type="button"
+                      title="付"
+                      onClick={() => { const raw = formData.interestRateAnnual; if (!raw.startsWith('-')) setFormData(d => ({ ...d, interestRateAnnual: raw ? '-' + raw : '-' })); }}
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-lg font-bold shrink-0 transition-all"
+                      style={isNeg
+                        ? { background: '#DEF7EC', color: '#059669', border: '2px solid #059669' }
+                        : { backgroundColor: '#F3F4F6', color: '#9CA3AF', border: '2px solid transparent' }}
+                    >−</button>
+                  </>
+                  ); })()}
                   <input
                     type="number"
                     inputMode="decimal"
@@ -2608,22 +2611,17 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               {/* 利息支付方式 */}
               <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">利息支付方式</label>
-                <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={formData.interestPaymentType}
+                  onChange={e => setFormData(d => ({ ...d, interestPaymentType: e.target.value }))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
+                  style={{ backgroundColor: '#fff', color: formData.interestPaymentType ? '#1A2340' : '#9CA3AF' }}
+                >
+                  <option value="">请选择支付方式</option>
                   {INTEREST_PAYMENT_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setFormData(d => ({ ...d, interestPaymentType: d.interestPaymentType === opt.value ? '' : opt.value }))}
-                      className="py-2.5 rounded-xl text-sm font-medium transition-all"
-                      style={
-                        formData.interestPaymentType === opt.value
-                          ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
-                          : { backgroundColor: '#F3F4F6', color: '#6B7280' }
-                      }
-                    >
-                      {opt.label}
-                    </button>
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
-                </div>
+                </select>
               </div>
 
               {/* 分隔线：担保货币 - 受邀订单隐藏 */}
@@ -2637,38 +2635,59 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               {!editingOrder?.participantInfo && (
               <div className="space-y-3">
                 {collateralAssets.map((item, idx) => (
-                  <div key={idx} className="flex gap-2 items-center">
-                    <div className="flex rounded-xl border border-gray-200 overflow-hidden shrink-0">
-                      {COLLATERAL_COINS.map(c => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => setCollateralAssets(prev => prev.map((a, i) => i === idx ? { ...a, coin: c } : a))}
-                          className={`px-2.5 py-2.5 text-xs font-medium transition-colors ${
-                            item.coin === c ? 'bg-blue-600 text-white' : 'bg-white text-gray-500'
-                          }`}
-                        >{c}</button>
-                      ))}
+                  <div key={idx} className="rounded-xl border border-gray-200 p-3 space-y-2">
+                    <div className="flex gap-2 items-center">
+                      <select
+                        value={item.coin}
+                        onChange={e => setCollateralAssets(prev => prev.map((a, i) => i === idx ? { ...a, coin: e.target.value } : a))}
+                        className="px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
+                        style={{ width: '50%', backgroundColor: '#fff', color: COIN_COLORS[item.coin as keyof typeof COIN_COLORS] || '#1A2340' }}
+                      >
+                        {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={item.qty}
+                        onChange={e => setCollateralAssets(prev => prev.map((a, i) => i === idx ? { ...a, qty: e.target.value } : a))}
+                        className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        placeholder="数量"
+                        style={{ width: '0' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = collateralAssets.filter((_, i) => i !== idx);
+                          setCollateralAssets(next);
+                          if (editingOrder?.id) persistCollateral(next); // 编辑态：删除立即写回
+                        }}
+                        className="w-8 h-8 flex items-center justify-center rounded-full bg-red-50 text-red-400 text-lg shrink-0"
+                      >&times;</button>
                     </div>
                     <input
-                      type="number"
-                      inputMode="decimal"
-                      value={item.qty}
-                      onChange={e => setCollateralAssets(prev => prev.map((a, i) => i === idx ? { ...a, qty: e.target.value } : a))}
-                      className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      placeholder="数量"
-                      style={{ width: '0' }}
+                      type="text"
+                      value={item.note || ''}
+                      onChange={e => setCollateralAssets(prev => prev.map((a, i) => i === idx ? { ...a, note: e.target.value } : a))}
+                      className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="备注（选填）"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setCollateralAssets(prev => prev.filter((_, i) => i !== idx))}
-                      className="w-8 h-8 flex items-center justify-center rounded-full bg-red-50 text-red-400 text-lg shrink-0"
-                    >&times;</button>
+                    {/* 编辑已有订单时，每笔可独立保存 */}
+                    {editingOrder?.id && (
+                      <button
+                        type="button"
+                        onClick={() => persistCollateral(collateralAssets)}
+                        disabled={saveCollateralMutation.isPending}
+                        className="w-full py-2 rounded-xl text-sm font-medium text-white transition-all disabled:opacity-60"
+                        style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+                      >{saveCollateralMutation.isPending ? '保存中…' : '保存这笔担保'}</button>
+                    )}
                   </div>
                 ))}
                 <button
                   type="button"
-                  onClick={() => setCollateralAssets(prev => [...prev, { coin: 'BTC', qty: '' }])}
+                  onClick={() => setCollateralAssets(prev => [...prev, { coin: 'BTC', qty: '', note: '' }])}
                   className="w-full py-2.5 rounded-xl border border-dashed border-blue-300 text-sm text-blue-500 font-medium flex items-center justify-center gap-1"
                 >
                   <span className="text-base leading-none">+</span> 添加担保货币
