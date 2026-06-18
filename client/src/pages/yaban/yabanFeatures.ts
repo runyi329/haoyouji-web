@@ -43,7 +43,7 @@ export const ALL_FEATURE_DICT: FeatureDef[] = [
   { key: "revisit", name: "回访管理", icon: `${ICON_BASE}/huifang_guanli.webp`, route: "" },
   { key: "lab_process", name: "技加工", icon: `${ICON_BASE}/ji_jiagong.webp`, route: "" },
   { key: "partner_profile", name: "合伙人档案", icon: `${ICON_BASE}/hehuoren_dangan.webp`, route: "/yaban/partner-profile" },
-  { key: "staff_profile", name: "员工档案", icon: `${ICON_BASE}/yuangong_dangan.webp`, route: "/yaban/staff-profile" },
+  { key: "staff_profile", name: "员工档案", icon: `${ICON_BASE}/yuangong_dangan.webp`, route: "/yaban/staff" },
   { key: "dental_shop", name: "牙科商店", icon: `${ICON_BASE}/yake_shangdian.webp`, route: "/yaban/shop" },
   { key: "ai_valuation", name: "AI估值", icon: `${ICON_BASE}/ai_guzhi.webp`, route: "/yaban/ai-valuation" },
 ];
