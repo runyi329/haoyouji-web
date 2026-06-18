@@ -275,7 +275,7 @@ export default function YabanSchedule() {
           </div>
           <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,.18)", borderRadius: 12, padding: 4, flexShrink: 0 }}>
             <div style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, background: "#fff", color: SKY_D, boxShadow: "0 1px 3px rgba(0,0,0,.1)", whiteSpace: "nowrap" }}>顾客预约</div>
-            <div onClick={() => { try { sessionStorage.setItem("yaban_shift_date", toDateStr(selDate)); } catch {} setLocation("/yaban/clinic-shift"); }} style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, color: "#eaf6ff", whiteSpace: "nowrap", cursor: "pointer" }}>医生排班</div>
+            <div onClick={() => { try { sessionStorage.setItem("yaban_shift_date", toDateStr(selDate)); } catch {} setLocation("/yaban/clinic-shift"); }} style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, color: "#eaf6ff", whiteSpace: "nowrap", cursor: "pointer" }}>员工排班</div>
           </div>
           <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
             <button onClick={() => setNewModal({ open: true })} aria-label="新建预约" style={{ width: 32, height: 32, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.12)", border: "none", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", cursor: "pointer" }}>
@@ -314,7 +314,7 @@ export default function YabanSchedule() {
           {calDates.map((d, i) => {
             if (!d) return <div key={i} />;
             const isToday = isSameDay(d as Date, today), isSel = isSameDay(d as Date, selDate);
-            const isPast = (d as Date) < today && !isToday;
+            const isPast = ((d as Date).getTime() < today.getTime()) && !isToday;
             const r = cellLoad(d as Date);
             const bg = r > 0 ? heatColor(r) : "#f3f6f9";
             const tc = r > 0 ? heatTextColor(r) : "#2a3340";
@@ -518,6 +518,14 @@ function DocRows({ docList, onDocClick, onApptClick, onNewAppt, trkStart, trkEnd
                 );
               })}
             </div>
+            {/* 进度条下方：该医生当天真实工作时间段文字（与员工排班页一致，休息则不显示） */}
+            {doc.shift && doc.shift.segments.length > 0 && (
+              <div style={{ marginTop: 4, display: "flex", flexWrap: "wrap", gap: "2px 8px", fontSize: 10, color: GRAY }}>
+                {doc.shift.segments.map(([s0, e0], si) => (
+                  <span key={si}>{hm(s0)}–{hm(e0)}</span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       ))}

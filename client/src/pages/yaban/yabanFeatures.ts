@@ -23,7 +23,7 @@ export type FeatureDef = {
 // 全部功能字典（首页可选项的全集）
 export const ALL_FEATURE_DICT: FeatureDef[] = [
   // —— 常用核心 ——
-  { key: "schedule", name: "预约日程", icon: `${ICON_BASE}/richeng.webp`, route: "/yaban/schedule" },
+  { key: "schedule", name: "客户预约", icon: `${ICON_BASE}/richeng.webp`, route: "/yaban/schedule" },
   { key: "clinic_shift", name: "诊所排班", icon: `${ICON_BASE}/zhensuo_paiban.webp`, route: "/yaban/clinic-shift" },
   { key: "patients", name: "顾客档案", icon: `${ICON_BASE}/huanzhe.webp`, route: "/yaban/patients" },
   { key: "followup", name: "随访", icon: `${ICON_BASE}/suifang.webp`, route: "/yaban/followup" },
