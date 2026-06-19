@@ -194,12 +194,7 @@ async function queryCreditsUsage(userId: string): Promise<string> {
       }
     }
 
-    // 附加全账号总消耗（仅供参考）
-    let totalCost = 0;
-    for (const r of allRecords) {
-      if (r.type === "cost") totalCost += Math.abs(r.credits);
-    }
-    lines.push(`\n--- 全账号近期总消耗: ${totalCost} 积分 ---`);
+
 
     return lines.join("\n");
   } catch (e) {
