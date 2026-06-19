@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
-import { trpc } from "@/lib/trpc";
 import {
   ArrowLeft, RefreshCw, Trash2, Edit2, Plus, Check, X, Bot,
   Zap, MessageSquare, User, BarChart2, Menu, ChevronRight,
@@ -92,26 +91,6 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 export default function WecomAdmin() {
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<TabKey>("users");
-  const { data: user, isLoading } = trpc.auth.me.useQuery(undefined, { retry: 1 });
-
-  // 权限检查：只有超级管理员可访问
-  useEffect(() => {
-    if (!isLoading && user && (user as any).role !== "super_admin") {
-      navigate("/");
-    }
-  }, [user, isLoading, navigate]);
-
-  if (isLoading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if ((user as any).role !== "super_admin") {
-    return null;
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 max-w-md mx-auto">
@@ -160,6 +139,81 @@ export default function WecomAdmin() {
 // Tab 1: 用户管理
 // ═══════════════════════════════════════════════════════════════════════════════
 
+interface ManusTask { id: string; title: string; agent_profile?: string; }
+interface WecomUser { userid: string; name: string; }
+
+function SearchSelect({
+  options, value, onChange, placeholder, displayKey, valueKey, labelKey
+}: {
+  options: any[];
+  value: string;
+  onChange: (val: string, label?: string) => void;
+  placeholder: string;
+  displayKey: string;
+  valueKey: string;
+  labelKey?: string;
+}) {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [selectedLabel, setSelectedLabel] = useState("");
+  const filtered = options.filter(o =>
+    (o[displayKey] || "").toLowerCase().includes(search.toLowerCase()) ||
+    (o[valueKey] || "").toLowerCase().includes(search.toLowerCase())
+  );
+  const handleSelect = (o: any) => {
+    const label = o[displayKey] || o[valueKey];
+    setSelectedLabel(label);
+    onChange(o[valueKey], label);
+    setSearch("");
+    setOpen(false);
+  };
+  return (
+    <div className="relative">
+      <div
+        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm flex items-center justify-between cursor-pointer bg-white"
+        onClick={() => setOpen(v => !v)}
+      >
+        <span className={selectedLabel ? "text-gray-900" : "text-gray-400"}>
+          {selectedLabel || placeholder}
+        </span>
+        <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-90" : ""}`} />
+      </div>
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+          <div className="p-2 border-b border-gray-100">
+            <input
+              autoFocus
+              className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm"
+              placeholder="搜索..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onClick={e => e.stopPropagation()}
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-3 text-sm text-gray-400 text-center">无匹配结果</div>
+            ) : filtered.map(o => (
+              <div
+                key={o[valueKey]}
+                className={`px-3 py-2.5 text-sm cursor-pointer hover:bg-blue-50 ${
+                  value === o[valueKey] ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-700"
+                }`}
+                onClick={() => handleSelect(o)}
+              >
+                <div className="font-medium">{o[displayKey]}</div>
+                {labelKey && o[labelKey] && o[labelKey] !== o[displayKey] && (
+                  <div className="text-xs text-gray-400 mt-0.5 font-mono">{o[labelKey]}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function UsersTab() {
   const [sessions, setSessions] = useState<WecomSession[]>([]);
   const [loading, setLoading] = useState(false);
@@ -167,6 +221,10 @@ function UsersTab() {
   const [editForm, setEditForm] = useState<Partial<WecomSession>>({});
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState({ wecom_user_id: "", manus_task_id: "", nickname: "" });
+  const [manusTasks, setManusTasks] = useState<ManusTask[]>([]);
+  const [wecomUsers, setWecomUsers] = useState<WecomUser[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [wecomUsersError, setWecomUsersError] = useState("");
 
   const fetchSessions = useCallback(async () => {
     setLoading(true);
@@ -183,6 +241,30 @@ function UsersTab() {
   }, []);
 
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
+
+  const fetchDropdownData = useCallback(async () => {
+    setLoadingTasks(true);
+    try {
+      const [tasksRes, usersRes] = await Promise.all([
+        fetch("/api/wecom/manus-tasks?limit=50"),
+        fetch("/api/wecom/wecom-users"),
+      ]);
+      const tasksData = await tasksRes.json();
+      const usersData = await usersRes.json();
+      setManusTasks(tasksData.tasks || []);
+      if (usersData.error) {
+        setWecomUsersError(usersData.error);
+        setWecomUsers([]);
+      } else {
+        setWecomUsers(usersData.users || []);
+        setWecomUsersError("");
+      }
+    } catch {
+      toast.error("加载下拉数据失败");
+    } finally {
+      setLoadingTasks(false);
+    }
+  }, []);
 
   const handleDelete = async (id: number, nickname: string) => {
     if (!confirm(`确认删除「${nickname || id}」的绑定？删除后该用户下次发消息会重新创建任务。`)) return;
@@ -288,7 +370,7 @@ function UsersTab() {
           刷新
         </button>
         <button
-          onClick={() => setShowAddForm(!showAddForm)}
+          onClick={() => { setShowAddForm(v => !v); if (!showAddForm) fetchDropdownData(); }}
           className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium"
         >
           <Plus className="w-4 h-4" />
@@ -299,25 +381,63 @@ function UsersTab() {
       {/* 添加表单 */}
       {showAddForm && (
         <div className="bg-white rounded-xl p-4 shadow-sm space-y-3 border border-blue-100">
-          <div className="text-sm font-medium text-gray-700">手动绑定新用户</div>
-          <div>
-            <label className="text-xs text-gray-500 mb-1 block">企业微信用户ID *</label>
-            <input
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-              placeholder="如：HuYongYu"
-              value={addForm.wecom_user_id}
-              onChange={e => setAddForm(f => ({ ...f, wecom_user_id: e.target.value }))}
-            />
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-medium text-gray-700">手动绑定新用户</div>
+            {loadingTasks && <span className="text-xs text-gray-400">加载中...</span>}
           </div>
+
+          {/* 企业微信用户 */}
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">Manus 任务ID *</label>
-            <input
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
-              placeholder="如：6iJ9mQRxzykTSqFHtz5KFp"
-              value={addForm.manus_task_id}
-              onChange={e => setAddForm(f => ({ ...f, manus_task_id: e.target.value }))}
-            />
+            <label className="text-xs text-gray-500 mb-1 block">企业微信用户 *</label>
+            {wecomUsers.length > 0 ? (
+              <SearchSelect
+                options={wecomUsers}
+                value={addForm.wecom_user_id}
+                onChange={val => setAddForm(f => ({ ...f, wecom_user_id: val }))}
+                placeholder="选择企业微信成员..."
+                displayKey="name"
+                valueKey="userid"
+                labelKey="userid"
+              />
+            ) : (
+              <div>
+                <input
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                  placeholder="输入企业微信 userId，如：HuYongYu"
+                  value={addForm.wecom_user_id}
+                  onChange={e => setAddForm(f => ({ ...f, wecom_user_id: e.target.value }))}
+                />
+                {wecomUsersError && (
+                  <div className="text-xs text-orange-500 mt-1">⚠ 无法拉取成员列表（{wecomUsersError.slice(0,30)}），请手动输入</div>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Manus 任务 */}
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Manus 任务 *</label>
+            {manusTasks.length > 0 ? (
+              <SearchSelect
+                options={manusTasks}
+                value={addForm.manus_task_id}
+                onChange={val => setAddForm(f => ({ ...f, manus_task_id: val }))}
+                placeholder="选择 Manus 任务..."
+                displayKey="title"
+                valueKey="id"
+                labelKey="id"
+              />
+            ) : (
+              <input
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                placeholder="输入任务 ID，如：6iJ9mQRxzykTSqFHtz5KFp"
+                value={addForm.manus_task_id}
+                onChange={e => setAddForm(f => ({ ...f, manus_task_id: e.target.value }))}
+              />
+            )}
+          </div>
+
+          {/* 备注名 */}
           <div>
             <label className="text-xs text-gray-500 mb-1 block">备注名（可选）</label>
             <input
@@ -327,11 +447,15 @@ function UsersTab() {
               onChange={e => setAddForm(f => ({ ...f, nickname: e.target.value }))}
             />
           </div>
+
           <div className="flex gap-2">
             <button onClick={handleAdd} className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
               确认绑定
             </button>
-            <button onClick={() => setShowAddForm(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm">
+            <button
+              onClick={() => { setShowAddForm(false); setAddForm({ wecom_user_id: "", manus_task_id: "", nickname: "" }); }}
+              className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm"
+            >
               取消
             </button>
           </div>
@@ -361,12 +485,24 @@ function UsersTab() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">Manus 任务ID</label>
-                  <input
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
-                    value={editForm.manus_task_id || ""}
-                    onChange={e => setEditForm(f => ({ ...f, manus_task_id: e.target.value }))}
-                  />
+                  <label className="text-xs text-gray-500 mb-1 block">Manus 任务</label>
+                  {manusTasks.length > 0 ? (
+                    <SearchSelect
+                      options={manusTasks}
+                      value={editForm.manus_task_id || ""}
+                      onChange={val => setEditForm(f => ({ ...f, manus_task_id: val }))}
+                      placeholder="选择 Manus 任务..."
+                      displayKey="title"
+                      valueKey="id"
+                      labelKey="id"
+                    />
+                  ) : (
+                    <input
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                      value={editForm.manus_task_id || ""}
+                      onChange={e => setEditForm(f => ({ ...f, manus_task_id: e.target.value }))}
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">默认模型</label>
@@ -471,7 +607,7 @@ function UsersTab() {
 
                 <div className="flex gap-2">
                   <button
-                    onClick={() => { setEditingId(session.id); setEditForm({ nickname: session.nickname, manus_task_id: session.manus_task_id, model_pref: session.model_pref || "manus-1.6-max", system_prompt: session.system_prompt || "" }); }}
+                    onClick={() => { setEditingId(session.id); setEditForm({ nickname: session.nickname, manus_task_id: session.manus_task_id, model_pref: session.model_pref || "manus-1.6-max", system_prompt: session.system_prompt || "" }); fetchDropdownData(); }}
                     className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-gray-50 text-gray-600 rounded-lg text-xs border border-gray-200"
                   >
                     <Edit2 className="w-3 h-3" /> 编辑

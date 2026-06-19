@@ -1205,4 +1205,60 @@ router.post("/api/wecom/menu", async (req: Request, res: Response) => {
   }
 });
 
+// -----------------------------------------------------------
+// 管理API：获取 Manus 任务列表（用于手动绑定下拉框）
+// -----------------------------------------------------------
+router.get("/api/wecom/manus-tasks", async (req: Request, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 50;
+    const cursor = req.query.cursor as string || undefined;
+    const url = new URL(`${MANUS_API_BASE}/task.list`);
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("order", "desc");
+    if (cursor) url.searchParams.set("cursor", cursor);
+
+    const resp = await fetch(url.toString(), {
+      headers: { "x-manus-api-key": MANUS_API_KEY },
+    });
+    const data = await resp.json() as any;
+    const tasks = (data.data || []).map((t: any) => ({
+      id: t.id,
+      title: t.title || "(无标题)",
+      created_at: t.created_at,
+      agent_profile: t.agent_profile,
+    }));
+    res.json({ tasks, has_more: data.has_more, next_cursor: data.next_cursor });
+  } catch (e) {
+    console.error("[WeCom] 获取Manus任务列表失败:", e);
+    res.status(500).json({ error: "获取任务列表失败" });
+  }
+});
+
+// -----------------------------------------------------------
+// 管理API：获取企业微信成员列表（用于手动绑定下拉框）
+// -----------------------------------------------------------
+router.get("/api/wecom/wecom-users", async (req: Request, res: Response) => {
+  try {
+    const token = await getAccessToken();
+    const resp = await fetch(
+      `https://qyapi.weixin.qq.com/cgi-bin/user/simplelist?access_token=${token}&department_id=1&fetch_child=1`
+    );
+    const data = await resp.json() as any;
+    if (data.errcode !== 0) {
+      // IP白名单限制时降级返回空列表，前端改为手动输入
+      console.warn("[WeCom] 获取成员列表失败（可能IP未加白名单）:", data.errmsg);
+      return res.json({ users: [], error: data.errmsg });
+    }
+    const users = (data.userlist || []).map((u: any) => ({
+      userid: u.userid,
+      name: u.name || u.userid,
+    }));
+    res.json({ users });
+  } catch (e) {
+    console.error("[WeCom] 获取企业微信成员列表失败:", e);
+    res.json({ users: [], error: "获取失败" });
+  }
+});
+
 export default router;
+
