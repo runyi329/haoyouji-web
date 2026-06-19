@@ -425,9 +425,9 @@ async function getOrCreateManusTask(wecomUserId: string): Promise<string | null>
       } catch (_) {}
     }
 
-    // 保存到数据库
+    // 保存到数据库，新任务强制为 active
     await (conn as any).execute(
-      "INSERT INTO wecom_manus_sessions (wecom_user_id, manus_task_id) VALUES (?, ?)",
+      "INSERT INTO wecom_manus_sessions (wecom_user_id, manus_task_id, status) VALUES (?, ?, 'active')",
       [wecomUserId, initTaskId]
     );
     console.log(`[Manus] 为用户 ${wecomUserId} 创建新任务成功: ${initTaskId}`);
@@ -888,7 +888,7 @@ router.get("/api/wecom/sessions", async (req: Request, res: Response) => {
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
     const [rows] = await (conn as any).execute(
-      "SELECT id, wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, enabled, created_at, updated_at FROM wecom_manus_sessions ORDER BY updated_at DESC"
+      "SELECT id, wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, enabled, status, created_at, updated_at FROM wecom_manus_sessions ORDER BY updated_at DESC"
     ) as any;
     const sessions = rows as any[];
 
@@ -949,10 +949,17 @@ router.post("/api/wecom/sessions", async (req: Request, res: Response) => {
     }
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    // 如果是新绑定，先把该用户旧的 active 记录改为 archived
     await (conn as any).execute(
-      `INSERT INTO wecom_manus_sessions (wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, enabled) 
-       VALUES (?, ?, ?, ?, ?, ?) 
-       ON DUPLICATE KEY UPDATE manus_task_id = VALUES(manus_task_id), nickname = VALUES(nickname), model_pref = VALUES(model_pref), system_prompt = VALUES(system_prompt), enabled = VALUES(enabled)`,
+      "UPDATE wecom_manus_sessions SET status = 'archived' WHERE wecom_user_id = ? AND status = 'active' AND manus_task_id != ?",
+      [wecom_user_id, manus_task_id]
+    );
+
+    // 插入新记录或更新现有记录，同时强制设为 active
+    await (conn as any).execute(
+      `INSERT INTO wecom_manus_sessions (wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, enabled, status) 
+       VALUES (?, ?, ?, ?, ?, ?, 'active') 
+       ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), model_pref = VALUES(model_pref), system_prompt = VALUES(system_prompt), enabled = VALUES(enabled), status = 'active'`,
       [wecom_user_id, manus_task_id, nickname || "", model_pref || "manus-1.6-max", system_prompt || null, enabled !== undefined ? enabled : 1]
     );
     res.json({ ok: true, message: "绑定成功" });
@@ -963,18 +970,18 @@ router.post("/api/wecom/sessions", async (req: Request, res: Response) => {
 });
 
 // -----------------------------------------------------------
-// 管理API：删除绑定
+// 管理API：归档绑定记录（代替物理删除）
 // -----------------------------------------------------------
-router.delete("/api/wecom/sessions/:id", async (req: Request, res: Response) => {
+router.post("/api/wecom/sessions/:id/archive", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
-    await (conn as any).execute("DELETE FROM wecom_manus_sessions WHERE id = ?", [id]);
-    res.json({ ok: true, message: "删除成功" });
+    await (conn as any).execute("UPDATE wecom_manus_sessions SET status = 'archived' WHERE id = ?", [id]);
+    res.json({ ok: true, message: "归档成功" });
   } catch (e) {
-    console.error("[WeCom] 删除失败:", e);
-    res.status(500).json({ error: "删除失败" });
+    console.error("[WeCom] 归档失败:", e);
+    res.status(500).json({ error: "归档失败" });
   }
 });
 
@@ -1119,7 +1126,7 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
 
-    // 查询所有绑定用户
+    // 查询所有绑定用户（包含 active 和 archived）
     const [sessionRows] = await (conn as any).execute(
       "SELECT wecom_user_id, manus_task_id, nickname FROM wecom_manus_sessions"
     ) as any;
@@ -1152,15 +1159,30 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
       }
     }
 
-    // 关联用户信息
-    const stats = sessions
-      .map((s: any) => ({
-        task_id: s.manus_task_id,
-        wecom_user_id: s.wecom_user_id,
-        nickname: s.nickname || s.wecom_user_id,
-        total_cost: taskCostMap[s.manus_task_id]?.total_cost || 0,
-        record_count: taskCostMap[s.manus_task_id]?.record_count || 0,
-      }))
+    // 按 wecom_user_id 汇总所有任务的积分
+    const userStatsMap: Record<string, any> = {};
+    for (const s of sessions) {
+      const uid = s.wecom_user_id;
+      if (!userStatsMap[uid]) {
+        userStatsMap[uid] = {
+          wecom_user_id: uid,
+          nickname: s.nickname || uid,
+          total_cost: 0,
+          record_count: 0,
+          task_count: 0,
+        };
+      }
+      const cost = taskCostMap[s.manus_task_id]?.total_cost || 0;
+      const count = taskCostMap[s.manus_task_id]?.record_count || 0;
+      if (cost > 0 || count > 0) {
+        userStatsMap[uid].total_cost += cost;
+        userStatsMap[uid].record_count += count;
+        userStatsMap[uid].task_count += 1;
+      }
+    }
+
+    const stats = Object.values(userStatsMap)
+      .filter(s => s.total_cost > 0)
       .sort((a: any, b: any) => b.total_cost - a.total_cost);
 
     const total_cost = stats.reduce((sum: number, s: any) => sum + s.total_cost, 0);

@@ -17,6 +17,7 @@ interface WecomSession {
   model_pref?: string;
   system_prompt?: string;
   enabled?: number;
+  status?: string;  // 'active' | 'archived'
   task_title?: string;
   wecom_name?: string;
   wecom_avatar?: string;
@@ -37,11 +38,11 @@ interface WorkflowRule {
 }
 
 interface UsageStat {
-  task_id: string;
   nickname: string;
   wecom_user_id: string;
   total_cost: number;
   record_count: number;
+  task_count: number;  // 该用户名下所有任务数
 }
 
 interface MenuItem {
@@ -266,13 +267,13 @@ function UsersTab() {
     }
   }, []);
 
-  const handleDelete = async (id: number, nickname: string) => {
-    if (!confirm(`确认删除「${nickname || id}」的绑定？删除后该用户下次发消息会重新创建任务。`)) return;
+  const handleArchive = async (id: number, nickname: string) => {
+    if (!confirm(`确认归档「${nickname || id}」的绑定？\n\n归档后该用户下次发消息会自动创建新任务，历史绑定和积分记录会完整保留。`)) return;
     try {
-      const res = await fetch(`/api/wecom/sessions/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/wecom/sessions/${id}/archive`, { method: "POST" });
       const data = await res.json();
-      if (data.ok) { toast.success("删除成功"); fetchSessions(); }
-      else toast.error("删除失败：" + (data.error || "未知错误"));
+      if (data.ok) { toast.success("归档成功，积分记录已保留"); fetchSessions(); }
+      else toast.error("归档失败：" + (data.error || "未知错误"));
     } catch { toast.error("网络错误，请重试"); }
   };
 
@@ -572,8 +573,11 @@ function UsersTab() {
                         {session.wecom_alias && (
                           <span className="ml-1 text-xs text-gray-400 font-normal">({session.wecom_alias})</span>
                         )}
-                        {session.enabled === 0 && (
-                          <span className="ml-1.5 text-xs text-gray-400 font-normal">已禁用</span>
+                        {session.status === 'archived' && (
+                          <span className="ml-1.5 text-xs bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded font-normal">已归档</span>
+                        )}
+                        {session.enabled === 0 && session.status !== 'archived' && (
+                          <span className="ml-1.5 text-xs text-orange-400 font-normal">已禁用</span>
                         )}
                       </div>
                       <div className="text-xs text-gray-400">{session.wecom_user_id}</div>
@@ -624,8 +628,9 @@ function UsersTab() {
                     {session.enabled === 0 ? "启用" : "禁用"}
                   </button>
                   <button
-                    onClick={() => handleDelete(session.id, session.nickname)}
-                    className="flex items-center justify-center gap-1 px-3 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs border border-red-200"
+                    onClick={() => handleArchive(session.id, session.nickname)}
+                    title="归档（保留积分记录）"
+                    className="flex items-center justify-center gap-1 px-3 py-1.5 bg-orange-50 text-orange-500 rounded-lg text-xs border border-orange-200"
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>
@@ -1074,7 +1079,12 @@ function StatsTab() {
             <div key={i} className="px-4 py-3 flex items-center justify-between border-b border-gray-50 last:border-0">
               <div>
                 <div className="text-sm font-medium text-gray-900">{stat.nickname || stat.wecom_user_id}</div>
-                <div className="text-xs text-gray-400">{stat.wecom_user_id}</div>
+                <div className="text-xs text-gray-400">
+                  {stat.wecom_user_id}
+                  {stat.task_count > 1 && (
+                    <span className="ml-1.5 text-orange-500">共 {stat.task_count} 个任务</span>
+                  )}
+                </div>
               </div>
               <div className="flex gap-6 text-right">
                 <div className="text-sm text-gray-600 w-10">{stat.record_count}</div>
