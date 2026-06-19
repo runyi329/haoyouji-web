@@ -266,6 +266,15 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string): Prom
 
       const events = msgsData.events || [];
 
+      // 调试：打印事件类型列表
+      const eventTypes = events.map((e: any) => e.type).join(',');
+      if (waited <= 10 || waited % 30 === 0) {
+        console.log(`[Manus] listMessages 事件类型: [${eventTypes}] (共${events.length}条)`);
+        if (events.length > 0) {
+          console.log(`[Manus] 第一条事件: ${JSON.stringify(events[0]).substring(0, 300)}`);
+        }
+      }
+
       // 查找最新的 status_update 事件（order=desc，第一个就是最新的）
       const latestStatus = events.find((e: any) => e.type === "status_update");
       if (latestStatus) {
