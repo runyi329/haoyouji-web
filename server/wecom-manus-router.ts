@@ -177,13 +177,34 @@ async function getOrCreateManusTask(wecomUserId: string): Promise<string | null>
       return null;
     }
 
+    // 等待初始任务完成（最多60秒），避免立刻 sendMessage 时任务还在 running
+    const initTaskId = data.task_id;
+    let initWaited = 0;
+    while (initWaited < 60) {
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      initWaited += 3;
+      try {
+        const checkRes = await fetch(
+          `${MANUS_API_BASE}/task.listMessages?task_id=${initTaskId}&order=desc&limit=5`,
+          { headers: { "x-manus-api-key": MANUS_API_KEY } }
+        );
+        const checkData = await checkRes.json() as any;
+        if (checkData.ok) {
+          const statusEvt = (checkData.events || []).find((e: any) => e.type === "status_update");
+          const st = statusEvt?.status_update?.agent_status;
+          console.log(`[Manus] 初始任务状态: ${st} (已等待 ${initWaited}s)`);
+          if (st === "stopped" || st === "waiting" || st === "error") break;
+        }
+      } catch (_) {}
+    }
+
     // 保存到数据库
     await (conn as any).execute(
       "INSERT INTO wecom_manus_sessions (wecom_user_id, manus_task_id) VALUES (?, ?)",
-      [wecomUserId, data.task_id]
+      [wecomUserId, initTaskId]
     );
-    console.log(`[Manus] 为用户 ${wecomUserId} 创建新任务成功: ${data.task_id}`);
-    return data.task_id;
+    console.log(`[Manus] 为用户 ${wecomUserId} 创建新任务成功: ${initTaskId}`);
+    return initTaskId;
   } catch (e) {
     console.error("[Manus] 创建任务异常:", e);
     return null;
@@ -220,8 +241,8 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string): Prom
       return "消息发送失败，请稍后重试。";
     }
 
-    // 轮询等待任务完成（最多等待180秒）
-    const maxWait = 180;
+    // 轮询等待任务完成（最多等待300秒，Max模式任务可能较慢）
+    const maxWait = 300;
     const pollInterval = 5;
     let waited = 0;
 
@@ -242,7 +263,7 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string): Prom
 
       const events = msgsData.events || [];
 
-      // 查找最新的 status_update 事件
+      // 查找最新的 status_update 事件（order=desc，第一个就是最新的）
       const latestStatus = events.find((e: any) => e.type === "status_update");
       if (latestStatus) {
         const agentStatus = latestStatus.status_update?.agent_status;
