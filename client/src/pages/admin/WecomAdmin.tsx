@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 import {
   ArrowLeft, RefreshCw, Trash2, Edit2, Plus, Check, X, Bot,
   Zap, MessageSquare, User, BarChart2, Menu, ChevronRight,
@@ -91,6 +92,26 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 export default function WecomAdmin() {
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<TabKey>("users");
+  const { data: user, isLoading } = trpc.auth.me.useQuery(undefined, { retry: 1 });
+
+  // 权限检查：只有超级管理员可访问
+  useEffect(() => {
+    if (!isLoading && user && (user as any).role !== "super_admin") {
+      navigate("/");
+    }
+  }, [user, isLoading, navigate]);
+
+  if (isLoading || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if ((user as any).role !== "super_admin") {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 max-w-md mx-auto">
