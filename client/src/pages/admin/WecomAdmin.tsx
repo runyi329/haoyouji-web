@@ -121,7 +121,7 @@ export default function WecomAdmin() {
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </button>
         <Bot className="w-5 h-5 text-blue-600" />
-        <h1 className="text-base font-semibold text-gray-900 flex-1">企微 AI 管理</h1>
+        <h1 className="text-base font-semibold text-gray-900 flex-1">企业微信 AI 管理</h1>
       </div>
 
       {/* Tab 内容 */}
