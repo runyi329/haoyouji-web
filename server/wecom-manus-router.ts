@@ -439,9 +439,82 @@ async function getOrCreateManusTask(wecomUserId: string): Promise<string | null>
 }
 
 // -----------------------------------------------------------
+// 工具函数：上传图片到企业微信临时素材并发送图片消息
+// -----------------------------------------------------------
+async function sendWeComImage(toUser: string, imageUrl: string): Promise<void> {
+  try {
+    // 1. 下载图片
+    const imgRes = await fetch(imageUrl);
+    if (!imgRes.ok) {
+      console.error(`[WeCom] 下载图片失败: ${imgRes.status} ${imageUrl.substring(0, 80)}`);
+      return;
+    }
+    const imgBuffer = Buffer.from(await imgRes.arrayBuffer());
+    const contentType = imgRes.headers.get("content-type") || "image/png";
+    const ext = contentType.includes("jpeg") ? "jpg" : contentType.includes("gif") ? "gif" : "png";
+
+    // 2. 上传到企业微信临时素材
+    const token = await getAccessToken();
+    const uploadUrl = `https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token=${token}&type=image`;
+
+    // 构造 multipart/form-data
+    const boundary = `----WeComBoundary${Date.now()}`;
+    const filename = `image.${ext}`;
+    const header = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="media"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`
+    );
+    const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
+    const body = Buffer.concat([header, imgBuffer, footer]);
+
+    const uploadRes = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+      body,
+    });
+    const uploadData = await uploadRes.json() as any;
+    if (uploadData.errcode !== 0 && uploadData.errcode !== undefined) {
+      console.error("[WeCom] 上传临时素材失败:", uploadData.errmsg);
+      // 降级：发送图片链接文字
+      await sendWeComMessage(toUser, `[图片] ${imageUrl}`);
+      return;
+    }
+    const mediaId = uploadData.media_id;
+    console.log(`[WeCom] 图片上传成功 media_id=${mediaId}`);
+
+    // 3. 发送图片消息
+    const sendToken = await getAccessToken();
+    const sendRes = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=${sendToken}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        touser: toUser,
+        msgtype: "image",
+        agentid: Number(WECOM_AGENT_ID),
+        image: { media_id: mediaId },
+        safe: 0,
+      }),
+    });
+    const sendData = await sendRes.json() as any;
+    if (sendData.errcode !== 0) {
+      console.error("[WeCom] 发送图片消息失败:", sendData.errmsg);
+    } else {
+      console.log(`[WeCom] 图片消息已发送给 ${toUser}`);
+    }
+  } catch (e) {
+    console.error("[WeCom] 发送图片异常:", e);
+  }
+}
+
+// -----------------------------------------------------------
 // 工具函数：向 Manus 任务发送消息并等待回复
 // -----------------------------------------------------------
-async function sendToManusAndGetReply(taskId: string, userMessage: string): Promise<string> {
+interface ManusReply {
+  text: string;
+  imageUrls: string[];
+  fileAttachments: Array<{ url: string; filename: string; type: string }>;
+}
+
+async function sendToManusAndGetReply(taskId: string, userMessage: string): Promise<ManusReply> {
   try {
     // 记录发送前的时间戳（Unix 秒），用于过滤旧消息
     const sendTimestamp = Math.floor(Date.now() / 1000);
@@ -467,7 +540,7 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string): Prom
 
     if (!sendData.ok) {
       console.error("[Manus] 发送消息失败:", JSON.stringify(sendData));
-      return "消息发送失败，请稍后重试。";
+      return { text: "消息发送失败，请稍后重试。", imageUrls: [], fileAttachments: [] };
     }
 
     // 轮询等待任务完成（最多等待300秒，Max模式任务可能较慢）
@@ -512,24 +585,50 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string): Prom
           const newAssistantMsgs = events.filter(
             (e: any) => e.type === "assistant_message" && (e.timestamp || 0) >= sendTimestamp
           );
+
+          // 提取文字 + 附件（图片/视频/文件）的辅助函数
+          const extractReply = (msg: any): ManusReply => {
+            const am = msg.assistant_message || {};
+            // 提取文字
+            let text = "";
+            const rawContent = am.content;
+            if (typeof rawContent === "string") text = rawContent;
+            else if (Array.isArray(rawContent)) {
+              text = rawContent.filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n");
+            }
+            // 提取附件
+            const imageUrls: string[] = [];
+            const fileAttachments: Array<{ url: string; filename: string; type: string }> = [];
+            const attachments: any[] = am.attachments || [];
+            for (const att of attachments) {
+              const url = att.url || "";
+              const filename = att.filename || "file";
+              const attType = att.type || att.content_type || "";
+              if (attType === "image" || (att.content_type || "").startsWith("image/")) {
+                imageUrls.push(url);
+              } else {
+                // 视频、音频、文件、PPT、Excel、PDF 等统一作为文件链接
+                fileAttachments.push({ url, filename, type: attType });
+              }
+            }
+            return { text, imageUrls, fileAttachments };
+          };
+
           if (newAssistantMsgs.length > 0) {
-            // 取最新的一条（order=desc 所以第一条就是最新）
-            const content = newAssistantMsgs[0].assistant_message?.content;
-            if (typeof content === "string") return content;
-            if (Array.isArray(content)) {
-              return content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n");
+            const result = extractReply(newAssistantMsgs[0]);
+            if (result.text || result.imageUrls.length > 0 || result.fileAttachments.length > 0) {
+              return result;
             }
           }
           // 如果没有新消息，尝试不过滤时间再找一次（容错）
           const anyAssistantMsg = events.find((e: any) => e.type === "assistant_message");
           if (anyAssistantMsg) {
-            const content = anyAssistantMsg.assistant_message?.content;
-            if (typeof content === "string") return content;
-            if (Array.isArray(content)) {
-              return content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n");
+            const result = extractReply(anyAssistantMsg);
+            if (result.text || result.imageUrls.length > 0 || result.fileAttachments.length > 0) {
+              return result;
             }
           }
-          return agentStatus === "error" ? "任务执行失败，请重新描述您的需求。" : "任务已完成，但没有文字回复。";
+          return { text: agentStatus === "error" ? "任务执行失败，请重新描述您的需求。" : "任务已完成，但没有文字回复。", imageUrls: [], fileAttachments: [] };
         }
 
         if (agentStatus === "waiting") {
@@ -539,12 +638,12 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string): Prom
             const askMsg = events.find((e: any) => e.type === "assistant_message");
             if (askMsg) {
               const askContent = askMsg.assistant_message?.content;
-              if (typeof askContent === "string") return askContent;
-              if (Array.isArray(askContent)) {
-                return askContent.filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n");
-              }
+              let askText = "";
+              if (typeof askContent === "string") askText = askContent;
+              else if (Array.isArray(askContent)) askText = askContent.filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n");
+              if (askText) return { text: askText, imageUrls: [], fileAttachments: [] };
             }
-            return "AI 助手需要更多信息，请补充说明。";
+            return { text: "AI 助手需要更多信息，请补充说明。", imageUrls: [], fileAttachments: [] };
           }
           // 其他等待类型，自动确认
           if (detail?.waiting_for_event_id) {
@@ -571,10 +670,10 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string): Prom
       }
     }
 
-    return "Manus 正在处理中，处理时间较长。请稍后再发送消息查看进度。";
+    return { text: "Manus 正在处理中，处理时间较长。请稍后再发送消息查看进度。", imageUrls: [], fileAttachments: [] };
   } catch (e) {
     console.error("[Manus] 通信异常:", e);
-    return "与 AI 助手通信时发生错误，请稍后重试。";
+    return { text: "与 AI 助手通信时发生错误，请稍后重试。", imageUrls: [], fileAttachments: [] };
   }
 }
 
@@ -741,15 +840,38 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
     // 发送给 Manus 并获取回复
     const reply = await sendToManusAndGetReply(taskId, finalContent);
 
-    // 回复给用户（超过2048字符分段发送）
-    if (reply.length <= 2048) {
-      await sendWeComMessage(userId, reply);
-    } else {
-      const chunks = reply.match(/.{1,2000}/gs) || [reply];
-      for (const chunk of chunks) {
-        await sendWeComMessage(userId, chunk);
-        await new Promise(resolve => setTimeout(resolve, 500));
+    // 1. 先发文字（超过2048字符分段发送）
+    if (reply.text) {
+      if (reply.text.length <= 2048) {
+        await sendWeComMessage(userId, reply.text);
+      } else {
+        // 按段落切分，避免截断中文
+        const chunks = reply.text.match(/[\s\S]{1,2000}/g) || [reply.text];
+        for (const chunk of chunks) {
+          await sendWeComMessage(userId, chunk);
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
       }
+    }
+
+    // 2. 发送图片（每张单独发）
+    for (const imgUrl of reply.imageUrls) {
+      await sendWeComImage(userId, imgUrl);
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    // 3. 发送文件附件（视频/PPT/Excel/PDF等，以文字链接形式发送）
+    for (const att of reply.fileAttachments) {
+      const typeLabel: Record<string, string> = {
+        video: "视频", audio: "音频", pdf: "PDF文件",
+        ppt: "PPT文件", pptx: "PPT文件", xlsx: "Excel文件",
+        xls: "Excel文件", docx: "Word文件", doc: "Word文件",
+        csv: "CSV文件", zip: "压缩包", html: "网页文件",
+      };
+      const ext = att.filename.split(".").pop()?.toLowerCase() || "";
+      const label = typeLabel[att.type] || typeLabel[ext] || "文件";
+      await sendWeComMessage(userId, `[${label}] ${att.filename}\n${att.url}`);
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
 
   } catch (e) {
