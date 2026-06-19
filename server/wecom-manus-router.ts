@@ -1359,7 +1359,8 @@ router.get("/api/wecom/user-detail", async (req: Request, res: Response) => {
       };
     });
 
-    res.json({ ok: true, sessions: enrichedSessions, records: userRecords });
+    const usdtCnyRate = getUsdtCnyRate();
+    res.json({ ok: true, sessions: enrichedSessions, records: userRecords, usdt_cny_rate: usdtCnyRate });
   } catch (e) {
     console.error("[WeCom] 查询用户明细失败:", e);
     res.status(500).json({ error: "查询失败" });

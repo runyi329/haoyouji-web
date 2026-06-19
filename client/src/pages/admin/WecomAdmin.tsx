@@ -86,9 +86,13 @@ function formatShortDate(dateStr: string) {
 // 计算从某日期到现在的天数
 function calcDays(dateStr: string) {
   if (!dateStr) return "-";
-  const start = new Date(dateStr).getTime();
+  // 将 'YYYY-MM-DD HH:mm:ss' 格式转为 ISO 格式避免时区解析问题
+  const normalized = dateStr.replace(' ', 'T') + (dateStr.includes('T') ? '' : '+08:00');
+  const start = new Date(normalized).getTime();
   const now = Date.now();
-  const days = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+  const diff = now - start;
+  if (diff < 0) return "1天"; // 防止负数
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   if (days === 0) return "1天";
   return `${days}天`;
 }
@@ -1068,6 +1072,13 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
   const [sessions, setSessions] = useState<UserDetailSession[]>([]);
   const [records, setRecords] = useState<UserDetailRecord[]>([]);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [usdtCnyRate, setUsdtCnyRate] = useState<number>(7.0);
+
+  // 积分转USDT：先转元，再除以汇率
+  const creditsToUsdt = (credits: number) => {
+    const yuan = credits * 0.037;
+    return (yuan / usdtCnyRate).toFixed(2);
+  };
 
   useEffect(() => {
     fetch(`/api/wecom/user-detail?wecom_user_id=${encodeURIComponent(wecomUserId)}`)
@@ -1076,6 +1087,7 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
         if (data.ok) {
           setSessions(data.sessions || []);
           setRecords(data.records || []);
+          if (data.usdt_cny_rate) setUsdtCnyRate(data.usdt_cny_rate);
         } else toast.error(data.error || "加载失败");
       })
       .catch(() => toast.error("网络错误"))
@@ -1096,7 +1108,7 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
           <div className="text-xs text-gray-400">{wecomUserId} · 积分账本</div>
         </div>
         <div className="text-right">
-          <div className="text-lg font-bold text-blue-600">{totalCost.toFixed(1)}</div>
+          <div className="text-lg font-bold text-blue-600">{Math.round(totalCost)}</div>
           <div className="text-xs text-gray-400">总消耗算力</div>
         </div>
       </div>
@@ -1132,7 +1144,7 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
                     )}
                   </div>
                   <div className="ml-3 text-right flex-shrink-0">
-                    <div className="text-sm font-bold text-blue-600">{s.total_cost.toFixed(1)}</div>
+                    <div className="text-sm font-bold text-blue-600">{Math.round(s.total_cost)}</div>
                     <div className="text-xs text-gray-400">{s.record_count} 条</div>
                   </div>
                   <ChevronRight className={`ml-2 w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
@@ -1221,7 +1233,7 @@ function StatsTab() {
           <Coins className="w-4 h-4 text-blue-200" />
           <span className="text-sm text-blue-100">企微渠道累计消耗</span>
         </div>
-        <div className="text-3xl font-bold">{totalCost.toFixed(1)}</div>
+        <div className="text-3xl font-bold">{Math.round(totalCost)}</div>
         <div className="text-sm text-blue-200 mt-0.5">积分</div>
       </div>
 
