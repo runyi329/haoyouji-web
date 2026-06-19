@@ -166,7 +166,7 @@ async function getOrCreateManusTask(wecomUserId: string): Promise<string | null>
           role: "user",
           content: "你好，我是通过企业微信连接的用户。请记住我们的对话，帮助我完成各种工作。",
         },
-        agent_profile: "max",
+        agent_profile: "manus-1.6-max",
       }),
     });
     const data = await res.json() as any;
@@ -209,7 +209,7 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string): Prom
           role: "user",
           content: userMessage,
         },
-        agent_profile: "max",
+        agent_profile: "manus-1.6-max",
       }),
     });
     const sendData = await sendRes.json() as any;
