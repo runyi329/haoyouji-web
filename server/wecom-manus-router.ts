@@ -967,6 +967,23 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       await new Promise(resolve => setTimeout(resolve, 300));
     }
 
+    // 4. 发送本次消耗统计（从已记录的差值数据中取，避免重复查询）
+    try {
+      const afterRes2 = await fetch(`${MANUS_API_BASE}/task.detail?task_id=${taskId}`, {
+        headers: { "x-manus-api-key": MANUS_API_KEY },
+      });
+      const afterData2 = await afterRes2.json() as any;
+      const creditsAfterFinal = (afterData2.ok && afterData2.task) ? (afterData2.task.credit_usage || 0) : creditsBefore;
+      const creditsUsedFinal = Math.max(0, creditsAfterFinal - creditsBefore);
+      if (creditsUsedFinal > 0) {
+        const usdtRate = getUsdtCnyRate();
+        // 1 积分 = 0.01 USDT，再换算成人民币
+        const cnyAmount = (creditsUsedFinal * 0.01 * usdtRate).toFixed(2);
+        const modelLabel = Object.values(MODEL_PROFILES).find(m => m.profile === modelUsed)?.label.split('（')[0] || modelUsed;
+        await sendWeComMessage(userId, `─────────────\n本次消耗：${creditsUsedFinal} 积分 | 约 ${cnyAmount} 元 | ${modelLabel}`);
+      }
+    } catch (_) {}
+
   } catch (e) {
     console.error("[WeCom] 处理消息异常:", e);
   }
