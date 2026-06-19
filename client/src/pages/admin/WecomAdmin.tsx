@@ -1094,10 +1094,9 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
   const [usdtCnyRate, setUsdtCnyRate] = useState<number>(7.0);
   const [useMessageCredits, setUseMessageCredits] = useState(false);
 
-  // 积分转USDT：先转元，再除以汇率
+  // 积分转人民币：1积分 = 0.037元（基于4000积分=148元官方定价）
   const creditsToUsdt = (credits: number) => {
-    const yuan = credits * 0.037;
-    return (yuan / usdtCnyRate).toFixed(2);
+    return (credits * 0.037).toFixed(2);
   };
 
   useEffect(() => {
@@ -1218,7 +1217,7 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
                                   )}
                                   <div className="flex items-center justify-between text-xs text-gray-400">
                                     <span>算力 {r.credits_before ?? "?"} → {r.credits_after ?? "?"}</span>
-                                    <span>{creditsToUsdt(r.credits)} U</span>
+                                    <span>{creditsToUsdt(r.credits)} 元</span>
                                   </div>
                                   {r.model && (
                                     <div className="text-xs text-gray-400">模型: {r.model}</div>
@@ -1246,7 +1245,7 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
                             <div className="text-sm font-medium text-blue-600 text-center">-{Math.round(r.credits)}</div>
                             <div className="text-right">
                               <div className="text-xs font-medium text-green-600">{creditsToYuan(r.credits)}</div>
-                              <div className="text-xs text-gray-400">{creditsToUsdt(r.credits)} U</div>
+                              <div className="text-xs text-gray-400">{creditsToUsdt(r.credits)} 元</div>
                             </div>
                           </div>
                         ))}
@@ -1271,10 +1270,9 @@ function StatsTab() {
   const [detailUser, setDetailUser] = useState<{ id: string; name: string } | null>(null);
   const [usdtCnyRate, setUsdtCnyRate] = useState<number>(7.0);
 
-  // 积分转USDT：先转元，再除以汇率
+  // 积分转人民币：1积分 = 0.037元（基于4000积分=148元官方定价）
   const creditsToUsdt = (credits: number) => {
-    const yuan = credits * 0.037;
-    return (yuan / usdtCnyRate).toFixed(2);
+    return (credits * 0.037).toFixed(2);
   };
 
   const fetchStats = useCallback(async () => {
@@ -1381,7 +1379,7 @@ function StatsTab() {
                     <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
                     <td className="px-3 py-2.5 text-center border-r border-gray-100">
                       <div className="text-sm font-semibold text-green-600">{creditsToYuan(stat.total_cost)}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{creditsToUsdt(stat.total_cost)} U</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{creditsToUsdt(stat.total_cost)} 元</div>
                     </td>
                     <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
                   </tr>
@@ -1421,7 +1419,7 @@ function StatsTab() {
                     <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
                     <td className="px-3 py-2.5 text-center border-r border-gray-100">
                       <div className="text-sm font-semibold text-green-600">{creditsToYuan(stat.total_cost)}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{creditsToUsdt(stat.total_cost)} U</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{creditsToUsdt(stat.total_cost)} 元</div>
                     </td>
                     <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
                   </tr>
@@ -1470,7 +1468,7 @@ function StatsTab() {
                     <td className="px-3 py-2.5 text-center text-sm font-bold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
                     <td className="px-3 py-2.5 text-center border-r border-gray-100">
                       <div className="text-sm font-semibold text-green-600">{creditsToYuan(stat.total_cost)}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{creditsToUsdt(stat.total_cost)} U</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{creditsToUsdt(stat.total_cost)} 元</div>
                     </td>
                     <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
                   </tr>

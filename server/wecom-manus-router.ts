@@ -982,9 +982,8 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       const creditsAfterFinal = (afterData2.ok && afterData2.task) ? (afterData2.task.credit_usage || 0) : creditsBefore;
       const creditsUsedFinal = Math.max(0, creditsAfterFinal - creditsBefore);
       if (creditsUsedFinal > 0) {
-        const usdtRate = getUsdtCnyRate();
-        // 1 积分 = 0.01 USDT，再换算成人民币
-        const cnyAmount = (creditsUsedFinal * 0.01 * usdtRate).toFixed(2);
+        // 1 积分 = 0.037 元（基于4000积分=148元官方定价）
+        const cnyAmount = (creditsUsedFinal * 0.037).toFixed(2);
         const modelLabel = Object.values(MODEL_PROFILES).find(m => m.profile === modelUsed)?.label.split('（')[0] || modelUsed;
         await sendWeComMessage(userId, `─────────────\n本次消耗：${creditsUsedFinal} 积分 | 约 ${cnyAmount} 元 | ${modelLabel}`);
       }
