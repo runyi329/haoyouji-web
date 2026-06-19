@@ -26,6 +26,11 @@ import {
   Save,
   MessageSquare,
   MousePointerClick,
+  MonitorSmartphone,
+  Plug,
+  Ban,
+  GitBranch,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 
@@ -376,6 +381,118 @@ function UIInteractionRuleContent() {
   );
 }
 
+/** ===== 004 · 开发预览与部署纪律 详情正文 ===== */
+function DevPreviewDeployRuleContent() {
+  return (
+    <>
+      {/* 概述 */}
+      <div className="bg-gradient-to-br from-[#102A22] to-[#1C3D32] rounded-2xl p-4 text-white shadow-sm">
+        <div className="flex items-center gap-2 mb-1.5">
+          <MonitorSmartphone className="w-4 h-4 text-[#E0B97D]" />
+          <span className="text-sm font-semibold">开发预览与部署纪律</span>
+        </div>
+        <p className="text-[12.5px] leading-relaxed text-white/70">
+          关于「实时热修改预览地址」「端口管理」「提交部署」的统一纪律。核心卖点是
+          <span className="text-[#E0B97D] font-medium">「左边改、右边马上变」的实时热开发</span>
+          ——开发时只在临时预览地址上改、客户实时看，攒够一批再经超管确认后统一提交部署。
+        </p>
+      </div>
+
+      {/* 端口锁定 3000 */}
+      <RuleSection icon={Plug} title="① 预览端口：永远锁定 3000">
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            实时预览的临时监听地址，端口号写在域名前缀里（如
+            <span className="font-mono text-[12px]"> 3000-xxxx.manus.computer</span>），所以端口必须
+            <span className="font-semibold text-gray-900">永远锁定 3000</span>，地址前缀才稳定。
+          </li>
+          <li>
+            3000 被占用时：<span className="text-[#D32F2F] font-medium">先杀掉占用进程腾出 3000</span> 再启动，
+            <span className="font-semibold text-gray-900">绝不顺延到 3001 / 3002</span>（一换端口地址就变，客户那边即失效）。
+          </li>
+          <li>
+            若占用 3000 的就是本项目自己的开发服务器，直接复用、不必重启。
+          </li>
+        </ul>
+      </RuleSection>
+
+      {/* 地址性质与发送 */}
+      <RuleSection icon={Clock} title="② 临时地址：何时变、何时发">
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            临时地址<span className="font-semibold text-gray-900">不按时间变</span>——只在「沙箱/会话休眠后唤醒、重启开发服务、重新暴露端口」等事件发生时才变；连续演示几小时内保持不变。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">地址不变时不重复发</span>给客户，避免对方误以为又换了；只有地址确实变了才重新发。
+          </li>
+          <li>
+            该地址是<span className="font-semibold text-gray-900">临时开发服务器</span>，会变、会随会话失效、首次加载慢几秒，
+            <span className="text-[#D32F2F] font-medium">不可添加到桌面/主屏长期使用</span>——只用于「临时看一眼实时热修改」。客户日常长期入口一律用正式部署域名。
+          </li>
+        </ul>
+      </RuleSection>
+
+      {/* 地址变更显式提示 */}
+      <RuleSection icon={AlertTriangle} title="③ 地址变更：必须显式提示，不能只甩链接">
+        <p>
+          当地址因不可抗力变更（沙箱重启 / 会话唤醒 / 重新暴露等，<span className="font-semibold text-gray-900">非</span> 3000 被占杀进程那种），必须
+          <span className="font-semibold text-gray-900">主动、显式告知</span>，不能默默发一串新链接让对方自己比对：
+        </p>
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>明确一句话：<span className="font-semibold text-gray-900">「临时预览地址已变更，请改用新地址」</span>；</li>
+          <li>给出<span className="font-semibold text-gray-900">新地址</span>，并尽量附新旧对比（指出中间标识串变了），让对方无需逐字比对；</li>
+          <li>提醒把客户那边保存的链接同步替换。</li>
+        </ul>
+      </RuleSection>
+
+      {/* 未提交改动计数 */}
+      <RuleSection icon={MessageSquare} title="④ 未提交改动计数：口头播报，满 10 次提醒">
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            每完成一次有效改动（且尚未提交部署），向超管<span className="font-semibold text-gray-900">口头播报当前已累计的未提交改动次数</span>（如「已累计 3 次未提交」）。
+          </li>
+          <li>
+            累计到约 <span className="font-semibold text-gray-900">10 次</span>时给出一次提醒，建议可以提交部署了；是否提交由超管决定。
+          </li>
+          <li>提交部署后计数清零，重新从 0 累计。此为口头约定，不做页面徽标。</li>
+        </ul>
+      </RuleSection>
+
+      {/* 禁止自行部署 */}
+      <RuleSection icon={Ban} title="⑤ 绝对禁止 AI 自行提交部署">
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            <span className="text-[#D32F2F] font-medium">任何 git commit / git push / 触发部署，必须经超管明确指令后才能执行</span>；没有点头，只能在本地 / 预览地址上改与演示，不得推送。
+          </li>
+          <li>
+            工作节奏：通常攒够一批改动（约 10 次）、超管确认满意后，再一次性提交部署，不每改一次就部署。
+          </li>
+        </ul>
+      </RuleSection>
+
+      {/* 部署目标仓库 */}
+      <RuleSection icon={GitBranch} title="⑥ 部署目标：统一推送 runyi329/haoyouji-web · main">
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            所有提交统一推送到 GitHub 仓库
+            <span className="font-mono font-semibold text-[#102A22]"> runyi329/haoyouji-web</span> 的
+            <span className="font-mono font-semibold text-[#102A22]"> main</span> 分支；
+          </li>
+          <li>
+            push main 后由 <span className="font-mono text-[12px]">bg-deploy.yml</span> 工作流
+            <span className="font-semibold text-gray-900">自动部署到生产服务器</span>；
+          </li>
+          <li><span className="text-[#D32F2F] font-medium">不推到</span>任何其他仓库或分支。</li>
+        </ul>
+      </RuleSection>
+
+      <p className="text-center text-[11px] text-gray-300 pt-1">
+        规则 004 · 开发预览与部署纪律 · 仅超级管理员可见
+      </p>
+    </>
+  );
+}
+
 /** ===== 规则库总表 ===== */
 export const RULES: Rule[] = [
   {
@@ -398,6 +515,13 @@ export const RULES: Rule[] = [
     summary:
       "通用交互规范：①返回按钮从哪来回哪去 ②刷新强制整页重载 ③保存有正反馈且再进为只读展示态 ④提示默认居中显示。",
     content: <UIInteractionRuleContent />,
+  },
+  {
+    id: "004",
+    title: "开发预览与部署纪律",
+    summary:
+      "实时热修改与部署纪律：①预览端口锁定3000、占用则杀进程腾出绝不顺延 ②临时地址不变不重发、不可放桌面 ③地址变更须显式提示给新址 ④未提交改动口头播报、满10次提醒 ⑤绝对禁止AI自行提交部署 ⑥统一推送 runyi329/haoyouji-web · main 自动部署。",
+    content: <DevPreviewDeployRuleContent />,
   },
 ];
 
