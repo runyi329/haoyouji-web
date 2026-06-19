@@ -28,7 +28,7 @@ const WECOM_ENCODING_AES_KEY = process.env.WECOM_ENCODING_AES_KEY || "myX82WWfAV
 const WECOM_CORP_ID = process.env.WECOM_CORP_ID || "wwbbaccf1da5f886d9";
 const WECOM_AGENT_ID = process.env.WECOM_AGENT_ID || "1000002";
 const WECOM_SECRET = process.env.WECOM_SECRET || "3-XQAnU8_8iKPA74O6_Gw3YQPdOIA2nIv4ILXpxcZ2g";
-const MANUS_API_KEY = process.env.MANUS_API_KEY || "";
+const MANUS_API_KEY = process.env.MANUS_API_KEY || "sk-CR8TOKZLGtXfij6m_2UNN8XQcjq75tcEYTtYv6Y9mWm3-bGLAxU54FiOK4IESdLl_Xcr1FVbceWQJD4XaNv4lNYnsxqw";
 const MANUS_API_BASE = "https://api.manus.ai/v2";
 
 // -----------------------------------------------------------
@@ -352,7 +352,7 @@ async function ensureSessionTable(): Promise<void> {
       trigger_type ENUM('keyword','schedule','always') NOT NULL DEFAULT 'keyword' COMMENT '触发方式',
       trigger_value TEXT NOT NULL COMMENT '触发值（关键词/cron表达式/说明）',
       action_type ENUM('prompt_override','fixed_reply','block') NOT NULL DEFAULT 'prompt_override' COMMENT '执行动作',
-      action_value TEXT NOT NULL DEFAULT '' COMMENT '动作内容',
+      action_value TEXT NOT NULL COMMENT '动作内容',
       enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
