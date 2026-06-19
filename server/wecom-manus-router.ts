@@ -17,6 +17,7 @@ import { Router, Request, Response, text as expressText } from "express";
 import crypto from "crypto";
 import { parseStringPromise } from "xml2js";
 import { getDbConnection } from "./db";
+import { getUsdtCnyRate } from "./price-scanner";
 
 const router = Router();
 
@@ -1192,7 +1193,8 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
 
     const total_cost = stats.reduce((sum: number, s: any) => sum + s.total_cost, 0);
 
-    res.json({ ok: true, stats, total_cost });
+    const usdt_cny_rate = getUsdtCnyRate();
+    res.json({ ok: true, stats, total_cost, usdt_cny_rate });
   } catch (e) {
     console.error("[WeCom] 查询使用统计失败:", e);
     res.status(500).json({ error: "查询失败" });

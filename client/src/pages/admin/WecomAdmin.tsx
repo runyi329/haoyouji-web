@@ -1175,6 +1175,13 @@ function StatsTab() {
   const [totalCost, setTotalCost] = useState(0);
   const [viewMode, setViewMode] = useState<"user" | "time" | "rank">("user");
   const [detailUser, setDetailUser] = useState<{ id: string; name: string } | null>(null);
+  const [usdtCnyRate, setUsdtCnyRate] = useState<number>(7.0);
+
+  // 积分转USDT：先转元，再除以汇率
+  const creditsToUsdt = (credits: number) => {
+    const yuan = credits * 0.037;
+    return (yuan / usdtCnyRate).toFixed(2);
+  };
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
@@ -1184,6 +1191,7 @@ function StatsTab() {
       if (data.ok) {
         setStats(data.stats || []);
         setTotalCost(data.total_cost || 0);
+        if (data.usdt_cny_rate) setUsdtCnyRate(data.usdt_cny_rate);
       } else toast.error(data.error || "加载失败");
     } catch { toast.error("网络错误"); }
     finally { setLoading(false); }
@@ -1253,7 +1261,7 @@ function StatsTab() {
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">累计时间</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16"><div>元</div><div className="text-gray-400">￥</div></th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20"><div>元</div><div className="text-gray-400">U</div></th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-8"></th>
                 </tr>
               </thead>
@@ -1277,7 +1285,10 @@ function StatsTab() {
                     <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{calcDays(stat.first_bound_at)}</td>
                     <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
                     <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
-                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-green-600 border-r border-gray-100">{creditsToYuan(stat.total_cost)}</td>
+                    <td className="px-3 py-2.5 text-center border-r border-gray-100">
+                      <div className="text-sm font-semibold text-green-600">{creditsToYuan(stat.total_cost)}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{creditsToUsdt(stat.total_cost)} U</div>
+                    </td>
                     <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
                   </tr>
                 ))}
@@ -1295,7 +1306,7 @@ function StatsTab() {
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">累计时间</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16"><div>元</div><div className="text-gray-400">￥</div></th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20"><div>元</div><div className="text-gray-400">U</div></th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-8"></th>
                 </tr>
               </thead>
@@ -1314,7 +1325,10 @@ function StatsTab() {
                     <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{calcDays(stat.first_bound_at)}</td>
                     <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
                     <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
-                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-green-600 border-r border-gray-100">{creditsToYuan(stat.total_cost)}</td>
+                    <td className="px-3 py-2.5 text-center border-r border-gray-100">
+                      <div className="text-sm font-semibold text-green-600">{creditsToYuan(stat.total_cost)}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{creditsToUsdt(stat.total_cost)} U</div>
+                    </td>
                     <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
                   </tr>
                 ))}
@@ -1333,7 +1347,7 @@ function StatsTab() {
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">累计时间</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16"><div>元</div><div className="text-gray-400">￥</div></th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20"><div>元</div><div className="text-gray-400">U</div></th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-8"></th>
                 </tr>
               </thead>
@@ -1360,7 +1374,10 @@ function StatsTab() {
                     <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{calcDays(stat.first_bound_at)}</td>
                     <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
                     <td className="px-3 py-2.5 text-center text-sm font-bold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
-                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-green-600 border-r border-gray-100">{creditsToYuan(stat.total_cost)}</td>
+                    <td className="px-3 py-2.5 text-center border-r border-gray-100">
+                      <div className="text-sm font-semibold text-green-600">{creditsToYuan(stat.total_cost)}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{creditsToUsdt(stat.total_cost)} U</div>
+                    </td>
                     <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
                   </tr>
                 ))}
