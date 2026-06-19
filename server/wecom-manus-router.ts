@@ -567,26 +567,28 @@ interface ManusReply {
   fileAttachments: Array<{ url: string; filename: string; type: string }>;
 }
 
-async function sendToManusAndGetReply(taskId: string, userMessage: string): Promise<ManusReply> {
+async function sendToManusAndGetReply(taskId: string, userMessage: string, agentProfile?: string): Promise<ManusReply> {
   try {
     // 记录发送前的时间戳（Unix 秒），用于过滤旧消息
     const sendTimestamp = Math.floor(Date.now() / 1000);
 
-    // 发送消息（使用 Max 模式）
-    console.log(`[Manus] 向任务 ${taskId} 发送消息: ${userMessage.substring(0, 50)}`);
+    console.log(`[Manus] 向任务 ${taskId} 发送消息 (model=${agentProfile || 'default'}): ${userMessage.substring(0, 50)}`);
+    const sendBody: any = {
+      task_id: taskId,
+      message: {
+        role: "user",
+        content: userMessage,
+      },
+    };
+    if (agentProfile) sendBody.agent_profile = agentProfile;
+
     const sendRes = await fetch(`${MANUS_API_BASE}/task.sendMessage`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-manus-api-key": MANUS_API_KEY,
       },
-      body: JSON.stringify({
-        task_id: taskId,
-        message: {
-          role: "user",
-          content: userMessage,
-        },
-      }),
+      body: JSON.stringify(sendBody),
     });
     const sendData = await sendRes.json() as any;
     console.log("[Manus] task.sendMessage 响应:", JSON.stringify(sendData).substring(0, 300));
@@ -905,7 +907,11 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       }
     } catch (_) {}
 
-    const reply = await sendToManusAndGetReply(taskId, finalContent);
+    // 获取用户当前模型偏好，发消息时一并传入
+    const userModelProfile = await getUserModel(userId);
+    const reply = await sendToManusAndGetReply(taskId, finalContent, userModelProfile);
+    // 用户实际使用的模型就是其偏好
+    modelUsed = userModelProfile;
 
     // 2. 回复后再查一次，计算差值并写入数据库
     try {
