@@ -447,6 +447,7 @@ function Router() {
 
         {/* 卡券相关页面 */}
         <Route path="/coupons" component={lazy(() => import("./pages/MyCoupons"))} />
+        <Route path="/longxia/theme" component={lazy(() => import("./pages/longxia/LongxiaThemeManager"))} />
         <Route path="/coupons/create" component={lazy(() => import("./pages/CreateCoupon"))} />
         <Route path="/coupons/:id" component={lazy(() => import("./pages/CouponDetail"))} />
         <Route path="/membership" component={lazy(() => import("./pages/MemberShip"))} />
