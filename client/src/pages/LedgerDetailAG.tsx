@@ -179,6 +179,29 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
   const [showFavModal, setShowFavModal] = useState(false);
   const [favoritedIds, setFavoritedIds] = useState<Set<number>>(new Set());
 
+  // 加载当前用户在该账本的收藏集合
+  const { data: favIdsData } = trpc.ledger.getAgFavoriteIds.useQuery(
+    { ledgerId },
+    { enabled: !!user }
+  );
+  useEffect(() => {
+    if (favIdsData?.ids) {
+      setFavoritedIds(new Set(favIdsData.ids as number[]));
+    }
+  }, [favIdsData]);
+
+  // 收藏切换（乐观更新本地集合）
+  const toggleFavMutation = trpc.ledger.toggleAgFavorite.useMutation({
+    onMutate: ({ imageId }) => {
+      setFavoritedIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(imageId)) next.delete(imageId);
+        else next.add(imageId);
+        return next;
+      });
+    },
+  });
+
   // 分页状态
   const [page, setPage] = useState(1);
   const [allItems, setAllItems] = useState<PromptImage[]>([]);

@@ -1367,7 +1367,7 @@ function MacroSection() {
             </div>
             <div className="flex gap-1.5 overflow-x-auto">
               {SUBTABS.map(t => (
-                <button key={t.key} onClick={() => handleTabChange(t.key)}
+                <button key={t.key} onClick={() => setSubTab(t.key)}
                   className="flex-shrink-0 px-3 py-1 rounded-full text-[12px] font-medium transition-colors"
                   style={{
                     background: subTab === t.key ? RED : "#F0F0F0",

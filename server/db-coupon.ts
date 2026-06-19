@@ -14,14 +14,14 @@ export async function getAvailableRecipients(userId: string) {
     // 查询已共享人脉给其他用户的列表
     const recipients = await db
       .select({
-        userId: contactSharingConnections.sharedWithId,
+        userId: contactSharingConnections.receiverId,
         username: users.username,
         avatar: users.avatar,
       })
-      .from(contactShares)
-      .leftJoin(users, eq(contactSharingConnections.sharedWithId, users.id))
+      .from(contactSharingConnections)
+      .leftJoin(users, eq(contactSharingConnections.receiverId, users.id))
       .where(eq(contactSharingConnections.sharerId, userId))
-      .groupBy(contactSharingConnections.sharedWithId);
+      .groupBy(contactSharingConnections.receiverId);
 
     return recipients;
   } catch (error) {

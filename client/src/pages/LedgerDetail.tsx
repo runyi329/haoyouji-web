@@ -1115,7 +1115,7 @@ function smartQty(val: number | string): string {
 }
 
 // 小图模式单张订单卡片（独立组件，可使用 Hook）
-function FunderOrderSmallCard({ order, livePrices }: { order: any; livePrices: Record<string, number> }) {
+function FunderOrderSmallCard({ order, livePrices, cnyRate }: { order: any; livePrices: Record<string, number>; cnyRate: number }) {
   const coinColorMap: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
   const cc = coinColorMap[order.coin] || '#6B7280';
   const qty = parseFloat(order.buy_quantity || '0');

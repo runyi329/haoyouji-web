@@ -34,6 +34,7 @@ const PRESET_BANKS = [
  */
 export async function initializeBanks() {
   try {
+    const db = await getDb();
     const existingBanks = await db.select().from(banks).limit(1);
     
     if (existingBanks.length === 0) {
@@ -55,6 +56,7 @@ export async function initializeBanks() {
  * 搜索银行（模糊匹配）
  */
 export async function searchBanks(query: string) {
+  const db = await getDb();
   if (!query || query.trim() === '') {
     // 如果没有查询，返回使用次数最多的前20个
     return await db
@@ -85,6 +87,7 @@ export async function addOrUpdateBank(bankName: string) {
   const trimmedName = bankName.trim();
   
   try {
+    const db = await getDb();
     // 检查银行是否已存在
     const existing = await db
       .select()
@@ -126,6 +129,7 @@ export async function addOrUpdateBank(bankName: string) {
  * 获取所有银行（按使用次数排序）
  */
 export async function getAllBanks() {
+  const db = await getDb();
   return await db
     .select()
     .from(banks)

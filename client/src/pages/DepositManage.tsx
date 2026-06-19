@@ -872,7 +872,7 @@ export default function DepositManage() {
                     const cnyVal = coin === "元"
                       ? data.total
                       : coin === "USDT"
-                      ? data.total * CNY_RATE
+                      ? data.total * (cryptoPrices["USDT"] ?? CNY_RATE_FALLBACK)
                       : data.total * (cryptoPrices[coin] ?? 0);
                     return (
                       <div

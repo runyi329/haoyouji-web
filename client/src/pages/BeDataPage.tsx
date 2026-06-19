@@ -1112,6 +1112,7 @@ function PredictTab({ allData, symbol }: { allData: { date: string; changePct: n
   const [rangeIdx, setRangeIdx] = useState(0);
   const [points, setPoints] = useState(100);
   const [confirmed, setConfirmed] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const distMap = useMemo(() => {
     const m: Record<number, number> = {};

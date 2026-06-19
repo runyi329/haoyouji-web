@@ -306,6 +306,7 @@ export const rechargeRouter = router({
 export const fixScannerHeartbeat = protectedProcedure
   .mutation(async ({ ctx }) => {
     const results: string[] = [];
+    const db = await getDb();
     try {
       results.push("开始修复区块链扫描器心跳记录...");
       // 1. 检查用户是否已启用收款地址

@@ -1,9 +1,16 @@
 import React from "react";
 import { Link, useParams } from "wouter";
-import { Share2, Check } from "lucide-react";
+import { Share2, Check, X } from "lucide-react";
 import { PageTag } from "@/components/PageTag";
 
 const BASE_URL = "https://www.jiangyuchen.cn";
+
+// 模块级图片预览桥接：articles 数组为模块级常量，其 JSX 内的图片点击
+// 无法直接访问组件状态，故通过此桥接函数转发到组件内的 setPreviewImage。
+let _openPreview: ((url: string) => void) | null = null;
+function openImagePreview(url: string) {
+  if (_openPreview) _openPreview(url);
+}
 
 // 文章数据类型定义
 interface Article {
@@ -120,7 +127,7 @@ const articles: Article[] = [
                 src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/yNdunTloulJArwlY.webp" 
                 alt="我们的数据谁在赚钱海报" 
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewImage('https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/yNdunTloulJArwlY.webp')}
+                onClick={() => openImagePreview('https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/yNdunTloulJArwlY.webp')}
               />
             </div>
           </div>
@@ -203,7 +210,7 @@ const articles: Article[] = [
                 src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/hzwbYkVZJnEjisDu.webp" 
                 alt="我们的人脉有什么价值海报" 
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewImage('https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/hzwbYkVZJnEjisDu.webp')}
+                onClick={() => openImagePreview('https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/hzwbYkVZJnEjisDu.webp')}
               />
             </div>
           </div>
@@ -332,7 +339,7 @@ const articles: Article[] = [
                 src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oECpcLjZmbRuIuuO.webp" 
                 alt="资本眼里的用户价值海报" 
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewImage('https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oECpcLjZmbRuIuuO.webp')}
+                onClick={() => openImagePreview('https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oECpcLjZmbRuIuuO.webp')}
               />
             </div>
           </div>
@@ -531,7 +538,7 @@ const articles: Article[] = [
                 src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oHGzHPCONtyApGMj.webp" 
                 alt="脉动网的价值估值逻辑海报" 
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewImage("https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oHGzHPCONtyApGMj.webp")}
+                onClick={() => openImagePreview("https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/oHGzHPCONtyApGMj.webp")}
               />
             </div>
           </div>
@@ -673,7 +680,7 @@ const articles: Article[] = [
                 src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/hAoSbkXclaLpcFbw.webp" 
                 alt="为什么你和资本看到的价值不同海报" 
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewImage("https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/hAoSbkXclaLpcFbw.webp")}
+                onClick={() => openImagePreview("https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/hAoSbkXclaLpcFbw.webp")}
               />
             </div>
           </div>
@@ -780,7 +787,7 @@ const articles: Article[] = [
                 src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/LCDRnxTTlZoqtsgY.webp" 
                 alt="人脉做减法收入做乘法海报" 
                 className="w-full rounded-lg shadow-md cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setPreviewImage("https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/LCDRnxTTlZoqtsgY.webp")}
+                onClick={() => openImagePreview("https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/LCDRnxTTlZoqtsgY.webp")}
               />
             </div>
           </div>
@@ -795,6 +802,13 @@ export default function ArticleDetail() {
   const articleId = params.id ? parseInt(params.id) : null;
   const article = articles.find(a => a.id === articleId);
   const [copied, setCopied] = React.useState(false);
+  const [previewImage, setPreviewImage] = React.useState<string | null>(null);
+
+  // 将组件内的 setter 注册到模块级桥接，供 articles 数组中的图片点击调用
+  React.useEffect(() => {
+    _openPreview = (url: string) => setPreviewImage(url);
+    return () => { _openPreview = null; };
+  }, []);
 
   // 分享功能
   const handleShare = async () => {
@@ -879,6 +893,28 @@ export default function ArticleDetail() {
           </Link>
         </div>
       </div>
+
+      {/* 图片放大预览 */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4"
+          onClick={() => setPreviewImage(null)}
+        >
+          <img
+            src={previewImage}
+            alt="预览"
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setPreviewImage(null)}
+            className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/20 text-white text-xl"
+            aria-label="关闭"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

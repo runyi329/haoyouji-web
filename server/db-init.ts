@@ -453,9 +453,12 @@ export async function initDatabase() {
       console.warn('[DB Init] ⚠️ shareType fix skipped:', fixErr instanceof Error ? fixErr.message : fixErr);
     }
 
+    // ===== 建立 equity 相关表（共用连接）=====
+    const connection = await getDbConnection();
+
     // ===== 建立 equity_transfers 股权转让申请表 =====
     try {
-      await connection.execute(`
+      if (connection) await connection.execute(`
         CREATE TABLE IF NOT EXISTS \`equity_transfers\` (
           id INT AUTO_INCREMENT PRIMARY KEY,
           from_user_id INT NOT NULL COMMENT '转出方用户ID',
@@ -479,7 +482,7 @@ export async function initDatabase() {
 
     // ===== 建立 equity_weights 股权权重表 =====
     try {
-      await connection.execute(`
+      if (connection) await connection.execute(`
         CREATE TABLE IF NOT EXISTS \`equity_weights\` (
           id INT AUTO_INCREMENT PRIMARY KEY,
           user_id INT NOT NULL UNIQUE COMMENT '用户ID',
@@ -497,7 +500,7 @@ export async function initDatabase() {
 
     // ===== 建立 equity_weight_logs 权重变更日志表 =====
     try {
-      await connection.execute(`
+      if (connection) await connection.execute(`
         CREATE TABLE IF NOT EXISTS \`equity_weight_logs\` (
           id INT AUTO_INCREMENT PRIMARY KEY,
           ledger_id INT NOT NULL COMMENT '账本ID',
@@ -687,7 +690,7 @@ export async function initDatabase() {
     console.log('[DB Init] gto_notes table ready');
 
     // gto_hand_logs 牌局日志表
-    await connection.execute(`
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS \`gto_hand_logs\` (
         \`id\` INT NOT NULL AUTO_INCREMENT,
         \`user_id\` INT NOT NULL,
