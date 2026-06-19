@@ -983,9 +983,10 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       const creditsUsedFinal = Math.max(0, creditsAfterFinal - creditsBefore);
       if (creditsUsedFinal > 0) {
         // 1 积分 = 0.037 元（基于4000积分=148元官方定价）
-        const cnyAmount = (creditsUsedFinal * 0.037).toFixed(2);
+        const cnyThis = (creditsUsedFinal * 0.037).toFixed(2);
+        const cnyTotal = (creditsAfterFinal * 0.037).toFixed(2);
         const modelLabel = Object.values(MODEL_PROFILES).find(m => m.profile === modelUsed)?.label.split('（')[0] || modelUsed;
-        await sendWeComMessage(userId, `─────────────\n本次消耗：${creditsUsedFinal} 积分 | 约 ${cnyAmount} 元 | ${modelLabel}`);
+        await sendWeComMessage(userId, `─────────────\n本次新增：${creditsUsedFinal} 积分 | ${cnyThis} 元 | ${modelLabel}\n项目累计：${creditsAfterFinal} 积分 | ${cnyTotal} 元`);
       }
     } catch (_) {}
 
