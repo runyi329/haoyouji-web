@@ -42,7 +42,8 @@ interface UsageStat {
   wecom_user_id: string;
   total_cost: number;
   record_count: number;
-  task_count: number;  // 该用户名下所有任务数
+  task_count: number;
+  first_bound_at: string;  // 最早绑定时间
 }
 
 interface MenuItem {
@@ -71,6 +72,23 @@ function formatDate(dateStr: string) {
   if (!dateStr) return "-";
   const d = new Date(dateStr);
   return d.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
+}
+
+// 简短日期：只显示年月日
+function formatShortDate(dateStr: string) {
+  if (!dateStr) return "-";
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+// 计算从某日期到现在的天数
+function calcDays(dateStr: string) {
+  if (!dateStr) return "-";
+  const start = new Date(dateStr).getTime();
+  const now = Date.now();
+  const days = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+  if (days === 0) return "1天";
+  return `${days}天`;
 }
 
 // ─── Tab 按钮 ────────────────────────────────────────────────────────────────
@@ -1019,10 +1037,139 @@ function MessagesTab() {
 // Tab 4: 使用统计
 // ═══════════════════════════════════════════════════════════════════════════════
 
+interface UserDetailSession {
+  id: number;
+  manus_task_id: string;
+  nickname: string;
+  status: string;
+  created_at: string;
+  task_title: string;
+  total_cost: number;
+  record_count: number;
+}
+
+interface UserDetailRecord {
+  task_id: string;
+  task_status: string;
+  credits: number;
+  created_at: string;
+  model: string;
+}
+
+function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: string; displayName: string; onClose: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [sessions, setSessions] = useState<UserDetailSession[]>([]);
+  const [records, setRecords] = useState<UserDetailRecord[]>([]);
+  const [expandedTask, setExpandedTask] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/wecom/user-detail?wecom_user_id=${encodeURIComponent(wecomUserId)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          setSessions(data.sessions || []);
+          setRecords(data.records || []);
+        } else toast.error(data.error || "加载失败");
+      })
+      .catch(() => toast.error("网络错误"))
+      .finally(() => setLoading(false));
+  }, [wecomUserId]);
+
+  const totalCost = sessions.reduce((s, t) => s + t.total_cost, 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      {/* 顶栏 */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white">
+        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100">
+          <ArrowLeft className="w-5 h-5 text-gray-600" />
+        </button>
+        <div className="flex-1">
+          <div className="text-sm font-semibold text-gray-900">{displayName}</div>
+          <div className="text-xs text-gray-400">{wecomUserId} · 积分账本</div>
+        </div>
+        <div className="text-right">
+          <div className="text-lg font-bold text-blue-600">{totalCost.toFixed(1)}</div>
+          <div className="text-xs text-gray-400">总消耗算力</div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">加载中...</div>
+      ) : sessions.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">暂无绑定记录</div>
+      ) : (
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          {sessions.map((s) => {
+            const taskRecords = records.filter(r => r.task_id === s.manus_task_id);
+            const isExpanded = expandedTask === s.manus_task_id;
+            return (
+              <div key={s.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                {/* 任务头部 */}
+                <div
+                  className="px-4 py-3 flex items-start justify-between cursor-pointer active:bg-gray-50"
+                  onClick={() => setExpandedTask(isExpanded ? null : s.manus_task_id)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                        s.status === "active" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                      }`}>{s.status === "active" ? "当前" : "已归档"}</span>
+                      <span className="text-xs text-gray-400">{formatDate(s.created_at)} 绑定</span>
+                    </div>
+                    <div className="text-sm font-medium text-gray-900 truncate">
+                      {s.task_title || s.manus_task_id}
+                    </div>
+                    {s.task_title && (
+                      <div className="text-xs text-gray-400 font-mono truncate mt-0.5">{s.manus_task_id}</div>
+                    )}
+                  </div>
+                  <div className="ml-3 text-right flex-shrink-0">
+                    <div className="text-sm font-bold text-blue-600">{s.total_cost.toFixed(1)}</div>
+                    <div className="text-xs text-gray-400">{s.record_count} 条</div>
+                  </div>
+                  <ChevronRight className={`ml-2 w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                </div>
+
+                {/* 展开明细 */}
+                {isExpanded && (
+                  <div className="border-t border-gray-50">
+                    {taskRecords.length === 0 ? (
+                      <div className="px-4 py-3 text-xs text-gray-400 text-center">暂无积分消耗记录</div>
+                    ) : (
+                      <div>
+                        <div className="px-4 py-2 bg-gray-50 flex justify-between text-xs text-gray-400 font-medium">
+                          <span>时间</span>
+                          <span>消耗算力</span>
+                        </div>
+                        {taskRecords.map((r, i) => (
+                          <div key={i} className="px-4 py-2.5 flex items-center justify-between border-b border-gray-50 last:border-0">
+                            <div>
+                              <div className="text-xs text-gray-700">{formatDate(r.created_at)}</div>
+                              {r.model && <div className="text-xs text-gray-400 mt-0.5">{r.model}</div>}
+                            </div>
+                            <div className="text-sm font-medium text-blue-600">-{r.credits.toFixed(1)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StatsTab() {
   const [stats, setStats] = useState<UsageStat[]>([]);
   const [loading, setLoading] = useState(false);
   const [totalCost, setTotalCost] = useState(0);
+  const [viewMode, setViewMode] = useState<"user" | "time" | "rank">("user");
+  const [detailUser, setDetailUser] = useState<{ id: string; name: string } | null>(null);
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
@@ -1039,6 +1186,13 @@ function StatsTab() {
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
+  // 按积分排行（已是降序）
+  const rankStats = [...stats].sort((a, b) => b.total_cost - a.total_cost);
+
+  if (detailUser) {
+    return <UserDetailModal wecomUserId={detailUser.id} displayName={detailUser.name} onClose={() => setDetailUser(null)} />;
+  }
+
   return (
     <div className="px-4 space-y-3">
       {/* 总消耗卡片 */}
@@ -1051,47 +1205,158 @@ function StatsTab() {
         <div className="text-sm text-blue-200 mt-0.5">积分</div>
       </div>
 
-      {/* 刷新按钮 */}
-      <button
-        onClick={fetchStats}
-        className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-600"
-        disabled={loading}
-      >
-        <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-        刷新数据
-      </button>
+      {/* 三维度 Tab + 刷新 */}
+      <div className="flex items-center gap-2">
+        <div className="flex bg-gray-100 rounded-xl p-1 flex-1">
+          {(["user", "time", "rank"] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                viewMode === mode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+              }`}
+            >
+              {mode === "user" ? "按用户" : mode === "time" ? "按时间" : "按积分"}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={fetchStats}
+          className="flex items-center gap-1 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-600"
+          disabled={loading}
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+          刷新
+        </button>
+      </div>
 
-      {/* 用户消耗列表 */}
+      {/* 内容区 */}
       {loading && stats.length === 0 ? (
         <div className="text-center py-10 text-gray-400 text-sm">加载中...</div>
       ) : stats.length === 0 ? (
         <div className="text-center py-10 text-gray-400 text-sm">暂无使用记录</div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-            <span className="text-xs font-medium text-gray-500">用户</span>
-            <div className="flex gap-6">
-              <span className="text-xs font-medium text-gray-500">消息数</span>
-              <span className="text-xs font-medium text-gray-500">消耗积分</span>
-            </div>
-          </div>
-          {stats.map((stat, i) => (
-            <div key={i} className="px-4 py-3 flex items-center justify-between border-b border-gray-50 last:border-0">
-              <div>
-                <div className="text-sm font-medium text-gray-900">{stat.nickname || stat.wecom_user_id}</div>
-                <div className="text-xs text-gray-400">
-                  {stat.wecom_user_id}
-                  {stat.task_count > 1 && (
-                    <span className="ml-1.5 text-orange-500">共 {stat.task_count} 个任务</span>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-6 text-right">
-                <div className="text-sm text-gray-600 w-10">{stat.record_count}</div>
-                <div className="text-sm font-medium text-blue-600 w-14">{stat.total_cost.toFixed(1)}</div>
-              </div>
-            </div>
-          ))}
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+
+          {/* 按用户 */}
+          {viewMode === "user" && (
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200">用户（点击查看明细）</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">开始时间</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">累计时间</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-8"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.map((stat, i) => (
+                  <tr
+                    key={i}
+                    className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-blue-50 active:bg-blue-100 transition-colors"
+                    onClick={() => setDetailUser({ id: stat.wecom_user_id, name: stat.nickname || stat.wecom_user_id })}
+                  >
+                    <td className="px-3 py-2.5 border-r border-gray-100">
+                      <div className="font-medium text-gray-900 text-sm">{stat.nickname || stat.wecom_user_id}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {stat.wecom_user_id}
+                        {stat.task_count > 1 && (
+                          <span className="ml-1.5 text-orange-500">共 {stat.task_count} 个任务</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{formatShortDate(stat.first_bound_at)}</td>
+                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{calcDays(stat.first_bound_at)}</td>
+                    <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
+                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
+                    <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* 按时间 */}
+          {viewMode === "time" && (
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200">用户（最早绑定在前）</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">开始时间</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">累计时间</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-8"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...stats].sort((a, b) => new Date(a.first_bound_at).getTime() - new Date(b.first_bound_at).getTime()).reverse().map((stat, i) => (
+                  <tr
+                    key={i}
+                    className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-blue-50 active:bg-blue-100 transition-colors"
+                    onClick={() => setDetailUser({ id: stat.wecom_user_id, name: stat.nickname || stat.wecom_user_id })}
+                  >
+                    <td className="px-3 py-2.5 border-r border-gray-100">
+                      <div className="font-medium text-gray-900 text-sm">{stat.nickname || stat.wecom_user_id}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{stat.wecom_user_id}</div>
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{formatShortDate(stat.first_bound_at)}</td>
+                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{calcDays(stat.first_bound_at)}</td>
+                    <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
+                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
+                    <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {/* 按积分排行 */}
+          {viewMode === "rank" && (
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-10">排名</th>
+                  <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200">用户</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">开始时间</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">累计时间</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-8"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rankStats.map((stat, i) => (
+                  <tr
+                    key={i}
+                    className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-blue-50 active:bg-blue-100 transition-colors"
+                    onClick={() => setDetailUser({ id: stat.wecom_user_id, name: stat.nickname || stat.wecom_user_id })}
+                  >
+                    <td className="px-3 py-2.5 text-center border-r border-gray-100">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mx-auto ${
+                        i === 0 ? "bg-yellow-100 text-yellow-700" :
+                        i === 1 ? "bg-gray-100 text-gray-600" :
+                        i === 2 ? "bg-orange-100 text-orange-600" :
+                        "bg-gray-50 text-gray-400"
+                      }`}>{i + 1}</div>
+                    </td>
+                    <td className="px-3 py-2.5 border-r border-gray-100">
+                      <div className="font-medium text-gray-900 text-sm">{stat.nickname || stat.wecom_user_id}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{stat.wecom_user_id}</div>
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{formatShortDate(stat.first_bound_at)}</td>
+                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{calcDays(stat.first_bound_at)}</td>
+                    <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
+                    <td className="px-3 py-2.5 text-center text-sm font-bold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
+                    <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
         </div>
       )}
     </div>

@@ -1126,9 +1126,9 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
 
-    // 查询所有绑定用户（包含 active 和 archived）
+    // 查询所有绑定用户（包含 active 和 archived），按 created_at 升序排列以便取最早时间
     const [sessionRows] = await (conn as any).execute(
-      "SELECT wecom_user_id, manus_task_id, nickname FROM wecom_manus_sessions"
+      "SELECT wecom_user_id, manus_task_id, nickname, created_at FROM wecom_manus_sessions ORDER BY created_at ASC"
     ) as any;
     const sessions = sessionRows as any[];
 
@@ -1170,6 +1170,7 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
           total_cost: 0,
           record_count: 0,
           task_count: 0,
+          first_bound_at: s.created_at || "",  // 最早绑定时间（SQL已升序，第一条即最早）
         };
       }
       const cost = taskCostMap[s.manus_task_id]?.total_cost || 0;
@@ -1282,5 +1283,83 @@ router.get("/api/wecom/wecom-users", async (req: Request, res: Response) => {
   }
 });
 
+// -----------------------------------------------------------
+// 管理API：用户积分明细（按用户查询该用户所有任务的每条消耗记录）
+// -----------------------------------------------------------
+router.get("/api/wecom/user-detail", async (req: Request, res: Response) => {
+  const wecomUserId = req.query.wecom_user_id as string;
+  if (!wecomUserId) return res.status(400).json({ error: "缺少wecom_user_id" });
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+
+    // 查询该用户所有绑定记录（active + archived）
+    const [sessionRows] = await (conn as any).execute(
+      "SELECT id, manus_task_id, nickname, status, created_at FROM wecom_manus_sessions WHERE wecom_user_id = ? ORDER BY created_at ASC",
+      [wecomUserId]
+    ) as any;
+    const sessions = sessionRows as any[];
+
+    if (sessions.length === 0) {
+      return res.json({ ok: true, sessions: [], records: [] });
+    }
+
+    // 拉取该用户所有任务的积分记录
+    const usageRes = await fetch(`${MANUS_API_BASE}/usage.list?limit=500`, {
+      headers: { "x-manus-api-key": MANUS_API_KEY },
+    });
+    const usageData = await usageRes.json() as any;
+    const allRecords = (usageData.ok && usageData.data) ? usageData.data as any[] : [];
+
+    // 构建 task_id -> session 映射
+    const taskMap: Record<string, any> = {};
+    for (const s of sessions) {
+      taskMap[s.manus_task_id] = s;
+    }
+
+    // 过滤属于该用户的积分消耗记录
+    const userRecords = allRecords
+      .filter((r: any) => r.task_id && taskMap[r.task_id] && r.type === "cost")
+      .map((r: any) => ({
+        task_id: r.task_id,
+        task_status: taskMap[r.task_id]?.status || "active",
+        credits: Math.abs(r.credits || 0),
+        created_at: r.created_at || r.timestamp || "",
+        model: r.model || "",
+      }))
+      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    // 拉取每个任务的标题
+    const taskTitles: Record<string, string> = {};
+    await Promise.all(sessions.map(async (s: any) => {
+      try {
+        const r = await fetch(`${MANUS_API_BASE}/task.detail?task_id=${s.manus_task_id}`, {
+          headers: { "x-manus-api-key": MANUS_API_KEY },
+        });
+        const d = await r.json() as any;
+        if (d.ok && d.task?.title) taskTitles[s.manus_task_id] = d.task.title;
+      } catch (_) {}
+    }));
+
+    // 为 sessions 添加标题和积分汇总
+    const enrichedSessions = sessions.map((s: any) => {
+      const taskRecords = userRecords.filter((r: any) => r.task_id === s.manus_task_id);
+      return {
+        ...s,
+        task_title: taskTitles[s.manus_task_id] || "",
+        total_cost: taskRecords.reduce((sum: number, r: any) => sum + r.credits, 0),
+        record_count: taskRecords.length,
+      };
+    });
+
+    res.json({ ok: true, sessions: enrichedSessions, records: userRecords });
+  } catch (e) {
+    console.error("[WeCom] 查询用户明细失败:", e);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
 export default router;
+
 
