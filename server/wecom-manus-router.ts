@@ -345,6 +345,25 @@ async function ensureSessionTable(): Promise<void> {
     await (conn as any).execute(`ALTER TABLE wecom_manus_sessions ADD COLUMN IF NOT EXISTS enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用'`);
   } catch (_) {}
 
+  // 创建消息级积分记录表
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS wecom_message_credits (
+      id            INT AUTO_INCREMENT PRIMARY KEY,
+      wecom_user_id VARCHAR(100) NOT NULL COMMENT '企业微信用户ID',
+      manus_task_id VARCHAR(200) NOT NULL COMMENT 'Manus任务ID',
+      user_message  TEXT         COMMENT '用户发送的消息内容（前200字）',
+      credits_before INT         NOT NULL DEFAULT 0 COMMENT '发消息前任务累计积分消耗',
+      credits_after  INT         NOT NULL DEFAULT 0 COMMENT 'AI回复后任务累计积分消耗',
+      credits_used   INT         NOT NULL DEFAULT 0 COMMENT '本次消耗积分（after - before）',
+      model_used    VARCHAR(50)  COMMENT '使用的模型',
+      reply_preview TEXT         COMMENT 'AI回复预览（前100字）',
+      created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '消息时间',
+      INDEX idx_mc_wecom_user (wecom_user_id),
+      INDEX idx_mc_task (manus_task_id),
+      INDEX idx_mc_created (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业微信每条消息积分消耗记录'
+  `);
+
   // 创建工作流规则表
   await (conn as any).execute(`
     CREATE TABLE IF NOT EXISTS wecom_workflow_rules (
@@ -838,9 +857,49 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       }
     } catch (_) {}
 
-    // 发送给 Manus 并获取回复
+    // 发送给 Manus 并获取回复（差值法记录每条消息积分消耗）
+    // 1. 发消息前查询当前任务的积分消耗
+    let creditsBefore = 0;
+    let modelUsed = "manus-1.6-max";
+    try {
+      const beforeRes = await fetch(`${MANUS_API_BASE}/task.detail?task_id=${taskId}`, {
+        headers: { "x-manus-api-key": MANUS_API_KEY },
+      });
+      const beforeData = await beforeRes.json() as any;
+      if (beforeData.ok && beforeData.task) {
+        creditsBefore = beforeData.task.credit_usage || 0;
+        modelUsed = beforeData.task.agent_profile || "manus-1.6-max";
+      }
+    } catch (_) {}
+
     const reply = await sendToManusAndGetReply(taskId, finalContent);
 
+    // 2. 回复后再查一次，计算差值并写入数据库
+    try {
+      const afterRes = await fetch(`${MANUS_API_BASE}/task.detail?task_id=${taskId}`, {
+        headers: { "x-manus-api-key": MANUS_API_KEY },
+      });
+      const afterData = await afterRes.json() as any;
+      const creditsAfter = (afterData.ok && afterData.task) ? (afterData.task.credit_usage || 0) : creditsBefore;
+      const creditsUsed = Math.max(0, creditsAfter - creditsBefore);
+      const replyPreview = reply.text ? reply.text.substring(0, 100) : (reply.imageUrls.length > 0 ? "[图片]" : "[文件]");
+      const msgPreview = content.substring(0, 200);
+
+      const dbConn = await getDbConnection();
+      if (dbConn) {
+        await (dbConn as any).execute(
+          `INSERT INTO wecom_message_credits
+           (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, model_used, reply_preview)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [userId, taskId, msgPreview, creditsBefore, creditsAfter, creditsUsed, modelUsed, replyPreview]
+        );
+        console.log(`[Credits] 用户 ${userId} 本次消耗 ${creditsUsed} 积分 (${creditsBefore} -> ${creditsAfter})`);
+      }
+    } catch (creditsErr) {
+      console.error("[Credits] 记录积分失败:", creditsErr);
+    }
+
+    // 发送回复给用户
     // 1. 先发文字（超过2048字符分段发送）
     if (reply.text) {
       if (reply.text.length <= 2048) {
@@ -1311,56 +1370,97 @@ router.get("/api/wecom/user-detail", async (req: Request, res: Response) => {
       return res.json({ ok: true, sessions: [], records: [] });
     }
 
-    // 拉取该用户所有任务的积分记录
-    const usageRes = await fetch(`${MANUS_API_BASE}/usage.list?limit=500`, {
-      headers: { "x-manus-api-key": MANUS_API_KEY },
-    });
-    const usageData = await usageRes.json() as any;
-    const allRecords = (usageData.ok && usageData.data) ? usageData.data as any[] : [];
+    // 优先从 wecom_message_credits 表读取消息级积分记录
+    const taskIds = sessions.map((s: any) => s.manus_task_id);
+    let messageRecords: any[] = [];
+    let useMessageCredits = false;
 
-    // 构建 task_id -> session 映射
-    const taskMap: Record<string, any> = {};
-    for (const s of sessions) {
-      taskMap[s.manus_task_id] = s;
+    if (taskIds.length > 0) {
+      try {
+        const placeholders = taskIds.map(() => "?").join(",");
+        const [mcRows] = await (conn as any).execute(
+          `SELECT id, wecom_user_id, manus_task_id, user_message, credits_before, credits_after,
+                  credits_used, model_used, reply_preview,
+                  DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+           FROM wecom_message_credits
+           WHERE manus_task_id IN (${placeholders})
+           ORDER BY created_at DESC`,
+          taskIds
+        ) as any;
+        messageRecords = mcRows as any[];
+        useMessageCredits = messageRecords.length > 0;
+      } catch (_) {}
     }
 
-    // 过滤属于该用户的积分消耗记录
-    const userRecords = allRecords
-      .filter((r: any) => r.task_id && taskMap[r.task_id] && r.type === "cost")
-      .map((r: any) => ({
-        task_id: r.task_id,
-        task_status: taskMap[r.task_id]?.status || "active",
-        credits: Math.abs(r.credits || 0),
-        created_at: r.created_at || r.timestamp || "",
-        model: r.model || "",
-      }))
-      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-    // 拉取每个任务的标题
+    // 拉取每个任务的标题（并行请求）
     const taskTitles: Record<string, string> = {};
+    const taskCreditTotals: Record<string, number> = {};
     await Promise.all(sessions.map(async (s: any) => {
       try {
         const r = await fetch(`${MANUS_API_BASE}/task.detail?task_id=${s.manus_task_id}`, {
           headers: { "x-manus-api-key": MANUS_API_KEY },
         });
         const d = await r.json() as any;
-        if (d.ok && d.task?.title) taskTitles[s.manus_task_id] = d.task.title;
+        if (d.ok && d.task) {
+          taskTitles[s.manus_task_id] = d.task.title || "";
+          taskCreditTotals[s.manus_task_id] = d.task.credit_usage || 0;
+        }
       } catch (_) {}
     }));
 
-    // 为 sessions 添加标题和积分汇总
+    // 如果有消息级记录，用 wecom_message_credits 计算每个任务的积分汇总；否则用 task.detail
     const enrichedSessions = sessions.map((s: any) => {
-      const taskRecords = userRecords.filter((r: any) => r.task_id === s.manus_task_id);
+      const taskMsgs = messageRecords.filter((r: any) => r.manus_task_id === s.manus_task_id);
+      const totalCost = useMessageCredits
+        ? taskMsgs.reduce((sum: number, r: any) => sum + (r.credits_used || 0), 0)
+        : (taskCreditTotals[s.manus_task_id] || 0);
       return {
         ...s,
         task_title: taskTitles[s.manus_task_id] || "",
-        total_cost: taskRecords.reduce((sum: number, r: any) => sum + r.credits, 0),
-        record_count: taskRecords.length,
+        total_cost: totalCost,
+        record_count: taskMsgs.length,
       };
     });
 
+    // 构建统一格式的 records 数组返回给前端
+    let userRecords: any[];
+    if (useMessageCredits) {
+      // 消息级记录：每条消息一行
+      userRecords = messageRecords.map((r: any) => ({
+        id: r.id,
+        task_id: r.manus_task_id,
+        user_message: r.user_message || "",
+        credits: r.credits_used || 0,
+        credits_before: r.credits_before || 0,
+        credits_after: r.credits_after || 0,
+        model: r.model_used || "",
+        reply_preview: r.reply_preview || "",
+        created_at: r.created_at || "",
+        record_type: "message",  // 标识记录类型
+      }));
+    } else {
+      // 降级：从 Manus usage.list 获取任务级记录
+      const usageRes = await fetch(`${MANUS_API_BASE}/usage.list?limit=500`, {
+        headers: { "x-manus-api-key": MANUS_API_KEY },
+      });
+      const usageData = await usageRes.json() as any;
+      const allRecords = (usageData.ok && usageData.data) ? usageData.data as any[] : [];
+      const taskMap: Record<string, any> = {};
+      for (const s of sessions) taskMap[s.manus_task_id] = s;
+      userRecords = allRecords
+        .filter((r: any) => r.task_id && taskMap[r.task_id] && r.type === "cost")
+        .map((r: any) => ({
+          task_id: r.task_id,
+          credits: Math.abs(r.credits || 0),
+          created_at: r.created_at ? new Date(Number(r.created_at) * 1000).toISOString().replace('T', ' ').substring(0, 19) : "",
+          model: r.model || "",
+          record_type: "task",
+        }))
+        .sort((a: any, b: any) => b.created_at.localeCompare(a.created_at));
+    }
+
     const usdtCnyRate = getUsdtCnyRate();
-    res.json({ ok: true, sessions: enrichedSessions, records: userRecords, usdt_cny_rate: usdtCnyRate });
+    res.json({ ok: true, sessions: enrichedSessions, records: userRecords, usdt_cny_rate: usdtCnyRate, use_message_credits: useMessageCredits });
   } catch (e) {
     console.error("[WeCom] 查询用户明细失败:", e);
     res.status(500).json({ error: "查询失败" });

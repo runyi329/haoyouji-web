@@ -1060,11 +1060,18 @@ interface UserDetailSession {
 }
 
 interface UserDetailRecord {
+  id?: number;
   task_id: string;
-  task_status: string;
+  task_status?: string;
   credits: number;
+  credits_before?: number;
+  credits_after?: number;
   created_at: string;
   model: string;
+  // 消息级字段（当 record_type === 'message' 时存在）
+  record_type?: "message" | "task";
+  user_message?: string;  // 用户发送的消息
+  reply_preview?: string; // AI回复预览
 }
 
 function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: string; displayName: string; onClose: () => void }) {
@@ -1072,7 +1079,9 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
   const [sessions, setSessions] = useState<UserDetailSession[]>([]);
   const [records, setRecords] = useState<UserDetailRecord[]>([]);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [expandedMsg, setExpandedMsg] = useState<number | null>(null);
   const [usdtCnyRate, setUsdtCnyRate] = useState<number>(7.0);
+  const [useMessageCredits, setUseMessageCredits] = useState(false);
 
   // 积分转USDT：先转元，再除以汇率
   const creditsToUsdt = (credits: number) => {
@@ -1088,6 +1097,7 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
           setSessions(data.sessions || []);
           setRecords(data.records || []);
           if (data.usdt_cny_rate) setUsdtCnyRate(data.usdt_cny_rate);
+          setUseMessageCredits(!!data.use_message_credits);
         } else toast.error(data.error || "加载失败");
       })
       .catch(() => toast.error("网络错误"))
@@ -1105,7 +1115,10 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
         </button>
         <div className="flex-1">
           <div className="text-sm font-semibold text-gray-900">{displayName}</div>
-          <div className="text-xs text-gray-400">{wecomUserId} · 积分账本</div>
+          <div className="text-xs text-gray-400">
+            {wecomUserId} · 积分账本
+            {useMessageCredits && <span className="ml-1 text-green-500">· 消息级</span>}
+          </div>
         </div>
         <div className="text-right">
           <div className="text-lg font-bold text-blue-600">{Math.round(totalCost)}</div>
@@ -1155,7 +1168,58 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
                   <div className="border-t border-gray-50">
                     {taskRecords.length === 0 ? (
                       <div className="px-4 py-3 text-xs text-gray-400 text-center">暂无积分消耗记录</div>
+                    ) : useMessageCredits ? (
+                      // 消息级明细：每条消息一行，可展开查看内容
+                      <div>
+                        <div className="px-4 py-2 bg-gray-50 flex items-center justify-between text-xs text-gray-400 font-medium">
+                          <span>用户消息</span>
+                          <span>消耗算力 / 元</span>
+                        </div>
+                        {taskRecords.map((r, i) => {
+                          const isExpMsg = expandedMsg === (r.id ?? i);
+                          return (
+                            <div key={r.id ?? i} className="border-b border-gray-50 last:border-0">
+                              {/* 消息主行 */}
+                              <div
+                                className="px-4 py-2.5 flex items-start gap-2 cursor-pointer active:bg-gray-50"
+                                onClick={() => setExpandedMsg(isExpMsg ? null : (r.id ?? i))}
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-xs text-gray-500 mb-0.5">{formatDate(r.created_at)}</div>
+                                  <div className="text-sm text-gray-800 truncate">
+                                    {r.user_message || "(无内容)"}
+                                  </div>
+                                </div>
+                                <div className="flex-shrink-0 text-right ml-2">
+                                  <div className="text-sm font-bold text-blue-600">-{Math.round(r.credits)}</div>
+                                  <div className="text-xs text-green-600">{creditsToYuan(r.credits)}</div>
+                                </div>
+                                <ChevronRight className={`w-3.5 h-3.5 text-gray-300 flex-shrink-0 mt-1 transition-transform ${isExpMsg ? "rotate-90" : ""}`} />
+                              </div>
+                              {/* 展开：AI回复预览 + 积分详情 */}
+                              {isExpMsg && (
+                                <div className="px-4 pb-3 bg-gray-50 space-y-2">
+                                  {r.reply_preview && (
+                                    <div className="rounded-lg bg-white border border-gray-100 px-3 py-2">
+                                      <div className="text-xs text-gray-400 mb-1">AI 回复预览</div>
+                                      <div className="text-xs text-gray-700 leading-relaxed">{r.reply_preview}</div>
+                                    </div>
+                                  )}
+                                  <div className="flex items-center justify-between text-xs text-gray-400">
+                                    <span>算力 {r.credits_before ?? "?"} → {r.credits_after ?? "?"}</span>
+                                    <span>{creditsToUsdt(r.credits)} U</span>
+                                  </div>
+                                  {r.model && (
+                                    <div className="text-xs text-gray-400">模型: {r.model}</div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     ) : (
+                      // 降级：任务级记录（旧格式）
                       <div>
                         <div className="px-4 py-2 bg-gray-50 grid grid-cols-3 text-xs text-gray-400 font-medium">
                           <span>时间</span>
