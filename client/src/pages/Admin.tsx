@@ -449,6 +449,10 @@ export default function Admin() {
               账户关系
             </TabsTrigger>
 
+            <TabsTrigger value="wecomAdmin" className="text-xs sm:text-sm">
+              <MessageSquare className="w-4 h-4 mr-1 hidden sm:inline" />
+              企微AI
+            </TabsTrigger>
             <TabsTrigger value="aiManagement" className="text-xs sm:text-sm">
               <Sparkles className="w-4 h-4 mr-1 hidden sm:inline" />
               AI管理
@@ -1091,6 +1095,22 @@ export default function Admin() {
 
 
           {/* AI 管理 */}
+          <TabsContent value="wecomAdmin">
+            <Card className="p-4">
+              <h2 className="font-bold mb-4">企业微信 AI 管理</h2>
+              <p className="text-muted-foreground text-sm mb-4">
+                管理企业微信用户与 Manus AI 的绑定关系，配置每个用户的模型偏好和系统提示词。
+              </p>
+              <Button
+                onClick={() => setLocation('/admin/wecom')}
+                className="bg-[#D32F2F] hover:bg-[#B71C1C] text-white border-0"
+              >
+                <MessageSquare className="w-4 h-4 mr-2" />
+                进入企微AI管理
+              </Button>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="aiManagement">
             <Card className="p-4">
               <h2 className="font-bold mb-4">AI 管理</h2>

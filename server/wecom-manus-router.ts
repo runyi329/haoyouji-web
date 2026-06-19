@@ -329,11 +329,36 @@ async function ensureSessionTable(): Promise<void> {
       wecom_user_id VARCHAR(100) NOT NULL UNIQUE COMMENT '企业微信用户ID',
       manus_task_id VARCHAR(200) NOT NULL COMMENT 'Manus任务ID',
       nickname VARCHAR(200) DEFAULT '' COMMENT '用户备注名',
+      model_pref VARCHAR(50) DEFAULT 'manus-1.6-max' COMMENT '用户默认模型',
+      system_prompt TEXT DEFAULT NULL COMMENT '系统提示词',
+      enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_wecom_user_id (wecom_user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业微信用户与Manus任务的会话映射'
   `);
+  // 迁移：如果旧表没有相关列，自动添加
+  try {
+    await (conn as any).execute(`ALTER TABLE wecom_manus_sessions ADD COLUMN IF NOT EXISTS model_pref VARCHAR(50) DEFAULT 'manus-1.6-max' COMMENT '用户默认模型'`);
+    await (conn as any).execute(`ALTER TABLE wecom_manus_sessions ADD COLUMN IF NOT EXISTS system_prompt TEXT DEFAULT NULL COMMENT '系统提示词'`);
+    await (conn as any).execute(`ALTER TABLE wecom_manus_sessions ADD COLUMN IF NOT EXISTS enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用'`);
+  } catch (_) {}
+
+  // 创建工作流规则表
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS wecom_workflow_rules (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(200) NOT NULL COMMENT '规则名称',
+      trigger_type ENUM('keyword','schedule','always') NOT NULL DEFAULT 'keyword' COMMENT '触发方式',
+      trigger_value TEXT NOT NULL COMMENT '触发值（关键词/cron表达式/说明）',
+      action_type ENUM('prompt_override','fixed_reply','block') NOT NULL DEFAULT 'prompt_override' COMMENT '执行动作',
+      action_value TEXT NOT NULL DEFAULT '' COMMENT '动作内容',
+      enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业微信工作流规则'
+  `);
+
   _tableEnsured = true;
 }
 
@@ -697,8 +722,24 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       return;
     }
 
+    // 从数据库读取 system_prompt，注入到消息前面
+    let finalContent = content;
+    try {
+      const conn = await getDbConnection();
+      if (conn) {
+        const [rows] = await (conn as any).execute(
+          "SELECT system_prompt FROM wecom_manus_sessions WHERE wecom_user_id = ? LIMIT 1",
+          [userId]
+        ) as any;
+        const systemPrompt = (rows as any[])[0]?.system_prompt;
+        if (systemPrompt) {
+          finalContent = `[系统指令：${systemPrompt}]\n\n${content}`;
+        }
+      }
+    } catch (_) {}
+
     // 发送给 Manus 并获取回复
-    const reply = await sendToManusAndGetReply(taskId, content);
+    const reply = await sendToManusAndGetReply(taskId, finalContent);
 
     // 回复给用户（超过2048字符分段发送）
     if (reply.length <= 2048) {
@@ -725,7 +766,7 @@ router.get("/api/wecom/sessions", async (req: Request, res: Response) => {
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
     const [rows] = await (conn as any).execute(
-      "SELECT id, wecom_user_id, manus_task_id, nickname, created_at, updated_at FROM wecom_manus_sessions ORDER BY updated_at DESC"
+      "SELECT id, wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, created_at, updated_at FROM wecom_manus_sessions ORDER BY updated_at DESC"
     );
     res.json({ ok: true, sessions: rows });
   } catch (e) {
@@ -740,17 +781,17 @@ router.get("/api/wecom/sessions", async (req: Request, res: Response) => {
 router.post("/api/wecom/sessions", async (req: Request, res: Response) => {
   try {
     await ensureSessionTable();
-    const { wecom_user_id, manus_task_id, nickname } = req.body || {};
+    const { wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, enabled } = req.body || {};
     if (!wecom_user_id || !manus_task_id) {
       return res.status(400).json({ error: "wecom_user_id 和 manus_task_id 为必填" });
     }
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
     await (conn as any).execute(
-      `INSERT INTO wecom_manus_sessions (wecom_user_id, manus_task_id, nickname) 
-       VALUES (?, ?, ?) 
-       ON DUPLICATE KEY UPDATE manus_task_id = VALUES(manus_task_id), nickname = VALUES(nickname)`,
-      [wecom_user_id, manus_task_id, nickname || ""]
+      `INSERT INTO wecom_manus_sessions (wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, enabled) 
+       VALUES (?, ?, ?, ?, ?, ?) 
+       ON DUPLICATE KEY UPDATE manus_task_id = VALUES(manus_task_id), nickname = VALUES(nickname), model_pref = VALUES(model_pref), system_prompt = VALUES(system_prompt), enabled = VALUES(enabled)`,
+      [wecom_user_id, manus_task_id, nickname || "", model_pref || "manus-1.6-max", system_prompt || null, enabled !== undefined ? enabled : 1]
     );
     res.json({ ok: true, message: "绑定成功" });
   } catch (e) {
@@ -772,6 +813,233 @@ router.delete("/api/wecom/sessions/:id", async (req: Request, res: Response) => 
   } catch (e) {
     console.error("[WeCom] 删除失败:", e);
     res.status(500).json({ error: "删除失败" });
+  }
+});
+
+// -----------------------------------------------------------
+// 管理API：工作流规则 - 查询所有
+// -----------------------------------------------------------
+router.get("/api/wecom/workflow-rules", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const [rows] = await (conn as any).execute(
+      "SELECT id, name, trigger_type, trigger_value, action_type, action_value, enabled, created_at FROM wecom_workflow_rules ORDER BY created_at DESC"
+    );
+    res.json({ ok: true, rules: rows });
+  } catch (e) {
+    console.error("[WeCom] 查询workflow-rules失败:", e);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
+// -----------------------------------------------------------
+// 管理API：工作流规则 - 创建
+// -----------------------------------------------------------
+router.post("/api/wecom/workflow-rules", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const { name, trigger_type, trigger_value, action_type, action_value } = req.body || {};
+    if (!name || !trigger_value || action_value === undefined) {
+      return res.status(400).json({ error: "name、trigger_value、action_value 为必填" });
+    }
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    await (conn as any).execute(
+      "INSERT INTO wecom_workflow_rules (name, trigger_type, trigger_value, action_type, action_value) VALUES (?, ?, ?, ?, ?)",
+      [name, trigger_type || "keyword", trigger_value, action_type || "prompt_override", action_value || ""]
+    );
+    res.json({ ok: true, message: "规则创建成功" });
+  } catch (e) {
+    console.error("[WeCom] 创建workflow-rule失败:", e);
+    res.status(500).json({ error: "创建失败" });
+  }
+});
+
+// -----------------------------------------------------------
+// 管理API：工作流规则 - 更新（启用/禁用）
+// -----------------------------------------------------------
+router.patch("/api/wecom/workflow-rules/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { enabled, name, trigger_value, action_value } = req.body || {};
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    // 动态构建更新字段
+    const updates: string[] = [];
+    const values: any[] = [];
+    if (enabled !== undefined) { updates.push("enabled = ?"); values.push(enabled); }
+    if (name !== undefined) { updates.push("name = ?"); values.push(name); }
+    if (trigger_value !== undefined) { updates.push("trigger_value = ?"); values.push(trigger_value); }
+    if (action_value !== undefined) { updates.push("action_value = ?"); values.push(action_value); }
+    if (updates.length === 0) return res.status(400).json({ error: "没有需要更新的字段" });
+    values.push(id);
+    await (conn as any).execute(
+      `UPDATE wecom_workflow_rules SET ${updates.join(", ")} WHERE id = ?`,
+      values
+    );
+    res.json({ ok: true, message: "更新成功" });
+  } catch (e) {
+    console.error("[WeCom] 更新workflow-rule失败:", e);
+    res.status(500).json({ error: "更新失败" });
+  }
+});
+
+// -----------------------------------------------------------
+// 管理API：工作流规则 - 删除
+// -----------------------------------------------------------
+router.delete("/api/wecom/workflow-rules/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    await (conn as any).execute("DELETE FROM wecom_workflow_rules WHERE id = ?", [id]);
+    res.json({ ok: true, message: "删除成功" });
+  } catch (e) {
+    console.error("[WeCom] 删除workflow-rule失败:", e);
+    res.status(500).json({ error: "删除失败" });
+  }
+});
+
+// -----------------------------------------------------------
+// 管理API：查询某用户的消息记录（调用 Manus task.listMessages）
+// -----------------------------------------------------------
+router.get("/api/wecom/messages/:taskId", async (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params;
+    if (!taskId) return res.status(400).json({ error: "taskId 为必填" });
+
+    const msgsRes = await fetch(
+      `${MANUS_API_BASE}/task.listMessages?task_id=${taskId}&order=asc&limit=100`,
+      { headers: { "x-manus-api-key": MANUS_API_KEY } }
+    );
+    const msgsData = await msgsRes.json() as any;
+
+    if (!msgsData.ok) {
+      return res.status(500).json({ error: msgsData.error || "获取消息失败" });
+    }
+
+    // 提取 user_message 和 assistant_message 类型的消息
+    const rawMessages = msgsData.messages || [];
+    const messages = rawMessages
+      .filter((e: any) => e.type === "user_message" || e.type === "assistant_message")
+      .map((e: any) => {
+        const isUser = e.type === "user_message";
+        const contentRaw = isUser ? e.user_message?.content : e.assistant_message?.content;
+        let content = "";
+        if (typeof contentRaw === "string") {
+          content = contentRaw;
+        } else if (Array.isArray(contentRaw)) {
+          content = contentRaw.filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n");
+        }
+        return {
+          role: isUser ? "user" : "assistant",
+          content,
+          timestamp: e.timestamp ? new Date(e.timestamp * 1000).toISOString() : null,
+        };
+      })
+      .filter((m: any) => m.content);
+
+    res.json({ ok: true, messages });
+  } catch (e) {
+    console.error("[WeCom] 查询消息记录失败:", e);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
+// -----------------------------------------------------------
+// 管理API：使用统计（调用 Manus usage.list，按 task_id 聚合）
+// -----------------------------------------------------------
+router.get("/api/wecom/stats", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+
+    // 查询所有绑定用户
+    const [sessionRows] = await (conn as any).execute(
+      "SELECT wecom_user_id, manus_task_id, nickname FROM wecom_manus_sessions"
+    ) as any;
+    const sessions = sessionRows as any[];
+
+    if (sessions.length === 0) {
+      return res.json({ ok: true, stats: [], total_cost: 0 });
+    }
+
+    // 拉取积分记录（多拉以确保覆盖所有用户）
+    const usageRes = await fetch(`${MANUS_API_BASE}/usage.list?limit=200`, {
+      headers: { "x-manus-api-key": MANUS_API_KEY },
+    });
+    const usageData = await usageRes.json() as any;
+
+    if (!usageData.ok || !usageData.data) {
+      return res.status(500).json({ error: "获取使用记录失败" });
+    }
+
+    const allRecords = usageData.data as any[];
+
+    // 按 task_id 聚合
+    const taskCostMap: Record<string, { total_cost: number; record_count: number }> = {};
+    for (const r of allRecords) {
+      if (!r.task_id) continue;
+      if (!taskCostMap[r.task_id]) taskCostMap[r.task_id] = { total_cost: 0, record_count: 0 };
+      if (r.type === "cost") {
+        taskCostMap[r.task_id].total_cost += Math.abs(r.credits || 0);
+        taskCostMap[r.task_id].record_count += 1;
+      }
+    }
+
+    // 关联用户信息
+    const stats = sessions
+      .map((s: any) => ({
+        task_id: s.manus_task_id,
+        wecom_user_id: s.wecom_user_id,
+        nickname: s.nickname || s.wecom_user_id,
+        total_cost: taskCostMap[s.manus_task_id]?.total_cost || 0,
+        record_count: taskCostMap[s.manus_task_id]?.record_count || 0,
+      }))
+      .sort((a: any, b: any) => b.total_cost - a.total_cost);
+
+    const total_cost = stats.reduce((sum: number, s: any) => sum + s.total_cost, 0);
+
+    res.json({ ok: true, stats, total_cost });
+  } catch (e) {
+    console.error("[WeCom] 查询使用统计失败:", e);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
+// -----------------------------------------------------------
+// 管理API：推送菜单到企业微信
+// -----------------------------------------------------------
+router.post("/api/wecom/menu", async (req: Request, res: Response) => {
+  try {
+    const { menu } = req.body || {};
+    if (!menu || !Array.isArray(menu)) {
+      return res.status(400).json({ error: "menu 字段为必填数组" });
+    }
+
+    const token = await getAccessToken();
+    const url = `https://qyapi.weixin.qq.com/cgi-bin/menu/create?access_token=${token}&agentid=${WECOM_AGENT_ID}`;
+
+    const menuRes = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ button: menu }),
+    });
+    const menuData = await menuRes.json() as any;
+
+    if (menuData.errcode !== 0) {
+      console.error("[WeCom] 推送菜单失败:", menuData);
+      return res.status(500).json({ error: `企业微信错误: ${menuData.errmsg}` });
+    }
+
+    console.log("[WeCom] 菜单推送成功");
+    res.json({ ok: true, message: "菜单推送成功" });
+  } catch (e) {
+    console.error("[WeCom] 推送菜单异常:", e);
+    res.status(500).json({ error: "推送失败" });
   }
 });
 

@@ -435,6 +435,7 @@ function Router() {
         <Route path="/admin/product/new" component={ProductPublish} />
         <Route path="/admin/product/:id/edit" component={ProductPublish} />
         <Route path="/admin/ai-monitor" component={lazy(() => import("./pages/admin/AiTokenMonitor"))} />
+        <Route path="/admin/wecom" component={lazy(() => import("./pages/admin/WecomAdmin"))} />
         <Route path="/admin/projects" component={lazy(() => import("./pages/admin/ProjectConsole"))} />
         <Route path="/admin/rules" component={lazy(() => import("./pages/admin/RulesList"))} />
         <Route path="/admin/rules/:id" component={lazy(() => import("./pages/admin/RuleDetail"))} />
