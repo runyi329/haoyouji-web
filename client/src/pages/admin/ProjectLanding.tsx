@@ -11,7 +11,11 @@
 import { useEffect, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useSmartBack } from "@/hooks/useSmartBack";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft, Sparkles, ExternalLink } from "lucide-react";
+
+// 临时实时预览（热修改）监听地址 —— 仅用于开发态客户实时预览
+const LIVE_PREVIEW_URL =
+  "https://3000-idq74i86gfo1tcyghhsn5-fb479a13.sg1.manus.computer";
 
 type StoredProject = {
   key: string;
@@ -79,6 +83,17 @@ export default function ProjectLanding() {
         >
           返回
         </button>
+
+        {/* 实时预览（热修改）入口 —— 点进去即开发态监听地址，可实时看到改动 */}
+        <a
+          href={LIVE_PREVIEW_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-[#1A1A1A] text-[#F5C518] text-sm font-medium active:scale-[0.97] transition-transform"
+        >
+          <ExternalLink className="w-4 h-4" />
+          实时预览（热修改）
+        </a>
       </main>
     </div>
   );
