@@ -758,7 +758,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
 });
 
 // -----------------------------------------------------------
-// 管理API：查询所有绑定关系（并发拉取 Manus 任务标题）
+// 管理API：查询所有绑定关系（并发拉取 Manus 标题 + 企微真实姓名头像）
 // -----------------------------------------------------------
 router.get("/api/wecom/sessions", async (req: Request, res: Response) => {
   try {
@@ -770,23 +770,45 @@ router.get("/api/wecom/sessions", async (req: Request, res: Response) => {
     ) as any;
     const sessions = rows as any[];
 
-    // 并发拉取每个 task 的 Manus 标题
-    const withTitles = await Promise.all(
+    // 获取企微 access_token
+    let wecomToken = "";
+    try {
+      const tokenRes = await fetch(
+        `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${WECOM_CORP_ID}&corpsecret=${WECOM_SECRET}`
+      );
+      const tokenData = await tokenRes.json() as any;
+      wecomToken = tokenData.access_token || "";
+    } catch { /* 如果获取失败就继续 */ }
+
+    // 并发拉取：Manus 任务标题 + 企微成员信息
+    const enriched = await Promise.all(
       sessions.map(async (s: any) => {
-        try {
-          const r = await fetch(
-            `${MANUS_API_BASE}/task.detail?task_id=${s.manus_task_id}`,
-            { headers: { "x-manus-api-key": MANUS_API_KEY } }
-          );
-          const d = await r.json() as any;
-          return { ...s, task_title: d.ok ? (d.task?.title || "") : "" };
-        } catch {
-          return { ...s, task_title: "" };
-        }
+        const [manusRes, wecomRes] = await Promise.allSettled([
+          // 1. Manus 任务标题
+          fetch(`${MANUS_API_BASE}/task.detail?task_id=${s.manus_task_id}`, {
+            headers: { "x-manus-api-key": MANUS_API_KEY }
+          }).then(r => r.json()) as Promise<any>,
+          // 2. 企微成员信息（姓名 + 头像）
+          wecomToken
+            ? fetch(`https://qyapi.weixin.qq.com/cgi-bin/user/get?access_token=${wecomToken}&userid=${encodeURIComponent(s.wecom_user_id)}`)
+                .then(r => r.json()) as Promise<any>
+            : Promise.resolve(null)
+        ]);
+
+        const taskTitle = manusRes.status === "fulfilled" && manusRes.value?.ok
+          ? (manusRes.value.task?.title || "")
+          : "";
+
+        const wecomUser = wecomRes.status === "fulfilled" ? wecomRes.value : null;
+        const wecomName = wecomUser?.errcode === 0 ? (wecomUser.name || "") : "";
+        const wecomAvatar = wecomUser?.errcode === 0 ? (wecomUser.avatar || wecomUser.thumb_avatar || "") : "";
+        const wecomAlias = wecomUser?.errcode === 0 ? (wecomUser.alias || "") : "";
+
+        return { ...s, task_title: taskTitle, wecom_name: wecomName, wecom_avatar: wecomAvatar, wecom_alias: wecomAlias };
       })
     );
 
-    res.json({ ok: true, sessions: withTitles });
+    res.json({ ok: true, sessions: enriched });
   } catch (e) {
     console.error("[WeCom] 查询sessions失败:", e);
     res.status(500).json({ error: "查询失败" });

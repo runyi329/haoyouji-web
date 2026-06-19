@@ -18,6 +18,9 @@ interface WecomSession {
   system_prompt?: string;
   enabled?: number;
   task_title?: string;
+  wecom_name?: string;
+  wecom_avatar?: string;
+  wecom_alias?: string;
   created_at: string;
   updated_at: string;
 }
@@ -391,14 +394,27 @@ function UsersTab() {
               <div className="p-4">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      session.enabled === 0 ? "bg-gray-100" : "bg-blue-100"
-                    }`}>
-                      <User className={`w-4 h-4 ${session.enabled === 0 ? "text-gray-400" : "text-blue-600"}`} />
-                    </div>
+                    {session.wecom_avatar ? (
+                      <img
+                        src={session.wecom_avatar}
+                        alt="avatar"
+                        className={`w-9 h-9 rounded-full object-cover border-2 ${
+                          session.enabled === 0 ? "border-gray-200 opacity-50" : "border-blue-100"
+                        }`}
+                      />
+                    ) : (
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center ${
+                        session.enabled === 0 ? "bg-gray-100" : "bg-blue-100"
+                      }`}>
+                        <User className={`w-4 h-4 ${session.enabled === 0 ? "text-gray-400" : "text-blue-600"}`} />
+                      </div>
+                    )}
                     <div>
                       <div className="text-sm font-medium text-gray-900">
-                        {session.nickname || session.wecom_user_id}
+                        {session.wecom_name || session.nickname || session.wecom_user_id}
+                        {session.wecom_alias && (
+                          <span className="ml-1 text-xs text-gray-400 font-normal">({session.wecom_alias})</span>
+                        )}
                         {session.enabled === 0 && (
                           <span className="ml-1.5 text-xs text-gray-400 font-normal">已禁用</span>
                         )}
@@ -810,11 +826,18 @@ function MessagesTab() {
             className="w-full bg-white rounded-xl shadow-sm p-4 flex items-center justify-between text-left"
           >
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
-                <User className="w-4 h-4 text-blue-600" />
-              </div>
+              {session.wecom_avatar ? (
+                <img src={session.wecom_avatar} alt="avatar" className="w-9 h-9 rounded-full object-cover border border-blue-100" />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
+                  <User className="w-4 h-4 text-blue-600" />
+                </div>
+              )}
               <div>
-                <div className="text-sm font-medium text-gray-900">{session.nickname || session.wecom_user_id}</div>
+                <div className="text-sm font-medium text-gray-900">
+                  {session.wecom_name || session.nickname || session.wecom_user_id}
+                  {session.wecom_alias && <span className="ml-1 text-xs text-gray-400">({session.wecom_alias})</span>}
+                </div>
                 {session.task_title ? (
                   <div className="text-xs text-blue-500 truncate max-w-[180px]">{session.task_title}</div>
                 ) : (
