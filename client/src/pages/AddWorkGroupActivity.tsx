@@ -3,7 +3,6 @@ import { useRoute, useLocation } from "wouter";
 import { ChevronLeft, Calendar, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 import {
   Sheet,
   SheetContent,
@@ -151,7 +150,6 @@ export default function AddWorkGroupActivity() {
   
   return (
     <div className="min-h-screen bg-[#FAF3ED] flex flex-col">
-      <PageTag code="P044" />
       {/* 顶部导航栏 */}
       <div className="bg-[#D32F2F] text-white px-4 py-3 flex items-center justify-between sticky top-0 z-10">
         <button 

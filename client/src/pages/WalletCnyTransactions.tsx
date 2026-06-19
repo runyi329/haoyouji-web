@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, RefreshCw } from "lucide-react";
 import { trpc } from "../lib/trpc";
-import { PageTag } from "@/components/PageTag";
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -78,7 +77,6 @@ export default function WalletCnyTransactions() {
   if (isYaban) {
     return (
       <div className="min-h-screen" style={{ background: "#F4F8FB" }}>
-        <PageTag code="P201" />
         {/* 顶部导航 */}
         <div
           className="sticky top-0 z-20 flex items-center justify-between px-4 py-3"
@@ -217,7 +215,6 @@ export default function WalletCnyTransactions() {
       className="min-h-screen"
       style={{ background: "linear-gradient(160deg, #0d0d0d 0%, #1a1a1a 50%, #111111 100%)" }}
     >
-        <PageTag code="P201" />
       <div
         className="sticky top-0 z-20 flex items-center justify-between px-4 py-3"
         style={{

@@ -1,7 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { useEffect } from "react";
 import { useLocation, useParams } from "wouter";
-import { PageTag } from "@/components/PageTag";
 
 const SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"];
 const NAMES: Record<string, string> = {
@@ -106,7 +105,6 @@ export default function CryptoFundingHistoryPage() {
 
   return (
     <div style={{ background: "#0d1117", minHeight: "100vh", color: "#e6edf3", fontFamily: "monospace" }}>
-      <PageTag code="P075" />
       {/* 顶部导航 */}
       <div style={{ position: "sticky", top: 0, background: "#0d1117", borderBottom: "1px solid #21262d", zIndex: 10, display: "flex", alignItems: "center", padding: "10px 12px", gap: 8 }}>
         <button

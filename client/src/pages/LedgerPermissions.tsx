@@ -4,7 +4,6 @@ import { ArrowLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
-import { PageTag } from "@/components/PageTag";
 
 type Permission = "all" | "own" | "none";
 type BackupPermission = "allow" | "none";
@@ -180,7 +179,6 @@ const LedgerPermissions = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <PageTag code="P130" />
       {/* 顶部导航 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white p-3 flex items-center">
         <button onClick={() => setLocation(`/ledger/${id}/settings`)}>

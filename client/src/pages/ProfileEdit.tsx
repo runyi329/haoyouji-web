@@ -4,7 +4,6 @@ import { ArrowLeft, CreditCard, User, Phone, Building2, Briefcase, Mail, Save, E
 import { trpc } from "../lib/trpc";
 import { toast } from "sonner";
 
-import { PageTag } from "@/components/PageTag";
 export default function ProfileEdit() {
   const [isEditing, setIsEditing] = useState(false);
   const [, navigate] = useLocation();
@@ -87,7 +86,6 @@ export default function ProfileEdit() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <PageTag code="P026" />
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-[#D32F2F] border-t-transparent rounded-full animate-spin" />
           <span className="text-gray-500 text-sm">加载中...</span>
@@ -161,7 +159,6 @@ export default function ProfileEdit() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      <PageTag code="P026" />
       {/* 顶部导航栏 */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm">
         <div className="max-w-lg mx-auto px-4 py-3.5 flex items-center">

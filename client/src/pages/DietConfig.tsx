@@ -6,7 +6,6 @@ import { useParams, useLocation } from "wouter";
 import { ChevronLeft, Target } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 
 export default function DietConfig() {
   const { id } = useParams<{ id: string }>();
@@ -56,7 +55,6 @@ export default function DietConfig() {
 
   return (
     <div className="min-h-screen bg-[#FFF5F5]">
-      <PageTag code="P083" />
       {/* 顶部导航 */}
       <div className="bg-gradient-to-r from-rose-500 to-pink-400 text-white px-3 py-3 flex items-center">
         <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1 -ml-1">

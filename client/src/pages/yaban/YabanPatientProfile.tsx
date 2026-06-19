@@ -1,5 +1,4 @@
 import { useLocation, useRoute } from "wouter";
-import { PageTag } from "@/components/PageTag";
 import { ChevronLeft, Edit, Copy } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
@@ -132,7 +131,6 @@ export default function YabanPatientProfile() {
           </div>
         </div>
         <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">未找到该顾客</div>
-        <PageTag code="P330" />
       </div>
     );
   }
@@ -272,7 +270,6 @@ export default function YabanPatientProfile() {
         </button>
       </div>
 
-      <PageTag code="P330" />
     </div>
   );
 }

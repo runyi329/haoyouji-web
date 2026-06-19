@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, TrendingUp } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 // Chart.js 动态加载
 declare global {
@@ -115,7 +114,6 @@ export default function ContractTool() {
       className="min-h-screen flex flex-col"
       style={{ background: "#0d1117", color: "white", fontFamily: "-apple-system, sans-serif" }}
     >
-        <PageTag code="P070" />
       {/* 顶部导航 */}
       <div
         style={{

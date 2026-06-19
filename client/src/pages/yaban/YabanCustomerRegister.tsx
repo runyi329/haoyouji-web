@@ -8,7 +8,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, ClipboardList, Check } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 
 const SKY = "#2196C8";
@@ -197,7 +196,6 @@ export default function YabanCustomerRegister() {
         </button>
       </div>
 
-      <PageTag code="P331" />
 
       <style>{`
         .reg-input {

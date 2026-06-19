@@ -10,7 +10,6 @@ import JiangTabBar from "./JiangTabBar";
 import BottomNav from "@/components/BottomNav";
 import { Cpu, Zap, Code2, Layers, ArrowRight, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 
 // CDN 资源
 const SENTIA_ICON = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sentia-icon-v1_cfb26d59.webp";
@@ -77,7 +76,6 @@ export default function JiangHome() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
-      <PageTag code="P285" />
       {/* 顶部 Header */}
       <div className="bg-[#0d0d14] border-b border-[#D32F2F]/20">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">

@@ -7,7 +7,6 @@ import { ArrowLeft, RefreshCw, PlusCircle, Search, X, ChevronDown } from "lucide
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 
 // 颜色常量
 const BG = "#0D1B2A";
@@ -461,7 +460,6 @@ export default function NbaOddsAdmin() {
         </button>
         <span style={{ flex: 1, fontWeight: 700, fontSize: 17, color: TEXT }}>NBA 总决赛管理</span>
         <span style={{ background: "rgba(255,100,0,0.15)", color: "#FF6400", fontSize: 11, padding: "3px 8px", borderRadius: 6, fontWeight: 700 }}>管理员</span>
-        <PageTag tag="P013" />
       </div>
 
       {/* 数据统计卡片 */}

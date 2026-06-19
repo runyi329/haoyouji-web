@@ -5,7 +5,6 @@
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { ChevronLeft, ShoppingCart, Minus, Plus, Share2, Copy, X, Star } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { useCart } from "./useCart";
 import { useShopProduct } from "./useShopProducts";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -107,7 +106,6 @@ export default function YabanShopProduct() {
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] pb-20">
-      <PageTag code="P303" />
 
       {/* 顶部返回栏 */}
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">

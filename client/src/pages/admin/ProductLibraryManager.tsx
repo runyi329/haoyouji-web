@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 import {
   Plus,
   Edit,
@@ -363,7 +362,6 @@ export default function ProductLibraryManager() {
 
   return (
     <div className="space-y-3">
-      <PageTag code="P234" />
       {/* 顶部标题栏 */}
       <div className="flex items-center justify-between">
         <div>

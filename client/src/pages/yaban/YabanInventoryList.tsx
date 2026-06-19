@@ -5,7 +5,6 @@
  */
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
-import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
 import YabanClinicTag from "./YabanClinicTag";
@@ -56,7 +55,6 @@ export default function YabanInventoryList() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-24">
-      <PageTag code="INV02" />
 
       {/* 顶部栏 */}
       <div className="text-white sticky top-0 z-20" style={{ background: BLUE_GRAD }}>

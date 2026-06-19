@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCenterToast } from "@/components/ui/center-toast";
 import { EXPENSE_CATEGORIES, getDefaultExpenseConfig } from "./AJCompanyManager";
-import { PageTag } from "@/components/PageTag";
 
 type RequestType = 'add' | 'update' | 'delete';
 
@@ -375,7 +374,6 @@ export default function AJOwnerCompanies() {
 
   return (
     <div className="min-h-screen bg-gray-50 max-w-md mx-auto">
-      <PageTag code={`${activeTab === 'companies' ? 'P042-A' : 'P042-B'}`} />
       {/* 顶部导航 */}
       <div className="bg-[#C0392B] text-white px-4 pt-12 pb-4">
         <div className="flex items-center gap-3">

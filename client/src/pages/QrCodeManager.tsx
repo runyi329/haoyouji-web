@@ -15,7 +15,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import QRCode from "qrcode";
-import { PageTag } from "@/components/PageTag";
 
 /* ─── 二维码绘制工具 ─────────────────────────────────────────── */
 async function generateQrCanvas(
@@ -223,7 +222,6 @@ export default function QrCodeManager() {
   /* ── 渲染 ───────────────────────────────────────────────────── */
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
-      <PageTag code="P179" />
       {/* 顶部导航 */}
       <div className="bg-[#D32F2F] text-white px-4 py-3 flex items-center gap-3">
         <button onClick={() => setLocation(`/ledger/${ledgerId}/settings`)} className="p-1 -ml-1">

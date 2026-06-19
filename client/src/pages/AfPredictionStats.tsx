@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { PageTag } from "@/components/PageTag";
 
 const STATUS_LABEL: Record<string, { text: string; color: string }> = {
   won:       { text: '盈利', color: '#D32F2F' },
@@ -40,7 +39,6 @@ export default function AfPredictionStats() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F5F5' }}>
-      <PageTag code="P052" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 flex items-center px-4 py-3 border-b border-gray-100 bg-white">
         <button

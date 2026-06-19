@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import WineTabBar from "./WineTabBar";
 import BottomNav from "@/components/BottomNav";
-import { PageTag } from "@/components/PageTag";
 
 export default function WineProfile() {
   const { user, logout } = useAuth();
@@ -117,7 +116,6 @@ export default function WineProfile() {
 
   return (
     <div className="min-h-screen bg-[#0d0505] text-white pb-24">
-      <PageTag code="P304" />
       {/* 顶部标题栏 */}
       <div className="bg-[#1a0a0a] border-b border-[#8B1A1A]/30 px-4 py-4">
         <h1 className="text-white font-bold text-lg">我的</h1>

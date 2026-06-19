@@ -8,7 +8,6 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { ChevronLeft, Loader2, X, Phone, ClipboardList, Truck, QrCode, Download } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { useYabanClinic } from "./useYabanClinic";
 
 type StatusKey = "all" | "pending" | "confirmed" | "shipped" | "completed" | "refunding" | "cancelled";
@@ -112,7 +111,6 @@ export default function YabanShopAdminOrders() {
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] pb-6">
-      <PageTag code="P306" />
 
       {/* 顶部返回栏 */}
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">

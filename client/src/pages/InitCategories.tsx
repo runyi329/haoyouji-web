@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { PageTag } from "@/components/PageTag";
 
 export default function InitCategories() {
   const [log, setLog] = useState<string[]>([]);
@@ -62,7 +61,6 @@ export default function InitCategories() {
   
   return (
     <div className="container mx-auto p-4">
-      <PageTag code="P103" />
       <h1 className="text-2xl font-bold mb-4">初始化字段分类</h1>
       <Button onClick={handleInit} disabled={createCategoryMutation.isPending}>
         开始初始化

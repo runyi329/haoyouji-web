@@ -14,7 +14,6 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 import { useYabanClinic } from "./useYabanClinic";
 import YabanClinicHeader from "./YabanClinicHeader";
 
@@ -640,7 +639,6 @@ export default function YabanClinicShift() {
       )}
 
 
-      <PageTag code="P324" />
     </div>
   );
 }

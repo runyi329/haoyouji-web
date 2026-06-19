@@ -33,7 +33,6 @@ import {
   AlertCircle,
   Layers,
 } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
 
@@ -358,7 +357,6 @@ export default function YabanDataManage() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-12">
-      <PageTag code="P317" />
 
       {/* 头部 */}
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">

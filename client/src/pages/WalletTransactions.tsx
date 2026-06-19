@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, ArrowDownCircle, ArrowUpCircle, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { trpc } from "../lib/trpc";
-import { PageTag } from "@/components/PageTag";
 
 type TransactionType = "recharge" | "withdraw" | "reward" | "all";
 
@@ -161,7 +160,6 @@ export default function WalletTransactions() {
   if (isYaban) {
     return (
       <div className="min-h-screen pb-20" style={{ background: '#F4F8FB' }}>
-        <PageTag code="P202" />
         <div className="sticky top-0 z-10" style={{ background: 'linear-gradient(135deg,#2196C8,#3BA9E0)' }}>
           <div className="flex items-center px-4 py-3">
             <button onClick={() => setLocation(backTo)} className="mr-3 flex items-center justify-center w-9 h-9 rounded-full" style={{ background: 'rgba(255,255,255,0.18)' }}>
@@ -266,7 +264,6 @@ export default function WalletTransactions() {
   // ============ 原黑金主题 ============
   return (
     <div className="min-h-screen pb-20" style={{ background: 'linear-gradient(160deg,#111111 0%,#1a1a1a 100%)' }}>
-      <PageTag code="P202" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 border-b border-[#2a2a2a]" style={{ background: '#111111' }}>
         <div style={{ height: '2px', background: 'linear-gradient(90deg,transparent,#CBA471,#e8c98a,#CBA471,transparent)' }} />

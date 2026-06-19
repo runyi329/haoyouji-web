@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/_core/hooks/useAuth";
 import ReimbursementForm from "@/components/ReimbursementForm";
-import { PageTag } from "@/components/PageTag";
 
 export default function TransactionDetail() {
   const [, params] = useRoute("/ledger/:ledgerId/transaction/:transactionId");
@@ -359,7 +358,6 @@ export default function TransactionDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <PageTag code="P197" />
       {/* 顶部导航栏 */}
       <div style={{ backgroundColor: `${themeColors.primary}30`, color: themeColors.text }}>
         <div className="flex items-center justify-between px-4 py-3">

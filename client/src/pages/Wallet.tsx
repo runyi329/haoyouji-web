@@ -17,7 +17,6 @@ import {
 import { trpc } from "../lib/trpc";
 import Recharge from "./Recharge";
 import Withdraw from "./Withdraw";
-import { PageTag } from "@/components/PageTag";
 
 // 从交易备注中提取世界杯球队 code（小写），如 [ES] → 'es'
 function extractWcTeamCode(note: string): string | null {
@@ -488,7 +487,6 @@ export default function Wallet() {
 
   return (
     <div className="min-h-screen" style={{ background: G.bg }}>
-      <PageTag code="P008" />
 
       {/* ── 顶部导航栏 ── */}
       <div

@@ -1,11 +1,9 @@
 import { Link } from "wouter";
 import { ArrowLeft } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 export default function PrivacyPolicy() {
   return (
     <div className="min-h-screen bg-gray-50">
-      <PageTag code="P168" />
       {/* 顶部导航 */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center">

@@ -9,7 +9,6 @@ import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Plus, Edit, Trash2, Star, Gift } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 import {
   Dialog,
   DialogContent,
@@ -133,7 +132,6 @@ export default function RewardsManagement() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50 to-orange-50 pb-20">
-      <PageTag code="P298" />
       {/* 顶部导航 */}
       <div className="bg-white shadow-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">

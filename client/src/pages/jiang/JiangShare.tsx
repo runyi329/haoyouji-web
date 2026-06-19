@@ -17,7 +17,6 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { Share2, Cpu, Zap, Code2, Layers, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 
 const SENTIA_ICON = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sentia-icon-v1_cfb26d59.webp";
 const PRODUCT_CONTACTS = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/product-contacts-4fLDcpWoC7ZCAT35ypvu8N.webp";
@@ -81,7 +80,6 @@ export default function JiangShare() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white">
-      <PageTag code="P291" />
       {/* 顶部品牌标识（无返回按钮，无 App 导航） */}
       <div className="bg-[#0d0d14] border-b border-[#D32F2F]/20 px-4 py-4">
         <div className="max-w-lg mx-auto flex items-center justify-between">

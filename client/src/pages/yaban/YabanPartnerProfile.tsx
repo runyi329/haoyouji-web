@@ -8,7 +8,6 @@
 import { useLocation } from "wouter";
 import { ChevronLeft, User, Briefcase } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
-import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
 
@@ -21,7 +20,6 @@ export default function YabanPartnerProfile() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <PageTag code="P402" />
       <div
         className="text-white sticky top-0 z-40"
         style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}

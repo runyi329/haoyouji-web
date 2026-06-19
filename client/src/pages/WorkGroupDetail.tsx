@@ -17,7 +17,6 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
-import { PageTag } from "@/components/PageTag";
 
 /**
  * 脉动节点合作平台 - 第二层：群详情（人员列表）
@@ -90,7 +89,6 @@ export default function WorkGroupDetail() {
 
   return (
     <div className="min-h-screen bg-[#FAF3ED]">
-      <PageTag code="P206" />
       {/* 顶部导航栏 */}
       <div className="bg-[#D32F2F] border-b border-[#D32F2F]-dark sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4">

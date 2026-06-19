@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, Home, Plane, Hammer, Briefcase, GraduationCap, Receipt, Edit, Dumbbell } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 // 账本类型配置
 const ledgerTypes = [
@@ -76,7 +75,6 @@ export default function CreateLedgerType() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-4">
-      <PageTag code="P074" />
       {/* 顶部导航栏 */}
       <div className="text-white px-3 py-2.5 flex items-center" style={{ backgroundColor: 'var(--brand-red, #D32F2F)' }}>
         <button

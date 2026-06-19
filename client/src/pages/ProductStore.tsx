@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { ChevronLeft, ChevronRight, Users, BookOpen, Cpu, Zap, Star } from 'lucide-react';
-import { PageTag } from "@/components/PageTag";
 
 // ============================================================
 // 商品数据
@@ -74,7 +73,6 @@ export default function ProductStore() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <PageTag code="P170" />
       {/* 顶部导航 */}
       <div className="bg-[#D32F2F] text-white sticky top-0 z-10">
         <div className="flex items-center p-4">

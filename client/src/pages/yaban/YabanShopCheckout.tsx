@@ -6,7 +6,6 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, Check, Loader2 } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useCart } from "./useCart";
@@ -80,7 +79,6 @@ export default function YabanShopCheckout() {
   if (rows.length === 0) {
     return (
       <div className="min-h-screen bg-[#F5F7FA] flex flex-col items-center justify-center">
-        <PageTag code="P305" />
         <p className="text-sm text-gray-400 mb-4">没有可结算的商品</p>
         <button onClick={() => navigate("/yaban/shop")} className="text-sm text-[#2196C8]">
           返回商城
@@ -91,7 +89,6 @@ export default function YabanShopCheckout() {
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] pb-24">
-      <PageTag code="P305" />
 
       {/* 顶部返回栏 */}
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">

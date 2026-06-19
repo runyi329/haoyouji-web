@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 
 // ─── AB型通用模板：菜单默认为空，可在后台配置菜品──────────────────────
 const MALUJI_DISHES: string[] = [];
@@ -1117,7 +1116,6 @@ export default function ABOpinionBook() {
 
   return (
     <div className="flex flex-col" style={{ minHeight: '100vh', overflow: 'auto' }}>
-      <PageTag code="P036" />
       <GuestView ledgerId={ledgerId} branches={branches} allCategories={allCategories} initialCategoryId={initialCategoryId} />
     </div>
   );

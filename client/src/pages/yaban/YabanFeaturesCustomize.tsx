@@ -11,7 +11,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, ArrowUp, ArrowDown, Minus, Plus, RotateCcw } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 import {
   ALL_FEATURE_DICT,
@@ -86,7 +85,6 @@ export default function YabanFeaturesCustomize() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
-      <PageTag code="P323" />
 
       {/* 顶部导航栏 */}
       <div

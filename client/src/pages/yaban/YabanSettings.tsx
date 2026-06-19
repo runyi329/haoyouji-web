@@ -16,7 +16,6 @@ import {
   LogOut,
   Loader2,
 } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 
@@ -88,7 +87,6 @@ export default function YabanSettings() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-10">
-      <PageTag code="P316" />
 
       {/* 头部 */}
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">

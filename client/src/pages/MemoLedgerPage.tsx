@@ -48,7 +48,6 @@ import {
 
 import { UserAvatar } from "@/components/UserAvatar";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { PageTag } from "@/components/PageTag";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -1133,7 +1132,6 @@ export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = f
 
   return (
     <div className="h-[100dvh] flex flex-col bg-gray-50 overflow-hidden">
-      <PageTag code="P143" />
       {/* 顶部导航 */}
       <div className="text-white flex-shrink-0 z-10" style={{ backgroundColor: promptMode ? promptCatColor : "#D32F2F", transition: "background-color 0.3s" }}>
         {/* 标题栏 */}

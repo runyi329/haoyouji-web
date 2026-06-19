@@ -8,7 +8,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, useRoute } from "wouter";
 import { ChevronDown, XCircle, Check, UserRound, Camera } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
@@ -302,7 +301,6 @@ export default function YabanPatientCreate() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <PageTag code="P304" />
 
       {/* 顶部导航栏 */}
       <div className="sticky top-0 z-40 bg-white border-b border-gray-100">

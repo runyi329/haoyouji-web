@@ -14,7 +14,6 @@ import {
 // AfFeeDetail 页面通过路由跳转，已删除内嵌 FeeDetailModal
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 
 // 综合状态标签（买入状态 + 卖出状态）
 const getStatusDisplay = (order: any) => {
@@ -415,7 +414,6 @@ export default function AfOrderManage() {
 
   return (
     <div className="min-h-screen pb-10" style={{ background: '#f5f7fa' }}>
-      <PageTag code="P050" />
 
       {/* ── 顶部蓝色区域 ── */}
       <div style={{ background: 'linear-gradient(135deg,#1e3a8a 0%,#2563eb 100%)' }}>

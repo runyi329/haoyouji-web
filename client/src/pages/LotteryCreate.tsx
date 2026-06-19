@@ -9,7 +9,6 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { ChevronLeft, Plus, X, Trophy, Shield, TrendingUp, BarChart2, Users, UserPlus, Link2, HelpCircle, CheckCircle2, Circle } from "lucide-react";
 import { LotteryDatePicker } from "@/components/LotteryDatePicker";
-import { PageTag } from "@/components/PageTag";
 
 // ─── 抽奖模式配置 ──────────────────────────────────────────────────────────
 const MODES = [
@@ -416,7 +415,6 @@ export default function LotteryCreate() {
 
   return (
     <div className="min-h-screen pb-24" style={{ backgroundColor: '#FAF3ED' }}>
-      <PageTag code="P135" />
       {/* 顶部导航 */}
       <div className="bg-white border-b sticky top-0 z-10" style={{ borderColor: '#E0E0E0' }}>
         <div className="flex items-center h-14 px-4 gap-3">

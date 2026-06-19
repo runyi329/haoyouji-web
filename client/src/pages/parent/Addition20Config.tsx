@@ -10,7 +10,6 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import ChallengeDialog from "@/components/ChallengeDialog";
-import { PageTag } from "@/components/PageTag";
 
 type Difficulty = "easy" | "hard";
 type AnswerMode = "choice" | "input";
@@ -138,7 +137,6 @@ export default function Addition20Config() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <PageTag code="P294" />
       {/* 顶部导航 */}
       <header className="z-50 glass border-b border-border/50">
         <div className="container flex items-center justify-between h-14">

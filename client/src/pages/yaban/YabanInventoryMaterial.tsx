@@ -5,7 +5,6 @@
  */
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
 import { toast } from "sonner";
@@ -50,7 +49,6 @@ export default function YabanInventoryMaterial() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-24">
-      <PageTag code="INV05" />
       <div className="text-white sticky top-0 z-20" style={{ background: BLUE_GRAD }}>
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => navigate("/yaban/inventory/list")} className="p-1"><ChevronLeft className="w-6 h-6" /></button>

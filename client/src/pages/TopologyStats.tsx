@@ -2,7 +2,6 @@ import { useLocation } from "wouter";
 import { ArrowLeft, Users, UserCheck, Network, TrendingUp, Share2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { PageTag } from "@/components/PageTag";
 
 interface StatRow {
   shareNo: string;
@@ -45,7 +44,6 @@ export default function TopologyStats() {
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
-      <PageTag code="P196" />
       {/* 顶部导航 */}
       <div className="bg-[#D32F2F] px-4 pt-12 pb-4">
         <div className="flex items-center gap-3">

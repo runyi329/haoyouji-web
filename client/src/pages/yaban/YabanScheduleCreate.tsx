@@ -12,7 +12,6 @@
  * - 禁止 Emoji
  */
 import { useState, useMemo } from "react";
-import { PageTag } from "@/components/PageTag";
 import { useLocation } from "wouter";
 import { ChevronRight, User, Clock, Stethoscope, FileText, Check, Search, Calendar } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -446,7 +445,6 @@ export default function YabanScheduleCreate() {
         );
       })()}
 
-      <PageTag code="P323" />
     </div>
   );
 }

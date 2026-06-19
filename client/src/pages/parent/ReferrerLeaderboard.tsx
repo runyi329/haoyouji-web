@@ -4,7 +4,6 @@ import { trpc } from "@/lib/trpc";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, TrendingUp, TrendingDown } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 type SortField = "direct" | "indirect" | "total";
 type SortOrder = "asc" | "desc";
@@ -58,7 +57,6 @@ export default function ReferrerLeaderboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50 p-4">
-      <PageTag code="P297" />
       <div className="max-w-4xl mx-auto">
         {/* 顶部导航 */}
         <div className="mb-6 flex items-center gap-4">

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, RefreshCw } from 'lucide-react';
 import { useLocation } from 'wouter';
-import { PageTag } from "@/components/PageTag";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
@@ -89,7 +88,6 @@ export default function ValuationManagement() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <PageTag code="P243" />
       {/* 顶部导航 */}
       <div className="bg-gradient-to-br from-[#800000] to-[#A80000] text-white px-6 pt-6 pb-8">
         <button

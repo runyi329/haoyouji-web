@@ -12,7 +12,6 @@ import {
   Cpu, X, CreditCard, Star, ChevronRight, MessageCircle, Phone,
 } from 'lucide-react';
 import BottomNav from '@/components/BottomNav';
-import { PageTag } from "@/components/PageTag";
 
 // ============================================================
 // 图片资源常量
@@ -931,7 +930,6 @@ export default function ProductDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-36">
-      <PageTag code="P169" />
       {/* 顶部导航 */}
       <div className="bg-[#D32F2F] text-white sticky top-0 z-20">
         <div className="flex items-center px-4 py-3">

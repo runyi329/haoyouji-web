@@ -5,7 +5,6 @@ import { ChevronLeft, ChevronRight, Building2, FileText, Shield, Calculator, Use
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { PageTag } from "@/components/PageTag";
 
 // ========== 中国法定节假日数据（2025-2026年） ==========
 const CHINA_HOLIDAYS: Record<string, string> = {
@@ -294,7 +293,6 @@ export default function AhCompanyWorkspace() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F5F7FA' }}>
-      <PageTag code={`${activeTab === 'members' ? 'P059-A' : activeTab === 'tax' ? 'P059-B' : activeTab === 'social' ? 'P059-C' : 'P059-D'}`} />
       {/* 顶部蓝色区域 */}
       <div style={{
         background: 'linear-gradient(135deg, #1E3A8A 0%, #1A56DB 50%, #3B82F6 100%)',

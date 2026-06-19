@@ -7,7 +7,6 @@ import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { PageTag } from "@/components/PageTag";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, Cell
@@ -896,7 +895,6 @@ export default function MacroDataPage() {
                 B(t) = W(t) × TFR(t) × Σ[ωᵢ × Xᵢ(t)]
               </div>
               <div style={{ color: TEXT_SUB, fontSize: 11, lineHeight: 1.8, marginBottom: 20 }}>
-      <PageTag code="P035" />
                 W(t)：育龄女性人口（主导因素，权重35%）。TFR(t)：总和生育率。Xᵢ(t)：社会经济变量。三情景通过调整TFR假设值（悲观0.85／基准1.0／乐观1.05）生成。
               </div>
             </div>

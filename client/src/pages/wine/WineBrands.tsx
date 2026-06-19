@@ -11,7 +11,6 @@ import { ShoppingCart, Wine, Search, Package } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import WineTabBar from "./WineTabBar";
 import BottomNav from "@/components/BottomNav";
-import { PageTag } from "@/components/PageTag";
 
 const MERCHANT_CODE = "cx8618";
 
@@ -90,7 +89,6 @@ export default function WineBrands() {
 
   return (
     <div className="min-h-screen text-white pb-24" style={{ backgroundColor: '#000' }}>
-      <PageTag code="P301" />
       {/* 顶部标题栏 */}
       <div className="px-4 py-4 flex items-center justify-between" style={{ backgroundColor: '#000', borderBottom: '1px solid #333' }}>
         <div>

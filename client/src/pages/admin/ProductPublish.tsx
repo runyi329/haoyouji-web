@@ -19,7 +19,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 import {
   ChevronLeft,
   Plus,
@@ -450,7 +449,6 @@ export default function ProductPublish() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-32">
-      <PageTag code="P235" />
       {/* 顶部导航栏 */}
       <div className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
         <div className="flex items-center h-14 px-4 gap-3">

@@ -3,7 +3,6 @@ import { trpc } from "../lib/trpc";
 import { toast } from "sonner";
 import { Loader2, AlertCircle, ArrowLeft, CheckCircle2, Clock, XCircle, ArrowUpCircle, ChevronRight } from "lucide-react";
 import { useLocation, useSearch } from "wouter";
-import { PageTag } from "@/components/PageTag";
 
 interface WithdrawProps {
   hideHeader?: boolean;
@@ -110,7 +109,6 @@ export default function Withdraw({ hideHeader, theme, onClose }: WithdrawProps) 
     const blueBtnStyle = { background: "linear-gradient(135deg,#2196C8,#1E88D6)", boxShadow: "0 6px 18px rgba(30,136,214,0.35)" } as const;
     return (
       <div className="min-h-screen pb-20" style={{ background: "#F4F8FB" }}>
-        <PageTag code="P010" />
         {!hideHeader && (
           <div className="sticky top-0 z-10" style={{ background: "linear-gradient(135deg,#2196C8,#3BA9E0)" }}>
             <div className="flex items-center justify-between px-4 py-3">
@@ -254,7 +252,6 @@ export default function Withdraw({ hideHeader, theme, onClose }: WithdrawProps) 
 
   return (
     <div className="min-h-screen pb-20" style={{ background: 'linear-gradient(160deg,#111111 0%,#1a1a1a 100%)' }}>
-      <PageTag code="P010" />
       {/* 顶部导航 */}
       {!hideHeader && (
         <div className="sticky top-0 z-10 border-b border-[#2a2a2a]" style={{ background: '#111111' }}>

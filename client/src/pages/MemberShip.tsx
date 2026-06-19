@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, Check, Crown, Zap } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 interface MembershipPlan {
   id: string;
@@ -85,7 +84,6 @@ export default function MemberShip() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      <PageTag code="P142" />
       {/* 顶部导航 */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center px-4 py-3">

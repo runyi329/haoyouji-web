@@ -8,7 +8,6 @@ import { useLocation } from "wouter";
 import { ChevronDown, ChevronUp, ScanLine, UserPlus, CalendarPlus, PhoneCall, ArrowDownToLine, ArrowUpFromLine, Grip } from "lucide-react";
 import YabanCalendar from "./YabanCalendar";
 import YabanTabBar from "./YabanTabBar";
-import { PageTag } from "@/components/PageTag";
 import VersionSwitcher from "@/components/VersionSwitcher";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -125,7 +124,6 @@ export default function YabanHome() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <PageTag code="P300" />
 
       {/* 顶部蓝色渐变 Header */}
       <div

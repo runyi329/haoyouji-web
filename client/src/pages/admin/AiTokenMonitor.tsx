@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, ToggleLeft, ToggleRight, BarChart2, Zap, Calendar, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 
 // 功能名称映射（feature_key → 中文）
 const FEATURE_LABELS: Record<string, string> = {
@@ -88,7 +87,6 @@ export default function AiTokenMonitor() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20 max-w-md mx-auto">
-      <PageTag code="P213" />
       {/* Header */}
       <div className="bg-white sticky top-0 z-10 px-4 py-3 flex items-center gap-3 border-b border-gray-100 shadow-sm">
         <button onClick={() => navigate("/parent/profile")} className="p-1 -ml-1">

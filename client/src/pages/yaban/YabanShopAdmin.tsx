@@ -14,7 +14,6 @@ import {
   BarChart3,
   Megaphone,
 } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import YabanClinicHeader from "./YabanClinicHeader";
 
 interface AdminEntry {
@@ -82,7 +81,6 @@ export default function YabanShopAdmin() {
 
   return (
     <div className="min-h-screen bg-[#F5F7FA]">
-      <PageTag code="P318" />
 
       {/* 顶部蓝色头部 */}
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">

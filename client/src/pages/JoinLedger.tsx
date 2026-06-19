@@ -6,7 +6,6 @@ import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
-import { PageTag } from "@/components/PageTag";
 
 export default function JoinLedger() {
   const { token } = useParams<{ token: string }>();
@@ -129,7 +128,6 @@ export default function JoinLedger() {
   // 待加入状态
   return (
     <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: `${'#D32F2F'}15` }}>
-      <PageTag code="P108" />
       <Card className="p-8 bg-white max-w-md w-full text-center">
         <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: `${'#D32F2F'}30` }}>
           <span className="text-3xl">📒</span>

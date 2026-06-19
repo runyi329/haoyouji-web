@@ -14,7 +14,6 @@ import {
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { PageTag } from "@/components/PageTag";
 
 export default function InviteCode() {
   const [, setLocation] = useLocation();
@@ -118,7 +117,6 @@ export default function InviteCode() {
 
   return (
     <div className="max-w-md mx-auto shadow-2xl bg-gray-50 min-h-screen">
-      <PageTag code="P106" />
       {/* 顶部导航 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#d44] text-white p-4 sticky top-0 z-50 shadow-lg rounded-t-2xl">
         <div className="flex items-center gap-4">

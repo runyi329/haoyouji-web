@@ -8,7 +8,6 @@ import { ChevronLeft, RefreshCw, Loader2, ExternalLink } from "lucide-react";
 import BeautyTabBar from "./BeautyTabBar";
 import BottomNav from "@/components/BottomNav";
 import { trpc } from "@/lib/trpc";
-import { PageTag } from "@/components/PageTag";
 
 // 根据标题关键词自动匹配分类标签
 function getCategory(title: string): { label: string; color: string; bg: string } {
@@ -50,7 +49,6 @@ export default function BeautyHealth() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
-      <PageTag code="P251" />
       {/* 顶部导航栏 */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-100">
         <div className="flex items-center justify-between px-4 py-3">

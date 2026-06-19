@@ -24,7 +24,6 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
-import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
 import { compressAvatar } from "@/utils/imageUtils";
@@ -219,7 +218,6 @@ export default function YabanProfile() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-20">
-      <PageTag code="P303" />
 
       {/* 顶部蓝色头部 + 用户信息 */}
       <div className="bg-gradient-to-b from-[#2196C8] to-[#3BA9E0] text-white">

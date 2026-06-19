@@ -75,7 +75,6 @@ import CustomAIManager from "./admin/CustomAIManager";
 import CustomAJManager from "./admin/CustomAJManager";
 import ProductLibraryManager from "./admin/ProductLibraryManager";
 import AdminRedeemOrders from "./admin/AdminRedeemOrders";
-import { PageTag } from "@/components/PageTag";
 
 // 定制账本类型配置表（新增类型只需在此添加）
 const CUSTOM_LEDGER_TYPES = [
@@ -376,7 +375,6 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <PageTag code="P006" />
       {/* 顶部导航 */}
       <header className="z-50 glass border-b border-border/50">
         <div className="container flex items-center justify-between h-14">

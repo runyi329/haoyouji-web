@@ -12,7 +12,6 @@ import { useRoute, useLocation } from "wouter";
 import { ChevronLeft, Check, X, Pencil, Plus, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { PageTag } from "@/components/PageTag";
 
 /** 单条筹码记录 */
 interface ChipItem {
@@ -312,7 +311,6 @@ export default function PositionLevelEdit() {
 
   return (
     <div className="min-h-screen max-w-md mx-auto relative" style={{ background: '#000000' }}>
-      <PageTag code="P164" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 flex items-center px-4 py-3" style={{ background: 'rgba(0,0,0,0.95)', borderBottom: '1px solid rgba(192,192,192,0.1)' }}>
         <button onClick={goBack} className="flex items-center gap-1 mr-3" style={{ color: 'rgba(192,192,192,0.7)' }}>

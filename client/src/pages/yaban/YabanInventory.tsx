@@ -4,7 +4,6 @@
  * 牙伴蓝青色系，移动端优先
  */
 import { useLocation } from "wouter";
-import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
 import {
@@ -36,7 +35,6 @@ export default function YabanInventory() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-10">
-      <PageTag code="INV01" />
 
       {/* 顶部栏 */}
       <div className="text-white sticky top-0 z-20" style={{ background: BLUE_GRAD }}>

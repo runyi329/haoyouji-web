@@ -18,7 +18,6 @@ import { useMerchantOG } from "@/hooks/useMerchantOG";
 import { Share2, Shield, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { FALLBACK_PRODUCTS } from "./beauty-fallback-data";
-import { PageTag } from "@/components/PageTag";
 
 /* ─── 图片资源 ─── */
 const IMG = {
@@ -181,7 +180,6 @@ export default function BeautyProductShare() {
 
   return (
     <div className="min-h-screen pb-24" style={{ background: "#0a0a0a", color: "#f5f0eb" }}>
-      <PageTag code="P258" />
 
       {/* 顶部品牌标识（无返回按钮，无导航） */}
       <div

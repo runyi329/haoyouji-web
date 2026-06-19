@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
-import { PageTag } from "@/components/PageTag";
 
 export default function DeletedRecords() {
   const params = useParams<{ id: string }>();
@@ -75,7 +74,6 @@ export default function DeletedRecords() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "var(--bg-cream)" }}>
-      <PageTag code="P078" />
       {/* 顶部导航栏 */}
       <div
         className="sticky top-0 z-10 flex items-center justify-between px-4 py-3"

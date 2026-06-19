@@ -2,7 +2,6 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
 import { ChevronLeft, Package, Truck, CheckCircle, XCircle, Clock, ShoppingBag } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 type StatusFilter = "all" | "pending" | "shipped" | "completed" | "cancelled";
 
@@ -42,7 +41,6 @@ export default function MyRedeemOrders() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <PageTag code="P149" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-100 flex items-center h-12 px-3">
         <button

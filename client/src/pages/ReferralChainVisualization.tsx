@@ -6,7 +6,6 @@ import { Card } from '@/components/ui/card';
 import { ChevronLeft, Loader2 } from 'lucide-react';
 import * as echarts from 'echarts';
 
-import { PageTag } from "@/components/PageTag";
 interface ReferralNode {
   id: number;
   name: string;
@@ -124,7 +123,6 @@ export default function ReferralChainVisualization() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <PageTag code="P028" />
         <Loader2 className="w-8 h-8 animate-spin text-[#1976D2]" />
       </div>
     );
@@ -151,7 +149,6 @@ export default function ReferralChainVisualization() {
 
   return (
     <div className="flex flex-col h-screen bg-white">
-      <PageTag code="P028" />
       {/* 顶部导航 */}
       <div className="p-4 border-b border-gray-200">
         <Button

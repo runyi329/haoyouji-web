@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Plus, MessageSquare } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 export default function CustomABManager() {
   const [showCreate, setShowCreate] = useState(false);
@@ -42,7 +41,6 @@ export default function CustomABManager() {
 
   return (
     <div className="space-y-4">
-      <PageTag code="P218" />
       {/* 标题 + 新建按钮 */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-2">

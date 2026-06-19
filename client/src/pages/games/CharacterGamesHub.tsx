@@ -2,7 +2,6 @@ import { Link } from "wouter";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Image, Zap, Headphones, Layers } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 interface LiteracyGame {
   id: string;
@@ -61,7 +60,6 @@ export default function CharacterGamesHub() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-yellow-50 to-amber-100 pb-20">
-      <PageTag code="P269" />
       {/* 顶部导航 */}
       <header className="z-50 bg-white/80 backdrop-blur-sm border-b border-gray-200">
         <div className="container flex items-center justify-between h-14">

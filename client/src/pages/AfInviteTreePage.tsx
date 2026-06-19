@@ -2,7 +2,6 @@ import { useState, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, GitBranch, ArrowUpDown } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 // ===== 家族树状图弹层组件（紧凑家谱样式）=====
 type TreeUser = { id: number; name: string; invitedByUserId: number | null; payoutRatio: number };
@@ -308,7 +307,6 @@ export default function AfInviteTreePage() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#F5F5F5' }}>
-      <PageTag code="P048" />
       {/* 顶部导航栏 */}
       <div className="sticky top-0 z-10 flex items-center px-4 py-3 border-b border-gray-100" style={{ backgroundColor: '#fff' }}>
         <button

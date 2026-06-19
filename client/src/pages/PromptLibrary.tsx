@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { PageTag } from "@/components/PageTag";
 
 const PROMPT_CATEGORIES = [
   { key: "image", label: "图片", color: "#1E88E5" },
@@ -106,7 +105,6 @@ export default function PromptLibrary({ ledgerId }: Props) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <PageTag code="P173" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 text-white" style={{ backgroundColor: catColor }}>
         <div className="flex items-center justify-between px-4 h-12">

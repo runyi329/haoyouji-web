@@ -3,7 +3,6 @@ import { useLocation } from 'wouter';
 import { toast } from 'sonner';
 import { MoreVertical, Share2 } from 'lucide-react';
 import { trpc } from "@/lib/trpc";
-import { PageTag } from "@/components/PageTag";
 
 // 计算资本加速系数的函数（修正版）
 // 公式：系数 = 1.0 + 2.0 × √((660 - 排名) / 659)
@@ -81,7 +80,6 @@ const CapitalMultiplierTable: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 pb-20">
-      <PageTag code="P067" />
       {/* 顶部导航栏 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#8B0000] text-white p-4 flex items-center justify-between shadow-lg sticky top-0 z-10">
         <div className="flex items-center">

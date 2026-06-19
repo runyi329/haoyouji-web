@@ -5,7 +5,6 @@ import { trpc } from "@/lib/trpc";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { saveToken, saveCredentials, getSavedCredentials, clearCredentials } from "@/lib/tokenStorage";
-import { PageTag } from "@/components/PageTag";
 
 /**
  * 多版本登录页：账号密码登录/注册逻辑完全通用，仅登录页 UI 外观按版本切换。
@@ -293,7 +292,6 @@ export default function Login() {
 
   return (
     <div className={theme.pageClassName} style={theme.pageStyle}>
-      <PageTag code="P133" />
       {/* 主内容区域 */}
       <main className="flex-1 flex flex-col items-center px-6 pt-8 overflow-y-auto touch-pan-y">
         <div className="w-full max-w-md">

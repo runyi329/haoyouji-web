@@ -8,7 +8,6 @@ import { useLocation } from "wouter";
 import { Search, ShoppingCart, Receipt, Ticket } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import YabanClinicHeader from "./YabanClinicHeader";
-import { PageTag } from "@/components/PageTag";
 import { SHOP_BANNER, type ShopProduct } from "./shopData";
 import { useCart } from "./useCart";
 import { useShopProducts } from "./useShopProducts";
@@ -79,7 +78,6 @@ export default function YabanShop() {
 
   return (
     <div className="min-h-screen bg-[#F5F7FA]">
-      <PageTag code="P302" />
 
       {/* 顶部蓝色头部 */}
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">

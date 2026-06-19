@@ -9,7 +9,6 @@ import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { PageTag } from "@/components/PageTag";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList, ReferenceLine
@@ -358,7 +357,6 @@ export default function DXYDetailPage() {
   // ── 渲染 ────────────────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "#EEF2F8" }}>
-      <PageTag code={`${activeTab === 'analysis' ? 'D002-A' : 'D002-B'}`} />
 
       {/* ── 蓝色渐变头部 ── */}
       <div style={{

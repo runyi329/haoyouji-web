@@ -19,7 +19,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import BottomNav from "@/components/BottomNav";
-import { PageTag } from "@/components/PageTag";
 
 // 卡类型配置
 const CARD_TYPES = [
@@ -381,7 +380,6 @@ export default function BeautyClients() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
-      <PageTag code="P250" />
       {/* 顶部 */}
       <div className="bg-gradient-to-r from-rose-500 to-red-400 text-white px-5 pt-12 pb-6">
         <button

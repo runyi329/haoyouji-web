@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { UsdtIcon } from "@/components/icons/UsdtIcon";
 import { TagLabelIcon } from "@/components/icons/TagLabelIcon";
 import { LevelIcon } from "@/components/icons/LevelIcon";
-import { PageTag } from "@/components/PageTag";
 
 type TabType = "history" | "rules" | "levels";
 
@@ -87,7 +86,6 @@ export default function PointsDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
-      <PageTag code="P163" />
       {/* 头部 */}
       <div className="bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-3">

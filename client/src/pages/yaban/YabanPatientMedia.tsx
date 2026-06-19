@@ -1,6 +1,5 @@
 import { useState, useRef, useMemo, useCallback } from "react";
 import { useLocation, useRoute } from "wouter";
-import { PageTag } from "@/components/PageTag";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
@@ -565,7 +564,6 @@ export default function YabanPatientMedia() {
         />
       )}
 
-      <PageTag code="P327" />
     </div>
   );
 }

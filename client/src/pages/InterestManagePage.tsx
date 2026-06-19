@@ -6,7 +6,6 @@ import {
   TrendingUp, FileText, Edit2, Check, X, PlusCircle, Pause, Play
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { PageTag } from "@/components/PageTag";
 import {
   Sheet,
   SheetContent,
@@ -259,7 +258,6 @@ export default function InterestManagePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <PageTag code="P105" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
         <button

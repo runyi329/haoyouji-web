@@ -8,7 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { toast } from "sonner";
 import { UserPlus, CheckCircle, ArrowLeft, Home, Gift } from "lucide-react";
 import { Link } from "wouter";
-import { PageTag } from "@/components/PageTag";
 
 export default function Register() {
   const [, setLocation] = useLocation();
@@ -78,7 +77,6 @@ export default function Register() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-rose-50 to-red-50 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
-      <PageTag code="P183" />
       <Card className="w-full max-w-md">
         <CardHeader>
           <div className="flex items-center gap-2 mb-2">

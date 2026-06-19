@@ -32,7 +32,6 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import Cropper from "react-easy-crop";
 import type { Area } from "react-easy-crop";
-import { PageTag } from "@/components/PageTag";
 
 // ===== 裁剪工具函数 =====
 function createImage(url: string): Promise<HTMLImageElement> {
@@ -1496,7 +1495,6 @@ export default function BeautyShowcase() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#FFF5F7" }}>
-      <PageTag code="P263" />
       {/* 顶部导航栏 */}
       <div
         className="sticky top-0 z-50 px-4 pt-3 pb-3"

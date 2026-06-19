@@ -172,7 +172,6 @@ import {
 import { useState } from "react";
 import { toast as sonnerToast } from "sonner";
 import { AIChatBox, type Message } from "@/components/AIChatBox";
-import { PageTag } from "@/components/PageTag";
 
 export default function ComponentsShowcase() {
   const { theme, toggleTheme } = useTheme();
@@ -229,7 +228,6 @@ export default function ComponentsShowcase() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <PageTag code="P069" />
       <main className="container max-w-6xl mx-auto">
         <div className="space-y-2 justify-between flex">
           <h2 className="text-3xl font-bold tracking-tight mb-6">

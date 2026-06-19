@@ -4,7 +4,6 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { ChevronLeft, Upload, Camera, Globe, Phone, MessageCircle, FileText, Image, Wine } from "lucide-react";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 
 export default function WineSettings() {
   const [, setLocation] = useLocation();
@@ -119,7 +118,6 @@ export default function WineSettings() {
 
   return (
     <div className="min-h-screen bg-[#1a0a0a] text-white pb-20">
-      <PageTag code="P305" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 bg-[#1a0a0a]/95 backdrop-blur-sm border-b border-[#722F37]/30 px-4 py-3 flex items-center gap-3">
         <button onClick={() => setLocation("/wine/profile")} className="p-1">

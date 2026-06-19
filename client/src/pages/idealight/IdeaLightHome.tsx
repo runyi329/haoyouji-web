@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import BottomNav from "@/components/BottomNav";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { PageTag } from "@/components/PageTag";
 
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663346422697/cSuKEEZ8CGmJveg8PVZXzb";
 const ICON_URL = `${CDN}/idealight_icon_white_ca457943.png`;
@@ -710,7 +709,6 @@ export default function IdeaLightHome() {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
-      <PageTag code="P282" />
       <div className="sticky top-0 z-50 bg-black/90 backdrop-blur-md border-b border-white/10">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">

@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Plus, Star, ExternalLink } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 export default function CustomAFManager() {
   const [showCreate, setShowCreate] = useState(false);
@@ -62,7 +61,6 @@ export default function CustomAFManager() {
 
   return (
     <div className="space-y-4">
-      <PageTag code="P222" />
       {/* 标题 + 新建按钮 */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-2">

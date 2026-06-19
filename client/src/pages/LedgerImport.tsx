@@ -4,7 +4,6 @@ import { ChevronLeft, HelpCircle, Upload, CheckCircle, AlertCircle } from "lucid
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { PageTag } from "@/components/PageTag";
 import {
   Dialog,
   DialogContent,
@@ -108,7 +107,6 @@ export default function LedgerImport() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <PageTag code="P125" />
       {/* 顶部导航栏 */}
       <div className="bg-white border-b border-divider sticky top-0 z-10">
         <div className="container flex items-center justify-between h-14 px-4">

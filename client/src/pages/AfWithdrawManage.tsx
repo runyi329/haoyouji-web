@@ -2,7 +2,6 @@ import { useState, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 
 const STATUS_LABEL: Record<string, { text: string; color: string; bg: string }> = {
   pending: { text: "待处理", color: "#d97706", bg: "#fef3c7" },
@@ -168,7 +167,6 @@ export default function AfWithdrawManage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-10 max-w-md mx-auto">
-      <PageTag code={`${activeTab === 'orders' ? 'P056-A' : 'P056-B'}`} />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-10 flex items-center px-4 py-3"

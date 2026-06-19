@@ -10,7 +10,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 
 export default function YabanShopPayResult() {
@@ -55,7 +54,6 @@ export default function YabanShopPayResult() {
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] flex flex-col">
-      <PageTag code="P307" />
 
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="max-w-lg mx-auto px-3 py-3 flex items-center">

@@ -5,7 +5,6 @@ import { ChevronLeft, Plus, Building2, Pencil, Trash2, Users, ChevronRight, Chec
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCenterToast } from "@/components/ui/center-toast";
-import { PageTag } from "@/components/PageTag";
 
 type Company = {
   id: number;
@@ -714,7 +713,6 @@ export default function AJCompanyManager() {
 
   return (
     <div className="min-h-screen bg-gray-50 max-w-md mx-auto">
-      <PageTag code={`${activeTab === 'companies' ? 'P039-A' : 'P039-B'}`} />
       {/* 顶部导航 */}
       <div className="bg-[#C0392B] text-white px-4 pt-12 pb-4">
         <div className="flex items-center gap-3">

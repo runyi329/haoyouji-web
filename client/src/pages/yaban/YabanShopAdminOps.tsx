@@ -9,7 +9,6 @@ import {
   ChevronLeft, Loader2, Star, MessageSquare, Image as ImageIcon,
   X, ImagePlus, Trash2, Plus,
 } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { useYabanClinic } from "./useYabanClinic";
 
 type Tab = "reviews" | "banners";
@@ -32,7 +31,6 @@ export default function YabanShopAdminOps() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-10">
-      <PageTag code="P314" />
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="flex items-center gap-2 px-4 py-3">
           <button onClick={() => navigate("/yaban/shop")} aria-label="返回">

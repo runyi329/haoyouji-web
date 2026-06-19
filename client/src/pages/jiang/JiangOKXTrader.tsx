@@ -23,7 +23,6 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { Streamdown } from "streamdown";
-import { PageTag } from "@/components/PageTag";
 
 type Message = {
   role: "user" | "assistant";
@@ -147,7 +146,6 @@ export default function JiangOKXTrader() {
 
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-white flex flex-col">
-      <PageTag code="P287" />
       {/* 顶部导航 */}
       <div className="bg-[#0d0d18] border-b border-[#1e2a4a] sticky top-0 z-10">
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center gap-3">

@@ -35,6 +35,7 @@ import {
   X,
   UserPlus,
   ChevronRight,
+  Hash,
   Trash2,
 } from "lucide-react";
 import {
@@ -257,7 +258,15 @@ export default function ProjectConsole() {
             <ArrowLeft className="w-5 h-5 text-gray-700" />
           </button>
           <h1 className="text-base font-semibold text-gray-900">项目总控台</h1>
-          <span className="ml-auto inline-flex items-center gap-1 text-xs text-[#CBA471] bg-[#FAF3ED] px-2 py-1 rounded-full">
+          <button
+            onClick={() => navigate("/admin/rules")}
+            className="ml-auto inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-[#FAF3ED] text-[#CBA471] text-xs font-medium active:scale-95 transition-transform"
+            aria-label="规则"
+            title="规则库"
+          >
+            规则
+          </button>
+          <span className="inline-flex items-center gap-1 text-xs text-[#CBA471] bg-[#FAF3ED] px-2 py-1 rounded-full">
             <ShieldCheck className="w-3.5 h-3.5" />
             超管
           </span>

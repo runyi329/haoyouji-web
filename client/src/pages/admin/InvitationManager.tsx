@@ -25,7 +25,6 @@ import {
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { PageTag } from "@/components/PageTag";
 import {
   Dialog,
   DialogContent,
@@ -604,7 +603,6 @@ export function InvitationManager() {
 
   return (
     <div className="space-y-5">
-      <PageTag code="P230" />
       {/* 页面标题 */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">

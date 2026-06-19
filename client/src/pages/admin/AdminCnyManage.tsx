@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
@@ -67,7 +66,6 @@ export default function AdminCnyManage() {
       className="min-h-screen"
       style={{ background: "linear-gradient(160deg, #0d0d0d 0%, #1a1a1a 50%, #111111 100%)" }}
     >
-        <PageTag code="P211" />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-20 flex items-center justify-between px-4 py-3"

@@ -5,7 +5,6 @@
  */
 import { useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 export default function TaxDataPage() {
   const [, navigate] = useLocation();
@@ -15,7 +14,6 @@ export default function TaxDataPage() {
       className="min-h-screen max-w-md mx-auto relative"
       style={{ background: '#f5f6f8', color: '#1a1a2e' }}
     >
-        <PageTag code="P193" />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-20 flex items-center px-4 py-3"

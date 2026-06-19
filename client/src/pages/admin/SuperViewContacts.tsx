@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Search, User, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { PageTag } from "@/components/PageTag";
 
 export default function SuperViewContacts() {
   const [, navigate] = useLocation();
@@ -33,7 +32,6 @@ export default function SuperViewContacts() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[#F5F5F5]">
-      <PageTag code="P240" />
       {/* 顶部导航 */}
       <div className="bg-[#D32F2F] text-white px-4 pt-12 pb-4 flex items-center gap-3">
         <button onClick={() => navigate("/")} className="p-1">

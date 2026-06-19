@@ -8,7 +8,6 @@
 import { useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ChevronRight, User } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { useYabanClinic } from "./useYabanClinic";
 
 // 选项配置
@@ -323,7 +322,6 @@ export default function YabanFollowUpCreate() {
         </div>
       )}
 
-      <PageTag code="P302" />
     </div>
   );
 }

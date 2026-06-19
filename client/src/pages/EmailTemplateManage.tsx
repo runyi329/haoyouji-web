@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { PageTag } from "@/components/PageTag";
 
 // ============================================================
 // 默认模板定义
@@ -307,7 +306,6 @@ export default function EmailTemplateManage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <PageTag code="P089" />
       {/* 顶部导航 */}
       <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
         <button

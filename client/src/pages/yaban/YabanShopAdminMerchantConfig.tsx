@@ -13,7 +13,6 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { ChevronLeft, Loader2, ShieldCheck, Save } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { useYabanClinic } from "./useYabanClinic";
 
 export default function YabanShopAdminMerchantConfig() {
@@ -94,7 +93,6 @@ export default function YabanShopAdminMerchantConfig() {
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] pb-24">
-      <PageTag code="P308" />
 
       {/* 顶部栏 */}
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">

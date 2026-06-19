@@ -5,7 +5,6 @@
 import { trpc } from "@/lib/trpc";
 import { Loader2, ImageIcon, Presentation, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
-import { PageTag } from "@/components/PageTag";
 import {
   Carousel,
   CarouselContent,
@@ -248,7 +247,6 @@ export default function BeautyShowcaseSharePage() {
   if (!token) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen" style={{ backgroundColor: "#FFF5F7" }}>
-        <PageTag code="P264" />
         <p className="text-base font-medium text-gray-700">链接无效</p>
       </div>
     );

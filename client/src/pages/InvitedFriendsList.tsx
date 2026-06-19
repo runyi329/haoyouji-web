@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Users, UserPlus, Share, Search, ArrowUpDown } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { PageTag } from "@/components/PageTag";
 
 type SortType = "time_desc" | "time_asc" | "own_desc" | "shared_desc" | "total_desc";
 
@@ -110,7 +109,6 @@ export default function InvitedFriendsList() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 to-rose-50 dark:from-gray-900 dark:to-gray-800">
-      <PageTag code="P107" />
       <div className="p-3 space-y-3">
         {/* 头部 */}
         <div className="flex items-center gap-3">

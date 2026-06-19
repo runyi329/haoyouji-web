@@ -29,7 +29,6 @@ import {
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
-import { PageTag } from "@/components/PageTag";
 
 const CRYPTO_COINS = ["BTC", "ETH", "SOL", "LDO", "USDT", "元"];
 const normalizeCoin = (coin: string) => (!coin || coin === "人民币") ? "元" : coin;
@@ -775,7 +774,6 @@ export default function DepositManage() {
 
   return (
     <div className="min-h-screen pb-10" style={{ backgroundColor: "#F0F4FF" }}>
-      <PageTag code={`${activeTab === 'left' ? 'P080-A' : 'P080-B'}`} />
       {/* 蓝色渐变顶部 */}
       <div
         className="sticky top-0 z-20 px-4 pt-4 pb-3"

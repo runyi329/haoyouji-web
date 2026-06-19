@@ -4,7 +4,6 @@ import { ChevronLeft, Plus, X, Check, ClipboardCopy, Pencil, FolderPlus, Shoppin
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
 import { toast } from 'sonner';
-import { PageTag } from "@/components/PageTag";
 
 export default function PptPromptLibrary() {
   const [, setLocation] = useLocation();
@@ -244,7 +243,6 @@ export default function PptPromptLibrary() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
-      <PageTag code="P167" />
       {/* 顶部导航 */}
       <div className="shrink-0 bg-white border-b border-gray-100 px-3 py-2.5 flex items-center gap-2 z-20">
         <button

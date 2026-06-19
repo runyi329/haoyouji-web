@@ -6,7 +6,6 @@
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine, Cell
@@ -176,7 +175,6 @@ export default function RealEstatePage() {
 
   return (
     <div className="min-h-screen pb-10 max-w-md mx-auto relative" style={{ background: BG_PAGE, color: TEXT_MAIN }}>
-      <PageTag code="P180" />
       {/* ── 顶部导航 ── */}
       <div className="sticky top-0 z-20 flex items-center px-4 py-3" style={{ background: '#fff', borderBottom: `1px solid ${BORDER}` }}>
         <button

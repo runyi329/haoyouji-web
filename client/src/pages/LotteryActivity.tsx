@@ -16,7 +16,6 @@ import Tooltip from '@/components/Tooltip';
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { PageTag } from "@/components/PageTag";
 import {
   ChevronLeft,
   Trophy,
@@ -1354,7 +1353,6 @@ export default function LotteryActivity() {
 
   return (
     <div className="min-h-screen pb-32" style={{ backgroundColor: C.bg }}>
-      <PageTag code="P134" />
 
       {/* ── 顶部导航栏 ── */}
       <div className="sticky top-0 z-20" style={{ backgroundColor: C.red }}>

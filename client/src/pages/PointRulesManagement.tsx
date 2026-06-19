@@ -7,7 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Loader2, Save, Settings } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 const ACTION_TYPE_NAMES: Record<string, string> = {
   add_contact: "添加人脉",
@@ -90,7 +89,6 @@ export default function PointRulesManagement() {
 
   return (
     <div className="container max-w-4xl py-8">
-      <PageTag code="P162" />
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <Settings className="h-8 w-8 text-primary" />

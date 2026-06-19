@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Volume2, RotateCcw, Play } from "lucide-react";
 import confetti from "canvas-confetti";
-import { PageTag } from "@/components/PageTag";
 
 // 音效功能已移除，只保留语音播报
 
@@ -359,7 +358,6 @@ export default function ListeningGame(props: any) {
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50 p-4">
-      <PageTag code="P274" />
       <div className="max-w-4xl mx-auto pt-8">
         {/* 顶部信息栏 */}
         <div className="flex justify-between items-center mb-2 text-sm" style={{ fontFamily: "'KaiTi', 'STKaiti', 'BiauKai', serif" }}>

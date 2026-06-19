@@ -7,7 +7,6 @@ import { useLocation } from "wouter";
 import { ChevronRight, ArrowLeft } from "lucide-react";
 import WineTabBar from "./WineTabBar";
 import BottomNav from "@/components/BottomNav";
-import { PageTag } from "@/components/PageTag";
 
 const NEWS_CATEGORIES = ["全部", "品鉴报告", "产区资讯", "活动预告", "行业动态"];
 
@@ -30,7 +29,6 @@ export default function WineNews() {
 
   return (
     <div className="min-h-screen bg-[#0d0505] text-white pb-24">
-      <PageTag code="P303" />
       {/* 顶部标题栏 */}
       <div className="bg-[#1a0a0a] border-b border-[#8B1A1A]/30 px-4 py-4 flex items-center gap-3">
         <button onClick={() => setLocation("/wine")} className="text-[#8a7a6a] hover:text-white">

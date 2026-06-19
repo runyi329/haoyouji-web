@@ -21,7 +21,6 @@ import {
   Layers,
   Check,
 } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { useYabanClinic } from "./useYabanClinic";
 
 const ACCENT = "#1E88D6";
@@ -180,7 +179,6 @@ export default function YabanChargeProducts() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-24">
-      <PageTag code="P328" />
 
       {/* 头部 */}
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">

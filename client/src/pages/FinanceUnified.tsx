@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import FunderManagement from "./FunderManagement";
 import FinanceManagement from "./FinanceManagement";
 export default function FinanceUnified() {
@@ -19,7 +18,6 @@ export default function FinanceUnified() {
   }, []);
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#F0F4FF' }}>
-      <PageTag code="P095" />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-10"

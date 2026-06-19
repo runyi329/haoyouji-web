@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import ReactECharts from "echarts-for-react";
-import { PageTag } from "@/components/PageTag";
 
 // ─── 类型 ───────────────────────────────────────────────────────────────────
 
@@ -281,7 +280,6 @@ export default function GoldTrackerPage() {
         color: "#e8d5a3",
       }}
     >
-        <PageTag code="P099" />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-30 flex items-center px-4 py-3"

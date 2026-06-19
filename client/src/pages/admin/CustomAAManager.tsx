@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Plus, Users, BookMarked, UserPlus, ChevronDown, ChevronUp } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 export default function CustomAAManager() {
   // 创建账本
@@ -59,7 +58,6 @@ export default function CustomAAManager() {
 
   return (
     <div className="space-y-4">
-      <PageTag code="P217" />
       {/* 标题 + 新建按钮 */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-2">

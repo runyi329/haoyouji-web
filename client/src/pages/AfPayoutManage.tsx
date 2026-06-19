@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { ChevronLeft, Plus, Trash2, Edit2, Check, X, AlertCircle, Users, Calculator } from 'lucide-react';
-import { PageTag } from "@/components/PageTag";
 
 // 权益系数表：第0档×0.75，第1档÷2，第2档÷3...
 const EQUITY_COEFFS = [0.75, 0.5, 0.3333, 0.25, 0.2, 0.1667, 0.1429, 0.125, 0.1111, 0.1];
@@ -96,7 +95,6 @@ export default function AfPayoutManage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <PageTag code="P051" />
       {/* 顶部导航 */}
       <div className="bg-white border-b px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
         <button onClick={() => setLocation(`/ledger/${ledgerId}/settings`)} className="p-1">

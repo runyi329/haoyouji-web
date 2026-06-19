@@ -8,7 +8,6 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { ChevronLeft, Building2, Loader2, CheckCircle2, Clock, XCircle, Save } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 import ClinicForm, { ClinicFormValue, EMPTY_CLINIC, fromClinic } from "./ClinicForm";
 
@@ -66,7 +65,6 @@ export default function YabanEnterprise() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-10">
-      <PageTag code="P304" />
       {/* 头部 */}
       <div className="bg-gradient-to-b from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="max-w-lg mx-auto px-4 pt-4 pb-6">

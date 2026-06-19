@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link, useParams } from "wouter";
 import { ArrowLeft, Search } from "lucide-react";
 import { wcTeams, teamsByGroup, type TeamData } from "@/data/wcTeams";
-import { PageTag } from "@/components/PageTag";
 
 // ===== 颜色常量（与 WorldCup.tsx 保持一致） =====
 const BG    = "#0D1B2A";
@@ -131,7 +130,6 @@ function TeamDetail({ team, backHref }: { team: TeamData; backHref: string }) {
         <span style={{ fontWeight: 700, color: TEXT, fontSize: 15, flex: 1 }}>{team.nameCn}</span>
         <span style={{ color: TEXT3, fontSize: 11 }}>{team.name}</span>
       </div>
-      <PageTag code="P014" />
 
       {/* 球队概览卡片 */}
       <div style={{
@@ -295,7 +293,6 @@ function TeamList() {
         <span style={{ fontWeight: 700, color: TEXT, fontSize: 15, flex: 1 }}>球队档案</span>
         <span style={{ color: TEXT3, fontSize: 11 }}>2026 FIFA World Cup</span>
       </div>
-      <PageTag code="P013" />
 
       {/* 搜索框 */}
       <div style={{ padding: "10px 16px 6px" }}>

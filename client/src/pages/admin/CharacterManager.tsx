@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/select";
 import { Plus, Edit, Trash2, Upload, Search } from "lucide-react";
 import { autoCompressImage } from "@/utils/imageUtils";
-import { PageTag } from "@/components/PageTag";
 
 export default function CharacterManager() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -166,7 +165,6 @@ export default function CharacterManager() {
       {/* 统计信息 */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <PageTag code="P216" />
           <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100">
             <div className="text-sm text-muted-foreground mb-1">总汉字数</div>
             <div className="text-3xl font-bold text-[#1976D2]">{stats.total}</div>

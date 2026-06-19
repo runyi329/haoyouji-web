@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
 import { useLocation, useRoute } from "wouter";
-import { PageTag } from "@/components/PageTag";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
@@ -271,7 +270,6 @@ export default function YabanPatientCharge() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-24">
-      <PageTag code="P329" />
 
       {/* 顶部导航栏 */}
       <div className="bg-gradient-to-r from-sky-500 to-sky-400 text-white sticky top-0 z-20">

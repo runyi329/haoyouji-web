@@ -6,7 +6,6 @@ import { ArrowLeft, RotateCcw, Play, Trophy, Circle, Undo2, Users, Bot, Star } f
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { StarRewardPopup } from "@/components/StarRewardPopup";
-import { PageTag } from "@/components/PageTag";
 
 // 棋盘大小选项
 type BoardSize = 9 | 13 | 19;
@@ -500,7 +499,6 @@ export default function GoGame() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageTag code="P272" />
       <header className="z-50 glass border-b border-border/50">
         <div className="container flex items-center justify-between h-14">
           <Link href="/games">

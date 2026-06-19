@@ -18,7 +18,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
-import { PageTag } from "@/components/PageTag";
 
 const AdminTransactionList = () => {
   const [, setLocation] = useLocation();
@@ -79,7 +78,6 @@ const AdminTransactionList = () => {
   if (ledger && !isAdminOrOwner) {
     return (
       <div className="h-screen flex items-center justify-center bg-[#FAF3ED]">
-        <PageTag code="P046" />
         <p className="text-gray-500 text-sm">无权限访问</p>
       </div>
     );

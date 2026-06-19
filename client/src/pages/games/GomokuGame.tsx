@@ -7,7 +7,6 @@ import { ArrowLeft, RotateCcw, Play, Trophy, Undo2, Users, Bot, Star, Swords } f
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { StarRewardPopup } from "@/components/StarRewardPopup";
-import { PageTag } from "@/components/PageTag";
 
 // 棋盘大小
 const BOARD_SIZE = 15;
@@ -666,7 +665,6 @@ export default function GomokuGame() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageTag code="P273" />
       <header className="z-50 glass border-b border-border/50">
         <div className="container flex items-center justify-between h-14">
           <Link href="/games">

@@ -3,7 +3,6 @@ import { useLocation, useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Camera, Upload, PenLine, X, Check, Loader2, Trash2, Search, ArrowUpDown, ArrowUp, ArrowDown, Edit2, Settings, AlertTriangle, CheckCircle, RefreshCw, ClipboardPaste } from "lucide-react";
 import * as XLSX from "xlsx";
-import { PageTag } from "@/components/PageTag";
 
 const FIELDS = [
   { key: "username", label: "用户名" },
@@ -418,7 +417,6 @@ export default function QQTradeRecords() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
-      <PageTag code="P178" />
       {/* 顶部导航 */}
       <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-800 sticky top-0 z-20">
         <button

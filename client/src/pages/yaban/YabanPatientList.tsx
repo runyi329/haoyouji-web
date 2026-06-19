@@ -17,7 +17,6 @@ import {
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { avatarSrc, ageToBucket, type AvatarKey } from "@/lib/yaban-avatar";
-import { PageTag } from "@/components/PageTag";
 import { useYabanClinic } from "./useYabanClinic";
 
 // 性别标签配色（性别用文字，非符号）
@@ -1302,7 +1301,6 @@ export default function YabanPatientList() {
         </div>
       )}
 
-      <PageTag code="P320" />
     </div>
   );
 }

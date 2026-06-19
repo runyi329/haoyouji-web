@@ -27,7 +27,6 @@ import { useLocation } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
 import { ChevronLeft, ChevronRight, Settings, Search, BarChart3, Plus, ChevronDown, CircleDollarSign, Users, X, RefreshCw, PauseCircle, AlertTriangle, HelpCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { PageTag } from "@/components/PageTag";
 import {
   AreaChart,
   Area,
@@ -1158,7 +1157,6 @@ export default function LedgerDetailAA({
   // ─── 渲染 ──────────────────────────────────────────────────────────────────
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor: "#FAF3ED" }}>
-      <PageTag code={`${calendarMode === 'balance' ? 'P117-A' : calendarMode === 'daily' ? 'P117-B' : calendarMode === 'monthly' ? 'P117-C' : 'P117-D'}`} />
       {/* ── 顶部红色区域 ── */}
       <div style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
         {/* 用户信息行 + 标签下拉（直接顶部，无返回栏） */}

@@ -17,7 +17,6 @@ import InvestorFAQ from "@/components/InvestorFAQ";
 import FAQCard from "@/components/FAQCard";
 import NodeAchievementBadge from "@/components/NodeAchievementBadge";
 import ShareholderSection from "@/components/ShareholderSection";
-import { PageTag } from "@/components/PageTag";
 
 // FAQ手风琴组件
 function FAQAccordion() {
@@ -434,7 +433,6 @@ export default function MyEquity() {
 
   return (
     <div className="min-h-screen bg-[#FAF3ED] pb-20">
-      <PageTag code="P147" />
       {/* 顶部导航 */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-md mx-auto px-4 py-3 flex items-center">

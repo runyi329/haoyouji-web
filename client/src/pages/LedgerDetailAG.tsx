@@ -26,7 +26,6 @@ import {
   Heart,
 } from "lucide-react";
 import { UserAvatar } from "@/components/UserAvatar";
-import { PageTag } from "@/components/PageTag";
 
 interface Props {
   ledgerId: number;
@@ -286,7 +285,6 @@ export default function LedgerDetailAG({ ledgerId, ledgerData, membersData, user
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#F5F5F5" }}>
-      <PageTag code="P119" />
       {/* ===== 顶部红色区域 ===== */}
       <div style={{ backgroundColor: "#D32F2F", color: "#FFFFFF" }}>
         {/* 第一行：账本名称（全行展示） */}

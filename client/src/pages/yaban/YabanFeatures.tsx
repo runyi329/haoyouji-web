@@ -8,7 +8,6 @@
 import { useLocation } from "wouter";
 import { ChevronLeft, Settings2 } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
-import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 import { ALL_FEATURE_DICT, loadHomeFeatureKeys } from "./yabanFeatures";
 
@@ -39,7 +38,6 @@ export default function YabanFeatures() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <PageTag code="P322" />
 
       {/* 顶部导航栏 */}
       <div

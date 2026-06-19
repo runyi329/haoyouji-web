@@ -5,7 +5,6 @@
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Loader2, TrendingUp, ShoppingBag, Wallet, CheckCircle2 } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { useYabanClinic } from "./useYabanClinic";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -28,7 +27,6 @@ export default function YabanShopAdminDashboard() {
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] pb-10">
-      <PageTag code="P312" />
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-3 py-3 flex items-center gap-2">
           <button onClick={() => navigate("/yaban/shop")} aria-label="返回">

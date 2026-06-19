@@ -7,7 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ChevronLeft, Plus, Trash2, Save, Loader2, Search, Calendar, X, Check } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
-import { PageTag } from "@/components/PageTag";
 
 /**
  * 用户搜索选择组件
@@ -235,7 +234,6 @@ export default function PartnershipDashboardManage() {
 
   return (
     <div className="min-h-screen bg-[#FAF3ED]">
-      <PageTag code="P157" />
       {/* 顶部导航栏 */}
       <div className="bg-[#B85C38] text-white p-4 flex items-center justify-between sticky top-0 z-10">
         <button onClick={() => navigate("/admin")} className="p-1">

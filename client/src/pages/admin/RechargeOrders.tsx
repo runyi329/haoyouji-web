@@ -2,7 +2,6 @@ import { useLocation } from "wouter";
 import { ArrowLeft, Clock, CheckCircle2, XCircle, RefreshCw, ExternalLink } from "lucide-react";
 import { trpc } from "../../lib/trpc";
 import { useState } from "react";
-import { PageTag } from "@/components/PageTag";
 
 export default function RechargeOrders() {
   const [, setLocation] = useLocation();
@@ -44,7 +43,6 @@ export default function RechargeOrders() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <PageTag code="P238" />
       {/* 顶部导航 */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center justify-between px-4 py-3">

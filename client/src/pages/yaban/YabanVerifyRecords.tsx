@@ -5,14 +5,12 @@
  */
 import { useLocation } from "wouter";
 import { ChevronLeft, Ticket } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 export default function YabanVerifyRecords() {
   const [, navigate] = useLocation();
 
   return (
     <div className="min-h-screen bg-[#F0F4F8]">
-      <PageTag code="P315" />
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="flex items-center gap-2 px-4 py-3">
           <button onClick={() => navigate("/yaban/profile")} aria-label="返回">

@@ -2,7 +2,6 @@ import { ArrowLeft, ChevronRight, Settings } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link } from "wouter";
-import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 import { wcTeams } from "@/data/wcTeams";
 
@@ -1407,7 +1406,6 @@ export default function WorldCup() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: BG }}>
-      <PageTag code="P011" />
       {/* ===== 顶部海报 ===== */}
       <div style={{ position: "relative", flexShrink: 0 }}>
         {/* 返回按钮 */}

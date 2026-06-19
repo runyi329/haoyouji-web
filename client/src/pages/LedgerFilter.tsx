@@ -6,7 +6,6 @@ import { Slider } from "@/components/ui/slider";
 import { trpc } from "@/lib/trpc";
 import { UserAvatar } from "@/components/UserAvatar";
 import { DatePicker } from "@/components/DatePicker";
-import { PageTag } from "@/components/PageTag";
 
 export default function LedgerFilter() {
   const [, params] = useRoute("/ledger/:id/filter");
@@ -235,7 +234,6 @@ export default function LedgerFilter() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-rose-50 flex flex-col">
-      <PageTag code="P122" />
       {/* 顶部标题栏 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#d44] px-3 py-2.5 flex items-center shadow-md">
         <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1 -ml-1">

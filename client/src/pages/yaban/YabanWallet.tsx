@@ -13,7 +13,6 @@ import {
 import { trpc } from "../../lib/trpc";
 import Recharge from "../Recharge";
 import Withdraw from "../Withdraw";
-import { PageTag } from "@/components/PageTag";
 
 // 从交易备注中提取世界杯球队 code（小写）
 function extractWcTeamCode(note: string): string | null {
@@ -428,7 +427,6 @@ export default function YabanWallet() {
 
   return (
     <div className="min-h-screen" style={{ background: Y.bg }}>
-      <PageTag code="P008" />
 
       {/* ── 顶部导航栏（蓝色渐变） ── */}
       <div

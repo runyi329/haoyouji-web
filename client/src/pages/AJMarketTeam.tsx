@@ -3,7 +3,6 @@ import { useParams } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Users, TrendingUp, FileCheck, FileText } from "lucide-react";
 import { UserAvatar } from "@/components/UserAvatar";
-import { PageTag } from "@/components/PageTag";
 
 type Period = 'all' | 'day' | 'week' | 'month' | 'quarter' | 'year';
 
@@ -31,7 +30,6 @@ export default function AJMarketTeam() {
 
   return (
     <div className="min-h-screen bg-gray-50 max-w-md mx-auto relative">
-      <PageTag code="P041" />
       {/* 顶部导航栏 */}
       <div
         className="sticky top-0 z-10 px-4 pt-4 pb-3 flex items-center gap-3"

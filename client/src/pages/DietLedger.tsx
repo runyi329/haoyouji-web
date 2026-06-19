@@ -9,7 +9,6 @@ import {
   TrendingDown, Target, Users, User, Clock, Edit2
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { PageTag } from "@/components/PageTag";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
@@ -66,7 +65,6 @@ export default function DietLedger() {
 
   return (
     <div className="min-h-screen bg-[#FFF5F5] pb-20">
-      <PageTag code="P084" />
       {/* 顶部导航 */}
       <div className="bg-gradient-to-r from-rose-500 to-pink-400 text-white px-3 py-3 flex items-center">
         <button onClick={() => setLocation("/ledger")} className="p-1 -ml-1">

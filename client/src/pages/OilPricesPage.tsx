@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { ArrowLeft, TrendingUp, BarChart3, Download } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 export default function OilPricesPage() {
   const [location, setLocation] = useLocation();
@@ -10,7 +9,6 @@ export default function OilPricesPage() {
   
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-900 to-black text-white">
-      <PageTag code="P152" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 bg-gray-900/90 backdrop-blur-sm border-b border-gray-800">
         <div className="px-4 py-3 flex items-center justify-between">

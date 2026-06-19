@@ -17,7 +17,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import YabanTabBar from "./YabanTabBar";
-import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 import { CLINICS, YB, type ClinicValuation } from "./yabanValuationData";
 import { useYabanClinic } from "./useYabanClinic";
@@ -408,7 +407,6 @@ export default function YabanAiValuation() {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <PageTag code="P403" />
 
       {/* 局部样式（动画与渐变进度条） */}
       <style>{`

@@ -4,7 +4,6 @@
  * 使用通用 MerchantSettingsPage 组件（§10.1 通用商家设置规范）
  */
 import MerchantSettingsPage from "@/components/MerchantSettingsPage";
-import { PageTag } from "@/components/PageTag";
 
 export default function JiangSettings() {
   return (

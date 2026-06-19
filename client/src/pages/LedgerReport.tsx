@@ -6,7 +6,6 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LabelList
 } from 'recharts';
 import { UserAvatar } from "@/components/UserAvatar";
-import { PageTag } from "@/components/PageTag";
 import {
   Select,
   SelectContent,
@@ -71,7 +70,6 @@ export default function LedgerReport() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <PageTag code="P131" />
       {/* 顶部导航区 - 红色背景 */}
       <div style={{ backgroundColor: '#D32F2F', color: '#FFFFFF' }}>
         {/* 顶部导航栏：返回 + 账本名称 + Tab切换 */}

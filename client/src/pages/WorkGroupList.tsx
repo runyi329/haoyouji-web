@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, BookOpen } from "lucide-react";
 import { trpc } from '../lib/trpc';
 import { useMemo } from 'react';
-import { PageTag } from "@/components/PageTag";
 
 /**
  * 脉动节点合作平台 - 数据看板首页
@@ -112,7 +111,6 @@ export default function WorkGroupList() {
 
   return (
     <div className="min-h-screen bg-[#FAF3ED] flex flex-col">
-      <PageTag code="P207" />
       {/* 顶部导航栏 */}
       <div className="bg-[#D32F2F] border-b border-[#D32F2F] sticky top-0 z-10">
         <div className="px-3 py-3 flex items-center justify-between">

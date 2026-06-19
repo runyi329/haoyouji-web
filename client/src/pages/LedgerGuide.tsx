@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { PageTag } from "@/components/PageTag";
 import {
   ChevronLeft, Search, X, ChevronDown, ChevronUp,
   PlusCircle, Edit3, Trash2, FileText, Image,
@@ -170,7 +169,6 @@ export default function LedgerGuide() {
 
   return (
     <div className="min-h-screen bg-[#FAF3ED] pb-8 max-w-md mx-auto relative shadow-2xl">
-      <PageTag code="P123" />
 
       {/* 顶部 */}
       <div className="sticky top-0 z-40 bg-[#A80000] px-4 pt-4 pb-3">

@@ -10,7 +10,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import BeautyTabBar from "./BeautyTabBar";
 import BottomNav from "@/components/BottomNav";
-import { PageTag } from "@/components/PageTag";
 
 const TIANAPI_KEY = "3878a89bed4728b65cc7d8dc0a644c07";
 
@@ -197,7 +196,6 @@ export default function BeautyAiDiet() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
-      <PageTag code="P246" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10">
         <div className="bg-white border-b border-gray-100">

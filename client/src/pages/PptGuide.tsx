@@ -3,7 +3,6 @@ import { useLocation, useParams } from 'wouter';
 import { ChevronLeft, ChevronRight, Copy, Check, ChevronDown, BookMarked, Plus, Trash2, ClipboardCopy } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { useAuth } from '@/_core/hooks/useAuth';
-import { PageTag } from "@/components/PageTag";
 
 // ===== 提示词管理弹窗 =====
 function PromptLibraryModal({ onClose }: { onClose: () => void }) {
@@ -407,7 +406,6 @@ ${l3Lines}
 
     return (
       <div className="min-h-screen bg-gray-50">
-        <PageTag code="P166" />
         {/* 顶部导航 */}
         <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
           <button onClick={() => window.history.back()} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100">

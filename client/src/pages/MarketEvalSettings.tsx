@@ -4,7 +4,6 @@ import { ChevronLeft, ChevronDown, ChevronRight, Loader2, RefreshCw, Database, W
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
-import { PageTag } from "@/components/PageTag";
 
 // 序号字符
 const CIRCLE_NUMS = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳"];
@@ -513,7 +512,6 @@ export default function MarketEvalSettings() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <PageTag code="P140" />
       {/* 顶部导航栏 */}
       <div className="sticky top-0 z-10 bg-[#B71C1C] text-white">
         <div className="flex items-center justify-between h-14 px-4">

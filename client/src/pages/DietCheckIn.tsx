@@ -11,7 +11,6 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { autoCompressImage } from "@/utils/imageUtils";
 import FoodRecognition from "@/components/FoodRecognition";
-import { PageTag } from "@/components/PageTag";
 
 type Category = "weight" | "measurement" | "bmi" | "calorie" | "food";
 
@@ -145,7 +144,6 @@ export default function DietCheckIn() {
 
   return (
     <div className="h-screen flex flex-col bg-[#FAF3ED]">
-      <PageTag code="P082" />
       {/* 顶部红色导航栏 */}
       <div className="bg-[#D32F2F] text-white px-3 py-3 flex items-center justify-between flex-shrink-0">
         <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1">

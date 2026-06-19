@@ -1,7 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { useEffect } from "react";
 import { useLocation, useParams } from "wouter";
-import { PageTag } from "@/components/PageTag";
 
 const SYMBOLS = ["CLUSDT", "BZUSDT", "NATGASUSDT"];
 const NAMES: Record<string, string> = {
@@ -108,7 +107,6 @@ export default function FundingHistoryPage() {
 
   return (
     <div style={{ background: "#0d1117", minHeight: "100vh", color: "#e6edf3", fontFamily: "Nunito, sans-serif" }}>
-      <PageTag code="P097" />
       {/* 顶部导航 */}
       <div style={{ display: "flex", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid #21262d", position: "sticky", top: 0, background: "#0d1117", zIndex: 10 }}>
         <button

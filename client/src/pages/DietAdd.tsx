@@ -6,7 +6,6 @@ import { useParams, useLocation, useSearch } from "wouter";
 import { ChevronLeft, Scale, Flame, CheckCircle } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 
 const ACTIVITY_TYPES = [
   "跑步", "快走", "游泳", "骑车", "瑜伽", "健身操", "力量训练", "跳绳", "爬山", "其他"
@@ -87,7 +86,6 @@ export default function DietAdd() {
 
   return (
     <div className="min-h-screen bg-[#FFF5F5]">
-      <PageTag code="P081" />
       {/* 顶部导航 */}
       <div className="bg-gradient-to-r from-rose-500 to-pink-400 text-white px-3 py-3 flex items-center">
         <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1 -ml-1">

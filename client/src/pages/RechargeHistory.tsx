@@ -1,7 +1,6 @@
 import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, CheckCircle2, XCircle, AlertCircle, Clock, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { trpc } from "../lib/trpc";
-import { PageTag } from "@/components/PageTag";
 
 // 从备注中提取世界杯球队 code，与 P202 保持一致
 function extractWcTeamCode(note: string): string | null {
@@ -80,7 +79,6 @@ export default function RechargeHistory() {
 
   return (
     <div className="min-h-screen pb-20" style={{background:'linear-gradient(160deg,#111111 0%,#1a1a1a 100%)'}}>
-      <PageTag code="P181" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 border-b border-[#2a2a2a]" style={{background:'#111111'}}>
         <div style={{height:'2px',background:'linear-gradient(90deg,transparent,#CBA471,#e8c98a,#CBA471,transparent)'}} />

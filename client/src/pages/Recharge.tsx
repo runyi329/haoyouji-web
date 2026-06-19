@@ -3,7 +3,6 @@ import { useLocation, useSearch } from "wouter";
 import { ArrowLeft, Copy, Check, Clock, AlertCircle, CheckCircle2, History, ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "../lib/trpc";
 import QRCode from "qrcode";
-import { PageTag } from "@/components/PageTag";
 
 interface RechargeProps {
   hideHeader?: boolean;
@@ -251,7 +250,6 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
     const quickAmountsY = [100, 500, 1000, 5000];
     return (
       <div className="min-h-screen pb-20" style={{ background: "#F4F8FB" }}>
-        <PageTag code="P009" />
         {!hideHeader && (
           <div className="sticky top-0 z-10" style={{ background: "linear-gradient(135deg,#2196C8,#3BA9E0)" }}>
             <div className="flex items-center justify-between px-4 py-3">
@@ -482,7 +480,6 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
 
   return (
     <>
-      <PageTag code="P009" />
     <div className={darkBg} style={{background:'linear-gradient(160deg,#111111 0%,#1a1a1a 100%)'}}>
       {!hideHeader && (
         <div className={darkNavBar} style={{background:'#111111'}}>

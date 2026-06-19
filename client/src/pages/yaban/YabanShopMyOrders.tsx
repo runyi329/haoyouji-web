@@ -11,7 +11,6 @@ import {
   ChevronLeft, Loader2, X, ShoppingBag, Truck, QrCode,
   Clock, CheckCircle2, RotateCcw, Star, ImagePlus,
 } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 type StatusKey = "all" | "pending" | "confirmed" | "shipped" | "completed" | "refunding" | "cancelled";
 
@@ -78,7 +77,6 @@ export default function YabanShopMyOrders() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-10">
-      <PageTag code="P305" />
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="flex items-center gap-2 px-4 py-3">
           <button onClick={() => navigate("/yaban/shop")} aria-label="返回">

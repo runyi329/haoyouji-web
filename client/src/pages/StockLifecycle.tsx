@@ -8,7 +8,6 @@ import { useParams, useLocation } from "wouter";
 import { ChevronLeft, Search, X, ChevronUp, ChevronDown, SlidersHorizontal } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { keepPreviousData } from "@tanstack/react-query";
-import { PageTag } from "@/components/PageTag";
 
 // ─── 总天数筛选选项 ────────────────────────────────────────────────────────
 const MIN_DAYS_OPTIONS: { label: string; value: number }[] = [
@@ -172,7 +171,6 @@ export default function StockLifecycle({ homeMode = false }: { homeMode?: boolea
 
   return (
     <div className="h-screen flex flex-col" style={{ background: BG }}>
-      <PageTag code="P192" />
       {/* 顶部导航 */}
       <div className="px-4 py-3 flex items-center gap-3 flex-shrink-0" style={{ background: RED, color: "#fff" }}>
         <button

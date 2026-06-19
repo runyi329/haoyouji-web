@@ -5,7 +5,7 @@ client/src/App.tsx :: error TS2322: Type 'LazyExoticComponent<({ homeMode }: { h
 client/src/App.tsx :: error TS2322: Type 'LazyExoticComponent<({ ledgerIdProp, hideHeader }?: FinanceManagementProps) => Element>' is not assignable to type 'ComponentType<RouteComponentProps<StringRouteParams<"/ledger/:id/finance-management">>> | undefined'.
 client/src/App.tsx :: error TS2322: Type 'LazyExoticComponent<({ ledgerIdProp, hideHeader, adminOnly, onRecycleBinRef }?: FunderManagementProps) => Element>' is not assignable to type 'ComponentType<RouteComponentProps<StringRouteParams<"/ledger/:id/funder-management">>> | undefined'.
 client/src/components/AIAssistantDialog.tsx :: error TS2339: Property 'result' does not exist on type '{ answer: string; tokensUsed: number; cost: number; balanceAfter: number; sessionId: number; }'.
-client/src/components/AJOwnerPanel.tsx :: error TS2322: Type '"all" | "month" | "year" | "day" | "week" | "quarter"' is not assignable to type '"all" | "month" | "year" | "day" | "week" | undefined'.
+client/src/components/AJOwnerPanel.tsx :: error TS2322: Type '"all" | "week" | "month" | "day" | "year" | "quarter"' is not assignable to type '"all" | "week" | "month" | "day" | "year" | undefined'.
 client/src/components/AJOwnerPanel.tsx :: error TS2339: Property 'show' does not exist on type 'CenterToastContextValue'.
 client/src/components/AJOwnerPanel.tsx :: error TS2339: Property 'show' does not exist on type 'CenterToastContextValue'.
 client/src/components/AJOwnerPanel.tsx :: error TS2339: Property 'show' does not exist on type 'CenterToastContextValue'.
@@ -154,13 +154,13 @@ client/src/pages/DemoOpinionBook.tsx :: error TS7006: Parameter 'e' implicitly h
 client/src/pages/DemoOpinionBook.tsx :: error TS7006: Parameter 'e' implicitly has an 'any' type.
 client/src/pages/DemoOpinionBook.tsx :: error TS7006: Parameter 'e' implicitly has an 'any' type.
 client/src/pages/DemoOpinionBook.tsx :: error TS7006: Parameter 'm' implicitly has an 'any' type.
-client/src/pages/DepositManage.tsx :: error TS2322: Type 'number' is not assignable to type '"sm" | "md" | "lg" | undefined'.
+client/src/pages/DepositManage.tsx :: error TS2322: Type 'number' is not assignable to type '"md" | "sm" | "lg" | undefined'.
 client/src/pages/DietConfig.tsx :: error TS2339: Property 'saveConfig' does not exist on type 'DecorateRouterRecord<{ ctx: TrpcContext; meta: object; errorShape: DefaultErrorShape; transformer: true; }, DecorateCreateRouterOptions<{ getMyConfig: QueryProcedure<{ input: { ledgerId: number; }; output: any; meta: object; }>; ... 15 more ...; getStats: QueryProcedure<...>; }>>'.
 client/src/pages/DietConfig.tsx :: error TS2551: Property 'getConfig' does not exist on type 'DecorateRouterRecord<{ ctx: TrpcContext; meta: object; errorShape: DefaultErrorShape; transformer: true; }, DecorateCreateRouterOptions<{ getMyConfig: QueryProcedure<{ input: { ledgerId: number; }; output: any; meta: object; }>; ... 15 more ...; getStats: QueryProcedure<...>; }>>'. Did you mean 'getMyConfig'?
 client/src/pages/DietConfig.tsx :: error TS7006: Parameter 'e' implicitly has an 'any' type.
 client/src/pages/EquityHistoryArchive.tsx :: error TS2769: No overload matches this call.
 client/src/pages/FeedbackPage.tsx :: error TS2339: Property 'ledgerName' does not exist on type '{ book: any; branch: any; tableName: any; }'.
-client/src/pages/FunderManagement.tsx :: error TS2345: Argument of type '{ userId: number; coin: "BTC"; amountCurrency: "USDT"; buyPrice: string; buyQuantity: string; buyDate: string; storageAccount: string; status: string; adminNote: string; publicNote: string; interestRateAnnual: string; ... 14 more ...; tags: string[]; }' is not assignable to parameter of type 'SetStateAction<{ userId: number; coin: "CNY" | "USDT" | "BTC" | "ETH" | "SOL" | "TSLA" | "NVDA" | "AAPL" | "MSFT" | "GOOGL" | "META" | "AMZN" | "SPY" | "QQQ" | "NFLX" | "ORCL" | "TSM" | "AMD" | "CL" | "NG" | "CRCL"; ... 25 more ...; tags: string[]; }>'.
+client/src/pages/FunderManagement.tsx :: error TS2345: Argument of type '{ userId: number; coin: "BTC"; amountCurrency: "USDT"; buyPrice: string; buyQuantity: string; buyDate: string; storageAccount: string; status: string; adminNote: string; publicNote: string; interestRateAnnual: string; ... 14 more ...; tags: string[]; }' is not assignable to parameter of type 'SetStateAction<{ userId: number; coin: "CNY" | "USDT" | "BTC" | "ETH" | "AAPL" | "MSFT" | "GOOGL" | "AMZN" | "NVDA" | "TSLA" | "META" | "SOL" | "SPY" | "QQQ" | "NFLX" | "ORCL" | "TSM" | "AMD" | "CL" | "NG" | "CRCL"; ... 25 more ...; tags: string[]; }>'.
 client/src/pages/Home.tsx :: error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
 client/src/pages/Home.tsx :: error TS2367: This comparison appears to be unintentional because the types '"svg"' and '"img"' have no overlap.
 client/src/pages/Home.tsx :: error TS2769: No overload matches this call.
@@ -183,7 +183,7 @@ client/src/pages/LedgerDetail.tsx :: error TS18047: 'afAdminStats.orders' is pos
 client/src/pages/LedgerDetail.tsx :: error TS18048: 'dc' is possibly 'undefined'.
 client/src/pages/LedgerDetail.tsx :: error TS18048: 'dc' is possibly 'undefined'.
 client/src/pages/LedgerDetail.tsx :: error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
-client/src/pages/LedgerDetail.tsx :: error TS2322: Type '{ avatar: string | null; username: string | null; isCurrentUser: boolean; id: number; userId: number; role: "admin" | "member" | "owner" | "funder" | "client" | "employee"; nickname: string | null; ... 5 more ...; realName: string | null; }[]' is not assignable to type 'Member[]'.
+client/src/pages/LedgerDetail.tsx :: error TS2322: Type '{ avatar: string | null; username: string | null; isCurrentUser: boolean; id: number; userId: number; role: "owner" | "admin" | "member" | "funder" | "client" | "employee"; nickname: string | null; ... 5 more ...; realName: string | null; }[]' is not assignable to type 'Member[]'.
 client/src/pages/LedgerDetail.tsx :: error TS2322: Type '{ className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'basePrice' does not exist on type 'never'.
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'basePrice' does not exist on type 'never'.
@@ -194,14 +194,14 @@ client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'id' does not exist 
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'id' does not exist on type 'never'.
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'name' does not exist on type 'never'.
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'name' does not exist on type 'never'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'originalPrice' does not exist on type 'never'.
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'subtitle' does not exist on type 'never'.
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'tag' does not exist on type 'never'.
@@ -239,17 +239,15 @@ client/src/pages/MyEquity_RedWhite.tsx :: error TS2322: Type '{ achieved: { stan
 client/src/pages/MyEquity_RedWhite.tsx :: error TS2339: Property 'capitalContribution' does not exist on type '{ estimatedValue: number; companyValuation: number; ranking: { rank: number; total: number; gapToNext: number; }; poolStatus: { poolName: string; poolKey: string; total: number; allocated: number; remaining: number; allocationRate: number; }[]; ... 8 more ...; details: { ...; }; }'.
 client/src/pages/MyEquity_RedWhite.tsx :: error TS2339: Property 'contribEquity' does not exist on type '{ estimatedValue: number; companyValuation: number; ranking: { rank: number; total: number; gapToNext: number; }; poolStatus: { poolName: string; poolKey: string; total: number; allocated: number; remaining: number; allocationRate: number; }[]; ... 8 more ...; details: { ...; }; }'.
 client/src/pages/MyEquity_RedWhite.tsx :: error TS2769: No overload matches this call.
-client/src/pages/NbaFinals.tsx :: error TS2322: Type '{ tag: string; }' is not assignable to type 'IntrinsicAttributes & PageTagProps'.
 client/src/pages/NbaFinals.tsx :: error TS2367: This comparison appears to be unintentional because the types '"super_admin" | "parent" | "baby" | undefined' and '"admin"' have no overlap.
-client/src/pages/NbaOddsAdmin.tsx :: error TS2322: Type '{ tag: string; }' is not assignable to type 'IntrinsicAttributes & PageTagProps'.
 client/src/pages/NbaOddsAdmin.tsx :: error TS2551: Property 'teamsCount' does not exist on type '{ snapshotId: number; teamCount: number; success: boolean; }'. Did you mean 'teamCount'?
 client/src/pages/OilBusinessPage.tsx :: error TS2322: Type '(options?: RefetchOptions | undefined) => Promise<QueryObserverResult<any[], TRPCClientErrorLike<{ input: void; output: any[]; transformer: true; errorShape: DefaultErrorShape; }>>>' is not assignable to type 'MouseEventHandler<HTMLButtonElement>'.
 client/src/pages/OilBusinessPage.tsx :: error TS2322: Type '(options?: RefetchOptions | undefined) => Promise<QueryObserverResult<any[], TRPCClientErrorLike<{ input: void; output: any[]; transformer: true; errorShape: DefaultErrorShape; }>>>' is not assignable to type 'MouseEventHandler<HTMLButtonElement>'.
 client/src/pages/OilBusinessPage.tsx :: error TS2802: Type 'MapIterator<number>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
 client/src/pages/OilBusinessPage.tsx :: error TS2802: Type 'Set<number>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
 client/src/pages/OilDetailPage.tsx :: error TS2322: Type 'string | (TextContent | ImageContent | FileContent)[]' is not assignable to type 'ReactNode'.
-client/src/pages/OpinionBookDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; createdAt: string; updatedAt: string; avatar: string | null; points: number; phone: string | null; familyId: number | null; role: "super_admin" | "parent" | "baby"; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/OpinionBookDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; createdAt: string; updatedAt: string; avatar: string | null; points: number; phone: string | null; familyId: number | null; role: "super_admin" | "parent" | "baby"; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/OpinionBookDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/OpinionBookDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
 client/src/pages/PointRulesManagement.tsx :: error TS2353: Object literal may only specify known properties, and 'ruleId' does not exist in type '{ actionType: string; points?: number | undefined; isActive?: boolean | undefined; description?: string | undefined; }'.
 client/src/pages/PointRulesManagement.tsx :: error TS2353: Object literal may only specify known properties, and 'ruleId' does not exist in type '{ actionType: string; points?: number | undefined; isActive?: boolean | undefined; description?: string | undefined; }'.
 client/src/pages/PptPromptLibrary.tsx :: error TS2802: Type 'Map<number, { name: string; items: { id: number; categoryId: number; content: string; remark: string | null; sortOrder: number; createdAt: Date; }[]; }>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
@@ -275,7 +273,7 @@ client/src/pages/TopologyStats.tsx :: error TS2367: This comparison appears to b
 client/src/pages/TransactionDetail.tsx :: error TS1501: This regular expression flag is only available when targeting 'es6' or later.
 client/src/pages/TransactionDetail.tsx :: error TS18046: 'defaultRule.approverIds' is of type 'unknown'.
 client/src/pages/TransactionDetail.tsx :: error TS18046: 'rule.approverIds' is of type 'unknown'.
-client/src/pages/TransactionDetail.tsx :: error TS2353: Object literal may only specify known properties, and 'ledgerId' does not exist in type '{ transactionId: number; action: "pending" | "rejected" | "approved" | "support_needed"; comment?: string | undefined; }'.
+client/src/pages/TransactionDetail.tsx :: error TS2353: Object literal may only specify known properties, and 'ledgerId' does not exist in type '{ transactionId: number; action: "pending" | "approved" | "rejected" | "support_needed"; comment?: string | undefined; }'.
 client/src/pages/USStockDetail.tsx :: error TS2551: Property 'usStockDetail' does not exist on type 'CreateTRPCReactBase<BuiltRouter<{ ctx: TrpcContext; meta: object; errorShape: DefaultErrorShape; transformer: true; }, DecorateCreateRouterOptions<{ workLog: BuiltRouter<{ ctx: TrpcContext; meta: object; errorShape: DefaultErrorShape; transformer: true; }, DecorateCreateRouterOptions<...>>; ... 170 more ...; worldCu...'. Did you mean 'aiStockDetail'?
 client/src/pages/USStockLifecycle.tsx :: error TS2551: Property 'usStockLifecycle' does not exist on type 'CreateTRPCReactBase<BuiltRouter<{ ctx: TrpcContext; meta: object; errorShape: DefaultErrorShape; transformer: true; }, DecorateCreateRouterOptions<{ workLog: BuiltRouter<{ ctx: TrpcContext; meta: object; errorShape: DefaultErrorShape; transformer: true; }, DecorateCreateRouterOptions<...>>; ... 170 more ...; worldCu...'. Did you mean 'aiStockLifecycle'?
 client/src/pages/USStockLifecycle.tsx :: error TS7006: Parameter 's' implicitly has an 'any' type.
@@ -353,7 +351,7 @@ client/src/pages/wine/products/WineProductFidencio.tsx :: error TS2322: Type '{ 
 client/src/pages/wine/products/WineProductMarthu.tsx :: error TS2322: Type '{ merchantCode: string; activeTab: string; }' is not assignable to type 'IntrinsicAttributes & BottomNavProps'.
 client/src/pages/wine/products/WineProductRomanico.tsx :: error TS2322: Type '{ merchantCode: string; activeTab: string; }' is not assignable to type 'IntrinsicAttributes & BottomNavProps'.
 client/src/pages/yaban/YabanPatientCreate.tsx :: error TS2503: Cannot find namespace 'JSX'.
-client/src/pages/yaban/YabanShopAdminOrders.tsx :: error TS2322: Type 'StatusKey' is not assignable to type '"completed" | "cancelled" | "pending" | "all" | "confirmed" | undefined'.
+client/src/pages/yaban/YabanShopAdminOrders.tsx :: error TS2322: Type 'StatusKey' is not assignable to type '"pending" | "confirmed" | "completed" | "cancelled" | "all" | undefined'.
 server/_core/bankAccountParser.ts :: error TS2345: Argument of type 'string | (TextContent | ImageContent | FileContent)[]' is not assignable to parameter of type 'string'.
 server/_core/context.ts :: error TS2322: Type 'Date' is not assignable to type 'string'.
 server/_core/context.ts :: error TS2322: Type 'Date' is not assignable to type 'string'.
@@ -388,14 +386,14 @@ server/ai-tools.ts :: error TS2769: No overload matches this call.
 server/ai-tools.ts :: error TS2769: No overload matches this call.
 server/ai-tools.ts :: error TS2769: No overload matches this call.
 server/ai-tools.ts :: error TS2769: No overload matches this call.
-server/beauty-router.ts :: error TS2345: Argument of type '"beauty-material"' is not assignable to parameter of type '"posters" | "avatars" | "ledger-photos" | "payment-qrcodes" | "reimbursement-vouchers" | "lottery-images" | "ag-prompts" | "beauty-showcase" | "signatures" | "yaban-shop" | undefined'.
+server/beauty-router.ts :: error TS2345: Argument of type '"beauty-material"' is not assignable to parameter of type '"avatars" | "ledger-photos" | "payment-qrcodes" | "reimbursement-vouchers" | "posters" | "lottery-images" | "ag-prompts" | "beauty-showcase" | "signatures" | "yaban-shop" | undefined'.
 server/beauty-router.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
 server/beauty-router.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
 server/blockchain-scanner.ts :: error TS18047: 'db' is possibly 'null'.
 server/blockchain-scanner.ts :: error TS18047: 'db' is possibly 'null'.
 server/blockchain-scanner.ts :: error TS18047: 'db' is possibly 'null'.
 server/blockchain-scanner.ts :: error TS2322: Type 'Date' is not assignable to type 'string | SQL<unknown> | undefined'.
-server/blockchain-scanner.ts :: error TS2345: Argument of type '"none" | "fuzzy" | "exact"' is not assignable to parameter of type '"fuzzy" | "exact" | undefined'.
+server/blockchain-scanner.ts :: error TS2345: Argument of type '"none" | "exact" | "fuzzy"' is not assignable to parameter of type '"exact" | "fuzzy" | undefined'.
 server/blockchain-scanner.ts :: error TS2769: No overload matches this call.
 server/company-reports.ts :: error TS18047: 'db' is possibly 'null'.
 server/company-reports.ts :: error TS18047: 'db' is possibly 'null'.
@@ -454,7 +452,7 @@ server/db-banks.ts :: error TS18047: 'db' is possibly 'null'.
 server/db-banks.ts :: error TS18047: 'db' is possibly 'null'.
 server/db-banks.ts :: error TS18047: 'db' is possibly 'null'.
 server/db-banks.ts :: error TS18047: 'db' is possibly 'null'.
-server/db-banks.ts :: error TS2339: Property 'id' does not exist on type '{} | { [x: string]: never; } | { [x: string]: never; } | { [x: string]: unknown; }'.
+server/db-banks.ts :: error TS2339: Property 'id' does not exist on type '{} | { [x: string]: unknown; } | { [x: string]: never; } | { [x: string]: never; }'.
 server/db-banks.ts :: error TS2339: Property 'onConflictDoNothing' does not exist on type 'MySqlInsertBase<MySqlTable<TableConfig>, MySql2QueryResultHKT, MySql2PreparedQueryHKT, undefined, false, never>'.
 server/db-banks.ts :: error TS2345: Argument of type 'PgTableWithColumns<{ name: "banks"; schema: undefined; columns: { id: PgColumn<{ name: "id"; tableName: "banks"; dataType: "number"; columnType: "PgSerial"; data: number; driverParam: number; notNull: true; hasDefault: true; ... 6 more ...; generated: undefined; }, {}, {}>; name: PgColumn<...>; usageCount: PgColumn<...' is not assignable to parameter of type 'MySqlTable<TableConfig>'.
 server/db-banks.ts :: error TS2345: Argument of type 'PgTableWithColumns<{ name: "banks"; schema: undefined; columns: { id: PgColumn<{ name: "id"; tableName: "banks"; dataType: "number"; columnType: "PgSerial"; data: number; driverParam: number; notNull: true; hasDefault: true; ... 6 more ...; generated: undefined; }, {}, {}>; name: PgColumn<...>; usageCount: PgColumn<...' is not assignable to parameter of type 'MySqlTable<TableConfig>'.
@@ -481,7 +479,7 @@ server/db-contacts.ts :: error TS2345: Argument of type 'string | null' is not a
 server/db-contacts.ts :: error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string'.
 server/db-contacts.ts :: error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
 server/db-contacts.ts :: error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
-server/db-contacts.ts :: error TS2345: Argument of type '{ isCompleted: boolean; }' is not assignable to parameter of type '{ userId?: number | SQL<unknown> | undefined; contactId?: number | SQL<unknown> | undefined; title?: string | SQL<unknown> | undefined; reminderTime?: string | SQL<unknown> | undefined; id?: number | ... 1 more ... | undefined; ... 9 more ...; isCompleted?: number | ... 1 more ... | undefined; }'.
+server/db-contacts.ts :: error TS2345: Argument of type '{ isCompleted: boolean; }' is not assignable to parameter of type '{ title?: string | SQL<unknown> | undefined; userId?: number | SQL<unknown> | undefined; contactId?: number | SQL<unknown> | undefined; reminderTime?: string | SQL<unknown> | undefined; id?: number | ... 1 more ... | undefined; ... 9 more ...; isCompleted?: number | ... 1 more ... | undefined; }'.
 server/db-contacts.ts :: error TS2358: The left-hand side of an 'instanceof' expression must be of type 'any', an object type or a type parameter.
 server/db-contacts.ts :: error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
 server/db-contacts.ts :: error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
@@ -570,7 +568,7 @@ server/db-ledger.ts :: error TS18047: 'db' is possibly 'null'.
 server/db-ledger.ts :: error TS18047: 'db' is possibly 'null'.
 server/db-ledger.ts :: error TS18047: 'db' is possibly 'null'.
 server/db-ledger.ts :: error TS18047: 'mainDb' is possibly 'null'.
-server/db-ledger.ts :: error TS2322: Type '"pending" | "rejected" | "approved" | "support_needed"' is not assignable to type 'SQL<unknown> | "pending" | "rejected" | "approved" | undefined'.
+server/db-ledger.ts :: error TS2322: Type '"pending" | "approved" | "rejected" | "support_needed"' is not assignable to type 'SQL<unknown> | "pending" | "approved" | "rejected" | undefined'.
 server/db-ledger.ts :: error TS2322: Type 'Date' is not assignable to type 'string | SQL<unknown> | undefined'.
 server/db-ledger.ts :: error TS2322: Type 'Date' is not assignable to type 'string | SQL<unknown> | undefined'.
 server/db-ledger.ts :: error TS2322: Type 'Date' is not assignable to type 'string | SQL<unknown> | undefined'.
@@ -730,7 +728,7 @@ server/db.ts :: error TS2322: Type 'false' is not assignable to type 'number | S
 server/db.ts :: error TS2322: Type 'false' is not assignable to type 'number | SQL<unknown> | undefined'.
 server/db.ts :: error TS2322: Type 'true' is not assignable to type 'number | SQL<unknown> | undefined'.
 server/db.ts :: error TS2322: Type 'true' is not assignable to type 'number | SQL<unknown> | undefined'.
-server/db.ts :: error TS2345: Argument of type '{ clickCount?: number | undefined; readDuration?: number | undefined; completedAt?: Date | undefined; }' is not assignable to parameter of type '{ kidId?: number | SQL<unknown> | undefined; storyId?: number | SQL<unknown> | undefined; id?: number | SQL<unknown> | undefined; completedAt?: string | SQL<unknown> | null | undefined; createdAt?: string | ... 1 more ... | undefined; updatedAt?: string | ... 1 more ... | undefined; clickCount?: number | ... 1 more ...'.
+server/db.ts :: error TS2345: Argument of type '{ clickCount?: number | undefined; readDuration?: number | undefined; completedAt?: Date | undefined; }' is not assignable to parameter of type '{ kidId?: number | SQL<unknown> | undefined; storyId?: number | SQL<unknown> | undefined; id?: number | SQL<unknown> | undefined; createdAt?: string | SQL<unknown> | undefined; updatedAt?: string | ... 1 more ... | undefined; completedAt?: string | ... 2 more ... | undefined; clickCount?: number | ... 1 more ... | u...'.
 server/db.ts :: error TS2724: '"../drizzle/schema"' has no exported member named 'Addition20Challenge'. Did you mean 'addition20Challenges'?
 server/db.ts :: error TS2724: '"../drizzle/schema"' has no exported member named 'Addition20Config'. Did you mean 'addition20Config'?
 server/db.ts :: error TS2724: '"../drizzle/schema"' has no exported member named 'Addition20Record'. Did you mean 'addition20Records'?
@@ -824,7 +822,7 @@ server/diet-router.ts :: error TS2339: Property 'content' does not exist on type
 server/diet-router.ts :: error TS2339: Property 'content' does not exist on type 'InvokeResult'.
 server/diet-router.ts :: error TS2339: Property 'content' does not exist on type 'InvokeResult'.
 server/diet-router.ts :: error TS2339: Property 'content' does not exist on type 'InvokeResult'.
-server/diet-router.ts :: error TS2345: Argument of type '"diet-meals"' is not assignable to parameter of type '"posters" | "avatars" | "ledger-photos" | "payment-qrcodes" | "reimbursement-vouchers" | "lottery-images" | "ag-prompts" | "beauty-showcase" | "signatures" | "yaban-shop" | undefined'.
+server/diet-router.ts :: error TS2345: Argument of type '"diet-meals"' is not assignable to parameter of type '"avatars" | "ledger-photos" | "payment-qrcodes" | "reimbursement-vouchers" | "posters" | "lottery-images" | "ag-prompts" | "beauty-showcase" | "signatures" | "yaban-shop" | undefined'.
 server/equity-router.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
 server/equity-router.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
 server/equity-router.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
@@ -1694,10 +1692,10 @@ server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly h
 server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
 server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
 server/routers/wcOdds.ts :: error TS2802: Type 'Set<number>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
-server/scanners/aptos-scanner.ts :: error TS2345: Argument of type '"none" | "fuzzy" | "exact"' is not assignable to parameter of type '"fuzzy" | "exact" | undefined'.
-server/scanners/bsc-scanner.ts :: error TS2551: Property 'orderNo' does not exist on type '{ order: any; matchType: "none" | "fuzzy" | "exact"; amountDiff: number; }'. Did you mean 'order'?
-server/scanners/erc20-scanner.ts :: error TS2551: Property 'orderNo' does not exist on type '{ order: any; matchType: "none" | "fuzzy" | "exact"; amountDiff: number; }'. Did you mean 'order'?
-server/scanners/solana-scanner.ts :: error TS2551: Property 'orderNo' does not exist on type '{ order: any; matchType: "none" | "fuzzy" | "exact"; amountDiff: number; }'. Did you mean 'order'?
+server/scanners/aptos-scanner.ts :: error TS2345: Argument of type '"none" | "exact" | "fuzzy"' is not assignable to parameter of type '"exact" | "fuzzy" | undefined'.
+server/scanners/bsc-scanner.ts :: error TS2551: Property 'orderNo' does not exist on type '{ order: any; matchType: "none" | "exact" | "fuzzy"; amountDiff: number; }'. Did you mean 'order'?
+server/scanners/erc20-scanner.ts :: error TS2551: Property 'orderNo' does not exist on type '{ order: any; matchType: "none" | "exact" | "fuzzy"; amountDiff: number; }'. Did you mean 'order'?
+server/scanners/solana-scanner.ts :: error TS2551: Property 'orderNo' does not exist on type '{ order: any; matchType: "none" | "exact" | "fuzzy"; amountDiff: number; }'. Did you mean 'order'?
 server/work-groups-router.ts :: error TS2339: Property 'session' does not exist on type 'Request<{ id: string; }, any, any, ParsedQs, Record<string, any>>'.
 server/work-groups-router.ts :: error TS2339: Property 'session' does not exist on type 'Request<{ id: string; }, any, any, ParsedQs, Record<string, any>>'.
 server/work-groups-router.ts :: error TS2339: Property 'session' does not exist on type 'Request<{ id: string; }, any, any, ParsedQs, Record<string, any>>'.

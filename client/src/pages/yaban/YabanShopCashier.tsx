@@ -12,7 +12,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ChevronLeft, Loader2, ShieldCheck } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
@@ -119,7 +118,6 @@ export default function YabanShopCashier() {
   if (!orderNo) {
     return (
       <div className="min-h-screen bg-[#F5F7FA] flex flex-col items-center justify-center">
-        <PageTag code="P306" />
         <p className="text-sm text-gray-400 mb-4">缺少订单信息</p>
         <button onClick={() => navigate("/yaban/shop")} className="text-sm text-[#2196C8]">
           返回商城
@@ -130,7 +128,6 @@ export default function YabanShopCashier() {
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] flex flex-col">
-      <PageTag code="P306" />
 
       {/* 顶部栏 */}
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">

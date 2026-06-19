@@ -5,7 +5,6 @@
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link, useLocation } from "wouter";
-import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 
 // ===== 颜色常量 =====
@@ -391,7 +390,6 @@ export default function NbaFinals() {
         )}
       </div>
 
-      <PageTag tag="P014" />
     </div>
   );
 }

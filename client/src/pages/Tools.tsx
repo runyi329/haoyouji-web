@@ -1,6 +1,5 @@
 import { useLocation } from "wouter";
 import { ArrowLeft, Wrench, TrendingUp, Calculator, Clock } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 interface Tool {
   id: string;
@@ -53,7 +52,6 @@ export default function Tools() {
 
   return (
     <div className="min-h-screen bg-[#F2F2F7]">
-      <PageTag code="P194" />
       {/* 顶部导航 */}
       <div className="bg-gradient-to-br from-red-600 to-red-800 rounded-b-3xl pb-6 relative">
         <div className="px-4 pt-4 flex items-center gap-3">

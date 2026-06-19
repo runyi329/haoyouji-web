@@ -2,13 +2,11 @@
  * 牙伴齿科管理 - 消息 Tab（占位符）
  */
 import YabanTabBar from "./YabanTabBar";
-import { PageTag } from "@/components/PageTag";
 import { MessageCircle } from "lucide-react";
 
 export default function YabanMessages() {
   return (
     <div className="min-h-screen bg-gray-50">
-      <PageTag code="P301" />
       {/* 顶部 Header */}
       <div className="bg-gradient-to-r from-[#FF8C00] to-[#FFA500] text-white sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-4 py-3">

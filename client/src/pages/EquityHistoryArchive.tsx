@@ -3,7 +3,6 @@ import { ArrowLeft, Shield, TrendingUp } from 'lucide-react';
 import { useLocation } from 'wouter';
 import AssetGrowthChart from '../components/equity/AssetGrowthChart';
 import { trpc } from '../lib/trpc';
-import { PageTag } from "@/components/PageTag";
 
 // 类型定义
 interface WeeklyReport {
@@ -243,7 +242,6 @@ const EquityHistoryArchive: React.FC = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#FAF3ED] flex items-center justify-center">
-        <PageTag code="P090" />
         <div className="text-gray-500">加载中...</div>
       </div>
     );

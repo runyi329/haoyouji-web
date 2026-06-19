@@ -1,14 +1,12 @@
 // 商业计划书页面 - 红白双色卡片布局 v2.0
 import { ArrowLeft } from "lucide-react";
 import { useLocation } from "wouter";
-import { PageTag } from "@/components/PageTag";
 
 export default function BusinessPlan() {
   const [, setLocation] = useLocation();
 
   return (
     <div className="min-h-screen bg-[#FAF3ED] pb-20">
-      <PageTag code="P066" />
       {/* 顶部返回区域 */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="px-4 py-3 flex items-center">

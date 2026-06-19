@@ -7,7 +7,6 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { ChevronLeft, Loader2, Ticket } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 type Tab = "claim" | "mine";
 
@@ -56,7 +55,6 @@ export default function YabanShopCoupons() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-10">
-      <PageTag code="P310" />
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="flex items-center gap-2 px-4 py-3">
           <button onClick={() => navigate("/yaban/shop")} aria-label="返回">

@@ -9,7 +9,6 @@ import { ImageCropDialog } from "@/components/ImageCropDialog";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 import { compressAvatar } from "@/utils/imageUtils";
-import { PageTag } from "@/components/PageTag";
 
 export default function KidsManagement() {
   const [, navigate] = useLocation();
@@ -132,7 +131,6 @@ export default function KidsManagement() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-red-50 to-rose-50 pb-20">
-      <PageTag code="P295" />
       {/* 顶部导航 */}
       <div className="bg-white shadow-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">

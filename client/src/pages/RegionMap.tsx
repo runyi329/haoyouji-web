@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { useMediaQuery } from '@/hooks/use-media-query';
 
-import { PageTag } from "@/components/PageTag";
 // 省份简称映射
 const provinceShortNames: Record<string, string> = {
   '北京市': '北京', '天津市': '天津', '上海市': '上海', '重庆市': '重庆',
@@ -174,7 +173,6 @@ export default function RegionMap() {
     if (isLoading) {
       return (
         <div className="flex flex-col items-center justify-center py-12 gap-3">
-          <PageTag code="P016" />
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">加载中...</p>
         </div>

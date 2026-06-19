@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, Store, TrendingUp, BarChart2, Brain } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell, LineChart, Line } from "recharts";
-import { PageTag } from "@/components/PageTag";
 
 // ── 数据 ──────────────────────────────────────────────────────────────────────
 
@@ -178,7 +177,6 @@ export default function CommercePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8 max-w-md mx-auto">
-      <PageTag code={`${activeTab === 'food' ? 'P068-A' : activeTab === 'retail' ? 'P068-B' : activeTab === 'beauty' ? 'P068-C' : activeTab === 'health' ? 'P068-D' : activeTab === 'hotel' ? 'P068-E' : activeTab === 'service' ? 'P068-F' : 'P068-G'}`} />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-20 bg-white border-b border-gray-100 flex items-center justify-between px-4 py-3">
         <button onClick={() => navigate("/smart-finance")} className="flex items-center gap-1 text-gray-600">

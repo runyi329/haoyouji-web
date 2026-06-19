@@ -8,7 +8,6 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, TrendingUp, TrendingDown, Loader2, RefreshCw, ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 
 // ─── 精选股票池配置 ────────────────────────────────────────────────
 const CRYPTO_ICONS: Record<string, string> = {
@@ -565,7 +564,6 @@ export default function GujianPage() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#F0F4FF" }}>
-      <PageTag code="P101" />
       {/* 顶部导航 */}
       <div className="flex-shrink-0 text-white px-4 pt-safe" style={{ background: "linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)" }}>
         <div className="flex items-center justify-between h-12">

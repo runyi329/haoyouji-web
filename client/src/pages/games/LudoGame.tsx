@@ -6,7 +6,6 @@ import { ArrowLeft, RotateCcw, Dice1, Dice2, Dice3, Dice4, Dice5, Dice6, Play, T
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { StarRewardPopup } from "@/components/StarRewardPopup";
-import { PageTag } from "@/components/PageTag";
 
 // 玩家颜色配置
 const PLAYER_COLORS = {
@@ -525,7 +524,6 @@ export default function LudoGame() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageTag code="P275" />
       {/* 顶部导航 */}
       <header className="z-50 glass border-b border-border/50">
         <div className="container flex items-center justify-between h-14">

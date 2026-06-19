@@ -2,7 +2,6 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Hourglass } from "lucide-react";
 import { UserAvatar } from "@/components/UserAvatar";
-import { PageTag } from "@/components/PageTag";
 
 export default function PendingOverview() {
   const [, setLocation] = useLocation();
@@ -44,7 +43,6 @@ export default function PendingOverview() {
 
   return (
     <div className="min-h-screen bg-[#FFF8F5]">
-      <PageTag code="P160" />
       {/* 顶部导航 */}
       <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
         <button onClick={() => setLocation("/ledger")} className="p-1">

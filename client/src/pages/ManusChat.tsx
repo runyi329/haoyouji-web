@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
-import { PageTag } from "@/components/PageTag";
 import {
   ArrowLeft,
   Send,
@@ -218,7 +217,6 @@ export default function ManusChat() {
 
   return (
     <div className="flex flex-col h-screen bg-[#F5F5F5] max-w-md mx-auto">
-      <PageTag code="P139" />
       {/* 顶部导航 */}
       <div className="bg-gradient-to-r from-[#A80000] to-[#d44] px-4 pt-10 pb-4 flex items-center gap-3 flex-shrink-0">
         <button

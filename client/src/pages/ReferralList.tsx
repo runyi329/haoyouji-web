@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
-import { PageTag } from "@/components/PageTag";
 interface ReferralPerson {
   id: number;
   name: string;
@@ -46,7 +45,6 @@ export default function ReferralList() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageTag code="P029" />
       <div className="sticky top-0 z-10 bg-background border-b">
         <div className="container max-w-4xl py-4">
           <div className="flex items-center gap-4">

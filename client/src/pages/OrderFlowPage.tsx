@@ -25,7 +25,6 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { PageTag } from "@/components/PageTag";
 
 // ===== 工具函数 =====
 function fmt(n: number | null | undefined, decimals = 2): string {
@@ -621,7 +620,6 @@ export default function OrderFlowPage() {
       className="min-h-screen pb-28 max-w-md mx-auto relative"
       style={{ background: OKX_BG, overflowX: "hidden", touchAction: "pan-y" }}
     >
-        <PageTag code="P155" />
       {/* ===== 顶部导航 ===== */}
       <div
         className="sticky top-0 z-20 flex items-center px-4 py-3"

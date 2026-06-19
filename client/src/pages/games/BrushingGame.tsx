@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Star, ArrowLeft, Play, Volume2 } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 type GamePhase = "setup" | "ready" | "playing" | "finished";
 
@@ -215,7 +214,6 @@ export default function BrushingGame() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-cyan-50 to-blue-100 py-4 px-4" style={{ fontFamily: "KaiTi, STKaiti, BiauKai, serif" }}>
-      <PageTag code="P267" />
       {/* 头部 */}
       <div className="max-w-2xl mx-auto mb-4 flex items-center justify-between">
         <Button variant="ghost" size="sm" onClick={() => setLocation(`/games?kidId=${kidId}`)}>

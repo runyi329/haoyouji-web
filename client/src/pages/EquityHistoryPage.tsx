@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { PageTag } from "@/components/PageTag";
 
 const EVENT_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   grant: { label: "授予", color: "#8B4513", bg: "rgba(201,168,76,0.15)" },
@@ -173,7 +172,6 @@ export default function EquityHistoryPage() {
 
   return (
     <div className="min-h-screen" style={{ background: BG }}>
-      <PageTag code="P091" />
       {/* 顶部导航栏 */}
       <div
         className="sticky top-0 z-10 flex items-center justify-between px-4 py-3"

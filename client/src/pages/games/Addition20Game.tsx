@@ -10,7 +10,6 @@ import { toast } from "sonner";
 import { StarRewardPopup } from "@/components/StarRewardPopup";
 import { useState, useCallback, useEffect, useRef } from "react";
 import confetti from "canvas-confetti";
-import { PageTag } from "@/components/PageTag";
 
 // 音效生成函数
 const playCorrectSound = () => {
@@ -432,7 +431,6 @@ export default function Addition20Game() {
 
   return (
     <div className="min-h-screen bg-background pb-20">
-      <PageTag code="P265" />
       <style>{`
         @keyframes bounce {
           0%, 100% { transform: translateY(0); }

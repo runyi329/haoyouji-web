@@ -4,7 +4,6 @@ import { useAuth } from '@/_core/hooks/useAuth';
 import { getLoginUrl } from '@/const';
 import { trpc } from '@/lib/trpc';
 import { Ticket, Plus, ChevronLeft, ChevronRight, Users, BookOpen, Cpu, Check, Shield, Clock, Headphones, Zap, X } from 'lucide-react';
-import { PageTag } from "@/components/PageTag";
 
 // ============================================================
 // 商品数据
@@ -258,7 +257,6 @@ export default function MyCoupons() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <PageTag code="P146" />
       {/* 顶部导航栏 */}
       <div className="bg-[#D32F2F] text-white p-4 flex items-center">
         <button onClick={() => setLocation('/profile')} className="mr-3">

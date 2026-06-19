@@ -36,7 +36,6 @@ import {
   MapPin,
   Save,
 } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { trpc } from "@/lib/trpc";
 import ClinicForm, { ClinicFormValue, EMPTY_CLINIC, fromClinic } from "./ClinicForm";
 
@@ -187,7 +186,6 @@ export default function YabanAdmin() {
 
   return (
     <div className="min-h-screen bg-[#F0F4F8] pb-10">
-      <PageTag code="P305" />
 
       {/* 头部 */}
       <div className="bg-gradient-to-b from-[#1B6FA8] to-[#2196C8] text-white">

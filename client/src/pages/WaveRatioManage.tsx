@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { useParams, useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { ChevronLeft, Users, PieChart } from 'lucide-react';
-import { PageTag } from "@/components/PageTag";
 
 // 标签颜色列表（与LedgerDetailAA保持一致）
 const COLORS = ['#D32F2F', '#1976D2', '#388E3C', '#F57C00', '#7B1FA2', '#00838F', '#C62828', '#283593', '#2E7D32'];
@@ -65,7 +64,6 @@ export default function WaveRatioManage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <PageTag code="P203" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
         <button

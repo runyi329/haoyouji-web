@@ -15,7 +15,6 @@ import { Share2, Star, MapPin } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import ShareSheet from "@/components/ShareSheet";
 import { useMerchantOG } from "@/hooks/useMerchantOG";
-import { PageTag } from "@/components/PageTag";
 
 const CDN = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets";
 const COS = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com";
@@ -108,7 +107,6 @@ export default function WineProductRomanicoShare() {
 
   return (
     <div className="min-h-screen pb-24" style={{ background: "#0d0505", color: "#e8d5b7" }}>
-      <PageTag code="P309" />
 
       {/* 顶部品牌标识（无返回按钮） */}
       <div

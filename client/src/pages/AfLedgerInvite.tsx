@@ -3,7 +3,6 @@ import { useParams, useLocation, useSearch } from "wouter";
 import { ChevronLeft, Copy, Check, Network } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import QRCode from "qrcode";
-import { PageTag } from "@/components/PageTag";
 
 export default function AfLedgerInvite() {
   const { id } = useParams<{ id: string }>();
@@ -60,7 +59,6 @@ export default function AfLedgerInvite() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] flex flex-col">
-      <PageTag code="P049" />
       {/* 顶部红色导航栏 - 直角填满 */}
       <div className="bg-[#D32F2F] w-full">
         <div className="flex items-center px-4 pt-3 pb-4">

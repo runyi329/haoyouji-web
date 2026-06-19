@@ -7,7 +7,6 @@ import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { Loader2, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
 
-import { PageTag } from "@/components/PageTag";
 // ===== 人民币 SVG 图标 =====
 // 在岸CNY：红底白色¥符号
 const CnyIcon = ({ size = 32 }: { size?: number }) => (
@@ -389,7 +388,6 @@ export default function CNYDetailPage() {
 
   return (
     <div className="min-h-screen pb-20 max-w-md mx-auto" style={{ background: "#0f1117" }}>
-      <PageTag code={`${activeTab === 'analysis' ? 'P034-A' : 'P034-B'}`} />
       {/* 红色渐变头部区域（导航栏 + 双卡片 + AI分析）*/}
       <div style={{ background: "linear-gradient(135deg, #7b0000 0%, #cc0000 50%, #1a0000 100%)", borderRadius: "0 0 24px 24px", padding: "16px 16px 20px" }}>
         {/* 顶部导航栏 */}

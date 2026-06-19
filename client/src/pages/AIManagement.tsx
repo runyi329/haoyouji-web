@@ -11,7 +11,6 @@ import { ArrowLeft, Save, RotateCcw, Loader2 } from 'lucide-react';
 import CompanyReportManagement from '@/components/CompanyReportManagement';
 import ToolsList from '@/components/ai/ToolsList';
 import ApiKeysStatus from '@/components/ai/ApiKeysStatus';
-import { PageTag } from "@/components/PageTag";
 
 interface PromptsConfig {
   systemPrompt: string;
@@ -204,7 +203,6 @@ export default function AIManagement() {
 
   return (
     <div className="container max-w-4xl py-8">
-      <PageTag code="P038" />
       {/* 头部 */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">

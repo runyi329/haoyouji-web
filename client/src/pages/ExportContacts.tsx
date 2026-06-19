@@ -8,7 +8,6 @@ import { Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 
-import { PageTag } from "@/components/PageTag";
 type ExportFormat = 'json' | 'excel';
 
 export default function ExportContacts() {
@@ -141,7 +140,6 @@ export default function ExportContacts() {
 
   return (
     <div className="container max-w-2xl py-8">
-      <PageTag code="P020" />
       <Card>
         <CardHeader>
           <CardTitle>导出人脉数据</CardTitle>

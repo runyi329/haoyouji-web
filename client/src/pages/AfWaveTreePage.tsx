@@ -3,7 +3,6 @@ import { useRoute, useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { PageTag } from "@/components/PageTag";
 
 const YJH_USER_ID_CONST = 4957151;
 
@@ -408,7 +407,6 @@ export default function AfWaveTreePage() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: "#F5F5F5" }}>
-      <PageTag code="P055" />
       {/* 顶部导航 */}
       <div
         className="sticky top-0 z-10 flex items-center px-4 py-3 border-b border-gray-100"

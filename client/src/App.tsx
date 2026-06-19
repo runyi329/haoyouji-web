@@ -21,7 +21,7 @@ import YabanShopAdmin from "./pages/yaban/YabanShopAdmin";
 import { Toaster } from "@/components/ui/sonner";
 import { CenterToastProvider } from "@/components/ui/center-toast";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Route, Switch } from "wouter";
+import { Route, Switch, Redirect } from "wouter";
 import { trpc } from "@/lib/trpc";
 import ErrorBoundary from "./components/ErrorBoundary";
 import VersionGuard from "./components/VersionGuard";
@@ -31,6 +31,7 @@ import { Loader2 } from "lucide-react";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { useTokenPersistence } from "@/hooks/useTokenPersistence";
 import { SuperViewBanner } from "@/components/SuperViewBanner";
+import AutoPageTag from "@/components/AutoPageTag";
 
 
 // HMR 热更新提示音模块
@@ -432,6 +433,12 @@ function Router() {
         <Route path="/admin/product/:id/edit" component={ProductPublish} />
         <Route path="/admin/ai-monitor" component={lazy(() => import("./pages/admin/AiTokenMonitor"))} />
         <Route path="/admin/projects" component={lazy(() => import("./pages/admin/ProjectConsole"))} />
+        <Route path="/admin/rules" component={lazy(() => import("./pages/admin/RulesList"))} />
+        <Route path="/admin/rules/:id" component={lazy(() => import("./pages/admin/RuleDetail"))} />
+        {/* 兼容旧入口：角标规则即规则库 001 */}
+        <Route path="/admin/page-tag-rules">
+          <Redirect to="/admin/rules/001" />
+        </Route>
         <Route path="/p/:slug" component={lazy(() => import("./pages/admin/ProjectLanding"))} />
         <Route path="/payment/result" component={PaymentResult} />
 
@@ -852,6 +859,7 @@ function App() {
             <VersionGuard />
             <Router />
             <SuperViewBanner />
+            <AutoPageTag />
             </CenterToastProvider>
 
           </TooltipProvider>

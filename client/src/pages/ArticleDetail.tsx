@@ -1,7 +1,6 @@
 import React from "react";
 import { Link, useParams } from "wouter";
 import { Share2, Check, X } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 
 const BASE_URL = "https://www.jiangyuchen.cn";
 
@@ -837,7 +836,6 @@ export default function ArticleDetail() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <PageTag code="P061" />
       {/* 顶部导航栏 - 删除了返回按钮 */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">

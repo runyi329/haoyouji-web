@@ -8,7 +8,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, Plus, FileText, Pencil } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { useYabanClinic } from "./useYabanClinic";
 
 // 状态Tab配置
@@ -220,7 +219,6 @@ export default function YabanFollowUp() {
         </div>
       )}
 
-      <PageTag code="P301" />
     </div>
   );
 }

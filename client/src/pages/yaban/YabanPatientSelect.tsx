@@ -9,7 +9,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, Search, ChevronDown, SlidersHorizontal, User } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import { useYabanClinic } from "./useYabanClinic";
 
 // 患者标签配置
@@ -269,7 +268,6 @@ export default function YabanPatientSelect() {
         </div>
       </div>
 
-      <PageTag code="P303" />
     </div>
   );
 }

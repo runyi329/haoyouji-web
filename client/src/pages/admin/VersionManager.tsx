@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Layers, Plus, Edit, Trash2, RefreshCw } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import {
   Dialog,
   DialogContent,
@@ -104,7 +103,6 @@ export function VersionManager() {
 
   return (
     <div className="space-y-6">
-      <PageTag code="P231" />
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">版本管理</h3>

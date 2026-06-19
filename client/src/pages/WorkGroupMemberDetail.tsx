@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, Lightbulb, Users, Share } from "lucide-react";
 import { useState } from "react";
 import { trpc } from '../lib/trpc';
-import { PageTag } from "@/components/PageTag";
 
 /**
  * 伙伴详情/经营看板
@@ -172,7 +171,6 @@ export default function WorkGroupMemberDetail() {
 
   return (
     <div className="min-h-screen bg-[#FAF3ED] flex flex-col">
-      <PageTag code="P208" />
       {/* 顶部导航栏 */}
       <div className="bg-[#D32F2F] border-b border-[#D32F2F] sticky top-0 z-10">
         <div className="px-3 py-3 flex items-center justify-between">

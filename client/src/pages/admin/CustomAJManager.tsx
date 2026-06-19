@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { Plus, BookMarked, Users, ChevronDown, ChevronUp, ExternalLink, Receipt } from "lucide-react";
-import { PageTag } from "@/components/PageTag";
 import {
   Select,
   SelectContent,
@@ -77,7 +76,6 @@ export default function CustomAJManager() {
 
   return (
     <div className="space-y-4">
-      <PageTag code="P226" />
       {/* 标题 + 新建按钮 */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-2">

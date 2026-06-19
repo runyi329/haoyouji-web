@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { ChevronLeft, ChevronDown, ChevronRight } from 'lucide-react';
-import { PageTag } from "@/components/PageTag";
 
 export default function NodeGrowthGuide() {
   const [, setLocation] = useLocation();
@@ -125,7 +124,6 @@ export default function NodeGrowthGuide() {
 
   return (
     <div className="min-h-screen bg-[#FAF3ED]">
-      <PageTag code="P150" />
       {/* 顶部导航栏 */}
       <div className="bg-[#D32F2F] text-white p-4 flex items-center justify-between sticky top-0 z-10">
         <button onClick={() => setLocation('/profile')} className="p-2">

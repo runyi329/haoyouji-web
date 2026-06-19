@@ -12,7 +12,6 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { PageTag } from "@/components/PageTag";
 
 export default function LedgerAADividendManage() {
   const params = useParams();
@@ -365,7 +364,6 @@ export default function LedgerAADividendManage() {
   // ── 管理员视图 ──
   return (
     <div className="min-h-screen pb-20 max-w-md mx-auto" style={{ backgroundColor: '#F5F5F5' }}>
-      <PageTag code="P110" />
       {/* 顶部导航 */}
       <div className="sticky top-0 z-10 flex items-center px-4 py-3 border-b" style={{ backgroundColor: '#FFFFFF', borderColor: '#F0F0F0' }}>
         <button onClick={() => setLocation(`/ledger/${ledgerId}/settings`)} className="mr-3">
