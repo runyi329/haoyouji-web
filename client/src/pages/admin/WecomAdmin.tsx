@@ -17,6 +17,7 @@ interface WecomSession {
   model_pref?: string;
   system_prompt?: string;
   enabled?: number;
+  task_title?: string;
   created_at: string;
   updated_at: string;
 }
@@ -414,6 +415,11 @@ function UsersTab() {
                   </div>
                 </div>
 
+                {session.task_title && (
+                  <div className="text-xs text-blue-600 font-medium truncate mb-0.5">
+                    {session.task_title}
+                  </div>
+                )}
                 <div className="text-xs text-gray-400 font-mono truncate mb-1">
                   任务: {session.manus_task_id}
                 </div>
@@ -809,7 +815,11 @@ function MessagesTab() {
               </div>
               <div>
                 <div className="text-sm font-medium text-gray-900">{session.nickname || session.wecom_user_id}</div>
-                <div className="text-xs text-gray-400">{session.wecom_user_id}</div>
+                {session.task_title ? (
+                  <div className="text-xs text-blue-500 truncate max-w-[180px]">{session.task_title}</div>
+                ) : (
+                  <div className="text-xs text-gray-400">{session.wecom_user_id}</div>
+                )}
               </div>
             </div>
             <ChevronRight className="w-4 h-4 text-gray-400" />

@@ -758,7 +758,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
 });
 
 // -----------------------------------------------------------
-// 管理API：查询所有绑定关系
+// 管理API：查询所有绑定关系（并发拉取 Manus 任务标题）
 // -----------------------------------------------------------
 router.get("/api/wecom/sessions", async (req: Request, res: Response) => {
   try {
@@ -766,9 +766,27 @@ router.get("/api/wecom/sessions", async (req: Request, res: Response) => {
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
     const [rows] = await (conn as any).execute(
-      "SELECT id, wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, created_at, updated_at FROM wecom_manus_sessions ORDER BY updated_at DESC"
+      "SELECT id, wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, enabled, created_at, updated_at FROM wecom_manus_sessions ORDER BY updated_at DESC"
+    ) as any;
+    const sessions = rows as any[];
+
+    // 并发拉取每个 task 的 Manus 标题
+    const withTitles = await Promise.all(
+      sessions.map(async (s: any) => {
+        try {
+          const r = await fetch(
+            `${MANUS_API_BASE}/task.detail?task_id=${s.manus_task_id}`,
+            { headers: { "x-manus-api-key": MANUS_API_KEY } }
+          );
+          const d = await r.json() as any;
+          return { ...s, task_title: d.ok ? (d.task?.title || "") : "" };
+        } catch {
+          return { ...s, task_title: "" };
+        }
+      })
     );
-    res.json({ ok: true, sessions: rows });
+
+    res.json({ ok: true, sessions: withTitles });
   } catch (e) {
     console.error("[WeCom] 查询sessions失败:", e);
     res.status(500).json({ error: "查询失败" });
