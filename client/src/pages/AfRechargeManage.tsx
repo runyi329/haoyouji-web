@@ -49,7 +49,7 @@ export default function AfRechargeManage() {
     data: selectedBalance,
     isLoading: balanceLoading,
     isError: balanceError,
-  } = trpc.ledger.getBalance.useQuery(
+  } = trpc.recharge.getBalance.useQuery(
     { viewAsUserId: selectedUserId },
     { enabled: !isEditing && !!selectedUserId }
   );
