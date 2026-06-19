@@ -52,6 +52,17 @@ async function collectDescendantIds(rootUserId: number): Promise<number[]> {
   return result;
 }
 
+// 收集某用户的直接下线（仅下一级）
+async function collectDirectChildIds(rootUserId: number): Promise<number[]> {
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  const [rows]: any = await conn.execute(
+    `SELECT id FROM users WHERE invited_by_user_id = ?`,
+    [rootUserId]
+  );
+  return (rows as any[]).map((r) => Number(r.id)).filter((id) => id !== rootUserId);
+}
+
 export const versionRouter = router({
   // 列出版本：includeDisabled=true 时返回全部（管理员后台用）
   listVersions: publicProcedure
@@ -164,9 +175,16 @@ export const versionRouter = router({
         switchEnabled: z.boolean().optional(),
         // 允许切换到的版本key列表；空数组表示全部启用版本
         switchScope: z.array(z.string()).optional(),
-        // 影响范围：self=仅本人 / new=本人+今后新下线（依赖动态继承，不改老下线）
-        // old=本人+已注册老下线（强制改写） / both=本人+新老下线
+        // 影响范围（旧参数，保留向后兼容）：self / new / old / both
         applyScope: z.enum(["self", "new", "old", "both"]).optional(),
+        // 影响范围（新组合式，优先于 applyScope）：
+        // downlineScope：下线范围
+        //   none=不含下线 / direct=仅直接下线 / old=已注册老下线(整棵子树) / new=今后新下线 / both=新老全部 / targeted=指定某人及其下线
+        // includeSelf：是否含本人
+        // targetUserId：仅 targeted 使用
+        downlineScope: z.enum(["none", "direct", "old", "new", "both", "targeted"]).optional(),
+        includeSelf: z.boolean().optional(),
+        targetUserId: z.number().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -177,6 +195,8 @@ export const versionRouter = router({
       const sets: string[] = [];
       const vals: any[] = [];
 
+      // 默认版本 key（用于并入开放集合、派生是否可切换）
+      let normalizedVersionKey: string | null | undefined = undefined;
       if (input.versionKey !== undefined) {
         const vk = input.versionKey.trim();
         if (vk) {
@@ -190,30 +210,85 @@ export const versionRouter = router({
           }
           sets.push("version_key = ?");
           vals.push(vk);
+          normalizedVersionKey = vk;
         } else {
           sets.push("version_key = NULL");
+          normalizedVersionKey = null;
         }
       }
-      if (input.switchEnabled !== undefined) {
-        sets.push("version_switch_enabled = ?");
-        vals.push(input.switchEnabled ? 1 : 0);
-      }
       if (input.switchScope !== undefined) {
-        const scope = input.switchScope.map((s) => s.trim()).filter(Boolean).join(",");
+        // 新模型：version_switch_scope = 开放版本集合（并入默认版本）。
+        const scopeArr = Array.from(
+          new Set(
+            [
+              ...(normalizedVersionKey ? [normalizedVersionKey] : []),
+              ...input.switchScope,
+            ]
+              .map((s) => String(s).trim())
+              .filter(Boolean)
+          )
+        );
+        const scope = scopeArr.join(",");
         sets.push("version_switch_scope = ?");
         vals.push(scope || null);
+        // 与新模型口径一致：开放 >=2 个即等于“允许切换”。
+        // 仍同步写 version_switch_enabled，以兼容仍读该字段的旧逻辑（如 VersionGuard 等）。
+        sets.push("version_switch_enabled = ?");
+        vals.push(scopeArr.length >= 2 ? 1 : 0);
+      } else if (input.switchEnabled !== undefined) {
+        // 向后兼容：仅当未传 switchScope 但显式传了 switchEnabled 时才单独写
+        sets.push("version_switch_enabled = ?");
+        vals.push(input.switchEnabled ? 1 : 0);
       }
 
       if (sets.length === 0) return { success: true, affected: 0 };
 
-      // 目标用户集合。
-      // 仅当范围包含「已注册老下线」（old / both）时，才把设置强制写入现有下线。
-      // self / new 均只写本人；「今后新下线」靠系统已有的动态继承机制自然跟随，无需写库。
-      const scope = input.applyScope ?? "self";
-      const targetIds = [input.userId];
-      if (scope === "old" || scope === "both") {
-        const descendants = await collectDescendantIds(input.userId);
-        targetIds.push(...descendants);
+      // 目标用户集合计算。
+      // 优先使用新组合式参数 downlineScope/includeSelf/targetUserId；
+      // 未传新参数时回退到旧 applyScope（self/new/old/both）以向后兼容。
+      // 「今后新下线」靠系统已有的动态继承机制自然跟随，无需写库。
+      const targetIdSet = new Set<number>();
+
+      if (input.downlineScope !== undefined) {
+        // 新组合式
+        const ds = input.downlineScope;
+        const includeSelf = ds === "none" ? true : (input.includeSelf ?? true);
+        if (includeSelf) targetIdSet.add(input.userId);
+
+        if (ds === "direct") {
+          const kids = await collectDirectChildIds(input.userId);
+          kids.forEach((id) => targetIdSet.add(id));
+        } else if (ds === "old" || ds === "both") {
+          const descendants = await collectDescendantIds(input.userId);
+          descendants.forEach((id) => targetIdSet.add(id));
+        } else if (ds === "targeted") {
+          if (!input.targetUserId) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "指定某人及其下线时必须提供 targetUserId" });
+          }
+          // 校验 targetUserId 确实是 input.userId 名下的下线（防越权）
+          const allDesc = await collectDescendantIds(input.userId);
+          if (!allDesc.includes(input.targetUserId)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: "指定的目标不在该用户的下线范围内" });
+          }
+          // 目标人 + 其名下全部下线
+          targetIdSet.add(input.targetUserId);
+          const sub = await collectDescendantIds(input.targetUserId);
+          sub.forEach((id) => targetIdSet.add(id));
+        }
+        // ds === "none" 或 "new"：不需额外下线（new 靠动态继承）
+      } else {
+        // 旧 applyScope 兼容
+        const scope = input.applyScope ?? "self";
+        targetIdSet.add(input.userId);
+        if (scope === "old" || scope === "both") {
+          const descendants = await collectDescendantIds(input.userId);
+          descendants.forEach((id) => targetIdSet.add(id));
+        }
+      }
+
+      const targetIds = Array.from(targetIdSet);
+      if (targetIds.length === 0) {
+        return { success: true, affected: 0 };
       }
 
       // 逐批更新（IN 列表）

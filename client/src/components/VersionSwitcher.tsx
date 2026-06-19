@@ -8,7 +8,7 @@ import { trpc } from "@/lib/trpc";
  * 交互（与产品确认）：
  * - 圆圈显示「当前所在版本」自己的图标（脉动版=脉动波形图标，牙伴版=牙伴牙齿logo）。
  * - 点击圆圈弹出下拉，列出可切换版本（图标 + 名称），当前版本带勾选；点击某版本即切换到其落地地址。
- * - 仅当用户被管理员授予「允许切换(switchEnabled)」且可切换版本 >= 2 时才显示，否则不渲染。
+ * - 仅当用户的「开放版本集合」>= 2 个时才显示，否则不渲染（不再依赖 switchEnabled 总开关）。
  *
  * 两种摆放模式：
  * - floating（默认）：固定浮在屏幕右上角，适用于无顶栏图标行的页面（脉动版人脉首页）。
@@ -86,23 +86,28 @@ export default function VersionSwitcher({
   const version = (user as any)?.version as
     | {
         versionKey?: string;
-        switchEnabled?: boolean;
         switchableVersionKeys?: string[];
       }
     | undefined;
 
-  // 无切换权限：不渲染任何东西
-  if (!version || !version.switchEnabled) return null;
+  // 新模型：是否出现切换器完全由「开放版本集合」决定（下方计算后 <2 则不渲染），不再看 switchEnabled
+  if (!version) return null;
 
   // 「当前所在版本」：按实际路径实时判定（/yaban/* 为牙伴，其余为脉动），
   // 而非归属版本 versionKey，以免在牙伴页面却把当前判成脉动、图标与可切项相反。
   const currentKey = location.startsWith("/yaban") ? "yaban" : "maidong";
 
-  // 可切换范围：为空 = 全部已启用版本（与后台“不勾选任何项”语义一致）；再并入归属版本与当前所在版本
+  // 可切换范围：开放版本集合（switchableVersionKeys）；再并入归属版本与当前所在版本。
+  // 新模型下后端仅在开放集合非空时下发具体列表，不再有“为空=全部”的隐含语义。
   const scopeKeys = version.switchableVersionKeys || [];
-  const allEnabledKeys = (versions || []).filter((v: any) => v.enabled !== false).map((v: any) => v.versionKey);
-  const allowedSet = new Set<string>(scopeKeys.length > 0 ? scopeKeys : allEnabledKeys);
-  if (version.versionKey) allowedSet.add(version.versionKey);
+  // 开放集合本身（并入归属版本），这才是“到底给了几个版本”；是否出现切换器仅看它
+  const openSet = new Set<string>(scopeKeys);
+  if (version.versionKey) openSet.add(version.versionKey);
+  // 开放不足 2 个：固定在单一版本，不展示切换器
+  if (openSet.size < 2) return null;
+
+  // 可选项：开放集合 + 当前所在版本（保证当前项可高亮）
+  const allowedSet = new Set<string>(openSet);
   if (currentKey) allowedSet.add(currentKey);
   const options = (versions || [])
     .filter((v: any) => allowedSet.has(v.versionKey))
@@ -112,7 +117,6 @@ export default function VersionSwitcher({
       landingPath: (v.landingPath as string) || "/",
     }));
 
-  // 少于2个可切换版本时无需展示切换器
   if (options.length < 2) return null;
 
   const handleSwitch = (target: { versionKey: string; landingPath: string }) => {

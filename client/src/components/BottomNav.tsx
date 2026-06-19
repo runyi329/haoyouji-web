@@ -80,10 +80,14 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
   const version = (user as any)?.version as
     | {
         versionKey?: string;
-        switchEnabled?: boolean;
         switchableVersionKeys?: string[];
       }
     | undefined;
+
+  // 新模型：是否可切换由「开放版本集合」决定（>=2 个才能切），不再看 switchEnabled
+  const openVersionSet = new Set<string>(version?.switchableVersionKeys || []);
+  if (version?.versionKey) openVersionSet.add(version.versionKey);
+  const canSwitchVersions = openVersionSet.size >= 2;
 
   type SwitchItem = {
     key: string;          // 唯一标识（versionKey 或定制入口 key）
@@ -109,13 +113,9 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
   );
 
   // 1) 正式版本切换项
-  if (version?.switchEnabled) {
-    // 可去的正式版本：可切换范围 + 归属版本（归属版本始终可回去，即使未列入 scope）+ 当前所在版本
-    // 可切换范围为空 = 允许切换到全部已启用版本（与后台“不勾选任何项”语义一致）
-    const scopeKeys = version.switchableVersionKeys || [];
-    const allEnabledKeys = (versions || []).filter((v: any) => v.enabled !== false).map((v: any) => v.versionKey);
-    const allowedKeys = new Set<string>(scopeKeys.length > 0 ? scopeKeys : allEnabledKeys);
-    if (version.versionKey) allowedKeys.add(version.versionKey);
+  if (canSwitchVersions) {
+    // 可去的正式版本：开放版本集合 + 归属版本 + 当前所在版本
+    const allowedKeys = new Set<string>(openVersionSet);
     if (activeVersionKey) allowedKeys.add(activeVersionKey);
     (versions || [])
       .filter((v: any) => allowedKeys.has(v.versionKey))
@@ -134,7 +134,7 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
   // 2) 定制入口（通用）：
   //    - 若用户已开启“允许切换版本”，把其命中的定制入口并入切换菜单（与版本一起切换）；
   //    - 若未开启切换，则保持旧行为（中间键直接跳定制页，见 handlePlusClick 兜底）。
-  if (version?.switchEnabled) {
+  if (canSwitchVersions) {
     myCustomEntries.forEach((e) => {
       switchItems.push({
         key: e.key,

@@ -147,19 +147,15 @@ export async function resolveUserVersion(userId: number): Promise<ResolvedUserVe
   const defaultVersion = await getDefaultVersion(versions);
 
   const conn = await getDbConnection();
-  // 读取用户自身的切换权限设置
-  let switchEnabled = false;
+  // 读取用户自身的开放集合（新模型不再读 version_switch_enabled 作为门槛）
   let switchScopeRaw = "";
-  let selfVersionKey = "";
   if (conn) {
     const [rows]: any = await conn.execute(
-      `SELECT version_key, version_switch_enabled, version_switch_scope FROM users WHERE id = ? LIMIT 1`,
+      `SELECT version_switch_scope FROM users WHERE id = ? LIMIT 1`,
       [userId]
     );
     const row = (rows as any[])[0];
     if (row) {
-      selfVersionKey = row.version_key ? String(row.version_key).trim() : "";
-      switchEnabled = Number(row.version_switch_enabled) === 1;
       switchScopeRaw = row.version_switch_scope ? String(row.version_switch_scope) : "";
     }
   }
@@ -187,26 +183,41 @@ export async function resolveUserVersion(userId: number): Promise<ResolvedUserVe
   const effective =
     versions.find((v) => v.versionKey === effectiveKey) || defaultVersion;
 
-  // 解析可切换版本范围
-  let switchableVersionKeys: string[] = [];
-  if (switchEnabled) {
-    if (switchScopeRaw.trim()) {
-      const scoped = switchScopeRaw
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      switchableVersionKeys = versions
-        .filter((v) => scoped.includes(v.versionKey))
-        .map((v) => v.versionKey);
-    } else {
-      // 为空表示全部已启用版本
-      switchableVersionKeys = versions.map((v) => v.versionKey);
-    }
-    // 确保生效版本本身也在可切换列表里
-    if (!switchableVersionKeys.includes(effective.versionKey)) {
-      switchableVersionKeys.unshift(effective.versionKey);
+  // 解析开放版本集合（新模型）：
+  // - 「开放版本」跟随「生效版本的设置者」（self 取本人、inherited 取最顶层设置者），
+  //   与默认版本保持同一来源，避免「版本继承上线、但开放范围取自己」的错位。
+  // - 不再依赖 switchEnabled 总开关；不再有「为空=全部」的隐含语义。
+  // - 是否可切换由「开放集合 >= 2」决定（前端据此决定是否渲染切换器）。
+  let scopeRawForResolve = switchScopeRaw;
+  if (source === "inherited" && sourceUserId && conn) {
+    // 继承场景：读设置者（最顶层）的开放集合
+    try {
+      const [setterRows]: any = await conn.execute(
+        `SELECT version_switch_scope FROM users WHERE id = ? LIMIT 1`,
+        [sourceUserId]
+      );
+      const setterRow = (setterRows as any[])[0];
+      scopeRawForResolve = setterRow && setterRow.version_switch_scope
+        ? String(setterRow.version_switch_scope)
+        : "";
+    } catch {
+      scopeRawForResolve = "";
     }
   }
+
+  const scoped = scopeRawForResolve
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  let switchableVersionKeys = versions
+    .filter((v) => scoped.includes(v.versionKey))
+    .map((v) => v.versionKey);
+  // 生效版本本身始终属于开放集合
+  if (!switchableVersionKeys.includes(effective.versionKey)) {
+    switchableVersionKeys.unshift(effective.versionKey);
+  }
+  // 是否可切换：开放集合 >= 2（与前端、后台口径一致）
+  const resolvedSwitchEnabled = switchableVersionKeys.length >= 2;
 
   return {
     versionKey: effective.versionKey,
@@ -216,7 +227,7 @@ export async function resolveUserVersion(userId: number): Promise<ResolvedUserVe
     source,
     sourceUserId,
     sourceUserName,
-    switchEnabled,
+    switchEnabled: resolvedSwitchEnabled,
     switchableVersionKeys,
   };
 }
