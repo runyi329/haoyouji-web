@@ -70,7 +70,9 @@ const MODEL_COLOR: Record<string, string> = {
 
 function formatDate(dateStr: string) {
   if (!dateStr) return "-";
-  const d = new Date(dateStr);
+  // 支持Unix时间戳（纯数字字符串）
+  const ts = Number(dateStr);
+  const d = isNaN(ts) || dateStr.includes("-") ? new Date(dateStr) : new Date(ts * 1000);
   return d.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
 }
 
@@ -1143,17 +1145,22 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
                       <div className="px-4 py-3 text-xs text-gray-400 text-center">暂无积分消耗记录</div>
                     ) : (
                       <div>
-                        <div className="px-4 py-2 bg-gray-50 flex justify-between text-xs text-gray-400 font-medium">
+                        <div className="px-4 py-2 bg-gray-50 grid grid-cols-3 text-xs text-gray-400 font-medium">
                           <span>时间</span>
-                          <span>消耗算力</span>
+                          <span className="text-center">消耗算力</span>
+                          <span className="text-right"><div>元</div><div>U</div></span>
                         </div>
                         {taskRecords.map((r, i) => (
-                          <div key={i} className="px-4 py-2.5 flex items-center justify-between border-b border-gray-50 last:border-0">
+                          <div key={i} className="px-4 py-2.5 grid grid-cols-3 items-center border-b border-gray-50 last:border-0">
                             <div>
                               <div className="text-xs text-gray-700">{formatDate(r.created_at)}</div>
                               {r.model && <div className="text-xs text-gray-400 mt-0.5">{r.model}</div>}
                             </div>
-                            <div className="text-sm font-medium text-blue-600">-{r.credits.toFixed(1)}</div>
+                            <div className="text-sm font-medium text-blue-600 text-center">-{Math.round(r.credits)}</div>
+                            <div className="text-right">
+                              <div className="text-xs font-medium text-green-600">{creditsToYuan(r.credits)}</div>
+                              <div className="text-xs text-gray-400">{creditsToUsdt(r.credits)} U</div>
+                            </div>
                           </div>
                         ))}
                       </div>
