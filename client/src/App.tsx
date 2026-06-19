@@ -799,6 +799,10 @@ function Router() {
         <Route path="/yaban/inventory/outbound" component={lazy(() => import("./pages/yaban/YabanInventoryOutbound"))} />
         <Route path="/yaban/inventory/material/:id" component={lazy(() => import("./pages/yaban/YabanInventoryMaterial"))} />
         <Route path="/yaban/inventory/logs" component={lazy(() => import("./pages/yaban/YabanInventoryLogs"))} />
+        {/* 大龙虾项目（独立页面） */}
+        <Route path="/longxia" component={lazy(() => import("./pages/longxia/LongxiaHome"))} />
+        <Route path="/longxia/my" component={lazy(() => import("./pages/longxia/LongxiaMy"))} />
+        <Route path="/longxia/layout-templates" component={lazy(() => import("./pages/longxia/LongxiaLayoutTemplates"))} />
         {/* 404 */}
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
