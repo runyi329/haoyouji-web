@@ -114,6 +114,174 @@ async function sendWeComMessage(toUser: string, content: string): Promise<void> 
 }
 
 // -----------------------------------------------------------
+// 用户模型偏好（内存缓存，重启后默认 max）
+// -----------------------------------------------------------
+const userModelPrefs: Record<string, string> = {};
+const MODEL_PROFILES: Record<string, { profile: string; label: string }> = {
+  MODEL_MAX: { profile: "manus-1.6-max", label: "Max 模式（最强能力，适合复杂任务）" },
+  MODEL_NORMAL: { profile: "manus-1.6", label: "标准模式（平衡能力与速度）" },
+  MODEL_LITE: { profile: "manus-1.6-lite", label: "轻量模式（快速响应，省积分）" },
+};
+
+function getUserModel(userId: string): string {
+  return userModelPrefs[userId] || "manus-1.6-max";
+}
+
+function getUserModelLabel(userId: string): string {
+  const profile = getUserModel(userId);
+  const entry = Object.values(MODEL_PROFILES).find(m => m.profile === profile);
+  return entry?.label || profile;
+}
+
+// -----------------------------------------------------------
+// 工具函数：查询积分消耗
+// -----------------------------------------------------------
+async function queryCreditsUsage(): Promise<string> {
+  try {
+    const res = await fetch(`${MANUS_API_BASE}/usage.list?limit=10`, {
+      headers: { "x-manus-api-key": MANUS_API_KEY },
+    });
+    const data = await res.json() as any;
+    if (!data.ok || !data.data) {
+      return "查询积分失败，请稍后重试。";
+    }
+
+    const records = data.data as any[];
+    if (records.length === 0) {
+      return "暂无积分消耗记录。";
+    }
+
+    let totalCost = 0;
+    const lines: string[] = ["--- 最近积分记录 ---"];
+    for (const r of records) {
+      const time = new Date(r.created_at * 1000).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
+      const credits = r.credits;
+      const type = r.type === "cost" ? "消耗" : r.type === "refund" ? "退还" : "充值";
+      const title = r.title || "未命名任务";
+      lines.push(`${time} | ${type} ${Math.abs(credits)} 积分 | ${title}`);
+      if (r.type === "cost") totalCost += Math.abs(credits);
+    }
+    lines.push(`\n--- 以上记录累计消耗: ${totalCost} 积分 ---`);
+    return lines.join("\n");
+  } catch (e) {
+    console.error("[Manus] 查询积分异常:", e);
+    return "查询积分时发生错误，请稍后重试。";
+  }
+}
+
+// -----------------------------------------------------------
+// 工具函数：处理菜单点击事件
+// -----------------------------------------------------------
+async function handleMenuClick(userId: string, eventKey: string): Promise<void> {
+  console.log(`[WeCom] 菜单点击: user=${userId} key=${eventKey}`);
+
+  switch (eventKey) {
+    case "MODEL_MAX":
+    case "MODEL_NORMAL":
+    case "MODEL_LITE": {
+      const model = MODEL_PROFILES[eventKey];
+      userModelPrefs[userId] = model.profile;
+      await sendWeComMessage(userId, `已切换到: ${model.label}\n\n下次发送消息将使用新模型。`);
+      break;
+    }
+
+    case "MODEL_STATUS": {
+      const label = getUserModelLabel(userId);
+      await sendWeComMessage(userId, `当前使用模型: ${label}`);
+      break;
+    }
+
+    case "CREDITS_QUERY": {
+      await sendWeComMessage(userId, "正在查询积分...");
+      const result = await queryCreditsUsage();
+      await sendWeComMessage(userId, result);
+      break;
+    }
+
+    case "NEW_CONVERSATION": {
+      // 删除当前会话，下次发消息时自动创建新任务
+      try {
+        const conn = await getDbConnection();
+        if (conn) {
+          await (conn as any).execute(
+            "DELETE FROM wecom_manus_sessions WHERE wecom_user_id = ?",
+            [userId]
+          );
+        }
+        await sendWeComMessage(userId, "已开启新对话。下次发送消息将创建全新的 AI 任务。");
+      } catch (e) {
+        await sendWeComMessage(userId, "操作失败，请稍后重试。");
+      }
+      break;
+    }
+
+    case "TASK_STATUS": {
+      try {
+        await ensureSessionTable();
+        const conn = await getDbConnection();
+        if (!conn) {
+          await sendWeComMessage(userId, "系统异常，请稍后重试。");
+          break;
+        }
+        const [rows] = await (conn as any).execute(
+          "SELECT manus_task_id, created_at FROM wecom_manus_sessions WHERE wecom_user_id = ? LIMIT 1",
+          [userId]
+        ) as any;
+        if ((rows as any[]).length === 0) {
+          await sendWeComMessage(userId, "当前没有活跃任务。发送任何消息即可创建新任务。");
+        } else {
+          const row = (rows as any[])[0];
+          const created = new Date(row.created_at).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
+          await sendWeComMessage(userId, `当前任务ID: ${row.manus_task_id}\n创建时间: ${created}\n当前模型: ${getUserModelLabel(userId)}`);
+        }
+      } catch (e) {
+        await sendWeComMessage(userId, "查询任务状态失败。");
+      }
+      break;
+    }
+
+    case "HELP": {
+      const helpText = [
+        "--- 使用帮助 ---",
+        "",
+        "直接发送文字消息即可与 AI 对话。",
+        "",
+        "底部菜单功能:",
+        "[切换模型] 选择不同的 AI 模型",
+        "  - Max: 最强能力，适合复杂任务",
+        "  - 标准: 平衡能力与速度",
+        "  - 轻量: 快速响应，省积分",
+        "",
+        "[工具箱]",
+        "  - 查积分: 查看最近积分消耗",
+        "  - 新对话: 重新开始一个全新任务",
+        "  - 任务状态: 查看当前任务信息",
+        "",
+        "[更多]",
+        "  - 使用帮助: 显示本帮助",
+        "  - 意见反馈: 提交反馈建议",
+      ].join("\n");
+      await sendWeComMessage(userId, helpText);
+      break;
+    }
+
+    case "FEEDBACK": {
+      await sendWeComMessage(userId, "感谢您的反馈！请直接回复您的建议或问题，我们会认真处理。");
+      break;
+    }
+
+    default: {
+      if (eventKey.startsWith("RESERVED_")) {
+        await sendWeComMessage(userId, "此功能即将上线，敬请期待。");
+      } else {
+        await sendWeComMessage(userId, `未知操作: ${eventKey}`);
+      }
+      break;
+    }
+  }
+}
+
+// -----------------------------------------------------------
 // 工具函数：确保数据库表存在
 // -----------------------------------------------------------
 let _tableEnsured = false;
@@ -166,7 +334,7 @@ async function getOrCreateManusTask(wecomUserId: string): Promise<string | null>
           role: "user",
           content: "你好，我是通过企业微信连接的用户。请记住我们的对话，帮助我完成各种工作。",
         },
-        agent_profile: "manus-1.6-max",
+        agent_profile: getUserModel(wecomUserId),
       }),
     });
     const data = await res.json() as any;
@@ -233,7 +401,6 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string): Prom
           role: "user",
           content: userMessage,
         },
-        agent_profile: "manus-1.6-max",
       }),
     });
     const sendData = await sendRes.json() as any;
@@ -468,11 +635,21 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
 
     console.log(`[WeCom] 收到消息 from=${userId} type=${innerMsgType} content=${content}`);
 
+    // 处理事件类型（菜单点击等）
+    if (innerMsgType === "event") {
+      if (event === "subscribe") {
+        await sendWeComMessage(userId, "您好！我是脉动网 AI 助手，有任何需求直接告诉我即可。");
+      } else if (event === "click") {
+        const eventKey = innerXml.EventKey;
+        if (eventKey) {
+          await handleMenuClick(userId, eventKey);
+        }
+      }
+      return;
+    }
+
     // 只处理文字消息
     if (innerMsgType !== "text" || !content || !userId) {
-      if (innerMsgType === "event" && event === "subscribe") {
-        await sendWeComMessage(userId, "您好！我是脉动网 AI 助手，有任何需求直接告诉我即可。");
-      }
       return;
     }
 
