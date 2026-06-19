@@ -7,7 +7,9 @@
     "dev": "NODE_ENV=development tsx server/_core/index.ts",
     "build": "node scripts/export-git-log.cjs && vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist && cp server/git-log.json dist/git-log.json",
     "start": "NODE_ENV=production node dist/index.js",
-    "check": "tsc --noEmit",
+    "check": "node scripts/check-focus.mjs",
+    "check:all": "tsc --noEmit",
+    "check:baseline": "node scripts/check-focus.mjs --generate",
     "format": "prettier --write .",
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate"
