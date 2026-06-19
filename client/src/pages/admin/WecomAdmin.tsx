@@ -270,7 +270,18 @@ function UsersTab() {
     }
   }, []);
 
-  useEffect(() => { fetchSessions(); }, [fetchSessions]);
+  useEffect(() => {
+    fetchSessions();
+    // 每 30 秒静默轮询，同步企微端模型切换
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch("/api/wecom/sessions");
+        const data = await res.json();
+        if (data.ok) setSessions(data.sessions || []);
+      } catch {}
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [fetchSessions]);
 
   const fetchDropdownData = useCallback(async () => {
     setLoadingTasks(true);
