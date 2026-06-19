@@ -190,7 +190,7 @@ async function getOrCreateManusTask(wecomUserId: string): Promise<string | null>
         );
         const checkData = await checkRes.json() as any;
         if (checkData.ok) {
-          const statusEvt = (checkData.events || []).find((e: any) => e.type === "status_update");
+          const statusEvt = (checkData.messages || []).find((e: any) => e.type === "status_update");
           const st = statusEvt?.status_update?.agent_status;
           console.log(`[Manus] 初始任务状态: ${st} (已等待 ${initWaited}s)`);
           if (st === "stopped" || st === "waiting" || st === "error") break;
@@ -264,7 +264,7 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string): Prom
         continue;
       }
 
-      const events = msgsData.events || [];
+      const events = msgsData.messages || [];
 
       // 调试：打印事件类型列表
       const eventTypes = events.map((e: any) => e.type).join(',');
