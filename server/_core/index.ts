@@ -453,6 +453,9 @@ async function startServer() {
   // 黄金行情路由（Yahoo Finance）
   const goldTrackerModule = await import('../gold-tracker-router.js');
   app.use(goldTrackerModule.default);
+  // 企业微信 + Manus API 集成路由
+  const wecomManusModule = await import('../wecom-manus-router.js');
+  app.use(wecomManusModule.default);
 
   // 内部数字币数据补全接口（仅允许本机调用）
   app.post('/api/internal/sync-crypto', async (req: any, res: any) => {
