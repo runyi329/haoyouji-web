@@ -216,6 +216,9 @@ async function getOrCreateManusTask(wecomUserId: string): Promise<string | null>
 // -----------------------------------------------------------
 async function sendToManusAndGetReply(taskId: string, userMessage: string): Promise<string> {
   try {
+    // 记录发送前的时间戳（Unix 秒），用于过滤旧消息
+    const sendTimestamp = Math.floor(Date.now() / 1000);
+
     // 发送消息（使用 Max 模式）
     console.log(`[Manus] 向任务 ${taskId} 发送消息: ${userMessage.substring(0, 50)}`);
     const sendRes = await fetch(`${MANUS_API_BASE}/task.sendMessage`, {
@@ -270,10 +273,22 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string): Prom
         console.log(`[Manus] 任务状态: ${agentStatus} (已等待 ${waited}s)`);
 
         if (agentStatus === "stopped" || agentStatus === "error") {
-          // 查找最后一条 assistant_message
-          const assistantMsg = events.find((e: any) => e.type === "assistant_message");
-          if (assistantMsg) {
-            const content = assistantMsg.assistant_message?.content;
+          // 只取 sendTimestamp 之后的新 assistant_message（过滤历史旧消息）
+          const newAssistantMsgs = events.filter(
+            (e: any) => e.type === "assistant_message" && (e.timestamp || 0) >= sendTimestamp
+          );
+          if (newAssistantMsgs.length > 0) {
+            // 取最新的一条（order=desc 所以第一条就是最新）
+            const content = newAssistantMsgs[0].assistant_message?.content;
+            if (typeof content === "string") return content;
+            if (Array.isArray(content)) {
+              return content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n");
+            }
+          }
+          // 如果没有新消息，尝试不过滤时间再找一次（容错）
+          const anyAssistantMsg = events.find((e: any) => e.type === "assistant_message");
+          if (anyAssistantMsg) {
+            const content = anyAssistantMsg.assistant_message?.content;
             if (typeof content === "string") return content;
             if (Array.isArray(content)) {
               return content.filter((c: any) => c.type === "text").map((c: any) => c.text).join("\n");
