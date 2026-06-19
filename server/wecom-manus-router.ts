@@ -136,9 +136,25 @@ function getUserModelLabel(userId: string): string {
 // -----------------------------------------------------------
 // 工具函数：查询积分消耗
 // -----------------------------------------------------------
-async function queryCreditsUsage(): Promise<string> {
+async function queryCreditsUsage(userId: string): Promise<string> {
   try {
-    const res = await fetch(`${MANUS_API_BASE}/usage.list?limit=10`, {
+    // 先从数据库获取当前用户的 task_id
+    let userTaskId: string | null = null;
+    try {
+      const conn = await getDbConnection();
+      if (conn) {
+        const [rows] = await (conn as any).execute(
+          "SELECT manus_task_id FROM wecom_manus_sessions WHERE wecom_user_id = ? LIMIT 1",
+          [userId]
+        ) as any;
+        if ((rows as any[]).length > 0) {
+          userTaskId = (rows as any[])[0].manus_task_id;
+        }
+      }
+    } catch (_) {}
+
+    // 拉取积分记录（多拉一些以确保能找到当前用户的）
+    const res = await fetch(`${MANUS_API_BASE}/usage.list?limit=50`, {
       headers: { "x-manus-api-key": MANUS_API_KEY },
     });
     const data = await res.json() as any;
@@ -146,22 +162,45 @@ async function queryCreditsUsage(): Promise<string> {
       return "查询积分失败，请稍后重试。";
     }
 
-    const records = data.data as any[];
-    if (records.length === 0) {
+    const allRecords = data.data as any[];
+    if (allRecords.length === 0) {
       return "暂无积分消耗记录。";
     }
 
-    let totalCost = 0;
-    const lines: string[] = ["--- 最近积分记录 ---"];
-    for (const r of records) {
-      const time = new Date(r.created_at * 1000).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
-      const credits = r.credits;
-      const type = r.type === "cost" ? "消耗" : r.type === "refund" ? "退还" : "充值";
-      const title = r.title || "未命名任务";
-      lines.push(`${time} | ${type} ${Math.abs(credits)} 积分 | ${title}`);
-      if (r.type === "cost") totalCost += Math.abs(credits);
+    // 过滤出当前用户的任务记录
+    const records = userTaskId
+      ? allRecords.filter((r: any) => r.task_id === userTaskId)
+      : [];
+
+    // 计算当前用户消耗
+    let userCost = 0;
+    const lines: string[] = [];
+
+    if (records.length > 0) {
+      lines.push("--- 你的任务积分记录 ---");
+      for (const r of records) {
+        const time = new Date(r.created_at * 1000).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
+        const credits = r.credits;
+        const type = r.type === "cost" ? "消耗" : r.type === "refund" ? "退还" : "充值";
+        const title = r.title || "未命名任务";
+        lines.push(`${time} | ${type} ${Math.abs(credits)} 积分 | ${title}`);
+        if (r.type === "cost") userCost += Math.abs(credits);
+      }
+      lines.push(`\n你的累计消耗: ${userCost} 积分`);
+    } else {
+      lines.push("暂无你的积分消耗记录。");
+      if (!userTaskId) {
+        lines.push("（你还没有创建过任务，发送消息即可开始）");
+      }
     }
-    lines.push(`\n--- 以上记录累计消耗: ${totalCost} 积分 ---`);
+
+    // 附加全账号总消耗（仅供参考）
+    let totalCost = 0;
+    for (const r of allRecords) {
+      if (r.type === "cost") totalCost += Math.abs(r.credits);
+    }
+    lines.push(`\n--- 全账号近期总消耗: ${totalCost} 积分 ---`);
+
     return lines.join("\n");
   } catch (e) {
     console.error("[Manus] 查询积分异常:", e);
@@ -193,7 +232,7 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
 
     case "CREDITS_QUERY": {
       await sendWeComMessage(userId, "正在查询积分...");
-      const result = await queryCreditsUsage();
+      const result = await queryCreditsUsage(userId);
       await sendWeComMessage(userId, result);
       break;
     }
