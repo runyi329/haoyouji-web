@@ -219,15 +219,21 @@ export default function Admin() {
     enabled: user?.role === "super_admin",
   });
   
-  // 搜索过滤用户
-  const filteredUsers = users?.filter((u) => {
-    if (!searchKeyword) return true;
-    const keyword = searchKeyword.toLowerCase();
-    return (
-      (u.username && u.username.toLowerCase().includes(keyword)) ||
-      (u.name && u.name.toLowerCase().includes(keyword))
-    );
-  });
+  // 搜索过滤用户，jiang 永远置顶
+  const filteredUsers = users
+    ?.filter((u) => {
+      if (!searchKeyword) return true;
+      const keyword = searchKeyword.toLowerCase();
+      return (
+        (u.username && u.username.toLowerCase().includes(keyword)) ||
+        (u.name && u.name.toLowerCase().includes(keyword))
+      );
+    })
+    .sort((a, b) => {
+      if (a.username === "jiang") return -1;
+      if (b.username === "jiang") return 1;
+      return 0;
+    });
 
   const createUserMutation = trpc.admin.createUser.useMutation({
     onSuccess: () => {

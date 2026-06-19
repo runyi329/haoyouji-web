@@ -37,6 +37,9 @@ import {
   Lock,
   LogIn,
   Paintbrush,
+  Upload,
+  Image,
+  Minimize2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -546,6 +549,11 @@ function ProjectCreationRuleContent() {
             <span className="font-medium text-gray-900">多项目登录皮肤路由</span>
             <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">已定</span>
           </li>
+          <li className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[#5A2E1C] text-white text-[10px] font-bold shrink-0">F</span>
+            <span className="font-medium text-gray-900">图片/视频/文件上传规范</span>
+            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">已定</span>
+          </li>
         </ol>
       </div>
 
@@ -675,6 +683,60 @@ function ProjectCreationRuleContent() {
           <li>皮肤仅影响登录页 UI 层，不影响任何认证逻辑。</li>
           <li><code className="bg-gray-100 px-1 rounded text-[12px]">lastProject</code> 不随 token 一起清除，属于 UI 偏好标记而非认证凭证。</li>
           <li>首次登录（无标记）展示默认登录页，不强制跳转。</li>
+        </ul>
+      </RuleSection>
+
+      {/* ===== 板块 F：图片/视频/文件上传规范 ===== */}
+      <div className="flex items-center gap-2 pt-1">
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[#5A2E1C] text-white text-[10px] font-bold">F</span>
+        <span className="text-[13px] font-bold text-[#5A2E1C]">图片/视频/文件上传规范</span>
+      </div>
+
+      <RuleSection icon={Upload} title="核心原则：所有上传全部走腾讯云 COS，无需每次再问">
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            <span className="font-semibold text-gray-900">所有场景</span>——网页图标、品牌图片、用户头像、商品图、设备图、影像资料、内容配图、用户上传的任何文件——
+            <span className="text-[#D32F2F] font-medium">一律上传到腾讯云 COS</span>，不允许存放在本地服务器、<code className="bg-gray-100 px-1 rounded text-[12px]">client/public/</code> 目录或任何项目目录内。
+          </li>
+          <li>
+            开发时无需每次询问存在哪里、怎么上传：<span className="font-semibold text-gray-900">默认就是 COS，直接操作。</span>
+          </li>
+          <li>
+            新项目自带的网页图标（logo、icon、banner 等）以及项目内所有涉及上传功能的模块，均直接对接下方 COS 配置，不另起存储方案。
+          </li>
+        </ul>
+      </RuleSection>
+
+      <RuleSection icon={Image} title="COS 存储配置（全项目共用）">
+        <div className="bg-gray-50 rounded-xl p-3 font-mono text-[12px] space-y-1 mb-3">
+          <div><span className="text-gray-400">Bucket：</span><span className="font-semibold text-gray-800">haoyouji-images-1396946788</span></div>
+          <div><span className="text-gray-400">Region：</span><span className="font-semibold text-gray-800">ap-shanghai</span></div>
+          <div><span className="text-gray-400">CDN 前缀：</span><span className="font-semibold text-gray-800 break-all">https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/</span></div>
+        </div>
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            路径命名规范：<code className="bg-gray-100 px-1 rounded text-[12px]">assets/分类/文件名</code>，例如
+            <code className="bg-gray-100 px-1 rounded text-[12px] ml-1">assets/icons/doraemon-icon.png</code>、
+            <code className="bg-gray-100 px-1 rounded text-[12px] ml-1">assets/avatars/user-123.jpg</code>、
+            <code className="bg-gray-100 px-1 rounded text-[12px] ml-1">assets/products/shebei-001.webp</code>。
+          </li>
+          <li>
+            SecretId / SecretKey <span className="text-[#D32F2F] font-medium">仅存于服务端环境变量</span>，严禁写入代码或提交到 Git。
+          </li>
+        </ul>
+      </RuleSection>
+
+      <RuleSection icon={Minimize2} title="图片压缩规则">
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            <span className="font-semibold text-gray-900">普通图片</span>（图标、头像、商品图、内容配图等）：上传前必须压缩，建议长边不超过 1200px，输出格式优先 WebP，质量 80–85。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">医疗影像类原始凭证</span>（X 光、CT、活检报告等）：<span className="text-[#D32F2F] font-medium">不压缩、不转格式</span>，保留原始文件直接上传，确保医疗数据完整性。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">视频文件</span>：直接上传原文件，不在服务端转码。
+          </li>
         </ul>
       </RuleSection>
 

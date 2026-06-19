@@ -145,9 +145,6 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
         active: e.pageMatch ? e.pageMatch(location) : false,
       });
     });
-  } else if (isLiulifan) {
-    // 向后兼容：liulifan 即便未走正式切换，也保留奢贝入口与脉动版双入口
-    switchItems.push({ key: "beauty", name: "奢贝设备", icon: SHEBEI_ICON, path: "/beauty", active: isBeautyPage });
   }
 
   // 弹框里只展示「除当前所在版本之外」的可去目的地
@@ -212,10 +209,6 @@ export default function BottomNav({ onJoinLedger, onCreateLedger }: BottomNavPro
       // cx8618：跳转到红酒商会首页
       setShowLedgerMenu(false);
       setLocation('/wine');
-    } else if (isJiang) {
-      // jiang：跳转到润仪算力研发中心
-      setShowLedgerMenu(false);
-      setLocation('/jiang');
     } else if (isStevenHuang) {
       // STEVEN_HUANG：跳转到IDEALIGHT红颜派商家主页
       setShowLedgerMenu(false);

@@ -36,8 +36,8 @@ function getCategory(title: string): { label: string; color: string; bg: string 
 }
 import { Card, CardContent } from "@/components/ui/card";
 import BeautyTabBar from "./BeautyTabBar";
-import BottomNav from "@/components/BottomNav";
 import { toast } from "sonner";
+import { ChevronDown } from "lucide-react";
 
 const STORE_INFO = {
   name: "奢贝美容院",
@@ -57,7 +57,40 @@ export default function BeautyHome() {
   const { user, logout } = useAuth();
   const [, setLocation] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [switchMenuOpen, setSwitchMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const switchMenuRef = useRef<HTMLDivElement>(null);
+
+  // 版本切换：获取版本列表
+  const { data: versions } = trpc.version.listVersions.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const versionInfo = (user as any)?.version as { versionKey?: string; switchableVersionKeys?: string[] } | undefined;
+  const switchableKeys = new Set<string>(versionInfo?.switchableVersionKeys || []);
+  if (versionInfo?.versionKey) switchableKeys.add(versionInfo.versionKey);
+  // 可切换到的其他版本（排除当前 shebei）
+  const switchableVersions = (versions || []).filter(
+    (v: any) => switchableKeys.has(v.versionKey) && v.versionKey !== 'shebei'
+  );
+
+  // 点击外部关闭版本切换菜单
+  useEffect(() => {
+    if (!switchMenuOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (switchMenuRef.current && !switchMenuRef.current.contains(e.target as Node)) {
+        setSwitchMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [switchMenuOpen]);
+
+  function handleSwitchVersion(v: any) {
+    setSwitchMenuOpen(false);
+    try { sessionStorage.setItem('_viewing_version', v.versionKey); } catch {}
+    setLocation(v.landingPath || '/');
+  }
 
   // 开机画面状态
   const SPLASH_KEY = '_beauty_splash_shown';
@@ -153,8 +186,37 @@ export default function BeautyHome() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-white/80 text-sm mb-1">欢迎光临</p>
-              <h1 className="text-2xl font-bold tracking-wide">{STORE_INFO.name}</h1>
-              <p className="text-white/70 text-xs mt-1 tracking-widest">{STORE_INFO.subtitle}</p>
+              <div className="relative" ref={switchMenuRef}>
+                <button
+                  onClick={() => switchableVersions.length > 0 && setSwitchMenuOpen(o => !o)}
+                  className="flex items-center gap-1 active:opacity-70 transition-opacity"
+                >
+                  <h1 className="text-2xl font-bold tracking-wide">{STORE_INFO.name}</h1>
+
+                </button>
+                <p className="text-white/70 text-xs mt-1 tracking-widest">{STORE_INFO.subtitle}</p>
+                {/* 版本切换下拉菜单 */}
+                {switchMenuOpen && switchableVersions.length > 0 && (
+                  <div className="absolute top-full left-0 mt-2 z-50 bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden min-w-[180px]">
+                    <div className="px-4 py-2 text-xs text-gray-400 border-b border-gray-50 flex items-center gap-1.5">
+                      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/doraemon-icon.png" alt="" className="w-4 h-4 rounded-full object-cover" />
+                      任意门
+                    </div>
+                    {switchableVersions.map((v: any) => (
+                      <button
+                        key={v.versionKey}
+                        onClick={() => handleSwitchVersion(v)}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-rose-50 transition-colors text-gray-800 text-sm"
+                      >
+                        <span className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">
+                          {v.name?.charAt(0) || '?'}
+                        </span>
+                        <span>{v.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               {/* 素材按钮 */}
@@ -421,7 +483,6 @@ export default function BeautyHome() {
         </Card>
       </div>
 
-      <BottomNav />
     </div>
   );
 }

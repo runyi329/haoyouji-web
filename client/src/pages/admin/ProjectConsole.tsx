@@ -80,8 +80,8 @@ type VersionRow = {
 
 export default function ProjectConsole() {
   const [, navigate] = useLocation();
-  // 规则3：从哪来回哪去（来源栈）。从 A055 进就回 A055，从首页进就回首页；栈空兑底回脉动网首页。
-  const goBack = useSmartBack("/");
+  // 规则3：从哪来回哪去（来源栈）。从 A055 进就回 A055，从个人中心进就回个人中心；栈空兑底回管理员个人中心。
+  const goBack = useSmartBack("/profile");
   const { data: user, isLoading: userLoading } = trpc.auth.me.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
