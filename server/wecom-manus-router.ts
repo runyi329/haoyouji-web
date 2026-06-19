@@ -115,7 +115,7 @@ async function sendWeComMessage(toUser: string, content: string): Promise<void> 
 }
 
 // -----------------------------------------------------------
-// 用户模型偏好（内存缓存，重启后默认 max）
+// 用户模型偏好（内存缓存 + 持久化到数据库）
 // -----------------------------------------------------------
 const userModelPrefs: Record<string, string> = {};
 const MODEL_PROFILES: Record<string, { profile: string; label: string }> = {
@@ -124,12 +124,44 @@ const MODEL_PROFILES: Record<string, { profile: string; label: string }> = {
   MODEL_LITE: { profile: "manus-1.6-lite", label: "轻量模式（快速响应，省积分）" },
 };
 
-function getUserModel(userId: string): string {
-  return userModelPrefs[userId] || "manus-1.6-max";
+async function getUserModel(userId: string): Promise<string> {
+  // 内存缓存命中直接返回
+  if (userModelPrefs[userId]) return userModelPrefs[userId];
+  // 从数据库读取
+  try {
+    const conn = await getDbConnection();
+    if (conn) {
+      const [rows] = await (conn as any).execute(
+        "SELECT model_pref FROM wecom_manus_sessions WHERE wecom_user_id = ? LIMIT 1",
+        [userId]
+      ) as any;
+      if ((rows as any[]).length > 0 && (rows as any[])[0].model_pref) {
+        const pref = (rows as any[])[0].model_pref;
+        userModelPrefs[userId] = pref; // 写入内存缓存
+        return pref;
+      }
+    }
+  } catch (_) {}
+  return "manus-1.6-max";
 }
 
-function getUserModelLabel(userId: string): string {
-  const profile = getUserModel(userId);
+async function setUserModel(userId: string, profile: string): Promise<void> {
+  userModelPrefs[userId] = profile; // 更新内存缓存
+  try {
+    const conn = await getDbConnection();
+    if (conn) {
+      await (conn as any).execute(
+        "UPDATE wecom_manus_sessions SET model_pref = ? WHERE wecom_user_id = ?",
+        [profile, userId]
+      );
+    }
+  } catch (e) {
+    console.error("[WeCom] 保存模型偏好失败:", e);
+  }
+}
+
+async function getUserModelLabel(userId: string): Promise<string> {
+  const profile = await getUserModel(userId);
   const entry = Object.values(MODEL_PROFILES).find(m => m.profile === profile);
   return entry?.label || profile;
 }
@@ -215,13 +247,13 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
     case "MODEL_NORMAL":
     case "MODEL_LITE": {
       const model = MODEL_PROFILES[eventKey];
-      userModelPrefs[userId] = model.profile;
+      await setUserModel(userId, model.profile);
       await sendWeComMessage(userId, `已切换到: ${model.label}\n\n下次发送消息将使用新模型。`);
       break;
     }
 
     case "MODEL_STATUS": {
-      const label = getUserModelLabel(userId);
+      const label = await getUserModelLabel(userId);
       await sendWeComMessage(userId, `当前使用模型: ${label}`);
       break;
     }
@@ -267,7 +299,8 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
         } else {
           const row = (rows as any[])[0];
           const created = new Date(row.created_at).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
-          await sendWeComMessage(userId, `当前任务ID: ${row.manus_task_id}\n创建时间: ${created}\n当前模型: ${getUserModelLabel(userId)}`);
+          const modelLabel = await getUserModelLabel(userId);
+          await sendWeComMessage(userId, `当前任务ID: ${row.manus_task_id}\n创建时间: ${created}\n当前模型: ${modelLabel}`);
         }
       } catch (e) {
         await sendWeComMessage(userId, "查询任务状态失败。");
@@ -413,7 +446,7 @@ async function getOrCreateManusTask(wecomUserId: string): Promise<string | null>
           role: "user",
           content: "你好，我是通过企业微信连接的用户。请记住我们的对话，帮助我完成各种工作。",
         },
-        agent_profile: getUserModel(wecomUserId),
+        agent_profile: await getUserModel(wecomUserId),
       }),
     });
     const data = await res.json() as any;
