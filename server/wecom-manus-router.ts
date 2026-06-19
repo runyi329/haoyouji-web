@@ -1128,7 +1128,7 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
 
     // 查询所有绑定用户（包含 active 和 archived），按 created_at 升序排列以便取最早时间
     const [sessionRows] = await (conn as any).execute(
-      "SELECT wecom_user_id, manus_task_id, nickname, created_at FROM wecom_manus_sessions ORDER BY created_at ASC"
+      "SELECT wecom_user_id, manus_task_id, nickname, DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at FROM wecom_manus_sessions ORDER BY created_at ASC"
     ) as any;
     const sessions = sessionRows as any[];
 
@@ -1163,6 +1163,10 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
     const userStatsMap: Record<string, any> = {};
     for (const s of sessions) {
       const uid = s.wecom_user_id;
+      // 将 created_at 转为字符串（mysql2可能返回 Date 对象）
+      const createdAtStr = s.created_at
+        ? (s.created_at instanceof Date ? s.created_at.toISOString() : String(s.created_at))
+        : "";
       if (!userStatsMap[uid]) {
         userStatsMap[uid] = {
           wecom_user_id: uid,
@@ -1170,14 +1174,14 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
           total_cost: 0,
           record_count: 0,
           task_count: 0,
-          first_bound_at: s.created_at || "",  // 最早绑定时间（SQL已升序，第一条即最早）
+          first_bound_at: createdAtStr,  // 最早绑定时间（SQL已升序，第一条即最早）
         };
       }
       const cost = taskCostMap[s.manus_task_id]?.total_cost || 0;
       const count = taskCostMap[s.manus_task_id]?.record_count || 0;
+      userStatsMap[uid].total_cost += cost;
+      userStatsMap[uid].record_count += count;
       if (cost > 0 || count > 0) {
-        userStatsMap[uid].total_cost += cost;
-        userStatsMap[uid].record_count += count;
         userStatsMap[uid].task_count += 1;
       }
     }

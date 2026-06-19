@@ -91,6 +91,11 @@ function calcDays(dateStr: string) {
   return `${days}天`;
 }
 
+// 积分转元：4000积分 = 148元，1积分 = 0.037元
+function creditsToYuan(credits: number) {
+  return (credits * 0.037).toFixed(2);
+}
+
 // ─── Tab 按钮 ────────────────────────────────────────────────────────────────
 
 type TabKey = "users" | "workflow" | "messages" | "stats" | "menu";
@@ -1236,11 +1241,11 @@ function StatsTab() {
       ) : stats.length === 0 ? (
         <div className="text-center py-10 text-gray-400 text-sm">暂无使用记录</div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
 
           {/* 按用户 */}
           {viewMode === "user" && (
-            <table className="w-full border-collapse text-sm">
+            <table className="min-w-full border-collapse text-sm" style={{minWidth: '700px'}}>
               <thead>
                 <tr className="bg-gray-50">
                   <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200">用户（点击查看明细）</th>
@@ -1248,6 +1253,7 @@ function StatsTab() {
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">累计时间</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16"><div>元</div><div className="text-gray-400">￥</div></th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-8"></th>
                 </tr>
               </thead>
@@ -1271,6 +1277,7 @@ function StatsTab() {
                     <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{calcDays(stat.first_bound_at)}</td>
                     <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
                     <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
+                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-green-600 border-r border-gray-100">{creditsToYuan(stat.total_cost)}</td>
                     <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
                   </tr>
                 ))}
@@ -1280,7 +1287,7 @@ function StatsTab() {
 
           {/* 按时间 */}
           {viewMode === "time" && (
-            <table className="w-full border-collapse text-sm">
+            <table className="min-w-full border-collapse text-sm" style={{minWidth: '700px'}}>
               <thead>
                 <tr className="bg-gray-50">
                   <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200">用户（最早绑定在前）</th>
@@ -1288,6 +1295,7 @@ function StatsTab() {
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">累计时间</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16"><div>元</div><div className="text-gray-400">￥</div></th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-8"></th>
                 </tr>
               </thead>
@@ -1306,6 +1314,7 @@ function StatsTab() {
                     <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{calcDays(stat.first_bound_at)}</td>
                     <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
                     <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
+                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-green-600 border-r border-gray-100">{creditsToYuan(stat.total_cost)}</td>
                     <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
                   </tr>
                 ))}
@@ -1315,7 +1324,7 @@ function StatsTab() {
 
           {/* 按积分排行 */}
           {viewMode === "rank" && (
-            <table className="w-full border-collapse text-sm">
+            <table className="min-w-full border-collapse text-sm" style={{minWidth: '740px'}}>
               <thead>
                 <tr className="bg-gray-50">
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-10">排名</th>
@@ -1324,6 +1333,7 @@ function StatsTab() {
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">累计时间</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16"><div>元</div><div className="text-gray-400">￥</div></th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-8"></th>
                 </tr>
               </thead>
@@ -1350,6 +1360,7 @@ function StatsTab() {
                     <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{calcDays(stat.first_bound_at)}</td>
                     <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
                     <td className="px-3 py-2.5 text-center text-sm font-bold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
+                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-green-600 border-r border-gray-100">{creditsToYuan(stat.total_cost)}</td>
                     <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
                   </tr>
                 ))}
