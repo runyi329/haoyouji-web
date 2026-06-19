@@ -7,6 +7,7 @@
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { ChevronLeft, ClipboardList, Check } from "lucide-react";
 import { toast } from "sonner";
 
@@ -45,6 +46,7 @@ const EMPTY: RegForm = {
 
 export default function YabanCustomerRegister() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban/features");
   const [form, setForm] = useState<RegForm>({ ...EMPTY });
   const [submitting, setSubmitting] = useState(false);
 
@@ -77,7 +79,7 @@ export default function YabanCustomerRegister() {
         style={{ background: `linear-gradient(135deg, ${SKY} 0%, ${SKY_D} 100%)` }}
       >
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-          <button onClick={() => navigate("/yaban/features")} className="p-1" aria-label="返回">
+          <button onClick={goBack} className="p-1" aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex flex-col items-center leading-tight">

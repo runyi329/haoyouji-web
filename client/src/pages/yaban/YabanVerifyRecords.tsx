@@ -4,16 +4,18 @@
  * 风格：蓝色系。当前先做空态展示，待客人侧已核销订单接口接入后填充。
  */
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { ChevronLeft, Ticket } from "lucide-react";
 
 export default function YabanVerifyRecords() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban/profile");
 
   return (
     <div className="min-h-screen bg-[#F0F4F8]">
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="flex items-center gap-2 px-4 py-3">
-          <button onClick={() => navigate("/yaban/profile")} aria-label="返回">
+          <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <span className="text-base font-bold">核销记录</span>

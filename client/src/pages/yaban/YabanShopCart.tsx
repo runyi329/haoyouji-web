@@ -4,12 +4,14 @@
  */
 import { useMemo } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { ChevronLeft, Minus, Plus, Trash2 } from "lucide-react";
 import { useCart } from "./useCart";
 import { useProductsByIds } from "./useShopProducts";
 
 export default function YabanShopCart() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban/shop");
   const { items, setQty, remove } = useCart();
   const products = useProductsByIds(items.map((it) => it.id));
 
@@ -28,7 +30,7 @@ export default function YabanShopCart() {
       {/* 顶部返回栏 */}
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-3 py-3 flex items-center justify-between">
-          <button onClick={() => navigate("/yaban/shop")} aria-label="返回">
+          <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <span className="text-base font-bold">购物车</span>

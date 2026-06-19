@@ -5,6 +5,7 @@
  */
 import { useMemo, useState, useRef } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -68,6 +69,7 @@ const EMPTY_FORM: FormState = {
 
 export default function YabanShopAdminProducts() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban");
   const { current } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [filter, setFilter] = useState<StatusFilter>("all");
@@ -145,7 +147,7 @@ export default function YabanShopAdminProducts() {
       {/* 顶部返回栏 */}
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-3 py-3 flex items-center justify-between">
-          <button onClick={() => navigate("/yaban")} aria-label="返回">
+          <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex flex-col">

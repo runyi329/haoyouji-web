@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link, useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import {
   ArrowLeft,
   Users,
@@ -184,6 +185,7 @@ function CustomLedgerPanel() {
 
 export default function Admin() {
   const [, setLocation] = useLocation();
+  const goBack = useSmartBack("/admin/projects");
   const { user, loading } = useAuth();
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState<number | null>(null);
@@ -379,11 +381,9 @@ export default function Admin() {
       <header className="z-50 glass border-b border-border/50">
         <div className="container flex items-center justify-between h-14">
           <div className="flex items-center">
-            <Link href="/">
-              <Button variant="ghost" size="icon" className="mr-2">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
-            </Link>
+            <Button variant="ghost" size="icon" className="mr-2" onClick={goBack} aria-label="返回">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
             <h1 className="font-bold text-lg">后台管理</h1>
           </div>
           <div className="flex items-center gap-2">

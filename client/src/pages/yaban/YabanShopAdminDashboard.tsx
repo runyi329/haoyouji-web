@@ -3,6 +3,7 @@
  * 路由：/yaban/shop/admin/dashboard
  */
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, Loader2, TrendingUp, ShoppingBag, Wallet, CheckCircle2 } from "lucide-react";
 import { useYabanClinic } from "./useYabanClinic";
@@ -19,6 +20,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function YabanShopAdminDashboard() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban/shop");
   const { current } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const { data, isLoading } = trpc.yabanShopAdmin.dashboard.useQuery();
@@ -29,7 +31,7 @@ export default function YabanShopAdminDashboard() {
     <div className="min-h-screen bg-[#F5F7FA] pb-10">
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-3 py-3 flex items-center gap-2">
-          <button onClick={() => navigate("/yaban/shop")} aria-label="返回">
+          <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex flex-col">

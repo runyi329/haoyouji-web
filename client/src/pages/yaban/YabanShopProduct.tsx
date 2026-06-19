@@ -4,6 +4,7 @@
  */
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { ChevronLeft, ShoppingCart, Minus, Plus, Share2, Copy, X, Star } from "lucide-react";
 import { useCart } from "./useCart";
 import { useShopProduct } from "./useShopProducts";
@@ -27,6 +28,7 @@ function Stars({ rating, size = 14 }: { rating: number; size?: number }) {
 
 export default function YabanShopProduct() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban/shop");
   const [, params] = useRoute("/yaban/shop/product/:id");
   const id = params?.id || "";
   const { product, isLoading } = useShopProduct(id);
@@ -83,7 +85,7 @@ export default function YabanShopProduct() {
       <div className="min-h-screen bg-[#F5F7FA] flex flex-col items-center justify-center">
         <p className="text-sm text-gray-400 mb-4">商品不存在</p>
         <button
-          onClick={() => navigate("/yaban/shop")}
+          onClick={goBack}
           className="text-sm text-[#2196C8]"
         >
           返回商城

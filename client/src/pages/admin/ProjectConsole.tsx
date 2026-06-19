@@ -18,6 +18,7 @@
  */
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -79,6 +80,8 @@ type VersionRow = {
 
 export default function ProjectConsole() {
   const [, navigate] = useLocation();
+  // 规则3：从哪来回哪去（来源栈）。从 A055 进就回 A055，从首页进就回首页；栈空兑底回脉动网首页。
+  const goBack = useSmartBack("/");
   const { data: user, isLoading: userLoading } = trpc.auth.me.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: false,
@@ -251,7 +254,7 @@ export default function ProjectConsole() {
       <header className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-gray-100">
         <div className="flex items-center gap-3 px-4 h-14">
           <button
-            onClick={() => navigate("/parent/profile")}
+            onClick={goBack}
             className="p-1.5 -ml-1.5 rounded-full active:scale-95 transition-transform"
             aria-label="返回"
           >

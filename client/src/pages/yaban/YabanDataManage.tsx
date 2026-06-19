@@ -9,6 +9,7 @@
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import {
@@ -107,6 +108,7 @@ function base64ToBlob(base64: string, mime: string): Blob {
 
 export default function YabanDataManage() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban/profile");
   const { current } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [tab, setTab] = useState<"export" | "import">("export");
@@ -361,7 +363,7 @@ export default function YabanDataManage() {
       {/* 头部 */}
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="flex items-center gap-2 px-4 py-3">
-          <button onClick={() => navigate("/yaban/profile")} aria-label="返回">
+          <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex flex-col">
@@ -387,7 +389,7 @@ export default function YabanDataManage() {
         </div>
       </div>
 
-      <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
+      <div role="tabpanel" className="max-w-lg mx-auto px-4 pt-4 space-y-3">
         {/* 无医院身份：得体提示，隐藏所有导出操作 */}
         {hasNoClinic ? (
           <div className="bg-white rounded-2xl shadow-sm p-6 text-center">

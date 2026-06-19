@@ -6,6 +6,7 @@
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { ChevronLeft, Search, User } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { trpc } from "@/lib/trpc";
@@ -21,6 +22,7 @@ const ROLE_COLORS: Record<string, string> = {
 
 export default function YabanStaffProfile() {
   const [, setLocation] = useLocation();
+  const goBack = useSmartBack("/yaban/features");
   const { current } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [keyword, setKeyword] = useState("");
@@ -36,7 +38,7 @@ export default function YabanStaffProfile() {
         style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
       >
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-          <button onClick={() => setLocation("/yaban/features")} className="p-1" aria-label="返回">
+          <button onClick={goBack} className="p-1" aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex flex-col items-center">

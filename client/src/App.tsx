@@ -30,6 +30,7 @@ import { ColorThemeProvider } from "./contexts/ColorThemeContext";
 import { Loader2 } from "lucide-react";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { useTokenPersistence } from "@/hooks/useTokenPersistence";
+import { useNavSourceTracker } from "@/hooks/useSmartBack";
 import { SuperViewBanner } from "@/components/SuperViewBanner";
 import AutoPageTag from "@/components/AutoPageTag";
 
@@ -391,6 +392,8 @@ function LoadingFallback() {
 
 function Router() {
   const { isLoading } = trpc.auth.me.useQuery();
+  // 规则003：全局记录页面访问轨迹，供返回按钮精确「从哪来回哪去」
+  useNavSourceTracker();
 
   // 认证状态加载中时直接显示Loading，避免Switch提前命中NotFound导致刷新页面闪现404
   if (isLoading) {

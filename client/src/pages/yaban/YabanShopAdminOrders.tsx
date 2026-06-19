@@ -5,6 +5,7 @@
  */
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { ChevronLeft, Loader2, X, Phone, ClipboardList, Truck, QrCode, Download } from "lucide-react";
@@ -47,6 +48,7 @@ function fmtTime(val: any): string {
 
 export default function YabanShopAdminOrders() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban");
   const { current } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [filter, setFilter] = useState<StatusKey>("all");
@@ -56,8 +58,14 @@ export default function YabanShopAdminOrders() {
   const utils = trpc.useUtils();
   const exportMut = trpc.yabanShopAdmin.exportOrders.useQuery(undefined, { enabled: false });
 
+  // 后端 status 仅接受部分取值；前端额外的筛选项（shipped/refunding）回退为查询「全部」再由前端筛选
+  const queryStatus = (["all", "pending", "confirmed", "completed", "cancelled"] as const).includes(
+    filter as any
+  )
+    ? (filter as "all" | "pending" | "confirmed" | "completed" | "cancelled")
+    : "all";
   const { data, isLoading } = trpc.yabanShop.adminListOrders.useQuery({
-    status: filter,
+    status: queryStatus,
     keyword: keyword.trim() || undefined,
     limit: 200,
   });
@@ -115,7 +123,7 @@ export default function YabanShopAdminOrders() {
       {/* 顶部返回栏 */}
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-3 py-3 flex items-center justify-between">
-          <button onClick={() => navigate("/yaban")} aria-label="返回">
+          <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex flex-col">

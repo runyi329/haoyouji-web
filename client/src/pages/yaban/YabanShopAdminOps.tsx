@@ -4,6 +4,7 @@
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { trpc } from "@/lib/trpc";
 import {
   ChevronLeft, Loader2, Star, MessageSquare, Image as ImageIcon,
@@ -25,6 +26,7 @@ function Stars({ rating }: { rating: number }) {
 
 export default function YabanShopAdminOps() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban/shop");
   const { current } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [tab, setTab] = useState<Tab>("reviews");
@@ -33,7 +35,7 @@ export default function YabanShopAdminOps() {
     <div className="min-h-screen bg-[#F0F4F8] pb-10">
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="flex items-center gap-2 px-4 py-3">
-          <button onClick={() => navigate("/yaban/shop")} aria-label="返回">
+          <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex flex-col">

@@ -10,6 +10,7 @@
  */
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { ChevronLeft, ArrowUp, ArrowDown, Minus, Plus, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -33,6 +34,7 @@ function getCurrentTenantId(): number | null {
 
 export default function YabanFeaturesCustomize() {
   const [, setLocation] = useLocation();
+  const goBack = useSmartBack("/yaban/features");
   const tenantId = getCurrentTenantId();
 
   const [homeKeys, setHomeKeys] = useState<string[]>([]);
@@ -92,7 +94,7 @@ export default function YabanFeaturesCustomize() {
         style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
       >
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-          <button onClick={() => setLocation("/yaban/features")} className="p-1" aria-label="返回">
+          <button onClick={goBack} className="p-1" aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <span className="text-base font-bold">编辑首页功能</span>

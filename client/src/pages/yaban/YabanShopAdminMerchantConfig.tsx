@@ -10,6 +10,7 @@
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { ChevronLeft, Loader2, ShieldCheck, Save } from "lucide-react";
@@ -17,6 +18,7 @@ import { useYabanClinic } from "./useYabanClinic";
 
 export default function YabanShopAdminMerchantConfig() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban/shop");
   const { current } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const cfgQuery = trpc.yabanPayment.adminGetMerchantConfig.useQuery(undefined, {
@@ -97,7 +99,7 @@ export default function YabanShopAdminMerchantConfig() {
       {/* 顶部栏 */}
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-3 py-3 flex items-center justify-between">
-          <button onClick={() => navigate("/yaban/shop")} aria-label="返回">
+          <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex flex-col items-center">

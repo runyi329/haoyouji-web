@@ -6,6 +6,7 @@
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -21,6 +22,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 
 export default function YabanSettings() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban/profile");
   const { logout } = useAuth();
   const utils = trpc.useUtils();
   const { data: user } = trpc.auth.me.useQuery();
@@ -91,7 +93,7 @@ export default function YabanSettings() {
       {/* 头部 */}
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="flex items-center gap-2 px-4 py-3">
-          <button onClick={() => navigate("/yaban/profile")} aria-label="返回">
+          <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <span className="text-base font-bold">账号资料</span>

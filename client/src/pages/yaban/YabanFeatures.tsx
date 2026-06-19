@@ -6,6 +6,7 @@
  *       右上角「编辑首页」可自定义首页快捷功能与顺序。
  */
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { ChevronLeft, Settings2 } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ function getCurrentTenantId(): number | null {
 
 export default function YabanFeatures() {
   const [, setLocation] = useLocation();
+  const goBack = useSmartBack("/yaban");
   const tenantId = getCurrentTenantId();
 
   // 已加到首页的功能不在此重复展示
@@ -45,7 +47,7 @@ export default function YabanFeatures() {
         style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
       >
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-          <button onClick={() => setLocation("/yaban")} className="p-1" aria-label="返回">
+          <button onClick={goBack} className="p-1" aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <span className="text-base font-bold">全部功能</span>

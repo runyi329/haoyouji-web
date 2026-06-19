@@ -20,6 +20,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { toast } from "sonner";
 import {
   ChevronLeft,
@@ -99,6 +100,7 @@ function nextScope(cur: Scope, type: "toggle" | "scope"): Scope {
 
 export default function YabanRoles() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban/profile");
   const { current, currentTenantId } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
 
@@ -140,7 +142,7 @@ export default function YabanRoles() {
       {/* 头部 */}
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="flex items-center gap-2 px-4 py-3">
-          <button onClick={() => navigate("/yaban/profile")} aria-label="返回">
+          <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex flex-col flex-1">

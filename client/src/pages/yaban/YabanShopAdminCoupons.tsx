@@ -4,6 +4,7 @@
  */
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { ChevronLeft, Loader2, Plus, X } from "lucide-react";
@@ -30,6 +31,7 @@ const emptyForm: FormState = {
 
 export default function YabanShopAdminCoupons() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban/shop/admin/orders");
   const { current } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const utils = trpc.useUtils();
@@ -67,7 +69,7 @@ export default function YabanShopAdminCoupons() {
     <div className="min-h-screen bg-[#F5F7FA] pb-6">
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-3 py-3 flex items-center justify-between">
-          <button onClick={() => navigate("/yaban/shop/admin/orders")} aria-label="返回">
+          <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex flex-col">

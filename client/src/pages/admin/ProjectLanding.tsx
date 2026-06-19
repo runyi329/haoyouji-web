@@ -10,6 +10,7 @@
  */
 import { useEffect, useState } from "react";
 import { useLocation, useRoute } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { ArrowLeft, Sparkles } from "lucide-react";
 
 type StoredProject = {
@@ -23,6 +24,7 @@ const STORAGE_KEY = "project_console_items_v3";
 
 export default function ProjectLanding() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/admin/projects");
   const [, params] = useRoute("/p/:slug");
   const slug = params?.slug ?? "";
 
@@ -49,12 +51,12 @@ export default function ProjectLanding() {
       <header className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-gray-100">
         <div className="flex items-center gap-3 px-4 h-14">
           <button
-            onClick={() => navigate("/admin/projects")}
+            onClick={goBack}
             className="inline-flex items-center gap-1.5 text-sm text-gray-700 active:scale-95 transition-transform"
-            aria-label="返回总控台"
+            aria-label="返回"
           >
             <ArrowLeft className="w-5 h-5" />
-            返回总控台
+            返回
           </button>
         </div>
       </header>
@@ -72,10 +74,10 @@ export default function ProjectLanding() {
           访问路径：/p/{slug}
         </p>
         <button
-          onClick={() => navigate("/admin/projects")}
+          onClick={goBack}
           className="px-6 py-2.5 rounded-full bg-[#D32F2F] text-white text-sm font-medium active:scale-[0.97] transition-transform"
         >
-          返回总控台
+          返回
         </button>
       </main>
     </div>

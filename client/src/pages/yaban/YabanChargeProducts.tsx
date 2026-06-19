@@ -7,6 +7,7 @@
  */
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -49,6 +50,7 @@ function money(n: number): string {
 
 export default function YabanChargeProducts() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban/profile");
   const { current, currentTenantId } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const { user } = useAuth();
@@ -183,7 +185,7 @@ export default function YabanChargeProducts() {
       {/* 头部 */}
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="flex items-center gap-2 px-4 py-3">
-          <button onClick={() => navigate("/yaban/profile")} aria-label="返回">
+          <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex flex-col">

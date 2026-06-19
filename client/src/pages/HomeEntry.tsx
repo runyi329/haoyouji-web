@@ -34,12 +34,17 @@ export default function HomeEntry() {
     | { versionKey?: string; landingPath?: string; switchableVersionKeys?: string[] }
     | undefined;
 
+  // 超管（super_admin）是管理者，不参与版本分发：访问根路由 "/" 永远停在脉动网人脉首页，
+  // 避免被自动重定向到某个项目版本首页（如 /p/xxx），否则「返回首页」会被劫持造成死循环。
+  const isSuperAdmin = (user as any)?.role === "super_admin";
+
   // 计算「应落地版本」的 landingPath：优先用户手动选择的查看版本，否则归属版本
   let landingPath = version?.landingPath || "/";
+  if (isSuperAdmin) landingPath = "/";
   try {
     const viewing = sessionStorage.getItem("_viewing_version");
     const allowed = version?.switchableVersionKeys || [];
-    if (viewing && allowed.includes(viewing)) {
+    if (!isSuperAdmin && viewing && allowed.includes(viewing)) {
       const v = (versions || []).find((x: any) => x.versionKey === viewing);
       if (v) landingPath = (v.landingPath as string) || "/";
     }

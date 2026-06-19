@@ -15,6 +15,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { toast } from "sonner";
 import YabanTabBar from "./YabanTabBar";
 import { trpc } from "@/lib/trpc";
@@ -378,6 +379,7 @@ function ChangePill({ text, down }: { text: string; down?: boolean }) {
 /* ============== 主页面 ============== */
 export default function YabanAiValuation() {
   const [, setLocation] = useLocation();
+  const goBack = useSmartBack("/yaban/features");
   const { currentTenantId, current } = useYabanClinic();
   const [edit, setEdit] = useState<{ open: boolean; type: "asset" | "cost" }>({
     open: false,
@@ -429,7 +431,7 @@ export default function YabanAiValuation() {
       {/* 顶部 Header */}
       <div className="text-white sticky top-0 z-40" style={{ background: headerGrad }}>
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-          <button onClick={() => setLocation("/yaban/features")} className="p-1" aria-label="返回">
+          <button onClick={goBack} className="p-1" aria-label="返回">
             <IcBack className="w-6 h-6" />
           </button>
           <span className="text-base font-bold">AI 智能估值</span>

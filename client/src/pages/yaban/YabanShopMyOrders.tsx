@@ -6,6 +6,7 @@
  */
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { trpc } from "@/lib/trpc";
 import {
   ChevronLeft, Loader2, X, ShoppingBag, Truck, QrCode,
@@ -62,6 +63,7 @@ function money(val: any): string {
 
 export default function YabanShopMyOrders() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban/shop");
   const [filter, setFilter] = useState<StatusKey>("all");
   const [detailId, setDetailId] = useState<number | null>(null);
 
@@ -79,7 +81,7 @@ export default function YabanShopMyOrders() {
     <div className="min-h-screen bg-[#F0F4F8] pb-10">
       <div className="sticky top-0 z-30 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white">
         <div className="flex items-center gap-2 px-4 py-3">
-          <button onClick={() => navigate("/yaban/shop")} aria-label="返回">
+          <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <span className="text-base font-bold">我的订单</span>

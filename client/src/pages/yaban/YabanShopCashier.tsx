@@ -11,6 +11,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
+import { useSmartBack } from "@/hooks/useSmartBack";
 import { ChevronLeft, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
@@ -29,6 +30,7 @@ function detectEnv(): "wechat" | "alipay" | "browser" {
 
 export default function YabanShopCashier() {
   const [, navigate] = useLocation();
+  const goBack = useSmartBack("/yaban/shop");
   const { current } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const search = useSearch();
@@ -119,7 +121,7 @@ export default function YabanShopCashier() {
     return (
       <div className="min-h-screen bg-[#F5F7FA] flex flex-col items-center justify-center">
         <p className="text-sm text-gray-400 mb-4">缺少订单信息</p>
-        <button onClick={() => navigate("/yaban/shop")} className="text-sm text-[#2196C8]">
+        <button onClick={goBack} className="text-sm text-[#2196C8]">
           返回商城
         </button>
       </div>
@@ -132,7 +134,7 @@ export default function YabanShopCashier() {
       {/* 顶部栏 */}
       <div className="bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white sticky top-0 z-40">
         <div className="max-w-lg mx-auto px-3 py-3 flex items-center justify-between">
-          <button onClick={() => navigate("/yaban/shop")} aria-label="返回">
+          <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex flex-col items-center">
