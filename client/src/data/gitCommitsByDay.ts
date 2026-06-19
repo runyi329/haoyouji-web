@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-19
+// 生成时间：2026-06-20
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7557,5 +7557,23 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-19T12:35:26Z", type: "feat", cleanMessage: "集成企业微信+Manus API双向对话功能" },
     { date: "2026-06-19T13:06:40Z", type: "fix", cleanMessage: "修复企业微信消息链路 - 修正Manus API Base URL为api.manus.ai - 修正认证头为x-manus-api-key - 修正任务状态轮询逻辑 - 添加XML body解析中间件 - 使用Manus Max模式 - 添加管理API接口" },
     { date: "2026-06-19T13:22:10Z", type: "fix", cleanMessage: "agent_profile改为manus-1.6-max" },
+    { date: "2026-06-19T13:25:42Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-19T15:24:59Z", type: "fix", cleanMessage: "新用户创建任务后等待初始任务完成再sendMessage，轮询超时改为300秒" },
+    { date: "2026-06-19T15:29:41Z", type: "fix", cleanMessage: "轮询时用时间戳过滤旧消息，只取sendMessage之后的新回复" },
+    { date: "2026-06-19T15:46:22Z", type: "other", cleanMessage: "debug: 添加listMessages返回事件调试日志" },
+    { date: "2026-06-19T15:52:31Z", type: "fix", cleanMessage: "关键修复 - listMessages返回字段是messages不是events" },
+  ],
+  "2026-06-20": [
+    { date: "2026-06-19T16:08:43Z", type: "feat", cleanMessage: "添加企业微信底部菜单（模型切换、积分查询、新对话等）" },
+    { date: "2026-06-19T16:15:39Z", type: "fix", cleanMessage: "积分查询按用户task_id过滤，只显示当前用户消耗" },
+    { date: "2026-06-19T16:20:12Z", type: "fix", cleanMessage: "移除全账号总消耗显示" },
+    { date: "2026-06-19T16:54:41Z", type: "feat", cleanMessage: "企微AI管理后台 - 新增工作流/消息记录/统计/菜单配置Tab及后端API" },
+    { date: "2026-06-19T17:07:12Z", type: "fix", cleanMessage: "修复TEXT字段DEFAULT值问题，写入Manus API Key，数据库迁移修复" },
+    { date: "2026-06-19T17:11:47Z", type: "feat", cleanMessage: "sessions接口返回Manus任务标题，用户列表和消息页显示中文任务名" },
+    { date: "2026-06-19T17:18:29Z", type: "feat", cleanMessage: "sessions接口拉取企微真实姓名和头像，用户管理和消息页展示" },
+    { date: "2026-06-19T17:21:45Z", type: "feat", cleanMessage: "Profile页Token用量改为企业微信入口，WecomAdmin加超级管理员权限保护" },
+    { date: "2026-06-19T17:32:44Z", type: "fix", cleanMessage: "支持Manus返回图片/视频/PPT/Excel/PDF等所有附件类型推送到企业微信" },
+    { date: "2026-06-19T17:34:19Z", type: "fix", cleanMessage: "页面标题改为企业微信AI管理" },
+    { date: "2026-06-19T17:51:48Z", type: "feat", cleanMessage: "手动绑定改为带搜索的下拉框（任务标题+企微成员名）" },
   ],
 };
