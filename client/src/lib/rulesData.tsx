@@ -35,6 +35,8 @@ import {
   ShieldCheck,
   UserCog,
   Lock,
+  LogIn,
+  Paintbrush,
   type LucideIcon,
 } from "lucide-react";
 
@@ -539,6 +541,11 @@ function ProjectCreationRuleContent() {
             <span className="text-gray-500">初始化清单</span>
             <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">待补充</span>
           </li>
+          <li className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[#5A2E1C] text-white text-[10px] font-bold shrink-0">E</span>
+            <span className="font-medium text-gray-900">多项目登录皮肤路由</span>
+            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">已定</span>
+          </li>
         </ol>
       </div>
 
@@ -602,6 +609,72 @@ function ProjectCreationRuleContent() {
           <li>
             网站管理员可任命下级（项目成员）并分配其权限，但<span className="font-semibold text-gray-900">不得突破自己项目的边界</span>。
           </li>
+        </ul>
+      </RuleSection>
+
+      {/* ===== 板块 E：多项目登录皮肤路由 ===== */}
+      <div className="flex items-center gap-2 pt-1">
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[#5A2E1C] text-white text-[10px] font-bold">E</span>
+        <span className="text-[13px] font-bold text-[#5A2E1C]">多项目登录皮肤路由</span>
+      </div>
+
+      <RuleSection icon={Paintbrush} title="规则起源">
+        <p>
+          系统内所有项目共用同一套后端认证接口（用户名密码不变），但不同项目的用户应看到与该项目配色一致的登录界面。实现方式为纯前端皮肤切换，零后端改动。
+        </p>
+      </RuleSection>
+
+      <RuleSection icon={LogIn} title="实现机制（三步）">
+        <ol className="list-decimal pl-5 space-y-2">
+          <li>
+            <span className="font-semibold text-gray-900">退出时写入标记</span>：各项目「退出登录」按钮在清除 token 前，先往{" "}
+            <code className="bg-gray-100 px-1 rounded text-[12px]">localStorage</code> 写入{" "}
+            <code className="bg-gray-100 px-1 rounded text-[12px]">lastProject = "项目标识符"</code>。
+            例如龙虾项目写 <code className="bg-gray-100 px-1 rounded text-[12px]">longxia</code>，牙伴项目写 <code className="bg-gray-100 px-1 rounded text-[12px]">yaban</code>。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">登录页读取标记</span>：<code className="bg-gray-100 px-1 rounded text-[12px]">/login</code> 页面启动时读{" "}
+            <code className="bg-gray-100 px-1 rounded text-[12px]">localStorage.lastProject</code>，根据值渲染对应项目的 UI 皮肤。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">登录成功后清除标记</span>：登录成功跳转后删除{" "}
+            <code className="bg-gray-100 px-1 rounded text-[12px]">lastProject</code>，避免干扰下次首次登录逻辑。
+          </li>
+        </ol>
+      </RuleSection>
+
+      <RuleSection icon={Layers} title="皮肤映射表（持续扩充）">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="border-b border-gray-100">
+              <th className="text-left py-1 font-semibold text-gray-700">lastProject 值</th>
+              <th className="text-left py-1 font-semibold text-gray-700">登录页 UI 皮肤</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="border-b border-gray-50">
+              <td className="py-1.5"><code className="bg-gray-100 px-1 rounded">longxia</code></td>
+              <td className="py-1.5">龙虾深红金配色皮肤</td>
+            </tr>
+            <tr className="border-b border-gray-50">
+              <td className="py-1.5"><code className="bg-gray-100 px-1 rounded">yaban</code></td>
+              <td className="py-1.5">牙伴蓝白配色皮肤</td>
+            </tr>
+            <tr>
+              <td className="py-1.5">空 / 未设置</td>
+              <td className="py-1.5">脉动网默认登录页</td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="mt-2 text-[11px] text-gray-400">新增项目时，在映射表和登录页皮肤分支中同步新增一行即可。</p>
+      </RuleSection>
+
+      <RuleSection icon={ShieldCheck} title="设计原则">
+        <ul className="list-disc pl-5 space-y-1">
+          <li>用户名密码全局共用，不分项目。</li>
+          <li>皮肤仅影响登录页 UI 层，不影响任何认证逻辑。</li>
+          <li><code className="bg-gray-100 px-1 rounded text-[12px]">lastProject</code> 不随 token 一起清除，属于 UI 偏好标记而非认证凭证。</li>
+          <li>首次登录（无标记）展示默认登录页，不强制跳转。</li>
         </ul>
       </RuleSection>
 
