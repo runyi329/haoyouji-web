@@ -31,6 +31,10 @@ import {
   Ban,
   GitBranch,
   Clock,
+  Users,
+  ShieldCheck,
+  UserCog,
+  Lock,
   type LucideIcon,
 } from "lucide-react";
 
@@ -493,6 +497,121 @@ function DevPreviewDeployRuleContent() {
   );
 }
 
+/** ===== 005 · 项目创建规则 详情正文 ===== */
+function ProjectCreationRuleContent() {
+  return (
+    <>
+      {/* 概述 */}
+      <div className="bg-gradient-to-br from-[#3A1E12] to-[#5A2E1C] rounded-2xl p-4 text-white shadow-sm">
+        <div className="flex items-center gap-2 mb-1.5">
+          <ShieldCheck className="w-4 h-4 text-[#E0B97D]" />
+          <span className="text-sm font-semibold">项目创建规则</span>
+        </div>
+        <p className="text-[12.5px] leading-relaxed text-white/70">
+          每新建一个项目都需遵循的总规范。本规则内容会逐步增多，请按下方目录索引。
+        </p>
+      </div>
+
+      {/* 板块目录 */}
+      <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
+        <div className="flex items-center gap-1.5 mb-2.5">
+          <Layers className="w-3.5 h-3.5 text-[#8A4A2B]" />
+          <span className="text-[12.5px] font-semibold text-gray-700">板块目录</span>
+        </div>
+        <ol className="space-y-1.5 text-[12.5px]">
+          <li className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[#5A2E1C] text-white text-[10px] font-bold shrink-0">A</span>
+            <span className="font-medium text-gray-900">角色与归属权限</span>
+            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">已定</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-gray-300 text-white text-[10px] font-bold shrink-0">B</span>
+            <span className="text-gray-500">会员权限</span>
+            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">待补充</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-gray-300 text-white text-[10px] font-bold shrink-0">C</span>
+            <span className="text-gray-500">项目骨架结构</span>
+            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">待补充</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-gray-300 text-white text-[10px] font-bold shrink-0">D</span>
+            <span className="text-gray-500">初始化清单</span>
+            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">待补充</span>
+          </li>
+        </ol>
+      </div>
+
+      {/* ===== 板块 A：角色与归属权限 ===== */}
+      <div className="flex items-center gap-2 pt-1">
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[#5A2E1C] text-white text-[10px] font-bold">A</span>
+        <span className="text-[13px] font-bold text-[#5A2E1C]">角色与归属权限</span>
+      </div>
+
+      {/* 三层角色 */}
+      <RuleSection icon={UserCog} title="① 三层角色：统一命名、靠项目区分归属">
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            <span className="font-semibold text-gray-900">脉动网超级管理员</span>（平台层）：管全平台所有项目、规则库、全局配置，可跨项目看全部数据。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">{"{项目名}网站管理员"}</span>（项目层）：如「龙虾网站管理员」「牙伴网站管理员」。只管自己项目内的 UI 设计、会员管理、功能管理等。命名格式统一为「项目名 + 网站管理员」，<span className="text-[#D32F2F] font-medium">不带“版/板”字</span>。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">项目成员 / 员工</span>（操作层）：在项目里干具体活，权限由本项目网站管理员分配。
+          </li>
+          <li className="text-[12px] text-gray-400">
+            代码底层：项目管理员角色标识统一用 <span className="font-mono">site_admin</span>，附带 <span className="font-mono">project_id</span> 标明归属哪个项目；<span className="font-semibold text-gray-700">靠 project_id 区分，不靠不同名字</span>，避免多项目混乱。
+          </li>
+        </ul>
+      </RuleSection>
+
+      {/* 用户归属 */}
+      <RuleSection icon={Users} title="② 用户归属：统一账号，分项目归属">
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            所有用户都是<span className="font-semibold text-gray-900">脉动网统一账号</span>（注册在脉动网，不在各项目单独建账号体系）。
+          </li>
+          <li>
+            通过「<span className="font-semibold text-gray-900">用户 ↔ 项目归属关系</span>」决定每个用户属于哪些项目；一个用户可同时归属多个项目（在龙虾消费过、也在牙伴看过牙）。
+          </li>
+        </ul>
+      </RuleSection>
+
+      {/* 数据隔离 */}
+      <RuleSection icon={Lock} title="③ 数据隔离：只能看自己项目名下的用户（核心安全边界）">
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            <span className="text-[#D32F2F] font-medium">{"{项目名}网站管理员只能看到/调用到“归属于自己项目”的用户"}</span>，绝不能调出整个脉动网的全部用户。
+          </li>
+          <li>
+            查询用户时<span className="font-semibold text-gray-900">强制按 project_id 过滤</span>（写在后端、强制执行，不靠前端自觉）；例如返回/调用用户列表时隐含 <span className="font-mono text-[12px]">WHERE project_id = 本项目</span>。
+          </li>
+          <li>
+            只有<span className="font-semibold text-gray-900">脉动网超级管理员</span>可跨项目看全部用户。
+          </li>
+        </ul>
+      </RuleSection>
+
+      {/* 权限边界 */}
+      <RuleSection icon={ShieldCheck} title="④ 权限边界：一切圈定在本项目">
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li>
+            网站管理员的所有操作（UI、会员、功能、数据）一律<span className="font-semibold text-gray-900">圈定在自己项目范围内</span>，越不出本项目。
+          </li>
+          <li>
+            网站管理员可任命下级（项目成员）并分配其权限，但<span className="font-semibold text-gray-900">不得突破自己项目的边界</span>。
+          </li>
+        </ul>
+      </RuleSection>
+
+      <p className="text-center text-[11px] text-gray-300 pt-1">
+        规则 005 · 项目创建规则 · 仅超级管理员可见
+      </p>
+    </>
+  );
+}
+
 /** ===== 规则库总表 ===== */
 export const RULES: Rule[] = [
   {
@@ -522,6 +641,13 @@ export const RULES: Rule[] = [
     summary:
       "实时热修改与部署纪律：①预览端口锁定3000、占用则杀进程腾出绝不顺延 ②临时地址不变不重发、不可放桌面 ③地址变更须显式提示给新址 ④未提交改动口头播报、满10次提醒 ⑤绝对禁止AI自行提交部署 ⑥统一推送 runyi329/haoyouji-web · main 自动部署。",
     content: <DevPreviewDeployRuleContent />,
+  },
+  {
+    id: "005",
+    title: "项目创建规则",
+    summary:
+      "新建项目总规范【角色与归属权限板块】：①三层角色（脉动网超管 / {项目名}网站管理员 / 项目成员）统一命名靠 project_id 区分 ②用户为脉动网统一账号、按项目归属 ③网站管理员只能看自己项目的用户（后端强制 project_id 过滤） ④权限一切圈定在本项目。后续可补项目骨架、初始化清单等板块。",
+    content: <ProjectCreationRuleContent />,
   },
 ];
 
