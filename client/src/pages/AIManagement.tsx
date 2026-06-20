@@ -81,15 +81,28 @@ interface MenuItem {
 // ─── 常量 ────────────────────────────────────────────────────────────────────
 
 const MODEL_OPTIONS = [
-  { value: 'manus-1.6-max', label: 'Max', desc: '最强能力' },
-  { value: 'manus-1.6', label: '标准', desc: '平衡性能' },
-  { value: 'manus-1.6-lite', label: '轻量', desc: '快速省积分' },
+  // Manus 系列
+  { value: 'manus-1.6-max',              label: 'Manus Max',         desc: '最强能力，复杂任务',          group: 'Manus' },
+  { value: 'manus-1.6',                  label: 'Manus 标准',        desc: '平衡性能',                    group: 'Manus' },
+  { value: 'manus-1.6-lite',             label: 'Manus 轻量',        desc: '快速省积分',                  group: 'Manus' },
+  // DeepSeek 系列
+  { value: 'deepseek-v4-flash',          label: 'V4 Flash',          desc: '快速对话，日常问答',          group: 'DeepSeek' },
+  { value: 'deepseek-v4-flash-thinking', label: 'V4 Flash 深思',     desc: '中等推理，开启思考链',        group: 'DeepSeek' },
+  { value: 'deepseek-v4-pro',            label: 'V4 Pro',            desc: '专业分析，复杂任务',          group: 'DeepSeek' },
+  { value: 'deepseek-v4-pro-thinking',   label: 'V4 Pro 深思',       desc: '最强推理，开启思考链',        group: 'DeepSeek' },
+  // 智能路由
+  { value: 'auto_route',                 label: '智能路由',          desc: '自动分类派发',                group: '路由' },
 ];
 
 const MODEL_COLOR: Record<string, string> = {
-  'manus-1.6-max': 'bg-purple-100 text-purple-700',
-  'manus-1.6': 'bg-blue-100 text-blue-700',
-  'manus-1.6-lite': 'bg-green-100 text-green-700',
+  'manus-1.6-max':              'bg-purple-100 text-purple-700',
+  'manus-1.6':                  'bg-blue-100 text-blue-700',
+  'manus-1.6-lite':             'bg-green-100 text-green-700',
+  'deepseek-v4-flash':          'bg-cyan-100 text-cyan-700',
+  'deepseek-v4-flash-thinking': 'bg-teal-100 text-teal-700',
+  'deepseek-v4-pro':            'bg-sky-100 text-sky-700',
+  'deepseek-v4-pro-thinking':   'bg-indigo-100 text-indigo-700',
+  'auto_route':                 'bg-orange-100 text-orange-700',
 };
 
 const FEATURE_LABELS: Record<string, string> = {
@@ -359,6 +372,8 @@ function SearchSelect({
 
 // ─── UsersTab ────────────────────────────────────────────────────────────────
 
+interface WecomUser { userid: string; name: string; }
+
 function UsersTab() {
   const [sessions, setSessions] = useState<WecomSession[]>([]);
   const [loading, setLoading] = useState(false);
@@ -369,6 +384,15 @@ function UsersTab() {
   const [manusTasks, setManusTasks] = useState<ManusTask[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState({ wecom_user_id: '', nickname: '', manus_task_id: '', model_pref: 'manus-1.6-max', system_prompt: '' });
+  // 批量设置
+  const [batchModel, setBatchModel] = useState('');
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [batchMode, setBatchMode] = useState(false); // 是否开启批量选择模式
+  // 未绑定用户
+  const [unboundUsers, setUnboundUsers] = useState<WecomUser[]>([]);
+  const [showUnbound, setShowUnbound] = useState(false);
+  const [loadingUnbound, setLoadingUnbound] = useState(false);
 
   const fetchSessions = useCallback(async () => {
     setLoading(true);
@@ -429,6 +453,66 @@ function UsersTab() {
     } catch { toast.error('网络错误'); }
   };
 
+  // 批量设置模型
+  const handleBatchSetModel = async () => {
+    if (!batchModel) { toast.error('请先选择目标模型'); return; }
+    const targetSessions = batchMode && selectedIds.size > 0
+      ? sessions.filter(s => selectedIds.has(s.id))
+      : sessions.filter(s => s.status !== 'archived');
+    if (targetSessions.length === 0) { toast.error('没有可操作的用户'); return; }
+    const modelLabel = MODEL_OPTIONS.find(m => m.value === batchModel)?.label;
+    const scope = batchMode && selectedIds.size > 0 ? `已勾选的 ${targetSessions.length} 个` : `全部 ${targetSessions.length} 个`;
+    if (!confirm(`确认将${scope}用户的模型切换为「${modelLabel}」？`)) return;
+    setBatchLoading(true);
+    let success = 0, fail = 0;
+    for (const s of targetSessions) {
+      try {
+        const res = await fetch(`/api/wecom/sessions/${s.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model_pref: batchModel }),
+        });
+        const data = await res.json();
+        if (data.ok) success++; else fail++;
+      } catch { fail++; }
+    }
+    setBatchLoading(false);
+    if (fail === 0) {
+      toast.success(`${scope}用户已切换为 ${modelLabel}`);
+      if (batchMode) { setSelectedIds(new Set()); setBatchMode(false); }
+    } else toast.error(`${success} 成功，${fail} 失败`);
+    fetchSessions();
+  };
+
+  // 切换用户选中状态
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  // 全选 / 反选
+  const toggleSelectAll = () => {
+    const active = sessions.filter(s => s.status !== 'archived');
+    if (selectedIds.size === active.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(active.map(s => s.id)));
+  };
+
+  // 加载未绑定用户
+  const fetchUnboundUsers = async () => {
+    setLoadingUnbound(true);
+    try {
+      const res = await fetch('/api/wecom/wecom-users');
+      const data = await res.json();
+      const allUsers: WecomUser[] = data.users || [];
+      const boundIds = new Set(sessions.map(s => s.wecom_user_id));
+      setUnboundUsers(allUsers.filter(u => !boundIds.has(u.userid)));
+    } catch { toast.error('加载失败'); }
+    finally { setLoadingUnbound(false); }
+  };
+
   const handleAddSession = async () => {
     if (!addForm.wecom_user_id || !addForm.manus_task_id) {
       toast.error('企微用户ID和Manus任务ID为必填项');
@@ -452,6 +536,60 @@ function UsersTab() {
 
   return (
     <div className="px-4 space-y-3">
+      {/* 批量设置模型 */}
+      <div className="bg-white rounded-xl p-3 shadow-sm">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs font-medium text-gray-700">批量设置模型</div>
+          <button
+            onClick={() => { setBatchMode(!batchMode); setSelectedIds(new Set()); }}
+            className={`text-xs px-2 py-1 rounded-lg border transition-colors ${
+              batchMode ? 'bg-blue-600 text-white border-blue-600' : 'bg-gray-50 text-gray-600 border-gray-200'
+            }`}
+          >
+            {batchMode ? `已勾选 ${selectedIds.size} 人` : '勾选部分用户'}
+          </button>
+        </div>
+        {batchMode && (
+          <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
+            <button onClick={toggleSelectAll} className="underline">
+              {selectedIds.size === sessions.filter(s => s.status !== 'archived').length ? '反选' : '全选'}
+            </button>
+            <span>共 {sessions.filter(s => s.status !== 'archived').length} 个活跃用户</span>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <select
+            value={batchModel}
+            onChange={e => setBatchModel(e.target.value)}
+            className="flex-1 border border-gray-200 rounded-lg px-2 py-2 text-sm text-gray-700 bg-white"
+          >
+            <option value="">— 选择目标模型 —</option>
+            <optgroup label="—— Manus 系列 ——">
+              {MODEL_OPTIONS.filter(m => m.group === 'Manus').map(m => (
+                <option key={m.value} value={m.value}>{m.label} — {m.desc}</option>
+              ))}
+            </optgroup>
+            <optgroup label="—— DeepSeek 系列 ——">
+              {MODEL_OPTIONS.filter(m => m.group === 'DeepSeek').map(m => (
+                <option key={m.value} value={m.value}>{m.label} — {m.desc}</option>
+              ))}
+            </optgroup>
+            <optgroup label="—— 智能路由 ——">
+              {MODEL_OPTIONS.filter(m => m.group === '路由').map(m => (
+                <option key={m.value} value={m.value}>{m.label} — {m.desc}</option>
+              ))}
+            </optgroup>
+          </select>
+          <button
+            onClick={handleBatchSetModel}
+            disabled={batchLoading || !batchModel || (batchMode && selectedIds.size === 0)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 whitespace-nowrap"
+          >
+            {batchLoading ? '处理中...' : (batchMode && selectedIds.size > 0 ? `应用到 ${selectedIds.size} 人` : '应用到全部')}
+          </button>
+        </div>
+      </div>
+
       {/* 操作栏 */}
       <div className="flex gap-2">
         <button
@@ -515,18 +653,50 @@ function UsersTab() {
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">默认模型</label>
-            <div className="grid grid-cols-3 gap-2">
-              {MODEL_OPTIONS.map(opt => (
+            <div className="text-xs text-gray-400 mb-1">Manus</div>
+            <div className="grid grid-cols-3 gap-1.5 mb-2">
+              {MODEL_OPTIONS.filter(m => m.group === 'Manus').map(opt => (
                 <button
                   key={opt.value}
                   onClick={() => setAddForm(f => ({ ...f, model_pref: opt.value }))}
-                  className={`py-2 rounded-lg text-xs font-medium border transition-colors ${
+                  className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                     addForm.model_pref === opt.value
-                      ? 'bg-blue-600 text-white border-blue-600'
+                      ? 'bg-purple-600 text-white border-purple-600'
                       : 'bg-white text-gray-600 border-gray-200'
                   }`}
                 >
                   {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="text-xs text-gray-400 mb-1">DeepSeek</div>
+            <div className="grid grid-cols-3 gap-1.5 mb-2">
+              {MODEL_OPTIONS.filter(m => m.group === 'DeepSeek').map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setAddForm(f => ({ ...f, model_pref: opt.value }))}
+                  className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                    addForm.model_pref === opt.value
+                      ? 'bg-cyan-600 text-white border-cyan-600'
+                      : 'bg-white text-gray-600 border-gray-200'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-1 gap-1.5">
+              {MODEL_OPTIONS.filter(m => m.group === '路由').map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setAddForm(f => ({ ...f, model_pref: opt.value }))}
+                  className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                    addForm.model_pref === opt.value
+                      ? 'bg-orange-500 text-white border-orange-500'
+                      : 'bg-white text-gray-600 border-gray-200'
+                  }`}
+                >
+                  {opt.label} — {opt.desc}
                 </button>
               ))}
             </div>
@@ -555,7 +725,22 @@ function UsersTab() {
         <div className="text-center py-10 text-gray-400 text-sm">暂无绑定用户</div>
       ) : (
         sessions.map(session => (
-          <div key={session.id} className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div key={session.id} className={`bg-white rounded-xl shadow-sm overflow-hidden relative ${
+            batchMode && selectedIds.has(session.id) ? 'ring-2 ring-blue-400' : ''
+          }`}>
+            {/* 批量模式勾选框 */}
+            {batchMode && session.status !== 'archived' && (
+              <button
+                onClick={() => toggleSelect(session.id)}
+                className={`absolute top-3 right-3 z-10 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                  selectedIds.has(session.id)
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : 'bg-white border-gray-300'
+                }`}
+              >
+                {selectedIds.has(session.id) && <Check className="w-3 h-3" />}
+              </button>
+            )}
             {editingId === session.id ? (
               <div className="p-4 space-y-3">
                 <div className="flex items-center gap-2 mb-1">
@@ -592,18 +777,50 @@ function UsersTab() {
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">默认模型</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {MODEL_OPTIONS.map(opt => (
+                  <div className="text-xs text-gray-400 mb-1">Manus</div>
+                  <div className="grid grid-cols-3 gap-1.5 mb-2">
+                    {MODEL_OPTIONS.filter(m => m.group === 'Manus').map(opt => (
                       <button
                         key={opt.value}
                         onClick={() => setEditForm(f => ({ ...f, model_pref: opt.value }))}
-                        className={`py-2 rounded-lg text-xs font-medium border transition-colors ${
+                        className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                           (editForm.model_pref || 'manus-1.6-max') === opt.value
-                            ? 'bg-blue-600 text-white border-blue-600'
+                            ? 'bg-purple-600 text-white border-purple-600'
                             : 'bg-white text-gray-600 border-gray-200'
                         }`}
                       >
                         {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="text-xs text-gray-400 mb-1">DeepSeek</div>
+                  <div className="grid grid-cols-3 gap-1.5 mb-2">
+                    {MODEL_OPTIONS.filter(m => m.group === 'DeepSeek').map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setEditForm(f => ({ ...f, model_pref: opt.value }))}
+                        className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                          (editForm.model_pref || 'manus-1.6-max') === opt.value
+                            ? 'bg-cyan-600 text-white border-cyan-600'
+                            : 'bg-white text-gray-600 border-gray-200'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {MODEL_OPTIONS.filter(m => m.group === '路由').map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setEditForm(f => ({ ...f, model_pref: opt.value }))}
+                        className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                          (editForm.model_pref || 'manus-1.6-max') === opt.value
+                            ? 'bg-orange-500 text-white border-orange-500'
+                            : 'bg-white text-gray-600 border-gray-200'
+                        }`}
+                      >
+                        {opt.label} — {opt.desc}
                       </button>
                     ))}
                   </div>
@@ -725,6 +942,61 @@ function UsersTab() {
           </div>
         ))
       )}
+
+      {/* 未绑定用户区域 */}
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        <button
+          className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700"
+          onClick={() => {
+            setShowUnbound(v => {
+              if (!v) fetchUnboundUsers();
+              return !v;
+            });
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-orange-400" />
+            <span>未绑定用户</span>
+            {unboundUsers.length > 0 && (
+              <span className="bg-orange-100 text-orange-600 text-xs px-1.5 py-0.5 rounded-full font-medium">{unboundUsers.length}</span>
+            )}
+          </div>
+          <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${showUnbound ? 'rotate-90' : ''}`} />
+        </button>
+        {showUnbound && (
+          <div className="border-t border-gray-100 px-4 pb-4">
+            {loadingUnbound ? (
+              <div className="text-center py-4 text-xs text-gray-400">加载中...</div>
+            ) : unboundUsers.length === 0 ? (
+              <div className="text-center py-4 text-xs text-gray-400">所有企微成员均已绑定 ✅</div>
+            ) : (
+              <div className="space-y-2 pt-3">
+                <div className="text-xs text-gray-400 mb-2">以下企微成员尚未绑定 Manus 任务，可点「绑定」快速操作：</div>
+                {unboundUsers.map(u => (
+                  <div key={u.userid} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                    <div>
+                      <div className="text-sm text-gray-800 font-medium">{u.name}</div>
+                      <div className="text-xs text-gray-400 font-mono">{u.userid}</div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowAddForm(true);
+                        setAddForm(f => ({ ...f, wecom_user_id: u.userid, nickname: u.name }));
+                        fetchDropdownData();
+                        setShowUnbound(false);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className="text-xs px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg border border-blue-200"
+                    >
+                      绑定
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

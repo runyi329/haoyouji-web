@@ -141,7 +141,14 @@ const MODEL_PROFILES: Record<string, { profile: string; label: string; emoji: st
 };
 
 // DeepSeek 模型 profile 列表（用于判断是否走 DeepSeek 路径）
-const DEEPSEEK_PROFILES = new Set(["deepseek-chat", "deepseek-v4-flash"]);
+// 带 -thinking 后缀的表示开启思考模式（实际 API 调用时传入 thinking: { type: 'enabled' } 参数）
+const DEEPSEEK_PROFILES = new Set([
+  "deepseek-chat",
+  "deepseek-v4-flash",
+  "deepseek-v4-flash-thinking",
+  "deepseek-v4-pro",
+  "deepseek-v4-pro-thinking",
+]);
 
 async function getUserModel(userId: string): Promise<string> {
   // 内存缓存命中直接返回
@@ -1059,24 +1066,33 @@ async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "d
     if (!DEEPSEEK_API_KEY) {
       return errReply("DeepSeek API Key 未配置，请联系管理员。");
     }
-    console.log(`[DeepSeek] 发送消息 model=${model}: ${userMessage.substring(0, 50)}`);
+    // 判断是否需要开启思考模式，并将模型名映射到实际 API 模型名
+    const isThinking = model.endsWith("-thinking");
+    const actualModel = isThinking ? model.replace("-thinking", "") : model;
+    // 兼容旧模型名：deepseek-chat 映射到 deepseek-v4-flash
+    const apiModel = actualModel === "deepseek-chat" ? "deepseek-v4-flash" : actualModel;
+    console.log(`[DeepSeek] 发送消息 model=${apiModel} thinking=${isThinking}: ${userMessage.substring(0, 50)}`);
     const messages: Array<{role: string; content: string}> = [];
     if (systemPrompt) {
       messages.push({ role: "system", content: systemPrompt });
     }
     messages.push({ role: "user", content: userMessage });
+    const requestBody: Record<string, any> = {
+      model: apiModel,
+      messages,
+      max_tokens: isThinking ? 32768 : 4096,
+      stream: false,
+    };
+    if (isThinking) {
+      requestBody.thinking = { type: "enabled" };
+    }
     const res = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
       },
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: 4096,
-        stream: false,
-      }),
+      body: JSON.stringify(requestBody),
     });
     if (!res.ok) {
       const errText = await res.text();
@@ -1084,17 +1100,25 @@ async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "d
       return errReply(`DeepSeek 服务暂时不可用（${res.status}），请稍后重试。`);
     }
     const data = await res.json() as any;
+    // 思考模式下，content 是最终答案，reasoning_content 是思维链（不发给用户）
     const content = data?.choices?.[0]?.message?.content || "";
-    if (!content) {
+    const reasoningContent = data?.choices?.[0]?.message?.reasoning_content || "";
+    if (!content && !reasoningContent) {
       console.error("[DeepSeek] 返回内容为空:", JSON.stringify(data).substring(0, 300));
       return errReply("DeepSeek 未返回有效内容，请稍后重试。");
     }
+    // 如果 content 为空但有 reasoning_content，说明模型在思考中，取 reasoning_content 作为回复
+    const finalContent = content || reasoningContent;
     const usage = data?.usage || {};
     const promptTokens = usage.prompt_tokens || 0;
     const completionTokens = usage.completion_tokens || 0;
     const totalTokens = usage.total_tokens || 0;
-    console.log(`[DeepSeek] 回复成功，长度=${content.length}，tokens=${totalTokens}`);
-    return { content, promptTokens, completionTokens, totalTokens };
+    if (isThinking && reasoningContent) {
+      console.log(`[DeepSeek] 思考模式回复成功，思维链长度=${reasoningContent.length}，最终答案长度=${content.length}，tokens=${totalTokens}`);
+    } else {
+      console.log(`[DeepSeek] 回复成功，长度=${finalContent.length}，tokens=${totalTokens}`);
+    }
+    return { content: finalContent, promptTokens, completionTokens, totalTokens };
   } catch (e) {
     console.error("[DeepSeek] 通信异常:", e);
     return errReply("与 DeepSeek 通信时发生错误，请稍后重试。");
