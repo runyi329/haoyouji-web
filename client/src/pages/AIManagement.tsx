@@ -3254,10 +3254,46 @@ function RoutePanel() {
                     </div>
                   )}
                 </div>
-                {item.vars.length > 0 && (
+                {item.vars.length > 0 && editingReplies[item.key] && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    <span className="text-xs text-gray-400 self-center">点击插入：</span>
+                    {item.vars.map(v => {
+                      // 提取变量名，如 "{username}=账号" 取 "{username}"
+                      const varToken = v.split('=')[0];
+                      return (
+                        <button
+                          key={v}
+                          type="button"
+                          className="text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded px-1.5 py-0.5 font-mono active:bg-blue-100 cursor-pointer hover:bg-blue-100 transition-colors"
+                          onClick={() => {
+                            const ta = document.getElementById(`menu-reply-ta-${item.key}`) as HTMLTextAreaElement | null;
+                            if (!ta) {
+                              setMenuReplies(prev => ({ ...prev, [item.key]: (prev[item.key] || '') + varToken }));
+                              return;
+                            }
+                            const start = ta.selectionStart ?? (menuReplies[item.key] || '').length;
+                            const end = ta.selectionEnd ?? start;
+                            const cur = menuReplies[item.key] || '';
+                            const next = cur.slice(0, start) + varToken + cur.slice(end);
+                            setMenuReplies(prev => ({ ...prev, [item.key]: next }));
+                            // 延迟恢复光标位置
+                            setTimeout(() => {
+                              ta.focus();
+                              const pos = start + varToken.length;
+                              ta.setSelectionRange(pos, pos);
+                            }, 0);
+                          }}
+                        >
+                          {varToken} <span className="text-gray-400 font-sans">{v.split('=')[1]}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {item.vars.length > 0 && !editingReplies[item.key] && (
                   <div className="flex flex-wrap gap-1 mt-1">
                     {item.vars.map(v => (
-                      <span key={v} className="text-xs bg-blue-50 text-blue-600 border border-blue-100 rounded px-1.5 py-0.5 font-mono">{v}</span>
+                      <span key={v} className="text-xs bg-gray-50 text-gray-500 border border-gray-200 rounded px-1.5 py-0.5 font-mono">{v}</span>
                     ))}
                   </div>
                 )}
@@ -3265,9 +3301,10 @@ function RoutePanel() {
               <CardContent>
                 {editingReplies[item.key] ? (
                   <Textarea
+                    id={`menu-reply-ta-${item.key}`}
                     value={menuReplies[item.key] || ''}
                     onChange={e => setMenuReplies(v => ({ ...v, [item.key]: e.target.value }))}
-                    placeholder={`输入回复内容，空则用默认回复。支持\\n换行${item.vars.length > 0 ? '，可用上方变量' : ''}`}
+                    placeholder={`输入回复内容，空则用默认回复。支持\\n换行${item.vars.length > 0 ? '，点击上方变量可插入' : ''}`}
                     className="text-xs min-h-[80px] resize-none font-mono"
                   />
                 ) : (
