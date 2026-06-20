@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { getPromptsConfig } from './ai-prompts';
+import { isAIFeatureEnabled } from './ai-monitor';
 
 const router = Router();
 
@@ -14,6 +15,12 @@ router.post('/api/ai/background-check', async (req, res) => {
     // 验证必填字段
     if (!name) {
       return res.status(400).json({ error: '姓名是必填字段' });
+    }
+
+    // 检查功能开关
+    const enabled = await isAIFeatureEnabled('ai_background_check');
+    if (!enabled) {
+      return res.status(403).json({ error: 'AI 背景调查功能已关闭' });
     }
 
     // 从环境变量获取 DeepSeek API Key

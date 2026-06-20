@@ -1,4 +1,5 @@
 import { getDb } from "./db";
+import { isAIFeatureEnabled } from './ai-monitor';
 import {
   searchContacts,
   countContacts,
@@ -47,6 +48,12 @@ export async function queryWithAI(
   balanceAfter: number;
   sessionId: number;
 }> {
+  // 检查功能开关
+  const featureEnabled = await isAIFeatureEnabled('db_ai_assistant');
+  if (!featureEnabled) {
+    throw new Error('AI 数据助手功能已关闭');
+  }
+
   const apiKey = process.env.DEEPSEEK_API_KEY;
   
   if (!apiKey) {

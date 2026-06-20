@@ -8,6 +8,7 @@
  */
 
 import { getDbConnection } from "./db";
+import { isAIFeatureEnabled } from './ai-monitor';
 
 // ==================== 数据库迁移 ====================
 
@@ -244,6 +245,9 @@ export async function parseTaskWithAI(
   parsed: any;
   tokensUsed: number;
 }> {
+  const featureEnabled = await isAIFeatureEnabled('ai_employee');
+  if (!featureEnabled) throw new Error('AI 员工功能已关闭');
+
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
     throw new Error("DEEPSEEK_API_KEY 未配置");
@@ -914,6 +918,9 @@ export async function chatWithAIEmployee(
   taskCreated?: { taskId: number; summary: string };
 }> {
   await ensureAIConversationTable();
+  const featureEnabled = await isAIFeatureEnabled('ai_employee');
+  if (!featureEnabled) throw new Error('AI 员工功能已关闭');
+
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) throw new Error("DEEPSEEK_API_KEY 未配置");
 

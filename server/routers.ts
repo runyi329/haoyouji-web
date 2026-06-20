@@ -20099,6 +20099,10 @@ ${klinesSummary}
           .join('\n');
 
         // 使用 DeepSeek API 进行 AI 分析
+        const { isAIFeatureEnabled: isInsightsEnabled } = await import('./ai-monitor');
+        const insightsEnabled = await isInsightsEnabled('ai_insights');
+        if (!insightsEnabled) throw new TRPCError({ code: 'FORBIDDEN', message: '客户意见 AI 洞察功能已关闭' });
+
         const deepseekApiKey = process.env.DEEPSEEK_API_KEY;
         if (!deepseekApiKey) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DeepSeek API Key 未配置' });
         const deepseekRes = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -22127,6 +22131,10 @@ insights 数组每项包含：
       mimeType: z.string().default('image/jpeg'),
     }))
     .mutation(async ({ input }) => {
+      const { isAIFeatureEnabled } = await import('./ai-monitor');
+      const skinEnabled = await isAIFeatureEnabled('analyze_skin');
+      if (!skinEnabled) throw new TRPCError({ code: 'FORBIDDEN', message: '皮肤分析功能已关闭' });
+
       const apiKey = process.env.DEEPSEEK_API_KEY;
       if (!apiKey) {
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'AI 服务未配置' });

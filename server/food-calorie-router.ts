@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { isAIFeatureEnabled } from './ai-monitor';
 
 const router = Router();
 
@@ -15,7 +16,16 @@ router.post('/api/food/analyze', async (req, res) => {
       return res.status(400).json({ error: '请提供图片数据' });
     }
 
-    const apiKey = process.env.DEEPSEEK_API_KEY || 'REDACTED_KEY_1';
+    // 检查功能开关
+    const enabled = await isAIFeatureEnabled('food_calorie_scan');
+    if (!enabled) {
+      return res.status(403).json({ error: '食物热量扫描功能已关闭' });
+    }
+
+    const apiKey = process.env.DEEPSEEK_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'AI 服务未配置，请联系管理员' });
+    }
 
     const systemPrompt = `你是一位专业的营养师和食物热量分析专家。
 用户会给你描述一张食物图片的内容（因为你无法直接看图，用户会描述图中的食物）。

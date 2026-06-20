@@ -26,6 +26,8 @@ const FEATURE_LABELS: Record<string, string> = {
   ai_search: "AI搜索增强",
   company_reports: "公司报告生成",
   db_ai_assistant: "AI数据助手",
+  ai_background_check: "AI背景调查",
+  food_calorie_scan: "食物热量扫描",
 };
 
 // 功能颜色

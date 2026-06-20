@@ -23,6 +23,13 @@ export const AI_FEATURE_LABELS: Record<string, string> = {
   "prediction_analysis":      "预测市场分析",
   "bank_account_parser":      "银行流水解析",
   "ocr_recognize":            "通用 OCR 识别",
+  // 新增：之前漏网的功能
+  "ai_employee":              "AI 员工（定时任务）",
+  "ai_search":                "AI 搜索增强",
+  "company_reports":          "公司报告生成",
+  "db_ai_assistant":          "AI 数据助手",
+  "ai_background_check":      "AI 背景调查",
+  "food_calorie_scan":        "食物热量扫描",
 };
 
 // ==================== 建表（首次启动自动执行）====================

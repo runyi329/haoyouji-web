@@ -1,4 +1,5 @@
 import express from 'express';
+import { isAIFeatureEnabled } from './ai-monitor';
 import multer from 'multer';
 import { PDFParse } from 'pdf-parse';
 import { getDb } from './db';
@@ -121,6 +122,12 @@ let customPrompt = DEFAULT_COMPANY_REPORT_PROMPT;
  */
 async function formatCompanyReport(rawText: string): Promise<string> {
   try {
+    // 检查功能开关
+    const enabled = await isAIFeatureEnabled('company_reports');
+    if (!enabled) {
+      throw new Error('公司报告生成功能已关闭');
+    }
+
     // 调试：检查 API key
     // 直接从 process.env 读取，避免 ENV 对象的加载顺序问题
     const apiKey = process.env.DEEPSEEK_API_KEY;
