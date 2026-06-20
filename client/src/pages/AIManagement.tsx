@@ -170,11 +170,12 @@ function getDateRange(days: number) {
 
 // ─── Tab 类型 ────────────────────────────────────────────────────────────────
 
-type MainTab = 'wecom' | 'token' | 'assistant' | 'cert' | 'params' | 'reports';
+type MainTab = 'wecom' | 'token' | 'route' | 'assistant' | 'cert' | 'params' | 'reports';
 
 const MAIN_TABS: { key: MainTab; label: string; icon: React.ReactNode }[] = [
   { key: 'wecom', label: '企微AI', icon: <Bot className="w-4 h-4" /> },
   { key: 'token', label: 'Token', icon: <Zap className="w-4 h-4" /> },
+  { key: 'route', label: 'AI路由', icon: <BarChart2 className="w-4 h-4" /> },
   { key: 'assistant', label: 'AI助手', icon: <MessageSquare className="w-4 h-4" /> },
   { key: 'cert', label: '企业认证', icon: <Settings className="w-4 h-4" /> },
   { key: 'params', label: '参数', icon: <BarChart2 className="w-4 h-4" /> },
@@ -204,6 +205,7 @@ export default function AIManagement() {
       <div className="pt-3">
         {activeTab === 'wecom' && <WecomPanel />}
         {activeTab === 'token' && <TokenMonitorPanel />}
+        {activeTab === 'route' && <RoutePanel />}
         {activeTab === 'assistant' && <AssistantPanel />}
         {activeTab === 'cert' && <CertPanel />}
         {activeTab === 'params' && <ParamsPanel />}
@@ -2147,6 +2149,289 @@ function ReportsPanel() {
         </CardHeader>
         <CardContent>
           <CompanyReportManagement />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Panel 7: AI 路由
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const ROUTE_MODEL_LABELS: Record<string, { label: string; color: string; emoji: string }> = {
+  'deepseek-flash': { label: 'DeepSeek 快速', color: 'bg-yellow-100 text-yellow-700', emoji: '⚡' },
+  'deepseek-reasoner': { label: 'DeepSeek 深思', color: 'bg-orange-100 text-orange-700', emoji: '🧠' },
+  'manus-max': { label: 'Manus Max', color: 'bg-purple-100 text-purple-700', emoji: '🔴' },
+  'manus-standard': { label: 'Manus 标准', color: 'bg-blue-100 text-blue-700', emoji: '🟡' },
+  'manus-lite': { label: 'Manus 轻量', color: 'bg-green-100 text-green-700', emoji: '🟢' },
+};
+
+function RoutePanel() {
+  const [routeEnabled, setRouteEnabled] = useState(false);
+  const [fallback, setFallback] = useState('deepseek-flash');
+  const [classifyPrompt, setClassifyPrompt] = useState('');
+  const [editingConfig, setEditingConfig] = useState(false);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [stats, setStats] = useState<any>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [days, setDays] = useState(7);
+
+  useEffect(() => {
+    fetch('/api/wecom/route-config')
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok && d.config) {
+          setRouteEnabled(d.config.route_enabled === 'true');
+          setFallback(d.config.fallback_model || 'deepseek-flash');
+          setClassifyPrompt(d.config.classify_prompt || '');
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setStatsLoading(true);
+    fetch(`/api/wecom/route-stats?days=${days}`)
+      .then(r => r.json())
+      .then(d => { if (d.ok) setStats(d); })
+      .catch(() => {})
+      .finally(() => setStatsLoading(false));
+  }, [days]);
+
+  const saveConfig = async () => {
+    setSavingConfig(true);
+    try {
+      const res = await fetch('/api/wecom/route-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          config: {
+            route_enabled: String(routeEnabled),
+            fallback_model: fallback,
+            classify_prompt: classifyPrompt,
+          }
+        })
+      });
+      const d = await res.json();
+      if (d.ok) {
+        toast.success('路由配置已保存');
+        setEditingConfig(false);
+      } else {
+        toast.error(d.error || '保存失败');
+      }
+    } catch {
+      toast.error('保存失败，请重试');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  const todayTotal = stats?.today?.reduce((s: number, r: any) => s + Number(r.msg_count), 0) || 0;
+  const todayByModel = stats?.today || [];
+
+  const trendDates: string[] = [];
+  const trendByModel: Record<string, number[]> = {};
+  if (stats?.trend) {
+    const dateSet = new Set<string>();
+    stats.trend.forEach((r: any) => dateSet.add(r.date));
+    const sortedDates = Array.from(dateSet).sort();
+    sortedDates.forEach(d => trendDates.push(d.slice(5)));
+    stats.trend.forEach((r: any) => {
+      const key = r.routed_to || 'unknown';
+      if (!trendByModel[key]) trendByModel[key] = new Array(sortedDates.length).fill(0);
+      const idx = sortedDates.indexOf(r.date);
+      if (idx >= 0) trendByModel[key][idx] = Number(r.msg_count);
+    });
+  }
+
+  const modelColors: Record<string, string> = {
+    'deepseek-flash': '#f59e0b',
+    'deepseek-reasoner': '#f97316',
+    'manus-max': '#8b5cf6',
+    'manus-standard': '#3b82f6',
+    'manus-lite': '#22c55e',
+  };
+
+  return (
+    <div className="px-4 space-y-4">
+      {/* 路由配置卡片 */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">AI 智能路由</CardTitle>
+            {!editingConfig ? (
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingConfig(true)}>
+                <Edit2 className="w-3 h-3 mr-1" />编辑
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingConfig(false)}>取消</Button>
+                <Button size="sm" className="h-7 text-xs bg-red-500 hover:bg-red-600 text-white" onClick={saveConfig} disabled={savingConfig}>
+                  {savingConfig ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
+                  保存
+                </Button>
+              </div>
+            )}
+          </div>
+          <CardDescription className="text-xs">开启后系统自动判断每条消息派给哪个模型，用户无需手动选择</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between py-2 border-b border-gray-100">
+            <div>
+              <div className="text-sm font-medium">智能路由开关</div>
+              <div className="text-xs text-gray-500">关闭后用户手动选择模型</div>
+            </div>
+            <button
+              onClick={() => editingConfig && setRouteEnabled(!routeEnabled)}
+              className={`transition-opacity ${!editingConfig ? 'opacity-60 cursor-not-allowed' : ''}`}
+            >
+              {routeEnabled
+                ? <ToggleRight className="w-8 h-8 text-blue-500" />
+                : <ToggleLeft className="w-8 h-8 text-gray-400" />}
+            </button>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium">兜底模型</div>
+              <div className="text-xs text-gray-500">分类失败时使用</div>
+            </div>
+            <select
+              value={fallback}
+              onChange={e => editingConfig && setFallback(e.target.value)}
+              disabled={!editingConfig}
+              className="text-xs border border-gray-200 rounded px-2 py-1 bg-white disabled:bg-gray-50"
+            >
+              <option value="deepseek-flash">DeepSeek 快速</option>
+              <option value="deepseek-reasoner">DeepSeek 深思</option>
+              <option value="manus-standard">Manus 标准</option>
+              <option value="manus-lite">Manus 轻量</option>
+              <option value="manus-max">Manus Max</option>
+            </select>
+          </div>
+          {editingConfig && (
+            <div className="space-y-1">
+              <Label className="text-xs font-medium">分类 Prompt（留空使用默认规则）</Label>
+              <Textarea
+                value={classifyPrompt}
+                onChange={e => setClassifyPrompt(e.target.value)}
+                placeholder="留空使用内置默认分类规则"
+                className="text-xs min-h-[80px] resize-none"
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 今日统计 */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">今日消息分发</CardTitle>
+            <span className="text-xs text-gray-500">共 {todayTotal} 条</span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {statsLoading ? (
+            <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+          ) : todayTotal === 0 ? (
+            <div className="text-center text-xs text-gray-400 py-4">今日暂无路由记录</div>
+          ) : (
+            <div className="space-y-2">
+              {todayByModel.map((row: any) => {
+                const modelInfo = ROUTE_MODEL_LABELS[row.routed_to] || { label: row.routed_to, color: 'bg-gray-100 text-gray-600', emoji: '?' };
+                const pct = todayTotal > 0 ? Math.round(Number(row.msg_count) / todayTotal * 100) : 0;
+                return (
+                  <div key={row.routed_to} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${modelInfo.color}`}>
+                        {modelInfo.emoji} {modelInfo.label}
+                      </span>
+                      <span className="text-xs text-gray-600 font-medium">{row.msg_count} 条 ({pct}%)</span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-1.5">
+                      <div
+                        className="h-1.5 rounded-full transition-all"
+                        style={{ width: `${pct}%`, backgroundColor: modelColors[row.routed_to] || '#9ca3af' }}
+                      />
+                    </div>
+                    {Number(row.total_reply_tokens) > 0 && (
+                      <div className="text-xs text-gray-400">回复 {Number(row.total_reply_tokens).toLocaleString()} tokens · 均耗时 {Math.round(Number(row.avg_latency) / 1000)}s</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 历史趋势 */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">历史趋势</CardTitle>
+            <div className="flex gap-1">
+              {[7, 14, 30].map(d => (
+                <button
+                  key={d}
+                  onClick={() => setDays(d)}
+                  className={`text-xs px-2 py-0.5 rounded-full transition-colors ${
+                    days === d ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  {d}天
+                </button>
+              ))}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {statsLoading ? (
+            <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+          ) : trendDates.length === 0 ? (
+            <div className="text-center text-xs text-gray-400 py-4">暂无历史数据</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <div style={{ minWidth: `${Math.max(trendDates.length * 40, 280)}px` }}>
+                <div className="flex items-end gap-1 h-24">
+                  {trendDates.map((date, i) => {
+                    const total = Object.values(trendByModel).reduce((s, arr) => s + (arr[i] || 0), 0);
+                    const maxTotal = Math.max(...trendDates.map((_, j) =>
+                      Object.values(trendByModel).reduce((s, arr) => s + (arr[j] || 0), 0)
+                    ), 1);
+                    return (
+                      <div key={date} className="flex-1 flex flex-col items-center gap-0.5">
+                        <span className="text-gray-500" style={{ fontSize: '9px' }}>{total}</span>
+                        <div className="w-full rounded-t" style={{
+                          height: `${Math.max((total / maxTotal) * 72, total > 0 ? 4 : 0)}px`,
+                          backgroundColor: '#3b82f6',
+                          minHeight: total > 0 ? '4px' : '0'
+                        }} />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-1 mt-1">
+                  {trendDates.map(date => (
+                    <div key={date} className="flex-1 text-center" style={{ fontSize: '9px', color: '#9ca3af' }}>{date}</div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {stats?.total && (
+            <div className="mt-3 pt-3 border-t border-gray-100 flex justify-around text-center">
+              <div>
+                <div className="text-base font-bold text-gray-800">{Number(stats.total.total_msgs || 0).toLocaleString()}</div>
+                <div className="text-xs text-gray-400">累计路由消息</div>
+              </div>
+              <div>
+                <div className="text-base font-bold text-gray-800">{Number(stats.total.total_classify || 0).toLocaleString()}</div>
+                <div className="text-xs text-gray-400">累计分类 tokens</div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

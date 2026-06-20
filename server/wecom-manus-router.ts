@@ -422,6 +422,42 @@ async function ensureSessionTable(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业微信工作流规则'
   `);
 
+  // 创建 AI 路由日志表
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS wecom_route_log (
+      id              INT AUTO_INCREMENT PRIMARY KEY,
+      wecom_user_id   VARCHAR(100) NOT NULL COMMENT '企业微信用户ID',
+      user_message    TEXT         COMMENT '用户消息（前200字）',
+      classifier_result TINYINT    COMMENT '分类结果：1=DS快速 2=DS深思 3=Manus',
+      routed_to       VARCHAR(50)  COMMENT '实际路由到的模型',
+      tokens_classify INT          NOT NULL DEFAULT 0 COMMENT '分类消耗token',
+      tokens_reply    INT          NOT NULL DEFAULT 0 COMMENT '回复消耗token（DS）或积分（Manus）',
+      latency_ms      INT          NOT NULL DEFAULT 0 COMMENT '总耗时毫秒',
+      created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_rl_user (wecom_user_id),
+      INDEX idx_rl_created (created_at),
+      INDEX idx_rl_routed (routed_to)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI路由日志'
+  `);
+
+  // 创建 AI 路由配置表
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS wecom_route_config (
+      id          INT AUTO_INCREMENT PRIMARY KEY,
+      config_key  VARCHAR(100) NOT NULL UNIQUE COMMENT '配置键',
+      config_val  TEXT         NOT NULL COMMENT '配置值',
+      updated_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI路由配置'
+  `);
+
+  // 插入默认路由配置（如不存在）
+  await (conn as any).execute(`
+    INSERT IGNORE INTO wecom_route_config (config_key, config_val) VALUES
+    ('route_enabled', '0'),
+    ('fallback_model', 'deepseek-chat'),
+    ('classifier_prompt', '你是消息分类器，只回复数字，不解释。\n规则：\n1 = 普通问答、闲聊、查信息、写文字（DeepSeek快速处理）\n2 = 需要深度推理、复杂分析、数学逻辑（DeepSeek深思处理）\n3 = 需要执行操作、生成文件、调用工具、处理图片（Manus处理）\n\n用户消息：{MSG}\n\n回复数字：')
+  `);
+
   _tableEnsured = true;
 }
 
@@ -743,6 +779,58 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string, agent
 }
 
 // -----------------------------------------------------------
+// AI 路由：读取路由配置
+// -----------------------------------------------------------
+async function getRouteConfig(): Promise<{ enabled: boolean; fallbackModel: string; classifierPrompt: string }> {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return { enabled: false, fallbackModel: "deepseek-chat", classifierPrompt: "" };
+    const [rows] = await (conn as any).execute(
+      "SELECT config_key, config_val FROM wecom_route_config WHERE config_key IN ('route_enabled','fallback_model','classifier_prompt')"
+    ) as any;
+    const cfg: Record<string, string> = {};
+    for (const r of (rows as any[])) cfg[r.config_key] = r.config_val;
+    return {
+      enabled: cfg["route_enabled"] === "1",
+      fallbackModel: cfg["fallback_model"] || "deepseek-chat",
+      classifierPrompt: cfg["classifier_prompt"] || "",
+    };
+  } catch (_) {
+    return { enabled: false, fallbackModel: "deepseek-chat", classifierPrompt: "" };
+  }
+}
+
+// AI 路由：对消息进行分类，返回 1/2/3
+async function classifyMessage(userMessage: string, prompt: string): Promise<{ result: number; tokens: number }> {
+  try {
+    if (!DEEPSEEK_API_KEY) return { result: 1, tokens: 0 };
+    const fullPrompt = prompt.replace("{MSG}", userMessage.substring(0, 300));
+    const res = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${DEEPSEEK_API_KEY}` },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [{ role: "user", content: fullPrompt }],
+        max_tokens: 5,
+        temperature: 0,
+        stream: false,
+      }),
+    });
+    if (!res.ok) return { result: 1, tokens: 0 };
+    const data = await res.json() as any;
+    const raw = (data?.choices?.[0]?.message?.content || "1").trim();
+    const num = parseInt(raw.charAt(0));
+    const result = (num >= 1 && num <= 3) ? num : 1;
+    const tokens = data?.usage?.total_tokens || 0;
+    console.log(`[Router] 分类结果=${result}，tokens=${tokens}，原始回复=${raw}`);
+    return { result, tokens };
+  } catch (e) {
+    console.error("[Router] 分类失败:", e);
+    return { result: 1, tokens: 0 };
+  }
+}
+
+// -----------------------------------------------------------
 // 工具函数：向 DeepSeek API 发送消息并获取回复
 // -----------------------------------------------------------
 interface DeepSeekReply { content: string; promptTokens: number; completionTokens: number; totalTokens: number; }
@@ -924,7 +1012,24 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
     }
 
     // 获取用户当前模型偏好
-    const userModelProfile = await getUserModel(userId);
+    let userModelProfile = await getUserModel(userId);
+
+    // ===== AI 智能路由：如开启，自动分类派发 =====
+    const startTime = Date.now();
+    let classifierResult = 0;
+    let classifierTokens = 0;
+    const routeConfig = await getRouteConfig();
+    if (routeConfig.enabled && routeConfig.classifierPrompt) {
+      const cls = await classifyMessage(content, routeConfig.classifierPrompt);
+      classifierResult = cls.result;
+      classifierTokens = cls.tokens;
+      // 根据分类结果覆盖模型
+      if (classifierResult === 1) userModelProfile = "deepseek-chat";
+      else if (classifierResult === 2) userModelProfile = "deepseek-v4-flash"; // 深思模式占位，当前用 flash
+      else if (classifierResult === 3) userModelProfile = "manus-1.6"; // 默认派给 Manus 标准
+      console.log(`[Router] 用户 ${userId} 消息路由到: ${userModelProfile}`);
+    }
+
     const isDeepSeek = DEEPSEEK_PROFILES.has(userModelProfile);
     const modelEntry = Object.values(MODEL_PROFILES).find(m => m.profile === userModelProfile);
     const modelEmoji = modelEntry?.emoji || "";
@@ -970,6 +1075,15 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
           // 发送 token 统计消息
           if (dsReply.totalTokens > 0) {
             await sendWeComMessage(userId, `─────────────\n本次消耗：${dsReply.totalTokens} tokens\n累计消耗：${newTotalTokens} tokens`);
+          }
+          // 写入路由日志
+          if (classifierResult > 0) {
+            try {
+              await (dbConn as any).execute(
+                "INSERT INTO wecom_route_log (wecom_user_id, user_message, classifier_result, routed_to, tokens_classify, tokens_reply, latency_ms) VALUES (?,?,?,?,?,?,?)",
+                [userId, content.substring(0, 200), classifierResult, userModelProfile, classifierTokens, dsReply.totalTokens, Date.now() - startTime]
+              );
+            } catch (_) {}
           }
         }
       } catch (_) {}
@@ -1079,6 +1193,18 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
           const cnyThis = (creditsUsedFinal * 0.037).toFixed(2);
           const cnyTotal = (creditsAfterFinal * 0.037).toFixed(2);
           await sendWeComMessage(userId, `─────────────\n本次新增：${creditsUsedFinal} 积分 | ${cnyThis} 元 | ${modelShortLabel}\n项目累计：${creditsAfterFinal} 积分 | ${cnyTotal} 元`);
+        }
+        // 写入路由日志
+        if (classifierResult > 0) {
+          try {
+            const logConn = await getDbConnection();
+            if (logConn) {
+              await (logConn as any).execute(
+                "INSERT INTO wecom_route_log (wecom_user_id, user_message, classifier_result, routed_to, tokens_classify, tokens_reply, latency_ms) VALUES (?,?,?,?,?,?,?)",
+                [userId, content.substring(0, 200), classifierResult, userModelProfile, classifierTokens, creditsUsedFinal, Date.now() - startTime]
+              );
+            }
+          } catch (_) {}
         }
       } catch (_) {}
     }
@@ -1613,6 +1739,97 @@ router.get("/api/wecom/user-detail", async (req: Request, res: Response) => {
   } catch (e) {
     console.error("[WeCom] 查询用户明细失败:", e);
     res.status(500).json({ error: "查询失败" });
+  }
+});
+
+// -----------------------------------------------------------
+// AI 路由 API：获取路由配置
+// -----------------------------------------------------------
+router.get("/api/wecom/route-config", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const [rows] = await (conn as any).execute(
+      "SELECT config_key, config_val FROM wecom_route_config"
+    ) as any;
+    const cfg: Record<string, string> = {};
+    for (const r of (rows as any[])) cfg[r.config_key] = r.config_val;
+    res.json({ ok: true, config: cfg });
+  } catch (e) {
+    res.status(500).json({ error: "获取配置失败" });
+  }
+});
+
+// AI 路由 API：保存路由配置
+router.post("/api/wecom/route-config", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { config } = req.body || {};
+    if (!config || typeof config !== "object") return res.status(400).json({ error: "config 字段必填" });
+    for (const [key, val] of Object.entries(config)) {
+      await (conn as any).execute(
+        "INSERT INTO wecom_route_config (config_key, config_val) VALUES (?,?) ON DUPLICATE KEY UPDATE config_val=VALUES(config_val)",
+        [key, String(val)]
+      );
+    }
+    res.json({ ok: true, message: "配置已保存" });
+  } catch (e) {
+    res.status(500).json({ error: "保存配置失败" });
+  }
+});
+
+// AI 路由 API：今日统计
+router.get("/api/wecom/route-stats", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const days = parseInt(req.query.days as string) || 7;
+
+    // 今日汇总
+    const [todayRows] = await (conn as any).execute(`
+      SELECT
+        routed_to,
+        COUNT(*) AS msg_count,
+        SUM(tokens_classify) AS total_classify_tokens,
+        SUM(tokens_reply) AS total_reply_tokens,
+        AVG(latency_ms) AS avg_latency
+      FROM wecom_route_log
+      WHERE DATE(created_at) = CURDATE()
+      GROUP BY routed_to
+    `) as any;
+
+    // 迗去N天趋势
+    const [trendRows] = await (conn as any).execute(`
+      SELECT
+        DATE_FORMAT(created_at, '%Y-%m-%d') AS date,
+        routed_to,
+        COUNT(*) AS msg_count,
+        SUM(tokens_classify + tokens_reply) AS total_tokens
+      FROM wecom_route_log
+      WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+      GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d'), routed_to
+      ORDER BY date ASC
+    `, [days]) as any;
+
+    // 总计
+    const [totalRows] = await (conn as any).execute(`
+      SELECT COUNT(*) AS total_msgs, SUM(tokens_classify) AS total_classify
+      FROM wecom_route_log
+    `) as any;
+
+    res.json({
+      ok: true,
+      today: todayRows as any[],
+      trend: trendRows as any[],
+      total: (totalRows as any[])[0] || { total_msgs: 0, total_classify: 0 },
+    });
+  } catch (e) {
+    console.error("[WeCom] 路由统计失败:", e);
+    res.status(500).json({ error: "统计查询失败" });
   }
 });
 
