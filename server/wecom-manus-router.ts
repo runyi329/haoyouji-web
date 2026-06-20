@@ -351,15 +351,20 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
     case "AI_EMPLOYEE": {
       // 将用户模型偏好设为 auto_route，触发智能路由模式
       await setUserModel(userId, "auto_route");
-      await sendWeComMessage(
-        userId,
-        [
-          "已切换到 AI 员工模式 🤖",
-          "",
-          "我会自动判断你的问题，选择最合适的 AI 来回答。",
-          "直接发消息开始吧！",
-        ].join("\n")
-      );
+      // 从数据库读取可配置的欢迎语
+      let welcomeMsg = "已切换到 AI 员工模式\n\n我会自动判断你的问题，选择最合适的 AI 来回答。\n直接发消息开始吧！";
+      try {
+        const wConn = await getDbConnection();
+        if (wConn) {
+          const [wRows] = await (wConn as any).execute(
+            "SELECT config_val FROM wecom_route_config WHERE config_key = 'employee_welcome' LIMIT 1"
+          ) as any;
+          if ((wRows as any[]).length > 0 && (wRows as any[])[0].config_val) {
+            welcomeMsg = (wRows as any[])[0].config_val;
+          }
+        }
+      } catch (_) {}
+      await sendWeComMessage(userId, welcomeMsg);
       break;
     }
 
@@ -470,7 +475,8 @@ async function ensureSessionTable(): Promise<void> {
     INSERT IGNORE INTO wecom_route_config (config_key, config_val) VALUES
     ('route_enabled', '0'),
     ('fallback_model', 'deepseek-chat'),
-    ('classifier_prompt', '你是消息分类器，只回复数字，不解释。\n规则：\n1 = 普通问答、闲聊、查信息、写文字（DeepSeek快速处理）\n2 = 需要深度推理、复杂分析、数学逻辑（DeepSeek深思处理）\n3 = 需要执行操作、生成文件、调用工具、处理图片（Manus处理）\n\n用户消息：{MSG}\n\n回复数字：')
+    ('classifier_prompt', '你是消息分类器，只回复数字，不解释。\n规则：\n1 = 普通问答、闲聊、查信息、写文字（DeepSeek快速处理）\n2 = 需要深度推理、复杂分析、数学逻辑（DeepSeek深思处理）\n3 = 需要执行操作、生成文件、调用工具、处理图片（Manus处理）\n\n用户消息：{MSG}\n\n回复数字：'),
+    ('employee_welcome', '已切换到 AI 员工模式\n\n我会自动判断你的问题，选择最合适的 AI 来回答。\n直接发消息开始吧！')
   `);
 
   _tableEnsured = true;

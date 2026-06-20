@@ -2273,6 +2273,9 @@ function RoutePanel() {
   const [classifyPrompt, setClassifyPrompt] = useState('');
   const [editingConfig, setEditingConfig] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [welcomeMsg, setWelcomeMsg] = useState('已切换到 AI 员工模式\n\n我会自动判断你的问题，选择最合适的 AI 来回答。\n直接发消息开始吧！');
+  const [editingWelcome, setEditingWelcome] = useState(false);
+  const [savingWelcome, setSavingWelcome] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [days, setDays] = useState(7);
@@ -2285,6 +2288,7 @@ function RoutePanel() {
           setRouteEnabled(d.config.route_enabled === 'true');
           setFallback(d.config.fallback_model || 'deepseek-flash');
           setClassifyPrompt(d.config.classify_prompt || '');
+          if (d.config.employee_welcome) setWelcomeMsg(d.config.employee_welcome);
         }
       })
       .catch(() => {});
@@ -2418,6 +2422,61 @@ function RoutePanel() {
                 placeholder="留空使用内置默认分类规则"
                 className="text-xs min-h-[80px] resize-none"
               />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* AI员工欢迎语配置 */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">AI 员工欢迎语</CardTitle>
+            {!editingWelcome ? (
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingWelcome(true)}>
+                <Edit2 className="w-3 h-3 mr-1" />编辑
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingWelcome(false)}>取消</Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-red-500 hover:bg-red-600 text-white"
+                  disabled={savingWelcome}
+                  onClick={async () => {
+                    setSavingWelcome(true);
+                    try {
+                      const res = await fetch('/api/wecom/route-config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ config: { employee_welcome: welcomeMsg } })
+                      });
+                      const d = await res.json();
+                      if (d.ok) { toast.success('欢迎语已保存'); setEditingWelcome(false); }
+                      else toast.error(d.error || '保存失败');
+                    } catch { toast.error('保存失败，请重试'); }
+                    finally { setSavingWelcome(false); }
+                  }}
+                >
+                  {savingWelcome ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
+                  保存
+                </Button>
+              </div>
+            )}
+          </div>
+          <CardDescription className="text-xs">用户点击"AI员工"菜单时收到的提示语，支持换行（\n）</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {editingWelcome ? (
+            <Textarea
+              value={welcomeMsg}
+              onChange={e => setWelcomeMsg(e.target.value)}
+              placeholder="输入欢迎语，用 \n 表示换行"
+              className="text-xs min-h-[100px] resize-none font-mono"
+            />
+          ) : (
+            <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-700 whitespace-pre-wrap font-mono border border-gray-100">
+              {welcomeMsg || '（未设置）'}
             </div>
           )}
         </CardContent>
