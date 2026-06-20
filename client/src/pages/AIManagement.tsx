@@ -393,6 +393,8 @@ function UsersTab() {
   const [unboundUsers, setUnboundUsers] = useState<WecomUser[]>([]);
   const [showUnbound, setShowUnbound] = useState(false);
   const [loadingUnbound, setLoadingUnbound] = useState(false);
+  // Manus任务加载状态
+  const [loadingTasks, setLoadingTasks] = useState(false);
 
   const fetchSessions = useCallback(async () => {
     setLoading(true);
@@ -405,11 +407,13 @@ function UsersTab() {
   }, []);
 
   const fetchDropdownData = useCallback(async () => {
+    setLoadingTasks(true);
     try {
-      const res = await fetch('/api/wecom/manus-tasks');
+      const res = await fetch('/api/wecom/manus-tasks?limit=100');
       const data = await res.json();
       if (data.ok) setManusTasks(data.tasks || []);
     } catch { /* ignore */ }
+    finally { setLoadingTasks(false); }
   }, []);
 
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
@@ -631,7 +635,10 @@ function UsersTab() {
             />
           </div>
           <div>
-            <label className="text-xs text-gray-500 mb-1 block">Manus 任务（必填）</label>
+            <label className="text-xs text-gray-500 mb-1 block">
+              Manus 任务（必填）
+              {loadingTasks && <span className="ml-1 text-gray-400">加载中...</span>}
+            </label>
             {manusTasks.length > 0 ? (
               <SearchSelect
                 options={manusTasks}
@@ -640,12 +647,13 @@ function UsersTab() {
                 placeholder="选择 Manus 任务..."
                 displayKey="title"
                 valueKey="id"
-                labelKey="id"
               />
+            ) : loadingTasks ? (
+              <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-400">任务列表加载中...</div>
             ) : (
               <input
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
-                placeholder="Manus 任务 ID"
+                placeholder="手动输入 Manus 任务 ID"
                 value={addForm.manus_task_id}
                 onChange={e => setAddForm(f => ({ ...f, manus_task_id: e.target.value }))}
               />
@@ -765,13 +773,15 @@ function UsersTab() {
                       placeholder="选择 Manus 任务..."
                       displayKey="title"
                       valueKey="id"
-                      labelKey="id"
                     />
+                  ) : loadingTasks ? (
+                    <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-400">任务列表加载中...</div>
                   ) : (
                     <input
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
                       value={editForm.manus_task_id || ''}
                       onChange={e => setEditForm(f => ({ ...f, manus_task_id: e.target.value }))}
+                      placeholder="手动输入 Manus 任务 ID"
                     />
                   )}
                 </div>

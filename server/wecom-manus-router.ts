@@ -1897,7 +1897,7 @@ router.get("/api/wecom/manus-tasks", async (req: Request, res: Response) => {
       created_at: t.created_at,
       agent_profile: t.agent_profile,
     }));
-    res.json({ tasks, has_more: data.has_more, next_cursor: data.next_cursor });
+    res.json({ ok: true, tasks, has_more: data.has_more, next_cursor: data.next_cursor });
   } catch (e) {
     console.error("[WeCom] 获取Manus任务列表失败:", e);
     res.status(500).json({ error: "获取任务列表失败" });
