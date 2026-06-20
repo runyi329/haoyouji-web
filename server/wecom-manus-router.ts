@@ -291,6 +291,28 @@ async function queryCreditsUsage(userId: string): Promise<string> {
 }
 
 // -----------------------------------------------------------
+// 工具函数：查询菜单自定义回复模板（存储在 wecom_route_config，key = menu_reply_{EVENT_KEY}）
+// 支持变量替换：{username} {balance} {model} {task_id} {created_at}
+// 返回 null 表示未配置，调用方使用默认回复
+// -----------------------------------------------------------
+async function getMenuReplyTemplate(eventKey: string, vars: Record<string, string> = {}): Promise<string | null> {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return null;
+    const [rows] = await (conn as any).execute(
+      `SELECT config_val FROM wecom_route_config WHERE config_key = ? LIMIT 1`,
+      [`menu_reply_${eventKey}`]
+    ) as any;
+    const tpl = (rows as any[])[0]?.config_val;
+    if (!tpl) return null;
+    // 替换变量
+    return tpl.replace(/\{(\w+)\}/g, (_: string, k: string) => vars[k] ?? `{${k}}`);
+  } catch (_) {
+    return null;
+  }
+}
+
+// -----------------------------------------------------------
 // 工具函数：处理菜单点击事件
 // -----------------------------------------------------------
 async function handleMenuClick(userId: string, eventKey: string): Promise<void> {
@@ -303,13 +325,15 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
     case "MODEL_DS_FLASH": {
       const model = MODEL_PROFILES[eventKey];
       await setUserModel(userId, model.profile);
-      await sendWeComMessage(userId, `已切换到: ${model.emoji} ${model.label}\n\n下次发送消息将使用新模型。`);
+      const modelTpl = await getMenuReplyTemplate(eventKey, { model: model.label, emoji: model.emoji });
+      await sendWeComMessage(userId, modelTpl ?? `已切换到: ${model.emoji} ${model.label}\n\n下次发送消息将使用新模型。`);
       break;
     }
 
     case "MODEL_STATUS": {
       const label = await getUserModelLabel(userId);
-      await sendWeComMessage(userId, `当前使用模型: ${label}`);
+      const statusTpl = await getMenuReplyTemplate(eventKey, { model: label });
+      await sendWeComMessage(userId, statusTpl ?? `当前使用模型: ${label}`);
       break;
     }
 
@@ -391,7 +415,8 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
     }
 
     case "FEEDBACK": {
-      await sendWeComMessage(userId, "感谢您的反馈！请直接回复您的建议或问题，我们会认真处理。");
+      const feedbackTpl = await getMenuReplyTemplate(eventKey);
+      await sendWeComMessage(userId, feedbackTpl ?? "感谢您的反馈！请直接回复您的建议或问题，我们会认真处理。");
       break;
     }
     case "MY_WALLET": {
@@ -429,9 +454,14 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
         const userBalance = parseFloat(row.userBalance || '0') || 0;
         const manual = parseFloat(row.manual || '0') || 0;
         const totalBalance = userBalance + manual;
-        const now = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+        const walletVars = {
+          username: siteUsername,
+          balance: totalBalance.toFixed(2),
+          time: new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
+        };
+        const walletTpl = await getMenuReplyTemplate('MY_WALLET', walletVars);
         await sendWeComMessage(userId,
-          `─── 我的钱包 ───\n账号：${siteUsername}\n余额：¥${totalBalance.toFixed(2)} 元\n查询时间：${now}`
+          walletTpl ?? `─── 我的钱包 ───\n账号：${siteUsername}\n余额：¥${totalBalance.toFixed(2)} 元`
         );
       } catch (e) {
         console.error('[WeCom] MY_WALLET 查询失败:', e);

@@ -2805,6 +2805,15 @@ function RoutePanel() {
   const [statsLoading, setStatsLoading] = useState(true);
   const [days, setDays] = useState(7);
 
+  // 菜单回复模板状态
+  // menuKeys: [{key, name, desc, vars}]
+  const [menuKeys, setMenuKeys] = useState<{key:string;name:string;desc:string;vars:string[]}[]>([]);
+  // 模板内容：{ [key]: string }
+  const [menuReplies, setMenuReplies] = useState<Record<string,string>>({});
+  // 编辑状态：{ [key]: boolean }
+  const [editingReplies, setEditingReplies] = useState<Record<string,boolean>>({});
+  const [savingReplies, setSavingReplies] = useState<Record<string,boolean>>({});
+
   useEffect(() => {
     fetch('/api/wecom/route-config')
       .then(r => r.json())
@@ -2817,6 +2826,53 @@ function RoutePanel() {
           if (d.config.employee_welcome) setWelcomeMsg(d.config.employee_welcome);
           if (d.config.waiting_msg) setWaitingMsg(d.config.waiting_msg);
           if (d.config.system_prompt !== undefined) setSystemPrompt(d.config.system_prompt || '');
+          // 加载菜单回复模板
+          const replies: Record<string,string> = {};
+          Object.keys(d.config).forEach(k => {
+            if (k.startsWith('menu_reply_')) {
+              const eventKey = k.replace('menu_reply_', '');
+              replies[eventKey] = d.config[k];
+            }
+          });
+          setMenuReplies(replies);
+        }
+      })
+      .catch(() => {});
+    // 加载已保存菜单，提取所有 Key
+    fetch('/api/wecom/menu')
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok && d.menu) {
+          // 内置 Key 对应的变量说明
+          const VAR_HINTS: Record<string,{name:string;desc:string;vars:string[]}> = {
+            MY_WALLET:     { name: '我的钱包', desc: '查询钱包余额时的回复', vars: ['{username}=账号', '{balance}=余额(元)', '{time}=查询时间'] },
+            CREDITS_QUERY: { name: '查积分', desc: '查积分前的提示语', vars: [] },
+            NEW_TASK:      { name: '新对话', desc: '开启新对话时的回复', vars: [] },
+            TASK_STATUS:   { name: '任务状态', desc: '查询任务状态时的回复', vars: ['{task_id}=任务ID', '{created_at}=创建时间', '{model}=当前模型'] },
+            MODEL_MAX:     { name: 'Max 模式', desc: '切换模型时的回复', vars: ['{model}=模型名称', '{emoji}=模型图标'] },
+            MODEL_NORMAL:  { name: '标准模式', desc: '切换模型时的回复', vars: ['{model}=模型名称', '{emoji}=模型图标'] },
+            MODEL_LITE:    { name: '轻量模式', desc: '切换模型时的回复', vars: ['{model}=模型名称', '{emoji}=模型图标'] },
+            MODEL_DS_FLASH:{ name: 'DeepSeek', desc: '切换模型时的回复', vars: ['{model}=模型名称', '{emoji}=模型图标'] },
+            MODEL_STATUS:  { name: '当前模型', desc: '查询当前模型时的回复', vars: ['{model}=模型名称'] },
+            AI_EMPLOYEE:   { name: 'AI 员工', desc: '切换 AI 员工模式时的回复', vars: [] },
+            HELP:          { name: '使用帮助', desc: '点击帮助时的回复', vars: [] },
+            FEEDBACK:      { name: '意见反馈', desc: '点击反馈时的回复', vars: [] },
+          };
+          // 从菜单配置中提取所有 Key
+          const keys: {key:string;name:string;desc:string;vars:string[]}[] = [];
+          const seen = new Set<string>();
+          const extractKeys = (items: any[]) => {
+            for (const item of items) {
+              if (item.key && !seen.has(item.key)) {
+                seen.add(item.key);
+                const hint = VAR_HINTS[item.key] || { name: item.name || item.key, desc: '菜单回复', vars: [] };
+                keys.push({ key: item.key, name: hint.name || item.name || item.key, desc: hint.desc, vars: hint.vars });
+              }
+              if (item.sub_button) extractKeys(item.sub_button);
+            }
+          };
+          extractKeys(d.menu);
+          setMenuKeys(keys);
         }
       })
       .catch(() => {});
@@ -3149,6 +3205,81 @@ function RoutePanel() {
           )}
         </CardContent>
       </Card>
+
+      {/* 菜单回复模板 */}
+      {menuKeys.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <div className="w-1 h-4 bg-red-500 rounded-full" />
+            <span className="text-sm font-medium text-gray-800">菜单自动回复模板</span>
+            <span className="text-xs text-gray-400">用户点击菜单时自动发送的文字，空则用默认回复</span>
+          </div>
+          {menuKeys.map(item => (
+            <Card key={item.key}>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm">{item.name}</CardTitle>
+                    <div className="text-xs text-gray-400 mt-0.5">{item.desc}</div>
+                  </div>
+                  {!editingReplies[item.key] ? (
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingReplies(v => ({ ...v, [item.key]: true }))}>
+                      <Edit2 className="w-3 h-3 mr-1" />编辑
+                    </Button>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingReplies(v => ({ ...v, [item.key]: false }))}>取消</Button>
+                      <Button
+                        size="sm"
+                        className="h-7 text-xs bg-red-500 hover:bg-red-600 text-white"
+                        disabled={savingReplies[item.key]}
+                        onClick={async () => {
+                          setSavingReplies(v => ({ ...v, [item.key]: true }));
+                          try {
+                            const res = await fetch('/api/wecom/route-config', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ config: { [`menu_reply_${item.key}`]: menuReplies[item.key] || '' } })
+                            });
+                            const d = await res.json();
+                            if (d.ok) { toast.success(`「${item.name}」回复模板已保存`); setEditingReplies(v => ({ ...v, [item.key]: false })); }
+                            else toast.error(d.error || '保存失败');
+                          } catch { toast.error('保存失败，请重试'); }
+                          finally { setSavingReplies(v => ({ ...v, [item.key]: false })); }
+                        }}
+                      >
+                        {savingReplies[item.key] ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
+                        保存
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                {item.vars.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {item.vars.map(v => (
+                      <span key={v} className="text-xs bg-blue-50 text-blue-600 border border-blue-100 rounded px-1.5 py-0.5 font-mono">{v}</span>
+                    ))}
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent>
+                {editingReplies[item.key] ? (
+                  <Textarea
+                    value={menuReplies[item.key] || ''}
+                    onChange={e => setMenuReplies(v => ({ ...v, [item.key]: e.target.value }))}
+                    placeholder={`输入回复内容，空则用默认回复。支持\\n换行${item.vars.length > 0 ? '，可用上方变量' : ''}`}
+                    className="text-xs min-h-[80px] resize-none font-mono"
+                  />
+                ) : (
+                  <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-700 whitespace-pre-wrap font-mono border border-gray-100 min-h-[40px]">
+                    {menuReplies[item.key] || <span className="text-gray-400">（未设置，使用默认回复）</span>}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* 今日统计 */}
       <Card>
