@@ -632,6 +632,25 @@ async function ensureSessionTable(): Promise<void> {
     await (conn as any).execute(`INSERT IGNORE INTO wecom_route_config (config_key, config_val) VALUES ('menu_config', '')`);
   } catch (_) {}
 
+  // 专属规则表
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS wecom_custom_rules (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      rule_name VARCHAR(100) NOT NULL COMMENT '规则名称（管理员自定义）',
+      trigger_intent TEXT NOT NULL COMMENT '触发意图描述（自然语言，供分类模型判断）',
+      reply_mode ENUM('template','ai') NOT NULL DEFAULT 'ai' COMMENT 'template=固定模板回复 ai=专属AI回复',
+      template_text TEXT COMMENT '固定模板回复内容（reply_mode=template时使用）',
+      ai_model VARCHAR(100) NOT NULL DEFAULT 'deepseek-chat' COMMENT '专属AI模型',
+      ai_system_prompt TEXT COMMENT '专属System Prompt',
+      target_type ENUM('all','selected') NOT NULL DEFAULT 'selected' COMMENT 'all=全部用户 selected=指定用户',
+      target_user_ids TEXT COMMENT '指定用户的wecom_user_id列表，JSON数组格式',
+      enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+      trigger_count INT NOT NULL DEFAULT 0 COMMENT '累计触发次数',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   _tableEnsured = true;
 }
 
@@ -1426,6 +1445,80 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
 
     // 获取用户当前模型偏好
     let userModelProfile = await getUserModel(userId);
+
+    // ===== 专属规则优先级检查（高于全局路由）=====
+    try {
+      const ruleConn = await getDbConnection();
+      if (ruleConn) {
+        const [ruleRows] = await (ruleConn as any).execute(
+          `SELECT * FROM wecom_custom_rules WHERE enabled = 1 ORDER BY created_at ASC`
+        ) as any;
+        const allRules = ruleRows as any[];
+        // 筛选出适用于当前用户的规则
+        const applicableRules = allRules.filter((rule: any) => {
+          if (rule.target_type === 'all') return true;
+          try {
+            const ids: string[] = JSON.parse(rule.target_user_ids || '[]');
+            return ids.includes(userId);
+          } catch { return false; }
+        });
+        if (applicableRules.length > 0) {
+          // 用分类模型逐条判断是否命中
+          for (const rule of applicableRules) {
+            const intentPrompt = `你是意图匹配器，只回复 1 或 0，不解释。\n\n意图描述：${rule.trigger_intent}\n\n用户消息：${content}\n\n是否匹配（1=是 0=否）：`;
+            const matchResult = await classifyMessage(content, intentPrompt, 'deepseek-chat');
+            if (matchResult.result === 1) {
+              // 命中！按规则处理
+              console.log(`[专属规则] 用户 ${userId} 命中规则「${rule.rule_name}」`);
+              // 更新触发计数
+              await (ruleConn as any).execute(
+                `UPDATE wecom_custom_rules SET trigger_count = trigger_count + 1 WHERE id = ?`, [rule.id]
+              ).catch(() => {});
+              if (rule.reply_mode === 'template') {
+                // 固定模板回复
+                const replyText = (rule.template_text || '').replace(/\\n/g, '\n');
+                await sendWeComMessage(userId, replyText || '（模板内容为空）');
+              } else {
+                // 专属 AI 回复
+                const ruleModel = rule.ai_model || 'deepseek-chat';
+                const rulePrompt = rule.ai_system_prompt || '';
+                const isRuleDeepSeek = DEEPSEEK_PROFILES.has(ruleModel);
+                let waitingMsg2 = '收到，AI 正在思考中，请稍候...';
+                try {
+                  const [wRows] = await (ruleConn as any).execute(
+                    `SELECT config_val FROM wecom_route_config WHERE config_key = 'waiting_msg' LIMIT 1`
+                  ) as any;
+                  if ((wRows as any[]).length > 0 && (wRows as any[])[0].config_val) waitingMsg2 = (wRows as any[])[0].config_val;
+                } catch (_) {}
+                await sendWeComMessage(userId, waitingMsg2);
+                if (isRuleDeepSeek) {
+                  const dsReply = await sendToDeepSeekAndGetReply(content, ruleModel, rulePrompt || undefined);
+                  const chunks = dsReply.content.match(/[\s\S]{1,2000}/g) || [dsReply.content];
+                  for (const chunk of chunks) {
+                    await sendWeComMessage(userId, chunk);
+                    await new Promise(r => setTimeout(r, 500));
+                  }
+                } else {
+                  // Manus 路径
+                  const taskId = await getOrCreateManusTask(userId);
+                  if (taskId) {
+                    const reply = await sendToManusAndGetReply(taskId, content, ruleModel);
+                    const chunks = reply.content.match(/[\s\S]{1,2000}/g) || [reply.content];
+                    for (const chunk of chunks) {
+                      await sendWeComMessage(userId, chunk);
+                      await new Promise(r => setTimeout(r, 500));
+                    }
+                  }
+                }
+              }
+              return; // 专属规则已处理，跳过后续全局路由
+            }
+          }
+        }
+      }
+    } catch (ruleErr) {
+      console.error('[专属规则] 检查失败，继续走全局路由:', ruleErr);
+    }
 
     // ===== AI 智能路由：如开启，自动分类派发 =====
     const startTime = Date.now();
@@ -2482,6 +2575,123 @@ router.delete("/api/wecom/wallet-bindings/:wecomUserId", async (req: Request, re
   } catch (e) {
     console.error("[钱包绑定] 解除失败:", e);
     res.status(500).json({ error: "解除失败" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 专属规则 CRUD API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 查询规则列表
+router.get("/api/wecom/custom-rules", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const [rows] = await (conn as any).execute(
+      `SELECT id, rule_name, trigger_intent, reply_mode, template_text, ai_model, ai_system_prompt,
+              target_type, target_user_ids, enabled, trigger_count, created_at, updated_at
+       FROM wecom_custom_rules ORDER BY created_at DESC`
+    ) as any;
+    res.json({ ok: true, rules: rows as any[] });
+  } catch (e) {
+    console.error("[专属规则] 查询失败:", e);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
+// 新建规则
+router.post("/api/wecom/custom-rules", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { rule_name, trigger_intent, reply_mode, template_text, ai_model, ai_system_prompt, target_type, target_user_ids } = req.body;
+    if (!rule_name || !trigger_intent) return res.status(400).json({ error: "规则名称和触发意图不能为空" });
+    const [result] = await (conn as any).execute(
+      `INSERT INTO wecom_custom_rules (rule_name, trigger_intent, reply_mode, template_text, ai_model, ai_system_prompt, target_type, target_user_ids, enabled)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        rule_name,
+        trigger_intent,
+        reply_mode || 'ai',
+        template_text || '',
+        ai_model || 'deepseek-chat',
+        ai_system_prompt || '',
+        target_type || 'selected',
+        target_user_ids ? JSON.stringify(target_user_ids) : '[]'
+      ]
+    ) as any;
+    res.json({ ok: true, id: (result as any).insertId });
+  } catch (e) {
+    console.error("[专属规则] 新建失败:", e);
+    res.status(500).json({ error: "新建失败" });
+  }
+});
+
+// 更新规则
+router.put("/api/wecom/custom-rules/:id", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { id } = req.params;
+    const { rule_name, trigger_intent, reply_mode, template_text, ai_model, ai_system_prompt, target_type, target_user_ids, enabled } = req.body;
+    await (conn as any).execute(
+      `UPDATE wecom_custom_rules SET rule_name=?, trigger_intent=?, reply_mode=?, template_text=?,
+       ai_model=?, ai_system_prompt=?, target_type=?, target_user_ids=?, enabled=?, updated_at=NOW()
+       WHERE id=?`,
+      [
+        rule_name,
+        trigger_intent,
+        reply_mode || 'ai',
+        template_text || '',
+        ai_model || 'deepseek-chat',
+        ai_system_prompt || '',
+        target_type || 'selected',
+        target_user_ids ? JSON.stringify(target_user_ids) : '[]',
+        enabled ? 1 : 0,
+        id
+      ]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[专属规则] 更新失败:", e);
+    res.status(500).json({ error: "更新失败" });
+  }
+});
+
+// 切换启用/停用
+router.patch("/api/wecom/custom-rules/:id/toggle", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { id } = req.params;
+    const { enabled } = req.body;
+    await (conn as any).execute(
+      `UPDATE wecom_custom_rules SET enabled=?, updated_at=NOW() WHERE id=?`,
+      [enabled ? 1 : 0, id]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[专属规则] 切换失败:", e);
+    res.status(500).json({ error: "切换失败" });
+  }
+});
+
+// 删除规则
+router.delete("/api/wecom/custom-rules/:id", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { id } = req.params;
+    await (conn as any).execute(`DELETE FROM wecom_custom_rules WHERE id=?`, [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[专属规则] 删除失败:", e);
+    res.status(500).json({ error: "删除失败" });
   }
 });
 

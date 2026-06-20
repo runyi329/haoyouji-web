@@ -10,7 +10,7 @@ import {
   ArrowLeft, Save, RotateCcw, Loader2, Bot, User, Zap, MessageSquare,
   BarChart2, Menu, ChevronRight, RefreshCw, Trash2, Edit2, Plus, Check, X,
   PlayCircle, StopCircle, Coins, ToggleLeft, ToggleRight, Calendar, Clock,
-  Settings, AlertCircle
+  Settings, AlertCircle, Sparkles, Shield, Users, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import CompanyReportManagement from '@/components/CompanyReportManagement';
@@ -255,7 +255,7 @@ export default function AIManagement() {
 // Panel 1: 企微 AI（原 WecomAdmin 内容）
 // ═══════════════════════════════════════════════════════════════════════════════
 
-type WecomTabKey = 'users' | 'workflow' | 'messages' | 'stats' | 'menu' | 'wallet';
+type WecomTabKey = 'users' | 'workflow' | 'messages' | 'stats' | 'menu' | 'wallet' | 'rules';
 const WECOM_TABS: { key: WecomTabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'users', label: '用户', icon: <User className="w-3.5 h-3.5" /> },
   { key: 'workflow', label: '工作流', icon: <Zap className="w-3.5 h-3.5" /> },
@@ -263,6 +263,7 @@ const WECOM_TABS: { key: WecomTabKey; label: string; icon: React.ReactNode }[] =
   { key: 'stats', label: '统计', icon: <BarChart2 className="w-3.5 h-3.5" /> },
   { key: 'menu', label: '菜单', icon: <Menu className="w-3.5 h-3.5" /> },
   { key: 'wallet', label: '钱包绑定', icon: <Coins className="w-3.5 h-3.5" /> },
+  { key: 'rules', label: '专属规则', icon: <Sparkles className="w-3.5 h-3.5" /> },
 ];
 
 function WecomPanel() {
@@ -295,6 +296,7 @@ function WecomPanel() {
         {activeTab === 'stats' && <StatsTab />}
         {activeTab === 'menu' && <MenuTab />}
         {activeTab === 'wallet' && <WalletBindingTab />}
+        {activeTab === 'rules' && <CustomRulesTab />}
       </div>
     </div>
   );
@@ -1934,6 +1936,440 @@ function WalletBindingTab() {
               )}
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+const RULE_MODELS = [
+  { value: 'deepseek-chat', label: 'DeepSeek Flash（快速、省费）' },
+  { value: 'deepseek-v4-flash', label: 'DeepSeek 深思（复杂推理）' },
+  { value: 'manus-1.6-lite', label: 'Manus 轻量（快速响应）' },
+  { value: 'manus-1.6', label: 'Manus 标准（平衡能力）' },
+  { value: 'manus-1.6-max', label: 'Manus Max（最强能力）' },
+];
+
+interface CustomRule {
+  id: number;
+  rule_name: string;
+  trigger_intent: string;
+  reply_mode: 'template' | 'ai';
+  template_text: string;
+  ai_model: string;
+  ai_system_prompt: string;
+  target_type: 'all' | 'selected';
+  target_user_ids: string;
+  enabled: number;
+  trigger_count: number;
+  created_at: string;
+}
+
+interface WecomUserForRule { wecom_user_id: string; nickname: string; avatar_url?: string; }
+
+function CustomRulesTab() {
+  const [rules, setRules] = useState<CustomRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [editingRule, setEditingRule] = useState<CustomRule | null>(null);
+  const [wecomUsers2, setWecomUsers2] = useState<WecomUserForRule[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+
+  const [form, setForm] = useState({
+    rule_name: '',
+    trigger_intent: '',
+    reply_mode: 'ai' as 'template' | 'ai',
+    template_text: '',
+    ai_model: 'deepseek-chat',
+    ai_system_prompt: '',
+    target_type: 'selected' as 'all' | 'selected',
+    selected_user_ids: [] as string[],
+  });
+
+  const loadRules = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/wecom/custom-rules');
+      const d = await res.json();
+      if (d.ok) setRules(d.rules || []);
+    } catch { toast.error('加载失败'); }
+    finally { setLoading(false); }
+  };
+
+  const loadUsers2 = async () => {
+    try {
+      const res = await fetch('/api/wecom/users');
+      const d = await res.json();
+      if (d.ok) setWecomUsers2(d.users || []);
+    } catch {}
+  };
+
+  useEffect(() => { loadRules(); loadUsers2(); }, []);
+
+  const openCreate = () => {
+    setEditingRule(null);
+    setForm({ rule_name: '', trigger_intent: '', reply_mode: 'ai', template_text: '', ai_model: 'deepseek-chat', ai_system_prompt: '', target_type: 'selected', selected_user_ids: [] });
+    setShowModal(true);
+  };
+
+  const openEdit = (rule: CustomRule) => {
+    setEditingRule(rule);
+    let ids: string[] = [];
+    try { ids = JSON.parse(rule.target_user_ids || '[]'); } catch {}
+    setForm({
+      rule_name: rule.rule_name,
+      trigger_intent: rule.trigger_intent,
+      reply_mode: rule.reply_mode,
+      template_text: rule.template_text || '',
+      ai_model: rule.ai_model || 'deepseek-chat',
+      ai_system_prompt: rule.ai_system_prompt || '',
+      target_type: rule.target_type,
+      selected_user_ids: ids,
+    });
+    setShowModal(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.rule_name.trim()) { toast.error('请输入规则名称'); return; }
+    if (!form.trigger_intent.trim()) { toast.error('请输入触发意图描述'); return; }
+    setSaving(true);
+    try {
+      const body = {
+        rule_name: form.rule_name,
+        trigger_intent: form.trigger_intent,
+        reply_mode: form.reply_mode,
+        template_text: form.template_text,
+        ai_model: form.ai_model,
+        ai_system_prompt: form.ai_system_prompt,
+        target_type: form.target_type,
+        target_user_ids: form.target_type === 'all' ? [] : form.selected_user_ids,
+        enabled: 1,
+      };
+      let res;
+      if (editingRule) {
+        res = await fetch(`/api/wecom/custom-rules/${editingRule.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      } else {
+        res = await fetch('/api/wecom/custom-rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      }
+      const d = await res.json();
+      if (d.ok) { toast.success('保存成功'); setShowModal(false); loadRules(); }
+      else toast.error(d.error || '保存失败');
+    } catch { toast.error('保存失败'); }
+    finally { setSaving(false); }
+  };
+
+  const handleToggle = async (rule: CustomRule) => {
+    try {
+      const res = await fetch(`/api/wecom/custom-rules/${rule.id}/toggle`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !rule.enabled }) });
+      const d = await res.json();
+      if (d.ok) { toast.success(rule.enabled ? '已停用' : '已启用'); loadRules(); }
+      else toast.error(d.error || '操作失败');
+    } catch { toast.error('操作失败'); }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      const res = await fetch(`/api/wecom/custom-rules/${id}`, { method: 'DELETE' });
+      const d = await res.json();
+      if (d.ok) { toast.success('已删除'); setDeleteConfirm(null); loadRules(); }
+      else toast.error(d.error || '删除失败');
+    } catch { toast.error('删除失败'); }
+  };
+
+  const toggleUserSelect = (uid: string) => {
+    setForm(prev => ({
+      ...prev,
+      selected_user_ids: prev.selected_user_ids.includes(uid)
+        ? prev.selected_user_ids.filter(id => id !== uid)
+        : [...prev.selected_user_ids, uid]
+    }));
+  };
+
+  const filteredRules = rules.filter(r =>
+    r.rule_name.includes(search) || r.trigger_intent.includes(search)
+  );
+
+  const enabledCount = rules.filter(r => r.enabled).length;
+  const totalTriggers = rules.reduce((s, r) => s + (r.trigger_count || 0), 0);
+
+  return (
+    <div className="px-4 pb-6 space-y-3">
+      {/* 统计栏 */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-100">
+          <div className="text-lg font-bold text-gray-800">{rules.length}</div>
+          <div className="text-xs text-gray-400">规则总数</div>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-100">
+          <div className="text-lg font-bold text-green-600">{enabledCount}</div>
+          <div className="text-xs text-gray-400">已启用</div>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-100">
+          <div className="text-lg font-bold text-blue-600">{totalTriggers}</div>
+          <div className="text-xs text-gray-400">累计命中</div>
+        </div>
+      </div>
+
+      {/* 搜索和新建 */}
+      <div className="flex gap-2">
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="搜索规则名称或意图..."
+          className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-red-400"
+        />
+        <button onClick={openCreate} className="flex items-center gap-1 bg-red-500 text-white text-sm px-3 py-2 rounded-lg">
+          <Plus className="w-4 h-4" />新建
+        </button>
+      </div>
+
+      {/* 规则列表 */}
+      {loading ? (
+        <div className="text-center py-8 text-gray-400 text-sm">加载中...</div>
+      ) : filteredRules.length === 0 ? (
+        <div className="text-center py-12">
+          <Sparkles className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+          <div className="text-sm text-gray-400">暂无专属规则</div>
+          <div className="text-xs text-gray-300 mt-1">点击「新建」添加第一条规则</div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filteredRules.map(rule => {
+            let userIds: string[] = [];
+            try { userIds = JSON.parse(rule.target_user_ids || '[]'); } catch {}
+            const targetUsers = wecomUsers2.filter(u => userIds.includes(u.wecom_user_id));
+            return (
+              <div key={rule.id} className={`bg-white rounded-xl border p-3 ${rule.enabled ? 'border-gray-100' : 'border-gray-100 opacity-60'}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${rule.enabled ? 'bg-green-400' : 'bg-gray-300'}`} />
+                      <span className="text-sm font-medium text-gray-800 truncate">{rule.rule_name}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${rule.reply_mode === 'template' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>
+                        {rule.reply_mode === 'template' ? '固定模板' : 'AI回复'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1 line-clamp-2">{rule.trigger_intent}</div>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {rule.target_type === 'all' ? (
+                        <span className="text-xs text-purple-600 bg-purple-50 rounded px-1.5 py-0.5">全部用户</span>
+                      ) : (
+                        <span className="text-xs text-gray-500">
+                          {targetUsers.length > 0
+                            ? targetUsers.slice(0, 3).map(u => u.nickname).join('、') + (targetUsers.length > 3 ? `等${targetUsers.length}人` : '')
+                            : `${userIds.length}个用户`
+                          }
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-300">•</span>
+                      <span className="text-xs text-gray-400">命中 {rule.trigger_count} 次</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5 flex-shrink-0">
+                    <button onClick={() => openEdit(rule)} className="text-xs text-blue-500 border border-blue-200 rounded px-2 py-1">编辑</button>
+                    <button
+                      onClick={() => handleToggle(rule)}
+                      className={`text-xs border rounded px-2 py-1 ${rule.enabled ? 'text-gray-500 border-gray-200' : 'text-green-600 border-green-200'}`}
+                    >
+                      {rule.enabled ? '停用' : '启用'}
+                    </button>
+                    {deleteConfirm === rule.id ? (
+                      <div className="flex gap-1">
+                        <button onClick={() => handleDelete(rule.id)} className="text-xs text-white bg-red-500 rounded px-1.5 py-1">确删</button>
+                        <button onClick={() => setDeleteConfirm(null)} className="text-xs text-gray-500 border border-gray-200 rounded px-1.5 py-1">取消</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setDeleteConfirm(rule.id)} className="text-xs text-red-400 border border-red-100 rounded px-2 py-1">删除</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 新建/编辑弹窗 */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.4)' }}>
+          <div className="bg-white rounded-t-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
+              <span className="font-medium text-gray-800">{editingRule ? '编辑规则' : '新建专属规则'}</span>
+              <button onClick={() => setShowModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
+            </div>
+            <div className="px-4 py-4 space-y-4">
+
+              {/* 规则名称 */}
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">规则名称 <span className="text-red-400">*</span></label>
+                <input
+                  value={form.rule_name}
+                  onChange={e => setForm(p => ({ ...p, rule_name: e.target.value }))}
+                  placeholder="如：世界杯赔率查询"
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-red-400"
+                />
+              </div>
+
+              {/* 触发意图 */}
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">触发意图描述 <span className="text-red-400">*</span></label>
+                <div className="text-xs text-gray-400 mb-1">用自然语言描述什么情况下触发，AI 会判断用户消息是否匹配</div>
+                <Textarea
+                  value={form.trigger_intent}
+                  onChange={e => setForm(p => ({ ...p, trigger_intent: e.target.value }))}
+                  placeholder="如：用户在询问某支球队的赔率、比赛信息或赌局分析"
+                  className="text-sm min-h-[70px] resize-none"
+                />
+              </div>
+
+              {/* 回复模式切换 */}
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-2 block">回复模式</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setForm(p => ({ ...p, reply_mode: 'template' }))}
+                    className={`py-2.5 rounded-xl text-sm font-medium border-2 transition-all ${
+                      form.reply_mode === 'template'
+                        ? 'border-orange-400 bg-orange-50 text-orange-700'
+                        : 'border-gray-200 text-gray-500'
+                    }`}
+                  >
+                    固定模板回复
+                  </button>
+                  <button
+                    onClick={() => setForm(p => ({ ...p, reply_mode: 'ai' }))}
+                    className={`py-2.5 rounded-xl text-sm font-medium border-2 transition-all ${
+                      form.reply_mode === 'ai'
+                        ? 'border-blue-400 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 text-gray-500'
+                    }`}
+                  >
+                    专属 AI 回复
+                  </button>
+                </div>
+              </div>
+
+              {/* 固定模板内容 */}
+              {form.reply_mode === 'template' && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">回复内容</label>
+                  <Textarea
+                    value={form.template_text}
+                    onChange={e => setForm(p => ({ ...p, template_text: e.target.value }))}
+                    placeholder="输入固定回复内容，支持 \n 换行"
+                    className="text-sm min-h-[100px] resize-none font-mono"
+                  />
+                </div>
+              )}
+
+              {/* 专属 AI 配置 */}
+              {form.reply_mode === 'ai' && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">指定模型</label>
+                    <div className="space-y-1.5">
+                      {RULE_MODELS.map(m => (
+                        <button
+                          key={m.value}
+                          onClick={() => setForm(p => ({ ...p, ai_model: m.value }))}
+                          className={`w-full text-left text-sm px-3 py-2 rounded-lg border transition-all ${
+                            form.ai_model === m.value
+                              ? 'border-blue-400 bg-blue-50 text-blue-700'
+                              : 'border-gray-200 text-gray-600'
+                          }`}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">专属 System Prompt</label>
+                    <div className="text-xs text-gray-400 mb-1">告诉 AI 用什么格式、查什么内容回答</div>
+                    <Textarea
+                      value={form.ai_system_prompt}
+                      onChange={e => setForm(p => ({ ...p, ai_system_prompt: e.target.value }))}
+                      placeholder="如：你是一个体育赔率分析师，当用户提到任何球队名称时，请搜索该球队世界杯下一场比赛的最新赔率..."
+                      className="text-sm min-h-[120px] resize-none"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* 适用用户 */}
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-2 block">适用用户</label>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <button
+                    onClick={() => setForm(p => ({ ...p, target_type: 'selected' }))}
+                    className={`py-2 rounded-xl text-sm font-medium border-2 transition-all ${
+                      form.target_type === 'selected'
+                        ? 'border-red-400 bg-red-50 text-red-700'
+                        : 'border-gray-200 text-gray-500'
+                    }`}
+                  >
+                    指定用户
+                  </button>
+                  <button
+                    onClick={() => setForm(p => ({ ...p, target_type: 'all' }))}
+                    className={`py-2 rounded-xl text-sm font-medium border-2 transition-all ${
+                      form.target_type === 'all'
+                        ? 'border-purple-400 bg-purple-50 text-purple-700'
+                        : 'border-gray-200 text-gray-500'
+                    }`}
+                  >
+                    全部用户
+                  </button>
+                </div>
+                {form.target_type === 'selected' && (
+                  <div className="border border-gray-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                    {wecomUsers2.length === 0 ? (
+                      <div className="text-xs text-gray-400 text-center py-4">暂无企微用户</div>
+                    ) : wecomUsers2.map(u => (
+                      <div
+                        key={u.wecom_user_id}
+                        onClick={() => toggleUserSelect(u.wecom_user_id)}
+                        className={`flex items-center gap-3 px-3 py-2.5 border-b border-gray-50 last:border-0 cursor-pointer transition-colors ${
+                          form.selected_user_ids.includes(u.wecom_user_id) ? 'bg-red-50' : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                          form.selected_user_ids.includes(u.wecom_user_id) ? 'bg-red-500 border-red-500' : 'border-gray-300'
+                        }`}>
+                          {form.selected_user_ids.includes(u.wecom_user_id) && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        {u.avatar_url ? (
+                          <img src={u.avatar_url} className="w-7 h-7 rounded-full" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center">
+                            <User className="w-4 h-4 text-gray-400" />
+                          </div>
+                        )}
+                        <span className="text-sm text-gray-700">{u.nickname || u.wecom_user_id}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {form.target_type === 'selected' && form.selected_user_ids.length > 0 && (
+                  <div className="text-xs text-gray-500 mt-1">已选 {form.selected_user_ids.length} 个用户</div>
+                )}
+              </div>
+
+              {/* 保存按钮 */}
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="w-full py-3 bg-red-500 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {saving ? '保存中...' : '保存规则'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
