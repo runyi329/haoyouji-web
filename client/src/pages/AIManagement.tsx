@@ -255,14 +255,14 @@ export default function AIManagement() {
 // Panel 1: 企微 AI（原 WecomAdmin 内容）
 // ═══════════════════════════════════════════════════════════════════════════════
 
-type WecomTabKey = 'users' | 'workflow' | 'messages' | 'stats' | 'menu';
-
+type WecomTabKey = 'users' | 'workflow' | 'messages' | 'stats' | 'menu' | 'wallet';
 const WECOM_TABS: { key: WecomTabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'users', label: '用户', icon: <User className="w-3.5 h-3.5" /> },
   { key: 'workflow', label: '工作流', icon: <Zap className="w-3.5 h-3.5" /> },
   { key: 'messages', label: '消息', icon: <MessageSquare className="w-3.5 h-3.5" /> },
   { key: 'stats', label: '统计', icon: <BarChart2 className="w-3.5 h-3.5" /> },
   { key: 'menu', label: '菜单', icon: <Menu className="w-3.5 h-3.5" /> },
+  { key: 'wallet', label: '钱包绑定', icon: <span className="text-xs">💰</span> },
 ];
 
 function WecomPanel() {
@@ -294,6 +294,7 @@ function WecomPanel() {
         {activeTab === 'messages' && <MessagesTab />}
         {activeTab === 'stats' && <StatsTab />}
         {activeTab === 'menu' && <MenuTab />}
+        {activeTab === 'wallet' && <WalletBindingTab />}
       </div>
     </div>
   );
@@ -1774,7 +1775,7 @@ const DEFAULT_WECOM_MENU: MenuItemType[] = [
       { name: '查积分', type: 'click', key: 'CREDITS_QUERY' },
       { name: '新对话', type: 'click', key: 'NEW_TASK' },
       { name: '任务状态', type: 'click', key: 'TASK_STATUS' },
-      { name: '预留', type: 'click', key: 'RESERVED_2_4' },
+      { name: '我的钱包', type: 'click', key: 'MY_WALLET' },
       { name: '预留', type: 'click', key: 'RESERVED_2_5' },
     ],
   },
@@ -1789,6 +1790,155 @@ const DEFAULT_WECOM_MENU: MenuItemType[] = [
     ],
   },
 ];
+
+// ─── WalletBindingTab ────────────────────────────────────────────────────────────
+interface WalletBinding {
+  wecom_user_id: string;
+  nickname: string | null;
+  binding_id: number | null;
+  site_username: string | null;
+  site_user_id: number | null;
+  bound_by: string | null;
+  bound_at: string | null;
+}
+
+function WalletBindingTab() {
+  const [bindings, setBindings] = useState<WalletBinding[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [inputVal, setInputVal] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [searchText, setSearchText] = useState('');
+
+  const fetchBindings = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/wecom/wallet-bindings');
+      const data = await res.json();
+      if (data.ok) setBindings(data.bindings || []);
+    } catch { toast.error('加载失败'); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchBindings(); }, []);
+
+  const handleBind = async (wecomUserId: string) => {
+    if (!inputVal.trim()) { toast.error('请输入网站用户名'); return; }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/wecom/wallet-bindings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wecom_user_id: wecomUserId, site_username: inputVal.trim() }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast.success(data.message || '绑定成功');
+        setEditingId(null); setInputVal('');
+        fetchBindings();
+      } else {
+        toast.error(data.error || '绑定失败');
+      }
+    } catch { toast.error('绑定失败'); }
+    finally { setSaving(false); }
+  };
+
+  const handleUnbind = async (wecomUserId: string) => {
+    if (!confirm('确认解除绑定？')) return;
+    try {
+      const res = await fetch(`/api/wecom/wallet-bindings/${encodeURIComponent(wecomUserId)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.ok) { toast.success('已解除绑定'); fetchBindings(); }
+      else toast.error(data.error || '解除失败');
+    } catch { toast.error('解除失败'); }
+  };
+
+  const filtered = bindings.filter(b =>
+    !searchText ||
+    (b.nickname || '').includes(searchText) ||
+    b.wecom_user_id.includes(searchText) ||
+    (b.site_username || '').includes(searchText)
+  );
+  const boundCount = bindings.filter(b => b.binding_id).length;
+
+  return (
+    <div className="px-4 pb-6">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-sm text-gray-500">
+          共 <span className="font-semibold text-gray-800">{bindings.length}</span> 个企微用户，已绑定 <span className="font-semibold text-green-600">{boundCount}</span> 个
+        </div>
+        <button onClick={fetchBindings} className="text-xs text-blue-500 px-2 py-1 rounded border border-blue-200">刷新</button>
+      </div>
+      <div className="mb-3">
+        <input
+          type="text"
+          placeholder="搜索企微用户或网站账号..."
+          value={searchText}
+          onChange={e => setSearchText(e.target.value)}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+        />
+      </div>
+      {loading ? (
+        <div className="text-center text-gray-400 text-sm py-8">加载中...</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center text-gray-400 text-sm py-8">暂无数据</div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map(b => (
+            <div key={b.wecom_user_id} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="text-sm font-medium text-gray-800 truncate">{b.nickname || b.wecom_user_id}</span>
+                    {b.binding_id
+                      ? <span className="text-xs bg-green-50 text-green-600 border border-green-200 rounded px-1.5 py-0.5">已绑定</span>
+                      : <span className="text-xs bg-gray-50 text-gray-400 border border-gray-200 rounded px-1.5 py-0.5">未绑定</span>
+                    }
+                  </div>
+                  <div className="text-xs text-gray-400 truncate">{b.wecom_user_id}</div>
+                  {b.site_username && <div className="text-xs text-blue-600 mt-0.5">💰 {b.site_username}</div>}
+                </div>
+                <div className="flex-shrink-0 flex gap-1.5">
+                  {b.binding_id ? (
+                    <>
+                      <button onClick={() => { setEditingId(b.wecom_user_id); setInputVal(b.site_username || ''); }}
+                        className="text-xs text-blue-500 border border-blue-200 rounded px-2 py-1">修改</button>
+                      <button onClick={() => handleUnbind(b.wecom_user_id)}
+                        className="text-xs text-red-400 border border-red-200 rounded px-2 py-1">解除</button>
+                    </>
+                  ) : (
+                    <button onClick={() => { setEditingId(b.wecom_user_id); setInputVal(''); }}
+                      className="text-xs text-white bg-blue-500 rounded px-2 py-1">绑定</button>
+                  )}
+                </div>
+              </div>
+              {editingId === b.wecom_user_id && (
+                <div className="mt-2 pt-2 border-t border-gray-100">
+                  <div className="text-xs text-gray-500 mb-1">输入网站用户名（username）</div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text" value={inputVal}
+                      onChange={e => setInputVal(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleBind(b.wecom_user_id)}
+                      placeholder="网站用户名" autoFocus
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    />
+                    <button onClick={() => handleBind(b.wecom_user_id)} disabled={saving}
+                      className="text-xs text-white bg-blue-500 rounded-lg px-3 py-1.5 disabled:opacity-50">
+                      {saving ? '保存...' : '确定'}
+                    </button>
+                    <button onClick={() => { setEditingId(null); setInputVal(''); }}
+                      className="text-xs text-gray-400 border border-gray-200 rounded-lg px-2 py-1.5">取消</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function MenuTab() {
   const [menu, setMenu] = useState<MenuItemType[]>(DEFAULT_WECOM_MENU);
@@ -1890,9 +2040,65 @@ function MenuTab() {
   };
 
   const displayMenu = editing ? draft : menu;
-
+  const [keyRefOpen, setKeyRefOpen] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const KEY_REF = [
+    { key: 'MY_WALLET',       label: '我的钱包',   desc: '查询网站钱包余额' },
+    { key: 'CREDITS_QUERY',   label: '查积分',    desc: '查 AI 积分消耗' },
+    { key: 'NEW_TASK',        label: '新对话',    desc: '开启全新 AI 对话' },
+    { key: 'TASK_STATUS',     label: '任务状态',   desc: '查当前任务信息' },
+    { key: 'MODEL_MAX',       label: 'Max 模式',   desc: '切换最强模型' },
+    { key: 'MODEL_NORMAL',    label: '标准模式',   desc: '切换标准模型' },
+    { key: 'MODEL_LITE',      label: '轻量模式',   desc: '切换轻量模型' },
+    { key: 'MODEL_DS_FLASH',  label: 'DeepSeek',   desc: '切换 DeepSeek 模型' },
+    { key: 'MODEL_STATUS',    label: '当前模型',   desc: '查询当前使用模型' },
+    { key: 'AI_EMPLOYEE',     label: 'AI 员工',   desc: '切换智能路由模式' },
+    { key: 'HELP',            label: '使用帮助',   desc: '显示帮助说明' },
+    { key: 'FEEDBACK',        label: '意见反馈',   desc: '反馈入口' },
+  ];
+  const handleCopyKey = (key: string) => {
+    navigator.clipboard.writeText(key).then(() => {
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 1500);
+    });
+  };
   return (
     <div className="px-4 space-y-3">
+      {/* Key 对照表 */}
+      <div className="bg-blue-50 rounded-xl border border-blue-100 overflow-hidden">
+        <button
+          className="w-full px-3 py-2.5 flex items-center justify-between"
+          onClick={() => setKeyRefOpen(v => !v)}
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs">📋</span>
+            <span className="text-xs font-medium text-blue-800">Key 对照表（点击可一键复制）</span>
+          </div>
+          <span className="text-xs text-blue-400">{keyRefOpen ? '收起' : '展开'}</span>
+        </button>
+        {keyRefOpen && (
+          <div className="border-t border-blue-100">
+            {KEY_REF.map(item => (
+              <div key={item.key} className="flex items-center justify-between px-3 py-2 border-b border-blue-50 last:border-0">
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs text-gray-700 font-medium">{item.label}</span>
+                  <span className="text-xs text-gray-400 ml-1.5">{item.desc}</span>
+                </div>
+                <button
+                  onClick={() => handleCopyKey(item.key)}
+                  className={`flex-shrink-0 ml-2 text-xs px-2 py-0.5 rounded border transition-all ${
+                    copiedKey === item.key
+                      ? 'bg-green-500 text-white border-green-500'
+                      : 'bg-white text-blue-600 border-blue-200'
+                  }`}
+                >
+                  {copiedKey === item.key ? '✓ 已复制' : item.key}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
         <div className="flex items-center justify-between">
           <div>

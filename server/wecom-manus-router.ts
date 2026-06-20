@@ -394,6 +394,51 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
       await sendWeComMessage(userId, "感谢您的反馈！请直接回复您的建议或问题，我们会认真处理。");
       break;
     }
+    case "MY_WALLET": {
+      try {
+        await ensureSessionTable();
+        const conn = await getDbConnection();
+        if (!conn) {
+          await sendWeComMessage(userId, "系统异常，请稍后重试。");
+          break;
+        }
+        // 查询绑定关系
+        const [bindRows] = await (conn as any).execute(
+          `SELECT site_username, site_user_id FROM wecom_account_binding WHERE wecom_user_id = ? LIMIT 1`,
+          [userId]
+        ) as any;
+        if (!(bindRows as any[]).length) {
+          await sendWeComMessage(userId, "您还未绑定人脉网账号。\n\n请联系管理员帮您完成钱包绑定。");
+          break;
+        }
+        const binding = (bindRows as any[])[0];
+        const siteUserId = binding.site_user_id;
+        const siteUsername = binding.site_username;
+        if (!siteUserId) {
+          await sendWeComMessage(userId, `绑定账号「${siteUsername}」数据异常，请联系管理员。`);
+          break;
+        }
+        // 查询网站余额：users.balance + af_manual_balances合计
+        const [balRows] = await (conn as any).execute(
+          `SELECT
+             (SELECT COALESCE(balance, 0) FROM users WHERE id = ?) AS userBalance,
+             (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ?) AS manual`,
+          [siteUserId, siteUserId]
+        ) as any;
+        const row = (balRows as any[])[0] || {};
+        const userBalance = parseFloat(row.userBalance || '0') || 0;
+        const manual = parseFloat(row.manual || '0') || 0;
+        const totalBalance = userBalance + manual;
+        const now = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+        await sendWeComMessage(userId,
+          `─── 我的钱包 ───\n账号：${siteUsername}\n余额：¥${totalBalance.toFixed(2)} 元\n查询时间：${now}`
+        );
+      } catch (e) {
+        console.error('[WeCom] MY_WALLET 查询失败:', e);
+        await sendWeComMessage(userId, "查询余额失败，请稍后重试。");
+      }
+      break;
+    }
 
     case "AI_EMPLOYEE": {
       // 将用户模型偏好设为 auto_route，触发智能路由模式
@@ -524,6 +569,21 @@ async function ensureSessionTable(): Promise<void> {
       config_val  TEXT         NOT NULL COMMENT '配置值',
       updated_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI路由配置'
+  `);
+
+  // 创建企微用户与网站账号绑定表
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS wecom_account_binding (
+      id              INT AUTO_INCREMENT PRIMARY KEY,
+      wecom_user_id   VARCHAR(100) NOT NULL UNIQUE COMMENT '企微用户ID',
+      site_username   VARCHAR(100) NOT NULL COMMENT '网站用户名（users.username）',
+      site_user_id    INT          COMMENT '网站用户ID（users.id）',
+      bound_by        VARCHAR(100) COMMENT '绑定操作人',
+      created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_wab_wecom (wecom_user_id),
+      INDEX idx_wab_site (site_username)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企微用户与网站账号绑定关系'
   `);
 
   // 插入默认路由配置（如不存在）
@@ -2266,6 +2326,92 @@ router.get("/api/wecom/route-stats", async (req: Request, res: Response) => {
   } catch (e) {
     console.error("[WeCom] 路由统计失败:", e);
     res.status(500).json({ error: "统计查询失败" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 钉包绑定管理 API
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 查询绑定列表（包含所有企微用户，显示是否已绑定）
+router.get("/api/wecom/wallet-bindings", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    // 查询所有企微用户，左连接绑定表
+    const [rows] = await (conn as any).execute(`
+      SELECT
+        s.wecom_user_id,
+        s.nickname,
+        b.id AS binding_id,
+        b.site_username,
+        b.site_user_id,
+        b.bound_by,
+        b.created_at AS bound_at
+      FROM (
+        SELECT DISTINCT wecom_user_id, MAX(nickname) AS nickname
+        FROM wecom_manus_sessions
+        GROUP BY wecom_user_id
+      ) s
+      LEFT JOIN wecom_account_binding b ON b.wecom_user_id = s.wecom_user_id
+      ORDER BY b.id DESC, s.wecom_user_id
+    `) as any;
+    res.json({ ok: true, bindings: rows as any[] });
+  } catch (e) {
+    console.error("[钱包绑定] 查询失败:", e);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
+// 创建或更新绑定
+router.post("/api/wecom/wallet-bindings", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const { wecom_user_id, site_username } = req.body || {};
+    if (!wecom_user_id || !site_username) {
+      return res.status(400).json({ error: "缺少必要参数" });
+    }
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    // 查找网站用户
+    const [userRows] = await (conn as any).execute(
+      `SELECT id, username FROM users WHERE username = ? LIMIT 1`,
+      [site_username]
+    ) as any;
+    if (!(userRows as any[]).length) {
+      return res.status(404).json({ error: `网站用户「${site_username}」不存在` });
+    }
+    const siteUser = (userRows as any[])[0];
+    // 写入绑定（如已存在则更新）
+    await (conn as any).execute(
+      `INSERT INTO wecom_account_binding (wecom_user_id, site_username, site_user_id, bound_by)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE site_username = VALUES(site_username), site_user_id = VALUES(site_user_id), bound_by = VALUES(bound_by), updated_at = NOW()`,
+      [wecom_user_id, siteUser.username, siteUser.id, 'admin']
+    );
+    res.json({ ok: true, message: `绑定成功：${wecom_user_id} ↔ ${siteUser.username}` });
+  } catch (e) {
+    console.error("[钱包绑定] 创建失败:", e);
+    res.status(500).json({ error: "绑定失败" });
+  }
+});
+
+// 解除绑定
+router.delete("/api/wecom/wallet-bindings/:wecomUserId", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const wecomUserId = req.params.wecomUserId;
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    await (conn as any).execute(
+      `DELETE FROM wecom_account_binding WHERE wecom_user_id = ?`,
+      [wecomUserId]
+    );
+    res.json({ ok: true, message: "已解除绑定" });
+  } catch (e) {
+    console.error("[钱包绑定] 解除失败:", e);
+    res.status(500).json({ error: "解除失败" });
   }
 });
 
