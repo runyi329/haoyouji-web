@@ -561,6 +561,7 @@ async function ensureSessionTable(): Promise<void> {
     await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS input_tokens INT NOT NULL DEFAULT 0 COMMENT 'DeepSeek输入token数（缓存未命中）'`);
     await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS output_tokens INT NOT NULL DEFAULT 0 COMMENT 'DeepSeek输出token数'`);
     await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS cache_hit_tokens INT NOT NULL DEFAULT 0 COMMENT 'DeepSeek缓存命中输入token数'`);
+    await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS model_used VARCHAR(50) NULL COMMENT '使用的模型'`);
   } catch (_) {}
 
   // 创建工作流规则表
