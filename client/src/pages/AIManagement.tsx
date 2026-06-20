@@ -1521,6 +1521,28 @@ function MenuTab() {
     setDraft(m);
   };
 
+  // 切换一级菜单模式：有子菜单 <-> 直接触发
+  const handleToggleMode = (i: number) => {
+    const m = JSON.parse(JSON.stringify(draft)) as MenuItemType[];
+    if (m[i].sub_button && m[i].sub_button!.length > 0) {
+      // 有子菜单 → 切换为直接触发（删除所有子菜单，设置 key）
+      delete m[i].sub_button;
+      m[i].key = '';
+    } else {
+      // 直接触发 → 切换为有子菜单（清除 key，添加一个空子菜单）
+      m[i].key = '';
+      m[i].sub_button = [{ name: '', type: 'click', key: '' }];
+    }
+    setDraft(m);
+  };
+
+  // 修改一级菜单的 key（直接触发模式）
+  const handleTopKeyChange = (i: number, val: string) => {
+    const m = JSON.parse(JSON.stringify(draft)) as MenuItemType[];
+    m[i].key = val;
+    setDraft(m);
+  };
+
   const handleAddSub = (i: number) => {
     const m = JSON.parse(JSON.stringify(draft)) as MenuItemType[];
     if (!m[i].sub_button) m[i].sub_button = [];
@@ -1531,8 +1553,12 @@ function MenuTab() {
 
   const handleDeleteSub = (i: number, j: number) => {
     const m = JSON.parse(JSON.stringify(draft)) as MenuItemType[];
-    if (!m[i].sub_button || m[i].sub_button!.length <= 1) { toast.error('至少保留1个子菜单'); return; }
     m[i].sub_button!.splice(j, 1);
+    // 删完后自动切换为直接触发模式
+    if (m[i].sub_button!.length === 0) {
+      delete m[i].sub_button;
+      m[i].key = '';
+    }
     setDraft(m);
   };
 
@@ -1617,18 +1643,51 @@ function MenuTab() {
                   maxLength={4}
                 />
               </div>
+
+              {/* 模式切换区域 */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="text-xs font-medium text-gray-600">子菜单</div>
+                  <div className="text-xs font-medium text-gray-600">
+                    {item.sub_button && item.sub_button.length > 0 ? '子菜单模式' : '直接触发模式'}
+                  </div>
                   {editing && (
-                    <button
-                      onClick={() => handleAddSub(i)}
-                      className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium"
-                    >
-                      <Plus className="w-3 h-3" /> 添加
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {item.sub_button && item.sub_button.length > 0 && (
+                        <button
+                          onClick={() => handleAddSub(i)}
+                          className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium"
+                        >
+                          <Plus className="w-3 h-3" /> 添加子菜单
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleToggleMode(i)}
+                        className="flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs font-medium"
+                      >
+                        {item.sub_button && item.sub_button.length > 0 ? '改为直接触发' : '添加子菜单'}
+                      </button>
+                    </div>
                   )}
                 </div>
+
+                {/* 直接触发模式：显示 Key 输入框 */}
+                {(!item.sub_button || item.sub_button.length === 0) && (
+                  <div className="bg-blue-50 rounded-lg p-3">
+                    <label className="text-xs text-blue-700 mb-1 block">Key（点击按鈕触发的指令）</label>
+                    <input
+                      className={`w-full border rounded-lg px-3 py-2 text-sm font-mono ${
+                        editing ? 'border-blue-200 bg-white' : 'border-transparent bg-blue-100 text-blue-800'
+                      }`}
+                      placeholder="如：AI_EMPLOYEE"
+                      value={item.key || ''}
+                      onChange={e => editing && handleTopKeyChange(i, e.target.value)}
+                      readOnly={!editing}
+                    />
+                    <div className="text-xs text-blue-500 mt-1">用户点击此菜单时，服务器会收到此 Key</div>
+                  </div>
+                )}
+
+                {/* 子菜单列表 */}
                 {item.sub_button?.map((sub, j) => (
                   <div key={j} className="bg-gray-50 rounded-lg p-3 space-y-2">
                     <div className="flex items-center gap-2">
