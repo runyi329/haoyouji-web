@@ -11,12 +11,10 @@
 import { useState, useMemo } from "react";
 import { useLocation } from "wouter";
 import { ArrowLeft, ShieldCheck, Search } from "lucide-react";
-import { useSmartBack } from "@/hooks/useSmartBack";
 import { RULES } from "@/lib/rulesData";
 
 export default function RulesList() {
   const [, navigate] = useLocation();
-  const goBack = useSmartBack("/parent/profile");
   const [keyword, setKeyword] = useState("");
 
   const filtered = useMemo(() => {
@@ -36,7 +34,7 @@ export default function RulesList() {
       <header className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-gray-100">
         <div className="flex items-center gap-3 px-4 h-14">
           <button
-            onClick={goBack}
+            onClick={() => navigate("/admin/projects")}
             className="p-1.5 -ml-1.5 rounded-full active:scale-95 transition-transform"
             aria-label="返回"
           >
