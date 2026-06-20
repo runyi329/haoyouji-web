@@ -2276,6 +2276,12 @@ function RoutePanel() {
   const [welcomeMsg, setWelcomeMsg] = useState('已切换到 AI 员工模式\n\n我会自动判断你的问题，选择最合适的 AI 来回答。\n直接发消息开始吧！');
   const [editingWelcome, setEditingWelcome] = useState(false);
   const [savingWelcome, setSavingWelcome] = useState(false);
+  const [waitingMsg, setWaitingMsg] = useState('收到，AI 正在思考中，请稍候...');
+  const [editingWaiting, setEditingWaiting] = useState(false);
+  const [savingWaiting, setSavingWaiting] = useState(false);
+  const [systemPrompt, setSystemPrompt] = useState('');
+  const [editingSystemPrompt, setEditingSystemPrompt] = useState(false);
+  const [savingSystemPrompt, setSavingSystemPrompt] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [statsLoading, setStatsLoading] = useState(true);
   const [days, setDays] = useState(7);
@@ -2289,6 +2295,8 @@ function RoutePanel() {
           setFallback(d.config.fallback_model || 'deepseek-flash');
           setClassifyPrompt(d.config.classify_prompt || '');
           if (d.config.employee_welcome) setWelcomeMsg(d.config.employee_welcome);
+          if (d.config.waiting_msg) setWaitingMsg(d.config.waiting_msg);
+          if (d.config.system_prompt !== undefined) setSystemPrompt(d.config.system_prompt || '');
         }
       })
       .catch(() => {});
@@ -2477,6 +2485,117 @@ function RoutePanel() {
           ) : (
             <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-700 whitespace-pre-wrap font-mono border border-gray-100">
               {welcomeMsg || '（未设置）'}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 等待提示语配置 */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">等待提示语</CardTitle>
+            {!editingWaiting ? (
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingWaiting(true)}>
+                <Edit2 className="w-3 h-3 mr-1" />编辑
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingWaiting(false)}>取消</Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-red-500 hover:bg-red-600 text-white"
+                  disabled={savingWaiting}
+                  onClick={async () => {
+                    setSavingWaiting(true);
+                    try {
+                      const res = await fetch('/api/wecom/route-config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ config: { waiting_msg: waitingMsg } })
+                      });
+                      const d = await res.json();
+                      if (d.ok) { toast.success('等待提示语已保存'); setEditingWaiting(false); }
+                      else toast.error(d.error || '保存失败');
+                    } catch { toast.error('保存失败，请重试'); }
+                    finally { setSavingWaiting(false); }
+                  }}
+                >
+                  {savingWaiting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
+                  保存
+                </Button>
+              </div>
+            )}
+          </div>
+          <CardDescription className="text-xs">用户发消息后、AI 回复前显示的提示语，不暴露模型名称</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {editingWaiting ? (
+            <input
+              type="text"
+              value={waitingMsg}
+              onChange={e => setWaitingMsg(e.target.value)}
+              placeholder="例如：收到，AI 正在思考中，请稍候..."
+              className="w-full text-xs border border-gray-200 rounded px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+            />
+          ) : (
+            <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-700 border border-gray-100">
+              {waitingMsg || '（未设置）'}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 全局 System Prompt */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">全局 AI 指令（System Prompt）</CardTitle>
+            {!editingSystemPrompt ? (
+              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingSystemPrompt(true)}>
+                <Edit2 className="w-3 h-3 mr-1" />编辑
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingSystemPrompt(false)}>取消</Button>
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-red-500 hover:bg-red-600 text-white"
+                  disabled={savingSystemPrompt}
+                  onClick={async () => {
+                    setSavingSystemPrompt(true);
+                    try {
+                      const res = await fetch('/api/wecom/route-config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ config: { system_prompt: systemPrompt } })
+                      });
+                      const d = await res.json();
+                      if (d.ok) { toast.success('AI 指令已保存'); setEditingSystemPrompt(false); }
+                      else toast.error(d.error || '保存失败');
+                    } catch { toast.error('保存失败，请重试'); }
+                    finally { setSavingSystemPrompt(false); }
+                  }}
+                >
+                  {savingSystemPrompt ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3 mr-1" />}
+                  保存
+                </Button>
+              </div>
+            )}
+          </div>
+          <CardDescription className="text-xs">对所有用户生效的 AI 行为约束，例如禁止透露模型名称、限定回答范围等。留空则不限制。</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {editingSystemPrompt ? (
+            <Textarea
+              value={systemPrompt}
+              onChange={e => setSystemPrompt(e.target.value)}
+              placeholder="例如：你是一名专业助手，请不要透露你使用的是哪个大模型，也不要提及 DeepSeek、GPT、Manus 等品牌名称。"
+              className="text-xs min-h-[120px] resize-none"
+            />
+          ) : (
+            <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-700 whitespace-pre-wrap border border-gray-100 min-h-[60px]">
+              {systemPrompt || '（未设置，AI 不受额外约束）'}
             </div>
           )}
         </CardContent>

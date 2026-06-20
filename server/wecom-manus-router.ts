@@ -476,7 +476,9 @@ async function ensureSessionTable(): Promise<void> {
     ('route_enabled', '0'),
     ('fallback_model', 'deepseek-chat'),
     ('classifier_prompt', '你是消息分类器，只回复数字，不解释。\n规则：\n1 = 普通问答、闲聊、查信息、写文字（DeepSeek快速处理）\n2 = 需要深度推理、复杂分析、数学逻辑（DeepSeek深思处理）\n3 = 需要执行操作、生成文件、调用工具、处理图片（Manus处理）\n\n用户消息：{MSG}\n\n回复数字：'),
-    ('employee_welcome', '已切换到 AI 员工模式\n\n我会自动判断你的问题，选择最合适的 AI 来回答。\n直接发消息开始吧！')
+    ('employee_welcome', '已切换到 AI 员工模式\n\n我会自动判断你的问题，选择最合适的 AI 来回答。\n直接发消息开始吧！'),
+    ('waiting_msg', '收到，AI 正在思考中，请稍候...'),
+    ('system_prompt', '')
   `);
 
   _tableEnsured = true;
@@ -1062,6 +1064,22 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
     const modelEmoji = modelEntry?.emoji || "";
     const modelShortLabel = modelEntry?.label.split("\uff08")[0] || userModelProfile;
 
+    // 读取可配置的等待提示语和全局 system_prompt
+    let waitingMsg = "收到，AI 正在思考中，请稍候...";
+    let globalSystemPrompt = "";
+    try {
+      const cfgConn = await getDbConnection();
+      if (cfgConn) {
+        const [cfgRows] = await (cfgConn as any).execute(
+          "SELECT config_key, config_val FROM wecom_route_config WHERE config_key IN ('waiting_msg','system_prompt')"
+        ) as any;
+        for (const r of (cfgRows as any[])) {
+          if (r.config_key === 'waiting_msg' && r.config_val) waitingMsg = r.config_val;
+          if (r.config_key === 'system_prompt') globalSystemPrompt = r.config_val || "";
+        }
+      }
+    } catch (_) {}
+
     if (isDeepSeek) {
       // ===== DeepSeek 路径 =====
       // 检查功能开关
@@ -1070,13 +1088,13 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
         await sendWeComMessage(userId, "抱歉，DeepSeek 功能暂时未开放，请切换到 Manus 模式使用。");
         return;
       }
-      await sendWeComMessage(userId, `收到，${modelEmoji} DeepSeek 正在思考中，请稍候...`);
+      await sendWeComMessage(userId, waitingMsg);
       const dsReply = await sendToDeepSeekAndGetReply(content, userModelProfile);
-      const replyWithTag = `${modelEmoji} ${dsReply.content}`;
-      if (replyWithTag.length <= 2048) {
-        await sendWeComMessage(userId, replyWithTag);
+      const dsReplyText = dsReply.content;
+      if (dsReplyText.length <= 2048) {
+        await sendWeComMessage(userId, dsReplyText);
       } else {
-        const chunks = replyWithTag.match(/[\s\S]{1,2000}/g) || [replyWithTag];
+        const chunks = dsReplyText.match(/[\s\S]{1,2000}/g) || [dsReplyText];
         for (const chunk of chunks) {
           await sendWeComMessage(userId, chunk);
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -1117,7 +1135,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
 
     } else {
       // ===== Manus 路径 =====
-      await sendWeComMessage(userId, "收到，AI 正在处理中，请稍候...");
+      await sendWeComMessage(userId, waitingMsg);
 
       const taskId = await getOrCreateManusTask(userId);
       if (!taskId) {
@@ -1125,19 +1143,23 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
         return;
       }
 
-      // 从数据库读取 system_prompt，注入到消息前面
+      // 注入 system_prompt（全局配置 + 用户级配置叠加）
       let finalContent = content;
       try {
+        let combinedPrompt = globalSystemPrompt;
         const conn = await getDbConnection();
         if (conn) {
           const [rows] = await (conn as any).execute(
             "SELECT system_prompt FROM wecom_manus_sessions WHERE wecom_user_id = ? LIMIT 1",
             [userId]
           ) as any;
-          const systemPrompt = (rows as any[])[0]?.system_prompt;
-          if (systemPrompt) {
-            finalContent = `[系统指令：${systemPrompt}]\n\n${content}`;
+          const userSystemPrompt = (rows as any[])[0]?.system_prompt || "";
+          if (userSystemPrompt) {
+            combinedPrompt = combinedPrompt ? `${combinedPrompt}\n${userSystemPrompt}` : userSystemPrompt;
           }
+        }
+        if (combinedPrompt) {
+          finalContent = `[系统指令：${combinedPrompt}]\n\n${content}`;
         }
       } catch (_) {}
 
@@ -1180,11 +1202,11 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
 
       // 发送回复（带模型 Emoji 标识）
       if (reply.text) {
-        const replyWithTag = `${modelEmoji} ${reply.text}`;
-        if (replyWithTag.length <= 2048) {
-          await sendWeComMessage(userId, replyWithTag);
+        const manusReplyText = reply.text;
+        if (manusReplyText.length <= 2048) {
+          await sendWeComMessage(userId, manusReplyText);
         } else {
-          const chunks = replyWithTag.match(/[\s\S]{1,2000}/g) || [replyWithTag];
+          const chunks = manusReplyText.match(/[\s\S]{1,2000}/g) || [manusReplyText];
           for (const chunk of chunks) {
             await sendWeComMessage(userId, chunk);
             await new Promise(resolve => setTimeout(resolve, 500));
