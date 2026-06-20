@@ -185,7 +185,7 @@ function CustomLedgerPanel() {
 
 export default function Admin() {
   const [, setLocation] = useLocation();
-  const goBack = useSmartBack("/admin/projects");
+  const goBack = useSmartBack("/parent/profile");
   const { user, loading } = useAuth();
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState<number | null>(null);
