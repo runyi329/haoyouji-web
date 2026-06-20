@@ -63,7 +63,10 @@ jobs:
           SCRIPTEOF
           chmod +x /tmp/deploy.sh
           scp -i ~/.ssh/id_rsa -P ${{ secrets.DEPLOY_PORT }} /tmp/deploy.sh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/haoyouji-deploy.sh
-          echo "Script uploaded"
+          # 将 WECOM_DEEPSEEK_API_KEY 写入服务器 .env（如已存在则更新，否则新增）
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'grep -q "WECOM_DEEPSEEK_API_KEY" /root/haoyouji-web/.env && sed -i "s|WECOM_DEEPSEEK_API_KEY=.*|WECOM_DEEPSEEK_API_KEY=\"${{ secrets.WECOM_DEEPSEEK_API_KEY }}\"|" /root/haoyouji-web/.env || echo "WECOM_DEEPSEEK_API_KEY=\"${{ secrets.WECOM_DEEPSEEK_API_KEY }}\"" >> /root/haoyouji-web/.env'
+          echo "Script uploaded and env updated"
 
       - name: start background deploy
         run: |
