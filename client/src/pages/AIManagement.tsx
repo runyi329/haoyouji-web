@@ -661,53 +661,27 @@ function UsersTab() {
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">默认模型</label>
-            <div className="text-xs text-gray-400 mb-1">Manus</div>
-            <div className="grid grid-cols-3 gap-1.5 mb-2">
-              {MODEL_OPTIONS.filter(m => m.group === 'Manus').map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setAddForm(f => ({ ...f, model_pref: opt.value }))}
-                  className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                    addForm.model_pref === opt.value
-                      ? 'bg-purple-600 text-white border-purple-600'
-                      : 'bg-white text-gray-600 border-gray-200'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <div className="text-xs text-gray-400 mb-1">DeepSeek</div>
-            <div className="grid grid-cols-3 gap-1.5 mb-2">
-              {MODEL_OPTIONS.filter(m => m.group === 'DeepSeek').map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setAddForm(f => ({ ...f, model_pref: opt.value }))}
-                  className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                    addForm.model_pref === opt.value
-                      ? 'bg-cyan-600 text-white border-cyan-600'
-                      : 'bg-white text-gray-600 border-gray-200'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            <div className="grid grid-cols-1 gap-1.5">
-              {MODEL_OPTIONS.filter(m => m.group === '路由').map(opt => (
-                <button
-                  key={opt.value}
-                  onClick={() => setAddForm(f => ({ ...f, model_pref: opt.value }))}
-                  className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                    addForm.model_pref === opt.value
-                      ? 'bg-orange-500 text-white border-orange-500'
-                      : 'bg-white text-gray-600 border-gray-200'
-                  }`}
-                >
-                  {opt.label} — {opt.desc}
-                </button>
-              ))}
-            </div>
+            <select
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+              value={addForm.model_pref}
+              onChange={e => setAddForm(f => ({ ...f, model_pref: e.target.value }))}
+            >
+              <optgroup label="智能路由">
+                {MODEL_OPTIONS.filter(m => m.group === '路由').map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Manus">
+                {MODEL_OPTIONS.filter(m => m.group === 'Manus').map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
+                ))}
+              </optgroup>
+              <optgroup label="DeepSeek">
+                {MODEL_OPTIONS.filter(m => m.group === 'DeepSeek').map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
+                ))}
+              </optgroup>
+            </select>
           </div>
           <div className="flex gap-2">
             <button
@@ -787,53 +761,27 @@ function UsersTab() {
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">默认模型</label>
-                  <div className="text-xs text-gray-400 mb-1">Manus</div>
-                  <div className="grid grid-cols-3 gap-1.5 mb-2">
-                    {MODEL_OPTIONS.filter(m => m.group === 'Manus').map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setEditForm(f => ({ ...f, model_pref: opt.value }))}
-                        className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                          (editForm.model_pref || 'manus-1.6-max') === opt.value
-                            ? 'bg-purple-600 text-white border-purple-600'
-                            : 'bg-white text-gray-600 border-gray-200'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="text-xs text-gray-400 mb-1">DeepSeek</div>
-                  <div className="grid grid-cols-3 gap-1.5 mb-2">
-                    {MODEL_OPTIONS.filter(m => m.group === 'DeepSeek').map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setEditForm(f => ({ ...f, model_pref: opt.value }))}
-                        className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                          (editForm.model_pref || 'manus-1.6-max') === opt.value
-                            ? 'bg-cyan-600 text-white border-cyan-600'
-                            : 'bg-white text-gray-600 border-gray-200'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-1 gap-1.5">
-                    {MODEL_OPTIONS.filter(m => m.group === '路由').map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setEditForm(f => ({ ...f, model_pref: opt.value }))}
-                        className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                          (editForm.model_pref || 'manus-1.6-max') === opt.value
-                            ? 'bg-orange-500 text-white border-orange-500'
-                            : 'bg-white text-gray-600 border-gray-200'
-                        }`}
-                      >
-                        {opt.label} — {opt.desc}
-                      </button>
-                    ))}
-                  </div>
+                  <select
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                    value={editForm.model_pref || 'manus-1.6-max'}
+                    onChange={e => setEditForm(f => ({ ...f, model_pref: e.target.value }))}
+                  >
+                    <optgroup label="智能路由">
+                      {MODEL_OPTIONS.filter(m => m.group === '路由').map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Manus">
+                      {MODEL_OPTIONS.filter(m => m.group === 'Manus').map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="DeepSeek">
+                      {MODEL_OPTIONS.filter(m => m.group === 'DeepSeek').map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
+                      ))}
+                    </optgroup>
+                  </select>
                 </div>
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">系统提示词</label>
