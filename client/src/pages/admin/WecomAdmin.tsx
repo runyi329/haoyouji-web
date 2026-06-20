@@ -1496,7 +1496,7 @@ const DEFAULT_MENU: MenuItem[] = [
       { name: "Max 模式", type: "click", key: "MODEL_MAX" },
       { name: "标准模式", type: "click", key: "MODEL_NORMAL" },
       { name: "轻量模式", type: "click", key: "MODEL_LITE" },
-      { name: "", type: "click", key: "RESERVED_1_4" },
+      { name: "DeepSeek", type: "click", key: "MODEL_DS_FLASH" },
       { name: "", type: "click", key: "RESERVED_1_5" },
     ],
   },
