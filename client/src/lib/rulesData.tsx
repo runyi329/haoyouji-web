@@ -40,6 +40,10 @@ import {
   Upload,
   Image,
   Minimize2,
+  Key,
+  Bot,
+  FileText,
+  RefreshCcw,
   type LucideIcon,
 } from "lucide-react";
 
@@ -781,10 +785,171 @@ export const RULES: Rule[] = [
     id: "005",
     title: "项目创建规则",
     summary:
-      "新建项目总规范【角色与归属权限板块】：①三层角色（脉动网超管 / {项目名}网站管理员 / 项目成员）统一命名靠 project_id 区分 ②用户为脉动网统一账号、按项目归属 ③网站管理员只能看自己项目的用户（后端强制 project_id 过滤） ④权限一切圈定在本项目。后续可补项目骨架、初始化清单等板块。",
+      "新建项目总规范【角色与归属权限板块】：①三层角色（脉动网超管 / {project_id名}网站管理员 / 项目成员）统一命名靠 project_id 区分 ②用户为脉动网统一账号、按项目归属 ③网站管理员只能看自己项目的用户（后端强制 project_id 过滤） ④权限一切圈定在本项目。后续可补项目骨架、初始化清单等板块。",
     content: <ProjectCreationRuleContent />,
   },
+  {
+    id: "006",
+    title: "企业微信 AI API 绑定规则",
+    summary:
+      "企微 AI 全部 API 配置与换账号指南：①企微应用配置（不随 AI 账号变化）②Manus API Key 及任务 ID 绑定方式③DeepSeek API Key 配置④换 Manus 账号的完整步骤⑤换 DeepSeek 账号的完整步骤⑥服务器 .env 完整 AI 配置参考。",
+    content: <WeComAIBindingRuleContent />,
+  },
 ];
+
+/** ===== 006 · 企业微信 AI API 绑定规则 详情正文 ===== */
+function WeComAIBindingRuleContent() {
+  return (
+    <>
+      {/* 概述 */}
+      <div className="bg-gradient-to-br from-[#1A2B4A] to-[#243660] rounded-2xl p-4 text-white shadow-sm">
+        <div className="flex items-center gap-2 mb-1.5">
+          <Bot className="w-5 h-5 text-[#CBA471]" />
+          <span className="font-bold text-base">企业微信 AI API 绑定规则</span>
+        </div>
+        <p className="text-sm text-white/80 leading-relaxed">
+          本规则记录企业微信 AI 功能所需的全部 API 配置项、当前绑定的账号信息，以及更换 Manus / DeepSeek 账号时需要修改哪些地方。换账号时，将本规则发给新 AI 即可快速完成迁移。
+        </p>
+      </div>
+
+      {/* 一、企业微信配置 */}
+      <RuleSection icon={Server} title="一、企业微信应用配置（不随 AI 账号变化）">
+        <p className="text-xs text-gray-500 mb-2">以下配置绑定的是腾讯企业微信应用本身，与 AI 账号无关，换 AI 账号时无需修改。</p>
+        <div className="bg-gray-50 rounded-xl p-3 space-y-2 font-mono text-xs">
+          <div className="flex justify-between">
+            <span className="text-gray-500">WECOM_CORP_ID</span>
+            <span className="text-gray-900 font-semibold">wwbbaccf1da5f886d9</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">WECOM_AGENT_ID</span>
+            <span className="text-gray-900 font-semibold">1000002</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">WECOM_SECRET</span>
+            <span className="text-gray-900 font-semibold break-all">3-XQAnU8_8iKPA74O6_Gw3YQPdOIA2nIv4ILXpxcZ2g</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">WECOM_TOKEN</span>
+            <span className="text-gray-900 font-semibold">pEhNzolV5wrJ7Xk7</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">WECOM_ENCODING_AES_KEY</span>
+            <span className="text-gray-900 font-semibold break-all">myX82WWfAVfunhJyaLrqIyZozz1q7f8hVx1t4rSDKAy</span>
+          </div>
+        </div>
+        <p className="text-xs text-gray-400 mt-2">获取路径：企业微信管理后台 → 应用管理 → 自建应用 → 选择对应应用 → 查看 AgentID / Secret / 回调配置。</p>
+      </RuleSection>
+
+      {/* 二、Manus 配置 */}
+      <RuleSection icon={Key} title="二、Manus API 配置">
+        <p className="text-xs text-gray-500 mb-2">Manus 负责处理需要联网搜索、生成图片/视频/PPT 等复杂任务（Max / 标准 / 轻量模式）。</p>
+        <div className="bg-gray-50 rounded-xl p-3 space-y-2 font-mono text-xs">
+          <div>
+            <span className="text-gray-500">MANUS_API_KEY（当前）</span>
+            <div className="text-gray-900 font-semibold break-all mt-1">sk-CR8TOKZLGtXfij6m_2UNN8XQcjq75tcEYTtYv6Y9mWm3-bGLAxU54FiOK4IESdLl_Xcr1FVbceWQJD4XaNv4lNYnsxqw</div>
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 mt-3 mb-1 font-semibold">Key 获取方式：</p>
+        <ol className="list-decimal pl-5 space-y-1 text-xs text-gray-600">
+          <li>登录 <span className="font-mono text-[#1A2B4A]">manus.im</span>，进入「设置」→「API」</li>
+          <li>点击「生成 API Key」，复制完整 Key（以 sk- 开头）</li>
+          <li>注意：Key 只显示一次，生成后立即复制保存</li>
+        </ol>
+        <p className="text-xs text-gray-500 mt-3 mb-1 font-semibold">每个用户还需要绑定 Manus 任务 ID：</p>
+        <ol className="list-decimal pl-5 space-y-1 text-xs text-gray-600">
+          <li>在 Manus 里创建一个新任务（对话）</li>
+          <li>从浏览器地址栏复制任务 ID（URL 中 /task/ 后面的字符串）</li>
+          <li>在「AI 管理 → 企微AI → 用户 Tab」里，找到对应用户，填入任务 ID 并保存</li>
+        </ol>
+      </RuleSection>
+
+      {/* 三、DeepSeek 配置 */}
+      <RuleSection icon={Bot} title="三、DeepSeek API 配置">
+        <p className="text-xs text-gray-500 mb-2">DeepSeek 负责快速对话（快速 / 深思模式），按 token 计费，不消耗 Manus 积分。</p>
+        <div className="bg-gray-50 rounded-xl p-3 space-y-2 font-mono text-xs">
+          <div>
+            <span className="text-gray-500">DEEPSEEK_API_KEY（当前）</span>
+            <div className="text-gray-900 font-semibold break-all mt-1">REDACTED_KEY_1</div>
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 mt-3 mb-1 font-semibold">Key 获取方式：</p>
+        <ol className="list-decimal pl-5 space-y-1 text-xs text-gray-600">
+          <li>登录 <span className="font-mono text-[#1A2B4A]">platform.deepseek.com</span>，进入「API Keys」</li>
+          <li>点击「创建 API Key」，复制完整 Key（以 sk- 开头）</li>
+          <li>充值：平台支持微信/支付宝充值，按需充值即可，无月费</li>
+        </ol>
+      </RuleSection>
+
+      {/* 四、换 Manus 账号步骤 */}
+      <RuleSection icon={RefreshCcw} title="四、换 Manus 账号的步骤">
+        <p className="text-xs text-gray-500 mb-2">当 Manus 积分用完且无法充值，需要切换到新 Manus 账号时，按以下步骤操作：</p>
+        <ol className="list-decimal pl-5 space-y-2 text-xs text-gray-700">
+          <li>
+            <span className="font-semibold text-gray-900">获取新账号的 API Key</span>：登录新 Manus 账号 → 设置 → API → 生成 Key，复制保存
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">SSH 登录服务器修改 .env</span>：
+            <div className="bg-gray-100 rounded-lg p-2 mt-1 font-mono text-[11px] leading-relaxed">
+              <div>服务器 IP：124.223.54.69</div>
+              <div>用户名：root</div>
+              <div>密码：Miao@20190603</div>
+              <div className="mt-1">ssh root@124.223.54.69</div>
+              <div>cd /root/haoyouji-web</div>
+              <div>nano .env</div>
+              <div className="text-[#D32F2F] mt-1"># 找到 MANUS_API_KEY 这行，替换为新 Key</div>
+              <div>MANUS_API_KEY=sk-新的Key粘贴在这里</div>
+              <div className="mt-1"># 保存退出：Ctrl+O 回车，Ctrl+X</div>
+              <div>pm2 restart openclaw</div>
+            </div>
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">重新绑定每个用户的 Manus 任务 ID</span>：在新账号里为每个用户创建新任务，在「AI 管理 → 企微AI → 用户 Tab」里更新任务 ID
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">验证</span>：在企业微信里发一条消息，确认 AI 正常响应
+          </li>
+        </ol>
+        <p className="text-xs text-[#D32F2F] mt-2 font-medium">注意：其他所有配置（企微应用、DeepSeek、菜单、路由规则等）不需要修改。</p>
+      </RuleSection>
+
+      {/* 五、换 DeepSeek 账号步骤 */}
+      <RuleSection icon={RefreshCcw} title="五、换 DeepSeek 账号的步骤">
+        <p className="text-xs text-gray-500 mb-2">当 DeepSeek API Key 余额不足或需要切换账号时：</p>
+        <ol className="list-decimal pl-5 space-y-2 text-xs text-gray-700">
+          <li>
+            <span className="font-semibold text-gray-900">方案 A（推荐）：直接充值</span>：登录 platform.deepseek.com → 充值，无需换 Key，立即生效
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">方案 B：换新 Key</span>：生成新 Key 后，SSH 登录服务器，修改 .env 中的 DEEPSEEK_API_KEY，然后 pm2 restart openclaw
+          </li>
+        </ol>
+        <p className="text-xs text-gray-400 mt-2">DeepSeek 按 token 计费，充值后立即可用，无需重启服务。</p>
+      </RuleSection>
+
+      {/* 六、.env 文件完整配置参考 */}
+      <RuleSection icon={FileText} title="六、服务器 .env 完整 AI 相关配置参考">
+        <p className="text-xs text-gray-500 mb-2">以下为当前服务器 .env 中与 AI 相关的完整配置，换账号时对照修改：</p>
+        <div className="bg-gray-900 rounded-xl p-3 font-mono text-[11px] text-green-400 leading-relaxed overflow-x-auto">
+          <div className="text-gray-500"># DeepSeek API</div>
+          <div>DEEPSEEK_API_KEY="REDACTED_KEY_1"</div>
+          <div className="mt-2 text-gray-500"># 企业微信应用</div>
+          <div>WECOM_CORP_ID=wwbbaccf1da5f886d9</div>
+          <div>WECOM_AGENT_ID=1000002</div>
+          <div>WECOM_SECRET=3-XQAnU8_8iKPA74O6_Gw3YQPdOIA2nIv4ILXpxcZ2g</div>
+          <div>WECOM_TOKEN=pEhNzolV5wrJ7Xk7</div>
+          <div>WECOM_ENCODING_AES_KEY=myX82WWfAVfunhJyaLrqIyZozz1q7f8hVx1t4rSDKAy</div>
+          <div className="mt-2 text-gray-500"># Manus API</div>
+          <div className="text-yellow-400">MANUS_API_KEY=sk-CR8TOKZLGtXfij6m_2UNN8XQcjq75tcEYTtYv6Y9mWm3-bGLAxU54FiOK4IESdLl_Xcr1FVbceWQJD4XaNv4lNYnsxqw</div>
+          <div className="text-gray-500 mt-1"># 换账号时只需替换上面黄色这行</div>
+        </div>
+      </RuleSection>
+
+      <p className="text-center text-[11px] text-gray-300 pt-1">
+        规则 006 · 企业微信 AI API 绑定规则 · 仅超级管理员可见
+      </p>
+    </>
+  );
+}
 
 /** 按编号查规则 */
 export function getRuleById(id: string): Rule | undefined {
