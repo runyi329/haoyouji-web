@@ -30,6 +30,8 @@ export const AI_FEATURE_LABELS: Record<string, string> = {
   "db_ai_assistant":          "AI 数据助手",
   "ai_background_check":      "AI 背景调查",
   "food_calorie_scan":        "食物热量扫描",
+  // 企微 DeepSeek 开关
+  "wecom_deepseek":            "企微服务号 DeepSeek 对话",
 };
 
 // ==================== 建表（首次启动自动执行）====================

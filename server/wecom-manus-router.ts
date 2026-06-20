@@ -18,6 +18,7 @@ import crypto from "crypto";
 import { parseStringPromise } from "xml2js";
 import { getDbConnection } from "./db";
 import { getUsdtCnyRate } from "./price-scanner";
+import { isAIFeatureEnabled } from "./ai-monitor";
 
 const router = Router();
 
@@ -31,6 +32,8 @@ const WECOM_AGENT_ID = process.env.WECOM_AGENT_ID || "1000002";
 const WECOM_SECRET = process.env.WECOM_SECRET || "3-XQAnU8_8iKPA74O6_Gw3YQPdOIA2nIv4ILXpxcZ2g";
 const MANUS_API_KEY = process.env.MANUS_API_KEY || "sk-CR8TOKZLGtXfij6m_2UNN8XQcjq75tcEYTtYv6Y9mWm3-bGLAxU54FiOK4IESdLl_Xcr1FVbceWQJD4XaNv4lNYnsxqw";
 const MANUS_API_BASE = "https://api.manus.ai/v2";
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
+const DEEPSEEK_API_BASE = "https://api.deepseek.com/v1";
 
 // -----------------------------------------------------------
 // 工具函数：SHA1 签名验证
@@ -118,11 +121,15 @@ async function sendWeComMessage(toUser: string, content: string): Promise<void> 
 // 用户模型偏好（内存缓存 + 持久化到数据库）
 // -----------------------------------------------------------
 const userModelPrefs: Record<string, string> = {};
-const MODEL_PROFILES: Record<string, { profile: string; label: string }> = {
-  MODEL_MAX: { profile: "manus-1.6-max", label: "Max 模式（最强能力，适合复杂任务）" },
-  MODEL_NORMAL: { profile: "manus-1.6", label: "标准模式（平衡能力与速度）" },
-  MODEL_LITE: { profile: "manus-1.6-lite", label: "轻量模式（快速响应，省积分）" },
+const MODEL_PROFILES: Record<string, { profile: string; label: string; emoji: string }> = {
+  MODEL_MAX: { profile: "manus-1.6-max", label: "Max 模式（最强能力，适合复杂任务）", emoji: "🔴" },
+  MODEL_NORMAL: { profile: "manus-1.6", label: "标准模式（平衡能力与速度）", emoji: "🟡" },
+  MODEL_LITE: { profile: "manus-1.6-lite", label: "轻量模式（快速响应，省积分）", emoji: "🟢" },
+  MODEL_DS_FLASH: { profile: "deepseek-chat", label: "DeepSeek 快速（高效对话）", emoji: "⚡" },
 };
+
+// DeepSeek 模型 profile 列表（用于判断是否走 DeepSeek 路径）
+const DEEPSEEK_PROFILES = new Set(["deepseek-chat", "deepseek-v4-flash"]);
 
 async function getUserModel(userId: string): Promise<string> {
   // 内存缓存命中直接返回
@@ -245,10 +252,11 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
   switch (eventKey) {
     case "MODEL_MAX":
     case "MODEL_NORMAL":
-    case "MODEL_LITE": {
+    case "MODEL_LITE":
+    case "MODEL_DS_FLASH": {
       const model = MODEL_PROFILES[eventKey];
       await setUserModel(userId, model.profile);
-      await sendWeComMessage(userId, `已切换到: ${model.label}\n\n下次发送消息将使用新模型。`);
+      await sendWeComMessage(userId, `已切换到: ${model.emoji} ${model.label}\n\n下次发送消息将使用新模型。`);
       break;
     }
 
@@ -265,6 +273,7 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
       break;
     }
 
+    case "NEW_TASK":
     case "NEW_CONVERSATION": {
       // 删除当前会话，下次发消息时自动创建新任务
       try {
@@ -316,9 +325,10 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
         "",
         "底部菜单功能:",
         "[切换模型] 选择不同的 AI 模型",
-        "  - Max: 最强能力，适合复杂任务",
-        "  - 标准: 平衡能力与速度",
-        "  - 轻量: 快速响应，省积分",
+        "  🔴 Max: 最强能力，适合复杂任务",
+        "  🟡 标准: 平衡能力与速度",
+        "  🟢 轻量: 快速响应，省积分",
+        "  ⚡ DeepSeek 快速: 高效对话",
         "",
         "[工具箱]",
         "  - 查积分: 查看最近积分消耗",
@@ -733,6 +743,47 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string, agent
 }
 
 // -----------------------------------------------------------
+// 工具函数：向 DeepSeek API 发送消息并获取回复
+// -----------------------------------------------------------
+async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "deepseek-chat"): Promise<string> {
+  try {
+    if (!DEEPSEEK_API_KEY) {
+      return "DeepSeek API Key 未配置，请联系管理员。";
+    }
+    console.log(`[DeepSeek] 发送消息 model=${model}: ${userMessage.substring(0, 50)}`);
+    const res = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: userMessage }],
+        max_tokens: 4096,
+        stream: false,
+      }),
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error(`[DeepSeek] API 错误 ${res.status}:`, errText);
+      return `DeepSeek 服务暂时不可用（${res.status}），请稍后重试。`;
+    }
+    const data = await res.json() as any;
+    const content = data?.choices?.[0]?.message?.content || "";
+    if (!content) {
+      console.error("[DeepSeek] 返回内容为空:", JSON.stringify(data).substring(0, 300));
+      return "DeepSeek 未返回有效内容，请稍后重试。";
+    }
+    console.log(`[DeepSeek] 回复成功，长度=${content.length}`);
+    return content;
+  } catch (e) {
+    console.error("[DeepSeek] 通信异常:", e);
+    return "与 DeepSeek 通信时发生错误，请稍后重试。";
+  }
+}
+
+// -----------------------------------------------------------
 // 中间件：解析 text/xml body
 // -----------------------------------------------------------
 const xmlBodyParser = expressText({ type: ["text/xml", "application/xml"] });
@@ -866,129 +917,154 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       return;
     }
 
-    // 发送"处理中"提示
-    await sendWeComMessage(userId, "收到，AI 正在处理中，请稍候...");
-
-    // 获取或创建 Manus 任务
-    const taskId = await getOrCreateManusTask(userId);
-    if (!taskId) {
-      await sendWeComMessage(userId, "系统初始化失败，请联系管理员。");
-      return;
-    }
-
-    // 从数据库读取 system_prompt，注入到消息前面
-    let finalContent = content;
-    try {
-      const conn = await getDbConnection();
-      if (conn) {
-        const [rows] = await (conn as any).execute(
-          "SELECT system_prompt FROM wecom_manus_sessions WHERE wecom_user_id = ? LIMIT 1",
-          [userId]
-        ) as any;
-        const systemPrompt = (rows as any[])[0]?.system_prompt;
-        if (systemPrompt) {
-          finalContent = `[系统指令：${systemPrompt}]\n\n${content}`;
-        }
-      }
-    } catch (_) {}
-
-    // 发送给 Manus 并获取回复（差值法记录每条消息积分消耗）
-    // 1. 发消息前查询当前任务的积分消耗
-    let creditsBefore = 0;
-    let modelUsed = "manus-1.6-max";
-    try {
-      const beforeRes = await fetch(`${MANUS_API_BASE}/task.detail?task_id=${taskId}`, {
-        headers: { "x-manus-api-key": MANUS_API_KEY },
-      });
-      const beforeData = await beforeRes.json() as any;
-      if (beforeData.ok && beforeData.task) {
-        creditsBefore = beforeData.task.credit_usage || 0;
-        modelUsed = beforeData.task.agent_profile || "manus-1.6-max";
-      }
-    } catch (_) {}
-
-    // 获取用户当前模型偏好，发消息时一并传入
+    // 获取用户当前模型偏好
     const userModelProfile = await getUserModel(userId);
-    const reply = await sendToManusAndGetReply(taskId, finalContent, userModelProfile);
-    // 用户实际使用的模型就是其偏好
-    modelUsed = userModelProfile;
+    const isDeepSeek = DEEPSEEK_PROFILES.has(userModelProfile);
+    const modelEntry = Object.values(MODEL_PROFILES).find(m => m.profile === userModelProfile);
+    const modelEmoji = modelEntry?.emoji || "";
+    const modelShortLabel = modelEntry?.label.split("\uff08")[0] || userModelProfile;
 
-    // 2. 回复后再查一次，计算差值并写入数据库
-    try {
-      const afterRes = await fetch(`${MANUS_API_BASE}/task.detail?task_id=${taskId}`, {
-        headers: { "x-manus-api-key": MANUS_API_KEY },
-      });
-      const afterData = await afterRes.json() as any;
-      const creditsAfter = (afterData.ok && afterData.task) ? (afterData.task.credit_usage || 0) : creditsBefore;
-      const creditsUsed = Math.max(0, creditsAfter - creditsBefore);
-      const replyPreview = reply.text ? reply.text.substring(0, 100) : (reply.imageUrls.length > 0 ? "[图片]" : "[文件]");
-      const msgPreview = content.substring(0, 200);
-
-      const dbConn = await getDbConnection();
-      if (dbConn) {
-        await (dbConn as any).execute(
-          `INSERT INTO wecom_message_credits
-           (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, model_used, reply_preview)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-          [userId, taskId, msgPreview, creditsBefore, creditsAfter, creditsUsed, modelUsed, replyPreview]
-        );
-        console.log(`[Credits] 用户 ${userId} 本次消耗 ${creditsUsed} 积分 (${creditsBefore} -> ${creditsAfter})`);
+    if (isDeepSeek) {
+      // ===== DeepSeek 路径 =====
+      // 检查功能开关
+      const dsEnabled = await isAIFeatureEnabled("wecom_deepseek");
+      if (!dsEnabled) {
+        await sendWeComMessage(userId, "抱歉，DeepSeek 功能暂时未开放，请切换到 Manus 模式使用。");
+        return;
       }
-    } catch (creditsErr) {
-      console.error("[Credits] 记录积分失败:", creditsErr);
-    }
-
-    // 发送回复给用户
-    // 1. 先发文字（超过2048字符分段发送）
-    if (reply.text) {
-      if (reply.text.length <= 2048) {
-        await sendWeComMessage(userId, reply.text);
+      await sendWeComMessage(userId, `收到，${modelEmoji} DeepSeek 正在思考中，请稍候...`);
+      const dsReply = await sendToDeepSeekAndGetReply(content, userModelProfile);
+      const replyWithTag = `${modelEmoji} ${dsReply}`;
+      if (replyWithTag.length <= 2048) {
+        await sendWeComMessage(userId, replyWithTag);
       } else {
-        // 按段落切分，避免截断中文
-        const chunks = reply.text.match(/[\s\S]{1,2000}/g) || [reply.text];
+        const chunks = replyWithTag.match(/[\s\S]{1,2000}/g) || [replyWithTag];
         for (const chunk of chunks) {
           await sendWeComMessage(userId, chunk);
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
-    }
+      // 记录到数据库（manus_task_id 填 "deepseek" 作标识）
+      try {
+        const dbConn = await getDbConnection();
+        if (dbConn) {
+          await (dbConn as any).execute(
+            `INSERT INTO wecom_message_credits
+             (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, model_used, reply_preview)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [userId, "deepseek", content.substring(0, 200), 0, 0, 0, userModelProfile, dsReply.substring(0, 100)]
+          );
+        }
+      } catch (_) {}
 
-    // 2. 发送图片（每张单独发）
-    for (const imgUrl of reply.imageUrls) {
-      await sendWeComImage(userId, imgUrl);
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
+    } else {
+      // ===== Manus 路径 =====
+      await sendWeComMessage(userId, "收到，AI 正在处理中，请稍候...");
 
-    // 3. 发送文件附件（视频/PPT/Excel/PDF等，以文字链接形式发送）
-    for (const att of reply.fileAttachments) {
-      const typeLabel: Record<string, string> = {
-        video: "视频", audio: "音频", pdf: "PDF文件",
-        ppt: "PPT文件", pptx: "PPT文件", xlsx: "Excel文件",
-        xls: "Excel文件", docx: "Word文件", doc: "Word文件",
-        csv: "CSV文件", zip: "压缩包", html: "网页文件",
-      };
-      const ext = att.filename.split(".").pop()?.toLowerCase() || "";
-      const label = typeLabel[att.type] || typeLabel[ext] || "文件";
-      await sendWeComMessage(userId, `[${label}] ${att.filename}\n${att.url}`);
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
-
-    // 4. 发送本次消耗统计（从已记录的差值数据中取，避免重复查询）
-    try {
-      const afterRes2 = await fetch(`${MANUS_API_BASE}/task.detail?task_id=${taskId}`, {
-        headers: { "x-manus-api-key": MANUS_API_KEY },
-      });
-      const afterData2 = await afterRes2.json() as any;
-      const creditsAfterFinal = (afterData2.ok && afterData2.task) ? (afterData2.task.credit_usage || 0) : creditsBefore;
-      const creditsUsedFinal = Math.max(0, creditsAfterFinal - creditsBefore);
-      if (creditsUsedFinal > 0) {
-        // 1 积分 = 0.037 元（基于4000积分=148元官方定价）
-        const cnyThis = (creditsUsedFinal * 0.037).toFixed(2);
-        const cnyTotal = (creditsAfterFinal * 0.037).toFixed(2);
-        const modelLabel = Object.values(MODEL_PROFILES).find(m => m.profile === modelUsed)?.label.split('（')[0] || modelUsed;
-        await sendWeComMessage(userId, `─────────────\n本次新增：${creditsUsedFinal} 积分 | ${cnyThis} 元 | ${modelLabel}\n项目累计：${creditsAfterFinal} 积分 | ${cnyTotal} 元`);
+      const taskId = await getOrCreateManusTask(userId);
+      if (!taskId) {
+        await sendWeComMessage(userId, "系统初始化失败，请联系管理员。");
+        return;
       }
-    } catch (_) {}
+
+      // 从数据库读取 system_prompt，注入到消息前面
+      let finalContent = content;
+      try {
+        const conn = await getDbConnection();
+        if (conn) {
+          const [rows] = await (conn as any).execute(
+            "SELECT system_prompt FROM wecom_manus_sessions WHERE wecom_user_id = ? LIMIT 1",
+            [userId]
+          ) as any;
+          const systemPrompt = (rows as any[])[0]?.system_prompt;
+          if (systemPrompt) {
+            finalContent = `[系统指令：${systemPrompt}]\n\n${content}`;
+          }
+        }
+      } catch (_) {}
+
+      // 发消息前查询积分
+      let creditsBefore = 0;
+      try {
+        const beforeRes = await fetch(`${MANUS_API_BASE}/task.detail?task_id=${taskId}`, {
+          headers: { "x-manus-api-key": MANUS_API_KEY },
+        });
+        const beforeData = await beforeRes.json() as any;
+        if (beforeData.ok && beforeData.task) {
+          creditsBefore = beforeData.task.credit_usage || 0;
+        }
+      } catch (_) {}
+
+      const reply = await sendToManusAndGetReply(taskId, finalContent, userModelProfile);
+
+      // 回复后计算差值并写入数据库
+      try {
+        const afterRes = await fetch(`${MANUS_API_BASE}/task.detail?task_id=${taskId}`, {
+          headers: { "x-manus-api-key": MANUS_API_KEY },
+        });
+        const afterData = await afterRes.json() as any;
+        const creditsAfter = (afterData.ok && afterData.task) ? (afterData.task.credit_usage || 0) : creditsBefore;
+        const creditsUsed = Math.max(0, creditsAfter - creditsBefore);
+        const replyPreview = reply.text ? reply.text.substring(0, 100) : (reply.imageUrls.length > 0 ? "[图片]" : "[文件]");
+        const dbConn = await getDbConnection();
+        if (dbConn) {
+          await (dbConn as any).execute(
+            `INSERT INTO wecom_message_credits
+             (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, model_used, reply_preview)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [userId, taskId, content.substring(0, 200), creditsBefore, creditsAfter, creditsUsed, userModelProfile, replyPreview]
+          );
+          console.log(`[Credits] 用户 ${userId} 本次消耗 ${creditsUsed} 积分 (${creditsBefore} -> ${creditsAfter})`);
+        }
+      } catch (creditsErr) {
+        console.error("[Credits] 记录积分失败:", creditsErr);
+      }
+
+      // 发送回复（带模型 Emoji 标识）
+      if (reply.text) {
+        const replyWithTag = `${modelEmoji} ${reply.text}`;
+        if (replyWithTag.length <= 2048) {
+          await sendWeComMessage(userId, replyWithTag);
+        } else {
+          const chunks = replyWithTag.match(/[\s\S]{1,2000}/g) || [replyWithTag];
+          for (const chunk of chunks) {
+            await sendWeComMessage(userId, chunk);
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+      }
+      for (const imgUrl of reply.imageUrls) {
+        await sendWeComImage(userId, imgUrl);
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      for (const att of reply.fileAttachments) {
+        const typeLabel: Record<string, string> = {
+          video: "视频", audio: "音频", pdf: "PDF文件",
+          ppt: "PPT文件", pptx: "PPT文件", xlsx: "Excel文件",
+          xls: "Excel文件", docx: "Word文件", doc: "Word文件",
+          csv: "CSV文件", zip: "压缩包", html: "网页文件",
+        };
+        const ext = att.filename.split(".").pop()?.toLowerCase() || "";
+        const label = typeLabel[att.type] || typeLabel[ext] || "文件";
+        await sendWeComMessage(userId, `[${label}] ${att.filename}\n${att.url}`);
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      // 发送积分消耗统计
+      try {
+        const afterRes2 = await fetch(`${MANUS_API_BASE}/task.detail?task_id=${taskId}`, {
+          headers: { "x-manus-api-key": MANUS_API_KEY },
+        });
+        const afterData2 = await afterRes2.json() as any;
+        const creditsAfterFinal = (afterData2.ok && afterData2.task) ? (afterData2.task.credit_usage || 0) : creditsBefore;
+        const creditsUsedFinal = Math.max(0, creditsAfterFinal - creditsBefore);
+        if (creditsUsedFinal > 0) {
+          const cnyThis = (creditsUsedFinal * 0.037).toFixed(2);
+          const cnyTotal = (creditsAfterFinal * 0.037).toFixed(2);
+          await sendWeComMessage(userId, `─────────────\n本次新增：${creditsUsedFinal} 积分 | ${cnyThis} 元 | ${modelShortLabel}\n项目累计：${creditsAfterFinal} 积分 | ${cnyTotal} 元`);
+        }
+      } catch (_) {}
+    }
 
   } catch (e) {
     console.error("[WeCom] 处理消息异常:", e);
