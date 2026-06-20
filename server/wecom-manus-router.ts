@@ -34,8 +34,16 @@ const WECOM_ENCODING_AES_KEY = process.env.WECOM_ENCODING_AES_KEY || "myX82WWfAV
 const WECOM_CORP_ID = process.env.WECOM_CORP_ID || "wwbbaccf1da5f886d9";
 const WECOM_AGENT_ID = process.env.WECOM_AGENT_ID || "1000002";
 const WECOM_SECRET = process.env.WECOM_SECRET || "3-XQAnU8_8iKPA74O6_Gw3YQPdOIA2nIv4ILXpxcZ2g";
-const MANUS_API_KEY = process.env.MANUS_API_KEY || "sk-CR8TOKZLGtXfij6m_2UNN8XQcjq75tcEYTtYv6Y9mWm3-bGLAxU54FiOK4IESdLl_Xcr1FVbceWQJD4XaNv4lNYnsxqw";
+// ⚠️  换 Manus 账号时，只需 3 步：
+//   1. 修改服务器 .env 中的 MANUS_API_KEY 为新账号的 Key
+//   2. 执行 SQL: TRUNCATE TABLE wecom_manus_sessions  （清空旧任务绑定）
+//   3. pm2 restart haoyouji  （重启服务，新 Key 立即生效）
+//   之后用户发消息会自动用新 Key 创建新任务，无需任何代码改动。
+const MANUS_API_KEY = process.env.MANUS_API_KEY || "";
 const MANUS_API_BASE = "https://api.manus.ai/v2";
+if (!MANUS_API_KEY) {
+  console.error("[Manus] ❌ MANUS_API_KEY 未配置！请在 .env 中设置 MANUS_API_KEY，然后重启服务。");
+}
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
 const DEEPSEEK_API_BASE = "https://api.deepseek.com/v1";
 
