@@ -745,10 +745,12 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string, agent
 // -----------------------------------------------------------
 // 工具函数：向 DeepSeek API 发送消息并获取回复
 // -----------------------------------------------------------
-async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "deepseek-chat"): Promise<string> {
+interface DeepSeekReply { content: string; promptTokens: number; completionTokens: number; totalTokens: number; }
+async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "deepseek-chat"): Promise<DeepSeekReply> {
+  const errReply = (msg: string): DeepSeekReply => ({ content: msg, promptTokens: 0, completionTokens: 0, totalTokens: 0 });
   try {
     if (!DEEPSEEK_API_KEY) {
-      return "DeepSeek API Key 未配置，请联系管理员。";
+      return errReply("DeepSeek API Key 未配置，请联系管理员。");
     }
     console.log(`[DeepSeek] 发送消息 model=${model}: ${userMessage.substring(0, 50)}`);
     const res = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
@@ -767,19 +769,23 @@ async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "d
     if (!res.ok) {
       const errText = await res.text();
       console.error(`[DeepSeek] API 错误 ${res.status}:`, errText);
-      return `DeepSeek 服务暂时不可用（${res.status}），请稍后重试。`;
+      return errReply(`DeepSeek 服务暂时不可用（${res.status}），请稍后重试。`);
     }
     const data = await res.json() as any;
     const content = data?.choices?.[0]?.message?.content || "";
     if (!content) {
       console.error("[DeepSeek] 返回内容为空:", JSON.stringify(data).substring(0, 300));
-      return "DeepSeek 未返回有效内容，请稍后重试。";
+      return errReply("DeepSeek 未返回有效内容，请稍后重试。");
     }
-    console.log(`[DeepSeek] 回复成功，长度=${content.length}`);
-    return content;
+    const usage = data?.usage || {};
+    const promptTokens = usage.prompt_tokens || 0;
+    const completionTokens = usage.completion_tokens || 0;
+    const totalTokens = usage.total_tokens || 0;
+    console.log(`[DeepSeek] 回复成功，长度=${content.length}，tokens=${totalTokens}`);
+    return { content, promptTokens, completionTokens, totalTokens };
   } catch (e) {
     console.error("[DeepSeek] 通信异常:", e);
-    return "与 DeepSeek 通信时发生错误，请稍后重试。";
+    return errReply("与 DeepSeek 通信时发生错误，请稍后重试。");
   }
 }
 
@@ -934,7 +940,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       }
       await sendWeComMessage(userId, `收到，${modelEmoji} DeepSeek 正在思考中，请稍候...`);
       const dsReply = await sendToDeepSeekAndGetReply(content, userModelProfile);
-      const replyWithTag = `${modelEmoji} ${dsReply}`;
+      const replyWithTag = `${modelEmoji} ${dsReply.content}`;
       if (replyWithTag.length <= 2048) {
         await sendWeComMessage(userId, replyWithTag);
       } else {
@@ -944,16 +950,27 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
-      // 记录到数据库（manus_task_id 填 "deepseek" 作标识）
+      // 记录到数据库并查询累计 token
       try {
         const dbConn = await getDbConnection();
         if (dbConn) {
+          // 查询该用户历史累计 token
+          const [tokenRows] = await (dbConn as any).execute(
+            `SELECT COALESCE(SUM(credits_used), 0) AS total_tokens FROM wecom_message_credits WHERE wecom_user_id = ? AND manus_task_id = 'deepseek'`,
+            [userId]
+          ) as any;
+          const prevTotalTokens = Number((tokenRows as any[])[0]?.total_tokens || 0);
+          const newTotalTokens = prevTotalTokens + dsReply.totalTokens;
           await (dbConn as any).execute(
             `INSERT INTO wecom_message_credits
              (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, model_used, reply_preview)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [userId, "deepseek", content.substring(0, 200), 0, 0, 0, userModelProfile, dsReply.substring(0, 100)]
+            [userId, "deepseek", content.substring(0, 200), prevTotalTokens, newTotalTokens, dsReply.totalTokens, userModelProfile, dsReply.content.substring(0, 100)]
           );
+          // 发送 token 统计消息
+          if (dsReply.totalTokens > 0) {
+            await sendWeComMessage(userId, `─────────────\n本次消耗：${dsReply.totalTokens} tokens\n累计消耗：${newTotalTokens} tokens`);
+          }
         }
       } catch (_) {}
 
