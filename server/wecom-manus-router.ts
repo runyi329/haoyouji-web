@@ -44,7 +44,8 @@ const MANUS_API_BASE = "https://api.manus.ai/v2";
 if (!MANUS_API_KEY) {
   console.error("[Manus] ❌ MANUS_API_KEY 未配置！请在 .env 中设置 MANUS_API_KEY，然后重启服务。");
 }
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
+// 企微专用 DeepSeek Key，优先用 WECOM_DEEPSEEK_API_KEY，回退到通用 DEEPSEEK_API_KEY
+const DEEPSEEK_API_KEY = process.env.WECOM_DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY || "";
 const DEEPSEEK_API_BASE = "https://api.deepseek.com/v1";
 
 // -----------------------------------------------------------
