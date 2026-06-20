@@ -262,7 +262,7 @@ const WECOM_TABS: { key: WecomTabKey; label: string; icon: React.ReactNode }[] =
   { key: 'messages', label: '消息', icon: <MessageSquare className="w-3.5 h-3.5" /> },
   { key: 'stats', label: '统计', icon: <BarChart2 className="w-3.5 h-3.5" /> },
   { key: 'menu', label: '菜单', icon: <Menu className="w-3.5 h-3.5" /> },
-  { key: 'wallet', label: '钱包绑定', icon: <span className="text-xs">💰</span> },
+  { key: 'wallet', label: '钱包绑定', icon: <Coins className="w-3.5 h-3.5" /> },
 ];
 
 function WecomPanel() {
@@ -1946,6 +1946,19 @@ function MenuTab() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(0);
+
+  // 进入时从后端加载已保存的菜单
+  useEffect(() => {
+    fetch('/api/wecom/menu')
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok && data.menu) {
+          setMenu(data.menu);
+          setDraft(JSON.parse(JSON.stringify(data.menu)));
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleEdit = () => {
     setDraft(JSON.parse(JSON.stringify(menu)));

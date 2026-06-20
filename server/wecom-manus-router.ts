@@ -597,6 +597,10 @@ async function ensureSessionTable(): Promise<void> {
     ('waiting_msg', '收到，AI 正在思考中，请稍候...'),
     ('system_prompt', '')
   `);
+  // 单独插入 menu_config（避免多值 INSERT IGNORE 在已有部分记录时失效）
+  try {
+    await (conn as any).execute(`INSERT IGNORE INTO wecom_route_config (config_key, config_val) VALUES ('menu_config', '')`);
+  } catch (_) {}
 
   _tableEnsured = true;
 }
@@ -1912,21 +1916,18 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
       `SELECT
          mc.wecom_user_id,
          COALESCE(MAX(s.nickname), mc.wecom_user_id) AS nickname,
-         -- Manus 积分（manus_task_id != 'deepseek'）
-         SUM(CASE WHEN mc.manus_task_id != 'deepseek' THEN mc.credits_used ELSE 0 END) AS manus_credits,
-         -- DeepSeek token 汇总
-         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN mc.credits_used ELSE 0 END) AS ds_total_tokens,
-         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN mc.input_tokens ELSE 0 END) AS ds_input_miss,
-         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN mc.output_tokens ELSE 0 END) AS ds_output,
-         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN mc.cache_hit_tokens ELSE 0 END) AS ds_cache_hit,
-         -- 按模型分组的 DeepSeek token（用于精确计费）
-         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN mc.input_tokens ELSE 0 END) AS ds_pro_input_miss,
-         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN mc.output_tokens ELSE 0 END) AS ds_pro_output,
-         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN mc.cache_hit_tokens ELSE 0 END) AS ds_pro_cache_hit,
+         SUM(CASE WHEN mc.manus_task_id != 'deepseek' THEN COALESCE(mc.credits_used,0) ELSE 0 END) AS manus_credits,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN COALESCE(mc.credits_used,0) ELSE 0 END) AS ds_total_tokens,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN COALESCE(mc.input_tokens,0) ELSE 0 END) AS ds_input_miss,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN COALESCE(mc.output_tokens,0) ELSE 0 END) AS ds_output,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN COALESCE(mc.cache_hit_tokens,0) ELSE 0 END) AS ds_cache_hit,
+         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN COALESCE(mc.input_tokens,0) ELSE 0 END) AS ds_pro_input_miss,
+         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN COALESCE(mc.output_tokens,0) ELSE 0 END) AS ds_pro_output,
+         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN COALESCE(mc.cache_hit_tokens,0) ELSE 0 END) AS ds_pro_cache_hit,
          COUNT(*) AS record_count,
          MIN(mc.created_at) AS first_message_at
        FROM wecom_message_credits mc
-       LEFT JOIN wecom_manus_sessions s ON s.wecom_user_id = mc.wecom_user_id AND s.status = 'active'
+       LEFT JOIN wecom_manus_sessions s ON s.wecom_user_id = mc.wecom_user_id
        GROUP BY mc.wecom_user_id
        ORDER BY mc.wecom_user_id`
     ) as any;
@@ -1991,6 +1992,30 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
 // -----------------------------------------------------------
 // 管理API：推送菜单到企业微信
 // -----------------------------------------------------------
+// 菜单配置：读取已保存的菜单
+router.get("/api/wecom/menu", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const [rows] = await (conn as any).execute(
+      `SELECT config_val FROM wecom_route_config WHERE config_key = 'menu_config' LIMIT 1`
+    ) as any;
+    const val = (rows as any[])[0]?.config_val || '';
+    if (val) {
+      try {
+        const savedMenu = JSON.parse(val);
+        return res.json({ ok: true, menu: savedMenu });
+      } catch (_) {}
+    }
+    res.json({ ok: true, menu: null }); // null 表示未保存过，前端用默认值
+  } catch (e) {
+    console.error("[WeCom] 读取菜单失败:", e);
+    res.status(500).json({ error: "读取失败" });
+  }
+});
+
+// 菜单配置：推送并保存菜单
 router.post("/api/wecom/menu", async (req: Request, res: Response) => {
   try {
     const { menu } = req.body || {};
@@ -2013,7 +2038,22 @@ router.post("/api/wecom/menu", async (req: Request, res: Response) => {
       return res.status(500).json({ error: `企业微信错误: ${menuData.errmsg}` });
     }
 
-    console.log("[WeCom] 菜单推送成功");
+    // 推送成功后同时保存到数据库
+    try {
+      await ensureSessionTable();
+      const conn = await getDbConnection();
+      if (conn) {
+        await (conn as any).execute(
+          `INSERT INTO wecom_route_config (config_key, config_val) VALUES ('menu_config', ?)
+           ON DUPLICATE KEY UPDATE config_val = VALUES(config_val)`,
+          [JSON.stringify(menu)]
+        );
+      }
+    } catch (saveErr) {
+      console.error("[WeCom] 菜单保存到数据库失败:", saveErr);
+    }
+
+    console.log("[WeCom] 菜单推送并保存成功");
     res.json({ ok: true, message: "菜单推送成功" });
   } catch (e) {
     console.error("[WeCom] 推送菜单异常:", e);
