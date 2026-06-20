@@ -1521,7 +1521,30 @@ function MenuTab() {
     setDraft(m);
   };
 
+  const handleAddSub = (i: number) => {
+    const m = JSON.parse(JSON.stringify(draft)) as MenuItemType[];
+    if (!m[i].sub_button) m[i].sub_button = [];
+    if ((m[i].sub_button!.length) >= 5) { toast.error('每个一级菜单最多5个子菜单'); return; }
+    m[i].sub_button!.push({ name: '', type: 'click', key: '' });
+    setDraft(m);
+  };
+
+  const handleDeleteSub = (i: number, j: number) => {
+    const m = JSON.parse(JSON.stringify(draft)) as MenuItemType[];
+    if (!m[i].sub_button || m[i].sub_button!.length <= 1) { toast.error('至少保留1个子菜单'); return; }
+    m[i].sub_button!.splice(j, 1);
+    setDraft(m);
+  };
+
   const handleSave = async () => {
+    // 校验：所有子菜单 name 和 key 不能为空
+    for (const item of draft) {
+      if (!item.name.trim()) { toast.error('一级菜单名称不能为空'); return; }
+      for (const sub of (item.sub_button || [])) {
+        if (!sub.name.trim()) { toast.error('子菜单名称不能为空'); return; }
+        if (!sub.key?.trim()) { toast.error('子菜单 Key 不能为空'); return; }
+      }
+    }
     setSaving(true);
     try {
       const res = await fetch('/api/wecom/menu', {
@@ -1550,7 +1573,7 @@ function MenuTab() {
           <div>
             <div className="text-xs font-medium text-amber-800 mb-0.5">菜单配置</div>
             <div className="text-xs text-amber-700">
-              {editing ? '编辑模式 — 修改完成后点击推送' : '企业微信最多3个一级菜单，每个下最多5个子菜单'}
+              {editing ? '编辑模式 — 可增删子菜单，修改完成后点击推送' : '企业微信最多3个一级菜单，每个下最多5个子菜单'}
             </div>
           </div>
           {!editing && (
@@ -1574,7 +1597,7 @@ function MenuTab() {
               <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600">
                 {i + 1}
               </div>
-              <span className="text-sm font-medium text-gray-900">{item.name}</span>
+              <span className="text-sm font-medium text-gray-900">{item.name || '(未命名)'}</span>
               <span className="text-xs text-gray-400">({item.sub_button?.length || 0} 个子菜单)</span>
             </div>
             <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${expandedIdx === i ? 'rotate-90' : ''}`} />
@@ -1595,7 +1618,17 @@ function MenuTab() {
                 />
               </div>
               <div className="space-y-2">
-                <div className="text-xs font-medium text-gray-600">子菜单</div>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-medium text-gray-600">子菜单</div>
+                  {editing && (
+                    <button
+                      onClick={() => handleAddSub(i)}
+                      className="flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium"
+                    >
+                      <Plus className="w-3 h-3" /> 添加
+                    </button>
+                  )}
+                </div>
                 {item.sub_button?.map((sub, j) => (
                   <div key={j} className="bg-gray-50 rounded-lg p-3 space-y-2">
                     <div className="flex items-center gap-2">
@@ -1610,6 +1643,14 @@ function MenuTab() {
                         readOnly={!editing}
                         maxLength={4}
                       />
+                      {editing && (
+                        <button
+                          onClick={() => handleDeleteSub(i, j)}
+                          className="w-7 h-7 flex items-center justify-center bg-red-50 text-red-500 rounded-lg flex-shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400 w-4"></span>
