@@ -737,6 +737,85 @@ async function sendWeComVideo(toUser: string, videoUrl: string, filename: string
 }
 
 // -----------------------------------------------------------
+// 工具函数：下载文件并上传企微素材库发送文件消息（20MB 以内）
+// -----------------------------------------------------------
+async function sendWeComFile(toUser: string, fileUrl: string, filename: string): Promise<void> {
+  const tmpPath = path.join(os.tmpdir(), `wecom_file_${Date.now()}_${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`);
+  try {
+    // 1. 下载文件
+    console.log(`[WeCom] 下载文件: ${fileUrl.substring(0, 80)}`);
+    const fileRes = await fetch(fileUrl);
+    if (!fileRes.ok) {
+      console.error(`[WeCom] 下载文件失败: ${fileRes.status}`);
+      await sendWeComMessage(toUser, `[文件] ${filename}\n${fileUrl}`);
+      return;
+    }
+    const fileBuffer = Buffer.from(await fileRes.arrayBuffer());
+    const fileSize = fileBuffer.length;
+    console.log(`[WeCom] 文件下载完成，大小: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
+
+    // 2. 超过 20MB 降级为链接
+    const MAX_FILE_SIZE = 20 * 1024 * 1024;
+    if (fileSize > MAX_FILE_SIZE) {
+      console.log(`[WeCom] 文件超过 20MB，降级为链接`);
+      await sendWeComMessage(toUser, `[文件] ${filename}（${(fileSize / 1024 / 1024).toFixed(1)}MB，请点链接下载）\n${fileUrl}`);
+      return;
+    }
+
+    fs.writeFileSync(tmpPath, fileBuffer);
+
+    // 3. 上传到企业微信临时素材
+    const token = await getAccessToken();
+    const uploadUrl = `https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token=${token}&type=file`;
+    const boundary = `----WeComBoundary${Date.now()}`;
+    const header = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="media"; filename="${filename}"\r\nContent-Type: application/octet-stream\r\n\r\n`
+    );
+    const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
+    const body = Buffer.concat([header, fileBuffer, footer]);
+    const uploadRes = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+      body,
+    });
+    const uploadData = await uploadRes.json() as any;
+    if (uploadData.errcode !== 0 && uploadData.errcode !== undefined) {
+      console.error('[WeCom] 上传文件素材失败:', uploadData.errmsg);
+      await sendWeComMessage(toUser, `[文件] ${filename}\n${fileUrl}`);
+      return;
+    }
+    const mediaId = uploadData.media_id;
+    console.log(`[WeCom] 文件上传成功 media_id=${mediaId}`);
+
+    // 4. 发送文件消息
+    const sendToken = await getAccessToken();
+    const sendRes = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=${sendToken}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        touser: toUser,
+        msgtype: 'file',
+        agentid: Number(WECOM_AGENT_ID),
+        file: { media_id: mediaId },
+        safe: 0,
+      }),
+    });
+    const sendData = await sendRes.json() as any;
+    if (sendData.errcode !== 0) {
+      console.error('[WeCom] 发送文件消息失败:', sendData.errmsg);
+      await sendWeComMessage(toUser, `[文件] ${filename}\n${fileUrl}`);
+    } else {
+      console.log(`[WeCom] 文件消息已发送给 ${toUser}: ${filename}`);
+    }
+  } catch (e) {
+    console.error('[WeCom] 发送文件异常:', e);
+    await sendWeComMessage(toUser, `[文件] ${filename}\n${fileUrl}`);
+  } finally {
+    try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
+  }
+}
+
+// -----------------------------------------------------------
 // 工具函数：向 Manus 任务发送消息并等待回复
 // -----------------------------------------------------------
 interface ManusReply {
@@ -1338,14 +1417,8 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
           // 视频：自动下载压缩后以视频消息发送
           await sendWeComVideo(userId, att.url, att.filename);
         } else {
-          const typeLabel: Record<string, string> = {
-            audio: "音频", pdf: "PDF文件",
-            ppt: "PPT文件", pptx: "PPT文件", xlsx: "Excel文件",
-            xls: "Excel文件", docx: "Word文件", doc: "Word文件",
-            csv: "CSV文件", zip: "压缩包", html: "网页文件",
-          };
-          const label = typeLabel[att.type] || typeLabel[ext] || "文件";
-          await sendWeComMessage(userId, `[${label}] ${att.filename}\n${att.url}`);
+          // 其他文件（PDF/PPT/Excel/Word/音频/压缩包等）：上传企微素材库发文件消息
+          await sendWeComFile(userId, att.url, att.filename);
         }
         await new Promise(resolve => setTimeout(resolve, 300));
       }
