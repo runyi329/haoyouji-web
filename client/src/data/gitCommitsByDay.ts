@@ -7609,5 +7609,13 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-20T05:11:00Z", type: "feat", cleanMessage: "添加规则 006 企业微信 AI API 绑定规则" },
     { date: "2026-06-20T05:41:43Z", type: "fix", cleanMessage: "A028/A386 返回死循环 - fallback 改为个人中心" },
     { date: "2026-06-20T05:51:12Z", type: "fix", cleanMessage: "A386 规则库返回改为写死跳 A028，避免来源栈污染死循环" },
+    { date: "2026-06-20T07:52:50Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-20T07:29:36Z", type: "fix", cleanMessage: "移除硬编码 Manus API Key，改为纯 .env 配置驱动，换账号只需改 .env + restart" },
+    { date: "2026-06-20T10:20:06Z", type: "feat", cleanMessage: "升级DeepSeek模型选项为官方命名(V4 Flash/Pro + 深思模式)，支持批量多选用户设置，后端支持thinking参数" },
+    { date: "2026-06-20T10:32:21Z", type: "fix", cleanMessage: "Manus任务下拉框显示中文标题，修复ok字段缺失导致任务列表为空的问题，加入加载状态" },
+    { date: "2026-06-20T10:47:19Z", type: "feat", cleanMessage: "模型选择改为下拉框，智能路由排第一，分组展示Manus/DeepSeek" },
+    { date: "2026-06-20T10:50:42Z", type: "fix", cleanMessage: "模型下拉框只显示简称，去掉描述文字" },
+    { date: "2026-06-20T10:55:36Z", type: "fix", cleanMessage: "新建/编辑用户时默认模型改为智能路由(auto_route)" },
+    { date: "2026-06-20T11:21:12Z", type: "feat", cleanMessage: "前置分类模型可配置，AI路由页面新增前置分类模型下拉框，兜底模型选项同步更新为新命名" },
   ],
 };
