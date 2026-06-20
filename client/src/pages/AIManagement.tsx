@@ -2499,6 +2499,7 @@ const ROUTE_MODEL_LABELS: Record<string, { label: string; color: string; emoji: 
 
 function RoutePanel() {
   const [routeEnabled, setRouteEnabled] = useState(false);
+  const [classifierModel, setClassifierModel] = useState('deepseek-chat');
   const [fallback, setFallback] = useState('deepseek-flash');
   const [classifyPrompt, setClassifyPrompt] = useState('');
   const [editingConfig, setEditingConfig] = useState(false);
@@ -2522,6 +2523,7 @@ function RoutePanel() {
       .then(d => {
         if (d.ok && d.config) {
           setRouteEnabled(d.config.route_enabled === 'true');
+          setClassifierModel(d.config.classifier_model || 'deepseek-chat');
           setFallback(d.config.fallback_model || 'deepseek-flash');
           setClassifyPrompt(d.config.classify_prompt || '');
           if (d.config.employee_welcome) setWelcomeMsg(d.config.employee_welcome);
@@ -2550,6 +2552,7 @@ function RoutePanel() {
         body: JSON.stringify({
           config: {
             route_enabled: String(routeEnabled),
+            classifier_model: classifierModel,
             fallback_model: fallback,
             classify_prompt: classifyPrompt,
           }
@@ -2635,6 +2638,28 @@ function RoutePanel() {
           </div>
           <div className="flex items-center justify-between">
             <div>
+              <div className="text-sm font-medium">前置分类模型</div>
+              <div className="text-xs text-gray-500">判断消息应派给谁，建议轻量级</div>
+            </div>
+            <select
+              value={classifierModel}
+              onChange={e => editingConfig && setClassifierModel(e.target.value)}
+              disabled={!editingConfig}
+              className="text-xs border border-gray-200 rounded px-2 py-1 bg-white disabled:bg-gray-50"
+            >
+              <optgroup label="DeepSeek">
+                <option value="deepseek-chat">V4 Flash（推荐）</option>
+                <option value="deepseek-v4-pro">V4 Pro</option>
+              </optgroup>
+              <optgroup label="Manus">
+                <option value="manus-1.6-lite">Manus 轻量（推荐）</option>
+                <option value="manus-1.6">Manus 标准</option>
+                <option value="manus-1.6-max">Manus Max</option>
+              </optgroup>
+            </select>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
               <div className="text-sm font-medium">兜底模型</div>
               <div className="text-xs text-gray-500">分类失败时使用</div>
             </div>
@@ -2644,11 +2669,17 @@ function RoutePanel() {
               disabled={!editingConfig}
               className="text-xs border border-gray-200 rounded px-2 py-1 bg-white disabled:bg-gray-50"
             >
-              <option value="deepseek-flash">DeepSeek 快速</option>
-              <option value="deepseek-reasoner">DeepSeek 深思</option>
-              <option value="manus-standard">Manus 标准</option>
-              <option value="manus-lite">Manus 轻量</option>
-              <option value="manus-max">Manus Max</option>
+              <optgroup label="DeepSeek">
+                <option value="deepseek-chat">V4 Flash</option>
+                <option value="deepseek-v4-flash-thinking">V4 Flash 深思</option>
+                <option value="deepseek-v4-pro">V4 Pro</option>
+                <option value="deepseek-v4-pro-thinking">V4 Pro 深思</option>
+              </optgroup>
+              <optgroup label="Manus">
+                <option value="manus-1.6-lite">Manus 轻量</option>
+                <option value="manus-1.6">Manus 标准</option>
+                <option value="manus-1.6-max">Manus Max</option>
+              </optgroup>
             </select>
           </div>
           {editingConfig && (

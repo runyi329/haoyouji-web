@@ -494,6 +494,7 @@ async function ensureSessionTable(): Promise<void> {
     INSERT IGNORE INTO wecom_route_config (config_key, config_val) VALUES
     ('route_enabled', '0'),
     ('fallback_model', 'deepseek-chat'),
+    ('classifier_model', 'deepseek-chat'),
     ('classifier_prompt', '你是消息分类器，只回复数字，不解释。\n规则：\n1 = 普通问答、闲聊、查信息、写文字（DeepSeek快速处理）\n2 = 需要深度推理、复杂分析、数学逻辑（DeepSeek深思处理）\n3 = 需要执行操作、生成文件、调用工具、处理图片（Manus处理）\n\n用户消息：{MSG}\n\n回复数字：'),
     ('employee_welcome', '已切换到 AI 员工模式\n\n我会自动判断你的问题，选择最合适的 AI 来回答。\n直接发消息开始吧！'),
     ('waiting_msg', '收到，AI 正在思考中，请稍候...'),
@@ -1007,49 +1008,80 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string, agent
 // -----------------------------------------------------------
 // AI 路由：读取路由配置
 // -----------------------------------------------------------
-async function getRouteConfig(): Promise<{ enabled: boolean; fallbackModel: string; classifierPrompt: string }> {
+async function getRouteConfig(): Promise<{ enabled: boolean; fallbackModel: string; classifierModel: string; classifierPrompt: string }> {
   try {
     const conn = await getDbConnection();
-    if (!conn) return { enabled: false, fallbackModel: "deepseek-chat", classifierPrompt: "" };
+    if (!conn) return { enabled: false, fallbackModel: "deepseek-chat", classifierModel: "deepseek-chat", classifierPrompt: "" };
     const [rows] = await (conn as any).execute(
-      "SELECT config_key, config_val FROM wecom_route_config WHERE config_key IN ('route_enabled','fallback_model','classifier_prompt')"
+      "SELECT config_key, config_val FROM wecom_route_config WHERE config_key IN ('route_enabled','fallback_model','classifier_model','classifier_prompt')"
     ) as any;
     const cfg: Record<string, string> = {};
     for (const r of (rows as any[])) cfg[r.config_key] = r.config_val;
     return {
       enabled: cfg["route_enabled"] === "1",
       fallbackModel: cfg["fallback_model"] || "deepseek-chat",
+      classifierModel: cfg["classifier_model"] || "deepseek-chat",
       classifierPrompt: cfg["classifier_prompt"] || "",
     };
   } catch (_) {
-    return { enabled: false, fallbackModel: "deepseek-chat", classifierPrompt: "" };
+    return { enabled: false, fallbackModel: "deepseek-chat", classifierModel: "deepseek-chat", classifierPrompt: "" };
   }
 }
 
 // AI 路由：对消息进行分类，返回 1/2/3
-async function classifyMessage(userMessage: string, prompt: string): Promise<{ result: number; tokens: number }> {
+// classifierModel: 前置分类模型，建议选轻量级模型（如 deepseek-chat / manus-1.6-lite）
+async function classifyMessage(userMessage: string, prompt: string, classifierModel: string = "deepseek-chat"): Promise<{ result: number; tokens: number }> {
   try {
-    if (!DEEPSEEK_API_KEY) return { result: 1, tokens: 0 };
+    const isManus = classifierModel.startsWith("manus");
     const fullPrompt = prompt.replace("{MSG}", userMessage.substring(0, 300));
-    const res = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${DEEPSEEK_API_KEY}` },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [{ role: "user", content: fullPrompt }],
-        max_tokens: 5,
-        temperature: 0,
-        stream: false,
-      }),
-    });
-    if (!res.ok) return { result: 1, tokens: 0 };
-    const data = await res.json() as any;
-    const raw = (data?.choices?.[0]?.message?.content || "1").trim();
-    const num = parseInt(raw.charAt(0));
-    const result = (num >= 1 && num <= 3) ? num : 1;
-    const tokens = data?.usage?.total_tokens || 0;
-    console.log(`[Router] 分类结果=${result}，tokens=${tokens}，原始回复=${raw}`);
-    return { result, tokens };
+    if (isManus) {
+      // 使用 Manus API 做分类
+      const manusApiKey = process.env.MANUS_API_KEY || "";
+      if (!manusApiKey) return { result: 1, tokens: 0 };
+      const res = await fetch("https://api.manus.im/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${manusApiKey}` },
+        body: JSON.stringify({
+          model: classifierModel,
+          messages: [{ role: "user", content: fullPrompt }],
+          max_tokens: 5,
+          temperature: 0,
+          stream: false,
+        }),
+      });
+      if (!res.ok) return { result: 1, tokens: 0 };
+      const data = await res.json() as any;
+      const raw = (data?.choices?.[0]?.message?.content || "1").trim();
+      const num = parseInt(raw.charAt(0));
+      const result = (num >= 1 && num <= 3) ? num : 1;
+      const tokens = data?.usage?.total_tokens || 0;
+      console.log(`[Router] 分类模型=${classifierModel} 结果=${result} tokens=${tokens}`);
+      return { result, tokens };
+    } else {
+      // 使用 DeepSeek API 做分类
+      if (!DEEPSEEK_API_KEY) return { result: 1, tokens: 0 };
+      // 去掉 -thinking 后缀，分类不需要思考模式
+      const actualModel = classifierModel.replace("-thinking", "");
+      const res = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${DEEPSEEK_API_KEY}` },
+        body: JSON.stringify({
+          model: actualModel,
+          messages: [{ role: "user", content: fullPrompt }],
+          max_tokens: 5,
+          temperature: 0,
+          stream: false,
+        }),
+      });
+      if (!res.ok) return { result: 1, tokens: 0 };
+      const data = await res.json() as any;
+      const raw = (data?.choices?.[0]?.message?.content || "1").trim();
+      const num = parseInt(raw.charAt(0));
+      const result = (num >= 1 && num <= 3) ? num : 1;
+      const tokens = data?.usage?.total_tokens || 0;
+      console.log(`[Router] 分类模型=${actualModel} 结果=${result} tokens=${tokens}`);
+      return { result, tokens };
+    }
   } catch (e) {
     console.error("[Router] 分类失败:", e);
     return { result: 1, tokens: 0 };
@@ -1270,7 +1302,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
     // 当用户已选择 auto_route，或全局路由开关开启时，触发智能分类
     const shouldRoute = userModelProfile === "auto_route" || (routeConfig.enabled && routeConfig.classifierPrompt);
     if (shouldRoute && routeConfig.classifierPrompt) {
-      const cls = await classifyMessage(content, routeConfig.classifierPrompt);
+      const cls = await classifyMessage(content, routeConfig.classifierPrompt, routeConfig.classifierModel);
       classifierResult = cls.result;
       classifierTokens = cls.tokens;
       // 根据分类结果覆盖模型
