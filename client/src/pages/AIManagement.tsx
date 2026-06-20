@@ -1491,20 +1491,32 @@ const DEFAULT_WECOM_MENU: MenuItemType[] = [
 
 function MenuTab() {
   const [menu, setMenu] = useState<MenuItemType[]>(DEFAULT_WECOM_MENU);
+  const [draft, setDraft] = useState<MenuItemType[]>(DEFAULT_WECOM_MENU);
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(0);
 
+  const handleEdit = () => {
+    setDraft(JSON.parse(JSON.stringify(menu)));
+    setEditing(true);
+  };
+
+  const handleCancel = () => {
+    setDraft(JSON.parse(JSON.stringify(menu)));
+    setEditing(false);
+  };
+
   const handleNameChange = (i: number, j: number | null, val: string) => {
-    const m = JSON.parse(JSON.stringify(menu)) as MenuItemType[];
+    const m = JSON.parse(JSON.stringify(draft)) as MenuItemType[];
     if (j === null) m[i].name = val;
     else if (m[i].sub_button) m[i].sub_button![j].name = val;
-    setMenu(m);
+    setDraft(m);
   };
 
   const handleKeyChange = (i: number, j: number, val: string) => {
-    const m = JSON.parse(JSON.stringify(menu)) as MenuItemType[];
+    const m = JSON.parse(JSON.stringify(draft)) as MenuItemType[];
     if (m[i].sub_button) m[i].sub_button![j].key = val;
-    setMenu(m);
+    setDraft(m);
   };
 
   const handleSave = async () => {
@@ -1513,25 +1525,44 @@ function MenuTab() {
       const res = await fetch('/api/wecom/menu', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ menu }),
+        body: JSON.stringify({ menu: draft }),
       });
       const data = await res.json();
-      if (data.ok) toast.success('菜单已推送，企业微信端稍后生效');
-      else toast.error(data.error || '推送失败');
-    } catch { toast.error('网络错误'); }
+      if (data.ok) {
+        setMenu(JSON.parse(JSON.stringify(draft)));
+        setEditing(false);
+        toast.success('菜单已推送，企业微信端稍后生效');
+      } else {
+        toast.error(data.error || '推送失败，请重试');
+      }
+    } catch { toast.error('网络错误，请重试'); }
     finally { setSaving(false); }
   };
+
+  const displayMenu = editing ? draft : menu;
 
   return (
     <div className="px-4 space-y-3">
       <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
-        <div className="text-xs font-medium text-amber-800 mb-1">菜单配置</div>
-        <div className="text-xs text-amber-700 leading-relaxed">
-          企业微信最多3个一级菜单，每个下最多5个子菜单。修改后点击推送即可生效。
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-xs font-medium text-amber-800 mb-0.5">菜单配置</div>
+            <div className="text-xs text-amber-700">
+              {editing ? '编辑模式 — 修改完成后点击推送' : '企业微信最多3个一级菜单，每个下最多5个子菜单'}
+            </div>
+          </div>
+          {!editing && (
+            <button
+              onClick={handleEdit}
+              className="px-3 py-1.5 bg-amber-100 text-amber-800 rounded-lg text-xs font-medium"
+            >
+              编辑
+            </button>
+          )}
         </div>
       </div>
 
-      {menu.map((item, i) => (
+      {displayMenu.map((item, i) => (
         <div key={i} className="bg-white rounded-xl shadow-sm overflow-hidden">
           <button
             className="w-full px-4 py-3 flex items-center justify-between"
@@ -1552,9 +1583,12 @@ function MenuTab() {
               <div className="pt-3">
                 <label className="text-xs text-gray-500 mb-1 block">一级菜单名称（最多4字）</label>
                 <input
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                  className={`w-full border rounded-lg px-3 py-2 text-sm ${
+                    editing ? 'border-gray-200 bg-white' : 'border-transparent bg-gray-50 text-gray-700'
+                  }`}
                   value={item.name}
-                  onChange={e => handleNameChange(i, null, e.target.value)}
+                  onChange={e => editing && handleNameChange(i, null, e.target.value)}
+                  readOnly={!editing}
                   maxLength={4}
                 />
               </div>
@@ -1565,20 +1599,26 @@ function MenuTab() {
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400 w-4">{j + 1}.</span>
                       <input
-                        className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white"
+                        className={`flex-1 border rounded-lg px-2 py-1.5 text-xs ${
+                          editing ? 'border-gray-200 bg-white' : 'border-transparent bg-gray-100 text-gray-700'
+                        }`}
                         placeholder="菜单名称（最多4字）"
                         value={sub.name}
-                        onChange={e => handleNameChange(i, j, e.target.value)}
+                        onChange={e => editing && handleNameChange(i, j, e.target.value)}
+                        readOnly={!editing}
                         maxLength={4}
                       />
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400 w-4"></span>
                       <input
-                        className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white font-mono"
+                        className={`flex-1 border rounded-lg px-2 py-1.5 text-xs font-mono ${
+                          editing ? 'border-gray-200 bg-white' : 'border-transparent bg-gray-100 text-gray-500'
+                        }`}
                         placeholder="Key（如：MODEL_MAX）"
                         value={sub.key || ''}
-                        onChange={e => handleKeyChange(i, j, e.target.value)}
+                        onChange={e => editing && handleKeyChange(i, j, e.target.value)}
+                        readOnly={!editing}
                       />
                     </div>
                   </div>
@@ -1589,13 +1629,24 @@ function MenuTab() {
         </div>
       ))}
 
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="w-full py-3 bg-red-600 text-white rounded-xl text-sm font-medium disabled:opacity-60"
-      >
-        {saving ? '推送中...' : '推送菜单到企业微信'}
-      </button>
+      {editing && (
+        <div className="flex gap-2">
+          <button
+            onClick={handleCancel}
+            disabled={saving}
+            className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium disabled:opacity-60"
+          >
+            取消
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-[2] py-3 bg-red-600 text-white rounded-xl text-sm font-medium disabled:opacity-60"
+          >
+            {saving ? '推送中...' : '推送菜单到企业微信'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
