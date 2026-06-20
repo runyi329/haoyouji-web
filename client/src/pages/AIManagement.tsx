@@ -2000,9 +2000,23 @@ function CustomRulesTab() {
 
   const loadUsers2 = async () => {
     try {
-      const res = await fetch('/api/wecom/users');
+      const res = await fetch('/api/wecom/sessions');
       const d = await res.json();
-      if (d.ok) setWecomUsers2(d.users || []);
+      if (d.ok) {
+        // sessions 返回已绑定用户，提取 wecom_user_id 和 nickname
+        const users = (d.sessions || []).map((s: any) => ({
+          wecom_user_id: s.wecom_user_id,
+          nickname: s.nickname || s.wecom_user_id,
+          avatar_url: s.avatar_url || '',
+        }));
+        // 去重
+        const seen = new Set<string>();
+        setWecomUsers2(users.filter((u: WecomUserForRule) => {
+          if (seen.has(u.wecom_user_id)) return false;
+          seen.add(u.wecom_user_id);
+          return true;
+        }));
+      }
     } catch {}
   };
 
