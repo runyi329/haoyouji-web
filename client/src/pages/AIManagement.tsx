@@ -1454,41 +1454,70 @@ function StatsTab() {
 
 // ─── MenuTab ─────────────────────────────────────────────────────────────────
 
-function MenuTab() {
-  const [menuJson, setMenuJson] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
+interface MenuItemType { name: string; type: string; key?: string; sub_button?: MenuItemType[]; }
 
-  useEffect(() => {
-    setLoading(true);
-    fetch('/api/wecom/menu')
-      .then(r => r.json())
-      .then(data => {
-        if (data.ok && data.menu) {
-          setMenuJson(JSON.stringify(data.menu, null, 2));
-        }
-      })
-      .catch(() => toast.error('加载菜单失败'))
-      .finally(() => setLoading(false));
-  }, []);
+const DEFAULT_WECOM_MENU: MenuItemType[] = [
+  {
+    name: '切换模型', type: 'click', key: '',
+    sub_button: [
+      { name: 'Max 模式', type: 'click', key: 'MODEL_MAX' },
+      { name: '标准模式', type: 'click', key: 'MODEL_NORMAL' },
+      { name: '轻量模式', type: 'click', key: 'MODEL_LITE' },
+      { name: 'DeepSeek', type: 'click', key: 'MODEL_DS_FLASH' },
+      { name: '', type: 'click', key: 'RESERVED_1_5' },
+    ],
+  },
+  {
+    name: '工具箱', type: 'click', key: '',
+    sub_button: [
+      { name: '查积分', type: 'click', key: 'CREDITS_QUERY' },
+      { name: '新对话', type: 'click', key: 'NEW_TASK' },
+      { name: '任务状态', type: 'click', key: 'TASK_STATUS' },
+      { name: '预留', type: 'click', key: 'RESERVED_2_4' },
+      { name: '预留', type: 'click', key: 'RESERVED_2_5' },
+    ],
+  },
+  {
+    name: '更多', type: 'click', key: '',
+    sub_button: [
+      { name: '使用帮助', type: 'click', key: 'HELP' },
+      { name: '意见反馈', type: 'click', key: 'FEEDBACK' },
+      { name: '预留', type: 'click', key: 'RESERVED_3_3' },
+      { name: '预留', type: 'click', key: 'RESERVED_3_4' },
+      { name: '预留', type: 'click', key: 'RESERVED_3_5' },
+    ],
+  },
+];
+
+function MenuTab() {
+  const [menu, setMenu] = useState<MenuItemType[]>(DEFAULT_WECOM_MENU);
+  const [saving, setSaving] = useState(false);
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(0);
+
+  const handleNameChange = (i: number, j: number | null, val: string) => {
+    const m = JSON.parse(JSON.stringify(menu)) as MenuItemType[];
+    if (j === null) m[i].name = val;
+    else if (m[i].sub_button) m[i].sub_button![j].name = val;
+    setMenu(m);
+  };
+
+  const handleKeyChange = (i: number, j: number, val: string) => {
+    const m = JSON.parse(JSON.stringify(menu)) as MenuItemType[];
+    if (m[i].sub_button) m[i].sub_button![j].key = val;
+    setMenu(m);
+  };
 
   const handleSave = async () => {
-    try {
-      JSON.parse(menuJson);
-    } catch {
-      toast.error('JSON 格式错误，请检查');
-      return;
-    }
     setSaving(true);
     try {
       const res = await fetch('/api/wecom/menu', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ menu: JSON.parse(menuJson) }),
+        body: JSON.stringify({ menu }),
       });
       const data = await res.json();
-      if (data.ok) toast.success('菜单已更新');
-      else toast.error(data.error || '更新失败');
+      if (data.ok) toast.success('菜单已推送，企业微信端稍后生效');
+      else toast.error(data.error || '推送失败');
     } catch { toast.error('网络错误'); }
     finally { setSaving(false); }
   };
@@ -1496,33 +1525,77 @@ function MenuTab() {
   return (
     <div className="px-4 space-y-3">
       <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
-        <div className="text-xs font-medium text-amber-800 mb-1">企微服务号菜单配置</div>
-        <div className="text-xs text-amber-600 leading-relaxed">
-          编辑 JSON 配置后点击保存，菜单将立即更新到企业微信服务号。
+        <div className="text-xs font-medium text-amber-800 mb-1">菜单配置</div>
+        <div className="text-xs text-amber-700 leading-relaxed">
+          企业微信最多3个一级菜单，每个下最多5个子菜单。修改后点击推送即可生效。
         </div>
       </div>
 
-      {loading ? (
-        <div className="text-center py-10 text-gray-400 text-sm">加载中...</div>
-      ) : (
-        <>
-          <textarea
-            className="w-full border border-gray-200 rounded-xl px-3 py-3 text-xs font-mono resize-none bg-white"
-            rows={16}
-            value={menuJson}
-            onChange={e => setMenuJson(e.target.value)}
-            placeholder='{"button": [...]}'
-          />
+      {menu.map((item, i) => (
+        <div key={i} className="bg-white rounded-xl shadow-sm overflow-hidden">
           <button
-            onClick={handleSave}
-            disabled={saving}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl text-sm font-medium"
+            className="w-full px-4 py-3 flex items-center justify-between"
+            onClick={() => setExpandedIdx(expandedIdx === i ? null : i)}
           >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            {saving ? '保存中...' : '保存菜单'}
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600">
+                {i + 1}
+              </div>
+              <span className="text-sm font-medium text-gray-900">{item.name}</span>
+              <span className="text-xs text-gray-400">({item.sub_button?.length || 0} 个子菜单)</span>
+            </div>
+            <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${expandedIdx === i ? 'rotate-90' : ''}`} />
           </button>
-        </>
-      )}
+
+          {expandedIdx === i && (
+            <div className="px-4 pb-4 space-y-3 border-t border-gray-50">
+              <div className="pt-3">
+                <label className="text-xs text-gray-500 mb-1 block">一级菜单名称（最多4字）</label>
+                <input
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                  value={item.name}
+                  onChange={e => handleNameChange(i, null, e.target.value)}
+                  maxLength={4}
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-gray-600">子菜单</div>
+                {item.sub_button?.map((sub, j) => (
+                  <div key={j} className="bg-gray-50 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 w-4">{j + 1}.</span>
+                      <input
+                        className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white"
+                        placeholder="菜单名称（最多4字）"
+                        value={sub.name}
+                        onChange={e => handleNameChange(i, j, e.target.value)}
+                        maxLength={4}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 w-4"></span>
+                      <input
+                        className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white font-mono"
+                        placeholder="Key（如：MODEL_MAX）"
+                        value={sub.key || ''}
+                        onChange={e => handleKeyChange(i, j, e.target.value)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="w-full py-3 bg-red-600 text-white rounded-xl text-sm font-medium disabled:opacity-60"
+      >
+        {saving ? '推送中...' : '推送菜单到企业微信'}
+      </button>
     </div>
   );
 }
