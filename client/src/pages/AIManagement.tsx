@@ -379,11 +379,11 @@ function UsersTab() {
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<{ nickname: string; manus_task_id: string; model_pref: string; system_prompt: string }>({
-    nickname: '', manus_task_id: '', model_pref: 'manus-1.6-max', system_prompt: ''
+    nickname: '', manus_task_id: '', model_pref: 'auto_route', system_prompt: ''
   });
   const [manusTasks, setManusTasks] = useState<ManusTask[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addForm, setAddForm] = useState({ wecom_user_id: '', nickname: '', manus_task_id: '', model_pref: 'manus-1.6-max', system_prompt: '' });
+  const [addForm, setAddForm] = useState({ wecom_user_id: '', nickname: '', manus_task_id: '', model_pref: 'auto_route', system_prompt: '' });
   // 批量设置
   const [batchModel, setBatchModel] = useState('');
   const [batchLoading, setBatchLoading] = useState(false);
@@ -532,7 +532,7 @@ function UsersTab() {
       if (data.ok) {
         toast.success('用户已绑定');
         setShowAddForm(false);
-        setAddForm({ wecom_user_id: '', nickname: '', manus_task_id: '', model_pref: 'manus-1.6-max', system_prompt: '' });
+        setAddForm({ wecom_user_id: '', nickname: '', manus_task_id: '', model_pref: 'auto_route', system_prompt: '' });
         fetchSessions();
       } else toast.error(data.error || '绑定失败');
     } catch { toast.error('网络错误'); }
