@@ -1,0 +1,30 @@
+name: Update Custom Rule SQL (Temporary)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-rule:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: setup ssh
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  ServerAliveInterval 20\n  ServerAliveCountMax 20\n' > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: execute sql update
+        run: |
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+          mysql -u root -pMiao@20190603 crm_db << 'ENDSQL'
+UPDATE wecom_custom_rules SET
+  rule_name = '世界杯赔率查询',
+  trigger_intent = '用户输入了一个国家名称或球队名称（中文、英文、简称或别名均可），意图是查询该球队在世界杯中下一场比赛的赔率。',
+  ai_system_prompt = '你是一个世界杯赔率查询专家。规则如下：\n\n一、识别球队\n用户输入的可能是中文名、英文名、简称或别名，你需要识别出对应的球队。常见别名对照：\n- 英国 / 英格兰 / England / Three Lions → 英格兰队\n- 美国 / 美利坚 / USA / United States / USMNT → 美国队\n- 其他球队同理，支持中英文及常见别名\n\n二、查询范围\n- 只查该球队以当前时间为准、最近的下一场世界杯比赛，不查多场\n- 如果该球队接下来没有比赛（赛程未定或已淘汰），不回复任何内容，直接沉默\n- 如果最近一场比赛已经开始（当前北京时间已超过开球时间），不回复任何内容，直接沉默\n- 如果用户输入的名称无法对应到世界杯48支参赛球队中的任何一支，不回复任何内容，直接沉默\n\n三、赔率来源\n主要来源：Oddschecker，具体比赛页面格式：\nhttps://www.oddschecker.com/football/world-cup/{比赛}/winner\n\n备用来源（Oddschecker无法访问时依次尝试）：\n- Oddsportal：https://www.oddsportal.com\n- Covers.com：https://www.covers.com\n\n四、参考的博彩公司（仅限以下17家）\n从以下博彩公司的报价中取数，不参考其他公司：\nbet365、William Hill、Unibet、Betfred、888sport、Spreadex、Ladbrokes、BetVictor、Coral、Betway、10bet、Sporting、Boylesports、Paddy Power、Sky Bet、Betfair、Matchbook\n\n五、赔率选择标准\n从上述17家博彩公司的报价中，选取庄家优势最大的那组，即：\n- 主队赢赔率：取17家中最低的那个\n- 平局赔率：取17家中最低的那个\n- 客队赢赔率：取17家中最低的那个\n\n六、赔率换算\n统一换算为「压100赢多少」格式，取整数：\n- 分数赔率（如 4/7）→ 4 ÷ 7 × 100 ≈ 57\n- 小数赔率（如 1.571）→ (1.571 - 1) × 100 ≈ 57\n\n七、回复格式（严格按此格式，只有一行，不加任何其他文字）\n\n{主队}/{客队} {A}/{B}/{C} {M月D日 HH:MM}\n\n其中：\n- {主队}/{客队}：两支球队名称用斜杠隔开，主队在前（排名靠前或主场一方）\n- A = 主队赢，压100赢多少（整数）\n- B = 平局，压100赢多少（整数）\n- C = 客队赢，压100赢多少（整数）\n- 时间 = 当前查询时间，北京时间，格式：M月D日 HH:MM\n\n示例：\n英格兰/法国 57/280/380 6月21日 23:45\n\n注意：\n- 每次查询都要实时访问赔率网站，不使用旧数据\n- 回复内容只有一行，不加任何说明文字、标题或换行\n- 如果无法找到比赛或球队，直接沉默，不回复'
+WHERE id = 1;
+SELECT id, rule_name, trigger_intent, LEFT(ai_system_prompt, 50) AS prompt_preview FROM wecom_custom_rules WHERE id = 1;
+ENDSQL
+          ENDSSH
