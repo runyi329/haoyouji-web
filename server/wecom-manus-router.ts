@@ -1800,69 +1800,36 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
 
-    // 查询所有绑定用户（包含 active 和 archived），按 created_at 升序排列以便取最早时间
-    const [sessionRows] = await (conn as any).execute(
-      "SELECT wecom_user_id, manus_task_id, nickname, DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at FROM wecom_manus_sessions ORDER BY created_at ASC"
+    // 直接从本地 wecom_message_credits 表按 wecom_user_id 汇总
+    // 优点：不受 task_id 变更影响、不受 Manus API limit 限制、历史数据完整
+    const [creditRows] = await (conn as any).execute(
+      `SELECT
+         mc.wecom_user_id,
+         COALESCE(s.nickname, mc.wecom_user_id) AS nickname,
+         SUM(mc.credits_used) AS total_cost,
+         COUNT(*) AS record_count,
+         MIN(mc.created_at) AS first_message_at
+       FROM wecom_message_credits mc
+       LEFT JOIN wecom_manus_sessions s ON s.wecom_user_id = mc.wecom_user_id
+       GROUP BY mc.wecom_user_id
+       ORDER BY total_cost DESC`
     ) as any;
-    const sessions = sessionRows as any[];
+    const creditStats = creditRows as any[];
 
-    if (sessions.length === 0) {
+    if (creditStats.length === 0) {
       return res.json({ ok: true, stats: [], total_cost: 0 });
     }
 
-    // 拉取积分记录（多拉以确保覆盖所有用户）
-    const usageRes = await fetch(`${MANUS_API_BASE}/usage.list?limit=200`, {
-      headers: { "x-manus-api-key": MANUS_API_KEY },
-    });
-    const usageData = await usageRes.json() as any;
-
-    if (!usageData.ok || !usageData.data) {
-      return res.status(500).json({ error: "获取使用记录失败" });
-    }
-
-    const allRecords = usageData.data as any[];
-
-    // 按 task_id 聚合
-    const taskCostMap: Record<string, { total_cost: number; record_count: number }> = {};
-    for (const r of allRecords) {
-      if (!r.task_id) continue;
-      if (!taskCostMap[r.task_id]) taskCostMap[r.task_id] = { total_cost: 0, record_count: 0 };
-      if (r.type === "cost") {
-        taskCostMap[r.task_id].total_cost += Math.abs(r.credits || 0);
-        taskCostMap[r.task_id].record_count += 1;
-      }
-    }
-
-    // 按 wecom_user_id 汇总所有任务的积分
-    const userStatsMap: Record<string, any> = {};
-    for (const s of sessions) {
-      const uid = s.wecom_user_id;
-      // 将 created_at 转为字符串（mysql2可能返回 Date 对象）
-      const createdAtStr = s.created_at
-        ? (s.created_at instanceof Date ? s.created_at.toISOString() : String(s.created_at))
-        : "";
-      if (!userStatsMap[uid]) {
-        userStatsMap[uid] = {
-          wecom_user_id: uid,
-          nickname: s.nickname || uid,
-          total_cost: 0,
-          record_count: 0,
-          task_count: 0,
-          first_bound_at: createdAtStr,  // 最早绑定时间（SQL已升序，第一条即最早）
-        };
-      }
-      const cost = taskCostMap[s.manus_task_id]?.total_cost || 0;
-      const count = taskCostMap[s.manus_task_id]?.record_count || 0;
-      userStatsMap[uid].total_cost += cost;
-      userStatsMap[uid].record_count += count;
-      if (cost > 0 || count > 0) {
-        userStatsMap[uid].task_count += 1;
-      }
-    }
-
-    const stats = Object.values(userStatsMap)
-      .filter(s => s.total_cost > 0)
-      .sort((a: any, b: any) => b.total_cost - a.total_cost);
+    const stats = creditStats.map((r: any) => ({
+      wecom_user_id: r.wecom_user_id,
+      nickname: r.nickname || r.wecom_user_id,
+      total_cost: Number(r.total_cost) || 0,
+      record_count: Number(r.record_count) || 0,
+      task_count: 0,  // 兼容前端字段
+      first_bound_at: r.first_message_at
+        ? (r.first_message_at instanceof Date ? r.first_message_at.toISOString() : String(r.first_message_at))
+        : "",
+    }));
 
     const total_cost = stats.reduce((sum: number, s: any) => sum + s.total_cost, 0);
 
