@@ -1452,6 +1452,8 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
     let userModelProfile = await getUserModel(userId);
 
     // ===== 专属规则优先级检查（高于全局路由）=====
+    // hitCustomRule 标志：一旦命中规则并开始处理，无论后续是否异常都不再走全局路由
+    let hitCustomRule = false;
     try {
       const ruleConn = await getDbConnection();
       if (ruleConn) {
@@ -1473,7 +1475,8 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
             const intentPrompt = `你是意图匹配器，只回复 1 或 0，不解释。\n\n意图描述：${rule.trigger_intent}\n\n用户消息：${content}\n\n是否匹配（1=是 0=否）：`;
             const matchResult = await classifyMessage(content, intentPrompt, 'deepseek-chat');
             if (matchResult.result === 1) {
-              // 命中！按规则处理
+              // 命中！立即设置标志位，确保后续任何异常都不会再走全局路由
+              hitCustomRule = true;
               console.log(`[专属规则] 用户 ${userId} 命中规则「${rule.rule_name}」`);
               // 更新触发计数
               await (ruleConn as any).execute(
@@ -1511,10 +1514,16 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
                       ? `[系统指令]\n${rulePrompt}\n\n[用户消息]\n${content}`
                       : content;
                     const reply = await sendToManusAndGetReply(taskId, manusContent, ruleModel);
-                    const chunks = reply.content.match(/[\s\S]{1,2000}/g) || [reply.content];
-                    for (const chunk of chunks) {
-                      await sendWeComMessage(userId, chunk);
-                      await new Promise(r => setTimeout(r, 500));
+                    // 如果 Manus 返回空内容（沉默规则），不发任何消息
+                    if (reply.text || reply.imageUrls.length > 0 || reply.fileAttachments.length > 0) {
+                      const chunks = reply.text.match(/[\s\S]{1,2000}/g) || [reply.text];
+                      for (const chunk of chunks) {
+                        if (chunk.trim()) await sendWeComMessage(userId, chunk);
+                        await new Promise(r => setTimeout(r, 500));
+                      }
+                      for (const imgUrl of reply.imageUrls) {
+                        await sendWeComImage(userId, imgUrl);
+                      }
                     }
                   }
                 }
@@ -1525,7 +1534,9 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
         }
       }
     } catch (ruleErr) {
-      console.error('[专属规则] 检查失败，继续走全局路由:', ruleErr);
+      console.error('[专属规则] 检查/执行异常:', ruleErr);
+      // 如果已命中规则（hitCustomRule=true），即使出现异常也不走全局路由，避免重复回复
+      if (hitCustomRule) return;
     }
 
     // ===== AI 智能路由：如开启，自动分类派发 =====
