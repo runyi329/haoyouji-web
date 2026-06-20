@@ -857,13 +857,18 @@ async function classifyMessage(userMessage: string, prompt: string): Promise<{ r
 // 工具函数：向 DeepSeek API 发送消息并获取回复
 // -----------------------------------------------------------
 interface DeepSeekReply { content: string; promptTokens: number; completionTokens: number; totalTokens: number; }
-async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "deepseek-chat"): Promise<DeepSeekReply> {
+async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "deepseek-chat", systemPrompt?: string): Promise<DeepSeekReply> {
   const errReply = (msg: string): DeepSeekReply => ({ content: msg, promptTokens: 0, completionTokens: 0, totalTokens: 0 });
   try {
     if (!DEEPSEEK_API_KEY) {
       return errReply("DeepSeek API Key 未配置，请联系管理员。");
     }
     console.log(`[DeepSeek] 发送消息 model=${model}: ${userMessage.substring(0, 50)}`);
+    const messages: Array<{role: string; content: string}> = [];
+    if (systemPrompt) {
+      messages.push({ role: "system", content: systemPrompt });
+    }
+    messages.push({ role: "user", content: userMessage });
     const res = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
       method: "POST",
       headers: {
@@ -872,7 +877,7 @@ async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "d
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: "user", content: userMessage }],
+        messages,
         max_tokens: 4096,
         stream: false,
       }),
@@ -1089,7 +1094,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
         return;
       }
       await sendWeComMessage(userId, waitingMsg);
-      const dsReply = await sendToDeepSeekAndGetReply(content, userModelProfile);
+      const dsReply = await sendToDeepSeekAndGetReply(content, userModelProfile, globalSystemPrompt || undefined);
       const dsReplyText = dsReply.content;
       if (dsReplyText.length <= 2048) {
         await sendWeComMessage(userId, dsReplyText);
